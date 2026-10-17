@@ -6,9 +6,7 @@
 const VERSION = "berry-61039823df43";
 const LOCAL = ["./", "./ambience.js", "./beps.js", "./characters.js", "./charkit.js", "./dawn.js", "./editor.js", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./score.js", "./shore.js", "./touch.js"];                       // the game's own files (this folder)
 const LIB = "berry-lib-three-0.160.0";         // the engine and the fonts: their addresses never change, so they're kept across versions
-const REMOTE = ["https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-  "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js",
-  "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js"];
+const REMOTE = ["https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js", "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js"];                     // the engine's files (read from the game's import map by the build)
 const FONTS = "https://fonts.googleapis.com/css2?family=Bungee&family=Jost:wght@400;500;600;700&display=swap";                       // the fonts' stylesheet (index.html's link); the font files it lists are kept too
 const LIB_HOSTS = /^(cdn\.jsdelivr\.net|fonts\.googleapis\.com|fonts\.gstatic\.com)$/;
 
