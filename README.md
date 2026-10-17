@@ -1,9 +1,9 @@
 # Berry Blade (phone)
 
-The phone version of Berry Blade: the same game, with a see-through d-pad and two buttons over it.
+The phone version of Berry Blade: the same game, with a see-through d-pad and four buttons over it.
 
-- **← →** move (hold to speed up) · **↑** jump (twice for a double jump; climbs ladders) · **↓ ↓** drop through a ledge
-- **A** attack (tap again for combos, hold to charge) · **B** block (hold for the bubble) · **A + B** together: tackle
+- **← →** move (hold to speed up) · **↑** climbs ladders · **↓ ↓** drop through a ledge
+- **A** jump (twice for a double jump; hold it still for a big jump) · **X** attack (tap again for combos, hold to charge) · **B** block (hold for the bubble) · **Y** tackle (hold to charge it)
 - **❚❚** (top right) pauses; on the menu screens it goes back. Menus are tapped.
 
 **Works offline.** The first time it's opened online, it saves the whole game on the phone (the 3D engine and the fonts too), so

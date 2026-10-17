@@ -1587,7 +1587,7 @@ const STRIKES = {
       armB: [[0, .3], [.18, .1], [.24, 1.55], [.31, 1.5], [.4, .4], [.46, .2]],
       elbB: [[0, 1.6], [.18, 1.9], [.24, 0], [.31, .1], [.4, 1.5], [.46, 1.4]], bS: [[0, 0], [.22, 0], [.25, .135], [.3, .105], [.35, 0]],
       gB: [[0, 0], [.22, 0], [.25, .175], [.3, .15], [.34, -.03], [.38, 0]],
-      twist: [[0, 0], [.1, -.18], [.25, .45], [.4, .1], [.46, 0]], lean: [[0, .1], [.05, .02], [.1, .32], [.25, .32], [.46, .12]], fNx: [[0, .25], [.46, .25]], fFx: [[0, -.22], [.46, -.22]] } },
+      twist: [[0, 0], [.1, -.18], [.25, .45], [.4, .1], [.46, 0]], lean: [[0, .1], [.05, .02], [.1, .32], [.25, .32], [.46, .12]], fNx: [[0, .37], [.1, .42], [.32, .42], [.46, .37]], fFx: [[0, -.4], [.46, -.4]] } },   // (feet from his stance: a little step in on the jab)
   upperhook: { dur: .52, step: 120, sq: .1, hop: -260, sfx: "kick", sfx2: [.28, "punch"], hits: [{ t0: .08, t1: .19, reach: 64, back: -8, y0: 165, y1: 40, kind: "upper" }, { t0: .28, t1: .38, reach: 78, back: -8, y0: 115, y1: 55, kind: "hook" }],
     keys: { armF: [[0, .3], [.05, .1], [.16, 2.5], [.24, 2.4], [.34, .6], [.52, .2]], elbF: [[0, 1.5], [.05, 1.9], [.16, 1.3], [.24, 1.3], [.34, 1.6], [.52, 1.4]],
       armB: [[0, .3], [.22, .1], [.32, 1.45], [.38, 1.35], [.46, .4], [.52, .2]], elbB: [[0, 1.5], [.22, 1.7], [.32, 1.45], [.38, 1.5], [.46, 1.5], [.52, 1.4]],
@@ -1597,7 +1597,8 @@ const STRIKES = {
     hits: [{ t0: .2, t1: .3, reach: 92, back: -8, y0: 140, y1: 55, kind: "haymaker" }, { t0: .42, t1: .5, reach: 80, back: -8, y0: 115, y1: 55, kind: "hook" }],
     keys: { armF: [[0, .4], [.08, -1.0], [.16, 2.7], [.24, 1.45], [.32, 1.3], [.44, .5], [.62, .3]], elbF: [[0, 1.6], [.08, 1.2], [.16, .6], [.24, 0], [.32, .1], [.44, 1.5], [.62, 1.4]],
       aS: [[0, 0], [.2, 0], [.24, .135], [.3, .105], [.36, 0]], lean: [[0, .1], [.08, -.1], [.2, .6], [.32, .55], [.44, .3], [.62, .12]],
-      bodyY: [[0, 0], [.08, .02], [.22, -.14], [.34, -.12], [.5, -.03], [.62, 0]], fNx: [[0, .15], [.12, .2], [.22, .55], [.4, .5], [.62, .2]], fFx: [[0, -.15], [.22, -.55], [.4, -.5], [.62, -.2]],
+      bodyY: [[0, 0], [.08, .02], [.22, -.14], [.34, -.12], [.5, -.03], [.62, 0]], fNx: [[0, .37], [.1, .39], [.22, .48], [.42, .47], [.62, .37]], fFx: [[0, -.4], [.22, -.42], [.42, -.42], [.62, -.4]],
+      fNy: [[0, 0], [.08, .06], [.2, 0], [.62, 0]], hF: [[0, .5], [.2, .85], [.44, .7], [.62, .5]],   // (was a split: both feet sliding wide apart. Now the lead foot steps in, the rear heel drives up)
       twist: [[0, 0], [.08, -.35], [.22, .25], [.36, .1], [.44, .55], [.52, .2], [.62, 0]],
       armB: [[0, .3], [.36, .2], [.44, 1.45], [.5, 1.35], [.58, .4], [.62, .3]], elbB: [[0, 1.5], [.36, 1.7], [.44, 1.45], [.5, 1.5], [.62, 1.4]] } },
   palm: { dur: .38, chain: .24, step: 180, sq: -.1, sfx: "punch", hits: [{ t0: .08, t1: .18, reach: 86, back: -8, y0: 120, y1: 50, kind: "punch" }],   // twin palm strike from a low stance
@@ -1783,7 +1784,7 @@ function updatePoseHuman(p, dt) {
     else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .1, fNy: .08, fFx: -.08, fFy: .14, fP: .1 }), layPose(T, m.fall, p);
   } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
-  else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.72 + (p.sprint ? .08 : 0), .1, wk), arch: -.04, bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.34, -.04, wk) }
+  else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + (p.sprint ? .06 : 0), .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
     : { lean: lerp(.58 + (p.sprint ? .16 : 0), .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
   else {
     const b = Math.sin(t * 2.4); Object.assign(T, { bodyY: b * .006 * m.bounce, arch: b * .02, armF: .12 + b * .03, armB: -.08 - b * .02, headRot: Math.sin(t * 1.1) * .04 });

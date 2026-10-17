@@ -51,6 +51,7 @@
   #pips svg:nth-child(4) { animation-delay: .3s; } #pips svg:nth-child(5) { animation-delay: .4s; }
   @keyframes lifeShine { 0%, 80%, 100% { filter: none; } 86% { filter: brightness(1.55) drop-shadow(0 0 3px rgba(255, 255, 255, .85)); } }
   #round { letter-spacing: .2em; display: none; }   /* (the user: no room count in a level) */
+  #hud.boss .bar { display: none; }   /* (the user, 2026-10-17: no boss health on screen) */
   #pips svg.opt { display: none; }                  /* (the leaping fish: optional, so they're not counted) */
   #hint { position: fixed; left: 16px; bottom: 16px; background: var(--s); color: var(--y); font: 500 11px "Jost", sans-serif;
     letter-spacing: .22em; padding: 8px 14px 8px 6px; transition: opacity 1.2s; }
@@ -189,8 +190,14 @@
     #pause .btns button:first-child { grid-column: span 2; }
   }
   #hint { z-index: 1; }   /* (phone: under the pause menu and the other panels) */
+  #holdTip { display: none !important; }   /* (the user, 2026-10-17: no "press and hold your buttons" tip on the phone) */
+  @media (max-height: 520px) {   /* the room banners, the exit cue and the loading name, smaller (the user, 2026-10-17) */
+    #banner .blk { font-size: 26px; padding: 7px 12px 2px; } #banner .bar { font-size: 9px; margin-left: 28px; letter-spacing: .28em; }
+    #exitCue .blk { font-size: 18px; } #exitCue .bar { font-size: 8px; }
+    #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
+  }
 </style>
-<script src="charkit.js?v=20261017g"></script>
+<script src="charkit.js?v=20261017h"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261017b"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -266,7 +273,7 @@
 </div></div>
 <div id="modal"><div class="panel">
   <div class="lockup"><div class="blk" id="mtitle">TRIAL COMPLETE</div><div class="bar" id="result">Sirocco defeated.</div></div>
-  <div class="btns"><button id="reset">RESET TRIAL</button><button id="changeOpp">CHANGE OPPONENT</button><button id="change">CHANGE CHARACTER</button></div>
+  <div class="btns"><button id="reset">RESET TRIAL</button><button id="changeOpp">CHANGE WORLD</button><button id="change">CHANGE CHARACTER</button></div>
   <small>Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
@@ -476,7 +483,7 @@ function rngF(seed) {
 
 // ───────────────────────────── renderer / scene ─────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });   // the scene is antialiased in frameRT; the canvas only shows it
-let pixelRatio = Math.min(devicePixelRatio || 1, 1.5);
+let pixelRatio = Math.min(devicePixelRatio || 1, 2);   // (phone build: sharper)
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 document.body.prepend(renderer.domElement);
@@ -494,10 +501,10 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 } },
+  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     void main() {
       vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
@@ -507,7 +514,7 @@ const gradeMat = new THREE.ShaderMaterial({
       c = mix(c, c * tintC, tintAmt);                  // the hour's colour: golden, orange, blue, night
       c = pow(c, vec3(.95));                           // slightly brighter midtones
       c = (c - .5) * 1.07 + .5;                        // a little contrast back, so it doesn't read as haze
-      if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
+      if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
   depthTest: false, depthWrite: false,
@@ -516,7 +523,7 @@ gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat));
 if (window.BEP_IMG) {                                // the bep crowd art: green behind the title, blue behind character select, magenta as the cover when you win
   document.getElementById("title").style.backgroundImage = `url(${BEP_IMG.title})`; document.getElementById("modal").style.setProperty("--cover", `url(${BEP_IMG.cover})`);
   const im = new Image(); im.onload = () => { const t = new THREE.Texture(im); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
-    gradeMat.uniforms.bgTex.value = t; gradeMat.uniforms.bgA.value = im.width / im.height; }; im.src = BEP_IMG.select;
+    gradeMat.uniforms.bgTex.value = t; gradeMat.uniforms.bgA.value = im.width / im.height; gradeMat.uniforms.bgPer.value = im.width === 4331 ? 3492 / 4331 : 1; }; im.src = BEP_IMG.select;   // (the repeat: re-measure it if the art changes)
 }
 addEventListener("resize", () => {
   renderer.setSize(innerWidth, innerHeight); sizeRT();
@@ -2381,7 +2388,7 @@ addEventListener("keydown", e => {
     else if (/^Digit[1-7]$/.test(e.code) && +e.code.slice(5) <= FOES.length) pickOpp(+e.code.slice(5) - 1);
     return;
   }
-  if (modalOpen) { if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); onReset(); } else if (e.code === "KeyC") showSelect(); else if (e.code === "KeyO") showOpp(); return; }
+  if (modalOpen) { if (e.code === "Enter" || e.code === "Space") { e.preventDefault(); onReset(); } else if (e.code === "KeyC") showSelect(); else if (e.code === "KeyO" || e.code === "KeyW") showWorlds(); return; }
   if (paused) {
     if (e.repeat) return;
     if (["ArrowUp", "ArrowLeft", "KeyW", "KeyA"].includes(e.code)) setPauseSel(pauseSel - 1);
@@ -2704,7 +2711,7 @@ function setWorldSel(i, quiet) {
   if (quiet) { setWorld(worldSel); setScreen(0); }
   else setWorldSel.h = setTimeout(() => { if (mode === "world") { setWorld(worldSel); setScreen(0); } }, 150);
 }
-function chooseWorld(i) { if (transit) return; if (i !== worldSel || i !== world) setWorldSel(i, true); SFX.confirm(); showOpp(); }   // (a run can carry you on into the next world: picking this one again brings it back)
+function chooseWorld(i) { if (transit) return; if (i !== worldSel || i !== world) setWorldSel(i, true); pickOpp(STAGES[0].foe ?? 0); }   // (the user, 2026-10-17: no opponent screen; just pick the level)   // (a run can carry you on into the next world: picking this one again brings it back)
 function updateWorldSel(dt) {                        // the picked character waits centre stage while you choose
   const st = lineup[sel];
   st.x = lerp(st.x, 480, 1 - Math.exp(-dt * 7)); st.yaw = lerp(st.yaw, -1.45, 1 - Math.exp(-dt * 8));
@@ -2822,7 +2829,7 @@ function beginPlay() {                               // into the game (from pick
   $("select").classList.add("hidden");
   ["hud", "hint"].forEach(id => $(id).classList.remove("hidden"));   // (the top-left health bar and name are gone: the user, 2026-10-16)
   $("pname").textContent = rig.name; $("ename").textContent = foe.name;
-  $("hint").innerHTML = "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>↑</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>A</b>" + (rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN") + " · HOLD TO CHARGE <b>B</b>BLOCK · HOLD: BUBBLE <b>A+B</b>TACKLE <b>↑</b>LADDERS <b>❚❚</b>PAUSE";
+  $("hint").innerHTML = "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>A</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>X</b>" + (rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN") + " · HOLD TO CHARGE <b>B</b>BLOCK · HOLD: BUBBLE <b>Y</b>TACKLE · HOLD TO CHARGE <b>↑</b>LADDERS <b>❚❚</b>PAUSE";
   $("hint").classList.remove("hide"); hintShown = true;
   mode = "play"; resetTrial(); startMusic(); holdTipSoon();
 }
@@ -7134,7 +7141,9 @@ function buildCruxCity(k = 0, seed = k) {
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 12.6, bevelEnabled: false }).translate(0, 0, -8.6), mats.mid));
     const lip = new THREE.Shape(); lip.moveTo(X(a), gY - 10); pts.forEach(([x, y]) => lip.lineTo(X(x), Y(y) - .18)); lip.lineTo(X(b), gY - 10); lip.closePath();
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(lip, { depth: .3, bevelEnabled: false }).translate(0, 0, 3.95), mats.deep));
-    scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .14, bevelEnabled: false }).translate(0, .02, 3.86), mats.black));
+    scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .14, bevelEnabled: false }).translate(0, .02, 3.88), mats.black));
+    // (the kerb's face sits just proud of the street's front face: they were level at z 4.0 and fought, so the kerb line shimmered
+    // black and grey as you walked, worst on a phone. The user, 2026-10-17: "crux's world was kind of glitching at the bottom")
   });
   { const N = 180, jl = new THREE.InstancedMesh(new THREE.BoxGeometry(.04, .02, 1.6), mats.mid, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();   // paving joints
     let n = 0; for (let x = -10; x < WX + 10 && n < N; x += 1.6) for (const z of [-6, -4.2, -2.4, -.6, 1.2, 3]) { if (overGap(x / S) || n >= N) continue; m4.compose(new THREE.Vector3(x + (z % 2 ? .8 : 0), gAt(x) + .01, z), q, new THREE.Vector3(1, 1, 1)); jl.setMatrixAt(n++, m4); }
@@ -7768,46 +7777,47 @@ function buildMudHut(k) {
 }
 let WAVE_FOES = null;
 const WORLDS = [
-  { name: "BERRY WOODS", blurb: "A forest path from midday to night, crawling with leaf, thorn and wood baddies. Glos waits at the end of it.",
+  { name: "BERRY WOODS", blurb: "A forest path from midday to night, crawling with leaf, thorn and wood baddies.",
     screens: SCREENS.slice(), stages: STAGES.slice(), roster: BB_ROSTER.slice(), foes: woodFoes },
-  { name: "CUSS' WAVES", blurb: "A rocky coast from midday to night. Cross the open water on sea stacks and piers (fall in and it costs a heart). Cuss waits at the summit.",
+  { name: "CUSS' WAVES", blurb: "A rocky coast from midday to night. Cross the open water on sea stacks and piers (fall in and it costs a heart).",
     screens: WAVE_SCREENS, stages: WAVE_STAGES, roster: WAVE_ROSTER, foes: () => WAVE_FOES || (WAVE_FOES = buildWaveFoes()) },
-  { name: "VOLT KEEP", blurb: "Van Van's castle-factory, crackling with electricity and crawling with robot berries. In at the gate, up through the works: two ways to the top, and Van Van at either end.",
+  { name: "VOLT KEEP", blurb: "A castle-factory crackling with electricity and crawling with robot berries. In at the gate, up through the works: two ways to the top.",
     screens: FACTORY_SCREENS, stages: FACTORY_STAGES, roster: FACTORY_ROSTER, foes: () => FACTORY_FOES || (FACTORY_FOES = buildFactoryFoes()) },
-  { name: "LOOF'S SKY", blurb: "Up in the clouds off the top of Volt Keep: sandstone docks over a sea of cloud, airships drifting by, Loof's cronies everywhere. Fall and it costs a heart. Rope ladders climb up or down: the top way out drops you into the Berry Woods.",
+  { name: "LOOF'S SKY", blurb: "Up in the clouds off the top of Volt Keep: sandstone docks over a sea of cloud, airships drifting by, sky-pirate berries everywhere. Fall and it costs a heart. Rope ladders climb up or down: the top way out drops you into the Berry Woods.",
     screens: SKY_SCREENS, stages: SKY_STAGES, roster: SKY_ROSTER, foes: skyFoes },
-  { name: "SIROCCO'S DUNES", blurb: "Down out of the bottom of Loof's sky: red dunes under a blue sky, a glass pyramid far off with a beam of light from its tip, fire daruma everywhere, sinkholes in the sand. Sirocco waits on the crest.",
+  { name: "SIROCCO'S DUNES", blurb: "Down out of the bottom of Loof's sky: red dunes under a blue sky, a glass pyramid far off with a beam of light from its tip, fire daruma everywhere, sinkholes in the sand.",
     screens: DUNE_SCREENS, stages: DUNE_STAGES, roster: DUNE_ROSTER, foes: duneFoes },
-  { name: "KESH'S GARDEN", blurb: "On out of the dunes into the night: a floating blossom garden under the stars, ninja berries in every hedge. Night the whole way, darkest at the start; the light only comes at the very end, and Kesh is waiting at dawn. Fall through a rift and it costs a heart.",
+  { name: "KESH'S GARDEN", blurb: "On out of the dunes into the night: a floating blossom garden under the stars, ninja berries in every hedge. Night the whole way, darkest at the start; the light only comes at the very end. Fall through a rift and it costs a heart.",
     screens: KESH_SCREENS, stages: KESH_STAGES, roster: KESH_ROSTER, foes: keshFoes, song: 6 },
-  { name: "VINELLA'S CANDY WORKS", blurb: "On from Kesh's garden into Vinella's candy factory: swirls everywhere, conveyors of sweets, vats of bubbling taffy (fall in and it costs a heart), vampire berries in little cloaks. The floor splits in two at B4; Vinella waits at both ends.",
+  { name: "VINELLA'S CANDY WORKS", blurb: "On from Kesh's garden into the candy factory: swirls everywhere, conveyors of sweets, vats of bubbling taffy (fall in and it costs a heart), vampire berries in little cloaks. The floor splits in two at B4.",
     screens: CANDY_SCREENS, stages: CANDY_STAGES, roster: CANDY_ROSTER, foes: candyFoes, song: 7 },
-  { name: "CRUX'S CITY", blurb: "On from the candy works into Crux's city: a busy towering city in old-cartoon black and white (all but you), signs pointing every which way, a berry whose swirl leaves you dizzy. At the crossroads it splits three ways, up, on and down: three ways out, and Crux at the end of each.",
+  { name: "CRUX'S CITY", blurb: "On from the candy works into the city: a busy towering city in old-cartoon black and white (all but you), signs pointing every which way, a berry whose swirl leaves you dizzy. At the crossroads it splits three ways, up, on and down: three ways out.",
     screens: CRUX_SCREENS, stages: CRUX_STAGES, roster: CRUX_ROSTER, foes: cruxFoes, song: 8 },
-  { name: "TURTLE'S LAKEBED", blurb: "Down to the bottom of a great lake that's run dry: cracked mud and stranded boats, mud huts, balloon skiffs drifting under a huge pale planet. Mostly the low lake floor; at the old shore steps the way splits, up and up toward the rim, or on down into the deep. The Turtle waits at both ends.",
+  { name: "TURTLE'S LAKEBED", blurb: "Down to the bottom of a great lake that's run dry: cracked mud and stranded boats, mud huts, balloon skiffs drifting under a huge pale planet. Mostly the low lake floor; at the old shore steps the way splits, up and up toward the rim, or on down into the deep.",
     screens: LAKE_SCREENS, stages: LAKE_STAGES, roster: LAKE_ROSTER, foes: lakeFoes, song: 9 },
 ];
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
-// (the user, 2026-10-17: "dont cluster too many of them in each section. maybe 2 or so per screen usually"). Rooms had four to seven
-// baddies, often two or three within a step of each other. Now each room keeps three of its roster (two in a boss room), the set
-// spread furthest apart (about a screen between them, so you meet them a couple at a time), with as many different kinds as it can.
-// Picked the same way every time, so a room always has the same baddies; the hand-placed rosters are untouched.
+// baddies come in encounters (the user, 2026-10-17: "only 2 to 3 should ever be close to each other, no more. and usually 2 depending
+// on how difficult the pairing is"). The rooms keep most of their hand-placed baddies; any closer than SEP to the next one are one
+// encounter, and an encounter is one baddy, a pair (unless the two together are too much: a giant and a big one), or three only when
+// they're all light (small ones, or two small and a medium). Weight: small 1, medium 1.5, big 2, giant 3, and +.5 for one that shoots.
+// Picked the same way every time (each kind's first one first, then the rest in roster order), so a room always has the same baddies
+const ENC_SEP = 560, BB_RANGED = new Set(["spit", "lob", "bubble", "bomb", "shuriken", "daze", "puff"]), BB_WT = { S: 1, M: 1.5, B: 2, G: 3 };
 function thinRoster(W) {
   if (W.rosterThin) return W.rosterThin;
   return (W.rosterThin = (W.roster || []).map((row, k) => {
-    const st = W.stages[k] || {}, pl = st.plats || [], gp = st.gaps || [], N = Math.min((row || []).length, st.boss ? 2 : 3);
-    if (!row || row.length <= N) return row;
+    if (!row || row.length < 2) return row;
+    const st = W.stages[k] || {}, pl = st.plats || [], gp = st.gaps || [];
     const xOf = at => typeof at === "number" ? at : at && at.plat !== undefined && pl[at.plat] ? pl[at.plat][0] + pl[at.plat][2] / 2
-      : at && at.gap !== undefined && gp[at.gap] ? (gp[at.gap][0] + gp[at.gap][1]) / 2 : WORLD / 2, xs = row.map(e => xOf(e[2]));
-    const sets = (from, n) => n === 0 ? [[]] : from.length < n ? [] : [...sets(from.slice(1), n - 1).map(c => [from[0], ...c]), ...sets(from.slice(1), n)];
-    let best = null;
-    for (const c of sets(row.map((e, i) => i), N)) {
-      const v = c.map(i => xs[i]).sort((a, b) => a - b); let gap = 1e9; for (let j = 1; j < v.length; j++) gap = Math.min(gap, v[j] - v[j - 1]);
-      const score = Math.min(gap, 700) * 10 + new Set(c.map(i => row[i][0])).size * 100 + (v[v.length - 1] - v[0]) * .01;
-      if (!best || score > best.score) best = { score, c };
-    }
-    return row.filter((e, i) => best.c.includes(i));
+      : at && at.gap !== undefined && gp[at.gap] ? (gp[at.gap][0] + gp[at.gap][1]) / 2 : WORLD / 2;
+    const wt = e => { const T = BB_TYPES[e[0]] || {}; return (BB_WT[T.size] || 1.5) + (BB_RANGED.has(T.atk) ? .5 : 0); };
+    const items = row.map((e, i) => ({ i, x: xOf(e[2]), w: wt(e), t: e[0] })), seen = new Set(), first = [], rest = [];
+    items.forEach(q => (seen.has(q.t) ? rest : (seen.add(q.t), first)).push(q));
+    const sum = g => g.reduce((a, q) => a + q.w, 0), ok = g => g.length === 1 || (g.length === 2 && sum(g) <= 4.5) || (g.length === 3 && sum(g) <= 3.5);
+    const groups = list => { const gs = []; [...list].sort((a, b) => a.x - b.x).forEach(q => { const g = gs[gs.length - 1]; if (g && q.x - g[g.length - 1].x < ENC_SEP) g.push(q); else gs.push([q]); }); return gs; };
+    const kept = []; for (const q of [...first, ...rest]) if (groups([...kept, q]).every(ok)) kept.push(q);
+    return row.filter((e, i) => kept.some(q => q.i === i));
   }));
 }
 function setWorld(i) {                             // swap in a world's hours, stages, baddies and bosses
@@ -7933,7 +7943,8 @@ const bossPips = n => Array.from({ length: n }, (_, i) =>      // one pip per tw
   `<svg viewBox="0 0 16 20" style="animation-delay:${(i * .1).toFixed(1)}s"><path d="M8 1 L13 8 L14 13 Q14 19 8 19 Q2 19 2 13 L3 8 L6 5 Z" fill="#ffd203"/><path d="M8 10 L10.5 14 Q10 17 8 17 Q6 17 5.5 14 Z" fill="#2f3b43"/></svg>`).join("");
 const BERRY_PIP = `<svg viewBox="0 0 16 20"><path d="M3.2 4.6 L5.4 6.6 L6.8 3.4 L8 6 L9.2 3.4 L10.6 6.6 L12.8 4.6 L12.4 8 A6.6 6.6 0 1 1 3.6 8 Z" fill="#ffd203"/><path d="M8 11 L9.6 12.4 L9 14.4 L7 14.4 L6.4 12.4 Z" fill="#2f3b43"/></svg>`;
 function setFoeHud() {                           // while the baddies are up the bar counts them (berries); then it shows the boss's health
-  if (bossIn) { $("ename").textContent = foe.name; pipsEl.innerHTML = bossPips(Math.ceil((enemy.maxHp || 10) / 2)); [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(enemy.hp / 2)) pip.classList.add("lost"); }); }
+  $("hud").classList.toggle("boss", !!bossIn);
+  if (bossIn) { $("ename").textContent = foe.name; pipsEl.innerHTML = ""; }   // (the user, 2026-10-17: don't show the bosses' health)
   else { $("ename").textContent = "BERRY BADDIES"; pipsEl.innerHTML = baddies.map(b => b.T.move === "breach" ? BERRY_PIP.replace("<svg", '<svg class="opt"') : BERRY_PIP).join(""); baddies.forEach((b, i) => { if (b.gone || b.dead) pipsEl.children[i].classList.add("lost"); }); }
 }
 function bossArrive() {                          // all three popped: the boss drops in at the far end of the clearing
@@ -9659,6 +9670,7 @@ function render(dt) {
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
+  if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   renderer.render(scene, camera);
@@ -9677,11 +9689,11 @@ function adaptQuality(dt) {
   qT += dt; qN++; qSum += dt;
   if (qT < 1.5) return;
   const avg = qSum / qN; qT = qN = qSum = 0;
-  if (avg > 1 / 54 && pixelRatio > 1) {                     // under ~54 fps: a lower resolution first
-    pixelRatio = Math.max(1, pixelRatio - .25);
+  if (avg > 1 / 40 && pixelRatio > 1.5) {   // (phone build: only under ~40 fps, and never below 1.5x)                     // under ~54 fps: a lower resolution first
+    pixelRatio = Math.max(1.5, pixelRatio - .25);
     renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight); sizeRT();
-  } else if (avg > 1 / 54 && frameRT.samples > 2) { frameRT.samples = 2; frameRT.dispose(); }   // still slow: lighter edge smoothing
-  else if (avg > 1 / 50 && frameRT.samples > 0) { frameRT.samples = 0; frameRT.dispose(); }      // and slower still: none
+  } else if (avg > 1 / 36 && frameRT.samples > 2) { frameRT.samples = 2; frameRT.dispose(); }   // still slow: lighter edge smoothing
+  else if (false && frameRT.samples > 0) { frameRT.samples = 0; frameRT.dispose(); }      // and slower still: none
 }
 let fadeT = 0; const fadeEl = document.getElementById("fade");
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
@@ -9702,7 +9714,7 @@ let frameErrs = 0;
 const PERF = { u: 0, r: 0, n: 0, dt: 0 };      // frame timing, for tuning (window.__game.perf())
 $("reset").onclick = onReset;
 $("change").onclick = showSelect;
-$("changeOpp").onclick = showOpp;
+$("changeOpp").onclick = showWorlds;
 renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
 showSelect();
 const storeReady = store.connect().then(ok => { if (ok) villainLooks.connect(); if (ok && mode === "select" && !edOpen) { const id = roster[sel] && roster[sel].id; rebuildRoster(); showSelect(); const i = roster.findIndex(r => r.id === id); if (i >= 0) setSel(i); } }).catch(() => {});
