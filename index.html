@@ -205,7 +205,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261018b"></script>
+<script src="charkit.js?v=20261018c"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261017b"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -1082,12 +1082,169 @@ function bakeStatic(objs, keep) {
   objs.forEach(o => { if (!o.isMesh && !o.isPoints && !o.children.length) scene.remove(o); });
   buckets.forEach((geos, mat) => { const merged = mergeGeometries(geos, false); if (merged) { const mesh = new THREE.Mesh(merged, mat); mesh.matrixAutoUpdate = false; scene.add(mesh); } });
 }
+// ───────────────────────────── the Caribbean rainforest (world 1) ─────────────────────────────
+// (the user, 2026-10-18: "set berry blade on a tropical island" ... "redo it with a focus on tropical forests like in puerto rico or
+// anything in the dominican republic"). After El Yunque and Los Haitises: sierra palms in clumps, royal palms, giant tree ferns,
+// yagrumos (big hand-shaped leaves, silver underneath), ceibas on their buttress roots, flamboyanes in flower, tabonucos; plantains,
+// malanga, heliconias and bromeliads below; lianas hanging; red earth, mossy limestone, and the mogotes (round karst hills) far off
+function tropMats() {
+  const D = { side: THREE.DoubleSide };
+  return { palm: toon("#8f897d"), palmRing: toon("#6f695f"), royal: toon("#d6d1c5"), crown: toon("#7cb24c"), fruit: toon("#d9792e"),
+    frond: [toon("#4f9a3a", D), toon("#3e8434", D), toon("#68ae42", D)], fern: [toon("#6cae3e", D), toon("#58a03a", D)], fernTrunk: toon("#4b3a2c"),
+    yag: toon("#d9d5c8"), yagTop: toon("#3f7d39"), yagUnder: toon("#c9d3c4", { side: THREE.BackSide }), ceiba: toon("#949a8b"), tab: toon("#958d7e"), bark: toon("#5f4c3a"),
+    canopy: ["#2f6a3e", "#3b7a44", "#2a5c39", "#4a8a4a"].map(c => toon(c)), flame: ["#e2412a", "#f0682e", "#d3352a"].map(c => toon(c)),
+    leaf: [toon("#3f8a3c", D), toon("#55a046", D)], vein: toon("#8cc46a"), leafD: toon("#22503a", D), stalk: toon("#6e9e48"),
+    hel: toon("#e0362e"), helTip: toon("#f4c536"), plant: toon("#7f9440"), plantain: toon("#a2c64e"), bud: toon("#7a2f5a"),
+    brom: toon("#5e9a3c", D), bromRed: toon("#ee4a30"), liana: toon("#5d4a32"), mogote: toon("#2f5c41"), moss: toon("#5f9c3e") };
+}
+const leafAim = (o, yaw, pitch) => { o.rotation.order = "YXZ"; o.rotation.y = yaw; o.rotation.z = pitch; return o; };   // a leaf built out along +x: turned round to yaw, tipped up by pitch
+function frondGeo(len, w, { rise = .3, fall = .9, segs = 10, saw = .45, fold = .3 } = {}) {   // a leaf blade along an arc, out along +x, up and then arching over; saw: jagged leaflets down its edges (palms, ferns); fold: the V along its midrib
+  const P = [], pt = (t, sd) => { const i = Math.round(t * segs), wd = w * Math.pow(Math.sin(Math.PI * (.06 + .94 * t)), .6) * (saw && i % 2 ? 1 - saw : 1);
+    return [len * t, len * (rise * t - fall * t * t) - fold * wd * Math.abs(sd), sd * wd]; };
+  for (let i = 0; i < segs; i++) { const a = i / segs, b = (i + 1) / segs, La = pt(a, 1), Ca = pt(a, 0), Ra = pt(a, -1), Lb = pt(b, 1), Cb = pt(b, 0), Rb = pt(b, -1);
+    P.push(...La, ...Ca, ...Lb, ...Ca, ...Cb, ...Lb, ...Ca, ...Ra, ...Cb, ...Ra, ...Rb, ...Cb); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(P.length / 3 * 2), 2)); return g;
+}
+function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0 } = {}) {   // a sierra palm (a ringed grey trunk bending a little, fronds arching, orange fruit stalks under the crown) or a royal palm (tall, smooth, pale, swelling in the middle, a green crownshaft)
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); let top;
+  if (royal) {
+    g.add(mk(new THREE.LatheGeometry([[.4, -.5], [.38, h * .12], [.47, h * .45], [.36, h * .82], [.3, h]].map(([r, v]) => new THREE.Vector2(r, v)), 8), null, { mat: M.royal, ol }));
+    g.add(at(mk(new THREE.CylinderGeometry(.27, .31, h * .15, 8), null, { mat: M.crown, ol }), 0, h * 1.075, 0)); top = new THREE.Vector3(0, h * 1.15, 0);
+  } else {
+    const n = 4, pp = new THREE.Vector3(0, -.4, 0);
+    for (let i = 0; i < n; i++) { const a = lean * (i + 1) / n, d = new THREE.Vector3(Math.sin(a), Math.cos(a), 0), L = (h + .4) / n;
+      const sg = mk(new THREE.CylinderGeometry(.17, .21, L, 7), null, { mat: M.palm, ol }); pointAlong(sg, d); sg.position.copy(pp).addScaledVector(d, L / 2); g.add(sg);
+      pp.addScaledVector(d, L); if (i < n - 1) { const rg = mk(new THREE.CylinderGeometry(.215, .215, .1, 7), null, { mat: M.palmRing, ol: 0 }); pointAlong(rg, d); rg.position.copy(pp); g.add(rg); } }
+    top = pp;
+    for (let j = 0; j < 2; j++) { const a = R(0, TAU), d = new THREE.Vector3(Math.cos(a) * .6, -1, Math.sin(a) * .6).normalize(), st = mk(new THREE.CylinderGeometry(.03, .03, 1, 4), null, { mat: M.fruit, ol: 0 });
+      pointAlong(st, d); st.position.copy(top).addScaledVector(d, .55); g.add(st);
+      for (let b = 0; b < 4; b++) { const u = .4 + b * .18; g.add(at(mk(new THREE.IcosahedronGeometry(.07, 0), null, { mat: M.fruit, ol: 0 }), top.x + d.x * u + R(-.06, .06), top.y + d.y * u, top.z + d.z * u + R(-.06, .06))); } }
+  }
+  const nf = royal ? 12 : 10, fl = royal ? 3.8 : 3.1;
+  for (let j = 0; j < nf; j++) { const f = mk(frondGeo(fl * R(.85, 1.12), .42, { rise: .35, fall: 1.05, segs: 7, saw: .5, fold: .32 }), null, { mat: M.frond[j % 3], ol: 0 });
+    leafAim(f, j / nf * TAU + R(-.2, .2), R(-.05, .5)); f.position.copy(top); g.add(f); }
+  return g;
+}
+function tropTreeFern(par, M, x, y, z, rng, { h = 6, ol = 0 } = {}) {   // a giant tree fern (helecho gigante): a thin dark trunk, a wide umbrella of lacy fronds, fiddleheads uncurling in the middle
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z), lean = R(-.12, .12), d = new THREE.Vector3(Math.sin(lean), Math.cos(lean), 0);
+  const tr = mk(new THREE.CylinderGeometry(.13, .19, h + .4, 6), null, { mat: M.fernTrunk, ol }); pointAlong(tr, d); tr.position.copy(d).multiplyScalar((h - .4) / 2); g.add(tr);
+  const top = d.clone().multiplyScalar(h);
+  for (let j = 0; j < 12; j++) { const f = mk(frondGeo(R(2.3, 3.1), .62, { rise: .28, fall: .62, segs: 8, saw: .6, fold: .12 }), null, { mat: M.fern[j % 2], ol: 0 }); leafAim(f, j / 12 * TAU + R(-.15, .15), R(-.05, .3)); f.position.copy(top); g.add(f); }
+  for (let j = 0; j < 3; j++) { const c = mk(new THREE.TorusGeometry(.13, .04, 4, 8, Math.PI * 1.5), null, { mat: M.fern[0], ol: 0 }); c.rotation.y = j * 2.1; c.position.copy(top).add(new THREE.Vector3(0, .28, 0)); g.add(c); }
+  return g;
+}
+let YAG_G = null;
+const yagLeafGeo = () => YAG_G || (YAG_G = (() => { const sh = new THREE.Shape(), N = 40;   // a yagrumo leaf: round, cut deep into eight fingers
+  for (let i = 0; i < N; i++) { const a = i / N * TAU, r = .32 + .68 * Math.pow(Math.abs(Math.cos(a * 4)), .55); (i ? sh.lineTo : sh.moveTo).call(sh, Math.cos(a) * r, Math.sin(a) * r); }
+  sh.closePath(); return new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2); })());
+function tropYagrumo(par, M, x, y, z, rng, { h = 11, ol = 0 } = {}) {   // a yagrumo (Cecropia): a pale jointed trunk, a few branches like a candelabra, each ending in a bunch of big hand-shaped leaves, silver underneath
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z);
+  g.add(at(mk(new THREE.CylinderGeometry(.2, .3, h, 7), null, { mat: M.yag, ol }), 0, h / 2, 0));
+  for (let i = 1; i < 5; i++) g.add(at(mk(new THREE.CylinderGeometry(.235, .235, .07, 7), null, { mat: M.palmRing, ol: 0 }), 0, h * i / 5, 0));
+  const nb = rng() < .5 ? 3 : 4;
+  for (let b = 0; b < nb; b++) { const a = b / nb * TAU + R(-.3, .3), len = R(1.6, 2.8), d = new THREE.Vector3(Math.cos(a) * .75, 1, Math.sin(a) * .5).normalize(), base = new THREE.Vector3(0, h - .2, 0);
+    const br = mk(new THREE.CylinderGeometry(.09, .14, len, 6), null, { mat: M.yag, ol }); pointAlong(br, d); br.position.copy(base).addScaledVector(d, len / 2); g.add(br);
+    const tip = base.clone().addScaledVector(d, len);
+    for (let l = 0; l < 5; l++) { const la = l / 5 * TAU + R(-.25, .25), sc = R(.85, 1.2), tilt = R(.25, .75), off = .8 * sc;
+      for (const mat of [M.yagTop, M.yagUnder]) { const lf = mk(yagLeafGeo(), null, { mat, ol: 0 }); lf.scale.setScalar(sc); leafAim(lf, -la, -tilt);
+        lf.position.set(tip.x + Math.cos(la) * off, tip.y - Math.sin(tilt) * off * .5 + .1, tip.z + Math.sin(la) * off); g.add(lf); } } }
+  return g;
+}
+let FIN_G = null;
+const finGeo = () => FIN_G || (FIN_G = (() => { const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(3, 0); sh.quadraticCurveTo(.9, .5, .15, 4.4); sh.lineTo(0, 4.4); sh.closePath();   // a buttress root: a tall thin fin flaring out from the foot of a trunk
+  return new THREE.ExtrudeGeometry(sh, { depth: .26, bevelEnabled: false, curveSegments: 5 }).translate(0, 0, -.13); })());
+function tropLiana(par, M, x, y, z, len, rng) {   // a liana hanging down, kinked a little, a few leaves along it
+  const R = (a, b) => a + rng() * (b - a), pp = new THREE.Vector3(x, y, z);
+  for (let i = 0; i < 3; i++) { const L = len / 3, d = new THREE.Vector3(R(-.18, .18), -1, R(-.1, .1)).normalize(), sg = mk(new THREE.CylinderGeometry(.035, .035, L, 4), null, { mat: M.liana, ol: 0 });
+    pointAlong(sg, d); sg.position.copy(pp).addScaledVector(d, L / 2); par.add(sg); pp.addScaledVector(d, L);
+    if (rng() < .7) par.add(at(mk(new THREE.IcosahedronGeometry(R(.1, .18), 0).scale(1.4, .5, 1), null, { mat: M.leaf[i % 2], ol: 0 }), pp.x + R(-.1, .1), pp.y, pp.z)); }
+}
+function tropBromeliad(par, M, x, y, z, rng, s = 1) {   // a bromeliad (piña de pájaro): a rosette of stiff arching leaves round a red spike
+  const g = group(par, x, y, z); g.scale.setScalar(s);
+  for (let j = 0; j < 8; j++) { const f = mk(frondGeo(.62, .1, { rise: 1.4, fall: 1.25, segs: 4, saw: 0, fold: .2 }), null, { mat: M.brom, ol: 0 }); leafAim(f, j / 8 * TAU + rng() * .4, .1); g.add(f); }
+  g.add(at(mk(new THREE.ConeGeometry(.08, .42, 5), null, { mat: M.bromRed, ol: 0 }), 0, .26, 0));
+  return g;
+}
+function tropCeiba(par, M, x, y, z, rng, { h = 13, ol = 0, crown = true, back = false } = {}) {   // a ceiba: a great grey trunk on buttress roots, limbs reaching out level, a wide flat crown; bromeliads up on the limbs, lianas hanging (back: the roots only spread behind it and to the sides)
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z);
+  g.add(at(mk(new THREE.CylinderGeometry(.85, 1.25, h + 1, 9), null, { mat: M.ceiba, ol }), 0, (h - 1) / 2, 0));
+  for (let i = 0; i < 6; i++) { const f = mk(finGeo(), null, { mat: M.ceiba, ol }); f.rotation.y = back ? i / 5 * Math.PI : i / 6 * TAU + R(-.2, .2); f.scale.set(R(.8, 1.2), R(.75, 1.1), 1); g.add(f); }
+  if (!crown) return g;
+  for (let i = 0; i < 5; i++) { const a = i / 5 * TAU + R(-.3, .3), len = R(4, 6.5), d = new THREE.Vector3(Math.cos(a), R(.3, .55), Math.sin(a) * .55).normalize(), base = new THREE.Vector3(0, h - .6, 0);
+    const lb = mk(new THREE.CylinderGeometry(.2, .42, len, 6), null, { mat: M.ceiba, ol }); pointAlong(lb, d); lb.position.copy(base).addScaledVector(d, len / 2); g.add(lb);
+    const tip = base.clone().addScaledVector(d, len * .7); tropBromeliad(g, M, tip.x, tip.y + .15, tip.z, rng, .7);
+    if (rng() < .7) tropLiana(g, M, tip.x, tip.y, tip.z + .2, R(3, 6), rng); }
+  for (let i = 0; i < 10; i++) { const a = R(0, TAU), dd = R(0, 6.8); g.add(at(mk(new THREE.IcosahedronGeometry(R(2.1, 3.3), 0).scale(1.45, .42, 1), null, { mat: M.canopy[i % 4], ol: 0 }), Math.cos(a) * dd, h + R(1.4, 2.6), Math.sin(a) * dd * .6)); }
+  return g;
+}
+function tropFlamboyan(par, M, x, y, z, rng, { h = 6, ol = 0 } = {}) {   // a flamboyán in flower: a short dark trunk splitting into spreading limbs, a wide umbrella crown of flame red
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z);
+  g.add(at(mk(new THREE.CylinderGeometry(.28, .42, h * .6, 7), null, { mat: M.bark, ol }), 0, h * .3, 0));
+  for (let i = 0; i < 4; i++) { const a = i / 4 * TAU + R(-.4, .4), len = R(3, 4.4), d = new THREE.Vector3(Math.cos(a), R(.5, .85), Math.sin(a) * .7).normalize(), base = new THREE.Vector3(0, h * .55, 0);
+    const lb = mk(new THREE.CylinderGeometry(.12, .25, len, 6), null, { mat: M.bark, ol }); pointAlong(lb, d); lb.position.copy(base).addScaledVector(d, len / 2); g.add(lb); }
+  for (let i = 0; i < 12; i++) { const a = R(0, TAU), dd = R(0, 4.2); g.add(at(mk(new THREE.IcosahedronGeometry(R(1.3, 2.3), 0).scale(1.4, .5, 1), null, { mat: i % 4 === 3 ? M.canopy[3] : M.flame[i % 3], ol: 0 }), Math.cos(a) * dd, h + R(.2, 1.4) - dd * .12, Math.sin(a) * dd * .7)); }
+  return g;
+}
+function tropTabonuco(par, M, x, y, z, rng, { h = 12, ol = 0 } = {}) {   // a tabonuco: El Yunque's big canopy tree, smooth pale bark, small buttresses, a broad crown
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); g.rotation.z = R(-.05, .05);
+  g.add(at(mk(new THREE.CylinderGeometry(R(.26, .38), R(.5, .7), h + 2, 7), null, { mat: M.tab, ol }), 0, h / 2, 0));
+  for (let i = 0; i < 4; i++) { const f = mk(finGeo(), null, { mat: M.tab, ol: 0 }); f.rotation.y = i / 4 * TAU + R(-.3, .3); f.scale.set(.42, .35, .8); g.add(f); }
+  for (let c = 0; c < 6; c++) g.add(at(mk(new THREE.IcosahedronGeometry(R(1.7, 3.1), 0).scale(1.3, .62, 1), null, { mat: M.canopy[c % 4], ol: 0 }), R(-3, 3), h + R(-1, 1.6), R(-1.6, 1.6)));
+  return g;
+}
+let HEARTLF_S = null, HEARTLF_G = null;
+const heartShape = () => HEARTLF_S || (HEARTLF_S = (() => { const sh = new THREE.Shape(), N = 36;   // malanga's (yautía's) leaf: a big arrow-heart, the stalk at the notch (0, 0), the tip out at x 1.6, the lobes back to x -0.5
+  for (let i = 0; i < N; i++) { const t = i / N * TAU, hx = 16 * Math.sin(t) ** 3, hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t); (i ? sh.lineTo : sh.moveTo).call(sh, (5 - hy) / 22 * 1.6, hx / 16 * .78); }
+  sh.closePath(); return sh; })());
+const heartLeafGeo = () => HEARTLF_G || (HEARTLF_G = new THREE.ShapeGeometry(heartShape()).rotateX(-Math.PI / 2));
+function tropMalanga(par, M, x, y, z, rng, s = 1) {   // a malanga clump: big arrow-heart leaves held out on long stalks
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); g.scale.setScalar(s);
+  for (let j = 0; j < 4; j++) { const a = j / 4 * TAU + R(-.4, .4) + .8, hh = R(.55, 1.05), out = R(.25, .45), tip = new THREE.Vector3(Math.cos(a) * out, hh, Math.sin(a) * out);
+    const st = mk(new THREE.CylinderGeometry(.025, .04, tip.length(), 5), null, { mat: M.stalk, ol: 0 }); pointAlong(st, tip); st.position.copy(tip).multiplyScalar(.5); g.add(st);
+    const lf = mk(heartLeafGeo(), null, { mat: M.leaf[j % 2], ol: 0 }); lf.scale.setScalar(R(.55, .8)); leafAim(lf, -a, R(-.7, -.25)); lf.position.copy(tip); g.add(lf); }
+  return g;
+}
+let PADDLE_G = null;
+const paddleGeo = () => PADDLE_G || (PADDLE_G = (() => { const sh = new THREE.Shape(); sh.absellipse(0, .55, .16, .55, 0, TAU, false, 0); return new THREE.ShapeGeometry(sh, 8); })());   // a long paddle leaf, upright from its foot
+function tropHeliconia(par, M, x, y, z, rng, s = 1) {   // a heliconia (platanillo): tall paddle leaves, and zigzag spikes of red bracts tipped yellow
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); g.scale.setScalar(s);
+  for (let j = 0; j < 5; j++) { const sub = group(g); sub.rotation.set(0, R(0, TAU), -R(.1, .45)); const hh = R(.3, .7);
+    sub.add(at(mk(new THREE.CylinderGeometry(.02, .03, hh, 4), null, { mat: M.stalk, ol: 0 }), 0, hh / 2, 0));
+    const lf = mk(paddleGeo(), null, { mat: M.leaf[j % 2], ol: 0 }); lf.scale.setScalar(R(.8, 1.2)); at(lf, 0, hh, 0); sub.add(lf); }
+  for (let k = 0; k < (rng() < .5 ? 2 : 1); k++) { const sp = group(g, R(-.12, .12), 0, R(-.12, .12)), hh = R(.95, 1.25); sp.rotation.z = R(-.12, .12);
+    sp.add(at(mk(new THREE.CylinderGeometry(.018, .025, hh, 4), null, { mat: M.stalk, ol: 0 }), 0, hh / 2, 0));
+    for (let b = 0; b < 5; b++) { const th = (b % 2 ? 1 : -1) * 1.05, y0 = hh - .55 + b * .12, br = mk(new THREE.ConeGeometry(.055, .3, 4), null, { mat: M.hel, ol: 0 }); br.rotation.z = th; at(br, 0, y0, 0); sp.add(br);
+      sp.add(at(mk(new THREE.IcosahedronGeometry(.03, 0), null, { mat: M.helTip, ol: 0 }), -Math.sin(th) * .15, y0 + Math.cos(th) * .15, 0)); } }
+  return g;
+}
+function tropPlantain(par, M, x, y, z, rng, s = 1) {   // a plantain (plátano): a green trunk, long leaves arching out, sometimes a bunch of green plantains with the purple flower bud hanging under it
+  const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); g.scale.setScalar(s); const h = R(1.3, 1.8);
+  g.add(at(mk(new THREE.CylinderGeometry(.11, .16, h, 7), null, { mat: M.plant, ol: 0 }), 0, h / 2, 0));
+  for (let j = 0; j < 6; j++) { const f = mk(frondGeo(R(1.5, 2.1), .32, { rise: .9, fall: 1.15, segs: 6, saw: j % 2 ? .25 : 0, fold: .08 }), null, { mat: M.leaf[j % 2], ol: 0 }); leafAim(f, j / 6 * TAU + R(-.2, .2), R(.15, .5)); f.position.set(0, h, 0); g.add(f); }
+  if (rng() < .45) { const a = R(0, TAU), d = new THREE.Vector3(Math.cos(a) * .5, -1, Math.sin(a) * .5).normalize(), b0 = new THREE.Vector3(Math.cos(a) * .12, h - .1, Math.sin(a) * .12);
+    const st = mk(new THREE.CylinderGeometry(.025, .025, .9, 4), null, { mat: M.plant, ol: 0 }); pointAlong(st, d); st.position.copy(b0).addScaledVector(d, .45); g.add(st);
+    for (let i = 0; i < 4; i++) { const c = b0.clone().addScaledVector(d, .2 + i * .14);
+      for (let k = 0; k < 4; k++) { const ka = k / 4 * TAU, fg = mk(new THREE.CapsuleGeometry(.03, .16, 1, 4), null, { mat: M.plantain, ol: 0 }); fg.position.set(c.x + Math.cos(ka) * .07, c.y, c.z + Math.sin(ka) * .07); fg.rotation.set(Math.sin(ka) * .6, 0, -Math.cos(ka) * .6); g.add(fg); } }
+    const bud = b0.clone().addScaledVector(d, .95); g.add(at(mk(new THREE.ConeGeometry(.08, .22, 6).rotateX(Math.PI), null, { mat: M.bud, ol: 0 }), bud.x, bud.y, bud.z)); }
+  return g;
+}
+function tropGroundFern(par, M, x, y, z, rng, s = 1) {   // a fern on the forest floor
+  const g = group(par, x, y, z); g.scale.setScalar(s);
+  for (let j = 0; j < 7; j++) { const f = mk(frondGeo(.8 + rng() * .4, .2, { rise: .9, fall: 1.0, segs: 6, saw: .55, fold: .1 }), null, { mat: M.fern[j % 2], ol: 0 }); leafAim(f, j / 7 * TAU + rng() * .5, .2); g.add(f); }
+  return g;
+}
+function tropMogote(par, M, x, y, z, rng, r, h) {   // a mogote: one of the round, steep karst hills (Los Haitises, Puerto Rico's karst country), forest all over it
+  const m = mk(new THREE.LatheGeometry([[r, -2], [r * .97, h * .3], [r * .86, h * .6], [r * .62, h * .84], [r * .32, h * .97], [0, h]].map(([a, b]) => new THREE.Vector2(a * (.9 + rng() * .2), b)), 10), null, { mat: M.mogote, ol: 0 });
+  m.scale.z = .7; at(m, x, y, z); par.add(m);
+  for (let i = 0; i < 5; i++) { const a = rng() * TAU, v = .2 + rng() * .7, rr = r * (1 - v * .8); par.add(at(mk(new THREE.IcosahedronGeometry(r * (.18 + rng() * .1), 0).scale(1.2, .6, 1), null, { mat: M.mogote, ol: 0 }), x + Math.cos(a) * rr, y + h * v, z + Math.sin(a) * rr * .7)); }   // tree crowns lumping its outline
+}
 function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const before = new Set(scene.children);
   const rng = rngF(7 + seed * 31);
   const R = (a, b) => a + rng() * (b - a);
-  const mGrass = toon("#6c9c44"), mDirt = toon("#2c4a33"), mStone = toon("#7d7898"), mMoss = toon("#6e9c48");
+  const mGrass = toon("#6c9c44"), mDirt = toon("#74402f"), mStone = toon("#a39d93"), mMoss = toon("#6e9c48");   // (red earth, like El Yunque's; mossy limestone, like the karst country's)
   const gAt = x => Y(groundAt(x / S) ?? GROUND);                                   // the ground's height (3D) at x (3D)
+  const M = tropMats(), bushMs0 = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c));
   const bgY = (st.elev ?? 1) >= 2 ? -14 : (1 - (st.elev ?? 1)) * ROW_RISE * S;     // the forest round about: up above us in the ravine (row C), its canopy far below up top (row A)
   // ground
   if (PROFILE.length) {                              // shaped ground: earth that steps and slopes, turf on top
@@ -1115,33 +1272,42 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   }
   scene.add(tufts);
   const flowerG = new THREE.OctahedronGeometry(.09, 0);
-  [["#e7a6b8", Math.round(160 * WS)], ["#a58ad0", Math.round(160 * WS)], ["#f3d76a", Math.round(50 * WS)]].forEach(([c, n]) => {
+  [["#e8433a", Math.round(150 * WS)], ["#f07aa0", Math.round(130 * WS)], ["#f6c83a", Math.round(70 * WS)], ["#fff3e2", Math.round(40 * WS)]].forEach(([c, n]) => {   // (hibiscus reds and pinks, yellows, a little white)
     const fl = new THREE.InstancedMesh(flowerG, toon(c), n);
     for (let i = 0; i < n; i++) { const x = R(-12, WX + 12); m4.compose(new THREE.Vector3(x, gAt(x) + R(.12, .3), R(-6, 4.5)), q.identity(), new THREE.Vector3(1, .7, 1)); fl.setMatrixAt(i, m4); }
     scene.add(fl);
   });
-  // platforms: lavender stone slab with a mossy cap, drips and vines (and giant mushrooms, bracket fungus on giant trunks, fallen logs, the land above jutting out)
-  const capM = toon("#c86a7c"), spotM = toon("#f6ead2"), stemM = toon("#eadfca"), gillM = toon("#9c4f60"), shelfM = toon("#d9b48a"), shelfEdgeM = toon("#a8794e"), barkM = toon("#6b5040"), ringM = toon("#c9a77a"), bigTrunkM = toon("#7b7896");
+  // platforms: a limestone slab with a mossy cap, drips and vines (and giant malanga leaves, a shelf of moss and bromeliads on a ceiba, fallen palm trunks, the land above jutting out)
+  const barkM = toon("#6b5040"), ringM = toon("#c9a77a"), shelfEdgeM = toon("#5f4c3a");
   for (const p of PLATFORMS) {
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
-    if (p.kind === "shroom") {                      // a giant mushroom: pale stem, a broad flat-topped rose cap with cream spots and dark gills
-      const sh = Math.max(.2, top - .5 - gy); scene.add(at(mk(new THREE.CylinderGeometry(w * .09 + .14, w * .13 + .22, sh, 10), null, { mat: stemM, ol: .04 }), cx, gy + sh / 2, -.1));
-      scene.add(at(mk(new THREE.CylinderGeometry(w * .5 + .05, w * .56 + .12, .5, 24), null, { mat: capM, ol: .05 }), cx, top - .25, 0));
-      scene.add(at(mk(new THREE.CylinderGeometry(w * .55 + .1, w * .2, .32, 24), null, { mat: gillM, ol: 0 }), cx, top - .66, 0));
-      for (let i = 0; i < 7; i++) { const a = R(0, TAU), rr = R(.3, .85) * (w * .5); scene.add(at(mk(new THREE.SphereGeometry(R(.12, .22), 8, 6).scale(1, .3, 1), null, { mat: spotM, ol: 0 }), cx + Math.cos(a) * rr, top + .01, Math.sin(a) * rr)); }
+    if (p.kind === "shroom") {                      // a giant malanga (yautía) leaf held out flat on its long stalk, a clump of smaller ones at its foot: stand on it
+      const sc = (w + 1.7) / 2.1, nx = cx - .55 * sc, x0 = (cx - w / 2 - nx) / sc, x1 = (cx + w / 2 - nx) / sc, lg = new THREE.ExtrudeGeometry(heartShape(), { depth: .16, bevelEnabled: false, curveSegments: 2 }).rotateX(Math.PI / 2);
+      const P = lg.attributes.position; for (let i = 0; i < P.count; i++) { const lx = P.getX(i), o = lx > x1 ? lx - x1 : lx < x0 ? x0 - lx : 0; P.setY(i, P.getY(i) - o * o * 4 - o * .5); }   // flat where you stand; the tip and the lobes beyond the edges droop
+      lg.computeVertexNormals(); const lf = mk(lg, null, { mat: M.leaf[0], ol: .04 }); lf.scale.set(sc, 1, Math.min(sc, 1.6)); at(lf, nx, top, 0); scene.add(lf);
+      scene.add(at(mk(new THREE.BoxGeometry(w - .1, .03, .07), null, { mat: M.vein, ol: 0 }), cx, top + .012, 0));   // the midrib, and the veins off it
+      for (let i = 0; i < 3; i++) [-1, 1].forEach(sd => { const vx = nx + (.25 + i * .42) * sc, vl = (.62 - i * .1) * Math.min(sc, 1.6), v = mk(new THREE.BoxGeometry(vl, .03, .05), null, { mat: M.vein, ol: 0 });
+        v.rotation.y = sd * -.75; at(v, vx + Math.cos(.75) * vl / 2, top + .012, sd * Math.sin(.75) * vl / 2); scene.add(v); });
+      const base = new THREE.Vector3(nx - .35, gy, -1.9), stalk = new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(base, new THREE.Vector3(nx - .45, top - .5, -1.7), new THREE.Vector3(nx + .15, top - .12, -.15)), 8, .14, 6);
+      scene.add(mk(stalk, null, { mat: M.stalk, ol: .03, smooth: true }));
+      tropMalanga(scene, M, base.x, gy, base.z - .2, rng, 1.25);
       continue;
     }
-    if (p.kind === "fungus") {                      // a bracket fungus shelf on a giant trunk behind the path
-      scene.add(at(mk(new THREE.CylinderGeometry(.95, 1.15, 40, 10), null, { mat: bigTrunkM, ol: .05 }), cx, gy + 18, -2.7));
-      const sg = new THREE.CylinderGeometry(1, 1.06, .42, 22, 1, false, -Math.PI / 2, Math.PI), shelf = mk(sg, null, { mat: shelfM, ol: .05 });
+    if (p.kind === "fungus") {                      // a great ceiba's trunk behind the path, a broad shelf of moss and bromeliads grown out on it (stand on it)
+      tropCeiba(scene, M, cx, gy, -2.7, rng, { h: 40, ol: .05, crown: false, back: true });
+      const sg = new THREE.CylinderGeometry(1, 1.06, .42, 22, 1, false, -Math.PI / 2, Math.PI), shelf = mk(sg, null, { mat: M.moss, ol: .05 });
       shelf.scale.set(w / 2 + .15, 1, 3.7); at(shelf, cx, top - .21, -2.4); scene.add(shelf);
       const band = mk(sg.clone(), null, { mat: shelfEdgeM, ol: 0 }); band.scale.set(w / 2 + .22, .4, 3.8); at(band, cx, top - .42, -2.4); scene.add(band);
+      [[-.4, -1.9], [.35, -2.0], [-.95, -1.25], [.95, -1.25]].forEach(([u, bz]) => tropBromeliad(scene, M, cx + u * (w / 2), top, bz, rng, R(.7, 1)));
+      for (let i = 0; i < Math.round(w * 1.6); i++) { const d = mk(new THREE.ConeGeometry(.1, R(.18, .4), 4), null, { mat: mMoss, ol: .02 }); pointAlong(at(d, cx + R(-.45, .45) * w, top - .5, R(.6, 1.1)), new THREE.Vector3(0, -1, 0)); scene.add(d); }   // moss hanging off its rim
       continue;
     }
-    if (p.kind === "log") {                          // a fallen log across two boulders
-      const r = .36, log = mk(new THREE.CylinderGeometry(r, r, w, 12).rotateZ(Math.PI / 2), null, { mat: barkM, ol: .05 }); at(log, cx, top - r, 0); scene.add(log);
-      [-1, 1].forEach(sd => { scene.add(at(mk(new THREE.CylinderGeometry(r * .9, r * .9, .03, 12).rotateZ(Math.PI / 2), null, { mat: ringM, ol: 0 }), cx + sd * (w / 2 + .01), top - r, 0));
-        const bx = cx + sd * (w / 2 - .55), bh = top - 2 * r - gAt(bx) + .1; if (bh > .05) scene.add(at(mk(new THREE.DodecahedronGeometry(.62, 0).scale(1.2, (bh + .2) / 1.24, 1), null, { mat: mStone, ol: .04 }), bx, gAt(bx) + bh / 2 - .05, 0)); });
+    if (p.kind === "log") {                          // a fallen palm trunk, grey and ringed, across two limestone boulders, ferns sprouting by them
+      const r = .34, log = mk(new THREE.CylinderGeometry(r, r * 1.05, w, 10).rotateZ(Math.PI / 2), null, { mat: M.palm, ol: .05 }); at(log, cx, top - r, 0); scene.add(log);
+      for (let xx = -w / 2 + .35; xx < w / 2 - .2; xx += R(.45, .65)) scene.add(at(mk(new THREE.CylinderGeometry(r + .02, r + .02, .07, 10).rotateZ(Math.PI / 2), null, { mat: M.palmRing, ol: 0 }), cx + xx, top - r, 0));
+      [-1, 1].forEach(sd => { scene.add(at(mk(new THREE.CylinderGeometry(r * .9, r * .9, .03, 10).rotateZ(Math.PI / 2), null, { mat: ringM, ol: 0 }), cx + sd * (w / 2 + .01), top - r, 0));
+        const bx = cx + sd * (w / 2 - .55), bh = top - 2 * r - gAt(bx) + .1; if (bh > .05) scene.add(at(mk(new THREE.DodecahedronGeometry(.62, 0).scale(1.2, (bh + .2) / 1.24, 1), null, { mat: mStone, ol: .04 }), bx, gAt(bx) + bh / 2 - .05, 0));
+        tropGroundFern(scene, M, bx + sd * .5, gAt(bx + sd * .5), -.9, rng, .8); });
       continue;
     }
     if (p.kind === "jut") {                          // the land of the row above, jutting out over the path: earth and turf, a ragged rocky end, roots hanging under it
@@ -1164,6 +1330,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
       const len = R(.6, 1.4), v = mk(new THREE.CylinderGeometry(.025, .025, len, 4), null, { mat: mMoss, ol: .015 });
       scene.add(at(v, cx - w / 2 + .3 + rng() * (w - .6), top - .3 - len / 2, 1.25));
     }
+    tropBromeliad(scene, M, cx - w / 2 + .35, top, -.95, rng, .8); if (w > 3.5) tropGroundFern(scene, M, cx + w / 2 - .45, top, -.95, rng, .6);   // a bromeliad and a fern at the back corners
   }
   for (const [c0, c1, cy] of CEILS) {               // the land above, overhead: earth with roots and vines hanging from its underside, a ragged edge
     const x0 = X(Math.max(c0, -900)), x1 = X(c1), len = x1 - x0, uy = Y(cy);
@@ -1176,35 +1343,52 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     scene.add(at(mk(new THREE.BoxGeometry(WX + 62, bgY + 9, 2.2), null, { mat: mDirt, ol: 0 }), WX / 2, (bgY - 9) / 2, -10.3));
     scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .45, 60), null, { mat: mGrass, ol: 0 }), WX / 2, bgY - .2, -40));
     const mWallRock = toon("#3c5646"); for (let x = -14; x < WX + 16; x += R(1.6, 3)) { const r = R(.35, .8); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, .8, .35), null, { mat: mWallRock, ol: 0 }), x, R(.4, bgY - .4), -9.3)); }
+    for (let x = -14; x < WX + 16; x += R(.8, 1.8)) { const r = R(.4, 1.1), m = mk(new THREE.DodecahedronGeometry(r, 0).scale(R(1.1, 1.9), R(.6, 1), .35), null, { mat: rng() < .5 ? M.moss : bushMs0[1], ol: 0 }); m.rotation.z = R(0, TAU); scene.add(at(m, x, R(.3, bgY - .2), -9.15)); }   // moss grown over the red earth (turned every which way, so it doesn't tile)
+    for (let x = -14; x < WX + 16; x += R(1.1, 2)) { const r = R(.6, 1.1); scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs0[(x * 7 | 0) & 1 ? 0 : 2], ol: 0 }), x, bgY + r * .2, -9.6)); }   // a bushy lip along the top
+    for (let i = 0; i < Math.round(12 * WS); i++) { const g = tropGroundFern(scene, M, R(-12, WX + 12), R(.8, bgY - .6), -9, rng, R(.8, 1.2)); g.rotation.x = 1.15; }   // ferns growing out of the wall
     for (let x = -14; x < WX + 16; x += R(.5, 1.3)) { const hl = R(.6, 2.6), v = mk(new THREE.CylinderGeometry(.04, .02, hl, 4), null, { mat: rng() < .6 ? mMoss : toon("#6b5040"), ol: .012 }); at(v, x, bgY - hl / 2, -9.1); scene.add(v); }
   } else if (bgY < -.5) {                            // up high: our ground ends in a cliff at the back, the forest's canopy far below
     for (let x = -14; x < WX + 16; x += R(.9, 1.8)) { const r = R(.6, 1.3); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .03 }), x, R(-3, -.6), -9.1)); }
   }
-  // forest: trunks + faceted canopy, deeper = foggier
-  const trunkM = toon("#7b7896"), canopyMs = ["#2f5e4c", "#3a6b55", "#285444", "#4e8366"].map(c => toon(c));
-  const wistM = toon("#8d78b4"), bushMs = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c));
+  // the rainforest round about: sierra palms in clumps, giant tree ferns, yagrumos, tabonucos, royal palms standing tall at the back, flamboyanes in
+  // flower; one great ceiba; lianas hanging; mogotes far off. Deeper = foggier
+  const bushMs = bushMs0, petalsAt = [];
   for (let i = 0; i < Math.round(46 * WS); i++) {
     const x = R(-14, WX + 14), z = -R(3.5, 34);
     if (Math.abs(x - WX / 2) < 5 && z > -14) continue;     // keep the sunlit clearing open
     if (bgY < -.5 && z > -10.5) continue;              // (up high there's nothing behind us but the drop)
     if (CEILS.some(([c0, c1]) => x > X(c0) - 1 && x < X(c1) + 1) && z > -9.5) continue;   // under the overhang: no trees through it
-    const ol = z > -14 ? .06 : 0, h = 26, lean = R(-.06, .06);
-    const tr = group(scene, x, z < -9.5 ? bgY : gAt(x), z); tr.rotation.z = lean;
-    tr.add(at(mk(new THREE.CylinderGeometry(R(.25, .4), R(.5, .75), h, 7), null, { mat: trunkM, ol }), 0, h / 2 - 1, 0));
-    const ny = R(9.5, 13);
-    for (let k = 0; k < 5; k++) tr.add(at(mk(new THREE.IcosahedronGeometry(R(1.6, 3.4), 0), null, { mat: canopyMs[k % 4], ol }), R(-2.5, 2.5), ny + R(-1.5, 2.5), R(-1.5, 1.5)));
-    if (rng() < .45) for (let k = 0; k < 3; k++) tr.add(at(mk(new THREE.IcosahedronGeometry(.35 - k * .07, 0), null, { mat: wistM, ol: ol && .02 }), R(-1.5, 1.5), ny - 2.2 - k * .45, R(.5, 1.5)));
+    const ol = z > -14 ? .06 : 0, by = z < -9.5 ? bgY : gAt(x), roll = rng();
+    if (roll < .3) { const n = rng() < .5 ? 3 : 2; for (let j = 0; j < n; j++) tropPalm(scene, M, x + R(-1.2, 1.2), by, z + R(-.8, .8), rng, { h: R(6.5, 10.5), lean: R(-.28, .28), ol }); }
+    else if (roll < .5) tropTreeFern(scene, M, x, by, z, rng, { h: R(4.5, 7.5), ol });
+    else if (roll < .62) tropYagrumo(scene, M, x, by, z, rng, { h: R(8.5, 11.5), ol });
+    else if (roll < .69 && z < -10) tropPalm(scene, M, x, by, z, rng, { h: R(12, 16), royal: true, ol });
+    else if (roll < .75) { tropFlamboyan(scene, M, x, by, z, rng, { h: R(5, 6.8), ol }); if (z > -9.5) petalsAt.push([x, z]); }
+    else tropTabonuco(scene, M, x, by, z, rng, { h: R(9.5, 12.5), ol });
   }
-  for (let i = 0; i < Math.round(70 * WS); i++) {          // undergrowth along the back of the path
+  { const x = WX * R(.2, .8), z = -R(15, 21); tropCeiba(scene, M, x, bgY > .5 || bgY < -.5 ? bgY : gAt(x), z, rng, { h: R(12, 14), ol: .04 }); }   // the great ceiba
+  if (!(bgY < -.5)) for (let i = 0; i < Math.round(14 * WS); i++) { const x = R(-10, WX + 10), z = -R(5, 12);   // lianas hanging out of the canopy
+    if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1]) => x > X(c0) - 1 && x < X(c1) + 1)) continue; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); }
+  for (let x = -30; x < WX + 30; x += R(14, 24)) tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22));   // the mogotes far off
+  if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
+    petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
+  for (let i = 0; i < Math.round(70 * WS); i++) {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
     const z = -R(2, 9), x = R(-12, WX + 12), r = R(.6, 1.5);
     if (bgY < -.5 && (i & 1)) continue;                // (thinner up high, to open the view down over the treetops)
-    scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[i % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .45, z));
+    const y0 = gAt(x), roll = rng();
+    if (roll < .3) scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[i % 3], ol: z > -6 ? .04 : 0 }), x, y0 + r * .45, z));
+    else if (roll < .5) tropMalanga(scene, M, x, y0, z, rng, R(.9, 1.4));
+    else if (roll < .64) tropHeliconia(scene, M, x, y0, Math.min(z, -3), rng, R(.9, 1.3));
+    else if (roll < .78) tropPlantain(scene, M, x, y0, Math.min(z, -3.5), rng, R(.85, 1.2));
+    else if (roll < .9) tropGroundFern(scene, M, x, y0, z, rng, R(.9, 1.3));
+    else tropBromeliad(scene, M, x, y0, z, rng, R(.9, 1.3));
   }
-  // foreground rocks & leaves framing the bottom of the shot
+  // foreground rocks & big dark leaves framing the bottom of the shot (kept low, under where your feet are on screen)
   const rockM = toon("#1f3b33"), fernM = toon("#2b5446");
   for (let x = -8; x < WX + 10; x += R(6, 11)) {
     scene.add(at(mk(new THREE.IcosahedronGeometry(R(.8, 1.4), 0).scale(1.4, .8, 1), null, { mat: rockM, ol: .05 }), x, gAt(x) - .15, R(5, 6.5)));
-    for (let k = 0; k < 4; k++) { const fx = x + R(-1, 1), f = mk(new THREE.ConeGeometry(.1, R(.6, 1.1), 3), null, { mat: fernM, ol: .03 }); at(f, fx, gAt(fx) + .3, R(5, 6)); f.rotation.z = R(-.5, .5); scene.add(f); }
+    for (let k = 0; k < 2; k++) { const fx = x + R(-1.4, 1.4), lf = mk(heartLeafGeo(), null, { mat: M.leafD, ol: .03 }); lf.scale.setScalar(R(.6, .8)); leafAim(lf, R(-.6, .6) + (rng() < .5 ? 0 : Math.PI), R(.15, .4)); at(lf, fx, gAt(fx) + .15, R(5.2, 6.2)); scene.add(lf); }
+    for (let k = 0; k < 3; k++) { const fx = x + R(-1, 1), f = mk(new THREE.ConeGeometry(.1, R(.6, 1.1), 3), null, { mat: fernM, ol: .03 }); at(f, fx, gAt(fx) + .3, R(5, 6)); f.rotation.z = R(-.5, .5); scene.add(f); }
   }
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(250, 125), new THREE.MeshBasicMaterial({ map: skyTex(k), fog: false }));
   at(sky, WX / 2, 30, -80); scene.add(sky);
@@ -7871,7 +8055,7 @@ function buildMudHut(k) {
 }
 let WAVE_FOES = null;
 const WORLDS = [
-  { name: "BERRY WOODS", blurb: "A forest path from midday to night, crawling with leaf, thorn and wood baddies.",
+  { name: "BERRY WOODS", blurb: "A rainforest path from midday to night, crawling with leaf, thorn and wood baddies.",
     screens: SCREENS.slice(), stages: STAGES.slice(), roster: BB_ROSTER.slice(), foes: woodFoes },
   { name: "CUSS' WAVES", blurb: "A rocky coast from midday to night. Cross the open water on sea stacks and piers (fall in and it costs a heart).",
     screens: WAVE_SCREENS, stages: WAVE_STAGES, roster: WAVE_ROSTER, foes: () => WAVE_FOES || (WAVE_FOES = buildWaveFoes()) },
@@ -8676,7 +8860,7 @@ function syncHideoutBeps(dt) {
 const HIDE_SPOTS = { seat: 960, sing: [700, -1.9], chase: [1250, -2.4], lounge: [[1150, 1.4], [760, 1.6], [1300, .9]] };
 function buildHideout(w, k) { return w === 8 ? buildMudHut(k) : w === 7 ? buildAttic(k) : w === 6 ? buildStash(k) : w === 5 ? buildPodRoom(k) : w === 4 ? buildTent(k) : w === 3 ? buildLoft(k) : w === 2 ? buildWorkshop(k) : w ? buildCove(k) : buildGrove(k); }
 function hideBits(rng) { const R = (a, b) => a + rng() * (b - a); return { R, cx: X(960) }; }
-function buildGrove(k) {                          // a hidden grove: trees all round, light falling through, mushrooms and flowers, a stump in the middle
+function buildGrove(k) {                          // a hidden grove: the rainforest all round, light falling through, heliconias, bromeliads and flowers, a stump in the middle
   const before = new Set(scene.children), rng = rngF(211), { R, cx } = hideBits(rng);
   const mGrass = toon("#6c9c44"), mDirt = toon("#2c4a33"), mBark = toon("#6b4a32"), mRing = toon("#d9b98a"), mRingD = toon("#b48a5a");
   scene.add(at(mk(new THREE.BoxGeometry(80, .35, 18), null, { mat: mGrass, ol: 0 }), 24, -.175, -4));
@@ -8685,23 +8869,23 @@ function buildGrove(k) {                          // a hidden grove: trees all r
   const tufts = new THREE.InstancedMesh(new THREE.ConeGeometry(.07, .38, 3), toon("#86b552"), 700);
   for (let i = 0; i < 700; i++) { e.set(R(-.3, .3), 0, R(-.4, .4)); q.setFromEuler(e); m4.compose(new THREE.Vector3(cx + R(-15, 15), .12, R(-9, 4.5)), q, new THREE.Vector3(1, R(.6, 1.6), 1)); tufts.setMatrixAt(i, m4); }
   scene.add(tufts);
-  [["#e7a6b8", 140], ["#a58ad0", 140], ["#f3d76a", 90], ["#ffffff", 60]].forEach(([c, n]) => { const fl = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.09, 0), toon(c), n);
+  [["#e8433a", 130], ["#f07aa0", 120], ["#f6c83a", 100], ["#fff3e2", 70]].forEach(([c, n]) => { const fl = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.09, 0), toon(c), n);
     for (let i = 0; i < n; i++) { m4.compose(new THREE.Vector3(cx + R(-14, 14), R(.12, .32), R(-8, 4.2)), q.identity(), new THREE.Vector3(1, .7, 1)); fl.setMatrixAt(i, m4); } scene.add(fl); });
-  // trees all round the back and both sides, closing the grove in; a canopy overhead
-  const trunkM = toon("#7b7896"), canopyMs = ["#2f5e4c", "#3a6b55", "#285444", "#4e8366"].map(c => toon(c)), bushMs = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c));
+  // the rainforest all round the back and both sides, closing the grove in: palms, tree ferns, yagrumos, tabonucos, a flamboyán; a canopy overhead
+  const M = tropMats(), bushMs = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c));
   for (let i = 0; i < 40; i++) {
-    const side = i < 26 ? 0 : i < 33 ? -1 : 1, x = side ? cx + side * R(12, 17) : cx + R(-18, 18), z = side ? R(-6, 3) : -R(4.5, 18);
-    const tr = group(scene, x, 0, z); tr.rotation.z = R(-.07, .07);
-    tr.add(at(mk(new THREE.CylinderGeometry(R(.3, .45), R(.55, .8), 24, 7), null, { mat: trunkM, ol: 0 }), 0, 11, 0));
-    for (let c = 0; c < 4; c++) tr.add(at(mk(new THREE.IcosahedronGeometry(R(1.8, 3.4), 0), null, { mat: canopyMs[c % 4], ol: 0 }), R(-2.5, 2.5), R(8.5, 12), R(-1.5, 1.5)));
+    const side = i < 26 ? 0 : i < 33 ? -1 : 1, x = side ? cx + side * R(12, 17) : cx + R(-18, 18), z = side ? R(-6, 3) : -R(4.5, 18), roll = rng();
+    if (roll < .3) tropPalm(scene, M, x, 0, z, rng, { h: R(7, 10), lean: R(-.25, .25) });
+    else if (roll < .5) tropTreeFern(scene, M, x, 0, z, rng, { h: R(4.5, 7) });
+    else if (roll < .65) tropYagrumo(scene, M, x, 0, z, rng, { h: R(8, 11) });
+    else if (roll < .7) tropFlamboyan(scene, M, x, 0, z, rng, { h: R(5, 6.5) });
+    else tropTabonuco(scene, M, x, 0, z, rng, { h: R(9, 12) });
   }
-  for (let i = 0; i < 46; i++) { const z = -R(2.6, 8), x = cx + R(-15, 15), r = R(.7, 1.6); scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[i % 3], ol: 0 }), x, r * .45, z)); }
-  // mushrooms, big and small
-  const mCap = toon("#e8423a"), mStem = toon("#f3ead8"), mDot = toon("#ffffff");
-  for (let i = 0; i < 16; i++) { const s = R(.5, 1.4), x = cx + (rng() < .5 ? -1 : 1) * R(5, 12), z = R(-4, 2.5), g = group(scene, x, 0, z); g.scale.setScalar(s);
-    g.add(at(mk(new THREE.CylinderGeometry(.09, .12, .4, 10), null, { mat: mStem, ol: 0 }), 0, .2, 0));
-    g.add(at(mk(new THREE.SphereGeometry(.28, 16, 8, 0, TAU, 0, Math.PI / 2).scale(1, .7, 1), null, { mat: mCap, ol: 0 }), 0, .38, 0));
-    for (let d = 0; d < 5; d++) { const a = d * 1.3, rr = .16; g.add(at(mk(new THREE.SphereGeometry(.04, 6, 5), null, { mat: mDot, ol: 0 }), Math.cos(a) * rr, .5 + (d === 4 ? .04 : 0), Math.sin(a) * rr)); } }
+  for (let i = 0; i < 46; i++) { const z = -R(2.6, 8), x = cx + R(-15, 15), r = R(.7, 1.6), roll = rng();
+    if (roll < .4) scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[i % 3], ol: 0 }), x, r * .45, z));
+    else if (roll < .65) tropMalanga(scene, M, x, 0, z, rng, R(.9, 1.3)); else if (roll < .8) tropPlantain(scene, M, x, 0, Math.min(z, -3.5), rng, R(.85, 1.1)); else tropGroundFern(scene, M, x, 0, z, rng, R(.9, 1.2)); }
+  // heliconias and bromeliads, big and small
+  for (let i = 0; i < 16; i++) { const x = cx + (rng() < .5 ? -1 : 1) * R(5, 12), z = R(-4, 2.5); if (i % 2) tropHeliconia(scene, M, x, 0, z, rng, R(.7, 1.05)); else tropBromeliad(scene, M, x, 0, z, rng, R(1, 1.5)); }
   // the stump in the middle (the seat), and a fallen log at the back for the singers
   const st = group(scene, cx, 0, -.42);
   st.add(at(mk(new THREE.CylinderGeometry(.42, .5, .52, 14), null, { mat: mBark, ol: 0 }), 0, .26, 0));

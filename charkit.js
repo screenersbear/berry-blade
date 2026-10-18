@@ -330,13 +330,14 @@ const PRESETS = [
       scarf: { on: true, col: "#ee1d1a", len: 1.5, flow: 1.3, flap: .8, ring: false },
       tabard: { on: true, col: "#fe0000", len: .48, width: .3, y: .27, gem: true, gemCol: "#e117d2" } },
     move: { set: "ninja" } }),
+  // (the user, 2026-10-18: Chase's skin tone matches Lydia's, #ebc3a6; it was #fdcbb6)
   merge0(HUMAN_DEFAULT, { id: "chase", name: "CHASE",     // from the character sheet: red vest over a slate jumpsuit, big boots, gauntlet
     body: { build: "tall", torso: 1.05, hands: 1.4 },
     head: { height: 1.11, jaw: .78, chinLen: .04 },
     face: { style: "chase", chin: .18, earY: -.1, ears: .85 },
     hair: { mode: "sculpt", shell: .25, taper: .8, fringe: "chase", sides: .78, back: .72, style: "none",
       tufts: [{ yaw: 0, pitch: 82, len: .3, width: .38, sharp: 2.4 }, { yaw: -62, pitch: -38, len: .08, width: .3, sharp: 2 }, { yaw: 62, pitch: -38, len: .08, width: .3, sharp: 2 }] },
-    colors: { skin: "#fdcbb6", hair: "#6b3a13", eyes: "#2379dc", lips: "#f6b2a2", lash: "#000000", brows: "#683810", ring: "#f4fbff" },
+    colors: { skin: "#ebc3a6", hair: "#6b3a13", eyes: "#2379dc", lips: "#f6b2a2", lash: "#000000", brows: "#683810", ring: "#f4fbff" },
     outfit: { top: "#2d383c", torsoProf: [[0, .3], [.12, .31], [.3, .24], [.45, .22], [.65, .25], [.82, .24], [.92, .16], [1, .1]],
       torso: [{ kind: "band", y0: 0, y1: 210, col: "#ec1c24" }, { kind: "poly", pts: [-40, 0, 40, 0, 0, 200], mirror: false, col: "#2d383c" },
         { kind: "buttons", dx: 52, y: 70, gap: 70, rows: 2, r: 15, col: "#fef200" }, { kind: "poly", pts: [-70, 300, -38, 280, -32, 290, -64, 310], mirror: true, col: "#fef200" }],
