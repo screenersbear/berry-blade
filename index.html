@@ -205,7 +205,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261018a"></script>
+<script src="charkit.js?v=20261018b"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261017b"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3571,6 +3571,7 @@ function updatePlayer(dt) {
   if (p.atkT >= 0 && p.atkKind) {          // keyed moves: the humans' strikes and Tocsin's card moves
     const S = cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind], pa = p.atkT; p.atkT += dt;
     if (S.sfx2 && pa < S.sfx2[0] && p.atkT >= S.sfx2[0]) SFX[S.sfx2[1]]();
+    if (S.stepIn && pa < S.stepIn[0] && p.atkT >= S.stepIn[0] && p.onGround) { p.vx = p.face * S.stepIn[1]; dust(p.x, p.y, 3, -p.face); }   // (a step in partway through: the jab loads up first)
     if (S.dive && pa < S.dive[0] && p.atkT >= S.dive[0] && !p.onGround) { p.vy = Math.max(p.vy, S.dive[1]); if (S.diveStill) p.vx = 0; }   // dives drop onto the enemy (the charged tackle's: straight down)
     if (S.dash && pa < S.dash[0] && p.atkT >= S.dash[0]) { SFX.dash(); p.vx = p.face * S.dash[1]; p.vy = Math.min(p.vy, S.dash[2]); p.onGround = false; p.sq = -.16; p.sqv = 0; dust(p.x, p.y, 4, -p.face); }   // Tocsin's card dash lunges forward
     if (S.landEnd && p.onGround && p.atkT > .12) { p.atkT = -1; dust(p.x, p.y, 6); SFX.land();   // a dive ends when it hits the ground
@@ -3588,6 +3589,7 @@ function updatePlayer(dt) {
   const target = control ? mx * maxV : p.hurtT > 0 && p.onGround ? 0 : p.vx;   // knocked back: once you're down again you stop, no sliding on
   if (p.tackle) tackleStep(p, dt);
   else if (MV && MV.slide && p.atkT < MV.slide) { }                                       // a dash keeps its speed
+  else if (MV && MV.stepIn && p.atkT >= MV.stepIn[0] && p.atkT < MV.stepIn[0] + MV.stepIn[2]) { }   // (and so does the jab's step in, for a moment)
   else if ((!cat || MV) && attacking && p.onGround) p.vx = approach(p.vx, 0, 2600 * dt);   // humans plant their feet while striking
   else if (!(attacking && Math.abs(p.vx) > maxV && Math.sign(p.vx) === mx)) p.vx = approach(p.vx, target, rate * dt * (attacking ? .5 : 1));
   if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle) p.face = ax;
@@ -9390,31 +9392,40 @@ const _limb = new THREE.Vector3();
 // punch lands that far out. June's slash lands about 126 px out (her sword's hit box); his is a little short of that, he's bigger
 const GHOST_REACH = 108;
 const GHOST_M = new THREE.MeshLambertMaterial({ color: "#ff7a2e", emissive: "#b8360a", transparent: true, opacity: .8, depthWrite: false });   // (lit, so its fingers and knuckles show)
-const GHOST_GLOW_M = new THREE.MeshBasicMaterial({ color: "#ffb36a", transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+const GHOST_GLOW_M = new THREE.MeshBasicMaterial({ color: "#ffb36a", transparent: true, opacity: .2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
 const GHOST_TRAIL_M = new THREE.MeshBasicMaterial({ color: "#ff9a40", transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false });
 const GHOST_TRAIL_G = new THREE.CylinderGeometry(.55, 1, 1, 12, 1, true).rotateZ(Math.PI / 2);   // (along x: the wide end at the fist)
 let ghosts = [];
-function ghostFist(p, hand) {
+function ghostHand(p, h, i) {                      // which hand sends one out on this hit: a marked punch, or the last blow of a charged combo (a gauntlet only)
+  if (!p.rig.prop || !p.rig.prop.fist) return null;
+  if (h.ghost) return h.ghost;
+  const S = KIT.STRIKES[p.atkKind], c = p.combo; return c && c.idx === c.level - 1 && S && i === S.hits.length - 1 ? "F" : null;
+}
+function ghostFist(p, hand, up) {
   const r = p.rig, pr = r.prop; if (!pr || !pr.fist) return;
   const side = r.spec.outfit.prop.side, propS = side === "near" ? (p.face > 0 ? 1 : -1) : side === "left" ? -1 : 1;
   r.root.updateMatrixWorld(true);
   const src = hand === "B" ? r.hands[propS > 0 ? 0 : 1] : pr.fist, from = src.getWorldPosition(new THREE.Vector3()), sc = pr.fist.getWorldScale(new THREE.Vector3()).x;
   const m = GHOST_M.clone(), gm = GHOST_GLOW_M.clone(), tm = GHOST_TRAIL_M.clone(), fist = pr.fist.clone(true);
   fist.traverse(o => { if (o.isMesh) { if (o.material && o.material.blending === THREE.AdditiveBlending) o.visible = false; else o.material = m; } });
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 12), gm); glow.position.set(0, -.13, 0); glow.scale.set(.9, 1.1, 1); fist.add(glow);   // (a glow round it)
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 12), gm); glow.position.set(0, -.13, 0); glow.scale.set(.75, .95, .85); fist.add(glow);   // (a glow round it)
   if (p.face > 0) fist.rotation.set(Math.PI, 0, Math.PI / 2); else fist.rotation.set(0, 0, -Math.PI / 2);   // knuckles first, toward the enemy
+  if (up) fist.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), p.face * .95));   // (the rocket uppercut's: up and forward)
   const trail = new THREE.Mesh(GHOST_TRAIL_G, tm); fist.renderOrder = trail.renderOrder = 4; actors.add(fist, trail);
-  const k = sc * 1.45, front = .29 * k, to = X(p.x + p.face * GHOST_REACH) - p.face * front;          // (its knuckles end up at the reach)
-  const hp = (p.rig.heightPx || 92) * S, ty = clamp(from.y, Y(p.y) + hp * .45, Y(p.y) + hp * .75);   // (straight out at the hand's height, kept between his chest and his shoulders)
+  const hpx = (p.rig.heightPx || 92) * S, k = hpx * .36 / .22, front = .29 * k;                   // about the size of his torso (the fist's .22 deep from knuckle to palm)
+  let to = X(p.x + p.face * GHOST_REACH) - p.face * front;                                        // (its knuckles end up at the reach, its back over his own fist and arm)
+  let ty = clamp(from.y, Y(p.y) + hpx * .45, Y(p.y) + hpx * .75);                                  // (straight out at the hand's height, kept between his chest and his shoulders)
+  if (up) { to = X(p.x + p.face * GHOST_REACH * .45); ty = Y(p.y) + hpx * 1.15; }
+  ghosts.forEach(o => { o.t = Math.max(o.t, .3); });   // (the one before starts fading as this one goes out: two never pile up into one blob)
   ghosts.push({ fist, trail, m, gm, tm, from, to, ty, k, f: p.face, t: 0 }); SFX.whoosh();
 }
 function syncGhosts(dt) {
   ghosts = ghosts.filter(g => {
-    g.t += dt; const out = sstep(0, .07, g.t), fade = 1 - sstep(.15, .3, g.t), x = g.from.x + (g.to - g.from.x) * out, y = g.from.y + (g.ty - g.from.y) * out;
-    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.m.opacity = .8 * fade; g.gm.opacity = .32 * fade;
+    g.t += dt; const out = sstep(0, .08, g.t), fade = 1 - sstep(.3, .48, g.t), x = g.from.x + (g.to - g.from.x) * out, y = g.from.y + (g.ty - g.from.y) * out;   // (out fast, hangs there a moment, then fades)
+    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.m.opacity = .8 * fade; g.gm.opacity = .2 * fade;
     const dx = x - g.from.x, dy = y - g.from.y, len = Math.hypot(dx, dy), rad = .06 * g.k;
     g.trail.position.set((x + g.from.x) / 2, (y + g.from.y) / 2, g.from.z + .12); g.trail.scale.set(Math.max(.001, len), rad, rad); g.trail.rotation.set(0, 0, Math.atan2(dy, dx)); g.tm.opacity = .28 * fade;
-    if (g.t < .32) return true;
+    if (g.t < .5) return true;
     actors.remove(g.fist, g.trail); g.m.dispose(); g.gm.dispose(); g.tm.dispose(); return false;
   });
 }
@@ -9435,7 +9446,7 @@ function combat() {
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
   if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) KIT.STRIKES[p.atkKind].hits.forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
-    if (!h.ghost || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, h.ghost); } });
+    const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
   if (!L.length) return;
   const pb = { x1: p.x - 18, x2: p.x + 18, y1: p.y - (p.rig.heightPx || 92) * (p.crouch ? .62 : 1), y2: p.y };
   const strike = (got, hb, kind, dirOf) => { for (const T of L) if (!got.has(T.e) && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) got.add(T.e); };   // each window hits each target once
@@ -9451,7 +9462,7 @@ function combat() {
     const pk = p.rig.spec.outfit.prop.kind, bare = pk === "none" || pk === "gauntlet", [fw, bw] = bare ? limbReach(p) : [0, 0];   // fists and feet: the box follows the limb itself (+16 px), not a set distance
     S.hits.forEach((h, i) => {
       if (p.atkT < h.t0 || p.atkT > h.t1) return;
-      const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * Math.max(limb ? Math.max(fw + (pk === "gauntlet" ? 26 : 16), 26) : h.reach * tall * rk, h.ghost ? GHOST_REACH : 0);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
+      const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * Math.max(limb ? Math.max(fw + (pk === "gauntlet" ? 26 : 16), 26) : h.reach * tall * rk, ghostHand(p, h, i) ? GHOST_REACH : 0);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
       strike(hitsOf(i), { x1: Math.min(xa, xb), x2: Math.max(xa, xb), y1: p.y - h.y0 * tall, y2: p.y - h.y1 * tall }, h.kind, () => f);
     });
   }
