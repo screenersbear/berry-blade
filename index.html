@@ -374,6 +374,7 @@ const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight()
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
   return S0.noLeft ? dn ?? S0.upX ?? 130 : 130; };
+let cheerHold = null;                     // a sad berry just cheered up: you're held a moment while it celebrates (nothing can hurt you, nothing comes at you)
 let entryHi = false;                      // came in by a split room's upper way out (the woods' ledge, the keep's upper tier): a knockout puts you back up there
 const hiPlat = () => PLATFORMS.filter(q => q.kind === "jut" || q.kind === "upper").sort((a, b) => (b.x + b.w) - (a.x + a.w))[0] || null;   // the way back is always open (forward needs the room cleared)   // the way back left: to the room you came in from
 const GAPS = [];                          // the clearing's open water: [x0, x1] spans with no ground. Fall in and it costs a heart
@@ -1295,15 +1296,26 @@ function buildFactory(k = 0, seed = k) {
   const mLip = mStripe.clone(); mLip.side = THREE.DoubleSide; scene.add(mkStrip(lip, luv, mLip));
   for (let x = -10; x < WX + 12; x += 1.6) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 13), null, { mat: mBeam, ol: 0 }), x, gAt(x) + .03, -1.8));   // plate seams
   // the back wall: riveted panels, a row of tall windows onto the sky and the city, yellow-and-black bands at the foot of each pillar
-  const WZ = -8.2, wy0 = SET === "skyline" ? 2.4 : 5.4, wy1 = SET === "skyline" ? 11 : 10.2;   // (up on the high catwalks the windows are tall: all sky)
+  const WZ = -8.2, wy0 = SET === "skyline" ? 2.4 : 4.4, wy1 = SET === "skyline" ? 11 : 10.2;   // (up on the high catwalks the windows are tall: all sky)
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 62, wy0 + 8, .6), mWall), WX / 2, (wy0 - 8) / 2, WZ));
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 62, 30 - wy1, .6), mWall), WX / 2, (wy1 + 30) / 2, WZ));
   for (let x = -30; x < WX + 32; x += 6.5) { scene.add(at(mk(new THREE.BoxGeometry(2.6, wy1 - wy0, .7), null, { mat: mWall2, ol: .03 }), x, (wy0 + wy1) / 2, WZ));
     scene.add(at(mk(new THREE.BoxGeometry(1.2, 30, .9), null, { mat: mWall2, ol: .03 }), x, 10, WZ + .3));
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.24, 1.1, .92), mStripe), x, .7, WZ + .3)); }
   scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .3, .9), null, { mat: mBeam, ol: .03 }), WX / 2, wy0, WZ + .2)); scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .3, .9), null, { mat: mBeam, ol: .03 }), WX / 2, wy1, WZ + .2));
+  // the windows themselves: steel frames of small panes, and glass with a sheen and a glint on it (the user, 2026-10-18: it should be obvious they're there)
+  const winH = wy1 - wy0, rowsN = Math.max(3, Math.round(winH / 1.45)), beamL = [];
+  for (let x = -30; x < WX + 32; x += 6.5) { const cx = x + 3.25;
+    [-1, 1].forEach(j => scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(.1, winH, .12), mBeam), cx + j * .65, (wy0 + wy1) / 2, WZ)));
+    for (let i = 1; i < rowsN; i++) scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(3.9, .1, .12), mBeam), cx, wy0 + winH * i / rowsN, WZ));
+    if (cx > -14 && cx < WX + 14) beamL.push([cx, wy1 - .2, 1.9]); }
+  const mGlass = new THREE.MeshBasicMaterial({ map: glassTex().clone(), transparent: true, depthWrite: false }); mGlass.map.needsUpdate = true; mGlass.map.repeat.set((WX + 62) / 6.5, 1);
+  const glass = at(new THREE.Mesh(new THREE.PlaneGeometry(WX + 62, winH), mGlass), WX / 2, (wy0 + wy1) / 2, WZ - .03); scene.add(glass); keep.add(glass);
+  const beams = windowBeams(beamL, k, WZ + .4, -3, gAt); scene.add(beams); keep.add(beams); let beamA = BEAM_A[k];
   // beyond the windows: the sky, the city (towers with lit windows, a dome, a big bell-bot building), far off
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(220, 108), new THREE.MeshBasicMaterial({ map: waveSkyTex(k, true), fog: false })); at(sky, WX / 2, 28, -70); scene.add(sky); keep.add(sky);
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(220, 108), new THREE.MeshBasicMaterial({ map: waveSkyTex(k, true, true), fog: false })); at(sky, WX / 2, 28, -70); scene.add(sky); keep.add(sky);
+  const cloudM = new THREE.MeshBasicMaterial({ map: cloudStrip(k), transparent: true, depthWrite: false, fog: false }); cloudM.map.repeat.set((WX + 140) / 60, 1);   // the clouds drifting past behind the city (a strip 60 long, 15 high)
+  const clouds = at(new THREE.Mesh(new THREE.PlaneGeometry(WX + 140, 15), cloudM), WX / 2, 14, -60); scene.add(clouds); keep.add(clouds);
   const winTex = tex(32, 64, g => { g.fillStyle = "#3d4a6a"; g.fillRect(0, 0, 32, 64); g.fillStyle = "#ffe9a0"; for (let y = 4; y < 60; y += 8) for (let x = 4; x < 28; x += 8) if (Math.random() < .55) g.fillRect(x, y, 4, 4); });
   const mTower = toon("#ffffff"); mTower.map = winTex;
   for (let i = 0; i < Math.round(40 * WS); i++) { const x = R(-30, WX + 32), z = -R(22, 46), w = R(1.5, 4), h = R(4, 15); const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mTower); at(m, x, h / 2 - 3, z); scene.add(m); }
@@ -1488,6 +1500,8 @@ function buildFactory(k = 0, seed = k) {
     if (core) { const k = .85 + .15 * Math.sin(t * 6); core.mCore.color.setRGB(.5 * k, .96 * k, 1); core.ch.material.opacity = .35 + .2 * Math.sin(t * 3); }
     screens.forEach((sc, i) => { sc.visible = Math.random() > .015; });
     beltM.map.offset.x -= dt * .25; cargo.forEach(m => { m.position.x += dt * 1.0; if (m.position.x > WX + 24) m.position.x -= WX + 44; });
+    cloudM.map.offset.x = -(t * 1.1 / 60) % 1;      // (by the clock, so they carry on where they were from room to room)
+    beams.material.opacity = beamA * (.85 + .15 * Math.sin(t * .7));   // (the light breathing a little, as the clouds go over)
     if ((arcT -= dt) <= 0) { arcT = .07;
       arcs.forEach((L, i) => { const P = L.geometry.attributes.position, [ax, ay] = coils[i % coils.length], tgt = i === 0 && coils.length > 1 ? [coils[1][0], coils[1][1]] : [ax + rand(-3, 3), ay + rand(2, 5)];
         const on = Math.random() < .75; L.visible = on;
@@ -1501,8 +1515,9 @@ function buildFactory(k = 0, seed = k) {
     hemi2.color.set(I.hemi ? I.hemi[0] : "#cfe0ff"); hemi2.groundColor.set(I.hemi ? I.hemi[1] : "#283040"); hemi2.intensity = I.hemi ? I.hemi[2] * 1.05 : 1.1;
     sun.color.set(I.sun ? I.sun[0] : "#ffffff"); sun.intensity = I.sun ? I.sun[1] : 1.6; sun2.color.set(I.sun ? I.sun[0] : "#ffffff"); sun2.intensity = I.sun ? I.sun[1] * 1.1 : 1.7;
     const lamp = I.lamp ?? .6; mHalo.opacity = .25 + .45 * lamp; mBulb.color.set("#fff1b8").multiplyScalar(.7 + .3 * lamp);
+    const h = L.waveK ?? k; beamA = BEAM_A[h]; beams.material.color.set(L.shaft || "#fff6d2"); mGlass.opacity = h >= 5 ? .45 : 1;
   }
-  return { k, shafts: [], motes, seeds, sky, inside: true, objs: scene.children.filter(o => !before.has(o)), tick, relight, openBep: hatch ? () => { hatch.want = 1; sparks(bep.zone, GROUND - 60, 10); } : undefined };
+  return { k, shafts: [], motes, seeds, sky, skyFor: h => waveSkyTex(h, true, true), inside: true, objs: scene.children.filter(o => !before.has(o)), tick, relight, openBep: hatch ? () => { hatch.want = 1; sparks(bep.zone, GROUND - 60, 10); } : undefined };
 }
 function disposeLevel(L) {                           // drop a clearing's meshes; its pictures wait to be freed until the next room is built (dropTextures)
   L.objs.forEach(o => { if (o.parent) o.parent.remove(o); o.traverse(m => { if (m.geometry) m.geometry.dispose(); (Array.isArray(m.material) ? m.material : m.material ? [m.material] : []).forEach(x => { texOf(x).forEach(t => texDrop.add(t)); x.dispose(); }); }); });
@@ -1629,8 +1644,8 @@ function cloudCanvas(g, x, y, w, fill, line, rnd) {   // a printed swirl cloud: 
   puffs.forEach(([px, py, r], i) => { if (i % 2) return; g.beginPath(); for (let a = 0; a < TAU * 1.6; a += .15) { const rr = r * .62 * (1 - a / (TAU * 1.9)); g.lineTo(px + Math.cos(a + i) * rr, py + Math.sin(a + i) * rr); } g.stroke(); });
 }
 const waveSkies = {};
-function waveSkyTex(k, tall) {                       // the printed sky for each hour: graded colour, grain, the sun or moon, swirl clouds, stars at night
-  const key = k + (tall ? "t" : ""); if (waveSkies[key]) return waveSkies[key];
+function waveSkyTex(k, tall, bare) {                 // the printed sky for each hour: graded colour, grain, the sun or moon, swirl clouds, stars at night (bare: no clouds; they drift past in front)
+  const key = k + (tall ? "t" : "") + (bare ? "b" : ""); if (waveSkies[key]) return waveSkies[key];
   const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 2048; c.height = tall ? 1024 : 512; const g = c.getContext("2d"), r2 = rngF(17 + k);
   if (tall) {                                         // up on the cliffs the sea drops away and more sky shows: the same sky, twice as tall
     const r3 = rngF(99 + k); g.fillStyle = Q.top; g.fillRect(0, 0, 2048, 512);
@@ -1651,7 +1666,7 @@ function waveSkyTex(k, tall) {                       // the printed sky for each
   g.strokeStyle = k >= 4 ? "#ffcf6a" : "#ffffff"; g.globalAlpha = k >= 4 ? .55 : .3; g.lineWidth = 2.2;
   for (let i = 0; i < 9; i++) { const cx = dx + (r2() - .5) * R * 1.4, cy = dy + (r2() - .5) * R * 1.4; g.beginPath(); for (let a = 0; a < TAU * 1.2; a += .2) { const rr = R * .28 * (1 - a / (TAU * 1.4)); g.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr * .7); } g.stroke(); }
   g.restore(); g.globalAlpha = 1;
-  if (Q.cloud) [[260, 170, 300], [1120, 120, 240], [1640, 210, 320], [760, 300, 200], [1900, 330, 180]].forEach(([x, y, w]) => {
+  if (Q.cloud && !bare) [[260, 170, 300], [1120, 120, 240], [1640, 210, 320], [760, 300, 200], [1900, 330, 180]].forEach(([x, y, w]) => {
     x += (r2() - .5) * 100; if (Math.hypot(x - dx, y - dy) < R + w * .55) x += (x < dx ? -1 : 1) * (R + w * .6);   // keep the disc clear
     cloudCanvas(g, x, y, w, Q.cloud, Q.cloudLine, r2); });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (waveSkies[key] = t);
@@ -1664,6 +1679,28 @@ function cloudTex(k) {
   const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 512; c.height = 160; const g = c.getContext("2d");
   cloudCanvas(g, 256, 100, 440, Q.cloud, Q.cloudLine, rngF(5 + k));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (cloudTexes[k] = t);
+}
+const cloudStrips = {};
+function cloudStripTex(k) {                          // the hour's swirl clouds alone on a clear strip that wraps round end to end, to drift past behind windows
+  if (cloudStrips[k]) return cloudStrips[k];
+  const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 2048; c.height = 512; const g = c.getContext("2d"), r2 = rngF(611 + k);
+  for (let i = 0; i < 5; i++) { const x = (i + .25 + r2() * .5) * 2048 / 5, y = 160 + r2() * 240, w = 260 + r2() * 170, sd = 700 + k * 17 + i;
+    [-2048, 0, 2048].forEach(dx => cloudCanvas(g, x + dx, y, w, Q.cloud, Q.cloudLine, rngF(sd))); }   // (each drawn again a strip's length either side: no seam where it wraps)
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return (cloudStrips[k] = t);
+}
+const cloudStrip = k => { const t = cloudStripTex(k).clone(); t.needsUpdate = true; return t; };   // (its own scroll and scale; the picture's shared)
+let glassT = null;
+const glassTex = () => glassT || (glassT = (() => { const t = tex(128, 128, g => {   // window glass: a faint sheen and two bright diagonal glints
+  g.fillStyle = "rgba(220,236,255,.07)"; g.fillRect(0, 0, 128, 128); g.fillStyle = "rgba(255,255,255,.3)";
+  [[34, 16], [62, 7]].forEach(([x, w]) => { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + w, 0); g.lineTo(x + w - 54, 128); g.lineTo(x - 54, 128); g.closePath(); g.fill(); }); }); t.wrapS = THREE.RepeatWrapping; return t; })());
+// the hour's light falling in at the windows: how strong (golden hour the most, a faint cold one by moonlight) and how far it slants
+const BEAM_A = [.1, .12, .15, .24, .2, .06, .045], BEAM_SH = [1.2, 1.8, 2.6, 3.8, 4.4, 2.4, 1.6];
+function windowBeams(list, k, zTop, zBot, gAt, scale = 1) {   // list: [x, top y, half width] per window; one soft slanting slab of light each, fading to nothing on the floor
+  const Q = WAVE_SCREENS[k].sky, sh = BEAM_SH[k] * (Q.discX > 512 ? -1 : 1), P = [], C = [];   // (slanting away from the sun or the moon)
+  list.forEach(([x, y, hw]) => { const yb = gAt(x + sh) + .03, a = [x - hw, y, zTop], b = [x + hw, y, zTop], c = [x + hw + sh, yb, zBot], d = [x - hw + sh, yb, zBot];
+    P.push(...a, ...b, ...c, ...a, ...c, ...d); C.push(1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0); });
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("color", new THREE.Float32BufferAttribute(C, 3));
+  return new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: WAVE_SCREENS[k].shaft, vertexColors: true, transparent: true, opacity: BEAM_A[k] * scale, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
 }
 function jag(geo, rng, amt) {                        // rough up a rock: push each vertex in or out a little
   const p = geo.attributes.position, seen = new Map();
@@ -2056,7 +2093,7 @@ function setLook(k) {                                // light the clearing for i
   sun.color.set(look.sun[0]); sun.intensity = look.sun[1]; sun2.color.set(look.sun2[0]); sun2.intensity = look.sun2[1];
   hemi.color.set(look.hemi[0]); hemi.groundColor.set(look.hemi[1]); hemi.intensity = look.hemi[2];
   hemi2.color.set(look.hemi2[0]); hemi2.groundColor.set(look.hemi2[1]); hemi2.intensity = look.hemi2[2];
-  level.sky.material.map = worldSky(k, level.tallSky); level.sky.material.needsUpdate = true;
+  level.sky.material.map = level.skyFor ? level.skyFor(k) : worldSky(k, level.tallSky); level.sky.material.needsUpdate = true;
   if (level.relight) level.relight(look);
   level.shafts.forEach(m => m.material.color.set(look.shaft));
   level.motes.material.color.set(look.mote); level.motes.material.size = look.moteSize;
@@ -2544,7 +2581,13 @@ const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && 
 const LOOK_KEY = "berry.looks.v1";                // which look each character wears (an alternate hair style, picked with ↑ ↓ on the select screen)
 let looks = {}; try { looks = JSON.parse(localStorage.getItem(LOOK_KEY) || "{}") || {}; } catch { }
 const lookOf = sp => KIT.withLook(sp, looks[sp.id] || 0);
-let roster = rosterSpecs().filter(sp => !isPet(sp) && !isVillain(sp)).map(sp => buildChar(lookOf(sp))), pets = rosterSpecs().filter(isPet).map(buildChar);   // pets: companions like Luna, never playable
+const SELECT_HIDE = new Set(["noro", "doir"]);         // (the user, 2026-10-18: off the select screen for now; still in the kit, so taking them out of here brings them back)
+const SELECT_FIRST = ["june", "chase", "tocsin"];      // the opening page, in this order; everyone else (Sofia, Lydia, anyone made in the editor) on the next
+function playableSpecs() {
+  const rank = sp => { const i = SELECT_FIRST.indexOf(sp.id); return i < 0 ? SELECT_FIRST.length : i; };
+  return rosterSpecs().filter(sp => !isPet(sp) && !isVillain(sp) && !SELECT_HIDE.has(sp.id)).map((sp, i) => [sp, i]).sort((a, b) => rank(a[0]) - rank(b[0]) || a[1] - b[1]).map(a => a[0]);
+}
+let roster = playableSpecs().map(sp => buildChar(lookOf(sp))), pets = rosterSpecs().filter(isPet).map(buildChar);   // pets: companions like Luna, never playable
 let pal = null;                                   // the companion following the player this round (a state, like the player's)
 pets.forEach(q => { q.root.visible = q.shadow.visible = false; });
 const furnace = buildFurnace(); let level = buildLevel(0, 1); level.s = 0; level.w = 0;
@@ -2625,14 +2668,17 @@ function showModal(title, text, kind = null) { modalKind = kind; modalOpen = tru
 // character select: everyone lines up in front of the platforms
 const LINE_Z = 2.4;
 const LINE_GAP = 92;
-const PAGE = 5, pageOf = i => Math.floor(i / PAGE);           // the cast comes in sets of five: past the end of one, the next set swipes in
-const lineX = i => { const pg = pageOf(i), n = Math.min(PAGE, roster.length - pg * PAGE), j = i - pg * PAGE; return 480 + (j - (n - 1) / 2) * Math.min(LINE_GAP, 470 / Math.max(1, n - 1)); };
+const PAGE = 5;                                   // the cast comes in sets: June, Chase and Tocsin on the first, then sets of five; past the end of one, the next set swipes in
+const page1 = () => roster.filter(r => SELECT_FIRST.includes(r.id)).length || PAGE;
+const pageOf = i => { const f = page1(); return i < f ? 0 : 1 + Math.floor((i - f) / PAGE); };
+const pageStart = pg => pg ? page1() + (pg - 1) * PAGE : 0;
+const lineX = i => { const pg = pageOf(i), st = pageStart(pg), n = Math.min(pg ? PAGE : page1(), roster.length - st), j = i - st; return 480 + (j - (n - 1) / 2) * Math.min(LINE_GAP, 470 / Math.max(1, n - 1)); };
 const lineTarget = i => lineX(i) + (pageOf(i) - pageOf(sel)) * 1300;
 const makeLineup = () => roster.map((r, i) => { const st = makeState(lineX(i), r, LINE_Z); st.yaw = -1.2; return st; });
 let lineup = makeLineup();
 function rebuildRoster() {                    // after an import: rebuild every character from its spec
   roster.forEach(KIT.dispose); pets.forEach(KIT.dispose); pal = null;
-  roster = rosterSpecs().filter(sp => !isPet(sp) && !isVillain(sp)).map(sp => buildChar(lookOf(sp))); pets = rosterSpecs().filter(isPet).map(buildChar); lineup = makeLineup();
+  roster = playableSpecs().map(sp => buildChar(lookOf(sp))); pets = rosterSpecs().filter(isPet).map(buildChar); lineup = makeLineup();
   if (WAVE_FOES) { const ej = WAVE_FOES.find(f => f.kit); if (ej) { hideFoe(ej); KIT.dispose(ej.rig); ej.rig = buildChar(rosterSpecs().find(q => q.id === "evil-june")); hideFoe(ej); } }   // her edits, live
   pets.forEach(q => { q.root.visible = q.shadow.visible = false; });
   sel = Math.min(sel, roster.length - 1); rig = roster[sel];
@@ -2683,7 +2729,7 @@ function setSel(i) {
   const st = lineup[sel]; st.sq = -.1; st.sqv = 0;
 }
 function clearStage() {
-  ejEnd();
+  ejEnd(); cheerHold = null;
   modalOpen = false; $("modal").classList.remove("show"); exitOpen = false; $("exitCue").classList.add("hidden");
   FOES.forEach(hideFoe); clearHz(); clearBaddies(); clearFriends(); parts.forEach(q => actors.remove(q.m)); parts = [];
   if (hideout) { hideout.beps.forEach(disposeBaddy); hideout.notes.forEach(n => actors.remove(n.m)); hideout = null; level.s = -2; }
@@ -3010,7 +3056,7 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     enterStage(ns, back); spawnEscort(back);
   });
 }
-function fillRoom() {                                // a room you've cleared stays clear (bar a sad berry you left be); a new one fills up with baddies
+function fillRoom() {                                // a new room fills up with baddies and you clear it to go on; back in one you've cleared, they're all back but the way out's already open
   if (stronghold) return shFill();
   const S0 = STAGES[stage];
   if (S0.peace) { const first = !roomsDone.has(stage); roomsDone.add(stage); clearBaddies(); bossIn = false; exitOpen = true; spawnGifts();   // no fighting here (the castle gate)
@@ -3495,7 +3541,8 @@ function updatePlayer(dt) {
   p.inv = Math.max(0, p.inv - dt); p.stompGrace = Math.max(0, p.stompGrace - dt);
   p.hurtT = Math.max(0, p.hurtT - dt);
   jumpBuf -= dt; atkBuf -= dt;
-  const control = p.hurtT <= 0 && !p.dead && !(intro && intro.lock) && !cine, cat = p.rig.kind === "cat";
+  p.calmT = Math.max(0, (p.calmT || 0) - dt);
+  const control = p.hurtT <= 0 && !p.dead && !(intro && intro.lock) && !cine && !cheerHold, cat = p.rig.kind === "cat";
   if (p.combo && p.atkT < 0) p.combo = null;   // safety net: a combo with no move playing would lock jump, attack, charge and block for good
   if (ax && hintShown && time > 4) { hintShown = false; setTimeout(() => document.getElementById("hint").classList.add("hide"), 5000); }
   // ladders: ↑ at the foot of one (or in the air beside it), ↓ standing at its top, and you climb
@@ -3896,6 +3943,7 @@ function bossThink(e, p, D) {
   e.intent = { kind: "hold", tx: e.x + rand(-70, 70) };                                     // on its toes: little steps in and out
 }
 function bossMove(e, p, D, dt) {
+  if (p.calmT > 0 || cheerHold) { e.vx = approach(e.vx, 0, BRAIN.brake * dt); e.atkCd = Math.max(e.atkCd, .6); return; }   // (you're calming a sad berry: it holds off)
   const dx = p.x - e.x, adx = Math.abs(dx); e.steer = false;
   e.backoff = Math.max(0, (e.backoff || 0) - dt); e.dodgeCd = Math.max(0, (e.dodgeCd || 0) - dt);
   if ((e.brainT = (e.brainT || 0) - dt) <= 0) { e.brainT = rand(...BRAIN.think); bossThink(e, p, D); }
@@ -6681,15 +6729,15 @@ const CANDY_INSIDE = [   // the factory's own warm light, the hour coming in at 
 ];
 const CANDY_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, bugs: [0, 0], shore: [0, 0], inside: CANDY_INSIDE[k] }));
 const candySkies = {};
-function candySkyTex(k) {                             // what the round windows show: the waves' hours, a little sweeter (pastel clouds, swirled)
-  if (candySkies[k]) return candySkies[k];
+function candySkyTex(k, bare) {                       // what the round windows show: the waves' hours, a little sweeter (pastel clouds, swirled; bare: none, they drift past in front)
+  const key = k + (bare ? "b" : ""); if (candySkies[key]) return candySkies[key];
   const S = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 512; c.height = 512; const g = c.getContext("2d"), r2 = rngF(931 + k);
   const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, S.top); gr.addColorStop(.6, S.mid); gr.addColorStop(1, S.low); g.fillStyle = gr; g.fillRect(0, 0, 512, 512);
   for (let i = 0; i < S.stars / 3; i++) { g.globalAlpha = .4 + r2() * .6; g.fillStyle = "#fff8e8"; g.fillRect(r2() * 512, r2() * 400, 1.6, 1.6); }
   g.globalAlpha = .55; g.strokeStyle = k >= 5 ? "#8a7ad8" : "#ffffff"; g.lineWidth = 9; g.lineCap = "round";
-  for (let i = 0; i < 4; i++) { const cx = r2() * 512, cy = 120 + r2() * 300, R = 20 + r2() * 30; g.beginPath(); for (let a = 0; a < TAU * 1.6; a += .2) { const rr = R * (1 - a / (TAU * 2)); g.lineTo(cx + Math.cos(a) * rr * 1.8, cy + Math.sin(a) * rr); } g.stroke(); }   // swirly clouds
+  for (let i = 0; i < (bare ? 0 : 4); i++) { const cx = r2() * 512, cy = 120 + r2() * 300, R = 20 + r2() * 30; g.beginPath(); for (let a = 0; a < TAU * 1.6; a += .2) { const rr = R * (1 - a / (TAU * 2)); g.lineTo(cx + Math.cos(a) * rr * 1.8, cy + Math.sin(a) * rr); } g.stroke(); }   // swirly clouds
   g.globalAlpha = 1; g.fillStyle = S.disc; g.beginPath(); g.arc(S.discX * .6, S.discY * .9 + 60, S.discR * .9, 0, TAU); g.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (candySkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (candySkies[key] = t);
 }
 // a spiral band, from its middle out, widening as it goes; the outer end can run on into a pointed flick (Vinella's quiff)
 function swirlShape(R, turns, w0, w1, tip = 0) {
@@ -6755,11 +6803,17 @@ function buildCandyFactory(k = 0, seed = k) {
     for (let i = 0; i < 6; i++) { const bb = new THREE.Mesh(ball(.2, 10, 8), mTaffy); bb.position.set(cx + R(-w / 2 + .2, w / 2 - .2), WY, R(-6, 3)); bb.userData.ph = rng() * 3; scene.add(bb); keep.add(bb); bubbles.push(bb); } });
   // the back wall: purple swirl wallpaper, round swirl-framed windows on the sky, swirl gears turning, a striped pipe along the top
   scene.add(at(new THREE.Mesh(new THREE.PlaneGeometry(WX + 80, 26), mWall), WX / 2, gY + 11, -9));
-  const skyM = new THREE.MeshBasicMaterial({ map: candySkyTex(k), fog: false }), sky = new THREE.Mesh(new THREE.CircleGeometry(1, 30), skyM); sky.visible = false; scene.add(sky); keep.add(sky);   // (the window glass shares the hour's sky)
+  const skyM = new THREE.MeshBasicMaterial({ map: candySkyTex(k, true), fog: false }), sky = new THREE.Mesh(new THREE.CircleGeometry(1, 30), skyM); sky.visible = false; scene.add(sky); keep.add(sky);   // (the window glass shares the hour's sky)
+  const winClouds = [], beamL = [], mGlassC = new THREE.MeshBasicMaterial({ map: glassTex(), transparent: true, depthWrite: false });
   for (let x = R(3, 8); x < WX; x += R(10, 14)) { const y = gY + R(7, 9.5), r = R(1.7, 2.4);
     const win = new THREE.Mesh(new THREE.CircleGeometry(r, 30), skyM); at(win, x, y, -8.95); scene.add(win); keep.add(win);
+    const cm = new THREE.MeshBasicMaterial({ map: cloudStrip(k), transparent: true, depthWrite: false, fog: false }); cm.map.repeat.set(r / 12, r / 3); cm.map.offset.y = .45 - r / 6;   // (a strip 24 long, 6 high, out there)
+    const cl = new THREE.Mesh(new THREE.CircleGeometry(r, 30), cm); at(cl, x, y, -8.93); scene.add(cl); keep.add(cl); winClouds.push([cm.map, (x - r) / 24]);
+    const gl = new THREE.Mesh(new THREE.CircleGeometry(r, 30), mGlassC); at(gl, x, y, -8.91); scene.add(gl); keep.add(gl);
+    beamL.push([x, y + r * .2, r * .8]);
     scene.add(at(mk(new THREE.TorusGeometry(r, .22, 8, 36), null, { mat: m.yel, ol: .02 }), x, y, -8.85));
     const sw = mk(swirlGeo(r * .55, 1.3, .03, .1, .5, .12), null, { mat: m.yelL, ol: .015 }); at(sw, x, y - r * .05, -8.8); sw.scale.set(1, 1, .5); scene.add(sw); }
+  const beams = windowBeams(beamL, k, -8.6, -3, gAt, 1.3); scene.add(beams); keep.add(beams); let beamA = BEAM_A[k] * 1.3;   // the hour's light falling in at the round windows
   const gears = [];
   for (let i = 0; i < 6; i++) { const x = R(0, WX), y = gY + R(2.5, 5.5), r = R(.9, 1.8), d = new THREE.Mesh(new THREE.CircleGeometry(r, 28), toon("#ffffff", { map: swirlTex(rng() < .5 ? CANDY.teal : CANDY.pur, CANDY.yelL) }));
     at(d, x, y, -8.7); scene.add(d); keep.add(d); gears.push([d, R(.3, .8) * (rng() < .5 ? -1 : 1)]);
@@ -6831,6 +6885,8 @@ function buildCandyFactory(k = 0, seed = k) {
   function tick(t, dt) {
     dt = Math.min(dt || 0, .05); anim.forEach(f => f(t, dt));
     gears.forEach(([d, sp]) => { d.rotation.z += dt * sp; });
+    winClouds.forEach(([m, x0]) => { m.offset.x = x0 - (t * .5 / 24) % 1; });   // (one sky going by behind every window, by the clock)
+    beams.material.opacity = beamA * (.85 + .15 * Math.sin(t * .7));
     belt.forEach(c => { c.position.x += dt * .9; if (c.position.x > WX + 10) c.position.x -= WX + 20; });
     pullers.forEach((h, i) => { h.rotation.z = t * (.7 + i * .2); });
     bubbles.forEach(b => { const u = ((t * .6 + b.userData.ph) % 1.6) / 1.6; b.scale.setScalar(u < .8 ? .3 + u : Math.max(.01, 1.1 - (u - .8) * 6)); b.position.y = WY + u * .05; });
@@ -6842,8 +6898,9 @@ function buildCandyFactory(k = 0, seed = k) {
     hemi.color.set(I.hemi[0]); hemi.groundColor.set(I.hemi[1]); hemi.intensity = I.hemi[2]; hemi2.color.set(I.hemi[0]); hemi2.groundColor.set(I.hemi[1]); hemi2.intensity = I.hemi[2] * 1.05;
     sun.color.set(I.sun[0]); sun.intensity = I.sun[1]; sun2.color.set(I.sun[0]); sun2.intensity = I.sun[1] * 1.1;
     const lamp = I.lamp ?? .5; mHalo.opacity = .2 + .5 * lamp; mBulb.color.set("#fff3c4").multiplyScalar(.6 + .4 * lamp);
+    const i = CANDY_SCREENS.indexOf(L), hk = i >= 0 ? i : k; beamA = BEAM_A[hk] * 1.3; beams.material.color.set(L.shaft || "#fff6d2"); mGlassC.opacity = hk >= 5 ? .45 : 1;
   }
-  return { k, shafts: [], motes, seeds, sky, inside: true, objs: scene.children.filter(o => !before.has(o)), tick, relight,
+  return { k, shafts: [], motes, seeds, sky, skyFor: h => candySkyTex(h, true), inside: true, objs: scene.children.filter(o => !before.has(o)), tick, relight,
     openBep: door ? () => { door.want = 1; sparks(bep.zone, GROUND - 60, 10); } : undefined };
 }
 // the rooms: in along the floor (C1–C3) and up the steps to the split (B4): the upper tier climbs on to A5–A7, the floor runs on through
@@ -7940,10 +7997,9 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
   baddies = (BB_ROSTER[k] || []).map(([type, col, at], i) => {
     const spot = k + ":" + i; if (sadDone.has(spot)) return null;                  // a sad berry you cheered up has gone for the rest of the run
     const sleepy = revisit && sleepersFor(k).includes(i);
-    if (revisit && !sleepy && !(sadSpots.has(spot) && sadFate !== "killed")) return null;     // back in a cleared room: only a sad berry you left be is still about ...
     if (sleepy) { const b = makeSpawn(type, col, at); b.spot = spot; b.idx = i; if (b.r.segs) { disposeBaddy(b); return null; } b.sleep = true; b.zT = rand(0, 1); b.dir = Math.random() < .5 ? -1 : 1; return b; }   // ... and after dark, some asleep
     const b = makeSpawn(type, col, at); b.spot = spot;
-    if (sadSpots.has(spot)) { b.sad = true; sadFace(b); sadFate = null; sadSpots = new Set([spot]); }   // (met it: the other branch's candidate is dropped)
+    if (sadSpots.has(spot) && !(revisit && sadFate === "killed")) { b.sad = true; sadFace(b); sadFate = null; sadSpots = new Set([spot]); }   // (met it: the other branch's candidate is dropped)   (one you popped comes back an ordinary baddy)
     return b;
   }).filter(Boolean);
   bossIn = !baddies.length; bossCue = 0;
@@ -8226,10 +8282,10 @@ function updateSad(b, dt) {                      // mopes about its patch; when 
   const front = p.block && !p.dead && ad < 250 && Math.abs(p.y - b.y) < 90 && facing;
   if (front) {
     if (!b.cheer) SFX.calm();
-    const c0 = b.cheer || 0; b.cheer = c0 + dt; b.dir = Math.sign(dx) || b.dir; b.vx = approach(b.vx, 0, 900 * dt);
+    const c0 = b.cheer || 0; b.cheer = c0 + dt; b.dir = Math.sign(dx) || b.dir; b.vx = approach(b.vx, 0, 900 * dt); p.calmT = .2;   // (while you calm it, you're safe: see hurtPlayer, updateBaddy, bossMove)
     if (b.sadAtk) { b.sadAtk = null; b.atk = null; b.sadCd = 1.5; }      // you've put your guard up: it stops winding up and calms down
     if (Math.floor(c0 * 4) !== Math.floor(b.cheer * 4)) calmHeart(b);      // a little heart floats up as it calms
-    if (b.cheer >= 1) cheerUp(b);
+    if (b.cheer >= 1.4) cheerUp(b);   // (was 1 s: the user found it over too quickly)
     return;
   }
   b.cheer = Math.max(0, (b.cheer || 0) - dt * .5);                          // (drains back slowly, so a moment's slip doesn't start it over)
@@ -8264,6 +8320,7 @@ function cheerUp(b) {                            // the gift, by size: S a heart
   const p = player, sz = b.T.size, big = sz === "B" || sz === "G";
   if (wst) wst.cheered++;
   b.sad = false; b.happyT = 0; b.cheer = 0; b.vx = 0; b.atk = null; b.sadAtk = null; b.runDir = Math.sign(b.x - p.x) || 1; b.baseY = b.y; sadFate = "cheered";
+  cheerHold = { t: 0, dur: 1.5 }; p.vx = 0; p.atkT = -1; p.combo = null; p.chargeT = 0; p.chargeLv = 0;   // held a moment, safe, while it celebrates
   happyFace(b); SFX.cheer();
   const before = p.hp; p.hp = sz === "S" ? Math.min(maxHp(), p.hp + 1) : maxHp(); if (big) p.power = 3;
   [...heartsEl.children].forEach((h, i) => { if (i >= before && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } });
@@ -8274,9 +8331,9 @@ function cheerUp(b) {                            // the gift, by size: S a heart
 }
 function updateHappy(b, dt) {                    // a happy spin, then off it runs, off the map
   b.happyT += dt;
-  if (b.happyT < .75) { b.vx = 0; b.y = b.baseY - Math.sin(Math.min(1, b.happyT / .75) * Math.PI) * 34; return; }
-  b.dir = b.runDir; b.vx = b.runDir * 600; b.x += b.vx * dt;
-  b.y = b.baseY - Math.abs(Math.sin((b.happyT - .75) * 11)) * 24; b.phase += dt * 30;
+  if (b.happyT < 1.2) { b.vx = 0; b.y = b.baseY - Math.abs(Math.sin(b.happyT / 1.2 * Math.PI * 2)) * 30; return; }   // (two happy hops now, not one)
+  b.dir = b.runDir; b.vx = b.runDir * 380; b.x += b.vx * dt;   // (off at a skip, not a dash: was 600)
+  b.y = b.baseY - Math.abs(Math.sin((b.happyT - 1.2) * 9)) * 22; b.phase += dt * 30;
   const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
   if (Math.abs(X(b.x) - camX) > halfW + 3 || b.x < -150 || b.x > WORLD + 150) {
     b.gone = true; b.r.root.visible = b.r.shadow.visible = false; if (b.r.segRoot) b.r.segRoot.visible = false;
@@ -8410,7 +8467,9 @@ function spawnEscort(cameBack) {                  // still leading you: they com
   if (!bepRun.escort) return;
   const home = bepHome(), cols = bepRun.escort, back = bepRun.back;
   if (back ? !cameBack || home > stage : cameBack || home < stage) return;     // (you've turned the other way: they wait where they were)
-  ["S", "M", "B"].forEach((sz, i) => { const x = back ? WORLD - 70 - i * 50 : 70 + i * 50, f = makeFriend(sz, cols[i], x); Object.assign(f, { popAt: 0, y: groundAt(x) ?? GROUND, onGround: true, z: .4 - i * .3 }); friends.push(f); });
+  const jut = back && entryHi ? hiPlat() : null;   // (back into a split room by its upper way: they come in up on that ledge with you, not on the lower path. The user, 2026-10-18)
+  ["S", "M", "B"].forEach((sz, i) => { let x = back ? WORLD - 70 - i * 50 : 70 + i * 50; if (jut) x = clamp(x, jut.x + 24, jut.x + jut.w - 24);
+    const f = makeFriend(sz, cols[i], x); Object.assign(f, { popAt: 0, y: jut ? jut.y : groundAt(x) ?? GROUND, plat: jut, onGround: true, z: .4 - i * .3 }); friends.push(f); });
   bepEv = { B: STAGES[home].bep, mode: home === stage ? (back ? "trail" : "arrive") : back ? "escortBack" : "escort", phase: "walk", t: 0, lead: friends[back ? 0 : 2], wait: false };
   const B = STAGES[home].bep;
   friends.forEach((f, i) => { f.task = { u: home === stage && !back ? clamp((f.x - B.left) / (B.zone - B.left) - (2 - i) * .075, 0, .6) : -1, lag: (back ? i : 2 - i) * .075 }; });
@@ -9204,7 +9263,7 @@ function updateBaddy(b, dt) {
     else { b.vx = approach(b.vx, 0, 1400 * dt); if (b.atkT >= A.rest) { b.atk = null; b.crossUp = false; b.atkCd = b.angry ? rand(.7, 1.3) : BB_MELEE.has(T.atk) ? rand(1, 1.8) : rand(1.5, 2.7); } }   // (a mad one's back at you sooner; so is a brawler)
   } else if ((b.onGround || fly) && b.hurtT <= 0) {
     // each baddy keeps to its own patch of the clearing: it only comes for you once you're in it, never leaves it, and wanders home after
-    const melee = BB_MELEE.has(T.atk), home = b.home ?? (b.home = b.x), dx = p.x - b.x, dy = p.y - b.y, near = !p.dead && (b.angry ? Math.abs(dx) < 900 && Math.abs(dy) < 260 : melee ? Math.abs(p.x - home) < ZONE + 190 && Math.abs(dx) < 520 && Math.abs(dy) < 200 : Math.abs(p.x - home) < ZONE + 110 && Math.abs(dx) < 400 && Math.abs(dy) < 170);   // (a mad one comes for you wherever you are; a brawler spots you from further off)
+    const melee = BB_MELEE.has(T.atk), home = b.home ?? (b.home = b.x), dx = p.x - b.x, dy = p.y - b.y, near = !p.dead && !(p.calmT > 0 || cheerHold) && (b.angry ? Math.abs(dx) < 900 && Math.abs(dy) < 260 : melee ? Math.abs(p.x - home) < ZONE + 190 && Math.abs(dx) < 520 && Math.abs(dy) < 200 : Math.abs(p.x - home) < ZONE + 110 && Math.abs(dx) < 400 && Math.abs(dy) < 170);   // (a mad one comes for you wherever you are; a brawler spots you from further off)
     if (b.angry && Math.random() < dt * .8) puffs(b.x, b.y - b.h - 4, 1, 6, 50);                         // steaming
     if (b.angry && b.z) b.z = approach(b.z, 0, dt * 3);                                                 // (up off the bunk / out from behind the table, into the fray)
     if (near) b.dir = Math.sign(dx) || b.dir;
@@ -9521,6 +9580,7 @@ function syncDizzy(dt) {                              // "?"s circling your head
 function hurtPlayer(d, src) {
   const p = player;
   if (p.inv > 0 || p.stompGrace > 0 || p.dead) return false;
+  if (p.calmT > 0 || cheerHold) { if (src) src.life = Math.min(src.life, src.t); return false; }   // calming a sad berry (or just cheered one up): nothing gets through
   if (intro) { if (src) src.life = Math.min(src.life, src.t); return false; }   // the opening: nothing can hurt you till your partner's waved and gone
   if (p.bubble) { popBubble(p); p.inv = .8; p.climb = null; if (src) src.life = Math.min(src.life, src.t); return false; }   // the bubble takes it, and pops
   if (p.tackle || (p.combo && p.combo.tackle)) {  // mid-tackle (or the charged one): it costs the heart (and a level of ATK), but no knockback, no stun: you keep going
@@ -9729,6 +9789,7 @@ function update(dt) {
   if (mode === "opp") { updateOpp(dt); return; }
   if (mode === "world") { updateWorldSel(dt); return; }
   wstTick(dt);
+  if (cheerHold && (cheerHold.t += dt) > cheerHold.dur) cheerHold = null;
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);
     if (player.auto && player.auto.kind === "enter" && player.auto.phase !== "walk") player.auto = null;
