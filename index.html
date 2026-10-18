@@ -190,7 +190,7 @@
     #pause .btns button:first-child { grid-column: span 2; }
   }
   #hint { z-index: 1; }   /* (phone: under the pause menu and the other panels) */
-  #holdTip { display: none !important; }   /* (the user, 2026-10-17: no "press and hold your buttons" tip on the phone) */
+  #holdTip, #hint { display: none !important; }   /* (the user, 2026-10-17: no tips about the buttons on the phone, neither the "press and hold" one nor the controls bar) */
   @media (max-height: 520px) {   /* the room banners, the exit cue and the loading name, smaller (the user, 2026-10-17) */
     #banner .blk { font-size: 26px; padding: 7px 12px 2px; } #banner .bar { font-size: 9px; margin-left: 28px; letter-spacing: .28em; }
     #exitCue .blk { font-size: 18px; } #exitCue .bar { font-size: 8px; }
@@ -2829,7 +2829,7 @@ function beginPlay() {                               // into the game (from pick
   $("select").classList.add("hidden");
   ["hud", "hint"].forEach(id => $(id).classList.remove("hidden"));   // (the top-left health bar and name are gone: the user, 2026-10-16)
   $("pname").textContent = rig.name; $("ename").textContent = foe.name;
-  $("hint").innerHTML = "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>A</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>X</b>" + (rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN") + " · HOLD TO CHARGE <b>B</b>BLOCK · HOLD: BUBBLE <b>Y</b>TACKLE · HOLD TO CHARGE <b>↑</b>LADDERS <b>❚❚</b>PAUSE";
+  $("hint").innerHTML = "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>A</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>B</b>" + (rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN") + " · HOLD TO CHARGE <b>X</b>BLOCK · HOLD: BUBBLE <b>Y</b>TACKLE · HOLD TO CHARGE <b>↑</b>LADDERS <b>❚❚</b>PAUSE";
   $("hint").classList.remove("hide"); hintShown = true;
   mode = "play"; resetTrial(); startMusic(); holdTipSoon();
 }
@@ -7798,26 +7798,41 @@ const WORLDS = [
 ];
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
-// baddies come in encounters (the user, 2026-10-17: "only 2 to 3 should ever be close to each other, no more. and usually 2 depending
-// on how difficult the pairing is"). The rooms keep most of their hand-placed baddies; any closer than SEP to the next one are one
-// encounter, and an encounter is one baddy, a pair (unless the two together are too much: a giant and a big one), or three only when
-// they're all light (small ones, or two small and a medium). Weight: small 1, medium 1.5, big 2, giant 3, and +.5 for one that shoots.
-// Picked the same way every time (each kind's first one first, then the rest in roster order), so a room always has the same baddies
-const ENC_SEP = 560, BB_RANGED = new Set(["spit", "lob", "bubble", "bomb", "shuriken", "daze", "puff"]), BB_WT = { S: 1, M: 1.5, B: 2, G: 3 };
+// every room keeps all its baddies, spread out (the user, 2026-10-17: "there should be more just like before. just space them out within
+// each screen"). The ones on a ledge or out in the water stay where they were put; the ones on the ground are re-placed along the room
+// as evenly as the room allows (each spot as far as it can be from all the others, clear of the drops and back from either doorway),
+// still in their left-to-right order, and two heavy ones (big or giant) are never left side by side. The same every time
 function thinRoster(W) {
   if (W.rosterThin) return W.rosterThin;
+  const HEAVY = t => ({ B: 1, G: 1 })[(BB_TYPES[t] || {}).size] === 1;
   return (W.rosterThin = (W.roster || []).map((row, k) => {
     if (!row || row.length < 2) return row;
-    const st = W.stages[k] || {}, pl = st.plats || [], gp = st.gaps || [];
-    const xOf = at => typeof at === "number" ? at : at && at.plat !== undefined && pl[at.plat] ? pl[at.plat][0] + pl[at.plat][2] / 2
-      : at && at.gap !== undefined && gp[at.gap] ? (gp[at.gap][0] + gp[at.gap][1]) / 2 : WORLD / 2;
-    const wt = e => { const T = BB_TYPES[e[0]] || {}; return (BB_WT[T.size] || 1.5) + (BB_RANGED.has(T.atk) ? .5 : 0); };
-    const items = row.map((e, i) => ({ i, x: xOf(e[2]), w: wt(e), t: e[0] })), seen = new Set(), first = [], rest = [];
-    items.forEach(q => (seen.has(q.t) ? rest : (seen.add(q.t), first)).push(q));
-    const sum = g => g.reduce((a, q) => a + q.w, 0), ok = g => g.length === 1 || (g.length === 2 && sum(g) <= 4.5) || (g.length === 3 && sum(g) <= 3.5);
-    const groups = list => { const gs = []; [...list].sort((a, b) => a.x - b.x).forEach(q => { const g = gs[gs.length - 1]; if (g && q.x - g[g.length - 1].x < ENC_SEP) g.push(q); else gs.push([q]); }); return gs; };
-    const kept = []; for (const q of [...first, ...rest]) if (groups([...kept, q]).every(ok)) kept.push(q);
-    return row.filter((e, i) => kept.some(q => q.i === i));
+    const st = W.stages[k] || {}, pl = st.plats || [], gaps = st.gaps || [];
+    const fixedX = at => at && at.plat !== undefined && pl[at.plat] ? pl[at.plat][0] + pl[at.plat][2] / 2 : at && at.gap !== undefined && gaps[at.gap] ? (gaps[at.gap][0] + gaps[at.gap][1]) / 2 : null;
+    const free = [], placed = [];
+    row.forEach((e, i) => { if (typeof e[2] === "number") free.push({ i, x0: e[2], t: e[0] }); else { const x = fixedX(e[2]); if (x !== null) placed.push(x); } });
+    if (!free.length) return row;
+    const lo = 320, hi = WORLD - 280, clear = x => !gaps.some(([a, b]) => x > a - 80 && x < b + 80), cands = [];
+    for (let x = lo; x <= hi; x += 10) if (clear(x)) cands.push(x);
+    if (!cands.length) return row;
+    const anchors = [lo - 140, hi + 140], spots = [];
+    for (let n = 0; n < free.length; n++) {                   // each spot as far as it can be from every other baddy (and the doorways)
+      let best = cands[0], bd = -1;
+      for (const x of cands) { let d = 1e9; for (const q of [...anchors, ...placed, ...spots]) d = Math.min(d, Math.abs(q - x)); if (d > bd) { bd = d; best = x; } }
+      spots.push(best);
+    }
+    const near = x => cands.reduce((b2, c) => Math.abs(c - x) < Math.abs(b2 - x) ? c : b2, cands[0]);
+    for (let it = 0; it < 30; it++) spots.forEach((x, n) => {           // then evened out: each one drifts to halfway between its neighbours
+      const others = [...anchors, ...placed, ...spots.filter((_, m) => m !== n)];
+      const L = Math.max(...others.filter(q => q <= x)), R = Math.min(...others.filter(q => q > x));
+      if (isFinite(L) && isFinite(R)) spots[n] = near((L + R) / 2);
+    });
+    spots.sort((a, b) => a - b); free.sort((a, b) => a.x0 - b.x0);
+    for (let n = 0; n + 1 < free.length; n++) if (HEAVY(free[n].t) && HEAVY(free[n + 1].t)) {   // two heavy ones side by side: swap the second for the next light one
+      const m = free.findIndex((q, j) => j > n + 1 && !HEAVY(q.t)); if (m > 0) [free[n + 1], free[m]] = [free[m], free[n + 1]];
+    }
+    const at = new Map(free.map((q, n) => [q.i, spots[n]]));
+    return row.map((e, i) => at.has(i) ? [e[0], e[1], at.get(i), ...e.slice(3)] : e);
   }));
 }
 function setWorld(i) {                             // swap in a world's hours, stages, baddies and bosses
