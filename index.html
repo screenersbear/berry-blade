@@ -9391,8 +9391,8 @@ const _limb = new THREE.Vector3();
 // red-orange copy of his fist shooting out from that hand to GHOST_REACH in front of him, a streak trailing back to his hand, and the
 // punch lands that far out. June's slash lands about 126 px out (her sword's hit box); his is a little short of that, he's bigger
 const GHOST_REACH = 108;
-const GHOST_M = new THREE.MeshLambertMaterial({ color: "#ff7a2e", emissive: "#b8360a", transparent: true, opacity: .8, depthWrite: false });   // (lit, so its fingers and knuckles show)
-const GHOST_GLOW_M = new THREE.MeshBasicMaterial({ color: "#ffb36a", transparent: true, opacity: .2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+const GHOST_M = new THREE.MeshLambertMaterial({ color: "#ff7a2e", emissive: "#b03208", transparent: true, opacity: .88 });   // (lit, so its fingers and knuckles show; it writes depth, so it draws as one fist, not a heap of see-through parts)
+const GHOST_RIM_M = new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });   // a glowing rim the shape of the fist
 const GHOST_TRAIL_M = new THREE.MeshBasicMaterial({ color: "#ff9a40", transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false });
 const GHOST_TRAIL_G = new THREE.CylinderGeometry(.55, 1, 1, 12, 1, true).rotateZ(Math.PI / 2);   // (along x: the wide end at the fist)
 let ghosts = [];
@@ -9406,10 +9406,10 @@ function ghostFist(p, hand, up) {
   const side = r.spec.outfit.prop.side, propS = side === "near" ? (p.face > 0 ? 1 : -1) : side === "left" ? -1 : 1;
   r.root.updateMatrixWorld(true);
   const src = hand === "B" ? r.hands[propS > 0 ? 0 : 1] : pr.fist, from = src.getWorldPosition(new THREE.Vector3()), sc = pr.fist.getWorldScale(new THREE.Vector3()).x;
-  const m = GHOST_M.clone(), gm = GHOST_GLOW_M.clone(), tm = GHOST_TRAIL_M.clone(), fist = pr.fist.clone(true);
-  fist.traverse(o => { if (o.isMesh) { if (o.material && o.material.blending === THREE.AdditiveBlending) o.visible = false; else o.material = m; } });
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 12), gm); glow.position.set(0, -.13, 0); glow.scale.set(.75, .95, .85); fist.add(glow);   // (a glow round it)
-  if (p.face > 0) fist.rotation.set(Math.PI, 0, Math.PI / 2); else fist.rotation.set(0, 0, -Math.PI / 2);   // knuckles first, toward the enemy
+  const m = GHOST_M.clone(), gm = GHOST_RIM_M.clone(), tm = GHOST_TRAIL_M.clone(), fist = pr.fist.clone(true), parts = [];
+  fist.traverse(o => { if (o.isMesh) { if (o.material && o.material.blending === THREE.AdditiveBlending) o.visible = false; else { o.material = m; parts.push(o); } } });
+  parts.forEach(o => { const h = new THREE.Mesh(o.geometry, gm); h.scale.setScalar(1.14); h.renderOrder = 3; o.add(h); });   // (each part's rim, just outside it)
+  fist.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, 1), new THREE.Vector3(-p.face, 0, 0), new THREE.Vector3(0, -p.face, 0)));   // knuckles toward the enemy, palm toward you: the curled fingers stacked, the thumb across
   if (up) fist.quaternion.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), p.face * .95));   // (the rocket uppercut's: up and forward)
   const trail = new THREE.Mesh(GHOST_TRAIL_G, tm); fist.renderOrder = trail.renderOrder = 4; actors.add(fist, trail);
   const hpx = (p.rig.heightPx || 92) * S, k = hpx * .36 / .22, front = .29 * k;                   // about the size of his torso (the fist's .22 deep from knuckle to palm)
@@ -9422,7 +9422,7 @@ function ghostFist(p, hand, up) {
 function syncGhosts(dt) {
   ghosts = ghosts.filter(g => {
     g.t += dt; const out = sstep(0, .08, g.t), fade = 1 - sstep(.3, .48, g.t), x = g.from.x + (g.to - g.from.x) * out, y = g.from.y + (g.ty - g.from.y) * out;   // (out fast, hangs there a moment, then fades)
-    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.m.opacity = .8 * fade; g.gm.opacity = .2 * fade;
+    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.m.opacity = .88 * fade; g.gm.opacity = .55 * fade;
     const dx = x - g.from.x, dy = y - g.from.y, len = Math.hypot(dx, dy), rad = .06 * g.k;
     g.trail.position.set((x + g.from.x) / 2, (y + g.from.y) / 2, g.from.z + .12); g.trail.scale.set(Math.max(.001, len), rad, rad); g.trail.rotation.set(0, 0, Math.atan2(dy, dx)); g.tm.opacity = .28 * fade;
     if (g.t < .5) return true;
