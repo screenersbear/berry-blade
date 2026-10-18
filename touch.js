@@ -38,7 +38,7 @@
   canvas { touch-action: none; }
   html { touch-action: manipulation; }
   body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }`;
-  const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
+  const st = document.createElement("style"); st.textContent = css + "\n  .mnu small { display: none; }   /* (the story menus: no keyboard hints on a phone, you tap) */"; document.head.appendChild(st);
   window.BERRY_TOUCH = true;                        // (the game words its prompts for a touch screen: "TAP" not "PRESS ANY BUTTON")
 
   const T = document.createElement("div"); T.id = "touch"; T.className = "off";
@@ -123,7 +123,7 @@
       waiting = true;
       const U = window.BERRY_UI; if (U && U.idle) return location.reload();
       const t = document.getElementById("toast");
-      if (t) { t.textContent = "UPDATE DOWNLOADED · IT LOADS AT THE CHARACTER SCREEN"; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 4000); }
+      if (t) { t.textContent = "UPDATE DOWNLOADED · IT LOADS AT THE MAIN MENU"; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 4000); }
     });
     setInterval(() => { if (waiting && window.BERRY_UI && window.BERRY_UI.idle) location.reload(); }, 500);
     addEventListener("pointerdown", () => { try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch { } }, { once: true });   // (asks the phone not to clear it out)
