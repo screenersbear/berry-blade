@@ -2378,6 +2378,7 @@ const SFX = {
     if (big) [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, f * 1.01, .2, { type: "square", vol: .05, lp: 3200, delay: .45 + i * .06 })); },
   splash() { noise(.5, { vol: .34, f0: 2600, f1: 500 }); noise(.22, { vol: .2, f0: 900, f1: 300, type: "bandpass", delay: .04 }); tone(220, 90, .16, { type: "sine", vol: .16 }); },
   block() { tone(1100, 820, .09, { type: "square", vol: .09, lp: 3000 }); tone(1650, 1400, .14, { type: "triangle", vol: .08 }); noise(.07, { vol: .22, f0: 3500, f1: 6000, type: "highpass" }); },
+  clash() { tone(760, 1300, .07, { type: "square", vol: .1, lp: 2800 }); tone(2150, 1980, .36, { type: "triangle", vol: .1 }); tone(3240, 3060, .28, { type: "sine", vol: .05, delay: .01 }); noise(.1, { vol: .28, f0: 3200, f1: 7500, type: "highpass" }); },   // two blows meeting: a ringing clang
   parry() { tone(1500, 2600, .1, { type: "triangle", vol: .12 }); tone(2200, 3300, .16, { type: "sine", vol: .08 }); noise(.05, { vol: .18, f0: 5000, f1: 9000, type: "highpass" }); },   // a bright ping
 };
 addEventListener("pointerdown", startMusic);
@@ -3994,7 +3995,7 @@ function updateEnemy(dt) {
   else if (e.atk) {                              // wind up, then the signature attack
     e.vx = approach(e.vx, 0, 1400 * dt); e.atkTm -= dt;
     if (e.atk === "charge" && e.atkTm <= 0) { e.atk = "act"; e.atkTm = A.act; e.actT = 0; e.emitN = 0; e.emitT = 0; shake = Math.max(shake, 3); if (A.sfx) SFX[A.sfx](); }
-    else if (e.atk === "act") { e.actT += dt; A.tick(e, dt); if (e.atkTm <= 0) { e.atk = null; e.atkCd = rand(...A.cd) * BRAIN.cd; e.backoff = rand(.35, .8); e.brainT = 0; } }   // (after a strike it gives a little ground)
+    else if (e.atk === "act") { e.actT += dt; hzOwner = e; A.tick(e, dt); hzOwner = null; if (e.atkTm <= 0) { e.atk = null; e.atkCd = rand(...A.cd) * BRAIN.cd; e.backoff = rand(.35, .8); e.brainT = 0; } }   // (after a strike it gives a little ground)
   } else if (e.windup > 0) {
     e.windup -= dt; e.vx = approach(e.vx, 0, 1400 * dt);
     if (e.windup <= 0) { e.vx = e.jumpVx; e.vy = e.jumpVy; e.onGround = false; e.sq = .32; e.sqv = 0; dust(e.x, e.y, 6); puffs(e.x, e.y - 8, 2, 30, 80); }
@@ -4018,9 +4019,10 @@ function updateEnemy(dt) {
 }
 
 // ── hazards: everything an opponent throws, shoots or sends along the ground
-let hz = [];
+let hz = [], hzOwner = null;                      // (hzOwner: whoever's attacking right now; what they put out is theirs)
 function addHz(h) {
   h = Object.assign({ t: 0, vx: 0, vy: 0, g: 0, r: 20, life: 1, bounce: 0, seed: Math.random() * 9, spin: 0 }, h);
+  if (hzOwner && !h.owner) h.owner = hzOwner;
   if (h.m) actors.add(h.m); hz.push(h); return h;
 }
 // parry: block just as a projectile arrives and it flies back, faster, at whoever it's nearest (the boss or a berry baddy)
@@ -9258,7 +9260,7 @@ function updateBaddy(b, dt) {
   else if (b.sad) { if ((b.onGround || fly) && b.hurtT <= 0) updateSad(b, dt); else if (b.onGround) b.vx = approach(b.vx, 0, 900 * dt); }   // a sad berry never fights
   else if (b.atk) {
     b.atkT += dt;
-    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= A.wind) { b.atk = "go"; b.atkT = 0; b.sq = .24; b.sqv = 0; A.start(b); } }
+    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= A.wind) { b.atk = "go"; b.atkT = 0; b.sq = .24; b.sqv = 0; hzOwner = b; A.start(b); hzOwner = null; } }
     else if (b.atk === "go") { if (A.land ? (b.onGround && b.atkT > .1) || b.atkT > A.go : b.atkT >= A.go) { b.atk = "rest"; b.atkT = 0; if (A.land) { dust(b.x, b.y, 4); if (A.landFx && b.onGround) A.landFx(b); } } }
     else { b.vx = approach(b.vx, 0, 1400 * dt); if (b.atkT >= A.rest) { b.atk = null; b.crossUp = false; b.atkCd = b.angry ? rand(.7, 1.3) : BB_MELEE.has(T.atk) ? rand(1, 1.8) : rand(1.5, 2.7); } }   // (a mad one's back at you sooner; so is a brawler)
   } else if ((b.onGround || fly) && b.hurtT <= 0) {
@@ -9494,6 +9496,27 @@ function limbReach(p) {                              // bare-handed fighters: ho
   [...r.hands, ...r.feet].forEach(m => { m.getWorldPosition(_limb); const d = (_limb.x / S - p.x) * p.face; fw = Math.max(fw, d); bw = Math.max(bw, -d); });
   return [fw, bw];
 }
+// ── clashes (the user, 2026-10-18): your attack and an enemy's connecting at the same moment: neither lands, and you bounce off each other
+const CLASH_LEAD = .1, CLASH_PAD = 26;                 // your swing counts a tenth of a second before it lands; its blow counts when it's all but on you
+const BB_BODY = new Set(["lunge", "leap", "flop", "sting", "roll"]), BOSS_BODY = new Set(["tidedash", "shellspin", "swoop", "bellyflop"]);   // attacks that are the body itself flying at you
+function tryClash(p, T, hb, pb) {
+  const e = T.e, boss = e === enemy;
+  if (p.combo || e.recoil > 0 || !(boss ? e.atk === "act" && !e.hide : e.atk === "go" && e.T && e.hurtT <= 0)) return false;   // (a charged combo powers through)
+  const near = { x1: pb.x1 - CLASH_PAD, x2: pb.x2 + CLASH_PAD, y1: pb.y1 - 10, y2: pb.y2 + 4 }, bx = h => ({ x1: h.x - h.r, x2: h.x + h.r, y1: h.y - h.r, y2: h.y + h.r });
+  const blows = hz.filter(h => h.owner === e && !h.harmless && !h.reflected && h.t < h.life && (!h.m && !h.g && Math.abs(h.vx) < 1 && Math.abs(h.vy) < 1   // its claws, its bite, its blade: a hit box right in front of it
+    || boss && e.def.kit && h.t < .14 && Math.abs(h.x - e.x) < e.def.hw + 110));   // (a sword-fighter's slash, just leaving the blade)
+  const lands = blows.some(h => overlap(bx(h), near)) || (boss ? BOSS_BODY.has(e.move) : BB_BODY.has(e.T.atk)) && overlap(T.box, near);
+  if (!lands || !(overlap(hb, T.hurt || T.box) || blows.some(h => overlap(hb, bx(h))))) return false;
+  blows.forEach(h => { h.life = h.t; });                   // its blow's spent
+  const d = Math.sign(e.x - p.x) || p.face, H = p.rig.heightPx || 92, hw = boss ? e.def.hw : e.hw;
+  p.atkT = -1; p.vx = -d * 400; p.carryDir = -d; p.carry = .14; p.vy = p.onGround ? -250 : Math.min(p.vy, -160); p.onGround = false; p.coyote = 0;   // you: knocked back a step, a little hop
+  p.inv = Math.max(p.inv, .35); p.sq = -.22; p.sqv = 5;
+  if (boss) { e.vx = d * 380; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.1); e.backoff = .5; e.brainT = 0; e.sq = -.15; e.sqv = 0; e.recoil = .45; }   // a boss: rocked back, its attack broken off
+  else { e.vx = d * 400 / Math.pow(e.wt || 1, 1.2); e.vy = -260; e.onGround = false; e.plat = null; e.atk = null; e.atkCd = Math.max(e.atkCd, 1); e.sq = .2; e.sqv = 0; e.recoil = .5; }   // a baddy: knocked back (the smaller, the further)
+  const cx = (p.x + d * 24 + e.x - d * hw) / 2, cy = p.y - H * .55;
+  slashFlair(cx, cy, false); sparks(cx, cy, 14); hitstop = Math.max(hitstop, .11); shake = Math.max(shake, 6); SFX.clash(); popText(cx, cy - 50, "CLASH!");
+  return true;
+}
 function combat() {
   const p = player, L = [];
   if (p.dead) return;
@@ -9508,21 +9531,24 @@ function combat() {
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
   if (!L.length) return;
   const pb = { x1: p.x - 18, x2: p.x + 18, y1: p.y - (p.rig.heightPx || 92) * (p.crouch ? .62 : 1), y2: p.y };
-  const strike = (got, hb, kind, dirOf) => { for (const T of L) if (!got.has(T.e) && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) got.add(T.e); };   // each window hits each target once
+  let clashed = false;
+  const strike = (got, hb, kind, dirOf, lead) => { for (const T of L) { if (clashed) return; if (got.has(T.e)) continue;   // each window hits each target once
+    if (!p.combo && tryClash(p, T, hb, pb)) { clashed = true; got.add(T.e); return; }   // both attacks at once: a clash instead
+    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) got.add(T.e); } };   // (lead: the swing's not landed yet, so only a clash)
   const hitsOf = i => (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set());
   const CM = p.rig.kind === "cat" && p.atkT >= 0 && p.atkKind && KIT.CAT_MOVES[p.atkKind];
   if (CM) CM.hits.forEach((h, i) => {                                // Tocsin's card moves: the ring of cards is the hitbox
-    if (p.atkT < h.t0 || p.atkT > h.t1) return;
+    if (p.atkT < h.t0 - CLASH_LEAD || p.atkT > h.t1) return;
     const ring = cardRing(p), rp = ring.r / S + 16, hb = { x1: ring.x - rp, x2: ring.x + rp, y1: ring.y - 62, y2: ring.y + 52 };
-    strike(hitsOf(i), hb, h.kind, T => Math.sign(T.e.x - p.x) || p.face);
+    strike(hitsOf(i), hb, h.kind, T => Math.sign(T.e.x - p.x) || p.face, p.atkT < h.t0);
   });
   if (p.rig.kind === "human" && p.atkT >= 0) {                     // each strike has its own hit windows (a combo can land twice)
     const S = KIT.STRIKES[p.atkKind], f = p.face, tall = (p.rig.heightPx || 92) / 92, rk = 1 + (p.rig.spec.move.reach - 1) * .6;
     const pk = p.rig.spec.outfit.prop.kind, bare = pk === "none" || pk === "gauntlet", [fw, bw] = bare ? limbReach(p) : [0, 0];   // fists and feet: the box follows the limb itself (+16 px), not a set distance
     S.hits.forEach((h, i) => {
-      if (p.atkT < h.t0 || p.atkT > h.t1) return;
+      if (p.atkT < h.t0 - CLASH_LEAD || p.atkT > h.t1) return;
       const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * Math.max(limb ? Math.max(fw + (pk === "gauntlet" ? 26 : 16), 26) : h.reach * tall * rk, ghostHand(p, h, i) ? GHOST_REACH : 0);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
-      strike(hitsOf(i), { x1: Math.min(xa, xb), x2: Math.max(xa, xb), y1: p.y - h.y0 * tall, y2: p.y - h.y1 * tall }, h.kind, () => f);
+      strike(hitsOf(i), { x1: Math.min(xa, xb), x2: Math.max(xa, xb), y1: p.y - h.y0 * tall, y2: p.y - h.y1 * tall }, h.kind, () => f, p.atkT < h.t0);
     });
   }
   if (p.tackle && p.tackle.t >= TKL.wind * .5 && p.tackle.t < TKL.wind + TKL.lunge + .05) { const f = p.face, H = p.rig.heightPx || 92;   // the tackle: whatever's in front, each once
