@@ -3455,49 +3455,65 @@ function startOpening() {
     Object.assign(st, { face: f, sit: 1, eat: 1, yaw: -Math.PI / 2 + f * .3 }); r.root.visible = r.shadow.visible = true;
     const fruit = mk(new THREE.SphereGeometry(.16, 12, 9).scale(1, 1.25, .9), null, { mat: toon(id === "june" ? "#ff8a1e" : "#ffb52e"), ol: 0 }); actors.add(fruit);
     return { id, r, st, fruit }; });
-  const G = woodFoes()[0], ge = makeFoeState(G, 1060); Object.assign(ge, { y: -560, vy: 0, onGround: false, dir: -1 }); showFoe(G);   // (on open sand, clear of the platforms)
+  const G = woodFoes()[0], ge = makeFoeState(G, 1130); Object.assign(ge, { y: -560, vy: 0, onGround: false, dir: -1 }); showFoe(G);   // (on open sand, clear of the platforms)
   Object.assign(player, { x: 640, face: 1 }); rig.root.visible = rig.shadow.visible = false;
   opening = { t: 0, kids, G, ge, mobs: [], fx: 0, focus: 640, startled: false, picked: false };
 }
-const OPEN_MOBS = [["leafy", "leaf", 980], ["acorn", "bark", 1130], ["twiggy", "olive", 1440], ["pinecone", "rust", 1500], ["thornball", "moss", 1090], ["stumpy", "bark", 1840]];
+const OPEN_MOBS = [["leafy", "leaf", 820, 0], ["acorn", "bark", 1190, 1], ["twiggy", "olive", 1340, 2], ["pinecone", "rust", 1500, 3], ["thornball", "moss", 1680, 4], ["stumpy", "bark", 2070, 6]];   // [type, colour, where it lands, the palm it knocks down] (Glos takes palm 5)
+const gj_pre = o => !o.gj || o.gj.ph === "wait";
+function knockPalm(kk, dir) { if (!kk || kk.t >= 0) return; kk.t = 0; kk.dir = dir; SFX.hit(); SFX.thud(); sparks(kk.x - dir * 10, GROUND - 70, 10); slashFlair(kk.x - dir * 16, GROUND - 70, false); shake = Math.max(shake, 5); }   // a blow on the trunk: it starts to go
 function updateOpening(dt) {
   const o = opening; if (!o || o.picked) return; o.t += dt; const t = o.t, L = level, G = o.G, e = o.ge;
-  o.focus = lerp(o.focus, t < 2.4 ? 640 : t < 7 ? 790 : t < 12 ? clamp(790 + (t - 7) * 300, 790, 2150) : 760, 1 - Math.exp(-dt * 1.6)); player.x = o.focus; player.face = 1;   // (the kids and Glos together, then after the baddies, then back)
+  const K = L.knock || [], allDown = K.length && K.every(k => k.down); if (allDown) o.endT = (o.endT || 0) + dt;
+  o.focus = lerp(o.focus, t < 2.4 ? 640 : t < 6.6 ? 790 : (o.endT || 0) < 1 ? clamp(o.watch ?? 790, 790, 2120) : 760, 1 - Math.exp(-dt * 1.8)); player.x = o.focus; player.face = 1;   // (the kids and Glos together, then each palm as it's hit, then back)
   // Glos: floating down out of the sky in a swirl of leaves, a look round, a sweep of his arm to the right, then off after his baddies
   if (t > 2.4 && !e.onGround) { e.y = Math.min(GROUND, e.y + (e.y < GROUND - 200 ? 300 : 140) * dt); if (Math.random() < dt * 10) sparks(e.x + rand(-50, 50), e.y - rand(40, 170), 1);   // (a glitter round him)
     if (!o.whoosh) { o.whoosh = true; SFX.whoosh(); }
     if (e.y >= GROUND) { e.onGround = true; e.vy = 0; dust(e.x, e.y, 10); SFX.thud(); shake = Math.max(shake, 5); } }
-  if (t > 5.2 && t < 6.4) { e.atk = "charge"; e.dir = 1; } else if (t >= 6.4 && t < 7) e.atk = "act"; else e.atk = null;
-  if (t > 7.6) { e.dir = 1; e.vx = approach(e.vx || 0, 190, 400 * dt); e.x += e.vx * dt; e.phase += dt * Math.abs(e.vx) * bossStep(G.rig);
-    for (const kk of L.knock || []) if (kk.t < 0 && Math.abs(e.x - kk.x) < 60) { kk.t = 0; SFX.whoosh(); } }   // (he swats any still standing as he goes)
+  if (gj_pre(o)) { if (t > 5.2 && t < 6.4) { e.atk = "charge"; e.dir = 1; } else if (t >= 6.4 && t < 7) e.atk = "act"; else e.atk = null; }   // (the point to the forest, before he sets off)
+  const gj = o.gj || (o.gj = { ph: "wait", palm: K[5], t: 0 });   // Glos: once his baddies are at it, up to the last palm but one; a wind-up, a swat, and it's down
+  if (gj.ph === "wait" && t > 7.6) gj.ph = gj.palm ? "walk" : "off";
+  if (gj.ph === "walk") { e.dir = 1; e.vx = approach(e.vx || 0, 250, 500 * dt); e.x += e.vx * dt; e.z = approach(e.z || 0, gj.palm.z + .9, dt * 1.5); if (gj.palm.t < 0) o.watch = e.x + 80;
+    if (e.x >= gj.palm.x - 95) { e.vx = 0; gj.ph = "swat"; gj.t = 0; e.atk = "charge"; } }
+  else if (gj.ph === "swat") { gj.t += dt; e.vx = 0; o.watch = gj.palm.x - 60; if (gj.t > .45 && e.atk !== "act") { e.atk = "act"; e.actT = 0; SFX.whoosh(); } if (e.atk === "act") e.actT += dt;
+    if (gj.t > .62) knockPalm(gj.palm, 1); if (gj.t > 1.2) { e.atk = null; gj.ph = "off"; } }
+  else if (gj.ph === "off") { e.dir = 1; e.vx = approach(e.vx || 0, 220, 400 * dt); e.x += e.vx * dt; e.z = approach(e.z || 0, 0, dt); }
+  if (e.onGround) e.phase += dt * Math.abs(e.vx || 0) * bossStep(G.rig);
   spring(e, dt); e.yaw = lerp(e.yaw ?? -Math.PI + .5, e.dir > 0 ? -.5 : -Math.PI + .5, 1 - Math.exp(-dt * 7));   // (turned the way he's facing, as a boss turns)
   // the baddies drop in round him, bounce about, then run off to the right, knocking the palms over as they go
-  if (t > 3 && o.mobs.length < OPEN_MOBS.length && t > 3 + o.mobs.length * .25) { const [ty, col, x] = OPEN_MOBS[o.mobs.length], b = makeBaddy(ty, col, x, -200 - rand(0, 200));
-    Object.assign(b, { y: -200, vy: 0, onGround: false, dir: -1 }); o.mobs.push(b); }
+  if (t > 3 && o.mobs.length < OPEN_MOBS.length && t > 3 + o.mobs.length * .25) { const i = o.mobs.length, [ty, col, x, pi] = OPEN_MOBS[i], b = makeBaddy(ty, col, x, -200 - rand(0, 200));
+    Object.assign(b, { y: -200, vy: 0, onGround: false, dir: -1, job: { ph: "wait", palm: K[pi], start: 6.6 + i * .5, t: 0 } }); o.mobs.push(b); }
   for (const b of o.mobs) { b.vy = Math.min(b.vy + 2000 * dt, 1000); b.y += b.vy * dt; const gy = groundAt(b.x) ?? GROUND;
     if (b.y >= gy) { if (!b.onGround) { b.sq = -.3; b.sqv = 0; dust(b.x, gy, 4); SFX.blop(); } b.y = gy; b.vy = 0; b.onGround = true; }
-    if (t > 5.4 && t < 6.6 && b.onGround && Math.random() < dt * 3) { b.vy = -420; b.onGround = false; }   // a cheer
-    if (t > 6.6) { b.dir = 1; b.vx = approach(b.vx, 330, 900 * dt); b.x += b.vx * dt; if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
-      for (const kk of L.knock || []) if (kk.t < 0 && Math.abs(b.x - kk.x) < 40) { kk.t = 0; SFX.whoosh(); } }
+    if (t > 5.4 && b.job.ph === "wait" && b.onGround && Math.random() < dt * 3) { b.vy = -420; b.onGround = false; }   // a cheer (till its turn)
+    const j = b.job;   // its palm: a run up to the trunk, a crouch, a ram, a bounce off it; then off after the others
+    if (j.ph === "wait" && t >= j.start) j.ph = j.palm ? "run" : "off";
+    if (j.ph === "run") { b.dir = 1; b.vx = approach(b.vx, 360, 1400 * dt); b.x += b.vx * dt; b.z = approach(b.z || 0, j.palm.z + .7, dt * 4); o.watch = b.x + 60;
+      if (b.x >= j.palm.x - 60) { b.x = j.palm.x - 60; b.vx = 0; j.ph = "wind"; j.t = 0; b.sq = -.34; b.sqv = 0; } }
+    else if (j.ph === "wind") { j.t += dt; b.x -= 160 * dt; o.watch = b.x + 60; if (j.t > .34) { j.ph = "ram"; j.t = 0; b.vx = 680; b.sq = .3; b.sqv = 0; SFX.whoosh(); } }
+    else if (j.ph === "ram") { j.t += dt; b.x += b.vx * dt; if (b.x >= j.palm.x - 22 || j.t > .3) { knockPalm(j.palm, 1); b.vx = -240; b.vy = -340; b.onGround = false; b.sq = -.3; b.sqv = 0; j.ph = "recoil"; j.t = 0; } }
+    else if (j.ph === "recoil") { j.t += dt; b.x += b.vx * dt; b.vx = approach(b.vx, 0, 500 * dt); if (j.t > .7 && b.onGround) j.ph = "off"; }
+    else if (j.ph === "off") { b.dir = 1; b.vx = approach(b.vx, 330, 900 * dt); b.x += b.vx * dt; b.z = approach(b.z || 0, 0, dt * 2); }
+    if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
     spring(b, dt); b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9)); }
   // the kids: eating, then the fright (a jump, "!"), up on their feet, watching it all go; then turning to each other
   for (const k of o.kids) { const s = k.st;
     if (!o.startled && t > 3.1) { s.sit = 0; s.eat = 0; s.startle = 1; s.vy = -300; s.onGround = false; s.zTo = 0; k.fruit.visible = false; glyph(BANG_MAT || (BANG_MAT = glyphMat("!", "#ffd203")), X(s.x), Y(s.y - 150), .4, V(0, 1.1, 0), .9, .7); }
     if (s.startle > 0) s.startle = Math.max(0, s.startle - dt * .6); if (s.zTo !== undefined) s.z = approach(s.z, s.zTo, dt * 3);   // (up off the log, out onto the sand)
     if (!s.onGround) { s.vy = Math.min(s.vy + GRAV * dt, 1100); s.y += s.vy * dt; if (s.y >= GROUND) { s.y = GROUND; s.vy = 0; s.onGround = true; s.sq = -.2; s.sqv = 0; } }
-    if (t > 3.1 && t < 12) { s.face = 1; s.yaw = lerp(s.yaw, -.95, 1 - Math.exp(-dt * 5)); }
-    else if (t >= 12) { s.face = k.id === "june" ? 1 : -1; s.yaw = lerp(s.yaw, s.face > 0 ? -.6 : -Math.PI + .6, 1 - Math.exp(-dt * 5)); }
+    if (t > 3.1 && (o.endT || 0) < 1.6) { s.face = 1; s.yaw = lerp(s.yaw, -.95, 1 - Math.exp(-dt * 5)); }
+    else if (t > 3.1) { s.face = k.id === "june" ? 1 : -1; s.yaw = lerp(s.yaw, s.face > 0 ? -.6 : -Math.PI + .6, 1 - Math.exp(-dt * 5)); }
     else s.yaw = lerp(s.yaw, -Math.PI / 2 + (k.id === "june" ? .3 : -.3), 1 - Math.exp(-dt * 5));
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt); }
   if (!o.startled && t > 3.1) { o.startled = true; SFX.startle && SFX.startle(); }
-  if (t > 13.6) openingAsk();
+  if ((o.endT || 0) > 3 || t > 22) openingAsk();
 }
 function openingAsk() {                              // everything gone off to the right: who are you?
   const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); showHero(story.slot, true);
 }
 function finishOpening() {                           // (skipped, or played out): the palms flat, Glos and his lot gone into the forest
   const o = opening; if (!o) return;
-  (level.knock || []).forEach(kk => { kk.t = 9; kk.down = true; kk.g.rotation.z = kk.dir * 1.48; });
+  (level.knock || []).forEach(kk => { kk.t = 9; kk.down = true; kk.g.rotation.z = -kk.dir * 1.48; });
   hideFoe(o.G); o.mobs.forEach(disposeBaddy); o.mobs = [];
   o.kids.forEach(k => { const s = k.st; Object.assign(s, { sit: 0, eat: 0, startle: 0, y: GROUND, vy: 0, onGround: true, z: 0, face: k.id === "june" ? 1 : -1 }); k.fruit.visible = false; });
 }
@@ -8596,9 +8612,9 @@ function buildBeach(k = 0, seed = k) {
   const knock = [];
   for (let i = 0; i < Math.round(15 * WS); i++) { const x = R(-6, WX + 6), z = -R(3.2, 8.5); if (ST.home && x < 13 && z > -7) continue;
     const g = tropPalm(scene, M, x, gAt(x), z, rng, { h: R(6.5, 11), lean: R(-.3, .3), coco: true }); g.rotation.x = -R(.04, .18); }
-  if (ST.home) [[1000, -3.6, 1], [1210, -4.4, -1], [1380, -3.3, 1], [1570, -4.1, 1], [1760, -3.5, -1], [1960, -4.3, 1], [2180, -3.7, 1]].forEach(([px, z, d], i) => {   // the seven that come down in the opening
+  if (ST.home) [[960, -2.4, 1], [1290, -2.9, 1], [1450, -2.3, 1], [1620, -2.8, 1], [1800, -2.4, 1], [1990, -2.7, 1], [2190, -2.4, 1]].forEach(([px, z, d], i) => {   // the seven that come down in the opening (each knocked over to the right, away from whoever hits it)
     const g = tropPalm(scene, M, X(px), gAt(X(px)), z, rng, { h: 8.4 + (i % 3) * .7, lean: d * .12, coco: true });
-    g.traverse(o => { if (o.isMesh) keep.add(o); }); knock.push({ g, x: px, dir: d, t: -1 }); if (!beachOpening) g.rotation.z = d * 1.48; });
+    g.traverse(o => { if (o.isMesh) keep.add(o); }); knock.push({ g, x: px, z, dir: d, t: -1 }); if (!beachOpening) g.rotation.z = -d * 1.48; });   // (dir: the way the crown falls)
   else for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1, g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
   for (let i = 0; i < Math.round(26 * WS); i++) { const x = R(-8, WX + 8), z = -R(2.4, 8.6), r = R(.5, 1.2); if (ST.home && x < 12 && z > -7) continue;
     scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[i % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); }
@@ -8665,8 +8681,9 @@ function buildBeach(k = 0, seed = k) {
     seaM.uniforms.uT.value = t;
     const u = .5 + .5 * Math.sin(t * .9), f = wl - .05 + u * .1;   // the foam running up the slope and back
     foam.position.set(WX / 2, -drop * f + .03, -9 - run * f); foam.material.opacity = 1;
-    knock.forEach(kk => { if (kk.t < 0) return; kk.t += dt; const e = Math.min(1, kk.t / .75); kk.g.rotation.z = kk.dir * 1.48 * e * e;
-      if (e >= 1 && !kk.down) { kk.down = true; SFX.thud(); shake = Math.max(shake, 7); for (let i = 0; i < 7; i++) dust(kk.x + kk.dir * i * 60, GROUND, 4, kk.dir); } });
+    knock.forEach(kk => { if (kk.t < 0 || kk.down) return; kk.t += dt; const u = kk.t - .14;   // hit: a shudder, then over it goes, faster and faster, away from the blow
+      if (u < 0) kk.g.rotation.z = Math.sin(kk.t * 75) * .045 * (1 - kk.t / .14); else { const e = Math.min(1, u / .85); kk.g.rotation.z = -kk.dir * 1.48 * Math.pow(e, 2.2);
+      if (e >= 1) { kk.down = true; SFX.thud(); shake = Math.max(shake, 7); for (let i = 0; i < 7; i++) dust(kk.x + kk.dir * i * 60, GROUND, 4, kk.dir); } } });
   }
   function relight(L) { const sc = L.sea || CARIB_SEA; seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line);
     mSand.color.set(L.sand || Q.sand); mWet.color.copy(mSand.color).multiplyScalar(.86); }
