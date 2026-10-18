@@ -1514,7 +1514,7 @@ const MOVESETS = {
   sword: { ground: ["slash", "rise"], air: ["spin", "chop"], charge: ["sw_c1", "sw_c2", "sw_c3"],
     block: { lean: .12, bodyY: -.12, armF: 1.05, elbF: 1.2, armB: 1.6, elbB: 1.45, blade: 1.5, fNx: .27, fFx: -.25, headRot: .04 },   // sword upright across the body, guard hand braced behind it
     stance: { lean: .26, bodyY: -.08, armF: .35, elbF: 1.15, armB: 1.3, elbB: .45, fNx: .24, fFx: -.2, blade: .95 } },   // crouched a little: guard hand out, sword ready
-  boxer: { ground: ["onetwo", "haymaker"], air: ["hammer", "dive2"], charge: ["bx_c1", "bx_c2", "bx_c3"],
+  boxer: { ground: ["hooks", "jab"], air: ["hammer", "dive2"], charge: ["bx_c1", "bx_c2", "bx_c3"],   // (the user, 2026-10-18: left hook, right hook on the first press; the strong jab on the second. The one-two and the haymaker are still defined)
     block: { lean: .28, bodyY: -.14, armF: 1.85, elbF: 2.25, armB: 1.7, elbB: 2.35, fNx: .26, fFx: -.24, headRot: -.12 },   // high guard: gauntlet up in front of the face           // boxer's guard: gauntlet fist leads, rear fist by the chin, light on his feet
     stance: { lean: .24, bodyY: -.17, armF: .55, elbF: 1.35, armB: .75, elbB: 1.3, spB: .1, fNx: .37, fFx: -.4, fNz: .1, fFz: .08, hF: .5, hop: .03 } },   // rear heel up, like a boxer; opened up (the user, 2026-10-17: "like june so he's not so stiff and looks ready to attack"): gauntlet out in front, the other fist out by his chest, feet wide, knees bent
     // (was lean .2, bodyY -.1, armF .72, elbF 1.7, armB .55, elbB 2.0, fNx .26, fFx -.3: both fists tucked by his face)
@@ -1580,6 +1580,21 @@ const STRIKES = {
     keys: { armF: [[0, 1.2], [.06, 1.6], [.38, 1.6], [.44, 1.2]], elbF: [[0, .2], [.06, 0], [.44, .2]], blade: [[0, -.2], [.06, 0], [.38, 0], [.44, -.3]],
       armB: [[0, .3], [.06, 1.4], [.38, 1.4], [.44, .4]], spin: [[0, 0], [.06, 0], [.38, TAU], [.44, TAU]], lean: [[0, .2], [.44, .2]], grip: [[0, 0], [.05, 1], [.4, 1], [.44, .6]],
       fNy: [[0, .3], [.44, .3]], fFy: [[0, .25], [.44, .25]] } },
+  hooks: { dur: .5, chain: .36, step: 120, sq: -.06, sfx: "punch", sfx2: [.27, "punch"],   // a left hook (the gauntlet) then a right hook, quick, the body whipping round with each
+    hits: [{ t0: .09, t1: .17, reach: 90, back: -8, y0: 130, y1: 55, kind: "hook", ghost: "F" }, { t0: .27, t1: .35, reach: 90, back: -8, y0: 130, y1: 55, kind: "hook", ghost: "B" }],
+    keys: { armF: [[0, .55], [.05, .75], [.1, 1.2], [.17, 1.15], [.25, .7], [.5, .55]], elbF: [[0, 1.35], [.05, 1.55], [.1, 1.0], [.17, 1.05], [.25, 1.3], [.5, 1.35]],
+      spF: [[0, 0], [.05, .9], [.1, .1], [.17, -.35], [.25, -.1], [.5, 0]], gF: [[0, 0], [.08, .15], [.16, .1], [.24, 0]],
+      armB: [[0, .75], [.18, .8], [.23, .8], [.28, 1.2], [.35, 1.15], [.43, .8], [.5, .75]], elbB: [[0, 1.3], [.18, 1.45], [.23, 1.55], [.28, 1.0], [.35, 1.05], [.43, 1.3], [.5, 1.3]],
+      spB: [[0, .1], [.18, .3], [.23, .9], [.28, .1], [.35, -.35], [.43, 0], [.5, .1]],
+      twist: [[0, 0], [.05, .25], [.12, -.4], [.2, -.35], [.24, -.3], [.3, .55], [.38, .4], [.5, 0]], lean: [[0, .12], [.1, .25], [.3, .28], [.5, .14]],
+      bodyY: [[0, 0], [.1, -.06], [.3, -.06], [.5, 0]], fNx: [[0, .37], [.5, .37]], fFx: [[0, -.4], [.5, -.4]], hF: [[0, .5], [.12, .7], [.22, .5], [.3, .7], [.5, .5]] } },
+  jab: { dur: .44, chain: .32, step: 220, sq: -.1, sfx: "punch",   // the strong jab: the gauntlet shoots out long, the fist ballooning, a step in behind it
+    hits: [{ t0: .1, t1: .21, reach: 120, back: -8, y0: 130, y1: 45, kind: "punch", ghost: "F" }],
+    keys: { armF: [[0, .55], [.05, .1], [.1, 1.55], [.22, 1.5], [.3, .7], [.44, .55]], elbF: [[0, 1.35], [.05, 2.1], [.1, 0], [.22, .05], [.3, 1.6], [.44, 1.35]],
+      aS: [[0, 0], [.06, -.04], [.1, .28], [.2, .25], [.26, -.02], [.32, 0]], gF: [[0, 0], [.06, -.1], [.1, .5], [.2, .45], [.26, -.07], [.32, .02], [.38, 0]],
+      armB: [[0, .75], [.1, .6], [.44, .75]], elbB: [[0, 1.3], [.1, 1.8], [.44, 1.3]],
+      lean: [[0, .12], [.05, .05], [.1, .45], [.25, .42], [.44, .14]], bodyY: [[0, 0], [.1, -.1], [.3, -.08], [.44, 0]], twist: [[0, 0], [.05, .2], [.12, -.3], [.44, 0]],
+      fNx: [[0, .37], [.1, .5], [.3, .48], [.44, .37]], fFx: [[0, -.4], [.1, -.42], [.44, -.4]], hF: [[0, .5], [.1, .85], [.3, .7], [.44, .5]], fNy: [[0, 0], [.05, .06], [.1, 0]] } },
   onetwo: { dur: .46, chain: .32, step: 170, sq: -.08, sfx: "punch", sfx2: [.23, "punch"], hits: [{ t0: .08, t1: .17, reach: 100, back: -8, y0: 125, y1: 50, kind: "punch" }, { t0: .23, t1: .31, reach: 82, back: -8, y0: 115, y1: 60, kind: "punch" }],
     keys: { armF: [[0, .4], [.05, .05], [.1, 1.55], [.17, 1.5], [.25, .7], [.46, .3]], elbF: [[0, 1.7], [.05, 2.1], [.1, 0], [.17, .05], [.25, 1.7], [.46, 1.6]],
       aS: [[0, 0], [.06, -.036], [.1, .225], [.15, .21], [.2, -.018], [.25, 0]],                 // gauntlet: pull in, shoot out long…

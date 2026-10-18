@@ -39,6 +39,7 @@
   html { touch-action: manipulation; }
   body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }`;
   const st = document.createElement("style"); st.textContent = css; document.head.appendChild(st);
+  window.BERRY_TOUCH = true;                        // (the game words its prompts for a touch screen: "TAP" not "PRESS ANY BUTTON")
 
   const T = document.createElement("div"); T.id = "touch"; T.className = "off";
   const arm = (d, rot) => `<g transform="rotate(${rot} 78 78)"><path class="arm" data-d="${d}" d="M58 6 Q58 2 62 2 L94 2 Q98 2 98 6 L98 58 L78 78 L58 58 Z"/><path class="tri" d="M78 16 L88 30 L68 30 Z"/></g>`;

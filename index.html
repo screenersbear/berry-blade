@@ -156,6 +156,14 @@
   #banner.stay { animation: none; opacity: 1; transform: translate(-50%, -50%); }
   #fade { position: fixed; inset: 0; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .45s; z-index: 45; }
   #fade.on { opacity: 1; }
+  #wstats { position: fixed; inset: 0; z-index: 47; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .6s; display: flex; align-items: center; justify-content: center; }
+  #wstats.show { opacity: 1; pointer-events: auto; cursor: pointer; }
+  #wstats .wsIn { opacity: 0; transition: opacity .5s .55s; display: flex; flex-direction: column; align-items: center; gap: 22px; }
+  #wstats.show .wsIn { opacity: 1; }
+  #wsList { display: grid; grid-template-columns: auto auto; gap: 7px 34px; align-items: baseline; font: 600 13px "Jost", sans-serif; letter-spacing: .22em; color: #fff; }
+  #wsList b { font: 20px "Bungee", sans-serif; color: var(--y); letter-spacing: .02em; text-align: right; }
+  #wstats .wsGo { font: 600 12px "Jost", sans-serif; letter-spacing: .4em; color: var(--y); animation: blink 1.1s steps(2, start) infinite; }
+  @media (max-height: 520px) { #wsList { font-size: 10px; gap: 3px 22px; } #wsList b { font-size: 14px; } #wstats .wsIn { gap: 12px; } #wstats .lockup.big .blk { font-size: 30px; } #wstats .lockup.big .bar { font-size: 10px; } #wstats .wsGo { font-size: 10px; } }
   #fade .lockup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .2s; }
   #fade.msg .lockup { opacity: 1; }
   #loading .bepWalk { position: relative; width: min(440px, 86vw); height: 128px; overflow: hidden; }
@@ -197,7 +205,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261017h"></script>
+<script src="charkit.js?v=20261018a"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261017b"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -244,6 +252,7 @@
 <div id="title" class="hidden"><div class="lockup big"><div class="blk">BERRY BLADE</div><div class="bar">PROTOTYPE</div></div><div class="press">TAP TO START</div></div>
 <div id="banner" class="lockup"></div>
 <div id="exitCue" class="lockup hidden"><div class="blk">NEXT →</div><div class="bar" id="exitName">AFTERNOON</div></div>
+<div id="wstats"><div class="wsIn"><div class="lockup big"><div class="blk" id="wsName">&nbsp;</div><div class="bar">CLEARED</div></div><div id="wsList"></div><div class="wsGo" id="wsGo">PRESS ANY BUTTON</div></div></div>
 <div id="fade"><div class="lockup big"><div class="blk" id="fadeName">&nbsp;</div><div class="bar">LOADING</div></div></div>
 <div id="weapon"></div>
 <div id="life" class="hud lockup hidden"><div class="blk" id="pname">TOCSIN</div><div class="bar"><span id="hearts"></span></div></div>
@@ -2345,6 +2354,7 @@ addEventListener("keydown", e => {
   }
   startMusic();
   if (titleUp) { dismissTitle(); return; }
+  if (statsUp) { if (!e.repeat) { e.preventDefault(); statsGo(); } return; }   // the stats card between worlds: any key goes on
   if (transit && mode !== "play") return;
   if (achOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyX", "KeyZ", "KeyT"].includes(e.code)) { e.preventDefault(); closeAch(); } return; }
   if (lvlOpen) { if (["Escape", "Backspace", "KeyL"].includes(e.code)) { e.preventDefault(); closeLvl(); } return; }
@@ -2412,6 +2422,7 @@ function pollPad() {
   const b = i => gp.buttons[i] && gp.buttons[i].pressed;
   pad = { l: gp.axes[0] < -.35 || b(14), r: gp.axes[0] > .35 || b(15), d: gp.axes[1] > .5 || b(13), u: gp.axes[1] < -.5 || b(12), j: b(0), a: b(2) || b(1), st: b(9), bl: b(4) || b(5) };
   if (pad.st && !padPrev.st && mode === "play" && !modalOpen && !edOpen) { paused ? closePause() : openPause(); }
+  if (statsUp) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) statsGo(); padPrev = { j: pad.j, a: pad.a, l: pad.l, r: pad.r, st: pad.st, d: pad.d, u: pad.u }; return; }
   if (titleUp) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) dismissTitle(); padPrev = { j: pad.j, a: pad.a, l: pad.l, r: pad.r }; return; }
   if (mode === "select" && lookPick) {
     if (pad.l && !padPrev.l) cycleLook(-1);
@@ -2819,7 +2830,7 @@ window.BerryGame = { store, shippedSpecs, toast, THREE,
 function pickOpp(i) {
   if (transit) return; SFX.confirm();
   swapUnderFade(() => {
-    oppSel = i; stage = runStart = foeStart(i); foe = FOES[STAGES[stage].foe]; beaten = 0; cleared = 0; startTrail(); setScreen(stage); rollSad(); levelTest = false;
+    oppSel = i; stage = runStart = foeStart(i); foe = FOES[STAGES[stage].foe]; beaten = 0; cleared = 0; startTrail(); setScreen(stage); rollSad(); levelTest = false; wstReset(); cameoWorlds = new Set();
     beginPlay();
     endIntro(); if (world === 0 && stage === 0) startIntro();        // the very start of the woods: the opening
   });
@@ -2870,7 +2881,7 @@ function levelGo(w, kind, a) {
   endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; } cine = null; clearStage(); bepEv = null; clearGifts();
   setWorld(w); level.s = -2;
   const s = kind === "room" || kind === "bep" ? a : SH_SPOT[w].s, night = kind === "hatch" || kind === "sh";
-  oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); rollSad(); levelTest = true;
+  oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); rollSad(); levelTest = true; wstReset(); cameoWorlds = new Set();
   if (night) { dayClock = 7; dayHeld = (world === 5 ? KESH_HOUR : HOUR_OF)[7]; roomsDone.add(s); }   // (the hatch only turns up at night, in a room you've cleared)
   mode = "play"; setScreen(s); beginPlay();
   if (kind === "bep") enterHideout();
@@ -2898,11 +2909,32 @@ function openExit() {                                // the boss is down (or the
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row
 const exitLabel = s => STAGES[s].toWorld !== undefined ? WORLDS[STAGES[s].toWorld].name : STAGES[s].noRight ? `↑ ${stageName(STAGES[s].up)} · ↓ ${stageName(STAGES[s].down)}` : STAGES[s].nextHi !== undefined ? `↑ ${stageName(STAGES[s].nextHi)} · → ${stageName(nextOf(s))}` : stageName(nextOf(s));   // (a split: up top, or on along the bottom)
-function goWorld(w) {                                // on into the next world: its first room, a new day
+// the stats card: fade to black, how the world went, and on into the next one only when you press something
+let wst = null, statsUp = null;
+function wstReset() { wst = { t: 0, pops: 0, lost: 0, kos: 0, cheered: 0, rooms: new Set(), boss: null, hp: null, dead: false }; }
+function wstTick(dt) { if (!wst || !player || mode !== "play") return; wst.t += dt; if (wst.hp !== null && player.hp < wst.hp) wst.lost += wst.hp - player.hp; wst.hp = player.hp; if (player.dead && !wst.dead) wst.kos++; wst.dead = !!player.dead; }
+const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+function goWorld(w) {
+  if (statsUp) return; const S = wst || { t: 0, pops: 0, lost: 0, kos: 0, cheered: 0, rooms: new Set(), boss: null };
+  statsUp = { w, t0: performance.now() }; paused = true; for (const k in keys) keys[k] = false;
+  $("wsName").textContent = WORLDS[world].name;
+  const rows = [["TIME", mmss(S.t)], ["ROOMS", Math.max(1, S.rooms.size)], ["BADDIES POPPED", S.pops], ["SAD BERRIES CHEERED UP", S.cheered], ["HEARTS LOST", S.lost], ["KNOCK-OUTS", S.kos]];
+  if (S.boss) rows.push(["BEAT", S.boss]);
+  $("wsList").innerHTML = rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("");
+  $("wsGo").textContent = (window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON") + " TO GO ON TO " + WORLDS[w].name;
+  $("wstats").classList.add("show");
+}
+function statsGo() {                                  // (not in the first moment: a button still held from the fight doesn't skip it)
+  if (!statsUp || performance.now() - statsUp.t0 < 900) return;
+  const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; goWorldNow(w);
+}
+$("wstats").addEventListener("pointerdown", e => { if (statsUp) { e.preventDefault(); statsGo(); } });
+function goWorldNow(w) {                             // on into the next world: its first room, a new day
   swapUnderFade(() => {
+    $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd();   // (she stays in the world she joined you in)
     worldStack.push({ w: world, trail: trail.slice() });             // (walk back off this world's first room and you're back where you left the last one)
-    setWorld(w); runStart = 0; trail = [0]; newStay(); roomsSeen.add(0); entrySide = "left"; entryHi = false; clockEnter(0); rollSad(); setScreen(0);
+    setWorld(w); wstReset(); runStart = 0; trail = [0]; newStay(); roomsSeen.add(0); entrySide = "left"; entryHi = false; clockEnter(0); rollSad(); setScreen(0);
     const gy = groundAt(40) ?? GROUND;
     Object.assign(player, { x: 40, y: gy, vx: 120, vy: 0, face: 1, onGround: true, plat: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, climb: null, safe: { x: 40, y: gy, plat: null } });
     if (pal) Object.assign(pal, { x: 0, y: gy, vx: 120, vy: 0, onGround: true, plat: null, pounce: null });
@@ -2923,7 +2955,7 @@ function goWorldBack() {                             // off the left of a world'
   const P0 = worldStack.pop() || { w: prevWorld(world), trail: pathTo(prevWorld(world), world) }; cine = null;   // You left it, so it's a new stay: its rooms all full again
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd();
-    setWorld(P0.w); trail = P0.trail.slice(); runStart = trail[0]; newStay(); entryHi = false;
+    setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); entryHi = false;
     const ns = trail[trail.length - 1]; entrySide = "right"; clockEnter(ns); rollSad(); setScreen(ns);
     const x = WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: -120, vy: 0, face: -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
@@ -3213,11 +3245,12 @@ function chideStep(e, dt) {                          // the boss's side: it drop
 function chidePose(e, r) { const C = e.chide, CH = chideOf(e.def), k = clamp(C.t / .25, 0, 1) * clamp((CH.dur - C.t) / .3, 0, 1); if (r.arms && r.arms.length && r.tilt) CH.pose(e, r, C.t, k); }
 // ── the partner cameo: now and then (1 in 10 rooms you walk into fresh, any world) June or Chase, whichever you aren't, is already
 // here ahead of you: dashes in, knocks one of the room's baddies out, waves to you and runs on ahead off to the right
-const CAMEO_P = .1;
+const CAMEO_P = 1 / 20;   // (was 1 in 10: the user, 2026-10-18, it came too often. Now rare, and once in a world it won't come again there this run)
+let cameoWorlds = new Set();
 let cameo = null;
 const walkable = (a, b) => { const lo = Math.min(a, b), hi = Math.max(a, b); for (let x = lo; x <= hi; x += 16) if (groundAt(x) === null) return false; return true; };   // solid ground all the way from a to b (no gaps)
 function maybeCameo(force) {
-  if (cameo || ej || intro || cine || hideout || STAGES[stage].peace || entrySide !== "left" || (!force && Math.random() >= CAMEO_P)) return false;   // (only walking in from the left: the partner runs in from there)
+  if (cameo || ej || intro || cine || hideout || STAGES[stage].peace || entrySide !== "left" || (!force && (cameoWorlds.has(world) || Math.random() >= CAMEO_P))) return false;   // (only walking in from the left: the partner runs in from there)
   const ids = ["june", "chase"].filter(id => !isMe(id)), id = ids[Math.floor(Math.random() * ids.length)], r = roster.find(q => q.id === id); if (!r) return false;
   const ok = b => !b.dead && !b.gone && !b.sad && !b.sleep && !b.under && !b.flee && !b.plat && b.onGround && !b.r.segs && !["float", "breach"].includes(b.T.move) && b.x > 250 && b.x < 1350;
   const tgt = baddies.filter(ok).sort((a, c) => a.x - c.x)[0]; if (!tgt) return false;          // the nearest one ahead of you…
@@ -3225,7 +3258,7 @@ function maybeCameo(force) {
   const x = Math.max(player.x + 170, tgt.x - 150); if (groundAt(x) === null || !walkable(x, tgt.x)) return false;   // the partner only goes where you could: never over a gap
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: 1 });
   tgt.atkCd = 9; tgt.think = 9; tgt.cameo = true;
-  r.root.visible = r.shadow.visible = true; cameo = { st, r, tgt, phase: "dash", t: 0, hit: false };
+  r.root.visible = r.shadow.visible = true; cameo = { st, r, tgt, phase: "dash", t: 0, hit: false }; cameoWorlds.add(world);
   return true;
 }
 function endCameo() { if (!cameo) return; cameo.r.root.visible = cameo.r.shadow.visible = false; if (cameo.tgt) cameo.tgt.cameo = false; cameo = null; }
@@ -3260,7 +3293,7 @@ function updateCameo(dt) {
 }
 function enterStage(ns, back) {                      // into the room: its baddies (or not, if you've cleared it), its boss waiting
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
-  stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel];
+  stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
   enemy = makeFoeState(foe, WORLD - 360); enemy.atkCd = 3;
   const done = fillRoom();                                            // the berry baddies first; on a boss stage the boss drops in once they're popped
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
@@ -8227,6 +8260,7 @@ function sadSlap(b, dt) {                         // returns true while it's bus
 }
 function cheerUp(b) {                            // the gift, by size: S a heart · M all hearts · B / G all hearts and full power
   const p = player, sz = b.T.size, big = sz === "B" || sz === "G";
+  if (wst) wst.cheered++;
   b.sad = false; b.happyT = 0; b.cheer = 0; b.vx = 0; b.atk = null; b.sadAtk = null; b.runDir = Math.sign(b.x - p.x) || 1; b.baseY = b.y; sadFate = "cheered";
   happyFace(b); SFX.cheer();
   const before = p.hp; p.hp = sz === "S" ? Math.min(maxHp(), p.hp + 1) : maxHp(); if (big) p.power = 3;
@@ -9263,7 +9297,8 @@ function popBaddy(b) {                           // juice everywhere; the player
   }
   const i = baddies.indexOf(b), pip = pipsEl.children[i];
   if (!bossIn && pip) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); }
-  if (!b.byPal) gainPower();                                           // (one the partner knocked out isn't yours)
+  if (!b.byPal) gainPower();
+  if (wst) wst.pops++;                                           // (one the partner knocked out isn't yours)
 }
 function gainPower() {                           // +1 ATK (max 3). Only June shows it so far (teeth on her sword); for everyone else it just works
   const p = player; if (!p || p.dead || (p.power || 0) >= 3) return;
@@ -9350,6 +9385,40 @@ function hitEnemy(dir, kind) {
 // ───────────────────────────── combat ─────────────────────────────
 function overlap(a, b) { return a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 && a.y2 > b.y1; }
 const _limb = new THREE.Vector3();
+// Chase's spectral fist: every punch marked with the hand that threw it (ghost: "F" his gauntlet hand, "B" the other) sends a see-through
+// red-orange copy of his fist shooting out from that hand to GHOST_REACH in front of him, a streak trailing back to his hand, and the
+// punch lands that far out. June's slash lands about 126 px out (her sword's hit box); his is a little short of that, he's bigger
+const GHOST_REACH = 108;
+const GHOST_M = new THREE.MeshLambertMaterial({ color: "#ff7a2e", emissive: "#b8360a", transparent: true, opacity: .8, depthWrite: false });   // (lit, so its fingers and knuckles show)
+const GHOST_GLOW_M = new THREE.MeshBasicMaterial({ color: "#ffb36a", transparent: true, opacity: .32, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });
+const GHOST_TRAIL_M = new THREE.MeshBasicMaterial({ color: "#ff9a40", transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false });
+const GHOST_TRAIL_G = new THREE.CylinderGeometry(.55, 1, 1, 12, 1, true).rotateZ(Math.PI / 2);   // (along x: the wide end at the fist)
+let ghosts = [];
+function ghostFist(p, hand) {
+  const r = p.rig, pr = r.prop; if (!pr || !pr.fist) return;
+  const side = r.spec.outfit.prop.side, propS = side === "near" ? (p.face > 0 ? 1 : -1) : side === "left" ? -1 : 1;
+  r.root.updateMatrixWorld(true);
+  const src = hand === "B" ? r.hands[propS > 0 ? 0 : 1] : pr.fist, from = src.getWorldPosition(new THREE.Vector3()), sc = pr.fist.getWorldScale(new THREE.Vector3()).x;
+  const m = GHOST_M.clone(), gm = GHOST_GLOW_M.clone(), tm = GHOST_TRAIL_M.clone(), fist = pr.fist.clone(true);
+  fist.traverse(o => { if (o.isMesh) { if (o.material && o.material.blending === THREE.AdditiveBlending) o.visible = false; else o.material = m; } });
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(.2, 16, 12), gm); glow.position.set(0, -.13, 0); glow.scale.set(.9, 1.1, 1); fist.add(glow);   // (a glow round it)
+  if (p.face > 0) fist.rotation.set(Math.PI, 0, Math.PI / 2); else fist.rotation.set(0, 0, -Math.PI / 2);   // knuckles first, toward the enemy
+  const trail = new THREE.Mesh(GHOST_TRAIL_G, tm); fist.renderOrder = trail.renderOrder = 4; actors.add(fist, trail);
+  const k = sc * 1.45, front = .29 * k, to = X(p.x + p.face * GHOST_REACH) - p.face * front;          // (its knuckles end up at the reach)
+  const hp = (p.rig.heightPx || 92) * S, ty = clamp(from.y, Y(p.y) + hp * .45, Y(p.y) + hp * .75);   // (straight out at the hand's height, kept between his chest and his shoulders)
+  ghosts.push({ fist, trail, m, gm, tm, from, to, ty, k, f: p.face, t: 0 }); SFX.whoosh();
+}
+function syncGhosts(dt) {
+  ghosts = ghosts.filter(g => {
+    g.t += dt; const out = sstep(0, .07, g.t), fade = 1 - sstep(.15, .3, g.t), x = g.from.x + (g.to - g.from.x) * out, y = g.from.y + (g.ty - g.from.y) * out;
+    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.m.opacity = .8 * fade; g.gm.opacity = .32 * fade;
+    const dx = x - g.from.x, dy = y - g.from.y, len = Math.hypot(dx, dy), rad = .06 * g.k;
+    g.trail.position.set((x + g.from.x) / 2, (y + g.from.y) / 2, g.from.z + .12); g.trail.scale.set(Math.max(.001, len), rad, rad); g.trail.rotation.set(0, 0, Math.atan2(dy, dx)); g.tm.opacity = .28 * fade;
+    if (g.t < .32) return true;
+    actors.remove(g.fist, g.trail); g.m.dispose(); g.gm.dispose(); g.tm.dispose(); return false;
+  });
+}
+const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 function limbReach(p) {                              // bare-handed fighters: how far in front of (and behind) them a fist or foot really is right now, in px
   const r = p.rig; let fw = 0, bw = 0; r.root.updateMatrixWorld(true);
   [...r.hands, ...r.feet].forEach(m => { m.getWorldPosition(_limb); const d = (_limb.x / S - p.x) * p.face; fw = Math.max(fw, d); bw = Math.max(bw, -d); });
@@ -9365,6 +9434,8 @@ function combat() {
     L.push({ e: b, top: b.y - b.h, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y - 2 }, hit: (d, k) => hitBaddy(b, d, k), touch: () => b.hurtT <= 0 && !b.sad && !b.sleep && !b.calm,
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
+  if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) KIT.STRIKES[p.atkKind].hits.forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
+    if (!h.ghost || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, h.ghost); } });
   if (!L.length) return;
   const pb = { x1: p.x - 18, x2: p.x + 18, y1: p.y - (p.rig.heightPx || 92) * (p.crouch ? .62 : 1), y2: p.y };
   const strike = (got, hb, kind, dirOf) => { for (const T of L) if (!got.has(T.e) && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) got.add(T.e); };   // each window hits each target once
@@ -9380,7 +9451,7 @@ function combat() {
     const pk = p.rig.spec.outfit.prop.kind, bare = pk === "none" || pk === "gauntlet", [fw, bw] = bare ? limbReach(p) : [0, 0];   // fists and feet: the box follows the limb itself (+16 px), not a set distance
     S.hits.forEach((h, i) => {
       if (p.atkT < h.t0 || p.atkT > h.t1) return;
-      const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * (limb ? Math.max(fw + (pk === "gauntlet" ? 26 : 16), 26) : h.reach * tall * rk);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
+      const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * Math.max(limb ? Math.max(fw + (pk === "gauntlet" ? 26 : 16), 26) : h.reach * tall * rk, h.ghost ? GHOST_REACH : 0);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
       strike(hitsOf(i), { x1: Math.min(xa, xb), x2: Math.max(xa, xb), y1: p.y - h.y0 * tall, y2: p.y - h.y1 * tall }, h.kind, () => f);
     });
   }
@@ -9646,6 +9717,7 @@ function update(dt) {
   if (mode === "select") { updateSelect(dt); return; }
   if (mode === "opp") { updateOpp(dt); return; }
   if (mode === "world") { updateWorldSel(dt); return; }
+  wstTick(dt);
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);
     if (player.auto && player.auto.kind === "enter" && player.auto.phase !== "walk") player.auto = null;
@@ -9659,7 +9731,7 @@ function update(dt) {
   if (!bossIn && !exitOpen && !player.dead && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : openExit();   // a patch ends when it's clear
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
-    beaten++;
+    beaten++; if (wst) wst.boss = foe.name;
     if (isRunEnd(stage)) level.openShrine && level.openShrine(), SFX.fanfare(true), showModal("ALL CLEAR!", `${rig.name} beat ${beaten === FOES.length ? "all " : ""}${beaten} opponent${beaten > 1 ? "s" : ""} in ${trialTime.toFixed(1)} seconds.`, "clear");   // the night boss ends the day, wherever the run began
     else openExit();
   }
@@ -9681,7 +9753,7 @@ function render(dt) {
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
     rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk; if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt);
+  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
