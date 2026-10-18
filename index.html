@@ -229,6 +229,23 @@
   #mapBox .node.lock { cursor: default; }
   #mapBox .ring { animation: mapRing 1s ease-in-out infinite; transform-origin: 0 0; }
   @keyframes mapRing { 50% { transform: scale(1.12); } }
+  /* the beach: "who are you?" over the game (dimmed), the bep's comic-book page, the opening's skip hint */
+  .mnu.dim { background: rgba(47, 59, 67, .5); }
+  #comic { position: fixed; inset: 0; z-index: 48; display: none; align-items: center; justify-content: center; background: var(--s); }
+  #comic.show { display: flex; }
+  #comic .page { position: relative; width: min(94vw, 156vh); aspect-ratio: 16 / 10; background: var(--y); padding: 14px; box-sizing: border-box; display: grid; grid-template-columns: 1.15fr .85fr; grid-template-rows: 1fr 1fr; gap: 12px; box-shadow: 10px 10px 0 #000; }
+  #comic .cp { position: relative; overflow: hidden; border: 5px solid var(--s); background: #fff center / cover no-repeat; opacity: 0; transform: scale(.85) rotate(-1.5deg); transition: opacity .3s, transform .35s cubic-bezier(.2, 1.5, .4, 1); }
+  #comic .cp:nth-child(2) { transform: scale(.85) rotate(1.5deg); } #comic .cp:nth-child(3) { transform: scale(.85) rotate(1deg); }
+  #comic .cp.on { opacity: 1; transform: none; }
+  #comic .cp::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(47, 59, 67, .32) 1.1px, transparent 1.6px) 0 0 / 7px 7px; mix-blend-mode: multiply; pointer-events: none; }   /* the halftone dots */
+  #comic .cap { position: absolute; left: 10px; top: 10px; z-index: 2; max-width: 78%; background: var(--y); color: var(--s); border: 3px solid var(--s); font: 15px/1.15 "Bungee", sans-serif; padding: 6px 10px 3px; box-shadow: 4px 4px 0 var(--s); }
+  #comic .cp:nth-child(even) .cap { left: auto; right: 10px; }
+  #comic .fx { position: absolute; z-index: 2; font: 46px "Bungee", sans-serif; color: var(--y); -webkit-text-stroke: 3px var(--s); paint-order: stroke; transform: rotate(-8deg); }
+  #comic .arrow { position: absolute; z-index: 2; right: 6%; top: 42%; width: 34%; height: 18%; background: var(--y); border: 4px solid var(--s); clip-path: polygon(0 30%, 62% 30%, 62% 0, 100% 50%, 62% 100%, 62% 70%, 0 70%); }
+  #comic .go { position: absolute; right: 14px; bottom: 10px; z-index: 3; font: 600 12px "Jost", sans-serif; letter-spacing: .4em; color: var(--y); background: var(--s); padding: 6px 12px; opacity: 0; transition: opacity .4s; }
+  #comic .go.on { opacity: 1; animation: blink 1.1s steps(2, start) infinite; }
+  #skipHint { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: var(--s); color: var(--y); font: 600 11px "Jost", sans-serif; letter-spacing: .26em; padding: 7px 12px; display: none; }
+  #skipHint.show { display: block; }
   @media (max-height: 520px) {
     .mnu .panel { padding: 14px 18px 12px; } .mnu .panel .blk { font-size: 30px; } .mnu .panel .bar { margin: 4px 0 10px 24px; font-size: 10px; } .mnu .panel small { margin-top: 8px; }
     #slList .slot { min-height: 0; gap: 4px; padding: 8px 8px; } .slot .head { width: 60px; height: 60px; } .slot .tm { font-size: 16px; }
@@ -254,7 +271,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261018c"></script>
+<script src="charkit.js?v=20261018d"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261017b"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -330,6 +347,8 @@
   <div class="btns" style="margin-top: 12px"><button data-mb="back">BACK</button></div>
   <small>← → to choose a place you've been &middot; Enter to go there &middot; Esc to go back</small>
 </div></div>
+<div id="comic"><div class="page"><div class="cp"><span class="cap">A BEP!</span><span class="fx" style="right: 10%; top: 30%">!</span></div><div class="cp"><span class="cap">GLOS WENT THAT WAY: INTO THE FOREST!</span><span class="arrow"></span></div><div class="cp"><span class="cap">IT HAD SOMETHING FOR THEM...</span><span class="fx" style="left: 8%; bottom: 10%">✦</span></div><div class="cp"><span class="cap">THE BERRY SWORD! THE GAUNTLET! AFTER GLOS!</span></div><span class="go" id="comicGo">PRESS ANY BUTTON</span></div></div>
+<div id="skipHint">ENTER: SKIP</div>
 <div id="banner" class="lockup"></div>
 <div id="exitCue" class="lockup hidden"><div class="blk">NEXT →</div><div class="bar" id="exitName">AFTERNOON</div></div>
 <div id="wstats"><div class="wsIn"><div class="lockup big"><div class="blk" id="wsName">&nbsp;</div><div class="bar">CLEARED</div></div><div id="wsList"></div><div class="wsGo" id="wsGo">PRESS ANY BUTTON</div></div></div>
@@ -445,7 +464,7 @@ const colOf = s => +String(STAGES[s].cell || "").slice(1) || 0;
 function clockEnter(s) {
   const c = colOf(s);
   if (!STAGES[s].peace && c > 0 && !stayCols.has(c)) { stayCols.add(c); dayClock = dayClock % 7 + 1; }   // (an intro screen, like the keep's gate, doesn't count)
-  dayHeld = (world === 5 ? KESH_HOUR : HOUR_OF)[dayClock]; if (!roomHour.has(s)) roomHour.set(s, dayHeld);
+  dayHeld = (world === 5 ? KESH_HOUR : world === 9 ? BEACH_HOUR : HOUR_OF)[dayClock]; if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
 function newStay() { roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); }
 const backOpen = () => (trail.length > 1 || worldStack.length > 0 || prevWorld(world) >= 0) && (exitOpen || entrySide === "left") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
@@ -1185,7 +1204,7 @@ function frondGeo(len, w, { rise = .3, fall = .9, segs = 10, saw = .45, fold = .
     P.push(...La, ...Ca, ...Lb, ...Ca, ...Cb, ...Lb, ...Ca, ...Ra, ...Cb, ...Ra, ...Rb, ...Cb); }
   const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(new Float32Array(P.length / 3 * 2), 2)); return g;
 }
-function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0 } = {}) {   // a sierra palm (a ringed grey trunk bending a little, fronds arching, orange fruit stalks under the crown) or a royal palm (tall, smooth, pale, swelling in the middle, a green crownshaft)
+function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0, coco = false } = {}) {   // (coco: a coconut palm on the beach)   // a sierra palm (a ringed grey trunk bending a little, fronds arching, orange fruit stalks under the crown) or a royal palm (tall, smooth, pale, swelling in the middle, a green crownshaft)
   const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); let top;
   if (royal) {
     g.add(mk(new THREE.LatheGeometry([[.4, -.5], [.38, h * .12], [.47, h * .45], [.36, h * .82], [.3, h]].map(([r, v]) => new THREE.Vector2(r, v)), 8), null, { mat: M.royal, ol }));
@@ -1196,7 +1215,8 @@ function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0
       const sg = mk(new THREE.CylinderGeometry(.17, .21, L, 7), null, { mat: M.palm, ol }); pointAlong(sg, d); sg.position.copy(pp).addScaledVector(d, L / 2); g.add(sg);
       pp.addScaledVector(d, L); if (i < n - 1) { const rg = mk(new THREE.CylinderGeometry(.215, .215, .1, 7), null, { mat: M.palmRing, ol: 0 }); pointAlong(rg, d); rg.position.copy(pp); g.add(rg); } }
     top = pp;
-    for (let j = 0; j < 2; j++) { const a = R(0, TAU), d = new THREE.Vector3(Math.cos(a) * .6, -1, Math.sin(a) * .6).normalize(), st = mk(new THREE.CylinderGeometry(.03, .03, 1, 4), null, { mat: M.fruit, ol: 0 });
+    if (coco) { const mC = M.coco || (M.coco = toon("#6b4a2a")); for (let j = 0; j < 4; j++) { const a = j * 1.7 + R(0, .5); g.add(at(mk(new THREE.IcosahedronGeometry(.22, 1), null, { mat: mC, ol: 0 }), top.x + Math.cos(a) * .22, top.y - .28, top.z + Math.sin(a) * .22)); } }
+    else for (let j = 0; j < 2; j++) { const a = R(0, TAU), d = new THREE.Vector3(Math.cos(a) * .6, -1, Math.sin(a) * .6).normalize(), st = mk(new THREE.CylinderGeometry(.03, .03, 1, 4), null, { mat: M.fruit, ol: 0 });
       pointAlong(st, d); st.position.copy(top).addScaledVector(d, .55); g.add(st);
       for (let b = 0; b < 4; b++) { const u = .4 + b * .18; g.add(at(mk(new THREE.IcosahedronGeometry(.07, 0), null, { mat: M.fruit, ol: 0 }), top.x + d.x * u + R(-.06, .06), top.y + d.y * u, top.z + d.z * u + R(-.06, .06))); } }
   }
@@ -2378,7 +2398,7 @@ function setScreen(s) {                              // build stage s (its platf
   if (level.s !== s || level.w !== world || level.h !== h) {
     disposeLevel(level); setPlatforms(s);
     const c = STAGES[s].col ?? STAGES[s].h;
-    level = world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
+    level = world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
     dropTextures();
@@ -2550,7 +2570,7 @@ function syncShore(dt) {
   if (!ac || ac.state !== "running") return;
   if (shore.state === "idle") shoreInit();
   if (shore.state !== "ready") return;
-  const on = sfxOn && (world === 1 || (world === 2 && STAGES[stage] && STAGES[stage].outside)) && (mode === "play" || mode === "opp" || mode === "world"), L = on ? (SCREENS[hour].shore || [0, 0]) : [0, 0];
+  const on = sfxOn && (world === 1 || world === 9 || (world === 2 && STAGES[stage] && STAGES[stage].outside)) && (mode === "play" || mode === "opp" || mode === "world"), L = on ? (SCREENS[hour].shore || [0, 0]) : [0, 0];
   if (L[0] !== shore.lvl) { shore.surfG.gain.setTargetAtTime(L[0] * .42, ac.currentTime, 1.4); shore.lvl = L[0]; }
   if (L[1] > 0 && (shore.next -= dt) <= 0) {
     shore.next = rand(6, 14) / Math.sqrt(L[1]);
@@ -2662,6 +2682,8 @@ addEventListener("keydown", e => {
   if (achOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyX", "KeyZ", "KeyT"].includes(e.code)) { e.preventDefault(); closeAch(); } return; }
   if (lvlOpen) { if (["Escape", "Backspace", "KeyL"].includes(e.code)) { e.preventDefault(); closeLvl(); } return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
+  if (comicUp) { if (!e.repeat) { e.preventDefault(); comicNext(); } return; }     // the bep's comic page: any key
+  if (opening && !e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); skipOpening(); return; }   // (the opening can be skipped)
   if (mode === "select") {
     if (e.repeat) return;
     if (lookPick) {                              // the hair style step
@@ -2725,6 +2747,8 @@ function pollPad() {
   if (!gp) { pad = { l: false, r: false, j: false, a: false }; return; }
   const b = i => gp.buttons[i] && gp.buttons[i].pressed;
   pad = { l: gp.axes[0] < -.35 || b(14), r: gp.axes[0] > .35 || b(15), d: gp.axes[1] > .5 || b(13), u: gp.axes[1] < -.5 || b(12), j: b(0), a: b(2) || b(1), st: b(9), bl: b(4) || b(5) };
+  if (comicUp) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
+  if (opening && ((pad.st && !padPrev.st) || (pad.j && !padPrev.j))) { skipOpening(); padPrev = { ...pad }; return; }
   if (menuUp && !titleUp) { const pr = k => pad[k] && !padPrev[k];
     menuNav(pr("l") || pr("u") ? -1 : pr("r") || pr("d") ? 1 : 0, pr("j") || pr("a"), pr("bl") || pr("st")); padPrev = { ...pad }; return; }
   if (pad.st && !padPrev.st && mode === "play" && !modalOpen && !edOpen) { paused ? closePause() : openPause(); }
@@ -2998,7 +3022,7 @@ function setSel(i) {
   const st = lineup[sel]; st.sq = -.1; st.sqv = 0;
 }
 function clearStage() {
-  ejEnd(); cheerHold = null;
+  ejEnd(); cheerHold = null; if (duo) duo.forEach(d => hideFoe(d.D)); duo = null; endGift(true);
   modalOpen = false; $("modal").classList.remove("show"); exitOpen = false; $("exitCue").classList.add("hidden");
   FOES.forEach(hideFoe); clearHz(); clearBaddies(); clearFriends(); parts.forEach(q => actors.remove(q.m)); parts = [];
   if (hideout) { hideout.beps.forEach(disposeBaddy); hideout.notes.forEach(n => actors.remove(n.m)); hideout = null; level.s = -2; }
@@ -3073,7 +3097,7 @@ const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEM
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "ach", "quit"] : ["resume", "ach", "lvl", "home", "quit"];   // (a story run: no testing tools here, they're under the gear)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
-function openPause() { if (paused) return; paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); }
+function openPause() { if (paused || opening || comicUp || (gift && gift.phase === "in")) return; paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); }
 function closePause() { if (!paused) return; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("pause").classList.remove("show"); }
 function pauseChoose(what) {
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
@@ -3169,7 +3193,7 @@ function holdTipSoon(wait = 5000) {
   if (holdTipDone) return; clearTimeout(holdTipSoon.h);
   holdTipSoon.h = setTimeout(() => {
     if (holdTipDone) return;
-    const busy = mode !== "play" || intro || cine || hideout || stronghold || paused || modalOpen || lvlOpen || $("achPop").classList.contains("show");
+    const busy = mode !== "play" || intro || cine || opening || gift || comicUp || hideout || stronghold || paused || modalOpen || lvlOpen || $("achPop").classList.contains("show");
     if (busy) return holdTipSoon(2000);
     holdTipDone = true; const el = $("holdTip"); el.classList.add("show"); SFX.tick();
     setTimeout(() => el.classList.remove("show"), 8000);
@@ -3217,8 +3241,8 @@ let mainSel = 0, devSel = 0, slotSel = 0, slotKind = "new", slotAsk = -1, askSel
 const SAVE_KEY = "berry.saves.v1";
 const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); return [0, 1, 2].map(i => (a && a[i]) || null); } catch { return [null, null, null]; } };
 function writeSave() {
-  if (!story) return; const all = loadSaves();
-  all[story.slot] = { v: 1, char: story.char, t: Math.round(story.t), w: world, s: stage, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
+  if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
+  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hms = t => { t = Math.floor(t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sc = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sc).padStart(2, "0"); };
@@ -3244,7 +3268,7 @@ function heroURL(id, part, sil) {
     g.putImageData(d, 0, 0); }
   return (heroArt.urls[key] = c.toDataURL("image/png"));
 }
-function closeMenus() { ["menu", "dev", "slots", "hero", "map"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); menuUp = null; }
+function closeMenus() { ["menu", "dev", "slots", "hero", "map"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); menuUp = null; }
 function showMainMenu() {                            // over the bep crowd: NEW GAME, LOAD GAME, and the gear
   closeMenus(); story = null;
   if (mode !== "select") showSelect();
@@ -3280,11 +3304,11 @@ function slotPick(i) {
   if (slotKind === "load") { if (!q) { SFX.tick(); toast("NOTHING SAVED IN FILE " + (i + 1)); return; } SFX.confirm(); storyLoad(i, q); return; }
   SFX.confirm();
   if (q && slotAsk !== i) { slotAsk = i; askSel = 1; renderSlots(); return; }   // (a file with a game in it: asked first, and NO is picked to start with)
-  showHero(i);
+  storyBegin(i);
 }
-function slotAnswer(yes) { const i = slotAsk; slotAsk = -1; SFX.confirm(); if (yes) showHero(i); else renderSlots(); }
-function showHero(slot) {
-  closeMenus(); menuUp = "hero"; heroSlot = slot; heroAsk = null; heroSel = 0; $("heroAsk").classList.remove("show"); $("heroList").classList.remove("asking");
+function slotAnswer(yes) { const i = slotAsk; slotAsk = -1; SFX.confirm(); if (yes) storyBegin(i); else renderSlots(); }
+function showHero(slot, inGame) {                  // (inGame: after the opening, over the beach: no going back from here)
+  closeMenus(); menuUp = "hero"; heroSlot = slot; $("hero").classList.toggle("dim", !!inGame); $("hero").querySelector("[data-hb]").style.display = inGame ? "none" : ""; heroAsk = null; heroSel = 0; $("heroAsk").classList.remove("show"); $("heroList").classList.remove("asking");
   const fill = () => [...$("heroList").children].forEach(b => { b.querySelector(".art").style.backgroundImage = `url('${heroURL(b.dataset.h, "body")}')`; });
   fill(); heroImg().then(fill); $("hero").classList.add("show"); markMenu();
 }
@@ -3293,7 +3317,7 @@ function heroPick(id) {                              // a hero picked: asked onc
   $("heroQ").innerHTML = `PLAY AS ${nm}?<br>YOU CAN'T CHANGE THIS LATER`; $("heroAsk").classList.add("show"); $("heroList").classList.add("asking");
   [...$("heroList").children].forEach(b => b.classList.toggle("picked", b.dataset.h === id)); markMenu();
 }
-function heroAnswer(yes) { SFX.confirm(); if (yes && heroAsk) return storyNew(heroSlot, heroAsk); heroAsk = null; $("heroAsk").classList.remove("show"); $("heroList").classList.remove("asking"); markMenu(); }
+function heroAnswer(yes) { SFX.confirm(); if (yes && heroAsk) return opening ? openingPicked(heroAsk) : storyNew(heroSlot, heroAsk); heroAsk = null; $("heroAsk").classList.remove("show"); $("heroList").classList.remove("asking"); markMenu(); }
 function markMenu() {
   if (menuUp === "main") [...$("mbtns").children].forEach((b, i) => b.classList.toggle("on", i === mainSel));
   if (menuUp === "dev") [...$("dbtns").children].forEach((b, i) => b.classList.toggle("on", i === devSel));
@@ -3311,7 +3335,7 @@ function menuNav(d, ok, back) {
     if (d) { slotSel = step(slotSel, 3); SFX.tick(); markMenu(); } if (ok) slotPick(slotSel); if (back) { SFX.tick(); showMainMenu(); } }
   else if (M === "hero") {
     if (heroAsk) { if (d) { heroAskSel = 1 - heroAskSel; SFX.tick(); markMenu(); } if (ok) heroAnswer(!heroAskSel); if (back) heroAnswer(false); return; }
-    if (d) { heroSel = step(heroSel, 2); SFX.tick(); markMenu(); } if (ok) heroPick(["june", "chase"][heroSel]); if (back) { SFX.tick(); showSlots(slotKind); } }
+    if (d) { heroSel = step(heroSel, 2); SFX.tick(); markMenu(); } if (ok) heroPick(["june", "chase"][heroSel]); if (back && !opening) { SFX.tick(); showSlots(slotKind); } }
   else if (M === "map") { const V = mapList(); if (d && V.length) { mapSel = V[(Math.max(0, V.indexOf(mapSel)) + d + V.length) % V.length]; SFX.tick(); drawMap(); } if (ok) mapGo(mapSel); if (back) closeMap(); }
 }
 function menuKey(e) {
@@ -3320,20 +3344,24 @@ function menuKey(e) {
     ["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(c), c === "Escape" || c === "Backspace");
 }
 function storyNew(slot, id) { story = { slot, char: id, t: 0, visited: new Set([0]) }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { story = { slot, char: q.char, t: q.t || 0, visited: new Set(q.visited || [q.w]) }; storyRun(q.w, q.s, false); }
+function storyLoad(slot, q) { story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]) }; storyRun(q.w, q.s, false); }
+function storyBegin(slot) { story = { slot, char: null, armed: false, t: 0, visited: new Set([9]) }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
-  const i = roster.findIndex(r => r.id === story.char); if (i < 0) { toast("CAN'T FIND " + String(story.char).toUpperCase()); return; }
-  closeMenus(); if (paused) closePause(); sel = i; rig = roster[i];
+  const id = story.char || "june", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
+  closeMenus(); if (paused) closePause(); sel = i; rig = w === 9 && !story.armed ? bareRig(id) : roster[i];   // (on the beach, till the bep's given them their weapons: bare fists)
   swapUnderFade(() => {
     endIntro(); endCameo(); clearTrap(); if (stronghold) stronghold = null; cine = null; clearStage(); bepEv = null; clearGifts();
+    beachOpening = fresh && w === 9 && s === 0; level.s = -2;
     setWorld(w); level.s = -2; oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); rollSad(); levelTest = false; wstReset(); cameoWorlds = new Set();
-    mode = "play"; setScreen(s); beginPlay();
-    if (fresh && w === 0 && s === 0) startIntro();     // (a new game: the opening, the other one waves and runs on ahead)
+    mode = "play"; setScreen(s); beginPlay(); beachOpening = false;
+    roster.forEach(r => { if (r !== rig) r.root.visible = r.shadow.visible = false; });
+    if (fresh && w === 9 && s === 0) startOpening();   // (a new game: June and Chase on the beach, and Glos coming down)
+    else if (w === 9 && story.char) kidPartner();       // (the other one, alongside you on the beach)
     story.visited.add(w); writeSave();
   }, WORLDS[w].name);
 }
 function quitToTitle() {                             // save (a story run) and back to the title card
-  if (story) writeSave(); story = null; modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause();
+  if (story) writeSave(); story = null; modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
   showSelect(); titleUp = true; $("title").classList.remove("hidden"); bgm.pause();
 }
 function storyModal() {                              // knocked out in a story run: try again, or save and quit (the testing tools are under the gear)
@@ -3342,9 +3370,9 @@ function storyModal() {                              // knocked out in a story r
 }
 // the world map: the island, every world on it where it lies (Loof's sky up in the clouds over it), the ways between them dotted in.
 // The places you've been light up; pick one and you're at its start
-const MAP_AT = [[430, 408], [812, 368], [764, 206], [520, 70], [212, 378], [236, 206], [612, 194], [418, 168], [306, 292]];
-const MAP_COL = ["#6cbf4e", "#3aa0e8", "#ffd21f", "#a9dcff", "#ef8a3e", "#ff86d8", "#c879e8", "#a8b0b8", "#d9bb7c"];
-const MAP_LINKS = [[0, 1], [0, 3], [1, 2], [2, 6], [2, 4], [3, 6], [3, 5], [4, 5], [5, 7], [5, 1], [6, 8], [7, 6], [7, 8], [8, 4]];
+const MAP_AT = [[430, 408], [812, 368], [764, 206], [520, 70], [212, 378], [236, 206], [612, 194], [418, 168], [306, 292], [560, 532]];
+const MAP_COL = ["#6cbf4e", "#3aa0e8", "#ffd21f", "#a9dcff", "#ef8a3e", "#ff86d8", "#c879e8", "#a8b0b8", "#d9bb7c", "#f6d36a"];
+const MAP_LINKS = [[9, 0], [0, 1], [0, 3], [1, 2], [2, 6], [2, 4], [3, 6], [3, 5], [4, 5], [5, 7], [5, 1], [6, 8], [7, 6], [7, 8], [8, 4]];
 const MAP_ICON = [   // each world's little mark, in navy on its colour
   '<path d="M0-13 11 6H-11Z"/><rect x="-2.5" y="5" width="5" height="8"/>',
   '<path d="M-13 1q4-8 9-2t8-1 9 0M-13 9q4-6 9-1t8 0 9 0" fill="none" stroke="#2f3b43" stroke-width="3.4" stroke-linecap="round"/>',
@@ -3355,6 +3383,7 @@ const MAP_ICON = [   // each world's little mark, in navy on its colour
   '<path d="M0 0a3 3 0 1 1 3 3 6 6 0 1 1-6-6 9 9 0 1 1 9 9" fill="none" stroke="#2f3b43" stroke-width="3.2" stroke-linecap="round"/>',
   '<rect x="-12" y="-5" width="7" height="18"/><rect x="-3" y="-13" width="7" height="26"/><rect x="6" y="-8" width="7" height="21"/>',
   '<ellipse cy="1" rx="11" ry="8"/><circle cx="13" cy="-1" r="3.5"/><path d="M-8 7-11 12M8 7l3 5M-8-4l-3-4M8-4l3-4" stroke="#2f3b43" stroke-width="3" stroke-linecap="round"/>',
+  '<path d="M-3 14Q-1 2 2-6" fill="none" stroke="#2f3b43" stroke-width="3.4" stroke-linecap="round"/><path d="M2-6Q-8-12-13-2Q-6-9 2-6Q-3-15-10-15Q0-16 2-6Q6-15 14-13Q6-11 2-6Q11-8 14 1Q8-5 2-6Z"/>',
 ];
 const mapList = () => WORLDS.map((_, w) => w).filter(w => w < MAP_AT.length && (!story || story.visited.has(w)));
 function openMap() { if (!story) return; menuUp = "map"; mapSel = world; $("pause").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); }
@@ -3377,6 +3406,7 @@ function drawMap() {
   o += `<circle cx="612" cy="194" r="34" fill="#ffb3e6" stroke="${N}" stroke-width="2.5"/>`;   // the candy works
   for (let i = 0; i < 6; i++) o += `<path d="M${880 + (i % 2) * 34} ${338 + i * 14}q8-8 16 0t16 0" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"/>`;   // the big waves on the east coast
   o += `<path d="M436 96a24 24 0 0 1 22-30 32 32 0 0 1 58-12 26 26 0 0 1 48 8 22 22 0 0 1 14 34Z" fill="#fff" stroke="${N}" stroke-width="3.5" stroke-linejoin="round"/>`;   // Loof's sky, up over it all
+  o += `<path d="M498 528Q560 506 632 530Q600 552 556 552Q514 550 498 528Z" fill="#fbebb8" stroke="${N}" stroke-width="2.5"/>`;   // the beach, on the south shore
   MAP_LINKS.forEach(([a, b]) => { const [x1, y1] = MAP_AT[a], [x2, y2] = MAP_AT[b], on = V.has(a) && V.has(b);
     o += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${N}" stroke-width="${on ? 4 : 3}" stroke-dasharray="1 10" stroke-linecap="round" opacity="${on ? .95 : .3}"/>`; });
   MAP_AT.forEach(([x, y], w) => { if (w >= WORLDS.length) return; const seen = V.has(w), sel = w === mapSel, nm = seen ? WORLDS[w].name : "???", tw = nm.length * 10.5 + 18;
@@ -3397,7 +3427,171 @@ $("heroAsk").addEventListener("click", e => { const b = e.target.closest("[data-
 $("hero").addEventListener("click", e => { if (e.target.closest("[data-hb]")) { SFX.tick(); showSlots(slotKind); } });
 $("mapBox").addEventListener("click", e => { const n = e.target.closest("[data-w]"); if (n && !n.classList.contains("lock")) { mapSel = +n.dataset.w; mapGo(mapSel); } });
 $("map").addEventListener("click", e => { if (e.target.closest("[data-mb]")) closeMap(); });
-window.__story = { get story() { return story; }, get menuUp() { return menuUp; }, showMainMenu, loadSaves, writeSave, storyRun, storyNew, openMap, showSlots, heroURL, heroImg, drawMap };
+window.__story = { get story() { return story; }, get menuUp() { return menuUp; }, get duo() { return duo; }, get opening() { return opening; }, get gift() { return gift; }, get comicUp() { return comicUp; }, showMainMenu, loadSaves, writeSave, storyRun, storyNew, openMap, showSlots, heroURL, heroImg, drawMap };
+
+// ── the beach's story (the user, 2026-10-18; beach_patch.py). Before the bep gives them their weapons, June and Chase fight bare-fisted
+// with Chase's punches (a copy of each, sword or gauntlet taken away, boxer moves), and the one you didn't pick is alongside you, fighting
+// the way Evil June does when she's on your side (the same partner, ej, with kid set: no boss tells them off)
+const BARE = {};
+function bareRig(id) {
+  if (BARE[id]) return BARE[id];
+  const base = rosterSpecs().find(q => q.id === id), sp = KIT.normalize(JSON.parse(JSON.stringify(base)));
+  sp.id = id + "-bare"; sp.move = { ...sp.move, set: "boxer" }; sp.outfit = { ...sp.outfit, prop: { ...sp.outfit.prop, kind: "none" } };
+  const r = buildChar(KIT.withLook(sp, looks[id] || 0)); r.root.visible = r.shadow.visible = false; return (BARE[id] = r);
+}
+const otherKid = id => id === "june" ? "chase" : "june";
+function kidPartner(x, y, face) {                    // the other one, at your side
+  const id = otherKid(story.char), r = story.armed || world !== 9 ? roster.find(q => q.id === id) : bareRig(id); if (!r) return;
+  if (ej) ejEnd();
+  const st = makeState(x ?? player.x - 90, r); Object.assign(st, { y: y ?? player.y, vy: 0, onGround: true, face: face ?? player.face, wave: 0 });
+  FLASHSET(r.mats, 0); r.root.visible = r.shadow.visible = true; ej = { phase: "partner", kid: true, id, st, r, t: 0, atkCd: 1.2, waveT: 0, hopT: 0 };
+}
+// the opening: June and Chase on the log by their house, eating mangoes; Glos comes floating down out of the sky with his berry baddies,
+// they knock three palms flat, and off they all go to the right, into the forest. Then: who are you?
+let opening = null;
+function startOpening() {
+  clearBaddies(); ["life", "hud", "hint"].forEach(id => $(id).classList.add("hidden")); $("skipHint").classList.add("show"); $("banner").classList.remove("show", "stay"); $("exitCue").classList.add("hidden");
+  const kids = [["june", 470, 1], ["chase", 560, -1]].map(([id, x, f]) => { const r = bareRig(id), st = makeState(x, r, -1.15);   // (on the log)
+    Object.assign(st, { face: f, sit: 1, eat: 1, yaw: -Math.PI / 2 + f * .3 }); r.root.visible = r.shadow.visible = true;
+    const fruit = mk(new THREE.SphereGeometry(.16, 12, 9).scale(1, 1.25, .9), null, { mat: toon(id === "june" ? "#ff8a1e" : "#ffb52e"), ol: 0 }); actors.add(fruit);
+    return { id, r, st, fruit }; });
+  const G = woodFoes()[0], ge = makeFoeState(G, 1060); Object.assign(ge, { y: -560, vy: 0, onGround: false, dir: -1 }); showFoe(G);   // (on open sand, clear of the platforms)
+  Object.assign(player, { x: 640, face: 1 }); rig.root.visible = rig.shadow.visible = false;
+  opening = { t: 0, kids, G, ge, mobs: [], fx: 0, focus: 640, startled: false, picked: false };
+}
+const OPEN_MOBS = [["leafy", "leaf", 980], ["acorn", "bark", 1130], ["twiggy", "olive", 1440], ["pinecone", "rust", 1500], ["thornball", "moss", 1090], ["stumpy", "bark", 1840]];
+function updateOpening(dt) {
+  const o = opening; if (!o || o.picked) return; o.t += dt; const t = o.t, L = level, G = o.G, e = o.ge;
+  o.focus = lerp(o.focus, t < 2.4 ? 640 : t < 7 ? 790 : t < 10.5 ? clamp(790 + (t - 7) * 260, 790, 1650) : 760, 1 - Math.exp(-dt * 1.6)); player.x = o.focus; player.face = 1;   // (the kids and Glos together, then after the baddies, then back)
+  // Glos: floating down out of the sky in a swirl of leaves, a look round, a sweep of his arm to the right, then off after his baddies
+  if (t > 2.4 && !e.onGround) { e.y = Math.min(GROUND, e.y + (e.y < GROUND - 200 ? 300 : 140) * dt); if (Math.random() < dt * 10) sparks(e.x + rand(-50, 50), e.y - rand(40, 170), 1);   // (a glitter round him)
+    if (!o.whoosh) { o.whoosh = true; SFX.whoosh(); }
+    if (e.y >= GROUND) { e.onGround = true; e.vy = 0; dust(e.x, e.y, 10); SFX.thud(); shake = Math.max(shake, 5); } }
+  if (t > 5.2 && t < 6.4) { e.atk = "charge"; e.dir = 1; } else if (t >= 6.4 && t < 7) e.atk = "act"; else e.atk = null;
+  if (t > 7.6) { e.dir = 1; e.vx = approach(e.vx || 0, 170, 400 * dt); e.x += e.vx * dt; e.phase += dt * Math.abs(e.vx) * bossStep(G.rig); }
+  spring(e, dt);
+  // the baddies drop in round him, bounce about, then run off to the right, knocking the palms over as they go
+  if (t > 3 && o.mobs.length < OPEN_MOBS.length && t > 3 + o.mobs.length * .25) { const [ty, col, x] = OPEN_MOBS[o.mobs.length], b = makeBaddy(ty, col, x, -200 - rand(0, 200));
+    Object.assign(b, { y: -200, vy: 0, onGround: false, dir: -1 }); o.mobs.push(b); }
+  for (const b of o.mobs) { b.vy = Math.min(b.vy + 2000 * dt, 1000); b.y += b.vy * dt; const gy = groundAt(b.x) ?? GROUND;
+    if (b.y >= gy) { if (!b.onGround) { b.sq = -.3; b.sqv = 0; dust(b.x, gy, 4); SFX.blop(); } b.y = gy; b.vy = 0; b.onGround = true; }
+    if (t > 5.4 && t < 6.6 && b.onGround && Math.random() < dt * 3) { b.vy = -420; b.onGround = false; }   // a cheer
+    if (t > 6.6) { b.dir = 1; b.vx = approach(b.vx, 330, 900 * dt); b.x += b.vx * dt; if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
+      for (const kk of L.knock || []) if (kk.t < 0 && Math.abs(b.x - kk.x) < 40) { kk.t = 0; SFX.whoosh(); } }
+    spring(b, dt); b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9)); }
+  // the kids: eating, then the fright (a jump, "!"), up on their feet, watching it all go; then turning to each other
+  for (const k of o.kids) { const s = k.st;
+    if (!o.startled && t > 3.1) { s.sit = 0; s.eat = 0; s.startle = 1; s.vy = -300; s.onGround = false; s.zTo = 0; k.fruit.visible = false; glyph(BANG_MAT || (BANG_MAT = glyphMat("!", "#ffd203")), X(s.x), Y(s.y - 150), .4, V(0, 1.1, 0), .9, .7); }
+    if (s.startle > 0) s.startle = Math.max(0, s.startle - dt * .6); if (s.zTo !== undefined) s.z = approach(s.z, s.zTo, dt * 3);   // (up off the log, out onto the sand)
+    if (!s.onGround) { s.vy = Math.min(s.vy + GRAV * dt, 1100); s.y += s.vy * dt; if (s.y >= GROUND) { s.y = GROUND; s.vy = 0; s.onGround = true; s.sq = -.2; s.sqv = 0; } }
+    if (t > 3.1 && t < 11) { s.face = 1; s.yaw = lerp(s.yaw, -.95, 1 - Math.exp(-dt * 5)); }
+    else if (t >= 11) { s.face = k.id === "june" ? 1 : -1; s.yaw = lerp(s.yaw, s.face > 0 ? -.6 : -Math.PI + .6, 1 - Math.exp(-dt * 5)); }
+    else s.yaw = lerp(s.yaw, -Math.PI / 2 + (k.id === "june" ? .3 : -.3), 1 - Math.exp(-dt * 5));
+    s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt); }
+  if (!o.startled && t > 3.1) { o.startled = true; SFX.startle && SFX.startle(); }
+  if (t > 12.4) openingAsk();
+}
+function openingAsk() {                              // everything gone off to the right: who are you?
+  const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); showHero(story.slot, true);
+}
+function finishOpening() {                           // (skipped, or played out): the palms flat, Glos and his lot gone into the forest
+  const o = opening; if (!o) return;
+  (level.knock || []).forEach(kk => { kk.t = 9; kk.down = true; kk.g.rotation.z = kk.dir * 1.48; });
+  hideFoe(o.G); o.mobs.forEach(disposeBaddy); o.mobs = [];
+  o.kids.forEach(k => { const s = k.st; Object.assign(s, { sit: 0, eat: 0, startle: 0, y: GROUND, vy: 0, onGround: true, z: 0, face: k.id === "june" ? 1 : -1 }); k.fruit.visible = false; });
+}
+function skipOpening() { if (!opening || opening.asked) return; SFX.tick(); openingAsk(); }
+function openingPicked(id) {                         // you're June (or Chase): the other one's at your side, and the berry baddies Glos left behind are here
+  const o = opening; closeMenus(); story.char = id; sel = roster.findIndex(r => r.id === id); rig = bareRig(id);
+  const me = o.kids.find(k => k.id === id), you = o.kids.find(k => k.id !== id);
+  o.kids.forEach(k => { actors.remove(k.fruit); }); opening = null;
+  player = makeState(me.st.x, rig); player.hp = maxHp(); player.face = 1; rig.root.visible = rig.shadow.visible = true; updateHearts(false);
+  kidPartner(you.st.x, GROUND, 1);
+  ["hud", "hint"].forEach(q => $(q).classList.remove("hidden")); $("life").classList.remove("hidden"); $("pname").textContent = rig.name;
+  clearHz(); fillRoom(); setFoeHud();
+  const b = $("banner"); b.innerHTML = `<div class="blk">${stageName(stage)}</div><div class="bar">GLOS LEFT SOME BERRY BADDIES BEHIND · POP THEM</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+  story.visited.add(9); writeSave(); holdTipSoon();
+}
+function endOpening() { const o = opening; if (!o) return; finishOpening(); o.kids.forEach(k => { actors.remove(k.fruit); if (k.r !== rig) k.r.root.visible = k.r.shadow.visible = false; }); opening = null; $("skipHint").classList.remove("show"); }
+// the end of the third room: a bep comes hopping out to them, and the page turns into a comic: it points the way Glos went, into the
+// forest, and gives them the berry sword and the gauntlet; they put them on, and after him
+let gift = null, comicUp = false, comicCam = null;
+function startGift() {
+  const b = makeFriend("M", "#7be04a", Math.min(WORLD - 60, player.x + 760)); Object.assign(b, { y: groundAt(b.x) ?? GROUND, onGround: true, dir: -1, z: 0 });
+  gift = { t: 0, b, phase: "in", hopT: .2 }; SFX.blop(); for (const k in keys) keys[k] = false;
+}
+function updateGift(dt) {
+  const g = gift; if (!g) return; const b = g.b, p = player; g.t += dt;
+  const tx = g.phase === "in" ? Math.min(p.x + 210, WORLD - 120) : WORLD + 200;
+  if (b.onGround && (g.hopT -= dt) <= 0 && Math.abs(tx - b.x) > 14) { b.vy = -420; b.vx = Math.sign(tx - b.x) * Math.min(300, Math.abs(tx - b.x) / .42); b.onGround = false; g.hopT = .12; b.sq = .2; b.sqv = 0; b.dir = Math.sign(tx - b.x); }
+  b.vy = Math.min(b.vy + 2000 * dt, 1000); b.x += b.vx * dt; b.y += b.vy * dt; const gy = groundAt(b.x) ?? GROUND;
+  if (b.y >= gy) { if (!b.onGround) { b.sq = -.25; b.sqv = 0; } b.y = gy; b.vy = 0; b.vx = 0; b.onGround = true; }
+  b.phase += dt * 4; spring(b, dt); b.yaw = lerp(b.yaw, g.phase === "in" && Math.abs(tx - b.x) < 30 ? -Math.PI / 2 : b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 8));
+  p.vx = approach(p.vx, 0, 2400 * dt); p.face = Math.sign(b.x - p.x) || 1;
+  if (g.phase === "in" && Math.abs(tx - b.x) < 30 && b.onGround && g.t > 1.2 && !g.shown) { g.shown = true; setTimeout(showComic, 450); }
+  if (g.phase === "out" && b.x > WORLD + 120) endGift();
+}
+function shot(cam) {                                 // one comic panel: the scene from cam, cut to 4:3, as a picture
+  comicCam = cam; render(0); comicCam = null; const C = renderer.domElement, h = C.height, w = Math.min(C.width, h * 4 / 3), c = document.createElement("canvas"); c.width = 640; c.height = 480;
+  c.getContext("2d").drawImage(C, (C.width - w) / 2, 0, w, h, 0, 0, 640, 480); return c.toDataURL("image/jpeg", .86);
+}
+function showComic() {
+  if (!gift) return; const g = gift, b = g.b, p = player, s = ej && ej.kid ? ej.st : null, mid = X((p.x + (s ? s.x : p.x)) / 2), bx = X(b.x);
+  $("comic").classList.add("show"); comicUp = true; $("holdTip").classList.remove("show"); $("comicGo").classList.remove("on"); [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.remove("on"));
+  const P = [];
+  b.yaw = -Math.PI / 2; P.push(shot({ x: (bx + mid) / 2, y: 1.9, z: 10, tx: (bx + mid) / 2, ty: 1.2, tz: 0 }));                       // a bep!
+  const bx0 = b.x, fx = X(WORLD - 170); b.x = WORLD - 170; b.y = groundAt(b.x) ?? GROUND; b.yaw = -Math.PI / 2 + .9; b.r.tilt.rotation.z = -.35;   // (staged at the room's far end: the bep in front, the forest beyond)
+  P.push(shot({ x: fx - 4.2, y: 1.5, z: 5, tx: fx + 15, ty: 2.8, tz: -8 }));                                                    // that way: the forest
+  b.x = bx0; b.y = groundAt(b.x) ?? GROUND; b.r.tilt.rotation.z = 0; b.yaw = -Math.PI / 2;
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#fff2a0", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); at(glow, bx, Y(b.y) + 2.25, .4); actors.add(glow);
+  const armed = ["june", "chase"].map(id => roster.find(q => q.id === id)), props = armed.map(r => r && r.prop && r.prop.group ? r.prop.group.clone() : null).filter(Boolean);
+  props.forEach((pg, i) => { pg.position.set(bx + (i ? .45 : -.45), Y(b.y) + 2.2, .5); pg.rotation.set(0, 0, i ? -.3 : .9); pg.scale.multiplyScalar(1.4); actors.add(pg); });
+  P.push(shot({ x: bx, y: 2.2, z: 6.2, tx: bx, ty: 1.75, tz: 0 }));                                                                   // for them
+  props.forEach(pg => actors.remove(pg)); actors.remove(glow); glow.material.dispose();
+  armHeroes(); [player, ej && ej.kid ? ej.st : null].forEach(st => { if (!st) return; st.face = 1; st.yaw = -.85;   // (turned to the forest: a sword mid-slash, a gauntlet mid-jab)
+    const kind = { sword: "slash", gauntlet: "jab" }[st.rig.spec.outfit.prop.kind], S2 = kind && KIT.STRIKES[kind]; if (S2) { st.atkKind = kind; st.atkT = (S2.hits[0].t0 + S2.hits[0].t1) / 2; } else st.startle = 1; for (let i = 0; i < 24; i++) updatePose(st, 1 / 60); });
+  P.push(shot({ x: mid + .2, y: 2.2, z: 6.4, tx: mid + .2, ty: 1.55, tz: 0 }));                                                      // put on, and after Glos
+  [player, ej && ej.kid ? ej.st : null].forEach(st => { if (st) { st.startle = 0; st.atkKind = null; st.atkT = -1; } });
+  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
+  setTimeout(() => { $("comicGo").classList.add("on"); g.ready = true; }, 350 + 4 * 900);
+}
+function comicNext() {                               // a press: all the panels at once, or (all shown) close the page and on
+  const g = gift; if (!comicUp) return;
+  if (!g || !g.ready) { [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.add("on")); $("comicGo").classList.add("on"); if (g) g.ready = true; return; }
+  comicUp = false; $("comic").classList.remove("show"); SFX.confirm(); g.phase = "out"; g.hopT = .6;
+  story.armed = true; writeSave(); openExit();
+  const b = $("banner"); b.innerHTML = `<div class="blk">AFTER GLOS!</div><div class="bar">THE BERRY SWORD AND THE GAUNTLET · INTO THE FOREST →</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+}
+function endGift(all) { if (gift && gift.b) disposeBaddy(gift.b); gift = null; if (all) { comicUp = false; $("comic").classList.remove("show"); } }
+function armHeroes() {                               // on with the weapons: you, and the other one
+  const id = story ? story.char : null, r = roster.find(q => q.id === id); if (!r) return;
+  const old = player; rig.root.visible = rig.shadow.visible = false; rig = r;
+  player = makeState(old.x, r); Object.assign(player, { y: old.y, face: old.face, hp: old.hp, power: old.power || 0, onGround: old.onGround, plat: old.plat, inv: .6 }); r.root.visible = r.shadow.visible = true;
+  if (ej && ej.kid) { const o = ej.st, other = roster.find(q => q.id === ej.id); if (other) { ej.r.root.visible = ej.r.shadow.visible = false; ej.r = other; ej.st = makeState(o.x, other); Object.assign(ej.st, { y: o.y, face: o.face, onGround: o.onGround, plat: o.plat }); other.root.visible = other.shadow.visible = true; } }
+  $("pname").textContent = rig.name; updateHearts(false); sparks(player.x, player.y - 60, 12); SFX.power && SFX.power(2);
+}
+// Noro and Doir, both at once: each runs on the boss brain and attacks in turn, the rest of the game sees whichever it's dealing with
+let duo = null;
+function withBoss(d, f) { const e0 = enemy, f0 = foe; enemy = d.e; foe = d.D; try { return f(); } finally { enemy = e0; foe = f0; } }
+function duoArrive() {
+  bossIn = true; bossCue = 0;
+  duo = FOES.slice(0, 2).map((D, i) => { showFoe(D); let x = clamp(player.x + (i ? 700 : 480), 300, WORLD - 200); if (groundAt(x) === null) x = WORLD - 400;
+    const e = makeFoeState(D, x); Object.assign(e, { dir: -1, atkCd: 2.2 + i * 1.4, y: -80 - i * 160, vy: 200, onGround: false }); return { D, e }; });
+  enemy = duo[0].e; foe = duo[0].D; setFoeHud(); $("ename").textContent = "NORO & DOIR"; SFX.confirm();
+  const b = $("banner"); b.innerHTML = `<div class="blk">NORO &amp; DOIR</div><div class="bar">THEY WERE WAITING · TWO AGAINST TWO</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+  setTimeout(() => { if (duo) popText(duo[0].e.x, duo[0].e.y - 150, "NOT SO FAST!"); }, 1300);
+}
+function updateDuo(dt) {
+  for (const d of duo) { const e = d.e;
+    if (d.flee) { e.dir = 1; e.vx = approach(e.vx, 640, 2600 * dt); e.x += e.vx * dt; const gy = groundAt(e.x); if (gy !== null) e.y = gy; e.onGround = true;
+      if (e.x > WORLD + 160 && !e.gone) { e.gone = true; hideFoe(d.D); } continue; }
+    if (e.gone) continue;
+    if (e.dead && e.deathT > .9) { d.flee = true; Object.assign(e, { dead: false, hurtT: 0, flash: 0, atk: null, strike: null, vx: 0, inv: 99 }); puffs(e.x, e.y - 40, 4, 30, 120);   // up again, and away into the forest
+      if (!duo.some(q => q !== d && q.flee)) popText(e.x, e.y - 150, "WE'LL BE BACK!"); continue; }
+    withBoss(d, () => updateEnemy(dt)); }
+  if (duo.every(d => d.e.gone) && !exitOpen && !transit && !modalOpen) { duo = null; bossIn = false; beaten++; if (wst) wst.boss = "NORO & DOIR"; openExit(); }
+}
+const duoTargets = () => duo ? duo.filter(d => !d.flee && !d.e.dead && !d.e.gone) : [];
 function updateOpp(dt) {
   const v = oppView, c = (time % 4.2);
   v.atk = c > 2.6 && c < 3.25 ? "charge" : c >= 3.25 && c < 3.9 ? "act" : null; v.actT = c - 3.25;
@@ -3440,6 +3634,7 @@ function statsGo() {                                  // (not in the first momen
 }
 $("wstats").addEventListener("pointerdown", e => { if (statsUp) { e.preventDefault(); statsGo(); } });
 function goWorldNow(w) {                             // on into the next world: its first room, a new day
+  const fromW = world;
   swapUnderFade(() => {
     $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd();   // (she stays in the world she joined you in)
@@ -3450,6 +3645,7 @@ function goWorldNow(w) {                             // on into the next world: 
     if (pal) Object.assign(pal, { x: 0, y: gy, vx: 120, vy: 0, onGround: true, plat: null, pounce: null });
     camX = clamp(X(130), 10, 40); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(0, false);
+    if (story && fromW === 9 && w === 0) startIntro();   // off the beach: into the woods as usual, dropping in, the other one waving and running on ahead
   }, WORLDS[w].name);
 }
 function goBack() { if (trail.length > 1) goRoom(trail[trail.length - 2], true); else if (worldStack.length || prevWorld(world) >= 0) goWorldBack(); }
@@ -3641,11 +3837,11 @@ function updateEJ(dt) {                              // the partner: at your sid
   if (s.atkKind) {                                   // her swing: the hit lands at the move's own moment
     s.atkT += dt; const S = KIT.STRIKES[s.atkKind], h = S.hits && S.hits[0];
     if (ej.tgt && !ej.hit && s.atkT >= (h ? h.t0 : .1)) { ej.hit = true; const b = ej.tgt;
-      if (!b.dead && !b.gone && Math.abs(b.x - s.x) < 110 && Math.abs(b.y - s.y) < 120) { b.inv = 0; hitBaddy(b, s.face, "slash"); sparks(b.x - s.face * b.hw * .5, b.y - b.h * .55, 6); } }
+      const D2 = duo && duo.find(d => d.e === b); if (D2) { if (!b.dead && !b.gone && Math.abs(b.x - s.x) < 130) withBoss(D2, () => hitEnemy(s.face, "punch")); } else if (!b.dead && !b.gone && Math.abs(b.x - s.x) < 110 && Math.abs(b.y - s.y) < 120) { b.inv = 0; hitBaddy(b, s.face, "slash"); sparks(b.x - s.face * b.hw * .5, b.y - b.h * .55, 6); } }
     s.vx = approach(s.vx, 0, 1400 * dt);
     if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ej.tgt = null; ej.atkCd = rand(.9, 1.5); }
   } else {
-    const tgt = ej.atkCd <= 0 && !p.dead && s.wave <= 0 ? baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110).sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
+    const tgt = ej.atkCd <= 0 && !p.dead && s.wave <= 0 ? [...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
     if (tgt) {                                       // one of the room's baddies close by: at it
       s.face = Math.sign(tgt.x - s.x) || s.face; s.sprint = true;
       if (Math.abs(tgt.x - s.x) < 66 && s.onGround) { s.sprint = false; ej.tgt = tgt; ej.hit = false; startStrike(s, first); }
@@ -3813,7 +4009,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   const b = $("banner"); b.innerHTML = `<div class="blk">${stageName(stage)}</div><div class="bar">${STAGES[stage].peace ? WORLDS[world].name : done ? "ALREADY CLEARED" : fresh ? "POP THE BERRY BADDIES · HEARTS REFILLED" : "POP THE BERRY BADDIES"}</div>`;
   b.classList.remove("show"); void b.offsetWidth; b.classList.add("show");
   if (!maybeEJ(false, !fresh || back) && fresh && !back) maybeCameo();   // (now and then the partner's here ahead of you; or, rarely, Evil June: likelier back in a room you've been in)
-  if (bossIn && STAGES[stage].boss && ej && ej.phase === "partner") startChide();   // (a boss already waiting: it tells her off first)
+  if (bossIn && STAGES[stage].boss && ej && ej.phase === "partner" && !ej.kid) startChide();   // (a boss already waiting: it tells her off first)
   maybeTrapdoor(back);                                                // (and at night, now and then, a stronghold's hatch)
   if (story) { story.visited.add(world); writeSave(); }             // a story run saves itself in every new room
 }
@@ -3922,6 +4118,7 @@ function musicRestart() {                            // (the user, 2026-10-17: a
   const S = window.BerryScore; syncMusic(0); if (S && S.restart) S.restart(); try { orig.currentTime = 0; } catch (e) { }
 }
 function resetTrial() {
+  if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; bossIn = false; }   // (knocked out by Noro and Doir: the room starts over)
   endCameo(); if (ej && ej.phase !== "partner") ejEnd(); exitOpen = false; transit = false; $("exitCue").classList.add("hidden"); $("fade").classList.remove("on");   // (knocked out by Evil June: she's gone)
   if (player && player.bubble) { actors.remove(player.bubble.m); player.bubble.m.geometry.dispose(); player.bubble = null; }   // (the old body's bubble goes with it, no ghost left behind)
   const rx = entryX(), hp0 = entrySide === "right" && entryHi ? hiPlat() : null; player = makeState(rx, rig); player.hp = maxHp(); player.y = hp0 ? hp0.y : groundAt(rx) ?? GROUND; if (hp0) player.plat = hp0; if (entrySide === "right") player.face = -1; setupPal(); ejPlace(rx - player.face * 90, player.y, player.face);
@@ -4243,7 +4440,7 @@ function blockHit(p, d) {                  // a blocked hit: pushed back a littl
 }
 function bounceOff(p, d) {                 // whoever was pressing in on the shield bounces off it (the smaller, the further) and holds off for a moment, so you can turn
   const list = baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined).map(b => [b, b.hw, b.h, b.wt]);
-  if (bossIn && !enemy.dead && !enemy.gone) list.push([enemy, enemy.def.hw, enemy.def.h, 0]);
+  if (duo) duoTargets().forEach(d => list.push([d.e, d.D.hw, d.D.h, 0])); else if (bossIn && !enemy.dead && !enemy.gone) list.push([enemy, enemy.def.hw, enemy.def.h, 0]);
   for (const [e, hw, h, wt] of list) {
     const side = Math.sign(e.x - p.x) || -d;
     if (side !== -d || Math.abs(e.x - p.x) - hw > 110 || Math.abs((e.y - h / 2) - (p.y - 45)) > h / 2 + 80) continue;   // only what's in front of the shield
@@ -4449,6 +4646,7 @@ function updateEnemy(dt) {
     e.deathT += dt; e.vx = approach(e.vx, 0, 900 * dt);
     if (Math.random() < dt * 22) puffs(e.x + rand(-D.hw, D.hw), e.y - Math.random() * D.h, 1, 10, 120);
     if (e.deathT > .9 && D.ej) { ejJoin(); return; }   // Evil June doesn't go up in smoke: she joins you
+    if (D.flee) return;                                // (nor do Noro and Doir: they get up and run, updateDuo)
     if (e.deathT > .9) {
       e.gone = true; e.deathT = 0; hideFoe(D); SFX.explode(true);
       puffs(e.x, e.y - D.h / 2, 26, D.hw * 1.6, 340); sparks(e.x, e.y - D.h / 2, 18);
@@ -4497,7 +4695,7 @@ function popText(x, y, text) {
   el.style.left = clamp((_popV.x + 1) / 2 * innerWidth, 70, innerWidth - 70) + "px"; el.style.top = clamp((1 - _popV.y) / 2 * innerHeight, 90, innerHeight - 60) + "px";
   el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); clearTimeout(popText.h); popText.h = setTimeout(() => el.classList.remove("show"), 520);
 }
-const foeTargets = () => [...(bossIn && !enemy.dead && !enemy.gone ? [{ e: enemy, cx: enemy.x, cy: enemy.y - enemy.def.h * .5, box: { x1: enemy.x - enemy.def.hw, x2: enemy.x + enemy.def.hw, y1: enemy.y - enemy.def.h, y2: enemy.y }, hit: d => hitEnemy(d, "punch") }] : []),
+const foeTargets = () => [...(duo ? duoTargets() : bossIn && !enemy.dead && !enemy.gone ? [{ e: enemy, D: foe }] : []).map(B => ({ e: B.e, cx: B.e.x, cy: B.e.y - B.e.def.h * .5, box: { x1: B.e.x - B.e.def.hw, x2: B.e.x + B.e.def.hw, y1: B.e.y - B.e.def.h, y2: B.e.y }, hit: d => duo ? withBoss(B, () => hitEnemy(d, "punch")) : hitEnemy(d, "punch") })),
   ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined).map(b => ({ e: b, cx: b.x, cy: b.y - b.h * .5, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 40), y2: b.y }, hit: d => hitBaddy(b, d, "punch") }))];
 function parry(p, h, d) {
   const back = -d, sp = Math.max(480, Math.hypot(h.vx, h.vy) * 1.35);
@@ -8334,6 +8532,145 @@ function buildMudHut(k) {
   return { k, shafts: [], motes, seeds, sky, inside: true, objs: scene.children.filter(o => !before.has(o)), tick, relight, spots: HIDE_SPOTS };
 }
 let WAVE_FOES = null;
+// ── world 10, though it's the first you play: THE BEACH (the user, 2026-10-18). June and Chase's home, a white beach outside the rainforest:
+// turquoise sea, coconut palms, their little house. Glos comes down onto it with his berry baddies; four rooms along the shore to where the
+// forest begins, Noro and Doir waiting there. Always morning: the forest's day starts after it
+const BEACH_HOUR = [0, 0, 0, 0, 0, 0, 0, 0];
+const CARIB_SEA = { deep: "#0b7896", mid: "#13adc0", light: "#7fe6d4", foam: "#ffffff", line: "#0a5570" };
+const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#f4e4b4", plats: [], plats2: [] }));
+const BEACH_STAGES = [   // plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk)
+  { h: 0, foe: 0, cell: "B1", elev: 0, name: "HOME BEACH", home: true, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },
+  { h: 0, foe: 0, cell: "B2", elev: 0, name: "PALM SHORE", plats: [[460, 360, 200, "rock"], [860, 300, 230, "plank"], [1300, 385, 170, "drift"], [1700, 320, 200, "rock"], [2120, 365, 190, "boat"]] },
+  { h: 0, foe: 0, cell: "B3", elev: 0, name: "COCONUT COVE", gift: true, plats: [[500, 380, 180, "boat"], [880, 310, 210, "rock"], [1280, 360, 220, "plank"], [1700, 300, 190, "rock"], [2100, 385, 170, "drift"]] },
+  { h: 0, foe: 0, cell: "B4", elev: 0, name: "THE FOREST'S EDGE", boss: true, duo: true, edge: true, bossX: 1700, toWorld: 0, plats: [[420, 370, 190, "drift"], [820, 300, 210, "rock"], [1240, 380, 180, "boat"]] },
+];
+const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the sand
+  [["leafy", "leaf", 900], ["acorn", "bark", { plat: 1 }], ["twiggy", "olive", 1450], ["pinecone", "rust", 2100]],
+  [["leafy", "orange", 640], ["thornball", "moss", 1100], ["acorn", "rust", { plat: 1 }], ["stumpy", "bark", 1550], ["twiggy", "bark", 2000]],
+  [["pinecone", "bark", 700], ["leafy", "yellow", { plat: 1 }], ["thornball", "olive", 1150], ["twiggy", "rust", 1550], ["acorn", "olive", { plat: 3 }]],
+  [["stumpy", "olive", 650], ["leafy", "red", { plat: 1 }], ["thornball", "purple", 1050], ["pinecone", "rust", 1500]],
+];
+// Noro and Doir, as bosses: their own characters (charkit), posed like the player, each with two moves of their own. Beaten, they don't go
+// up in smoke: they pick themselves up and run off into the forest (they'll be back)
+let BEACH_FOES = null;
+function kitFoe(id, name, o) { const sp = rosterSpecs().find(q => q.id === id), r = buildChar(lookOf(sp)); r.root.visible = r.shadow.visible = false;
+  return { id, kit: true, flee: true, name, rig: r, sync: syncKitFoe, hw: 24, h: Math.round(r.heightPx || 104), ...o }; }
+const beachFoes = () => BEACH_FOES || (BEACH_FOES = [kitFoe("noro", "NORO", { hp: 10, speed: 150, jumpy: .55, atk: "nrRush", atk2: "nrFly" }), kitFoe("doir", "DOIR", { hp: 10, speed: 160, jumpy: .5, atk: "drSweep", atk2: "drTornado" })]);
+Object.assign(ATTACKS, {
+  nrRush: { charge: .45, act: .8, cd: [2.4, 3.8], range: 520, desc: "Noro dashes in with a flurry of palm strikes, then a spinning kick.",
+    tick(e, dt) { if (e.emitN === 0) { e.emitN = 1; e.dashDir = e.dir; e.strike = { kind: "palm", fresh: true }; SFX.whoosh(); }
+      if (e.actT < .34) { e.vx = e.dashDir * 640; if (Math.random() < dt * 16) addHz({ x: e.x + e.dashDir * 34, y: e.y - 60, r: 40, life: .08, vx: e.dashDir * .01 }); }
+      else if (e.emitN === 1) { e.emitN = 2; e.vx = 0; e.strike = { kind: "spinkick", fresh: true }; }
+      if (e.emitN === 2 && e.actT > .52) { e.emitN = 3; addHz({ x: e.x + e.dir * 50, y: e.y - 70, r: 56, life: .14, vx: e.dir * .01 }); SFX.whoosh(); } } },
+  nrFly: { charge: .5, act: 1.3, cd: [3, 4.4], range: 640, desc: "Noro leaps high and comes down on you with a flying kick.",
+    tick(e, dt) { if (e.emitN === 0) { e.emitN = 1; e.vy = -980; e.vx = clamp(player.x - e.x, -420, 420) * 1.1; e.onGround = false; e.strike = { kind: "flipaxe", fresh: true }; SFX.jump(); }
+      else if (e.emitN === 1 && e.vy > 0) { e.emitN = 2; e.strike = { kind: "flykick", fresh: true }; }
+      if (e.emitN === 2 && !e.onGround && Math.random() < dt * 20) addHz({ x: e.x + e.dir * 26, y: e.y - 40, r: 40, life: .07, vx: e.dir * .01 });
+      if (e.emitN === 2 && e.onGround) { e.emitN = 3; e.vx = 0; dust(e.x, e.y, 6); shake = Math.max(shake, 4); SFX.thud(); } } },
+  drSweep: { charge: .5, act: .7, cd: [2.6, 4], range: 620, desc: "Doir sweeps low: a spray of sand runs along the ground at you. Jump it!",
+    tick(e) { if (e.emitN === 0) { e.emitN = 1; e.strike = { kind: "sweep", fresh: true }; }
+      else if (e.emitN === 1 && e.actT >= .18) { e.emitN = 2; SFX.whoosh(); addHz({ x: e.x + e.dir * 50, y: e.y - 30, r: 44, life: .12, vx: e.dir * .01 });
+        addHz({ m: crestT.clone(), x: e.x + e.dir * 80, y: e.y - 14, vx: e.dir * 430, life: 1.1, r: 16, z: .2, sync: h => { h.m.position.y += Math.abs(Math.sin(h.t * 26)) * .2; } }); } } },
+  drTornado: { charge: .55, act: .9, cd: [3, 4.6], range: 560, desc: "Doir spins in a tornado kick straight across at you. Jump over, or block.",
+    tick(e, dt) { if (e.emitN === 0) { e.emitN = 1; e.dashDir = e.dir; e.strike = { kind: "tornado", fresh: true }; SFX.whoosh(); e.vy = -380; e.onGround = false; }
+      if (e.actT < .6) { e.vx = e.dashDir * 520; if (Math.random() < dt * 18) addHz({ x: e.x + e.dashDir * 20, y: e.y - 60, r: 48, life: .07, vx: e.dashDir * .01 }); } else e.vx = approach(e.vx, 0, 1800 * dt); } },
+});
+// the beach itself: sand down to the sea, wet sand and foam at the water's edge, coconut palms, sea grape, rocks, shells and starfish;
+// the kids' house in the first room; palms Glos's lot knocked flat along the way; the rainforest beginning at the far end
+let beachOpening = false;                            // (the opening's about to play here: its three palms are still standing)
+function buildBeach(k = 0, seed = k) {
+  const before = new Set(scene.children), rng = rngF(401 + seed * 37), R = (a, b) => a + rng() * (b - a), keep = new Set(), ST = STAGES[seed] || {}, M = tropMats(), Q = BEACH_SCREENS[k];
+  const mSand = toon(Q.sand), mWet = toon("#dcc58e"), mFoam = new THREE.MeshBasicMaterial({ color: "#ffffff" }), mRock = toon("#646770"), mRockL = toon("#8d929b"), mDrift = toon("#cbb79c"), mDriftD = toon("#a08c74");
+  const WY = Y(WATER), gAt = x => Y(groundAt(x / S) ?? GROUND), bush = ["#4f8a3a", "#3f7a33", "#6a9a3a"].map(c => toon(c));
+  const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() });
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(230, 92, 230, 92).rotateX(-Math.PI / 2), seaM); at(sea, WX / 2, WY, -36); scene.add(sea); keep.add(sea);
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k), fog: false })); at(sky, WX / 2, 12, -80); scene.add(sky); keep.add(sky);
+  // the sand, and its slope down into the sea; the foam running up and back
+  scene.add(at(mk(new THREE.BoxGeometry(WX + 70, 6, 14), null, { mat: mSand, ol: 0 }), WX / 2, -3, -2));
+  const drop = -WY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);
+  at(slope, WX / 2, -drop / 2, -9 - run / 2); scene.add(slope);
+  const foam = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, .7).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mFoam), wl = -WY / drop;   // (where the water meets the slope: wl of the way down)
+  scene.add(foam); keep.add(foam);
+  // coconut palms all along the back of the beach, leaning out to sea; sea grape and rocks under them; rocks at the water's edge
+  const knock = [];
+  for (let i = 0; i < Math.round(15 * WS); i++) { const x = R(-6, WX + 6), z = -R(3.2, 8.5); if (ST.home && x < 13 && z > -7) continue;
+    const g = tropPalm(scene, M, x, gAt(x), z, rng, { h: R(6.5, 11), lean: R(-.3, .3), coco: true }); g.rotation.x = -R(.04, .18); }
+  if (ST.home) [[1050, -3.6, 1], [1420, -4.2, -1], [1820, -3.4, 1]].forEach(([px, z, d], i) => {   // the three that come down in the opening
+    const g = tropPalm(scene, M, X(px), gAt(X(px)), z, rng, { h: 9 + i * .6, lean: d * .12, coco: true });
+    g.traverse(o => { if (o.isMesh) keep.add(o); }); knock.push({ g, x: px, dir: d, t: -1 }); if (!beachOpening) g.rotation.z = d * 1.48; });
+  else for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1, g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
+  for (let i = 0; i < Math.round(26 * WS); i++) { const x = R(-8, WX + 8), z = -R(2.4, 8.6), r = R(.5, 1.2); if (ST.home && x < 12 && z > -7) continue;
+    scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[i % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); }
+  for (let i = 0; i < Math.round(18 * WS); i++) { const x = R(-8, WX + 8), r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) : -R(2.5, 8);
+    scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x, z < -9 ? (z + 9) * drop / run + r * .3 - .2 : gAt(x) + r * .3, z)); }
+  { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sh = new THREE.InstancedMesh(new THREE.ConeGeometry(.09, .14, 6).rotateX(Math.PI / 2), toon("#ffe0d2"), Math.round(90 * WS));   // shells
+    for (let i = 0; i < sh.count; i++) { const x = R(-8, WX + 8); e.set(R(-.4, .4), R(0, TAU), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, gAt(x) + .04, R(-8.5, 4.5)), q, new THREE.Vector3(1, 1, 1)); sh.setMatrixAt(i, m4); } scene.add(sh);
+    const st = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, r = i % 2 ? .07 : .2; (i ? st.lineTo : st.moveTo).call(st, Math.cos(a) * r, Math.sin(a) * r); }
+    const sf = new THREE.InstancedMesh(new THREE.ShapeGeometry(st).rotateX(-Math.PI / 2), toon("#ff7a4a"), Math.round(12 * WS));   // starfish
+    for (let i = 0; i < sf.count; i++) { const x = R(-8, WX + 8); q.setFromEuler(e.set(0, R(0, TAU), 0)); m4.compose(new THREE.Vector3(x, gAt(x) + .03, R(-8, 4)), q, new THREE.Vector3(1, 1, 1)); sf.setMatrixAt(i, m4); } scene.add(sf); }
+  // the kids' house (the first room): a little wooden house up on posts, turquoise with a red tin roof, a porch, a hammock between two palms,
+  // a table with a bowl of mangoes, and the log they sit on
+  if (ST.home) { const H = group(scene, 6.4, 0, -5.2), mWall = toon("#42c2cc"), mRoof = toon("#d8463a"), mTrim = toon("#fdf6e6"), mWood = toon("#8a6440"), mDoor = toon("#e8a23a"), mWin = toon("#2f3b43");
+    [[-2.1, -1.2], [2.1, -1.2], [-2.1, 1.3], [2.1, 1.3]].forEach(([x, z]) => H.add(at(mk(new THREE.BoxGeometry(.24, .9, .24), null, { mat: mWood, ol: .03 }), x, .45, z)));
+    H.add(at(mk(new THREE.BoxGeometry(4.8, .2, 3), null, { mat: mWood, ol: .03 }), 0, .95, 0));
+    H.add(at(mk(new THREE.BoxGeometry(4.4, 2.4, 2.6), null, { mat: mWall, ol: .04 }), 0, 2.25, -.1));
+    [-1, 1].forEach(sd => { const rf = mk(new THREE.BoxGeometry(5.2, .14, 1.9), null, { mat: mRoof, ol: .04 }); rf.rotation.x = sd * .55; at(rf, 0, 3.85, sd * -.72 - .1); H.add(rf); });
+    H.add(at(mk(new THREE.BoxGeometry(.9, 1.6, .06), null, { mat: mDoor, ol: .02 }), -.8, 1.85, 1.22));
+    [[.8, 2.4], [1.75, 2.4]].forEach(([x, y]) => { H.add(at(mk(new THREE.BoxGeometry(.66, .66, .06), null, { mat: mWin, ol: 0 }), x, y, 1.22)); H.add(at(mk(new THREE.BoxGeometry(.8, .8, .04), null, { mat: mTrim, ol: .02 }), x, y, 1.2)); });
+    for (let i = 0; i < 3; i++) H.add(at(mk(new THREE.BoxGeometry(1, .14, .36), null, { mat: mWood, ol: .02 }), -.8, .2 + i * .27, 1.6 + (2 - i) * .3));   // the porch steps
+    const pa = tropPalm(scene, M, 11.2, 0, -6.4, rng, { h: 8, lean: .1, coco: true }), pb = tropPalm(scene, M, 14.8, 0, -6.2, rng, { h: 8.6, lean: -.12, coco: true });
+    const ham = mk(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(11.7, 2.7, -6.3), new THREE.Vector3(13, 1.3, -6.3), new THREE.Vector3(14.3, 2.7, -6.3)), 14, .2, 6), null, { mat: toon("#ff7a3a"), ol: .02, smooth: true }); ham.scale.z = 1; scene.add(ham);   // the hammock, slung between them
+    [[11.4, 3], [14.6, 3]].forEach(([x, y]) => scene.add(at(mk(new THREE.CylinderGeometry(.03, .03, 1.2, 4).rotateZ(Math.PI / 2), null, { mat: mWood, ol: 0 }), x + (x < 13 ? .55 : -.55), y - .3, -6.3)));
+    const tb = group(scene, X(410), 0, -1.9); tb.add(at(mk(new THREE.BoxGeometry(1.3, .1, .8), null, { mat: mWood, ol: .03 }), 0, .72, 0));
+    [[-.55, -.3], [.55, -.3], [-.55, .3], [.55, .3]].forEach(([x, z]) => tb.add(at(mk(new THREE.BoxGeometry(.08, .7, .08), null, { mat: mWood, ol: 0 }), x, .35, z)));
+    tb.add(at(mk(new THREE.SphereGeometry(.3, 12, 6, 0, TAU, Math.PI / 2, Math.PI / 2), null, { mat: toon("#d9b48a"), ol: .02 }), 0, .78, 0));
+    [["#ff8a1e", -.12, .05], ["#ffb52e", .1, -.05], ["#e8442e", .02, .12]].forEach(([c, x, z]) => tb.add(at(mk(new THREE.SphereGeometry(.12, 10, 8).scale(1, 1.25, .9), null, { mat: toon(c), ol: 0 }), x, .9, z)));
+    tb.add(at(mk(new THREE.CylinderGeometry(.14, .16, .34, 8), null, { mat: toon("#e8b23a"), ol: .02 }), .42, .95, -.1)); tb.add(at(mk(new THREE.ConeGeometry(.12, .3, 6), null, { mat: toon("#3f8a3c"), ol: 0 }), .42, 1.25, -.1));   // a pineapple
+    const lg = mk(new THREE.CylinderGeometry(.26, .28, 4.2, 10).rotateZ(Math.PI / 2), null, { mat: mDrift, ol: .04 }); at(lg, X(515), .26, -1.25); scene.add(lg); }   // the log they sit on
+  if (ST.edge || ST.gift) { const x0 = ST.edge ? WX * .55 : WX + 3;   // the rainforest: where the beach ends (the far end, and a glimpse past the third room's end)
+    for (let i = 0; i < (ST.edge ? 34 : 26); i++) { const x = R(x0, WX + 28), z = -R(3, 22), roll = rng();
+      if (roll < .3) tropTabonuco(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(9, 12) }); else if (roll < .55) tropTreeFern(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(5, 7) });
+      else if (roll < .75) tropPalm(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(7, 10), lean: R(-.2, .2) }); else tropYagrumo(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(8, 11) }); }
+    for (let i = 0; i < (ST.edge ? 30 : 8); i++) { const x = R(x0, WX + 10), z = -R(2, 8); if (rng() < .5) tropMalanga(scene, M, x, gAt(Math.min(x, WX)), z, rng, R(1, 1.4)); else tropHeliconia(scene, M, x, gAt(Math.min(x, WX)), z, rng, R(1, 1.3)); }
+    if (ST.edge) { const gr = mk(new THREE.BoxGeometry(WX * .5 + 30, .06, 14), null, { mat: toon("#6c9c44"), ol: 0 }); at(gr, WX * .78 + 15, .03, -2); scene.add(gr); }   // the grass begins
+    tropMogote(scene, M, WX + 18, -2, -46, rng, 9, 18); tropMogote(scene, M, WX + 2, -2, -58, rng, 7, 14); }
+  // platforms
+  for (const p of PLATFORMS) { const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
+    if (p.kind === "rock") {                          // a rock arch: a slab of rock on legs at either end, front and back (open underneath, like the woods' slabs)
+      scene.add(at(mk(new THREE.DodecahedronGeometry(1, 0).scale(w * .52, .5, 1.25), null, { mat: mRock, ol: .05 }), cx, top - .42, 0));
+      scene.add(at(mk(new THREE.BoxGeometry(w - .1, .22, 2.4), null, { mat: mRockL, ol: .05 }), cx, top - .11, 0));
+      [-1, 1].forEach(sd => [-.85, .85].forEach(z => { const lx = cx + sd * (w / 2 - .45), lh = top - .5 - gAt(lx); if (lh > .1) scene.add(at(mk(new THREE.DodecahedronGeometry(1, 0).scale(.42, lh / 2 + .1, .38), null, { mat: mRock, ol: .04 }), lx, gAt(lx) + lh / 2, z)); })); }
+    else if (p.kind === "drift") { const r = .3, lg = mk(new THREE.CylinderGeometry(r, r * 1.15, w, 9).rotateZ(Math.PI / 2), null, { mat: mDrift, ol: .05 }); at(lg, cx, top - r, 0); lg.rotation.y = R(-.06, .06); scene.add(lg);
+      [-1, 1].forEach(sd => { const bx = cx + sd * (w / 2 - .5), bh = top - 2 * r - gAt(bx) + .1; if (bh > .05) scene.add(at(mk(new THREE.DodecahedronGeometry(.6, 0).scale(1.2, (bh + .2) / 1.2, 1), null, { mat: mRock, ol: .04 }), bx, gAt(bx) + bh / 2 - .05, 0)); });
+      scene.add(at(mk(new THREE.CylinderGeometry(.08, .1, .8, 5), null, { mat: mDriftD, ol: .02 }), cx + w * .3, top - .1, .3)); }
+    else if (p.kind === "boat") { const B = group(scene, cx, 0, 0), hh = 1.15, by = top - hh;   // a fishing boat (a yola) up on wooden blocks, blue with a red stripe
+      [-1, 1].forEach(sd => [-.75, .75].forEach(z => B.add(at(mk(new THREE.BoxGeometry(.16, by - gy + .05, .16), null, { mat: mDriftD, ol: .02 }), sd * w * .32, (by + gy) / 2, z))));   // (up on posts, front and back: you go underneath)
+      B.add(at(mk(new THREE.BoxGeometry(w * .86, hh * .8, 1.9), null, { mat: toon("#2f7fd0"), ol: .05 }), 0, by + hh * .4, 0));
+      B.add(at(mk(new THREE.BoxGeometry(w * .87, .16, 1.92), null, { mat: toon("#e8402e"), ol: 0 }), 0, by + hh * .7, 0));
+      B.add(at(mk(new THREE.BoxGeometry(w * .9, .14, 2.05), null, { mat: toon("#fdf6e6"), ol: .04 }), 0, top - .07, 0));
+      const bow = mk(new THREE.ConeGeometry(.98, 1.1, 4, 1).rotateY(Math.PI / 4).scale(1, 1, .98).rotateZ(-Math.PI / 2), null, { mat: toon("#2f7fd0"), ol: .04 }); at(bow, w * .43 + .5, by + hh * .45, 0); B.add(bow);
+      B.add(at(mk(new THREE.BoxGeometry(w * .8, .1, 1.5), null, { mat: mWood(), ol: 0 }), 0, top - .2, 0)); }
+    else if (p.kind === "plank") { scene.add(at(mk(new THREE.BoxGeometry(w, .22, 2.4), null, { mat: mDrift, ol: .05 }), cx, top - .11, 0));
+      for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 2.4), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, 0));
+      [-1, 1].forEach(sd => [-.9, .9].forEach(z => scene.add(at(mk(new THREE.CylinderGeometry(.12, .12, top - gy, 6), null, { mat: mDriftD, ol: .03 }), cx + sd * (w / 2 - .3), (top + gy) / 2, z)))); } }
+  function mWood() { return mWood.m || (mWood.m = toon("#8a6440")); }
+  // spray glinting over the water
+  const N = 50, mpos = new Float32Array(N * 3), seeds = [];
+  for (let i = 0; i < N; i++) seeds.push([R(-10, WX + 10), R(.3, 4), R(-14, -8), rng() * TAU]);
+  const mg = new THREE.BufferGeometry(); mg.setAttribute("position", new THREE.BufferAttribute(mpos, 3)); mg.setAttribute("color", new THREE.BufferAttribute(new Float32Array(N * 3).fill(1), 3));
+  const motes = new THREE.Points(mg, new THREE.PointsMaterial({ color: "#ffffff", size: .07, transparent: true, opacity: .7, blending: THREE.AdditiveBlending, depthWrite: false, vertexColors: true })); scene.add(motes);
+  bakeStatic([...scene.children].filter(o => !before.has(o)), keep);
+  function tick(t, dt) {
+    seaM.uniforms.uT.value = t;
+    const u = .5 + .5 * Math.sin(t * .9), f = wl - .05 + u * .1;   // the foam running up the slope and back
+    foam.position.set(WX / 2, -drop * f + .03, -9 - run * f); foam.material.opacity = 1;
+    knock.forEach(kk => { if (kk.t < 0) return; kk.t += dt; const e = Math.min(1, kk.t / .75); kk.g.rotation.z = kk.dir * 1.48 * e * e;
+      if (e >= 1 && !kk.down) { kk.down = true; SFX.thud(); shake = Math.max(shake, 7); for (let i = 0; i < 7; i++) dust(kk.x + kk.dir * i * 60, GROUND, 4, kk.dir); } });
+  }
+  function relight(L) { const sc = L.sea || CARIB_SEA; seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line);
+    mSand.color.set(L.sand || Q.sand); mWet.color.copy(mSand.color).multiplyScalar(.86); }
+  return { k, shafts: [], motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)), tick, relight, knock };
+}
 const WORLDS = [
   { name: "BERRY WOODS", blurb: "A rainforest path from midday to night, crawling with leaf, thorn and wood baddies.",
     screens: SCREENS.slice(), stages: STAGES.slice(), roster: BB_ROSTER.slice(), foes: woodFoes },
@@ -8353,6 +8690,8 @@ const WORLDS = [
     screens: CRUX_SCREENS, stages: CRUX_STAGES, roster: CRUX_ROSTER, foes: cruxFoes, song: 8 },
   { name: "TURTLE'S LAKEBED", blurb: "Down to the bottom of a great lake that's run dry: cracked mud and stranded boats, mud huts, balloon skiffs drifting under a huge pale planet. Mostly the low lake floor; at the old shore steps the way splits, up and up toward the rim, or on down into the deep.",
     screens: LAKE_SCREENS, stages: LAKE_STAGES, roster: LAKE_ROSTER, foes: lakeFoes, song: 9 },
+  { name: "THE BEACH", blurb: "June and Chase's home: a white beach outside the rainforest, coconut palms and a turquoise sea. Glos's berry baddies have come down onto the sand.",
+    screens: BEACH_SCREENS, stages: BEACH_STAGES, roster: BEACH_ROSTER, foes: beachFoes, song: 1 },   // (world 9, though a story starts here)
 ];
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
@@ -8520,6 +8859,7 @@ function setFoeHud() {                           // while the baddies are up the
   else { $("ename").textContent = "BERRY BADDIES"; pipsEl.innerHTML = baddies.map(b => b.T.move === "breach" ? BERRY_PIP.replace("<svg", '<svg class="opt"') : BERRY_PIP).join(""); baddies.forEach((b, i) => { if (b.gone || b.dead) pipsEl.children[i].classList.add("lost"); }); }
 }
 function bossArrive() {                          // all three popped: the boss drops in at the far end of the clearing
+  if (STAGES[stage].duo) return duoArrive();     // (the beach's end: Noro and Doir, together)
   bossIn = true; showFoe(foe);
   const bx0 = STAGES[stage].bossX ?? WORLD - 320; let bx = entrySide === "right" ? WORLD - bx0 : bx0;   // (in from the right: the far side's the left)
   if (Math.abs(bx - player.x) < 420) bx = player.x < WORLD / 2 ? Math.min(WORLD - 200, player.x + 560) : Math.max(200, player.x - 560);
@@ -8529,7 +8869,7 @@ function bossArrive() {                          // all three popped: the boss d
   setFoeHud(); SFX.confirm();
   const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">THE BERRY BADDIES ARE DOWN · HERE COMES THE BOSS</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
-  if (ej && ej.phase === "partner") startChide();    // Evil June's along: the boss tells her off first
+  if (ej && ej.phase === "partner" && !ej.kid) startChide();    // Evil June's along: the boss tells her off first
 }
 
 // ── world 3's robot berries (from the user's line art of Van Van's city): bell-shaped "V" bots with a visor band of glowing eyes,
@@ -9962,9 +10302,9 @@ function limbReach(p) {                              // bare-handed fighters: ho
 }
 // ── clashes (the user, 2026-10-18): your attack and an enemy's connecting at the same moment: neither lands, and you bounce off each other
 const CLASH_LEAD = .1, CLASH_PAD = 26;                 // your swing counts a tenth of a second before it lands; its blow counts when it's all but on you
-const BB_BODY = new Set(["lunge", "leap", "flop", "sting", "roll"]), BOSS_BODY = new Set(["tidedash", "shellspin", "swoop", "bellyflop"]);   // attacks that are the body itself flying at you
+const BB_BODY = new Set(["lunge", "leap", "flop", "sting", "roll"]), BOSS_BODY = new Set(["tidedash", "shellspin", "swoop", "bellyflop", "nrFly", "drTornado"]);   // attacks that are the body itself flying at you
 function tryClash(p, T, hb, pb) {
-  const e = T.e, boss = e === enemy;
+  const e = T.e, boss = e === enemy || !!(duo && duo.some(d => d.e === e));
   if (p.combo || e.recoil > 0 || !(boss ? e.atk === "act" && !e.hide : e.atk === "go" && e.T && e.hurtT <= 0)) return false;   // (a charged combo powers through)
   const near = { x1: pb.x1 - CLASH_PAD, x2: pb.x2 + CLASH_PAD, y1: pb.y1 - 10, y2: pb.y2 + 4 }, bx = h => ({ x1: h.x - h.r, x2: h.x + h.r, y1: h.y - h.r, y2: h.y + h.r });
   const blows = hz.filter(h => h.owner === e && !h.harmless && !h.reflected && h.t < h.life && (!h.m && !h.g && Math.abs(h.vx) < 1 && Math.abs(h.vy) < 1   // its claws, its bite, its blade: a hit box right in front of it
@@ -9984,9 +10324,9 @@ function tryClash(p, T, hb, pb) {
 function combat() {
   const p = player, L = [];
   if (p.dead) return;
-  if (bossIn && !enemy.dead && !enemy.gone) { const e = enemy, D = e.def;
+  for (const B of duo ? duoTargets() : bossIn && !enemy.dead && !enemy.gone ? [{ e: enemy, D: foe }] : []) { const e = B.e, D = e.def;   // (Noro and Doir: both of them)
     const bh = e.tuck ? 66 : D.h;
-    L.push({ e, top: e.y - bh, box: { x1: e.x - D.hw, x2: e.x + D.hw, y1: e.y - bh, y2: e.y - 4 }, hit: (d, k) => hitEnemy(d, k), touch: () => e.inv < .3 }); }
+    L.push({ e, top: e.y - bh, box: { x1: e.x - D.hw, x2: e.x + D.hw, y1: e.y - bh, y2: e.y - 4 }, hit: (d, k) => duo ? withBoss(B, () => hitEnemy(d, k)) : hitEnemy(d, k), touch: () => e.inv < .3 }); }
   for (const b of baddies) if (!b.dead && !b.gone && !b.under && !b.flee && b.happyT === undefined)
     L.push({ e: b, top: b.y - b.h, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y - 2 }, hit: (d, k) => hitBaddy(b, d, k), touch: () => b.hurtT <= 0 && !b.sad && !b.sleep && !b.calm,
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
@@ -10249,7 +10589,7 @@ function syncWorld(dt) {
     camera.position.set(camX + sx, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9, CAM_Z + camSit * 4.5);
     camera.lookAt(camX + sx, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08, 0);
   }
-  const dc = window.__cam;   // test hook: { x, y, z, tx, ty, tz } for close-up inspection
+  const dc = comicCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
   sun.position.set(camX - 7, look.sun[2], 11); sun.target.position.set(camX, 0, 0);
   sun2.position.copy(sun.position); sun2.target.position.copy(sun.target.position);
@@ -10280,6 +10620,9 @@ function update(dt) {
   if (mode === "world") { updateWorldSel(dt); return; }
   wstTick(dt); if (story) story.t += dt;                      // (the save file's time played)
   if (cheerHold && (cheerHold.t += dt) > cheerHold.dur) cheerHold = null;
+  if (opening) { updateOpening(dt); shake = Math.max(0, shake - dt * 40); return; }   // the beach's opening: nobody's playing yet
+  if (gift && gift.phase === "in") { updateGift(dt); updateEJ(dt); updateHazards(dt); shake = Math.max(0, shake - dt * 40); return; }   // the bep: everything waits
+  if (gift) updateGift(dt);
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);
     if (player.auto && player.auto.kind === "enter" && player.auto.phase !== "walk") player.auto = null;
@@ -10288,11 +10631,11 @@ function update(dt) {
   }
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
-  updatePal(dt); updateBaddies(dt); updateFriends(dt); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
+  updatePal(dt); updateBaddies(dt); updateFriends(dt); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : openExit();   // a patch ends when it's clear
+  if (!bossIn && !exitOpen && !player.dead && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : STAGES[stage].gift && story && !story.armed && !gift ? startGift() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
-  if (enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
+  if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (wst) wst.boss = foe.name;
     if (isRunEnd(stage)) level.openShrine && level.openShrine(), SFX.fanfare(true), showModal("ALL CLEAR!", `${rig.name} beat ${beaten === FOES.length ? "all " : ""}${beaten} opponent${beaten > 1 ? "s" : ""} in ${trialTime.toFixed(1)} seconds.`, "clear");   // the night boss ends the day, wherever the run began
     else openExit();
@@ -10314,7 +10657,10 @@ function render(dt) {
   else { if (intro) intro.cast.forEach(c => { if (c.phase !== "gone") { c.r.sync(c.st, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; } });
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
-    rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk; if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
+    rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
+    if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
+      opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
+    if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
   syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
@@ -10364,6 +10710,8 @@ const PERF = { u: 0, r: 0, n: 0, dt: 0 };      // frame timing, for tuning (wind
 $("reset").onclick = onReset;
 $("change").onclick = showSelect;
 $("mQuit").onclick = () => quitToTitle();
+$("comic").addEventListener("pointerdown", e => { e.preventDefault(); comicNext(); });
+$("skipHint").addEventListener("pointerdown", e => { e.preventDefault(); skipOpening(); });
 $("changeOpp").onclick = showWorlds;
 renderer.domElement.addEventListener("pointerdown", () => renderer.domElement.focus());
 showSelect();
@@ -10404,7 +10752,7 @@ function dismissTitle() { if (!titleUp || warming) return; titleUp = false; star
 $("title").addEventListener("pointerdown", dismissTitle);
 warmUp().catch(() => {}).finally(() => { warming = false; $("title").classList.remove("hidden"); document.getElementById("loading").remove(); });
 window.BERRY_UI = { get state() {           // (phone build: what's on screen, for touch.js)
-  if (titleUp || menuUp || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
+  if (titleUp || menuUp || comicUp || opening || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
   return mode === "play" ? "play" : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
 window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
