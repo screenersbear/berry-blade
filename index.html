@@ -351,7 +351,7 @@
 <div id="title" class="hidden"><div class="lockup big"><div class="blk">BERRY BLADE</div><div class="bar">PROTOTYPE</div></div><div class="press">TAP TO START</div></div>
 <div id="menu" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">BERRY BLADE</div><div class="bar">MAIN MENU</div></div>
-  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button></div>
+  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button><button data-m="del">DELETE A FILE</button></div>
   <small>↑ ↓ to choose &middot; Enter to pick</small>
 </div></div>
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
@@ -3590,7 +3590,7 @@ function showMainMenu() {                            // over the bep crowd: NEW 
   closeMenus(); story = null;
   if (mode !== "select") showSelect();
   $("select").classList.add("hidden"); selRing.visible = false; roster.forEach(r => { r.root.visible = r.shadow.visible = false; });
-  const any = loadSaves().some(Boolean); $("mbtns").children[1].classList.toggle("off", !any); if (!any) mainSel = 0;
+  const any = loadSaves().some(Boolean); [1, 2].forEach(k => $("mbtns").children[k].classList.toggle("off", !any)); if (!any) mainSel = 0;   // (LOAD GAME and DELETE A FILE: nothing to load or delete yet)
   menuUp = "main"; $("menu").classList.add("show"); $("gear").classList.add("show"); markMenu();
 }
 function showDev() { closeMenus(); menuUp = "dev"; devSel = 0; $("dev").classList.add("show"); SFX.confirm(); markMenu(); }
@@ -3605,8 +3605,8 @@ function devChoose(d) {
 }
 function showSlots(kind) {
   closeMenus(); slotKind = kind; slotAsk = -1; menuUp = "slots"; const S = loadSaves();
-  slotSel = kind === "load" ? Math.max(0, S.findIndex(Boolean)) : Math.max(0, S.findIndex(q => !q));
-  $("slTitle").textContent = kind === "new" ? "NEW GAME" : "LOAD GAME"; $("slSub").textContent = kind === "new" ? "PICK A FILE TO SAVE TO" : "PICK A FILE TO CARRY ON";
+  slotSel = kind !== "new" ? Math.max(0, S.findIndex(Boolean)) : Math.max(0, S.findIndex(q => !q));
+  $("slTitle").textContent = { new: "NEW GAME", load: "LOAD GAME", del: "DELETE A FILE" }[kind]; $("slSub").textContent = { new: "PICK A FILE TO SAVE TO", load: "PICK A FILE TO CARRY ON", del: "PICK A FILE TO DELETE" }[kind];
   renderSlots(); heroImg().then(() => { if (menuUp === "slots") renderSlots(); }); $("slots").classList.add("show");
 }
 function renderSlots() {
@@ -3614,17 +3614,23 @@ function renderSlots() {
   $("slList").innerHTML = S.map((q, i) => `<button class="slot${q ? "" : " empty"}" data-i="${i}"><span class="no">FILE ${i + 1}</span>` +
     (q ? `<span class="head" style="background-image: url('${heroURL(q.char, "head", true)}')"></span><b class="tm">${hms(q.t)}</b><span class="wh">${q.where}</span>`
        : `<span class="head none"></span><b class="tm">EMPTY</b><span class="wh">${slotKind === "new" ? "START A NEW GAME HERE" : "NOTHING SAVED YET"}</span>`) +
-    (slotAsk === i ? `<span class="ask">START OVER IN THIS FILE?<br>WHAT'S SAVED HERE WILL BE GONE<span><i data-a="yes">YES</i><i data-a="no">NO</i></span></span>` : "") + `</button>`).join("");
+    (slotAsk === i ? `<span class="ask">${slotKind === "del" ? `DELETE FILE ${i + 1}?<br>IT'LL BE GONE FOR GOOD` : `START OVER IN THIS FILE?<br>WHAT'S SAVED HERE WILL BE GONE`}<span><i data-a="yes">YES</i><i data-a="no">NO</i></span></span>` : "") + `</button>`).join("");
   markMenu();
 }
 function slotPick(i) {
   const q = loadSaves()[i]; slotSel = i;
-  if (slotKind === "load") { if (!q) { SFX.tick(); toast("NOTHING SAVED IN FILE " + (i + 1)); return; } SFX.confirm(); storyLoad(i, q); return; }
+  if (slotKind !== "new" && !q) { SFX.tick(); toast("NOTHING SAVED IN FILE " + (i + 1)); return; }
+  if (slotKind === "load") { SFX.confirm(); storyLoad(i, q); return; }
+  if (slotKind === "del") { SFX.confirm(); slotAsk = i; askSel = 1; renderSlots(); return; }   // (asked first, and NO is picked to start with)
   SFX.confirm();
   if (q && slotAsk !== i) { slotAsk = i; askSel = 1; renderSlots(); return; }   // (a file with a game in it: asked first, and NO is picked to start with)
   storyBegin(i);
 }
-function slotAnswer(yes) { const i = slotAsk; slotAsk = -1; SFX.confirm(); if (yes) storyBegin(i); else renderSlots(); }
+function slotAnswer(yes) { const i = slotAsk; slotAsk = -1; SFX.confirm(); if (yes && slotKind === "del") deleteSave(i); else if (yes) storyBegin(i); else renderSlots(); }
+function deleteSave(i) {                           // a save file emptied, for good
+  const all = loadSaves(); all[i] = null; try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
+  toast("FILE " + (i + 1) + " DELETED"); if (all.some(Boolean)) renderSlots(); else showMainMenu();   // (the last one gone: back to the main menu)
+}
 function showHero(slot, inGame) {                  // (inGame: after the opening, over the beach: no going back from here)
   closeMenus(); menuUp = "hero"; heroSlot = slot; $("hero").classList.toggle("dim", !!inGame); $("hero").querySelector("[data-hb]").style.display = inGame ? "none" : ""; heroAsk = null; heroSel = 0; $("heroAsk").classList.remove("show"); $("heroList").classList.remove("asking");
   const fill = () => [...$("heroList").children].forEach(b => { b.querySelector(".art").style.backgroundImage = `url('${heroURL(b.dataset.h, "body")}')`; });
