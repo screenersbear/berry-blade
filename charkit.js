@@ -1821,6 +1821,7 @@ function updatePoseHuman(p, dt) {
   const D = p.rig.D || BUILDS.chibi, SET = MOVESETS[m.set] || MOVESETS.brawler, ds = D.step;
   const ST = m.stance && Object.keys(m.stance).length ? { ...(SET.stance || {}), ...m.stance } : SET.stance;     // the character's own standing pose wins
   p.walkK = approach(p.walkK ?? 1, D.run && p.onGround ? 1 - sstep(150, 250, sp) : p.walkK ?? 1, dt * 3); const wk = D.run ? p.walkK : 0;
+  p.sprintK = approach(p.sprintK || 0, D.run && p.onGround ? clamp(((p.runK || 1) - 1) / .45, 0, 1) : p.sprintK || 0, dt * 3); const sk = p.sprintK * (1 - wk);   // sprinting: how far into it (0 at a run)
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
@@ -1841,8 +1842,8 @@ function updatePoseHuman(p, dt) {
     else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .1, fNy: .08, fFx: -.08, fFy: .14, fP: .1 }), layPose(T, m.fall, p);
   } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
-  else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + (p.sprint ? .06 : 0), .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
-    : { lean: lerp(.58 + (p.sprint ? .16 : 0), .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
+  else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
+    : { lean: lerp(.58 + .2 * sk, .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
   else {
     const b = Math.sin(t * 2.4); Object.assign(T, { bodyY: b * .006 * m.bounce, arch: b * .02, armF: .12 + b * .03, armB: -.08 - b * .02, headRot: Math.sin(t * 1.1) * .04 });
     if (ST) { const sw = leadFar(p); for (const k in ST) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0) T[kk] = ST[k]; } T.bodyY += b * .008 * m.bounce; T.armB += b * .03;
@@ -1864,7 +1865,7 @@ function updatePoseHuman(p, dt) {
   const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
-  const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride, th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk);   // (pumping: the knee drives a little higher)
+  const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .34 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .15 * sk);   // (sprinting: longer strides, not quicker ones)   // (pumping: the knee drives a little higher)
     return { th, pt: lerp(R[2], Wl[2], wk), fx: Math.sin(th) * TH + Math.sin(th - tk) * SH, dy: Math.cos(th) * TH + Math.cos(th - tk) * SH }; };
   const L0 = D.run ? leg(0) : null, LS = D.run ? leg(stS) : null;
   const runPx = D.run ? Math.max(20, (L0.fx - LS.fx) / stS * 40 * (Bd.scale || 1) * Math.cos(p.bodyYaw ?? 0)) : 118 * L;   // planted feet keep pace with the ground (at the character's size)
@@ -1896,7 +1897,7 @@ function updatePoseHuman(p, dt) {
     const flut = .1 * m.swing * Math.sin(TAU * u), cw = Math.cos(TAU * u), held = p.rig.prop && p.rig.prop.kind !== "none", pf = leadFar(p);   // running, arms trail straight back, fluttering a little; walking, they swing against the legs (the hand holding something, less)
     const awF = .42 * m.swing * (held && !pf ? .5 : 1), awB = .42 * m.swing * (held && pf ? .5 : 1);
     const ca = Math.cos(TAU * (u - .04)), fwF = Math.max(0, -ca), fwB = Math.max(0, ca);   // pumping, after the user's run sheet (refs/run_reference.png): leaning well into it, head out front, the
-    const rF = pump ? .02 - .95 * m.swing * ca : -1.42 + flut, rB = pump ? .02 + .95 * m.swing * ca : -1.42 - flut;   // front fist driving forward at chest height, the back elbow driving up behind, a beat behind
+    const rF = pump ? .02 - .95 * (1 + .25 * sk) * m.swing * ca : -1.42 + flut, rB = pump ? .02 + .95 * (1 + .25 * sk) * m.swing * ca : -1.42 - flut;   // front fist driving forward at chest height, the back elbow driving up behind, a beat behind
     const eF = pump ? 1.32 + .14 * fwF - .06 * fwB : .3, eB = pump ? 1.32 + .14 * fwB - .06 * fwF : .3;   // the legs; the elbow closed coming forward, a little more open behind; the forward arm a touch across
     if (pump && g > 0) { o.spF = lerp(o.spF || 0, -.14 * fwF + .05 * fwB, g * (1 - wk)); o.spB = lerp(o.spB || 0, -.14 * fwB + .05 * fwF, g * (1 - wk)); }
     o.armF = lerp(o.armF, lerp(rF, .08 - awF * cw, wk), g); o.elbF = lerp(o.elbF, lerp(eF, .3 + .25 * Math.max(0, -cw), wk), g);
