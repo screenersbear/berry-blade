@@ -294,7 +294,7 @@
 </style>
 <script src="charkit.js?v=20261018e"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="score.js?v=20261017b"></script>
+<script src="score.js?v=20261020a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="story.js?v=20261018a"></script>
@@ -636,10 +636,10 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     void main() {
       vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
@@ -649,6 +649,9 @@ const gradeMat = new THREE.ShaderMaterial({
       c = mix(c, c * tintC, tintAmt);                  // the hour's colour: golden, orange, blue, night
       c = pow(c, vec3(.95));                           // slightly brighter midtones
       c = (c - .5) * 1.07 + .5;                        // a little contrast back, so it doesn't read as haze
+      if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin;   // the land at war: washed out, sooty, darker
+        vec2 d = vUv - .5; c *= 1.0 - ruin * .55 * smoothstep(.25, .75, dot(d, d) * 2.2); }                                                           // ... and dark at the edges
+      if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l3), c, 1.0 + .3 * bloom); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter
       if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
@@ -2419,6 +2422,50 @@ function buildLadders() {                          // wooden ladders up the clif
     return g;
   });
 }
+const RUIN_GRADE = [0, .28, .55, .85];
+let ruinFx = null;
+function buildRuin(s, tier) {                     // what the fighting's done to the place: rubble, planks, scorch marks, smoke far off; fires and embers from 50%; ash at 75%
+  const R = rngF(9001 + world * 131 + s * 17), g = new THREE.Group(); scene.add(g);
+  const rock = toon("#7a7068"), rockD = toon("#4e4741"), plank = toon("#6b4a30"), plankD = toon("#3f2a1c");
+  const soot = new THREE.MeshBasicMaterial({ color: "#1c1714", transparent: true, opacity: .45, depthWrite: false });
+  const spot = (lo = 140, hi = WORLD - 140) => { for (let k = 0; k < 12; k++) { const x = lo + R() * (hi - lo); if (groundAt(x) !== null && groundAt(x - 60) !== null && groundAt(x + 60) !== null && !LADDERS.some(L => Math.abs(L.x - x) < 90)) return x; } return null; };
+  const at3 = (m, x, z) => { m.position.set(X(x), Y(groundAt(x) ?? GROUND), z); g.add(m); return m; };
+  const N = [0, 1, 2, 3][tier];
+  for (let i = 0; i < [0, 3, 6, 10][tier]; i++) { const x = spot(); if (x === null) continue; const z = R() < .7 ? -1.2 - R() * 2.2 : .9 + R() * .9, pile = new THREE.Group();   // rubble
+    for (let j = 0; j < 4 + Math.floor(R() * 5); j++) { const r = .16 + R() * .32, m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), R() < .5 ? rock : rockD); m.position.set((R() - .5) * .9, r * .6, (R() - .5) * .5); m.rotation.set(R() * 3, R() * 3, R() * 3); pile.add(m); }
+    at3(pile, x, z); }
+  for (let i = 0; i < [0, 2, 4, 7][tier]; i++) { const x = spot(); if (x === null) continue; const p = new THREE.Group(), n = 2 + Math.floor(R() * 3);       // broken planks, splintered and leaning
+    for (let j = 0; j < n; j++) { const L = .8 + R() * 1.1, m = new THREE.Mesh(new THREE.BoxGeometry(L, .12, .3), R() < .5 ? plank : plankD); m.position.set((R() - .5) * .6, .1 + j * .05, (R() - .5) * .3); m.rotation.set(R() * .4, R() * 3, (R() - .5) * 1.1); p.add(m); }
+    at3(p, x, -1 - R() * 2); }
+  for (let i = 0; i < [0, 2, 4, 8][tier]; i++) { const x = spot(); if (x === null) continue; const m = new THREE.Mesh(new THREE.CircleGeometry(1.2 + R() * 1.2, 14), soot); m.rotation.x = -Math.PI / 2; m.scale.set(1.4, 1, 1); at3(m, x, -.4 - R() * 2.2).position.y += .02; }   // scorch marks
+  for (let i = 0; i < [0, 2, 4, 6][tier]; i++) { const x = spot(); if (x === null) continue; const post = new THREE.Group(), h2 = .5 + R() * 1.1, w2 = .12 + R() * .08;   // posts and stakes snapped off, splintered at the top
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(w2, w2 * 1.15, h2, 7), R() < .5 ? plank : plankD); m.position.y = h2 / 2; post.add(m);
+    for (let j = 0; j < 3; j++) { const sp2 = new THREE.Mesh(new THREE.ConeGeometry(w2 * .45, .18 + R() * .25, 4), plankD); sp2.position.set((R() - .5) * w2, h2 + .05, (R() - .5) * w2); sp2.rotation.set((R() - .5) * .6, 0, (R() - .5) * .6); post.add(sp2); }
+    post.rotation.z = (R() - .5) * .5; at3(post, x, -.9 - R() * 2.6); }
+  // smoke columns in the distance, fires, embers, ash (moving: syncRuin)
+  const smokeM = new THREE.MeshBasicMaterial({ color: "#5d5650", transparent: true, opacity: .35, depthWrite: false, fog: false }), puffG = new THREE.IcosahedronGeometry(1, 1), plumes = [];
+  for (let i = 0; i < [0, 2, 3, 5][tier]; i++) { const x = 200 + R() * (WORLD - 400), base = new THREE.Vector3(X(x), Y(GROUND) - 1 + R() * 2, -8 - R() * 10), puffs = [];
+    for (let j = 0; j < 9; j++) { const m = new THREE.Mesh(puffG, smokeM); g.add(m); puffs.push({ m, u: j / 9 }); } plumes.push({ base, puffs, sway: R() * 6, w: .8 + R() * .8 }); }
+  const fires = [];
+  if (tier >= 2) for (let i = 0; i < [0, 0, 1, 3][tier]; i++) { const x = spot(); if (x === null) continue; const f = new THREE.Group(), z = -1.4 - R() * 2;
+    const mk = (c, s2, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.16 * s2, .6 * s2, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .3 * s2; f.add(m); return m; };
+    const fl = [mk("#ff6a1a", 1.4, .8), mk("#ffb02e", 1, .85), mk("#fff0a8", .55, .9)];
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 2.6), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#ff8a3c", transparent: true, opacity: .45, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); glow.position.y = .5; f.add(glow);
+    at3(f, x, z); fires.push({ fl, glow, ph: R() * 9 }); }
+  const motes = n => { const pos = new Float32Array(n * 3), seeds = []; for (let i = 0; i < n; i++) seeds.push([R() * WORLD, R(), -3 + R() * 6, R() * 9]); const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); return { geo, seeds }; };
+  let embers = null, ash = null;
+  if (tier >= 2) { const E = motes([0, 0, 22, 48][tier]); embers = { ...E, pts: new THREE.Points(E.geo, new THREE.PointsMaterial({ color: "#ff9a3a", size: .09, transparent: true, opacity: .9, blending: THREE.AdditiveBlending, depthWrite: false })) }; g.add(embers.pts); }
+  if (tier >= 3) { const A = motes(70); ash = { ...A, pts: new THREE.Points(A.geo, new THREE.PointsMaterial({ color: "#b9b2aa", size: .07, transparent: true, opacity: .75, depthWrite: false })) }; g.add(ash.pts); }
+  ruinFx = { g, plumes, fires, embers, ash, tier };
+  return g;
+}
+function syncRuin() {                             // the smoke rolling up, the fires flickering, embers rising, ash falling
+  const F = ruinFx; if (!F || !F.g.parent) return;
+  F.plumes.forEach(P => P.puffs.forEach(q => { const u = (q.u + time * .045) % 1, s2 = (1.2 + u * 5) * P.w; q.m.position.set(P.base.x + Math.sin(time * .3 + P.sway + u * 3) * (1 + u * 3), P.base.y + u * 22, P.base.z); q.m.scale.setScalar(s2); }));
+  F.fires.forEach(f => f.fl.forEach((m, i) => { const k = 1 + .16 * Math.sin(time * (12 + i * 3) + f.ph) + .08 * Math.sin(time * 25 + i); m.scale.set(1 / k, k, 1 / k); f.glow.material.opacity = .4 + .08 * Math.sin(time * 9 + f.ph); }));
+  const camL = camX - 22, step = (M, rise) => { if (!M) return; const a = M.geo.attributes.position; M.seeds.forEach(([x, p, z, ph], i) => { const u = ((p + time * (rise ? .07 : .05)) % 1); a.setXYZ(i, camL + ((X(x) - camL) % 44 + 44) % 44 + Math.sin(time + ph) * .6, rise ? Y(GROUND) + u * 9 : Y(GROUND) + 9 - u * 10, z); }); a.needsUpdate = true; };
+  step(F.embers, true); step(F.ash, false);
+}
 let restCamp = null;
 function buildRestCamp() {                        // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
   let x = 1280; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = 1280 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }
@@ -2448,13 +2495,15 @@ function restArrive() {                           // in the story, a rest stop y
 }
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
-  if (level.s !== s || level.w !== world || level.h !== h) {
+  const tierNow = mode === "play" && world !== 9 ? upTier() : 0;
+  if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow) {
     disposeLevel(level); setPlatforms(s);
     const c = STAGES[s].col ?? STAGES[s].h;
     level = world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
+    ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
     dropTextures();
   }
   setLook(h);
@@ -2530,6 +2579,7 @@ function syncMusic(dt) {                         // every frame: the right music
   if (!S) return;
   const ejM = ejFight() && mode === "play" && S.EJ !== undefined;   // Evil June's here: her quiet theme (the room's ambience carries on)
   if (S.setSong) S.setSong(ejM ? S.EJ : WORLDS[world].song ?? world);    // the woods' song, the waves' or Volt Keep's
+  if (S.setGloom) S.setGloom(mode === "play" && !hideout && !ejM && world !== 9 && upTier() >= 3);   // (the uprising at 75%: every hour played darker)
   if (ejM) S.setHour(0, 1);
   else if (hideout && S.SERENE) S.setHour(S.SERENE, .76);                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
@@ -11137,9 +11187,10 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest();
+  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest(); syncRuin();
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
+  gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[upTier()] : 0;
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
