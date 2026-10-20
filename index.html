@@ -265,6 +265,8 @@
   }
   #hint { z-index: 1; }   /* (phone: under the pause menu and the other panels) */
   #holdTip, #hint { display: none !important; }   /* (the user, 2026-10-17: no tips about the buttons on the phone, neither the "press and hold" one nor the controls bar) */
+  #weapon { left: calc(192px + env(safe-area-inset-left)); }   /* (the user, 2026-10-19: holding ↓, the sword or gauntlet shows to the right of the d-pad, clear of your thumb) */
+  #weapon svg { width: auto; height: min(390px, calc(100vh - 70px)); aspect-ratio: 150 / 390; }
   @media (max-height: 520px) {   /* the room banners, the exit cue and the loading name, smaller (the user, 2026-10-17) */
     #banner .blk { font-size: 26px; padding: 7px 12px 2px; } #banner .bar { font-size: 9px; margin-left: 28px; letter-spacing: .28em; }
     #exitCue .blk { font-size: 18px; } #exitCue .bar { font-size: 8px; }
@@ -1106,7 +1108,7 @@ function syncFoe(e, r, dt = 0) {
   if (!r.sp) foeJoints(r);
   const sty = r.style, ck = (r.clk = (r.clk || 0) + dt);
   const swell = e.dead ? 1 + e.deathT * .2 : 1, shudder = e.dead ? .06 : e.atk === "charge" ? .035 : e.atk === "act" ? .015 : 0;
-  r.root.position.set(X(e.x) + rand(-shudder, shudder), Y(e.y), e.z || 0);
+  r.root.position.set(X(e.x) + rand(-shudder, shudder) + jolt(e), Y(e.y), e.z || 0);
   const ks = r.size || 1; r.root.scale.set((1 - e.sq * .5) * swell * ks, (1 + e.sq) * swell * ks, (1 - e.sq * .5) * swell * ks);
   r.yaw.rotation.y = e.yaw;
   const walking = e.onGround && Math.abs(e.vx) > 20 && e.windup <= 0, ph = e.phase;
@@ -2635,7 +2637,7 @@ const SFX = {
   punch() { noise(.07, { vol: .3, f0: 900, f1: 4200, type: "bandpass", q: 1.6 }); noise(.045, { vol: .26, f0: 3600, f1: 1100, type: "bandpass", delay: .035 }); tone(210, 80, .1, { type: "sine", vol: .22, delay: .02 }); },   // a swish, a snap, a thump under it
   kick() { noise(.1, { vol: .32, f0: 600, f1: 3400, type: "bandpass", q: 1.5 }); noise(.05, { vol: .24, f0: 2800, f1: 800, type: "bandpass", delay: .05 }); tone(170, 70, .11, { type: "sine", vol: .2, delay: .04 }); },
   slash() { if (smpPlay("slash", .1)) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
-  hit() { if (smpPlay("hit", .165)) return; tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack
+  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.12 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) return; tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack
   impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
     noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
@@ -4055,7 +4057,15 @@ function enterStage(ns, back) {                      // into the room: its baddi
   maybeTrapdoor(back);                                                // (and at night, now and then, a stronghold's hatch)
   if (story) { story.visited.add(world); writeSave(); }             // a story run saves itself in every new room
 }
-function startTrail() { ejEnd(); trail = [runStart]; newStay(); roomsSeen.add(runStart); worldStack = []; cineSeen = new Set(); entrySide = "left"; entryHi = false; dayClock = Math.max(0, colOf(runStart) - 1); clockEnter(runStart); }   // a fresh run
+function startTrail() { ejEnd(); trail = roomPath(runStart); newStay(); roomsSeen.add(runStart); worldStack = []; cineSeen = new Set(); entrySide = "left"; entryHi = false; dayClock = Math.max(0, colOf(runStart) - 1);
+  trail.forEach(s => { if (s !== runStart && colOf(s) > 0 && !STAGES[s].peace) stayCols.add(colOf(s)); }); clockEnter(runStart); }   // a fresh run (started part-way in: as if you'd walked here, the columns behind you already counted)
+function roomPath(s) {                            // the way from this world's first room to room s: a run started there walks back room by room
+  const from = new Map([[0, -1]]), Q = [0];
+  while (Q.length) { const a = Q.shift(); if (a === s) break; const S0 = STAGES[a]; if (S0.toWorld !== undefined || S0.end) continue;
+    for (const b of [S0.next ?? a + 1, S0.nextHi, S0.up, S0.down]) if (b !== undefined && b < STAGES.length && !from.has(b)) { from.set(b, a); Q.push(b); } }
+  if (!from.has(s)) return [s];
+  const out = []; for (let a = s; a >= 0; a = from.get(a)) out.unshift(a); return out;
+}
 // golden berries: tucked away up high (a full wind-up jump and a double to reach them). A heart back, or ATK if your hearts are full
 let gifts = [], giftsTaken = new Set();
 const GIFT_M = [toon("#ffc934"), toon("#5aa04a"), new THREE.MeshBasicMaterial({ color: "#fff3b0", transparent: true, opacity: .45, blending: THREE.AdditiveBlending, depthWrite: false })];
@@ -4168,7 +4178,7 @@ function resetTrial() {
   enemy = makeFoeState(foe, WORLD - 360); player.power = 0;
   clearHz(); const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; const done = fillRoom(); spawnEscort(bepRun.back);
   parts.forEach(q => actors.remove(q.m)); parts = [];
-  shake = 0; hitstop = 0; if (beaten === 0) trialTime = 0; aura.show = aura.flare = aura.burst = 0; guardFx.show = guardFx.hit = 0; sprintDir = 0;
+  shake = 0; hitstop = 0; slowMo = 0; camKick = camKickV = 0; if (beaten === 0) trialTime = 0; aura.show = aura.flare = aura.burst = 0; guardFx.show = guardFx.hit = 0; sprintDir = 0;
   setFoeHud();
   FOES.forEach(hideFoe); if (bossIn) showFoe(foe);
   modalOpen = false; document.getElementById("modal").classList.remove("show");
@@ -4255,7 +4265,8 @@ function updatePlayer(dt) {
     if (L.rope && !ropeOpen(L)) continue;
     const fromBot = upHeld && Math.abs(p.x - L.x) < 26 && p.y > L.top + 2 && p.y <= L.bot + 2;
     const fromTop = held.down && p.onGround && Math.abs(p.y - L.top) < 4 && Math.abs(p.x - (L.face + L.wall * 24)) < 30;
-    if (fromBot || fromTop) { Object.assign(p, { climb: L, climbPh: 0, vx: 0, vy: 0, onGround: false, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0 }); jumpBuf = 0; if (fromTop) p.y = L.top + 14; break; }
+    const fromFall = L.rope === "down" && !p.onGround && p.vy > 60 && Math.abs(p.x - L.x) < 44 && p.y > L.top + 24 && p.y < L.bot - 90;   // dropping off the dock beside it: you catch it (the user, 2026-10-19: jumping down next to it, you fell)
+    if (fromBot || fromTop || fromFall) { Object.assign(p, { climb: L, climbPh: 0, vx: 0, vy: 0, onGround: false, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0 }); jumpBuf = 0; if (fromTop) p.y = L.top + 14; break; }
   }
   if (p.climb) { climbStep(p, dt); return; }
 
@@ -9317,7 +9328,9 @@ function spawnEscort(cameBack) {                  // still leading you: they com
   const home = bepHome(), cols = bepRun.escort, back = bepRun.back;
   if (back ? !cameBack || home > stage : cameBack || home < stage) return;     // (you've turned the other way: they wait where they were)
   const jut = back && entryHi ? hiPlat() : null;   // (back into a split room by its upper way: they come in up on that ledge with you, not on the lower path. The user, 2026-10-18)
+  const R0 = entrySide === "top" || entrySide === "bottom" ? LADDERS.find(q => q.rope === (entrySide === "bottom" ? "down" : "up")) : null;   // (in by a rope ladder: they come in by it too, just ahead of you)
   ["S", "M", "B"].forEach((sz, i) => { let x = back ? WORLD - 70 - i * 50 : 70 + i * 50; if (jut) x = clamp(x, jut.x + 24, jut.x + jut.w - 24);
+    if (R0) x = R0.rope === "down" ? R0.face + R0.wall * (70 + i * 50) : R0.x + (back ? -1 : 1) * (70 + i * 50);
     const f = makeFriend(sz, cols[i], x); Object.assign(f, { popAt: 0, y: jut ? jut.y : groundAt(x) ?? GROUND, plat: jut, onGround: true, z: .4 - i * .3 }); friends.push(f); });
   bepEv = { B: STAGES[home].bep, mode: home === stage ? (back ? "trail" : "arrive") : back ? "escortBack" : "escort", phase: "walk", t: 0, lead: friends[back ? 0 : 2], wait: false };
   const B = STAGES[home].bep;
@@ -9337,10 +9350,11 @@ function updateBepEvent(dt) {
   } else if (E.phase === "ack") {
     if (E.t > .7 && !E.hop2 && E.lead.onGround) { E.hop2 = true; E.lead.vy = -320; E.lead.onGround = false; SFX.chirp(); }
     if (E.t > 1.6) { E.phase = "walk"; E.t = 0; [E.lead, ...friends.filter(f => f !== E.lead)].forEach((f, i) => { f.task = { u: -1, lag: i * .075 }; f.hold = false; f.look = false; }); }
-  } else if (E.mode === "escort" || E.mode === "escortBack") {   // on to this room's way out (the right; or the left, taking you back): wait there for you, then lead on through it
-    const bk = E.mode === "escortBack";
-    if (E.phase === "walk" && friends.every(f => Math.abs(f.x - (bk ? 150 + f.task.lag * 600 : WORLD - 150 - f.task.lag * 600)) < 30)) { E.phase = "wait"; E.t = 0; }
-    if (E.phase === "wait" && !p.dead && (bk ? p.x < 520 : exitOpen && p.x > WORLD - 520)) { E.phase = "leave"; E.t = 0; }
+  } else if (E.mode === "escort" || E.mode === "escortBack") {   // on to this room's way out (the right; or the left, or a rope ladder, taking you back): wait there for you, then lead on through it
+    const bk = E.mode === "escortBack", R = E.rope === undefined ? (E.rope = bk ? escortRope() : null) : E.rope;
+    if (E.phase === "walk" && friends.every(f => Math.abs(f.x - escortSpot(f.task, bk, R)) < 30)) { E.phase = "wait"; E.t = 0; }
+    if ((E.phase === "wait" || (R && E.phase === "walk")) && !p.dead && (R ? Math.abs(p.x - R.x) < 320 : bk ? p.x < 520 : exitOpen && p.x > WORLD - 520)) {
+      E.phase = "leave"; E.t = 0; if (R) popText(R.x, R.rope === "down" ? R.top - 80 : R.bot - 200, R.rope === "down" ? "↓" : "↑"); }   // (by a rope: once you're close, whether or not they're all there yet)
     if (E.phase === "leave" && friends.every(f => f.gone)) bepEv = null;
   } else if (E.phase === "walk") {
     const tdir = Math.sign(B.zone - (E.mode === "arrive" ? B.left : B.trail)) || -1;
@@ -9352,6 +9366,25 @@ function updateBepEvent(dt) {
     friends.forEach((f, i) => { if (f.going === undefined && E.t > .7 + i * .5) { f.going = 0; f.from = [f.x, f.y, f.z]; } });
     if (E.t > 1 && friends.every(f => f.gone)) { E.phase = "follow"; E.t = 0; p.auto = { x: B.zone, kind: B.kind, t: 0, phase: "walk" }; p.combo = null; p.atkT = -1; p.block = false; p.chargeT = 0; }
   }
+}
+// the way back out of this room when it's a rope ladder (down to the dock below, or up to the one above): the beps lead you to it, not the wall
+function escortRope() {
+  const S0 = STAGES[stage], prev = trail[trail.length - 2];
+  if (prev === undefined || (prev !== S0.down && prev !== S0.up)) return null;
+  return LADDERS.find(L => L.rope === (prev === S0.down ? "down" : "up")) || null;
+}
+const ropeFoot = R => R.rope === "down" ? R.face + R.wall * 22 : R.x + 34;     // where you step on: the dock's edge by it, or the ground beside its foot
+function escortSpot(T, bk, R) {                   // where each one waits for you: spaced out back from the room's way out
+  if (!R) return bk ? 150 + T.lag * 600 : WORLD - 150 - T.lag * 600;
+  return R.rope === "down" ? R.face + R.wall * (64 + T.lag * 600) : R.x + 60 + T.lag * 600;
+}
+function bepRope(f, R, dt) {                      // a bep onto a rope ladder, and away down (or up) it hand over hand
+  if (!f.rope) { f.rope = { t: 0, from: [f.x, f.y, f.z] }; SFX.chirp(); }
+  const Q = f.rope, down = R.rope === "down", y0 = down ? R.top + 30 : R.bot - 50; Q.t += dt; f.vx = 0; f.vy = 0; f.onGround = false; f.look = false;
+  if (Q.t < .38) bepArc(f, Q.from, [R.x, y0, -.3], Q.t / .38, 36);
+  else { f.x = R.x; f.z = -.3; f.y = y0 + (down ? 1 : -1) * (Q.t - .38) * 190; f.phase += dt * 5; f.sq = .06 * Math.sin(Q.t * 18); }
+  if (down ? f.y > R.bot - 20 : f.y < R.top + 40) { f.gone = true; f.r.root.visible = f.r.shadow.visible = false; }
+  return true;
 }
 function bepTask(f, dt) {                         // a bep in the event: along the trail, then in through the hidden way
   const E = bepEv, B = E.B, T = f.task;
@@ -9376,10 +9409,12 @@ function bepTask(f, dt) {                         // a bep in the event: along t
     if (H2.t >= .7) { f.y = H2.to[1]; f.gapHop = null; f.vy = 0; f.onGround = true; }
     return true;
   }
-  if (E.mode === "escort" || E.mode === "escortBack") {   // to the room's way out, wait, then out of the room ahead of you
-    const bk = E.mode === "escortBack", tx = E.phase === "leave" ? (bk ? -140 : WORLD + 140) : bk ? 150 + T.lag * 600 : WORLD - 150 - T.lag * 600, dx = tx - f.x;
+  if (E.mode === "escort" || E.mode === "escortBack") {   // to the room's way out, wait, then out of the room ahead of you (or away down a rope ladder)
+    const bk = E.mode === "escortBack", R = E.rope;
+    if (f.rope || (R && E.phase === "leave" && Math.abs(ropeFoot(R) - f.x) < 40 && E.t > T.lag * 6)) return bepRope(f, R, dt);   // (one after another)
+    const tx = E.phase === "leave" ? (R ? ropeFoot(R) : bk ? -140 : WORLD + 140) : escortSpot(T, bk, R), dx = tx - f.x;
     if (f.onGround && f.hitWall && E.phase !== "wait") { f.vy = -1040; f.onGround = false; SFX.chirp(); }   // a step or a ledge in the way: one big bound
-    if (E.phase === "wait") { f.vx = approach(f.vx, 0, 600 * dt); f.dir = Math.sign(player.x - f.x) || f.dir; f.look = true; if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.7, 1.5); f.vy = -240; f.onGround = false; } }
+    if (E.phase === "wait" || (R && E.phase === "leave" && Math.abs(dx) < 40)) { f.vx = approach(f.vx, 0, 600 * dt); f.dir = Math.sign(player.x - f.x) || f.dir; f.look = true; if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.7, 1.5); f.vy = -240; f.onGround = false; } }
     else { f.vx = approach(f.vx, clamp(dx * 4, -110, 110), 700 * dt); if (Math.abs(dx) > 2) f.dir = Math.sign(dx); f.look = false;
       const ahead = f.x + Math.sign(dx) * (f.hw + 8), g = f.onGround && Math.abs(dx) > 20 ? GAPS.find(([a, c]) => ahead > a && ahead < c) : null;
       if (g) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? g[1] + 30 : g[0] - 30, groundAt(dx > 0 ? g[1] + 30 : g[0] - 30) ?? GROUND, f.z], t: 0 }; SFX.chirp(); } }
@@ -9498,16 +9533,16 @@ function updateHideout(dt) {
     if (Math.abs(p.x - L.seat) > 70) H.offSeat = true;                     // (once you've got up, step away before it'll sit you again)
     const still = !held.left && !held.right && p.onGround && Math.abs(p.vx) < 20 && Math.abs(p.x - L.seat) < 26 && H.offSeat !== false;
     H.sitIdle = still ? H.sitIdle + dt : 0;
-    if (H.sitIdle > .35) { p.sit = 1; p.x = L.seat; p.vx = 0; atkBuf = 0; toast("PRESS X TO GET UP", 3000); }
+    if (H.sitIdle > .35) { p.sit = 1; p.x = L.seat; p.vx = 0; atkBuf = 0; p.sitHeld = true; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
     if (p.x < H.cx - 440 && held.left) leaveHideout();
   }
 }
-function sitPlayer(dt) {                          // sitting: face out at the view; attack to stand up
-  const p = player;
+function sitPlayer(dt) {                          // sitting: face out at the view; any button to stand up
+  const p = player, any = held.atk || held.jump || held.block || held.down || held.left || held.right || keys.ArrowUp || keys.KeyW || pad.u;
   p.vx = 0; p.yaw = lerp(p.yaw, -Math.PI / 2, 1 - Math.exp(-dt * 6)); p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   spring(p, dt); updatePose(p, dt);
-  if (atkBuf > 0 || (held.atk && !p.sitHeld)) { atkBuf = 0; p.sit = 0; p.vy = -260; p.onGround = false; p.face = 1; hideout.sitIdle = 0; hideout.offSeat = false; }
-  p.sitHeld = held.atk;
+  if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.vy = -260; p.onGround = false; p.face = 1; hideout.sitIdle = 0; hideout.offSeat = false; }
+  p.sitHeld = any;
 }
 function syncHideoutBeps(dt) {
   for (const b of hideout.beps) {
@@ -10095,6 +10130,7 @@ function splashBits(x, n) { const y = Y(WATER) + .05; for (let i = 0; i < n; i++
 function updateBaddy(b, dt) {
   const T = b.T, p = player, A = BB_ATK[T.atk];
   b.inv = Math.max(0, b.inv - dt); b.flash = Math.max(0, b.flash - dt); b.hurtT = Math.max(0, b.hurtT - dt);
+  if (b.hurtT > 0 && b.onGround && Math.abs(b.vx) > 110 && (b.skidT = (b.skidT || 0) - dt) <= 0) { b.skidT = .07; dust(b.x - Math.sign(b.vx) * b.hw * .4, b.y, 2, -Math.sign(b.vx)); }   // knocked back along the ground: a skid
   if (b.sleep) { b.vx = 0; spring(b, dt); if ((b.zT -= dt) <= 0) { b.zT = rand(.9, 1.4); zzz(b); } return; }
   if (b.flee) { updateFlee(b, dt); spring(b, dt); return; }
   if (b.happyT !== undefined) { updateHappy(b, dt); spring(b, dt); b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9)); return; }
@@ -10179,19 +10215,43 @@ function updateBaddy(b, dt) {
   b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9));   // three-quarters on, so you see their faces
 }
 const KBT = { tackle: [420, -300], punch: [90, -200], slash: [150, -240], upper: [70, -520], hook: [330, -260], smash: [200, -160], launch: [360, -640] };   // knockback by hit kind
+// ── the weight of a blow (game feel)
+const HIT_W = { punch: .75, slash: .85, stomp: .8, kick: 1, hook: 1.05, upper: 1.1, tackle: 1.2, smash: 1.35, launch: 1.35 };   // how heavy each kind lands
+let camKick = 0, camKickV = 0, camPush = 0, slowMo = 0, chainN = 0, chainT = -9;
+function hitFeel(e, dir, kind, boss) {
+  const w = HIT_W[kind] || 1;
+  hitstop = Math.max(hitstop, (boss ? .05 : .033) + .036 * w); shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);
+  e.jolt = .05 + .045 * w; e.joltAt = time;                                           // (it shudders while the picture's held: see syncBaddy / syncFoe)
+  camKick += dir * (.07 + .07 * w);                                                   // the camera knocked the way the blow went (it springs back in update)
+  if (player && kind !== "stomp") { player.sq = Math.min(player.sq || 0, -.05 - .06 * w); player.sqv = 0; }   // your body into it
+  rumble(12 + 18 * w, .2 + .3 * w);
+}
+const hitChain = () => { chainN = time - chainT < .7 ? chainN + 1 : 0; chainT = time; return chainN; };   // hits in a quick run (they climb in pitch)
+const jolt = e => hitstop > 0 && e.joltAt === time ? rand(-1, 1) * e.jolt : 0;       // (time stands still in the freeze, so this is only the blow just landed)
+function lastKill(b) {                            // the room's last baddy down: a beat of slow motion, the camera leaning in
+  if (bossIn || STAGES[stage].boss || !baddies.every(o => o === b || o.gone || o.dead || o.sad || o.T.move === "breach")) return;
+  slowMo = .7; hitstop = Math.max(hitstop, .12); rumble(60, .7);
+}
+function rumble(ms, k) {                          // a buzz in your hands: a controller that can, or a phone (Android; iPhones don't let a web page)
+  try {
+    const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
+    if (gp && gp.vibrationActuator) gp.vibrationActuator.playEffect("dual-rumble", { duration: ms, strongMagnitude: Math.min(1, k), weakMagnitude: Math.min(1, k + .25) }).catch(() => { });
+    else if (window.BERRY_TOUCH && navigator.vibrate) navigator.vibrate(Math.round(ms));
+  } catch (e) { }
+}
 function hitBaddy(b, dir, kind) {
   if (b.inv > 0 || b.dead || b.gone) return false;
   if (b.calm) surprise(b.calm.gid);                                    // (caught napping: the whole lot of them are up)
   if (b.sleep) { if (kind === "stomp") { startle(b); return true; } b.sleep = false; }   // hit it instead and it just wakes up (and fights)
   b.hp -= 2 + (player.power || 0);
   b.inv = kind === "punch" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
-  if (kind === "stomp") SFX.stomp(); else SFX.hit();
+  if (kind === "stomp") SFX.stomp(); else SFX.hit(HIT_W[kind] || 1, hitChain());
   const KB = KBT[kind] || [300, -360];
   b.vx = dir * KB[0] * 1.2 / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt); b.onGround = false;
   b.sq = kind === "stomp" ? -.45 : .22; b.sqv = 0;
-  hitstop = .05; shake = Math.max(shake, 5);
+  hitFeel(b, dir, kind, false);
   sparks(kind === "stomp" ? player.x : b.x - dir * b.hw * .6, b.y - b.h * (kind === "stomp" ? 1 : .55), 7);
-  if (b.hp <= 0) { b.dead = true; b.deathT = 0; b.vx *= .4; if (player.combo) impactFrame(b.x, b.y - b.h * .5, false); else hitstop = .09; }   // (the freeze only for a combo's finishing blow)
+  if (b.hp <= 0) { b.dead = true; b.deathT = 0; b.vx *= .4; if (player.combo) impactFrame(b.x, b.y - b.h * .5, false); else hitstop = Math.max(hitstop, .09); lastKill(b); }   // (the freeze only for a combo's finishing blow)
   return true;
 }
 function popBaddy(b) {                           // juice everywhere; the player's ATK power goes up one
@@ -10220,7 +10280,7 @@ function syncBaddy(b, dt) {
   if (b.gone || b.under || (b.sunk && b.y > WATER + 4)) { r.root.visible = r.shadow.visible = false; if (r.segRoot) r.segRoot.visible = false; return; }
   r.root.visible = r.shadow.visible = true;
   const t = (r.clk += dt), pop = b.dead ? clamp(b.deathT / .22, 0, 1) : 0, sw = 1 + pop * pop * .45;
-  r.root.position.set(X(b.x), Y(b.y), b.z);
+  r.root.position.set(X(b.x) + jolt(b), Y(b.y), b.z);
   r.root.scale.set((1 - b.sq * .5) * sw, (1 + b.sq) * sw, (1 - b.sq * .5) * sw);
   r.yaw.rotation.y = b.yaw;
   const walking = b.onGround && Math.abs(b.vx) > 15 && !b.atk, ph = b.phase, air = !b.onGround;
@@ -10280,12 +10340,12 @@ function hitEnemy(dir, kind) {
   const e = enemy;
   if (e.inv > 0 || e.dead) return false;
   e.hp -= 2 + (player.power || 0); e.inv = kind === "punch" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
-  if (kind === "stomp") SFX.stomp(); else SFX.hit();
+  if (kind === "stomp") SFX.stomp(); else SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain());
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
   e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; e.windup = 0;
   e.sq = kind === "stomp" ? -.45 : .2; e.sqv = 0;
-  hitstop = kind === "stomp" ? .06 : .08; shake = Math.max(shake, 8);
+  hitFeel(e, dir, kind, true);
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
   sparks(kind === "stomp" ? player.x : e.x - dir * 30, kind === "stomp" ? e.y - e.def.h : e.y - e.def.h * .5, 10);
   if (e.hp <= 0) { e.dead = true; e.deathT = 0; e.vx = dir * 120; impactFrame(e.x, e.y - e.def.h * .5, true); }
@@ -10469,7 +10529,7 @@ function hurtPlayer(d, src) {
   if (src && src.daze) { src.life = Math.min(src.life, src.t); dazePlayer(p); return true; }   // Crux's city: the dizzy swirl only scrambles you
   p.hp--; updateHearts(true); p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.tkCharge = null; p.power = Math.max(0, (p.power || 0) - 1);   // each hit costs a level of ATK power
   p.vx = d * 260; p.vy = -420; p.onGround = false; p.hurtT = .45; p.inv = 1.3; p.atkT = -1; p.bounceT = -1;   // a little bounce back (the user: no long slide)
-  shake = Math.max(shake, 6); hitstop = .05; sparks(p.x, p.y - 40, 8);
+  shake = Math.max(shake, 6); hitstop = .05; sparks(p.x, p.y - 40, 8); rumble(70, .9);
   SFX.hurt();
   if (p.hp <= 0) { p.dead = true; p.hurtT = 99; p.inv = 0; p.vy = -560; p.vx = d * 300; shake = 12; hitstop = .14; puffs(p.x, p.y - 40, 6, 30, 160); SFX.ko(); }
   return true;
@@ -10557,7 +10617,7 @@ function syncFurnace(e, r, dt = 0) {
   const ck = (r.clk = (r.clk || 0) + dt);
   const swell = e.dead ? 1 + e.deathT * .2 : 1;
   const shudder = e.dead ? .06 : e.atk === "charge" ? .035 : e.atk === "act" ? .02 : 0;
-  r.root.position.set(X(e.x) + rand(-shudder, shudder), Y(e.y), e.z || 0);
+  r.root.position.set(X(e.x) + rand(-shudder, shudder) + jolt(e), Y(e.y), e.z || 0);
   const ks = r.size || 1; r.root.scale.set((1 - e.sq * .5) * swell * ks, (1 + e.sq) * swell * ks, (1 - e.sq * .5) * swell * ks);
   r.yaw.rotation.y = e.yaw;
   const walking = e.onGround && Math.abs(e.vx) > 20 && e.windup <= 0, ph = e.phase;
@@ -10629,8 +10689,9 @@ function syncWorld(dt) {
     camLift = lerp(camLift, clamp((Y(player.y) - camBase - 2.2) * .45, 0, 1.4), 1 - Math.exp(-dt * 3));
     const sx = shake ? rand(-.5, .5) * shake * S : 0, sy = shake ? rand(-.5, .5) * shake * S : 0;
     const cy = cine ? cine.camY : 0;                  // (the gate: panning up the keep)
-    camera.position.set(camX + sx, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9, CAM_Z + camSit * 4.5);
-    camera.lookAt(camX + sx, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08, 0);
+    camPush = lerp(camPush, slowMo > 0 ? 1 : 0, 1 - Math.exp(-dt * (slowMo > 0 ? 9 : 3)));   // (the last kill: leaning in, then easing back)
+    camera.position.set(camX + sx + camKick, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9 - camPush * .35, CAM_Z + camSit * 4.5 - camPush * 1.6);
+    camera.lookAt(camX + sx + camKick * .6, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2, 0);
   }
   const dc = comicCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
@@ -10690,6 +10751,7 @@ function update(dt) {
   else if (ej) ej.bump = Math.max(0, (ej.bump || 0) - dt);
   if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) showModal("KNOCKED OUT", ejFight() ? "EVIL JUNE wins this round, and she's gone. Reset to carry on." : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
   shake = Math.max(0, shake - dt * 40);
+  camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;   // (the blow's knock to the camera, springing back)
 }
 let warmAll = false;                                 // (while loading: scenery shows even on the character screen, so it gets drawn)
 function render(dt) {
@@ -10744,7 +10806,8 @@ function frame(now) {                              // (the next frame is asked f
     if (edOpen) return;                              // the editor draws its own stage
     if (window.__pause || paused) render(0);         // paused (or the test hook): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
-    else { const n = Math.max(1, Math.ceil(dt / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(dt / n); const t1 = performance.now(); render(dt);
+    else { const k = slowMo > 0 ? .35 : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt);   // (the last kill's slow motion)
+      const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
       PERF.u += t1 - t0; PERF.r += performance.now() - t1; PERF.n++; PERF.dt += dt; }
   } catch (e) { frameErrs++; if (frameErrs <= 3) console.error("frame error (the game keeps going)", e); }
 }
@@ -10796,9 +10859,9 @@ $("title").addEventListener("pointerdown", dismissTitle);
 warmUp().catch(() => {}).finally(() => { warming = false; $("title").classList.remove("hidden"); document.getElementById("loading").remove(); });
 window.BERRY_UI = { get state() {           // (phone build: what's on screen, for touch.js)
   if (titleUp || menuUp || comicUp || opening || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
-  return mode === "play" ? "play" : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
+  return mode === "play" ? (hideout && player && player.sit ? "sit" : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
-window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
+window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },

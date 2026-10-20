@@ -7,6 +7,7 @@
 // The buttons sit close ("slightly closer to each other but not enough to make you press the wrong one"): a touch only ever presses
 // the one button nearest it, so a thumb between two can't set off the wrong one.
 // A small button in the top-left corner pauses (Esc), or goes back on the menu screens. The pad and buttons only show while you're playing; the menus are tapped directly.
+// Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
 // The game tells this file what's on screen through window.BERRY_UI (added to the phone build's index.html by build_phone.py).
 // It also keeps the game working offline and updating itself (sw.js; see the bottom of this file).
 (() => {
@@ -30,6 +31,9 @@
     border: 2px solid #fff; background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center;
     font: 16px/1 "Bungee", sans-serif; box-sizing: border-box; }
   #tCorner.hide { display: none; }
+  #tPad, #tBtns, #tCorner { transition: opacity .7s; }
+  #touch.sit #tPad, #touch.sit #tBtns, #touch.sit #tCorner { opacity: 0; pointer-events: none; }   /* (sitting in the beps' hideout: the controls fade away) */
+  #tSit { position: absolute; inset: 0; pointer-events: auto; touch-action: none; display: none; } #touch.sit #tSit { display: block; }
   #tCorner.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
   #tTurn { position: fixed; inset: 0; z-index: 90; display: none; background: #2f3b43; color: #ffde00; align-items: center; justify-content: center;
     flex-direction: column; gap: 14px; font: 18px "Bungee", sans-serif; text-align: center; padding: 24px; }
@@ -43,7 +47,7 @@
 
   const T = document.createElement("div"); T.id = "touch"; T.className = "off";
   const arm = (d, rot) => `<g transform="rotate(${rot} 78 78)"><path class="arm" data-d="${d}" d="M58 6 Q58 2 62 2 L94 2 Q98 2 98 6 L98 58 L78 78 L58 58 Z"/><path class="tri" d="M78 16 L88 30 L68 30 Z"/></g>`;
-  T.innerHTML = `<div id="tPad"><svg viewBox="0 0 156 156">${arm("u", 0)}${arm("r", 90)}${arm("d", 180)}${arm("l", 270)}<circle cx="78" cy="78" r="9" fill="rgba(255,255,255,.3)"/></svg></div>
+  T.innerHTML = `<div id="tSit"></div><div id="tPad"><svg viewBox="0 0 156 156">${arm("u", 0)}${arm("r", 90)}${arm("d", 180)}${arm("l", 270)}<circle cx="78" cy="78" r="9" fill="rgba(255,255,255,.3)"/></svg></div>
     <div id="tBtns"><div class="b bY" data-b="y"><b>Y</b><i>TACKLE</i></div><div class="b bX" data-b="x"><b>X</b><i>BLOCK</i></div><div class="b bB" data-b="b"><b>B</b><i>ATTACK</i></div><div class="b bA" data-b="a"><b>A</b><i>JUMP</i></div></div>
     <div id="tCorner" class="hide">❚❚</div>`;
   const turn = document.createElement("div"); turn.id = "tTurn"; turn.innerHTML = "TURN YOUR PHONE SIDEWAYS<span>BERRY BLADE PLAYS IN LANDSCAPE</span>";
@@ -85,6 +89,7 @@
     hook(document.getElementById("tPad"), padPtr, padDirs); hook(document.getElementById("tBtns"), btnPtr, btnsAt);
     const C = document.getElementById("tCorner");
     C.addEventListener("pointerdown", e => { e.preventDefault(); C.classList.add("on"); tap("Escape"); });
+    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyX"); });   // sitting: a tap anywhere gets you up
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => C.addEventListener(t, () => C.classList.remove("on")));
     ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner")) e.preventDefault(); }, { passive: false }));
   };
@@ -101,11 +106,11 @@
   let was = "";
   setInterval(() => {
     const U = window.BERRY_UI; if (!U) return;
-    const s = U.state;                            // "play" | "menu" | "back" | "none"
+    const s = U.state;                            // "play" | "sit" | "back" | "none"
     if (s === was) return; was = s;
-    T.classList.toggle("off", s !== "play");
+    T.classList.toggle("off", s !== "play" && s !== "sit"); T.classList.toggle("sit", s === "sit");
     if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
-    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back"); C.textContent = s === "back" ? "‹" : "❚❚";
+    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit"); C.textContent = s === "back" ? "‹" : "❚❚";
   }, 120);
 
   // ── offline, and updating itself (sw.js keeps every file on the phone). Whenever it's online it looks for a new version: on opening,
