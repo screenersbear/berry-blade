@@ -4162,6 +4162,8 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     const sx = R0 ? R0.face + (R0.wall || 0) * 40 : foot, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(foot) ?? GROUND;
     Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
       carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x: sx, y: sy, plat: null } });
+    const topL = !up && !R0 && STAGES[ns].climbUp ? PLATFORMS.filter(q => q.kind === "climb").sort((a, b) => a.y - b.y)[0] : null;   // (down a hatch with stairs back up: onto the top of the stairs)
+    if (topL) Object.assign(player, { x: topL.x + topL.w / 2, y: topL.y, vx: 0, vy: 0, onGround: true, plat: topL, climb: null, safe: { x: topL.x + topL.w / 2, y: topL.y, plat: topL } });
     if (pal) Object.assign(pal, { x: sx - 50, y: sy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
     ejPlace(sx - 100, sy, 1);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
@@ -4187,7 +4189,10 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
     entrySide = "top"; entryHi = false; clockEnter(ns); setScreen(ns);
-    let x = clamp(fx, 60, WORLD - 60);                                              // straight down: onto the ground under where you fell (or the nearest there is)
+    let x = clamp(fx, 60, WORLD - 60);                                              // straight down: onto the ledge under where you fell (or the ground, or the nearest there is)
+    const ledge = PLATFORMS.filter(q => fx > q.x - 420 && fx < q.x + q.w + 420 && q.y < (groundAt(q.x + q.w / 2) ?? GROUND) - 60 && !CEILS.some(([c0, c1]) => q.x < c1 && q.x + q.w > c0))
+      .sort((a, b) => Math.abs(a.x + a.w / 2 - fx) - Math.abs(b.x + b.w / 2 - fx))[0];
+    if (ledge) x = clamp(fx, ledge.x + 24, ledge.x + ledge.w - 24); else
     for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null) && !CEILS.some(([c0, c1]) => v > c0 - 50 && v < c1 + 50)); if (c !== undefined) { x = c; break; } }
     const gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy - 430, vx: 0, vy, face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
@@ -4206,8 +4211,8 @@ function goRoomUp(ns) {                           // up off a climb: into the ro
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
     entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
-    const S1 = STAGES[ns], x = S1.arriveX ?? 130, f = S1.arriveF || 1, gy = groundAt(x) ?? GROUND;
-    Object.assign(player, { x, y: gy - 4, vx: f * 70, vy: -560, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+    const S1 = STAGES[ns], x = S1.arriveX ?? 130, f = S1.arriveF || 1, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
+    Object.assign(player, { x: rx, y: gy + 180, vx: f * 120, vy: -1200, fullJump: true, jumpT: time, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
       inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
     if (pal) Object.assign(pal, { x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
@@ -9642,6 +9647,22 @@ function gridLinks(W, w) {                         // the rooms joined up: along
     else { delete q.prev; if (i !== 0 && !q.exitLeft) { q.noLeft = true; if (w !== 3) q.wallL = true; } }   // (Loof's sky builds its own wall there: a tower)
   });
 }
+const LAND_KIND = { 0: "slab", 1: "pier", 2: "catwalk", 3: "deck", 4: "ruin", 5: "hedge", 6: "lolli", 7: "sign", 8: "ledge" };   // (each world's own platform, held up its own way)
+function landingLedges(W, w) {                     // a fall lands on something: under every hole into a room, a ledge (one it has, the climb's, or a new one)
+  const S0 = W.stages;
+  S0.forEach(U => { if (U.arena || U.below === undefined) return; const L = S0[U.below]; if (!L || !L.plats) return;
+    (U.gaps || []).forEach(([a, b]) => { if (b <= 0 || a >= WORLD) return;
+      const x = b > WORLD ? clamp(a + 200, 200, WORLD - 200) : clamp((a + b) / 2, 200, WORLD - 200);
+      if (L.plats.some(([px, py, pw]) => x > px - 120 && x < px + pw + 120 && py < GROUND - 60 && py > GROUND - 400) || (L.climbUp && Math.abs(L.climbUp.x - x) < 300)) return;
+      for (let k = 0; k < 42; k++) { const d = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 30, cx = x + d, x0 = cx - 95, x1 = cx + 95, far = Math.abs(d) > 300;   // (as near under it as it'll go; further out, a little closer to the others)
+        if (x0 < 120 || x1 > WORLD - 120) continue;
+        const gs = [x0, cx, x1].map(v => stageGround(L, v)); if (gs.some(g => g === null) || Math.max(...gs) - Math.min(...gs) > (far ? 60 : 40)) continue;
+        if (L.plats.some(([px, py, pw]) => px < x1 + (far ? 20 : 50) && px + pw > x0 - (far ? 20 : 50)) || (L.ceils || []).some(([c0, c1]) => c0 < x1 + 40 && c1 > x0 - 40) || (L.ladders || []).some(([f]) => Math.abs(f - cx) < 160)) continue;
+        if ([L.upX, L.downX, L.arriveX, L.climbUp && L.climbUp.x].some(v => v !== undefined && Math.abs(v - cx) < 260) || (L.bep && Math.abs(L.bep.zone - cx) < 300)) continue;
+        L.plats.push([x0, Math.min(...gs) - 150, 190, LAND_KIND[w] || "slab"]); return; }
+    });
+  });
+}
 function deepenWorlds() {
   WORLDS.forEach((W, w) => {
     const D = DEEP[w]; if (!D || W.deep) return; W.deep = true;
@@ -9659,7 +9680,7 @@ function deepenWorlds() {
     S0.forEach(q => { if (q.boss && q.toWorld === undefined && !q.end && !q.arena) delete q.boss; });   // a boss waits only where there's a way out (the user, 2026-10-20: "bosses should only appear at the exit door screens")
     fillGrid(W, w);
     (D.link || []).forEach(([uc, lc, o = {}]) => { const u = at(uc), l = at(lc); if (u < 0 || l < 0) return console.warn("deepen: no link", w, uc, lc); linkDown(S0, R0, u, l, o); });
-    gridLinks(W, w);
+    gridLinks(W, w); landingLedges(W, w);
     (CRATE_AT[w] || []).forEach(c => { const q = S0[c[0]]; if (!q) return; const ok = x => [-80, 0, 80].every(d => stageGround(q, x + d) !== null);   // (a crate never left standing in a pit)
       if (!ok(c[1])) for (let d = 20; d < WORLD; d += 20) { const x = [c[1] - d, c[1] + d].find(v => v > 200 && v < WORLD - 200 && ok(v)); if (x !== undefined) { c[1] = x; break; } } });
     W.rosterThin = null;
