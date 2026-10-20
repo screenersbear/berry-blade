@@ -3716,6 +3716,7 @@ pipsEl.innerHTML = Array.from({ length: 5 }, () =>
 // beat one opponent → the next one drops in and your hearts refill
 let exitOpen = false, transit = false;
 function openExit() {                                // the boss is down (or the patch is clear): say so, and point the way on
+  if (skirmish && !skirmish.won) { skirmish.won = true; skirmish.t = 0; SFX.cheer(); const live = friends.filter(f => f.brawl && !f.gone); if (live.length) popText(live.reduce((a, f) => a + f.x, 0) / live.length, GROUND - 200, "YAY!"); }   // (the beps cheer, and head off right)
   exitOpen = true; SFX.fanfare(); cleared++; roomsDone.add(stage); startBeps(); if (level.openShrine) level.openShrine();   // (the shrine opens: on into the next world)
   const b = $("banner");
   b.innerHTML = `<div class="blk">${STAGES[stage].boss ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${STAGES[stage].noRight ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : STAGES[stage].nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"}</div>`;
@@ -3749,6 +3750,9 @@ function upAdd(b) {                               // one more won back
   const pts = (UP_PTS[b.T.size] || 1) * (b.mini ? 3 : 1), U = upStore(); U[world] = (U[world] || 0) + pts; if (wst) wst.up = (wst.up || 0) + pts;
   if (!story) try { localStorage.setItem(UPRISE_KEY, JSON.stringify(upFree)); } catch { }
 }
+let upOverride = null;                            // (the gear menu's preview: pretend this world's uprising is at this %)
+const upNow = () => upOverride ?? (upOn(world) ? upPct(world) : 0);
+const upTier = () => { const p = upNow(); return p >= 75 ? 3 : p >= 50 ? 2 : p >= 25 ? 1 : 0; };
 const bossNameOf = () => { const q = STAGES.find(s => s.boss); return (q && FOES[q.foe] && FOES[q.foe].name) || "THE BOSS"; };
 function wsUprise(S) {                            // the stats card's bar: from where it was to where this run's taken it
   const on = upOn(world); $("wsUp").classList.toggle("hidden", !on); $("wsAsk").classList.add("hidden"); $("wsGo").classList.remove("hidden"); if (!on) return;
@@ -4162,7 +4166,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
   stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
   enemy = makeFoeState(foe, WORLD - 360); enemy.atkCd = 3;
-  const done = fillRoom();                                            // the berry baddies first; on a boss stage the boss drops in once they're popped
+  const done = fillRoom(); maybeSkirmish(done);                         // the berry baddies first; on a boss stage the boss drops in once they're popped
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
   const fresh = !done && !roomsSeen.has(stage); roomsSeen.add(stage);
   if (fresh) { player.hp = maxHp(); player.inv = 1; } updateHearts(false);
@@ -4894,7 +4898,7 @@ function updateHazards(dt) {
       continue;
     }
     if (!h.harmless && !h.grounded && h.t < h.life * .95 && !p.dead && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, pb)) hurtPlayer(Math.sign(h.vx) || Math.sign(p.x - h.x) || 1, h);
-    if (bepEv && friends.length && !h.harmless && !h.grounded && h.t < h.life * .95 && h.owner && baddies.includes(h.owner))   // (walking the beps home: the baddies' blows land on them too)
+    if ((bepEv || skirmish) && friends.length && !h.harmless && !h.grounded && h.t < h.life * .95 && h.owner && baddies.includes(h.owner))   // (walking the beps home: the baddies' blows land on them too)
       for (const f of friends) if (bepTargetable(f) && !(f.hurtT > 0) && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, { x1: f.x - f.hw, x2: f.x + f.hw, y1: f.y - f.h, y2: f.y })) {
         bepHurt(f, Math.sign(h.vx) || Math.sign(f.x - h.x) || 1); if (h.m) h.life = h.t; break; }
   }
@@ -9056,7 +9060,7 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
     const spot = k + ":" + i; if (sadDone.has(spot)) return null;                  // a sad berry you cheered up has gone for the rest of the run
     const sleepy = revisit && sleepersFor(k).includes(i);
     if (sleepy) { const b = makeSpawn(type, col, at); b.spot = spot; b.idx = i; if (b.r.segs) { disposeBaddy(b); return null; } b.sleep = true; b.zT = rand(0, 1); b.dir = Math.random() < .5 ? -1 : 1; return b; }   // ... and after dark, some asleep
-    const b = makeSpawn(type, col, at); b.spot = spot; if (tag === "mini") makeMini(b);
+    const b = makeSpawn(type, col, at); b.spot = spot; if (tag === "mini") makeMini(b); tierUp(b);
     if (sadSpots.has(spot) && !(revisit && sadFate === "killed")) { b.sad = true; sadFace(b); sadFate = null; sadSpots = new Set([spot]); }   // (met it: the other branch's candidate is dropped)   (one you popped comes back an ordinary baddy)
     return b;
   }).filter(Boolean);
@@ -9097,6 +9101,28 @@ function updateFlee(b, dt) {
     b.gone = true; b.r.root.visible = b.r.shadow.visible = false; if (b.r.segRoot) b.r.segRoot.visible = false;
     const plan = sleepPlan.get(stage); if (plan && plan.includes(b.idx)) plan.splice(plan.indexOf(b.idx), 1);
   }
+}
+function tierUp(b) {                              // as the uprising grows they fight harder: more life and smarter a tier, iron on from 75%
+  const tr = upTier(); if (!tr) return; b.hp = Math.round(b.hp * (1 + .15 * tr)); b.smart = tr; if (tr >= 3 && !b.r.segs) armorUp(b);
+}
+const _ab = new THREE.Box3(), _am = new THREE.Matrix4();
+function armorUp(b) {                             // the colonisers' iron: a helmet with a crest and a band round the middle, rivets on it, fitted to the body
+  const r = b.r; r.root.updateMatrixWorld(true); const inv = r.body.matrixWorld.clone().invert(); _ab.makeEmpty();
+  r.body.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); _ab.union(o.geometry.boundingBox.clone().applyMatrix4(_am.multiplyMatrices(inv, o.matrixWorld))); } });
+  if (_ab.isEmpty()) return;
+  const sz = _ab.getSize(new THREE.Vector3()), c = _ab.getCenter(new THREE.Vector3()), wd = Math.max(sz.x, sz.z), g = new THREE.Group(); r.body.add(g);
+  const steel = r.M("#6f7885"), dark = r.M("#3d444f"), gold = r.M("#e3b54a");
+  const cap = wd * .36, hel = new THREE.Mesh(new THREE.SphereGeometry(cap, 18, 9, 0, TAU, 0, Math.PI / 2), steel); hel.scale.y = .78; hel.position.set(c.x, _ab.max.y - cap * .3, c.z); g.add(hel);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(cap * .98, cap * .09, 6, 22).rotateX(Math.PI / 2), dark); rim.position.copy(hel.position); g.add(rim);
+  const crest = new THREE.Mesh(new THREE.ConeGeometry(cap * .16, cap * .55, 6), dark); crest.position.set(c.x, hel.position.y + cap * .9, c.z); g.add(crest);
+  const bandR = wd * .52, band = new THREE.Mesh(new THREE.CylinderGeometry(bandR, bandR, sz.y * .13, 22, 1, true), steel); band.material.side = THREE.DoubleSide; band.position.set(c.x, _ab.min.y + sz.y * .3, c.z); g.add(band);
+  for (let i = 0; i < 7; i++) { const a = i / 7 * TAU, m = new THREE.Mesh(new THREE.SphereGeometry(bandR * .07, 6, 5), gold); m.position.set(c.x + Math.cos(a) * bandR * 1.01, band.position.y, c.z + Math.sin(a) * bandR * 1.01); g.add(m); }
+  r.armor = g; b.armor = 2;
+}
+function armorOff(b) {                            // knocked clean off: the pieces fly
+  const r = b.r; if (!r.armor) return; r.armor.visible = false;
+  for (let i = 0; i < 6; i++) spawn("key", X(b.x) + rand(-.3, .3), Y(b.y - b.h * (.4 + .5 * Math.random())), .3, V(rand(-5, 5), rand(4, 9), rand(-2, 2)), .7, .5, { g: 26, spin: 10 });
+  SFX.crack(); SFX.clash(); popText(b.x, b.y - b.h - 30, "ARMOR OFF!");
 }
 function makeMini(b) {                            // a mini boss: one of the world's big berries, grown, heavier and much tougher (no health bar: the user, 2026-10-17)
   b.mini = true; b.miniCue = true; b.h *= MINI_K; b.hw *= MINI_K; b.r.sz.scale.multiplyScalar(MINI_K); b.r.shadowR *= MINI_K;
@@ -9489,6 +9515,7 @@ function spawnFriends(sizes, B) {                 // the three beps pop up near 
 }
 function clearFriends() { friends.forEach(disposeBaddy); friends = []; bepEv = null; bepRun.escort = null; }
 function updateFriends(dt) {
+  if (skirmish) skirmish.t += dt;
   for (const f of friends) {
     if (f.gone) continue;
     if (f.popAt > 0) { if ((f.popAt -= dt) <= 0) { const gy = groundAt(f.x) ?? GROUND; f.y = gy + 4; f.vy = -720; f.onGround = false; f.sq = .4; f.sqv = 0; puffs(f.x, gy - 6, 3, 20, 140); dust(f.x, gy, 8); SFX.blop(); SFX.cheer(); } else continue; }   // pop! up out of the ground
@@ -9496,6 +9523,7 @@ function updateFriends(dt) {
     if (f.hurtT > 0) { f.hurtT = Math.max(0, f.hurtT - dt); if (f.onGround) f.vx = approach(f.vx, 0, 700 * dt); } f.flash = Math.max(0, (f.flash || 0) - dt);
     if (bepEv && f.task && bepTask(f, dt)) { spring(f, dt); f.yaw = lerp(f.yaw, f.yawT ?? f.yaw, 1 - Math.exp(-dt * 8)); continue; }   // going in: scripted
     if (f.hold || (bepEv && f.task)) { if (f.hold) f.vx = approach(f.vx, 0, 600 * dt); }
+    else if (f.brawl) { if (brawlStep(f, dt)) { spring(f, dt); continue; } }
     else if (f.onGround) {
       if ((f.walkT -= dt) <= 0) { f.walkT = rand(1, 3); f.dir = Math.random() < .5 ? -1 : 1; f.stop = Math.random() < .3; }
       if ((f.dir > 0 && f.x > home + 160) || (f.dir < 0 && f.x < home - 160) || f.hitWall) f.dir = f.hitWall ? -f.hitWall : -f.dir;
@@ -9515,7 +9543,48 @@ function updateFriends(dt) {
     f.yaw = lerp(f.yaw, f.look ? (Math.sign(player.x - f.x) > 0 ? -Math.PI / 2 + .45 : -Math.PI / 2 - .45) : f.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 6));
   }
 }
+// ── a skirmish (the uprising at 50% or more): beps already at it with a room's baddies when you walk in
+let skirmish = null;
+const SKIRMISH_P = .5 / 15;
+function maybeSkirmish(done) {
+  skirmish = null;
+  if (done || upTier() < 2 || world === 9 || STAGES[stage].boss || STAGES[stage].peace || stronghold || hideout || bepEv || ej || cine || Math.random() >= SKIRMISH_P) return;
+  const foes = baddies.filter(b => !b.sad && !b.under && !["float", "breach"].includes(b.T.move) && groundAt(b.x) !== null).slice(0, 3); if (!foes.length) return;
+  skirmish = { t: 0, won: false }; const cols = [...FRIEND_COLS].sort(() => Math.random() - .5);
+  foes.concat(foes).slice(0, 3).forEach((b, i) => { let x = clamp(b.x + (i % 2 ? 1 : -1) * (b.hw + 50), 120, WORLD - 120); if (groundAt(x) === null) x = b.x;
+    const f = makeFriend(["S", "M", "B"][i], cols[i], x); Object.assign(f, { popAt: 0, y: groundAt(x) ?? GROUND, onGround: true, z: .3 - i * .3, brawl: true, dir: Math.sign(b.x - x) || 1 }); friends.push(f); });
+  popText(WORLD / 2, GROUND - 260, "BEPS VS BADDIES!");
+}
+function brawlStep(f, dt) {                       // at the nearest baddy, bonk it, back off; when they're all beaten, a cheer and away off to the right (true: it's moved itself)
+  const S = skirmish; if (!S || f.hurtT > 0) return false;
+  if (f.gapHop) { const H2 = f.gapHop; H2.t += dt; bepArc(f, H2.from, H2.to, Math.min(1, H2.t / .7), 130); f.onGround = false; f.vx = 0;   // (over open water in one bound)
+    if (H2.t >= .7) { f.y = H2.to[1]; f.gapHop = null; f.vy = 0; f.onGround = true; } return true; }
+  if (S.won) {
+    if (S.t < 1.3) { f.vx = approach(f.vx, 0, 900 * dt); f.look = true; if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.25, .5); f.vy = -rand(360, 460); f.onGround = false; f.sq = .25; f.sqv = 0; } }
+    else { f.look = false; f.dir = 1; f.vx = approach(f.vx, 290, 800 * dt);
+      if (f.x > WORLD - 160 && f.onGround) { f.x += 260 * dt; f.phase += dt * 26; if (f.x > WORLD + 60) { f.gone = true; f.r.root.visible = f.r.shadow.visible = false; } return true; }   // (out past the edge, off screen)
+      const ahead = f.x + f.hw + 30, g = f.onGround ? GAPS.find(([a, c]) => ahead > a && ahead < c) : null;
+      if (g) { f.gapHop = { from: [f.x, f.y, f.z], to: [g[1] + 30, groundAt(g[1] + 30) ?? GROUND, f.z], t: 0 }; return true; }
+      if (f.onGround && f.hitWall) { f.vy = -1040; f.onGround = false; }                       // (a step or a cliff: one big bound)
+      else if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.45, .9); f.vy = -250; f.onGround = false; }
+      if (f.x > WORLD + 60 || S.t > 11) { if (f.x <= WORLD + 60) puffs(f.x, f.y - f.h * .5, 2, f.hw, 100); f.gone = true; f.r.root.visible = f.r.shadow.visible = false; } }
+    return false;
+  }
+  const tg = baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad).reduce((a, b) => !a || Math.abs(b.x - f.x) < Math.abs(a.x - f.x) ? b : a, null);
+  if (!tg) { f.vx = approach(f.vx, 0, 900 * dt); return false; }
+  const dx = tg.x - f.x, reach = tg.hw + f.hw + 18; f.look = false; if (Math.abs(dx) > 4) f.dir = Math.sign(dx);
+  if (Math.abs(dx) > reach) f.vx = f.onGround && GAPS.length && overGap(f.x + f.dir * (f.hw + 24)) ? approach(f.vx, 0, 900 * dt) : approach(f.vx, f.dir * 125, 700 * dt);   // (not into the water after one)
+  else { f.vx = approach(f.vx, 0, 900 * dt); if (f.onGround && (f.bonkCd = (f.bonkCd ?? rand(.3, 1)) - dt) <= 0) { f.bonkCd = rand(1.1, 2); f.vy = -300; f.vx = f.dir * 230; f.onGround = false; f.bonk = true; f.sq = .25; f.sqv = 0; } }
+  if (f.bonk && !f.onGround && Math.abs(tg.x - f.x) < tg.hw + f.hw && f.y > tg.y - tg.h - 20) { f.bonk = false; bepBonk(tg, f.dir); }
+  if (f.onGround) f.bonk = false;
+  return false;
+}
+function bepBonk(b, dir) {                        // a bep's bonk: it stings (never the last blow: that's yours to land)
+  if (b.armor > 0 || b.inv > 0) { SFX.clack(); return; }
+  if (b.hp > 1) b.hp--; b.flash = .1; b.hurtT = .2; b.vx = dir * 150 / b.wt; b.vy = -160; b.onGround = false; SFX.blop(); sparks(b.x - dir * b.hw * .4, b.y - b.h * .5, 3);
+}
 function bepHurt(f, dir) {                        // a baddy's blow lands on a bep: knocked back, and one of their five berries gone
+  if (f.brawl && !f.gone && !(f.hurtT > 0)) { Object.assign(f, { hurtT: .5, flash: .15, vx: dir * 280, vy: -320, onGround: false, sq: .3, sqv: 0 }); sparks(f.x, f.y - f.h * .55, 5); SFX.startle(); return; }   // (in a skirmish: just knocked flying, and back in)
   if (f.hurtT > 0 || f.gone || !bepEv) return;
   Object.assign(f, { hurtT: .6, flash: .15, vx: dir * 300, vy: -340, onGround: false, sq: .3, sqv: 0, look: false });
   sparks(f.x, f.y - f.h * .55, 6); SFX.startle(); shake = Math.max(shake, 3); rumble(30, .4);
@@ -10363,8 +10432,9 @@ function updateLeaper(b, dt) {                   // swims about under the open w
 }
 function splashBits(x, n) { const y = Y(WATER) + .05; for (let i = 0; i < n; i++) { const m = new THREE.Mesh(BB_SEED, SPLASH_M); m.position.set(X(x) + rand(-.3, .3), y, rand(-.2, .3)); actors.add(m);
   parts.push({ m, v: V(rand(-.4, .4), rand(1.5, 2.6), 0), life: .4, t: 0, size: rand(.4, .7), g: 2, spin: 1, drag: 1, kind: "drop" }); } }
-const bepTargetable = f => !f.gone && !(f.popAt > 0) && !f.rope && !f.gapHop && f.going === undefined && !!f.task;
+const bepTargetable = f => !f.gone && !(f.popAt > 0) && !f.rope && !f.gapHop && f.going === undefined && (!!f.task || !!f.brawl);
 function bbTarget(b) {                            // who a baddy's after: you; but while you're walking the beps home, them (the user, 2026-10-19: "the enemies will start directing their aggression at them")
+  if (skirmish && !skirmish.won) { let best = player, bd = Math.abs(player.x - b.x) + 60; for (const f of friends) if (f.brawl && !f.gone) { const d = Math.abs(f.x - b.x); if (d < bd) { bd = d; best = f; } } return best; }   // (a skirmish: whoever's nearest)
   const E = bepEv; if (!E || !friends.length || ["pop", "ack", "open", "follow"].includes(E.phase)) return player;
   let best = null, bd = 900; for (const f of friends) if (bepTargetable(f)) { const d = Math.abs(f.x - b.x); if (d < bd) { bd = d; best = f; } }
   return best || player;
@@ -10409,7 +10479,7 @@ function updateBaddy(b, dt) {
       const adx = Math.abs(dx), facing = (p.face || 1) === -Math.sign(dx), blocking = p.block && facing && p.onGround;
       b.dodgeCd = Math.max(0, (b.dodgeCd || 0) - dt);
       if (p.atkT >= 0 && p.atkT < .1 && facing && adx < 150 && b.dodgeCd <= 0 && b.onGround) {   // your swing coming: sometimes it hops back out of it
-        b.dodgeCd = 1.8; if (Math.random() < (T.move === "hop" || T.move === "pogo" ? .45 : .3)) { b.vx = -Math.sign(dx) * 300; b.vy = -330; b.onGround = false; b.sq = -.2; b.sqv = 0; b.atkCd = Math.max(b.atkCd, .35); }
+        b.dodgeCd = 1.8; if (Math.random() < (T.move === "hop" || T.move === "pogo" ? .45 : .3) + .08 * (b.smart || 0)) { b.vx = -Math.sign(dx) * 300; b.vy = -330; b.onGround = false; b.sq = -.2; b.sqv = 0; b.atkCd = Math.max(b.atkCd, .35); }
       }
       if (blocking && adx < T.range + 40) {      // you're blocking: no point hitting the guard. It waits just outside, or (a leaper) goes over the top
         if (T.atk === "leap" && b.atkCd <= 0 && Math.random() < dt * 1.5) b.crossUp = true; else { hold = true; if (adx < Math.max(70, T.range * .7)) stop = true; }
@@ -10422,7 +10492,7 @@ function updateBaddy(b, dt) {
       if (p.chargeT > .25 || p.tkCharge || p.dizzy > 0) { rush = 1.35; cdRate = Math.max(cdRate, 2); }   // charging up, or seeing stars: it rushes you
     }
     const want = stop ? 0 : b.dir * T.speed * (near ? (b.angry ? 1.6 : melee ? 1.5 * rush : 1.25) : 1);
-    if ((b.atkCd -= dt * cdRate) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; }
+    if ((b.atkCd -= dt * cdRate * (1 + .15 * (b.smart || 0))) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; }
     else if (T.move === "pogo") { b.vy = -(T.hop || 470); b.vx = want * 1.4; b.onGround = false; b.sq = .28; b.sqv = 0; }   // boing, boing
     else if (T.move === "hop") {
       b.vx = approach(b.vx, 0, 1400 * dt);
@@ -10487,6 +10557,10 @@ function hitBaddy(b, dir, kind) {
   if (b.inv > 0 || b.dead || b.gone) return false;
   if (b.calm) surprise(b.calm.gid);                                    // (caught napping: the whole lot of them are up)
   if (b.sleep) { if (kind === "stomp") { startle(b); return true; } b.sleep = false; }   // hit it instead and it just wakes up (and fights)
+  if (b.armor > 0) {                               // iron on it: the blow rings off (it takes two to knock it off), no harm done
+    b.armor--; b.flash = .1; b.inv = .15; b.hurtT = .15; b.vx = dir * 140 / b.wt; SFX.block(); sparks(b.x - dir * b.hw * .5, b.y - b.h * .6, 8); hitFeel(b, dir, kind, false);
+    if (!b.armor) armorOff(b); return true;
+  }
   b.hp -= 2 + (player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1;
   b.inv = kind === "punch" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
   if (kind === "stomp") SFX.stomp(); else SFX.hit(HIT_W[kind] || 1, hitChain());
@@ -11158,7 +11232,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   if (titleUp || menuUp || comicUp || opening || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
   return mode === "play" ? (hideout && player && player.sit ? "sit" : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
-window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
+window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
