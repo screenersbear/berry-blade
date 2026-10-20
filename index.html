@@ -347,7 +347,7 @@
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="ach">ACHIEVEMENTS</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="ach">ACHIEVEMENTS</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="uprise" id="dUprise">UPRISING PREVIEW: AS PLAYED</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -2466,6 +2466,38 @@ function syncRuin() {                             // the smoke rolling up, the f
   const camL = camX - 22, step = (M, rise) => { if (!M) return; const a = M.geo.attributes.position; M.seeds.forEach(([x, p, z, ph], i) => { const u = ((p + time * (rise ? .07 : .05)) % 1); a.setXYZ(i, camL + ((X(x) - camL) % 44 + 44) % 44 + Math.sin(time + ph) * .6, rise ? Y(GROUND) + u * 9 : Y(GROUND) + 9 - u * 10, z); }); a.needsUpdate = true; };
   step(F.embers, true); step(F.ash, false);
 }
+function buildFreed(h, s) {                       // set free: the keep and the candy works torn down, and the land round about grown back over them
+  const keep = STAGES[s], K = world === 2 ? { crate: "stack", catwalk: "pier", pipe: "pier", upper: "ledge" } : { lolli: "shroom", wafer: "slab", belt: "log", upper: "slab" };
+  const row = String(keep.cell || "B")[0], q = { ...keep, plats: keep.plats && keep.plats.map(([x, y, w, k]) => [x, y, w, K[k] || k]), castle: false, theme: undefined, outside: true, elev: keep.elev ?? ({ A: 2.6, B: 1.3, C: 0 })[row] ?? 1 };
+  STAGES[s] = q;                                  // (only for the building: the room itself, its footing and its ways out, are unchanged)
+  try { return world === 2 ? buildWaves(h, s) : buildLevel(h, ((q.col ?? q.h) * 2 + (q.boss ? 0 : 1)) * 2 + 1, q.bep, q); }
+  finally { STAGES[s] = keep; }
+}
+let bloomFx = null;
+function buildBloom(s) {                          // the land replenished: flowers all over, butterflies, a little sparkle in the air
+  const R = rngF(4242 + world * 97 + s * 13), g = new THREE.Group(); scene.add(g);
+  const PET = ["#ff5fa8", "#ffd203", "#ff8a3c", "#b77bff", "#5fd0ff", "#ffffff", "#ff4f4f"], petal = new THREE.SphereGeometry(.07, 6, 4).scale(1, .4, 1), heart = new THREE.SphereGeometry(.05, 6, 4);
+  const mats = PET.map(c => toon(c)), mid = toon("#ffe27a"), stem = toon("#4f9a3c");
+  for (let i = 0; i < 46; i++) { const x = 60 + R() * (WORLD - 120); if (groundAt(x) === null) continue; const z = R() < .75 ? -.6 - R() * 3.4 : .7 + R() * 1.2, f = new THREE.Group(), m = mats[Math.floor(R() * mats.length)], hgt = .12 + R() * .3;
+    const st2 = new THREE.Mesh(new THREE.CylinderGeometry(.012, .012, hgt, 4), stem); st2.position.y = hgt / 2; f.add(st2);
+    for (let k = 0; k < 5; k++) { const a = k / 5 * TAU, p = new THREE.Mesh(petal, m); p.position.set(Math.cos(a) * .07, hgt, Math.sin(a) * .07); p.rotation.y = -a; f.add(p); }
+    const c = new THREE.Mesh(heart, mid); c.position.y = hgt + .02; f.add(c); f.scale.setScalar(.9 + R() * .9);
+    f.position.set(X(x), Y(groundAt(x)), z); g.add(f); }
+  const flies = [];
+  for (let i = 0; i < 9; i++) { const b = new THREE.Group(), m = new THREE.MeshBasicMaterial({ color: PET[Math.floor(R() * 5)], side: THREE.DoubleSide }), w1 = new THREE.Mesh(new THREE.CircleGeometry(.09, 8), m), w2 = w1.clone();
+    w1.position.x = -.07; w2.position.x = .07; b.add(w1, w2); g.add(b); flies.push({ b, w1, w2, x0: X(200 + R() * (WORLD - 400)), y0: Y(GROUND) + .6 + R() * 2.4, z0: -.5 - R() * 3, ph: R() * 9, sp: .4 + R() * .5 }); }
+  const N = 40, pos = new Float32Array(N * 3), seeds = []; for (let i = 0; i < N; i++) seeds.push([R() * WORLD, R(), -3 + R() * 6, R() * 9]);
+  const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: "#fff3b0", size: .08, transparent: true, opacity: .85, blending: THREE.AdditiveBlending, depthWrite: false })); g.add(pts);
+  bloomFx = { g, flies, geo, seeds };
+  return g;
+}
+function syncBloom() {
+  const F = bloomFx; if (!F || !F.g.parent) return;
+  F.flies.forEach(q => { const t2 = time * q.sp + q.ph; q.b.position.set(q.x0 + Math.sin(t2) * 3.2 + Math.sin(t2 * 2.3) * .6, q.y0 + Math.sin(t2 * 1.7) * .5, q.z0 + Math.cos(t2 * .8) * .6);
+    const fl = Math.sin(time * 18 + q.ph) * .9; q.w1.rotation.y = fl; q.w2.rotation.y = -fl; q.b.rotation.y = Math.cos(t2) > 0 ? 0 : Math.PI; });
+  const a = F.geo.attributes.position, camL = camX - 22; F.seeds.forEach(([x, p, z, ph], i) => { const u = (p + time * .03) % 1; a.setXYZ(i, camL + ((X(x) - camL) % 44 + 44) % 44 + Math.sin(time * .7 + ph) * .5, Y(GROUND) + .4 + u * 6, z); }); a.needsUpdate = true;
+}
 let restCamp = null;
 function buildRestCamp() {                        // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
   let x = 1280; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = 1280 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }
@@ -2495,15 +2527,17 @@ function restArrive() {                           // in the story, a rest stop y
 }
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
-  const tierNow = mode === "play" && world !== 9 ? upTier() : 0;
-  if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow) {
+  const tierNow = mode === "play" && world !== 9 ? upTier() : 0, frNow = mode === "play" && world !== 9 && freedNow();
+  const scr = WORLDS[frNow && world === 6 ? 0 : world].screens; if (WORLDS[world] && SCREENS[0] !== scr[0]) { SCREENS.splice(0, SCREENS.length, ...scr); level.s = -2; }   // (the candy works set free: the woods' sky and light, outdoors)
+  if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow || !!level.freed !== frNow) {
     disposeLevel(level); setPlatforms(s);
     const c = STAGES[s].col ?? STAGES[s].h;
-    level = world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
+    level = frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
+    bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
     dropTextures();
   }
   setLook(h);
@@ -2581,7 +2615,8 @@ function syncMusic(dt) {                         // every frame: the right music
   if (S.setSong) S.setSong(ejM ? S.EJ : WORLDS[world].song ?? world);    // the woods' song, the waves' or Volt Keep's
   if (S.setGloom) S.setGloom(mode === "play" && !hideout && !ejM && world !== 9 && upTier() >= 3);   // (the uprising at 75%: every hour played darker)
   if (ejM) S.setHour(0, 1);
-  else if (hideout && S.SERENE) S.setHour(S.SERENE, .76);                // in the beps' hideout: this world's tune, slower and kinder
+  else if (hideout && S.SERENE) S.setHour(S.SERENE, .76);
+  else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
   if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL); else if (S.state.playing) S.stop(on ? 1.5 : .12);
 }
@@ -3372,7 +3407,7 @@ const SAVE_KEY = "berry.saves.v1";
 const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); return [0, 1, 2].map(i => (a && a[i]) || null); } catch { return [null, null, null]; } };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, uprise: story.uprise || {}, rests: story.rests || {}, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, uprise: story.uprise || {}, rests: story.rests || {}, freed: story.freed || {}, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hms = t => { t = Math.floor(t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sc = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sc).padStart(2, "0"); };
@@ -3413,6 +3448,7 @@ function devChoose(d) {
   else if (d === "lvl") { story = null; showLvl(); }
   else if (d === "ach") showAch();
   else if (d === "edit") { closeMenus(); story = null; showSelect(); openEditor(); }
+  else if (d === "uprise") { upPrev = (upPrev + 1) % UP_PREVIEW.length; const [lb, p, fr] = UP_PREVIEW[upPrev]; upOverride = p; freedOverride = fr; $("dUprise").textContent = "UPRISING PREVIEW: " + lb; level.s = -2; }   // (every world, until set back to AS PLAYED)
   else showMainMenu();
 }
 function showSlots(kind) {
@@ -3475,7 +3511,7 @@ function menuKey(e) {
     ["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(c), c === "Escape" || c === "Backspace");
 }
 function storyNew(slot, id) { story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {} }; storyRun(q.w, q.s, false); }
+function storyLoad(slot, q) { story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, freed: q.freed || {} }; storyRun(q.w, q.s, false); }
 function storyBegin(slot) { story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   const id = story.char || "june", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
@@ -3802,7 +3838,11 @@ function upAdd(b) {                               // one more won back
 }
 let upOverride = null;                            // (the gear menu's preview: pretend this world's uprising is at this %)
 const upNow = () => upOverride ?? (upOn(world) ? upPct(world) : 0);
-const upTier = () => { const p = upNow(); return p >= 75 ? 3 : p >= 50 ? 2 : p >= 25 ? 1 : 0; };
+let freedOverride = null;                         // (the gear menu's preview: pretend this world's been set free)
+const freedNow = () => freedOverride ?? !!(story && story.freed && story.freed[world]);
+const upTier = () => { if (freedNow()) return 0; const p = upNow(); return p >= 75 ? 3 : p >= 50 ? 2 : p >= 25 ? 1 : 0; };   // (set free: no more fighting the land)
+const UP_PREVIEW = [["AS PLAYED", null, null], ["25%", 25, false], ["50%", 50, false], ["75%", 75, false], ["100%", 100, false], ["SET FREE", 100, true]];
+let upPrev = 0;
 const bossNameOf = () => { const q = STAGES.find(s => s.boss); return (q && FOES[q.foe] && FOES[q.foe].name) || "THE BOSS"; };
 function wsUprise(S) {                            // the stats card's bar: from where it was to where this run's taken it
   const on = upOn(world); $("wsUp").classList.toggle("hidden", !on); $("wsAsk").classList.add("hidden"); $("wsGo").classList.remove("hidden"); if (!on) return;
@@ -3935,7 +3975,7 @@ function fillRoom() {                                // a new room fills up with
   if (stronghold) return shFill();
   const S0 = STAGES[stage];
   if (S0.peace) { const first = !roomsDone.has(stage); roomsDone.add(stage); clearBaddies(); bossIn = false; exitOpen = true; spawnGifts(); if (S0.rest) restArrive();   // no fighting here (the castle gate)
-    if (first && S0.castle && !cineSeen.has(world)) { cineSeen.add(world); startCine(); } else { $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden"); } return true; }
+    if (first && S0.castle && !cineSeen.has(world) && !freedNow()) { cineSeen.add(world); startCine(); } else { $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden"); } return true; }
   const done = roomsDone.has(stage); spawnBaddies(stage, done); spawnGifts();
   if (done) { bossIn = false; exitOpen = true; $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden"); }
   return done;
@@ -11187,10 +11227,11 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest(); syncRuin();
+  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest(); syncRuin(); syncBloom();
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[upTier()] : 0;
+  gradeMat.uniforms.bloom.value = mode === "play" && !hideout && world !== 9 && freedNow() ? 1 : 0;
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
