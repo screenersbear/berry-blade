@@ -209,6 +209,7 @@
   #exitCue { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); animation: nudge 1s ease-in-out infinite; pointer-events: none; }
   #exitCue .blk { font-size: 30px; }
   @keyframes nudge { 50% { transform: translate(8px, -50%); } }
+  #exitCue.left { right: auto; left: 16px; animation-name: nudgeL; } @keyframes nudgeL { 50% { transform: translate(-8px, -50%); } }
   @keyframes banner { 0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1.06); }
     20% { transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; } }
   /* story mode: the main menu, the save files, "who are you?", the gear (free play and testing), the world map */
@@ -503,8 +504,14 @@ function clockEnter(s) {
   dayHeld = world === 9 ? BEACH_HOUR[dayClock] ?? 0 : (world === 5 ? KESH_HOUR : HOUR_OF)[Math.ceil(dayClock / 2)];   // (fourteen columns: each hour lasts two)
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
-function newStay() { roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); }
-const backOpen = () => (trail.length > 1 || worldStack.length > 0 || prevWorld(world) >= 0) && (exitOpen || entrySide === "left") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
+let bossDown = false;                              // this stay: the world's boss is beaten (so it isn't waiting at its other way out too)
+function newStay() { bossDown = false; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); }
+const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a way out of the world, the room to the left, back the way you came, or the world before
+  if (S0.exitLeft && S0.toWorld !== undefined) return "out";
+  if (S0.prev !== undefined) return S0.prev;
+  if (entrySide === "top" || entrySide === "bottom") return null;
+  return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
+const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
 const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right") && !ejFight();
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && (exitOpen || entrySide === (L.rope === "up" ? "top" : "bottom"));   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
@@ -513,7 +520,7 @@ const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S
 let cheerHold = null;                     // a sad berry just cheered up: you're held a moment while it celebrates (nothing can hurt you, nothing comes at you)
 let entryHi = false;                      // came in by a split room's upper way out (the woods' ledge, the keep's upper tier): a knockout puts you back up there
 const hiPlat = () => PLATFORMS.filter(q => q.kind === "jut" || q.kind === "upper").sort((a, b) => (b.x + b.w) - (a.x + a.w))[0] || null;   // the way back is always open (forward needs the room cleared)   // the way back left: to the room you came in from
-const GAPS = [];                          // the clearing's open water: [x0, x1] spans with no ground. Fall in and it costs a heart
+const GAPS = [];                          // the clearing's open water (or drops): [x0, x1] spans with no ground. Fall in: down into the room below, or back up where you jumped
 const PROFILE = [];                       // the ground's shape: [x, dy] points (dy < 0 is up). Two at one x make a sheer step; between points it slopes
 let WATER = GROUND + 46;                  // the sea's surface: just under the ground on row C, far below on the clifftops (row A)
 const ROW_RISE = 240;
@@ -1378,16 +1385,50 @@ function tropMogote(par, M, x, y, z, rng, r, h) {   // a mogote: one of the roun
   m.scale.z = .7; at(m, x, y, z); par.add(m);
   for (let i = 0; i < 5; i++) { const a = rng() * TAU, v = .2 + rng() * .7, rr = r * (1 - v * .8); par.add(at(mk(new THREE.IcosahedronGeometry(r * (.18 + rng() * .1), 0).scale(1.2, .6, 1), null, { mat: M.mogote, ol: 0 }), x + Math.cos(a) * rr, y + h * v, z + Math.sin(a) * rr * .7)); }   // tree crowns lumping its outline
 }
+// ── every platform stands on something (the user, 2026-10-20: "they should be supported by the environment ... make this a rule. they
+// should be real platforms"). Where one can be propped: solid ground under it, clear of the gaps, near its ends (its middle, if it's
+// narrow). None under it at all (it's out over a gap): the nearest ground either side instead, for an arch or a line. In px
+function propFeet(p, two) {
+  const pick = x0 => { for (let d = 0; d <= p.w / 2; d += 8) for (const x of [x0 - d, x0 + d]) if (x > p.x + 12 && x < p.x + p.w - 12 && groundAt(x) !== null) return x; return null; };
+  const xs = [];
+  (two ? [p.x + p.w * .2, p.x + p.w * .8] : [p.x + p.w / 2]).forEach(x0 => { const x = pick(x0); if (x !== null && !xs.some(q => Math.abs(q - x) < 40)) xs.push(x); });
+  if (xs.length) return { xs, rims: [] };
+  const rim = (x, d) => { for (let i = 8; i < 600; i += 8) if (groundAt(x + d * i) !== null) return x + d * i; return null; };
+  return { xs, rims: [rim(p.x, -1), rim(p.x + p.w, 1)].filter(x => x !== null) };
+}
 function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const before = new Set(scene.children);
   const rng = rngF(7 + seed * 31);
   const R = (a, b) => a + rng() * (b - a);
   const mGrass = toon("#6c9c44"), mDirt = toon("#74402f"), mStone = toon("#a39d93"), mMoss = toon("#6e9c48");   // (red earth, like El Yunque's; mossy limestone, like the karst country's)
   const gAt = x => Y(groundAt(x / S) ?? GROUND);                                   // the ground's height (3D) at x (3D)
-  const M = tropMats(), bushMs0 = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c));
+  const M = tropMats(), bushMs0 = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c)), barkPitM = toon("#6b5040");
   const bgY = (st.elev ?? 1) >= 2 ? -14 : (1 - (st.elev ?? 1)) * ROW_RISE * S;     // the forest round about: up above us in the ravine (row C), its canopy far below up top (row A)
   // ground
-  if (PROFILE.length) {                              // shaped ground: earth that steps and slopes, turf on top
+  const pitKeep = new Set();
+  if (GAPS.length) {                                 // a pit or two (drops down into the room below): the earth cut through in front, the bank behind it whole
+    const G0 = GAPS.splice(0), pr = rngF(77 + seed * 13), R2 = (a, b) => a + pr() * (b - a), mTurf = toon("#6c9c44"), mPit = toon("#122018"); mTurf.side = THREE.DoubleSide;
+    const part = (xa, xb, z0, z1, lip) => {           // earth and turf from xa to xb (px), z0 to z1 deep
+      const pts = [[xa, groundAt(xa)], ...PROFILE.filter(([x]) => x > xa && x < xb).map(([x, dy]) => [x, GROUND + dy]), [xb, groundAt(xb)]];
+      const sh = new THREE.Shape(); sh.moveTo(X(xa), -12); pts.forEach(([x, y]) => sh.lineTo(X(x), Y(y))); sh.lineTo(X(xb), -12); sh.closePath();
+      const e = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: z1 - z0, bevelEnabled: false }).translate(0, 0, z0), mDirt); scene.add(e); pitKeep.add(e);
+      const pos = [], quad = (a, b, c, d) => pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+      for (let i = 0; i < pts.length - 1; i++) { const [xa2, ya] = pts[i], [xb2, yb] = pts[i + 1]; if (xb2 <= xa2) continue;
+        const ax = X(xa2), ay = Y(ya) + .02, bx = X(xb2), by = Y(yb) + .02;
+        quad([ax, ay, z1], [bx, by, z1], [bx, by, z0], [ax, ay, z0]); if (lip) quad([ax, ay - .35, z1], [bx, by - .35, z1], [bx, by, z1], [ax, ay, z1]); }
+      const tg = new THREE.BufferGeometry(); tg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); tg.computeVertexNormals(); const t = new THREE.Mesh(tg, mTurf); scene.add(t); pitKeep.add(t);
+    };
+    part(-900, WORLD + 900, -9, -2.2, false);
+    let x0 = -900; G0.slice().sort((a, b) => a[0] - b[0]).forEach(([a, b]) => { if (a > x0) part(x0, a, -2.2, 5.05, true); x0 = Math.max(x0, b); }); if (x0 < WORLD + 900) part(x0, WORLD + 900, -2.2, 5.05, true);
+    for (const [a0, b0] of G0) { const a = Math.max(a0, -900), b = Math.min(b0, WORLD + 900), xa = X(a), xb = X(b), ya = Y(groundAt(a)), yb = Y(groundAt(b)), lo = Math.min(ya, yb);
+      const dk = new THREE.Mesh(new THREE.BoxGeometry(xb - xa - .04, 14, 7.15), mPit); at(dk, (xa + xb) / 2, lo - 1.5 - 7, 1.47); scene.add(dk); pitKeep.add(dk);   // dark, a little way down
+      [[a, xa, ya, 1], [b, xb, yb, -1]].forEach(([e, ex, ey, sd]) => { if (e <= -890 || e >= WORLD + 890) return;   // down each side: limestone and hanging roots
+        for (let y = ey - .35; y > ey - 2.2; y -= R2(.4, .7)) for (let z = -2; z < 5; z += R2(.8, 1.4)) { const m = mk(new THREE.DodecahedronGeometry(R2(.2, .4), 0).scale(.6, 1, 1), null, { mat: mStone, ol: .03 }); at(m, ex + sd * .06, y, z); scene.add(m); pitKeep.add(m); }
+        for (let z = -2; z < 5; z += R2(.45, 1)) { const len = R2(.4, 1.6), v = mk(new THREE.CylinderGeometry(.03, .02, len, 4), null, { mat: mMoss, ol: .012 }); at(v, ex + sd * .12, ey - len / 2, z); scene.add(v); pitKeep.add(v); } });
+      for (let x = xa + .25; x < xb - .2; x += R2(.4, .9)) { const len = R2(.5, 1.9), v = mk(new THREE.CylinderGeometry(.035, .02, len, 4), null, { mat: barkPitM, ol: .012 }); at(v, x, Y(groundAt(x / S)) - len / 2, -2.12); scene.add(v); pitKeep.add(v); }   // roots out of the bank behind
+    }
+    GAPS.push(...G0);
+  } else if (PROFILE.length) {                       // shaped ground: earth that steps and slopes, turf on top
     const pts = [[-900, groundAt(-900)], ...PROFILE.map(([x, dy]) => [x, GROUND + dy]), [WORLD + 900, groundAt(WORLD + 900)]];
     const sh = new THREE.Shape(); sh.moveTo(X(-900), -12); pts.forEach(([x, y]) => sh.lineTo(X(x), Y(y))); sh.lineTo(X(WORLD + 900), -12); sh.closePath();
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 14, bevelEnabled: false }).translate(0, 0, -9), mDirt));
@@ -1458,6 +1499,14 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
       for (let z = -8.5; z < 3.4; z += R(.9, 1.6)) { const r = R(.45, .85); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .04 }), x0 + R(-.2, .3), top - R(.4, th - .3), z)); }
       for (let i = 0; i < len * 1.4; i++) { const hl = R(.4, 1.6), v = mk(new THREE.CylinderGeometry(.035, .02, hl, 4), null, { mat: barkM, ol: .012 }); at(v, x0 + R(.3, len), top - th - hl / 2 + .05, R(-8.5, 3.2)); v.rotation.z = R(-.25, .25); scene.add(v); }
       continue;
+    }
+    { const F = propFeet(p, w > 4.4), pr = rngF(17 + p.x);                                 // standing on karst pillars of the same limestone: knobbly, a moss collar, a fern at the foot
+      F.xs.forEach(px => { const x = X(px), g = Y(groundAt(px)), h = top - .8 - g; if (h < .15) return;
+        scene.add(at(mk(new THREE.CylinderGeometry(.36, .5, h + .1, 7), null, { mat: mStone, ol: .04 }), x, g + h / 2, -.85));
+        for (let i = 0; i < 3; i++) { const ky = g + h * (.2 + pr() * .6); scene.add(at(mk(new THREE.DodecahedronGeometry(.26 + pr() * .12, 0), null, { mat: mStone, ol: .03 }), x + (pr() - .5) * .5, ky, -.85 + (pr() - .5) * .3)); }
+        scene.add(at(mk(new THREE.CylinderGeometry(.44, .44, .2, 7), null, { mat: mMoss, ol: .02 }), x, g + h - .05, -.85));
+        for (let i = 0; i < 4; i++) { const v = mk(new THREE.CylinderGeometry(.02, .02, .4 + pr() * .9, 4), null, { mat: mMoss, ol: .012 }); at(v, x + (pr() - .5) * .7, g + h - .5 - pr() * .4, -.45); scene.add(v); }
+        tropGroundFern(scene, M, x + .45, g, -1.35, pr, .55); });
     }
     scene.add(at(mk(new THREE.BoxGeometry(w - .1, .8, 2.4), null, { mat: mStone, ol: .05 }), cx, top - .48, 0));
     scene.add(at(mk(new THREE.DodecahedronGeometry(.5, 0).scale(w * .35, .5, 2), null, { mat: mStone, ol: .04 }), cx, top - .95, 0));
@@ -1561,6 +1610,14 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
       [[0, .55, 0, .9], [s * .35, 1.25, .1, .75], [s * -.1, 1.75, -.1, .7], [s * .5, .5, .3, .7]].forEach(([x, y, z, r]) => g.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.1, .95, 1), null, { mat: bushMs[(x * 10 | 0) & 1 ? 1 : 0], ol: 0 }), x, y, z))); return g; });
     D.traverse(o => { if (o.isMesh) keepW.add(o); });
     door = { D, halves, glow, hole, k: 0, want: 0 };
+  }
+  if (GAPS.length) {                                 // nothing left standing in a pit: the grass, the flowers, the plants and rocks over one are taken away
+    const bands = GAPS.map(([a, b]) => [X(a) - .15, X(b) + .15]), inPit = x => bands.some(([a, b]) => x > a && x < b), box = new THREE.Box3(), c = new THREE.Vector3(), m4b = new THREE.Matrix4(), pv = new THREE.Vector3(), z0 = new THREE.Matrix4().makeScale(0, 0, 0);
+    [...scene.children].filter(o => !before.has(o) && !pitKeep.has(o)).forEach(o => {
+      if (o.isInstancedMesh) { for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4b); pv.setFromMatrixPosition(m4b); if (pv.z > -2.4 && inPit(pv.x)) o.setMatrixAt(i, z0); } o.instanceMatrix.needsUpdate = true; return; }
+      box.setFromObject(o); if (box.isEmpty()) return; box.getCenter(c);
+      if (box.min.z > -2.6 && inPit(c.x) && box.max.y < Y(GROUND) + 4.5 && box.max.x - box.min.x < 6) scene.remove(o);
+    });
   }
   bakeStatic([...scene.children].filter(o => !before.has(o)), keepW);
   const L = { k, shafts, motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)) };
@@ -2433,6 +2490,34 @@ function buildLadders() {                          // wooden ladders up the clif
     return g;
   });
 }
+// the up-and-down rooms' own pieces, in each world's colours (the user, 2026-10-20: ladders and platforms "supported by the environment"):
+// the cliff (or wall) a rope ladder up to the room above is fixed to, a hatch where one goes down through a floor, the wall where a new
+// room is closed off. (Loof's sky and Crux's city build their own ladder walls.) [the wall, its trim]
+const DEEP_LOOK = { 0: ["#a39d93", "#6e9c48"], 1: ["#d0623e", "#33364a"], 2: ["#4a5468", "#ffd21f"], 3: ["#f0a868", "#c97a40"], 4: ["#b8452c", "#7a2a1c"], 5: ["#4a4f86", "#7a7fc0"], 6: ["#e88ab4", "#fff0f6"], 7: ["#8e8e8e", "#565656"], 8: ["#8a6a4a", "#5a4430"] };
+function buildDeepBits(s) {
+  const S0 = STAGES[s], g = new THREE.Group(); scene.add(g); const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], mW = toon(c0), mT = toon(c1), R = rngF(4242 + s * 7 + world * 131);
+  const lump = (x, y, z, r) => g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mW, ol: .03 }), x, y, z));
+  if (world !== 3 && world !== 7) LADDERS.filter(L => L.rope).forEach(L => {
+    const x = X(L.x);
+    if (L.rope === "up") {                          // a cliff (a wall) rising up out of sight, the ladder fixed to its face
+      const y0 = Y(L.bot) - .3, h = 18; g.add(at(mk(new THREE.BoxGeometry(2.2, h, 1.3), null, { mat: mW, ol: .04 }), x, y0 + h / 2, -1.15));
+      if (world === 2 || world === 6) for (let y = y0 + 1.2; y < y0 + 12; y += 1.6) g.add(at(mk(new THREE.BoxGeometry(2.3, .14, 1.4), null, { mat: mT, ol: .01 }), x, y, -1.15));   // (indoors: a girder, banded)
+      else for (let y = y0 + .6; y < y0 + 10; y += .9 + R() * .9) [-1, 1].forEach(sd => lump(x + sd * (1.05 + R() * .15), y, -1 + R() * .5, .22 + R() * .25));
+      g.add(at(mk(new THREE.BoxGeometry(2.5, .3, 1.6), null, { mat: mT, ol: .02 }), x, y0 + .45, -1.1));
+    } else if (groundAt(L.face - L.wall * 30) !== null) {   // going down through a floor (no drop beside it): a hatch, its lid open
+      const y = Y(L.top); g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.1, .04, 1.1), new THREE.MeshBasicMaterial({ color: "#121218" })), x, y + .02, -.4));
+      [-.58, .58].forEach(dz => g.add(at(mk(new THREE.BoxGeometry(1.3, .08, .14), null, { mat: mT, ol: .01 }), x, y + .05, -.4 + dz)));
+      [-.62, .62].forEach(dx => g.add(at(mk(new THREE.BoxGeometry(.14, .08, 1.3), null, { mat: mT, ol: .01 }), x + dx, y + .05, -.4)));
+      const lid = mk(new THREE.BoxGeometry(1.1, .06, 1.1), null, { mat: mW, ol: .02 }); lid.rotation.x = -1.2; at(lid, x, y + .5, -1.05); g.add(lid);
+    }
+  });
+  [["wallL", -1], ["wallR", 1]].forEach(([k, sd]) => { if (!S0[k]) return;    // closed off that side: a wall of the world's own rock
+    const ex = sd < 0 ? 0 : X(WORLD), gy = Y(groundAt(sd < 0 ? 30 : WORLD - 30) ?? GROUND);
+    g.add(at(mk(new THREE.BoxGeometry(6, 26, 15), null, { mat: mW, ol: .05 }), ex + sd * 2.7, gy + 12.6, -2.5));
+    for (let y = gy + .4; y < gy + 11; y += .8 + R() * 1.1) for (let z = -8; z < 5; z += 1.5 + R() * 2) lump(ex + sd * (.2 - R() * .3), y, z, .3 + R() * .5);
+  });
+  return g;
+}
 const RUIN_GRADE = [0, .28, .55, .85];
 let ruinFx = null;
 function buildRuin(s, tier) {                     // what the fighting's done to the place: rubble, planks, scorch marks, smoke far off; fires and embers from 50%; ash at 75%
@@ -2546,6 +2631,7 @@ function setScreen(s) {                              // build stage s (its platf
     level = frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
+    if (world !== 9) level.objs.push(buildDeepBits(s));
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
     bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
@@ -3872,13 +3958,20 @@ function openExit() {                                // the boss is down (or the
   if (skirmish && !skirmish.won) { skirmish.won = true; skirmish.t = 0; SFX.cheer(); const live = friends.filter(f => f.brawl && !f.gone); if (live.length) popText(live.reduce((a, f) => a + f.x, 0) / live.length, GROUND - 200, "YAY!"); }   // (the beps cheer, and head off right)
   exitOpen = true; SFX.fanfare(); cleared++; roomsDone.add(stage); startBeps(); if (level.openShrine) level.openShrine();   // (the shrine opens: on into the next world)
   const b = $("banner");
-  b.innerHTML = `<div class="blk">${STAGES[stage].boss ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${STAGES[stage].noRight ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : STAGES[stage].nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"}</div>`;
+  b.innerHTML = `<div class="blk">${STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${wayOnText()}</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
   $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden");
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row
-const exitLabel = s => STAGES[s].toWorld !== undefined ? WORLDS[STAGES[s].toWorld].name : STAGES[s].noRight ? `↑ ${stageName(STAGES[s].up)} · ↓ ${stageName(STAGES[s].down)}` : STAGES[s].nextHi !== undefined ? `↑ ${stageName(STAGES[s].nextHi)} · → ${stageName(nextOf(s))}` : stageName(nextOf(s));   // (a split: up top, or on along the bottom)
+const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"); cue.classList.toggle("left", !!q.exitLeft); cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : "NEXT →";   // (a way out on the left: the cue's over there)
+  if (q.toWorld !== undefined) return WORLDS[q.toWorld].name;
+  if (q.noRight) return [q.up !== undefined ? "↑ " + stageName(q.up) : "", q.down !== undefined ? "↓ " + stageName(q.down) : q.below !== undefined ? "↓ " + stageName(q.below) : ""].filter(Boolean).join(" · ");
+  return q.nextHi !== undefined ? `↑ ${stageName(q.nextHi)} · → ${stageName(nextOf(s))}` : stageName(nextOf(s)); };
+const wayOnText = () => { const q = STAGES[stage];
+  if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
+  if (q.noRight) return q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)";
+  return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
 // the stats card: fade to black, how the world went, and on into the next one only when you press something
 let wst = null, statsUp = null;
 // the uprising (see the patch notes): points won back per world, kept with the story save (or, outside the story, on their own)
@@ -3971,13 +4064,13 @@ function goWorldNow(w) {                             // on into the next world: 
     if (story && fromW === 9 && w === 0) startIntro();   // off the beach: into the woods as usual, dropping in, the other one waving and running on ahead
   }, WORLDS[w].name);
 }
-function goBack() { if (trail.length > 1) goRoom(trail[trail.length - 2], true); else if (worldStack.length || prevWorld(world) >= 0) goWorldBack(); }
+function goBack() { const t = leftOf(); if (t === "out") goWorld(STAGES[stage].toWorld); else if (t === "back") goWorldBack(); else if (t !== null) goRoom(t, true); }
 // the world before this one (whose way out leads here), and the way through it to that exit: for walking back into a world you didn't
 // come from this run (you started further on, from the world select or the level select)
 function prevWorld(w) { return w >= WORLDS.length || w === 0 ? -1 : WORLDS.findIndex(W => W.stages.some(q => q.toWorld === w)); }   // (the woods are the start: Loof's sky drops you into them, but only walking back the way you came takes you up again)
 function pathTo(pw, w) {
   const S = WORLDS[pw].stages, goal = S.findIndex(q => q.toWorld === w), from = new Map([[0, -1]]), Q = [0];
-  while (Q.length) { const a = Q.shift(); if (a === goal) break; for (const b of [S[a].next ?? a + 1, S[a].nextHi, S[a].up, S[a].down]) if (b !== undefined && b < S.length && !from.has(b) && S[a].toWorld === undefined) { from.set(b, a); Q.push(b); } }
+  while (Q.length) { const a = Q.shift(); if (a === goal) break; for (const b of [S[a].noRight ? undefined : S[a].next ?? a + 1, S[a].nextHi, S[a].up, S[a].down, S[a].below]) if (b !== undefined && b < S.length && !from.has(b) && S[a].toWorld === undefined) { from.set(b, a); Q.push(b); } }
   const out = []; for (let a = goal; a >= 0; a = from.get(a)) out.unshift(a); return out;
 }
 function goWorldBack() {                             // off the left of a world's first room: back into the world before, at the room you left it from.
@@ -3985,12 +4078,12 @@ function goWorldBack() {                             // off the left of a world'
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd();
     setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); entryHi = false;
-    const ns = trail[trail.length - 1]; entrySide = "right"; clockEnter(ns); rollSad(); setScreen(ns);
-    const x = WORLD - 40, gy = groundAt(x) ?? GROUND;
-    Object.assign(player, { x, y: gy, vx: -120, vy: 0, face: -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
-    if (pal) Object.assign(pal, { x: WORLD, y: gy, vx: -120, vy: 0, onGround: true, plat: null, pounce: null });
+    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
+    const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
+    Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
+    if (pal) Object.assign(pal, { x: lf ? 0 : WORLD, y: gy, vx: lf ? 120 : -120, vy: 0, onGround: true, plat: null, pounce: null });
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = X(WORLD) - halfW + 1; camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = lf ? clamp(X(130), 10, 40) : X(WORLD) - halfW + 1; camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, true);
   }, WORLDS[P0.w].name);
 }
@@ -4006,11 +4099,28 @@ function swapUnderFade(work, msg) {
   }, 480);
 }
 function warmFrame() { renderer.compile(scene, camera); renderer.compile(actors, camera); render(0); }
-function goRoom(ns, back) {                          // fade out, build the next clearing (or the one before), walk in from that side
-  cine = null; swapUnderFade(() => {
+// changing rooms inside a world: no fade to black (the user, 2026-10-20: "move down ... without it going black"). A picture of the room
+// you're leaving is laid over the game, the next room's built under it, then the two slide together, as if the camera panned on into it
+let slideCv = null, slideId = 0;
+function swapSlide(dir, work) {                    // dir: the way the camera goes, "left" | "right" | "up" | "down"
+  transit = true; const C = renderer.domElement;
+  if (!slideCv) { slideCv = document.createElement("canvas"); slideCv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none"; C.after(slideCv); }
+  let shot = false;
+  try { render(0); slideCv.width = C.width; slideCv.height = C.height; slideCv.getContext("2d").drawImage(C, 0, 0); shot = true; } catch (e) { }
+  try { work(); warmFrame(); } catch (e) { console.error("room change failed", e); }
+  const id = ++slideId; if (!shot) { transit = false; return; }
+  const [ax, ay] = { left: [1, 0], right: [-1, 0], up: [0, 1], down: [0, -1] }[dir], T = 420, t0 = performance.now();   // (the old picture leaves the opposite way)
+  const end = () => { if (id !== slideId) return; slideId++; slideCv.style.display = "none"; slideCv.style.transform = C.style.transform = ""; transit = false; };
+  const step = () => { if (id !== slideId) return; const u = Math.min(1, (performance.now() - t0) / T), e = easeInOut(u);
+    slideCv.style.transform = `translate(${ax * e * 100}%, ${ay * e * 100}%)`; C.style.transform = `translate(${-ax * (1 - e) * 100}%, ${-ay * (1 - e) * 100}%)`;
+    if (u < 1) requestAnimationFrame(step); else end(); };
+  slideCv.style.display = "block"; step(); setTimeout(end, T + 400);   // (and if the frames stop coming, it's finished anyway)
+}
+function goRoom(ns, back) {                          // on into the next clearing (or the one before): the screen slides across, and you walk in from that side
+  cine = null; swapSlide(back ? "left" : "right", () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const from = stage;
-    if (back) trail.pop(); else trail.push(ns);
+    if (trail.length > 1 && trail[trail.length - 2] === ns) trail.pop(); else trail.push(ns);   // (back the way you came; or on into a room you hadn't come through, having dropped in from above)
     entrySide = back ? "right" : "left"; clockEnter(ns); setScreen(ns);
     const d = back ? -1 : 1, x = back ? WORLD - 40 : 40, jut = back && STAGES[ns].nextHi === from ? hiPlat() : null, gy = jut ? jut.y : groundAt(x) ?? GROUND;   // back from up top: onto the ledge (or the upper tier) you left by
     entryHi = !!jut;
@@ -4023,7 +4133,7 @@ function goRoom(ns, back) {                          // fade out, build the next
   });
 }
 function goRoomV(ns, up) {                        // up (or down) a rope ladder into the room above (or below): on, or back the way you came
-  cine = null; swapUnderFade(() => {
+  cine = null; swapSlide(up ? "up" : "down", () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
@@ -4036,6 +4146,25 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     ejPlace(sx - 100, sy, 1);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
     camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(sy); exitOpen = false; $("exitCue").classList.add("hidden");
+    enterStage(ns, back); spawnEscort(back);
+  });
+}
+function goRoomDrop(ns) {                         // down a drop: into the room below, falling in from the top of the screen (the user, 2026-10-20: "they fall down to the next screen")
+  cine = null; const fx = player.x, vy = clamp(player.vy, 380, 900), face = player.face;
+  swapSlide("down", () => {
+    const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
+    const back = trail.length > 1 && trail[trail.length - 2] === ns;
+    if (back) trail.pop(); else trail.push(ns);
+    entrySide = "top"; entryHi = false; clockEnter(ns); setScreen(ns);
+    let x = clamp(fx, 60, WORLD - 60);                                              // straight down: onto the ground under where you fell (or the nearest there is)
+    for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null)); if (c !== undefined) { x = c; break; } }
+    const gy = groundAt(x) ?? GROUND;
+    Object.assign(player, { x, y: gy - 430, vx: 0, vy, face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+      inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
+    if (pal) Object.assign(pal, { x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
+    ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
+    const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back);
   });
 }
@@ -4346,7 +4475,7 @@ function startTrail() { ejEnd(); trail = roomPath(runStart); newStay(); roomsSee
 function roomPath(s) {                            // the way from this world's first room to room s: a run started there walks back room by room
   const from = new Map([[0, -1]]), Q = [0];
   while (Q.length) { const a = Q.shift(); if (a === s) break; const S0 = STAGES[a]; if (S0.toWorld !== undefined || S0.end) continue;
-    for (const b of [S0.next ?? a + 1, S0.nextHi, S0.up, S0.down]) if (b !== undefined && b < STAGES.length && !from.has(b)) { from.set(b, a); Q.push(b); } }
+    for (const b of [S0.noRight ? undefined : S0.next ?? a + 1, S0.nextHi, S0.up, S0.down, S0.below]) if (b !== undefined && b < STAGES.length && !from.has(b)) { from.set(b, a); Q.push(b); } }
   if (!from.has(s)) return [s];
   const out = []; for (let a = s; a >= 0; a = from.get(a)) out.unshift(a); return out;
 }
@@ -4678,7 +4807,9 @@ function updatePlayer(dt) {
     if (p.plat) p.safe = { x: clamp(p.x, p.plat.x + 22, p.plat.x + p.plat.w - 22), y: p.y, plat: p.plat };
     else if (!GAPS.some(([a, c]) => p.x > a - 34 && p.x < c + 34) && !stepXs().some(sx => Math.abs(p.x - sx) < 26)) p.safe = { x: p.x, y: groundAt(p.x) ?? GROUND, plat: null };
   }
-  if (GAPS.length && !p.dead && !p.sunkT && p.y > WATER - 6 && overGap(p.x)) splashDown(p);
+  const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
+  if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(WATER - 6, GROUND + 200)) goRoomDrop(dropTo);
+  else if (GAPS.length && !p.dead && !p.sunkT && p.y > WATER - 6 && overGap(p.x)) splashDown(p);
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
   if (p.landV > 0) { p.sq = -clamp(p.landV / 2100, .1, .45); p.sqv = 0; if (p.landV > 300) { dust(p.x, p.y, 5 + Math.round(p.landV / 250)); SFX.land(); } if (p.landV > 760) shake = Math.max(shake, 2.5); p.bounceT = -1; }   // a solid landing
   if (p.bounceT >= 0) { p.bounceT += dt; if (p.bounceT > .5) p.bounceT = -1; }
@@ -5139,6 +5270,11 @@ function bossMove(e, p, D, dt) {
   e.atkCd -= dt;
   if (e.atkCd <= 0 && !p.dead) { const pick = e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];
     if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
+}
+function foeOffGaps() {                           // a boss never walks (or lands) into a drop: back onto the near edge (rooms with drops, 2026-10-20)
+  if (!GAPS.length || !enemy || enemy.dead || enemy.gone || !overGap(enemy.x) || (!enemy.onGround && enemy.y < GROUND - 10)) return;
+  const g = GAPS.find(([a, b]) => enemy.x > a && enemy.x < b), x = g[1] > WORLD || enemy.x - g[0] < g[1] - enemy.x ? g[0] - 40 : g[1] + 40;
+  Object.assign(enemy, { x, y: groundAt(x) ?? GROUND, vx: 0, vy: 0, onGround: true });
 }
 function updateEnemy(dt) {
   const e = enemy, p = arena ? arenaFoeTgt() : player, D = e.def, A = ATTACKS[e.move || D.atk];   // (in the showdown: you, or one of the beps)
@@ -7048,6 +7184,12 @@ function buildSkyland(k = 0, seed = k) {
       scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(w * .92, .6, 2.2), mStone), cx, top - .6, 0));
       scene.add(at(new THREE.Mesh(new THREE.ConeGeometry(w * .36, 1.3, 6).rotateX(Math.PI), mStoneD), cx, top - 1.55, 0));
       [-1, 1].forEach(s => { const m = new THREE.Mesh(archG, mArch); at(m, cx + s * w * .25, top - .62, 1.11); m.scale.setScalar(.45); scene.add(m); });
+      const pr = rngF(29 + p.x), nb = w > 4.6 ? 2 : 1;                                           // lifted by balloons, like the decks (held up by something)
+      for (let i = 0; i < nb; i++) { const bx2 = nb === 1 ? cx : cx + (i ? 1 : -1) * w * .28, bal = group(scene, bx2, top + 3.6, -1.5);
+        bal.add(mk(ball(1, 18, 12).scale(1.3, .95, .95), null, { mat: pr() < .5 ? mFlagO : toon("#f4e6c8"), ol: .03, smooth: true }));
+        bal.add(at(mk(new THREE.TorusGeometry(.92, .05, 6, 20).rotateX(Math.PI / 2), null, { mat: mBrass, ol: 0 }), 0, -.25, 0));
+        [-1, 1].forEach(s => { const r = mk(new THREE.CylinderGeometry(.02, .02, 3, 4), null, { mat: mRope, ol: 0 }); at(r, bx2 + s * .5, top + 1.4, -1.2); r.rotation.z = s * .12; scene.add(r); });
+        bal.traverse(o => { if (o.isMesh) keep.add(o); }); const y0 = bal.position.y, ph = pr() * 9; anim.push(t => { bal.position.y = y0 + Math.sin(t * .9 + ph) * .06; }); }
     }
   }
   // rope ladders between the rows, each fixed to a wall (the user: free-standing ladders looked wrong): one up the face of a sandstone
@@ -7403,6 +7545,14 @@ function buildDunes(k = 0, seed = k) {
       scene.add(at(mk(new THREE.BoxGeometry(w, .3, 2.4), null, { mat: mSandL, ol: .02 }), cx, top - .15, 0));
       scene.add(at(new THREE.Mesh(new THREE.CylinderGeometry(w * .5, w * .38, h, 7).scale(1, 1, .55), mRock), cx, top - .3 - h / 2, 0));
       scene.add(at(new THREE.Mesh(new THREE.CylinderGeometry(w * .36, w * .08, 1, 7).scale(1, 1, .55), mSandD), cx, top - .3 - h - .5, 0));
+      const F = propFeet(p, w > 5.2), under = top - .3 - h - .9;                                   // on a hoodoo's neck of the same red rock, a skirt of scree at its foot
+      F.xs.forEach(px => { const x = X(px), g = Y(groundAt(px)), hh = under + .3 - g;              // (a low one sits right down in its scree)
+        if (hh > .1) scene.add(at(new THREE.Mesh(new THREE.CylinderGeometry(Math.min(.5, w * .09), Math.min(.85, w * .15), hh, 7).scale(1, 1, .6), mRock), x, g + hh / 2, -.6));
+        scene.add(at(new THREE.Mesh(new THREE.CylinderGeometry(Math.min(.7, w * .12), Math.min(1.3, w * .24), .45, 7).scale(1, 1, .6), mRock), x, g + .15, -.6));
+        scene.add(at(new THREE.Mesh(new THREE.CylinderGeometry(Math.min(1.1, w * .2), Math.min(1.5, w * .28), .2, 7).scale(1, 1, .6), mSandD), x, g + .04, -.6)); });
+      F.rims.forEach(rx => { const s = rx < p.x ? -1 : 1, x0 = X(rx), g = Y(groundAt(rx)), x1 = cx + s * w * .32, y1 = top - .45;   // (out over a sinkhole: an arch, rim to rim)
+        const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(x0, g - .3, -.6), new THREE.Vector3(x0 + (x1 - x0) * .1, y1 - .3, -.6), new THREE.Vector3(x1, y1, -.6));
+        scene.add(new THREE.Mesh(new THREE.TubeGeometry(c, 12, .45, 7), mRock)); });
     }
   }
   // the beps' way in: a trail of dropped beads, shells and pebbles to a little door in a half-buried ruin
@@ -7674,6 +7824,11 @@ function buildKeshGarden(k = 0, seed = k) {
       g.add(at(mk(new THREE.SphereGeometry(w / 2 * .8, 20, 8, 0, TAU, Math.PI / 2, Math.PI / 2).scale(1, .35, 1), null, { mat: mats.padRim, ol: .02 }), 0, -.32, 0));
       const ring = new THREE.Mesh(new THREE.TorusGeometry(w / 2 * .45, .05, 6, 28).rotateX(Math.PI / 2), mats.padGlow); at(ring, 0, -.58, 0); g.add(ring);
       g.traverse(o => { if (o.isMesh) keep.add(o); }); pads.push([g, rng() * TAU]);
+      const F = propFeet(p, false), px = F.xs.length ? F.xs[0] : F.rims.sort((a, b) => Math.abs(a - p.x - p.w / 2) - Math.abs(b - p.x - p.w / 2))[0];   // up on a tall flower stem, curving out of the garden
+      if (px !== undefined) { const x0 = X(px), gy0 = Y(groundAt(px)), y1 = top - .45;
+        if (y1 - gy0 > .3) { const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(x0, gy0 - .1, -.55), new THREE.Vector3(x0 + (cx - x0) * .2 + .35, (gy0 + y1) / 2, -.6), new THREE.Vector3(cx, y1, -.25));
+          scene.add(mk(new THREE.TubeGeometry(c, 12, .09, 6), null, { mat: mats.pinkD, ol: .015, smooth: true }));
+          [-1, 1].forEach(s => { const lf = mk(ball(.32, 8, 6).scale(1, .18, .55), null, { mat: mats.hedge, ol: .015 }); lf.rotation.z = s * .45; at(lf, x0 + s * .3, gy0 + .1, -.55); scene.add(lf); }); } }
     }
   }
   // the garden: blossom trees, pink umbrella trees, pods, behind and (a few) in front
@@ -8457,7 +8612,12 @@ function buildCruxCity(k = 0, seed = k) {
   const bob = [];
   for (const p of PLATFORMS) {
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, foot = gAt(cx);
-    if (p.kind === "skiff") { const f = flyingSkiff(scene, mats, w / 2.8); f.B.position.set(cx, top - .3, 0); keep.add(f.B); f.B.traverse(o => keep.add(o)); bob.push([f.B, top - .3, rng() * TAU, f.wings]); }
+    if (p.kind === "skiff") { const f = flyingSkiff(scene, mats, w / 2.8); f.B.position.set(cx, top - .3, 0); keep.add(f.B); f.B.traverse(o => keep.add(o)); bob.push([f.B, top - .3, rng() * TAU, f.wings]);
+      const near = d => { for (let i = 30; i < 700; i += 10) if (groundAt((d > 0 ? p.x + p.w : p.x) + d * i) !== null) return i; return 1e9; }, dl = near(-1), dr = near(1);   // moored: a line from the bow down to a bollard
+      if (Math.min(dl, dr) < 1e9) { const s = dr <= dl ? 1 : -1, bpx = (s > 0 ? p.x + p.w : p.x) + s * Math.min(dl, dr), bx2 = X(bpx), by = Y(groundAt(bpx)), ex = cx + s * (w / 2 - .25);
+        scene.add(at(mk(cyl(.13, .17, .5, 8), null, { mat: mats.black, ol: .015 }), bx2, by + .25, -.5)); scene.add(at(mk(cyl(.2, .2, .08, 8), null, { mat: mats.black, ol: 0 }), bx2, by + .52, -.5));
+        const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(ex, top - .35, -.35), new THREE.Vector3((ex + bx2) / 2, Math.min(top - .35, by + .45) - .5, -.45), new THREE.Vector3(bx2, by + .45, -.5));
+        scene.add(mk(new THREE.TubeGeometry(c, 12, .025, 4), null, { mat: mats.black, ol: 0 })); } }
     else if (p.kind === "sign") { scene.add(at(mk(new THREE.BoxGeometry(w, 1.1, .25), null, { mat: mats.white, ol: .04 }), cx, top - .6, -.4)); scene.add(at(mk(new THREE.BoxGeometry(w, .14, 1.6), null, { mat: mats.dark, ol: .02 }), cx, top - .07, 0));
       const q = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), QMARK()); at(q, cx, top - .6, -.26); scene.add(q); keep.add(q);
       [-1, 1].forEach(s => { if (top - foot > .8) scene.add(at(mk(cyl(.07, .07, top - foot - 1.1, 6), null, { mat: mats.black, ol: .015 }), cx + s * w * .35, foot + (top - foot - 1.1) / 2, -.4)); }); }
@@ -9182,20 +9342,142 @@ function buildBeach(k = 0, seed = k) {
     mSand.color.set(L.sand || Q.sand); mWet.color.copy(mSand.color).multiplyScalar(.86); }
   return { k, shafts: [], motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)), tick, relight, knock };
 }
+const ROOM_SPECIAL = new Set(["boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
+  "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts"]);
+const mirrorRoom = q => {                            // the room flipped left to right (and no way up off it: a fork's upper ledge stays with the fork)
+  const o = { pm: {} };
+  if (q.plats) { o.plats = []; q.plats.forEach(([x, y, wd, k], i) => { if (k === "jut" || k === "upper") return; o.pm[i] = o.plats.length; o.plats.push([WORLD - x - wd, y, wd, k]); }); }
+  if (q.gaps) o.gaps = q.gaps.map(([a, b]) => [WORLD - b, WORLD - a]).sort((p, r) => p[0] - r[0]);
+  const PF = []; let d = 0; (q.steps || []).forEach(([x, dy]) => { PF.push([x, d], [x, dy]); d = dy; }); (q.ground || []).forEach(p => PF.push(p.slice())); PF.sort((a, b) => a[0] - b[0]);
+  if (PF.length) o.ground = PF.reverse().map(([x, dy]) => [WORLD - x, dy]);
+  if (q.ceils) o.ceils = q.ceils.map(([a, b, y]) => [WORLD - b, WORLD - a, y]);
+  if (q.ladders) o.ladders = q.ladders.map(([f, wl]) => [WORLD - f, -wl]);
+  if (q.gifts) o.gifts = q.gifts.map(([x, y]) => [WORLD - x, y]);
+  return o;
+};
+const flipRoster = (row, pm, ng) => (row || []).map(([type, col, at, ...rest]) => [type, col,
+  typeof at === "number" ? WORLD - at : at && at.plat !== undefined ? (pm[at.plat] !== undefined ? { plat: pm[at.plat] } : 1280) : at && at.gap !== undefined ? { gap: ng - 1 - at.gap } : at, ...rest]);
+const stageGround = (q, x) => {                     // a room's ground height at x (px) without building it: null over a gap
+  if ((q.gaps || []).some(([a, b]) => x > a && x < b)) return null;
+  const P = []; let d = 0; (q.steps || []).forEach(([sx, dy]) => { P.push([sx, d], [sx, dy]); d = dy; }); (q.ground || []).forEach(p => P.push(p)); P.sort((a, b) => a[0] - b[0]);
+  if (!P.length) return GROUND;
+  for (let i = P.length - 1; i >= 0; i--) if (x >= P[i][0]) { const n = P[i + 1]; return GROUND + (n && n[0] > P[i][0] ? lerp(P[i][1], n[1], (x - P[i][0]) / (n[0] - P[i][0])) : P[i][1]); }
+  return GROUND + P[0][1];
+};
+// ── up and down within a column (the user, 2026-10-20: "add some variety where it makes sense to have levels that scale up and down within
+// each column ... in a more metroid-vania style. so there should rarely if ever be places where the player falls and dies but instead they
+// fall down to the next screen"; "everything doesnt have to drop all three levels. it can be just two or even just one at times ... it should
+// make sense with the world"; "some levels exit to the new world on the left side ... one exit can be on the right and the second on the left").
+// Per world, by cell:
+//  add: [cell, the room it hangs off, the room it's made from, opts] a new room (mirrored, like the fourteen-column ones). chamber: the
+//       room it hangs off gives it its way out to the next world, and that way out is on the LEFT (the boss can wait here too); above: it's
+//       over that room, not under it. cave: closed off both sides (a pocket to find). noLeft / noRight: a wall that side
+//  row: new rooms side by side, left to right
+//  link: [upper, lower, opts] the upper room's gaps fall into the lower room; a rope ladder at a pit's edge goes down, and back up.
+//       No gaps up there: a pit's dug (at: where, roughly). rope: false, a drop only. chasm: the room's right end drops away into the
+//       room below. hatch: no drop, a ladder down through a hatch in the floor (the keep). clear: room for the ladder below is made
+//       if it has to be (a platform in its way taken out; in a new room, a gap)
+const DEEP = {
+  0: { add: [["C2", "B2", "C8", { cave: true, name: "MIDDAY SINKHOLE CAVE" }], ["C14", "B14", "C7", { chamber: true, name: "THE NIGHT GATE'S RAVINE", bossX: 760 }]],   // the woods: the ridge (A) over the underwood (B), the ravine (C) under the gate
+       link: [["A11", "B11", { at: 1450 }], ["A12", "B12", { at: 1100 }], ["A13", "B13", { at: 1650 }], ["B2", "C2", { at: 1250 }], ["B14", "C14", { chasm: true }]] },
+  1: { add: [["C8", "B8", "C3", { name: "GOLDEN HOUR CLIFF FOOT", noLeft: true }], ["C9", "B9", "C1", { name: "GOLDEN HOUR SEA CAVES" }], ["C10", "B10", "C5", { name: "GOLDEN HOUR UNDERCLIFF", noRight: true }]],
+       row: ["C8", "C9", "C10"],                                                                                    // Cuss' waves: still climbing to the keep; under the cliff path, the shore at its foot, ladders back up its face
+       link: [["B8", "C8", { clear: true }], ["B9", "C9", { clear: true }], ["B10", "C10", { clear: true }]] },
+  2: { link: [["A10", "B10", { hatch: true }], ["A12", "B12", { hatch: true }]] },                                    // Volt Keep: ladders through hatches between the floors
+  3: { add: [["B14", "A14", "B6", { chamber: true, name: "LOOF'S LANDING", bossX: 760 }]],                           // Loof's sky: off the high docks, down through the clouds to the low ones
+       link: [["A9", "C9", { rope: false }], ["A10", "C10"], ["A11", "C11", { rope: false }], ["A12", "C12"], ["A13", "C13", { rope: false }], ["A14", "B14", { chasm: true }], ["B14", "C14", { rope: false }]] },
+  4: { add: [["B14", "A14", "B12", { chamber: true, name: "SIROCCO'S UNDERCREST", bossX: 760, noGaps: true }]],      // the dunes: down the sinkholes
+       link: [["B11", "C11"], ["B12", "C12"], ["A14", "B14", { chasm: true }]] },
+  5: { add: [["B14", "C14", "B12", { chamber: true, above: true, name: "KESH'S DAWN STAIR" }]],                      // Kesh's garden: down through the rifts; up a stair of vine out of the dell
+       link: [["B11", "C11"], ["B12", "C12"], ["B14", "C14", { at: WORLD - 330, newPit: true }]] },
+  6: { link: [["A9", "B9"], ["A11", "B11", { clear: true }], ["A12", "B12", { rope: false }]] },                                                         // the candy works: down a vat's drain to the floor below
+  7: { link: [["A9", "B9"], ["A10", "B10", { rope: false }], ["A11", "B11", { clear: true }], ["A12", "B12", { rope: false }], ["B9", "C9", { rope: false }], ["B10", "C10"], ["B11", "C11", { rope: false }], ["B12", "C12", { clear: true }]] },   // the city: three streets deep
+  8: { link: [["B7", "C7"], ["B8", "C8", { rope: false }], ["B9", "C9", { clear: true }], ["B10", "C10", { rope: false }], ["A11", "C11", { rope: false }], ["A12", "C12", { clear: true }], ["A13", "C13", { rope: false }]] },   // the lakebed: off the shore path and the rim road, down to the floor
+};
+const ropeClear = (q, x) => x > 150 && x < WORLD - 120 && [-60, 0, 60].every(d => stageGround(q, x + d) !== null) && Math.abs(stageGround(q, x - 60) - stageGround(q, x + 60)) < 24 &&
+  !(q.plats || []).some(([px, py, pw]) => x > px - 50 && x < px + pw + 50) && !(q.ladders || []).some(([f]) => Math.abs(f - x) < 140) && q.upX === undefined && !(q.bep && Math.abs(q.bep.zone - x) < 300);
+function pitX(U, L, at) {                          // where to dig a pit in U (px, its left edge): flat ground, nothing low over it, and clear under it in L for the ladder
+  let best = null;
+  for (let x = 360; x <= WORLD - 520; x += 20) {
+    const gs = [-100, 0, 70, 140, 240].map(d => stageGround(U, x + d)); if (gs.some(g => g === null) || Math.max(...gs) - Math.min(...gs) > 40) continue;
+    if ((U.plats || []).some(([px, py, pw]) => py > GROUND - 150 && px < x + 170 && px + pw > x - 30) || (U.ladders || []).some(([f]) => Math.abs(f - x) < 220)) continue;
+    if ((U.bep && Math.abs(U.bep.zone - x) < 350) || [U.upX, U.downX].some(v => v !== undefined && Math.abs(v - x) < 260) || !ropeClear(L, x + 15)) continue;
+    const sc = Math.abs(x - at); if (!best || sc < best.sc) best = { x, sc };
+  }
+  return best ? best.x : null;
+}
+function dropInWay(q, row, x) {                    // make room for a ladder at x: the platforms in its way taken out (their baddies down on the ground); in a new room, the gaps too
+  const pm = {}, keep = []; (q.plats || []).forEach((p, i) => { if (x > p[0] - 50 && x < p[0] + p[2] + 50) return; pm[i] = keep.length; keep.push(p); }); if (q.plats) q.plats = keep;
+  const gm = {}, gk = []; (q.gaps || []).forEach((g, i) => { if (q.deepNew && g[0] < x + 90 && g[1] > x - 90) return; gm[i] = gk.length; gk.push(g); }); if (q.gaps) q.gaps = gk;
+  for (let i = (row || []).length - 1; i >= 0; i--) { const e = row[i], a = e[2]; if (!a || typeof a !== "object") continue;
+    if (a.plat !== undefined) row[i] = [e[0], e[1], pm[a.plat] !== undefined ? { plat: pm[a.plat] } : x < 1280 ? x + 320 : x - 320, ...e.slice(3)];
+    else if (a.gap !== undefined) { if (gm[a.gap] !== undefined) row[i] = [e[0], e[1], { gap: gm[a.gap] }, ...e.slice(3)]; else row.splice(i, 1); } }
+}
+function linkDown(S0, R0, u, l, o) {                // room u drops into room l, under it
+  const U = S0[u], L = S0[l], at = o.at ?? WORLD * .5;
+  if (o.hatch) { const x = pitX({ ...U, gaps: [] }, L, at); if (x === null) return console.warn("deepen: no hatch", U.cell);
+    Object.assign(U, { down: l, downX: x, downWall: -1 }); Object.assign(L, { up: u, upX: x + 15 }); return; }
+  if (o.chasm) { for (let wd = 150; wd < 560; wd += 10) { const x = WORLD - wd; if (!ropeClear(L, x + 15) || stageGround(U, x - 30) === null) continue;
+      U.gaps = [...(U.gaps || []).filter(([a, b]) => b < x - 160), [x, WORLD + 1200]]; Object.assign(U, { below: l, down: l, downX: x, downWall: -1, noRight: true }); Object.assign(L, { up: u, upX: x + 15 }); return; }
+    return console.warn("deepen: no chasm", U.cell); }
+  let best = null;
+  if (!o.newPit) (U.gaps || []).forEach(([a, b]) => [[a, -1, a + 15], [b, 1, b - 15]].forEach(([e, wl, rx]) => {
+    if (rx < 200 || rx > WORLD - 200 || stageGround(U, e + wl * 30) === null || !ropeClear(L, rx)) return;
+    const sc = Math.abs(rx - at); if (!best || sc < best.sc) best = { sc, e, wl, rx }; }));
+  if (!best && o.clear && !o.newPit) (U.gaps || []).forEach(([a, b]) => [[a, -1, a + 15], [b, 1, b - 15]].forEach(([e, wl, rx]) => {   // (nowhere clear below: make room)
+    if (rx < 200 || rx > WORLD - 200 || stageGround(U, e + wl * 30) === null || !ropeClear({ ...L, plats: [], gaps: L.deepNew ? [] : L.gaps }, rx)) return;
+    const sc = Math.abs(rx - at) + 500 * (L.plats || []).filter(([px, , pw]) => rx > px - 50 && rx < px + pw + 50).length; if (!best || sc < best.sc) best = { sc, e, wl, rx, clear: true }; }));
+  if (best && best.clear && o.rope !== false && U.down === undefined && L.up === undefined) dropInWay(L, R0[l], best.rx);
+  if (!best && (o.newPit || !(U.gaps || []).length)) { const x = pitX(U, L, at); if (x === null) return console.warn("deepen: no pit", U.cell);
+    U.gaps = [...(U.gaps || []), [x, x + 140]].sort((p, q) => p[0] - q[0]); best = { e: x, wl: -1, rx: x + 15 }; }
+  U.below = l;
+  if (!best || o.rope === false || U.down !== undefined || L.up !== undefined) return;
+  Object.assign(U, { down: l, downX: best.e, downWall: best.wl }); Object.assign(L, { up: u, upX: best.rx });
+}
+function deepenWorlds() {
+  WORLDS.forEach((W, w) => {
+    const D = DEEP[w]; if (!D || W.deep) return; W.deep = true;
+    const S0 = W.stages, R0 = W.roster || (W.roster = []), at = c => { const f = S0.map((q, i) => i).filter(i => S0[i].cell === c && !S0[i].arena); return f.length === 1 ? f[0] : -1; };
+    (D.add || []).forEach(([cell, pc, tc, o]) => {
+      const p = at(pc), t = at(tc); if (p < 0 || t < 0 || at(cell) >= 0) return console.warn("deepen: skipped", w, cell);
+      const T0 = S0[t], P0 = S0[p], L = mirrorRoom(T0), s = S0.length, q = { h: P0.h, col: 100 + +cell.slice(1) * 4 + 3, cell, foe: (o.chamber ? P0.foe : T0.foe) ?? 0, gen: true, like: t, name: o.name, deepNew: true };
+      for (const k in T0) if (!ROOM_SPECIAL.has(k)) q[k] = T0[k];
+      for (const k of ["plats", "gaps", "ground", "ceils", "ladders", "gifts"]) if (L[k]) q[k] = L[k];
+      if (o.noGaps) q.gaps = [];
+      const row = flipRoster(R0[t], L.pm, (L.gaps || []).length).filter(e => (q.gaps || []).length || (BB_TYPES[e[0]] || {}).move !== "breach")
+        .map(e => { const a = e[2]; return a && typeof a === "object" && ((a.gap !== undefined && !(q.gaps || [])[a.gap]) || (a.plat !== undefined && !(q.plats || [])[a.plat])) ? [e[0], e[1], 1280, ...e.slice(3)] : e; });
+      if (o.cave) Object.assign(q, { noLeft: true, noRight: true, wallL: true, wallR: true });
+      if (o.noLeft) Object.assign(q, { noLeft: true, wallL: true });
+      if (o.noRight) Object.assign(q, { noRight: true, wallR: true });
+      if (o.chamber) { Object.assign(q, { toWorld: P0.toWorld, exitLeft: true, noRight: true, wallR: true, boss: !!P0.boss, bossX: o.bossX ?? 760 }); delete P0.toWorld; delete P0.next; P0.noRight = true; if (o.above) P0.wallR = true; }
+      S0.push(q); R0[s] = row;
+      if (o.cave) (CRATE_AT[w] || (CRATE_AT[w] = [])).push([s, 1280]);
+    });
+    (D.row || []).forEach((c, i, A) => { if (i) S0[at(A[i - 1])].next = at(c); });
+    (D.link || []).forEach(([uc, lc, o = {}]) => { const u = at(uc), l = at(lc); if (u < 0 || l < 0) return console.warn("deepen: no link", w, uc, lc); linkDown(S0, R0, u, l, o); });
+    (CRATE_AT[w] || []).forEach(c => { const q = S0[c[0]]; if (!q) return; const ok = x => [-80, 0, 80].every(d => stageGround(q, x + d) !== null);   // (a crate never left standing in a new pit)
+      if (!ok(c[1])) for (let d = 20; d < WORLD; d += 20) { const x = [c[1] - d, c[1] + d].find(v => v > 200 && v < WORLD - 200 && ok(v)); if (x !== undefined) { c[1] = x; break; } } });
+    const pred = new Map();                          // the way back left: each room's left-hand neighbour, spelled out (you can come into a room from above or below now)
+    S0.forEach((q, s) => { if (q.arena) return; new Set([q.noRight ? undefined : q.next, q.nextHi]).forEach(n => { if (n !== undefined) pred.set(n, pred.has(n) ? -1 : s); }); });
+    pred.forEach((s, n) => { if (s >= 0 && !S0[n].noLeft) S0[n].prev = s; });
+    W.rosterThin = null;
+  });
+  STAGES.splice(0, STAGES.length, ...WORLDS[world].stages);
+}
 const WORLDS = [
   { name: "BERRY WOODS", blurb: "A rainforest path from midday to night, crawling with leaf, thorn and wood baddies.",
     screens: SCREENS.slice(), stages: STAGES.slice(), roster: BB_ROSTER.slice(), foes: woodFoes },
-  { name: "CUSS' WAVES", blurb: "A rocky coast from midday to night. Cross the open water on sea stacks and piers (fall in and it costs a heart).",
+  { name: "CUSS' WAVES", blurb: "A rocky coast from midday to night. Cross the open water on sea stacks and piers (fall in and you swim back; off the cliff path, you land on the shore below and climb back up).",
     screens: WAVE_SCREENS, stages: WAVE_STAGES, roster: WAVE_ROSTER, foes: () => WAVE_FOES || (WAVE_FOES = buildWaveFoes()) },
   { name: "VOLT KEEP", blurb: "A castle-factory crackling with electricity and crawling with robot berries. In at the gate, up through the works: two ways to the top.",
     screens: FACTORY_SCREENS, stages: FACTORY_STAGES, roster: FACTORY_ROSTER, foes: () => FACTORY_FOES || (FACTORY_FOES = buildFactoryFoes()) },
-  { name: "LOOF'S SKY", blurb: "Up in the clouds off the top of Volt Keep: sandstone docks over a sea of cloud, airships drifting by, sky-pirate berries everywhere. Fall and it costs a heart. Rope ladders climb up or down: the high way out drops you into Crux's city, the low one into the candy works.",
+  { name: "LOOF'S SKY", blurb: "Up in the clouds off the top of Volt Keep: sandstone docks over a sea of cloud, airships drifting by, sky-pirate berries everywhere. Fall and you drop to the docks below. Rope ladders climb up or down: the high way out drops you into Crux's city, the low one into the candy works.",
     screens: SKY_SCREENS, stages: SKY_STAGES, roster: SKY_ROSTER, foes: skyFoes },
   { name: "SIROCCO'S DUNES", blurb: "Down out of Kesh's garden: red dunes under a blue sky, a glass pyramid far off with a beam of light from its tip, fire daruma everywhere, sinkholes in the sand.",
     screens: DUNE_SCREENS, stages: DUNE_STAGES, roster: DUNE_ROSTER, foes: duneFoes },
-  { name: "KESH'S GARDEN", blurb: "On from the city (or up out of the dunes) into the night: a floating blossom garden under the stars, ninja berries in every hedge. Night the whole way, darkest at the start; the light only comes at the very end. Fall through a rift and it costs a heart.",
+  { name: "KESH'S GARDEN", blurb: "On from the city (or up out of the dunes) into the night: a floating blossom garden under the stars, ninja berries in every hedge. Night the whole way, darkest at the start; the light only comes at the very end. Fall through a rift and you drop into the garden below.",
     screens: KESH_SCREENS, stages: KESH_STAGES, roster: KESH_ROSTER, foes: keshFoes, song: 6 },
-  { name: "VINELLA'S CANDY WORKS", blurb: "On from Volt Keep (or down out of Loof's sky) into the candy factory: swirls everywhere, conveyors of sweets, vats of bubbling taffy (fall in and it costs a heart), vampire berries in little cloaks. The floor splits in two at B4.",
+  { name: "VINELLA'S CANDY WORKS", blurb: "On from Volt Keep (or down out of Loof's sky) into the candy factory: swirls everywhere, conveyors of sweets, vats of bubbling taffy (upstairs, they drain to the floor below), vampire berries in little cloaks. The floor splits in two at B4.",
     screens: CANDY_SCREENS, stages: CANDY_STAGES, roster: CANDY_ROSTER, foes: candyFoes, song: 7 },
   { name: "CRUX'S CITY", blurb: "On from the candy works into the city: a busy towering city in old-cartoon black and white (all but you), signs pointing every which way, a berry whose swirl leaves you dizzy. At the crossroads it splits three ways, up, on and down: three ways out.",
     screens: CRUX_SCREENS, stages: CRUX_STAGES, roster: CRUX_ROSTER, foes: cruxFoes, song: 8 },
@@ -9204,7 +9486,7 @@ const WORLDS = [
   { name: "THE BEACH", blurb: "Camila and Rose's home: a white beach outside the rainforest, coconut palms and a turquoise sea. Glos's berry baddies have come down onto the sand.",
     screens: BEACH_SCREENS, stages: BEACH_STAGES, roster: BEACH_ROSTER, foes: beachFoes, song: 1 },   // (world 9, though a story starts here)
 ];
-growWorlds(); addArenas();
+growWorlds(); addArenas(); deepenWorlds();
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
 // every room keeps all its baddies, spread out (the user, 2026-10-17: "there should be more just like before. just space them out within
@@ -9256,28 +9538,13 @@ function growWorld(W, w) {
   W.grown = true;
   const S0 = W.stages, R0 = W.roster || (W.roster = []), n0 = S0.length, cq = q => +String(q.cell || "").slice(1) || 0, row = q => String(q.cell || "B")[0];
   const succ = S0.map((q, s) => q.boss || q.toWorld !== undefined || q.end || q.noRight ? undefined : q.next ?? s + 1);   // (the old walking order)
-  const SPECIAL = new Set(["boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
-    "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts"]);
-  const mirror = q => {                            // the room flipped left to right (and no way up off it: a fork's upper ledge stays with the fork)
-    const o = { pm: {} };
-    if (q.plats) { o.plats = []; q.plats.forEach(([x, y, wd, k], i) => { if (k === "jut" || k === "upper") return; o.pm[i] = o.plats.length; o.plats.push([WORLD - x - wd, y, wd, k]); }); }
-    if (q.gaps) o.gaps = q.gaps.map(([a, b]) => [WORLD - b, WORLD - a]).sort((p, r) => p[0] - r[0]);
-    const PF = []; let d = 0; (q.steps || []).forEach(([x, dy]) => { PF.push([x, d], [x, dy]); d = dy; }); (q.ground || []).forEach(p => PF.push(p.slice())); PF.sort((a, b) => a[0] - b[0]);
-    if (PF.length) o.ground = PF.reverse().map(([x, dy]) => [WORLD - x, dy]);
-    if (q.ceils) o.ceils = q.ceils.map(([a, b, y]) => [WORLD - b, WORLD - a, y]);
-    if (q.ladders) o.ladders = q.ladders.map(([f, wl]) => [WORLD - f, -wl]);
-    if (q.gifts) o.gifts = q.gifts.map(([x, y]) => [WORLD - x, y]);
-    return o;
-  };
-  const flipRow = (row, pm, ng) => (row || []).map(([type, col, at, ...rest]) => [type, col,
-    typeof at === "number" ? WORLD - at : at && at.plat !== undefined ? (pm[at.plat] !== undefined ? { plat: pm[at.plat] } : 1280) : at && at.gap !== undefined ? { gap: ng - 1 - at.gap } : at, ...rest]);
   let made = 0;
   const mk = (tpl, col) => {                       // a new room beside old room tpl, in column col
-    const T0 = S0[tpl], L = mirror(T0), s = S0.length, q = { h: T0.h, col: 100 + col * 4 + (made++ % 4), cell: row(T0) + col, foe: 0, gen: true, like: tpl };
-    for (const k in T0) if (!SPECIAL.has(k)) q[k] = T0[k];
+    const T0 = S0[tpl], L = mirrorRoom(T0), s = S0.length, q = { h: T0.h, col: 100 + col * 4 + (made++ % 4), cell: row(T0) + col, foe: 0, gen: true, like: tpl };
+    for (const k in T0) if (!ROOM_SPECIAL.has(k)) q[k] = T0[k];
     for (const k of ["plats", "gaps", "ground", "ceils", "ladders", "gifts"]) if (L[k]) q[k] = L[k];
     q.name = T0.name ? (T0.boss ? "THE WAY TO " + T0.name : T0.name + " II") : undefined;
-    S0.push(q); R0[s] = flipRow(R0[tpl], L.pm, (L.gaps || []).length); return s;
+    S0.push(q); R0[s] = flipRoster(R0[tpl], L.pm, (L.gaps || []).length); return s;
   };
   // each old room: its column now, and a new room before it or after it
   const head = [], tail = [];
@@ -9397,7 +9664,7 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
     if (sadSpots.has(spot) && !(revisit && sadFate === "killed")) { b.sad = true; sadFace(b); sadFate = null; sadSpots = new Set([spot]); }   // (met it: the other branch's candidate is dropped)   (one you popped comes back an ordinary baddy)
     return b;
   }).filter(Boolean);
-  bossIn = !baddies.length; bossCue = 0;
+  bossIn = !baddies.length && !(STAGES[k].boss && bossDown); bossCue = 0;
 }
 // walk back after dark into a room that was daytime and a baddy or two may be asleep there. Jump on one (don't hit it): it shoots up, startled, and runs off
 let sleepPlan = new Map();                       // this run: room → the roster entries asleep in it
@@ -11364,11 +11631,10 @@ function splash(x, k = 1) {                          // white water: drops throw
     parts.push({ m, v: V(Math.cos(a) * 2.6 * k, .6, Math.sin(a) * 1.6 * k), life: .5, t: 0, size: .9 * k, g: 3, spin: 2, drag: 3, kind: "drop" }); }
 }
 const SPLASH_M = new THREE.MeshBasicMaterial({ color: "#f4fbff" }), SPLASH_M2 = new THREE.MeshBasicMaterial({ color: "#8fe3e6" });
-function splashDown(p) {                             // into the sea: lose a heart, sink for a moment, then come back up where you jumped from
-  fallFx(p.x, 1.3); shake = Math.max(shake, 4);
-  p.hp--; updateHearts(true); p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.atkT = -1; p.block = false; p.power = Math.max(0, (p.power || 0) - 1);
+function splashDown(p) {                             // into the sea (or any drop with no room under it): sink for a moment, then come back up where you jumped from.
+  fallFx(p.x, 1.3); shake = Math.max(shake, 4);       // No heart lost (the user, 2026-10-20: "there should rarely if ever be places where the player falls and dies")
+  p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.atkT = -1; p.block = false;
   p.vx *= .2; p.vy = Math.min(p.vy, 240); p.hurtT = 9; p.inv = 9;
-  if (p.hp <= 0) { p.dead = true; p.sunkT = 0; p.sunk = true; SFX.ko(); return; }
   p.sunkT = .55; p.sunk = true;
 }
 function fallFx(x, k = 1) {                           // something's gone in: a splash in the sea, a puff of cloud in Loof's sky
@@ -11619,12 +11885,12 @@ function update(dt) {
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
+  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
-    beaten++; if (wst) wst.boss = foe.name;
+    beaten++; if (STAGES[stage].boss && !arena) bossDown = true; if (wst) wst.boss = foe.name;
     if (isRunEnd(stage)) level.openShrine && level.openShrine(), SFX.fanfare(true), showModal("ALL CLEAR!", `${rig.name} beat ${beaten === FOES.length ? "all " : ""}${beaten} opponent${beaten > 1 ? "s" : ""} in ${trialTime.toFixed(1)} seconds.`, "clear");   // the night boss ends the day, wherever the run began
     else if (arena) arenaWin();
     else openExit();
