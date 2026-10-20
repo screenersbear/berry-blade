@@ -279,6 +279,7 @@
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
+<script src="sfx.js?v=20261019a" defer></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -2495,7 +2496,7 @@ function reportSound() {
   else toast("♪ SOUND ON");
 }
 
-// ── sound effects: every sound is synthesized on the fly from tones and filtered noise
+// ── sound effects: synthesized on the fly from tones and filtered noise, except the hits and swords, which are recordings (sfx.js, below)
 let ac = null, sfxBus = null, noiseBuf = null, sfxOn = true;
 if (new URLSearchParams(location.search).has("mute")) { bgm.dataset.muted = "1"; sfxOn = false; }   // index.html?mute: silent from the first frame (for testing)
 function audio() {
@@ -2507,6 +2508,7 @@ function audio() {
     const b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(0);   // silent blip unlocks Safari
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    smpInit();
   }
   if (ac.state === "suspended") ac.resume().catch(() => {});
   return ac;
@@ -2602,6 +2604,27 @@ function syncDawn(dt) {
     src.connect(g); g.connect(pan); pan.connect(ac.destination); src.start();
   }
 }
+// ── recorded hits (sfx.js: CC0 recordings, so no licence, fee or credit is needed to publish the game; the user, 2026-10-19: "make sure it's things
+// I don't need a license if I were to publish the game"). Swords and clangs by StarNinjas, punches, knocks and thumps by Kenney, a few takes of each,
+// never the same take twice running. The synthesized sound plays until they've decoded (or if they can't be). Each level matches the synthesized
+// sound it replaced, measured after the effects bus and its limiter (loudest 30 ms); night pitches them down like everything else.
+const smp = { state: "idle", bank: {}, last: {} };
+function smpInit() {
+  const A = window.BERRY_SFX; if (!A || !ac || smp.state !== "idle") return;     // (sfx.js is deferred: until it's in, the next sound tries again)
+  smp.state = "loading";
+  const bytes = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
+  Promise.all(Object.keys(A).map(k => Promise.all(A[k].map(b => ac.decodeAudioData(bytes(b)))).then(bufs => { smp.bank[k] = bufs; })))
+    .then(() => { smp.state = "ready"; }).catch(() => { smp.state = "failed"; });
+}
+function smpPlay(k, vol, { rate = 1, delay = 0 } = {}) {
+  if (!live()) return false;
+  if (smp.state === "idle") smpInit();
+  const L = smp.bank[k]; if (!L) return false;
+  let i = Math.floor(Math.random() * L.length); if (L.length > 1 && i === smp.last[k]) i = (i + 1) % L.length; smp.last[k] = i;
+  const src = ac.createBufferSource(), g = ac.createGain();
+  src.buffer = L[i]; src.playbackRate.value = rate * sfxPitch() * rand(.97, 1.03); g.gain.value = vol;
+  src.connect(g); g.connect(sfxBus); src.start(ac.currentTime + delay); return true;
+}
 const SFX = {
   jump() { tone(280, 620, .13, { type: "triangle", vol: .16 }); },
   djump() { tone(520, 1040, .1, { type: "triangle", vol: .13 }); tone(780, 1560, .12, { type: "sine", vol: .08, delay: .05 }); },
@@ -2611,9 +2634,10 @@ const SFX = {
   whoosh() { noise(.28, { vol: .3, f0: 700, f1: 2600, type: "bandpass", q: 1.4 }); },
   punch() { noise(.07, { vol: .3, f0: 900, f1: 4200, type: "bandpass", q: 1.6 }); noise(.045, { vol: .26, f0: 3600, f1: 1100, type: "bandpass", delay: .035 }); tone(210, 80, .1, { type: "sine", vol: .22, delay: .02 }); },   // a swish, a snap, a thump under it
   kick() { noise(.1, { vol: .32, f0: 600, f1: 3400, type: "bandpass", q: 1.5 }); noise(.05, { vol: .24, f0: 2800, f1: 800, type: "bandpass", delay: .05 }); tone(170, 70, .11, { type: "sine", vol: .2, delay: .04 }); },
-  slash() { noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
-  hit() { tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack
-  impact(big) { noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
+  slash() { if (smpPlay("slash", .1)) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
+  hit() { if (smpPlay("hit", .165)) return; tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack
+  impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
+    noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
   hurt() { tone(620, 180, .28, { type: "square", vol: .09, lp: 2200 }); },
   ko() { [523, 440, 349, 262].forEach((f, i) => tone(f, f * .97, .2, { type: "triangle", vol: .12, delay: .2 + i * .16 })); },
@@ -2629,7 +2653,7 @@ const SFX = {
   huff() { noise(.2, { vol: .07, f0: 500 }); tone(180, 140, .2, { type: "sine", vol: .05 }); },
   achieve() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, .16, { type: "triangle", vol: .11, delay: i * .09 })); },
   heal() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f * 1.01, .2, { type: "sine", vol: .12, delay: i * .07 })); tone(1568, 2093, .32, { type: "triangle", vol: .05, delay: .28 }); },   // a heart back: a rising, replenishing chime
-  crack() { noise(.18, { vol: .32, f0: 2600, f1: 500, type: "bandpass", q: 1.2 }); tone(180, 70, .16, { type: "square", vol: .08, lp: 900 }); },   // a container breaking
+  crack() { if (smpPlay("crack", .09)) return; noise(.18, { vol: .32, f0: 2600, f1: 500, type: "bandpass", q: 1.2 }); tone(180, 70, .16, { type: "square", vol: .08, lp: 900 }); },   // a container breaking
   gift() { tone(660, 1320, .12, { type: "triangle", vol: .12 }); tone(990, 1980, .14, { type: "sine", vol: .09, delay: .08 }); tone(1320, 2640, .16, { type: "sine", vol: .06, delay: .16 }); },
   gate() { noise(1.1, { vol: .16, f0: 260, f1: 70 }); tone(70, 52, 1.1, { type: "sawtooth", vol: .05, lp: 400 }); },
   zap() { noise(.22, { vol: .22, f0: 3200, f1: 900, type: "bandpass" }); tone(1400, 300, .16, { type: "sawtooth", vol: .06 }); },
@@ -2650,7 +2674,8 @@ const SFX = {
   slam() { tone(80, 32, .55, { type: "sine", vol: .34 }); noise(.4, { vol: .24, f0: 600, f1: 90 }); },
   gulp() { noise(1.5, { vol: .15, f0: 2200, f1: 300, type: "bandpass", q: 2, a: .15 }); },
   clack() { noise(.035, { vol: .12, f0: 3000, type: "highpass" }); tone(1200, 900, .03, { type: "square", vol: .035 }); },
-  thud() { tone(70, 40, .18, { type: "sine", vol: .2 }); },
+  thud() { if (smpPlay("thud", .22)) return; tone(70, 40, .18, { type: "sine", vol: .2 }); },
+  wood() { if (smpPlay("wood", .25)) return; SFX.hit(); },   // a trunk knocked (the beach palms)
   power(lv) { const f = [0, 520, 700, 940][lv] || 520; tone(f * .5, f, .22, { type: "triangle", vol: .16 }); tone(f, f * 1.5, .3, { type: "sine", vol: .1, delay: .06 }); noise(.25, { vol: .12, f0: 3000, f1: 6000, type: "bandpass", q: 3 }); },
   release(lv) { noise(.35, { vol: .3, f0: 600, f1: 3200, type: "bandpass", q: 1.2 }); tone(220, 90 + lv * 40, .3, { type: "sawtooth", vol: .09, lp: 1400 }); },
   blop() { tone(320, 120, .12, { type: "sine", vol: .2 }); },
@@ -2662,9 +2687,9 @@ const SFX = {
   heal(big) { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, .18, { type: "triangle", vol: .13, delay: i * .07 })); tone(1568, 2093, .35, { type: "sine", vol: .06, delay: .28 });
     if (big) [1047, 1319, 1568, 2093].forEach((f, i) => tone(f, f * 1.01, .2, { type: "square", vol: .05, lp: 3200, delay: .45 + i * .06 })); },
   splash() { noise(.5, { vol: .34, f0: 2600, f1: 500 }); noise(.22, { vol: .2, f0: 900, f1: 300, type: "bandpass", delay: .04 }); tone(220, 90, .16, { type: "sine", vol: .16 }); },
-  block() { tone(1100, 820, .09, { type: "square", vol: .09, lp: 3000 }); tone(1650, 1400, .14, { type: "triangle", vol: .08 }); noise(.07, { vol: .22, f0: 3500, f1: 6000, type: "highpass" }); },
-  clash() { tone(760, 1300, .07, { type: "square", vol: .1, lp: 2800 }); tone(2150, 1980, .36, { type: "triangle", vol: .1 }); tone(3240, 3060, .28, { type: "sine", vol: .05, delay: .01 }); noise(.1, { vol: .28, f0: 3200, f1: 7500, type: "highpass" }); },   // two blows meeting: a ringing clang
-  parry() { tone(1500, 2600, .1, { type: "triangle", vol: .12 }); tone(2200, 3300, .16, { type: "sine", vol: .08 }); noise(.05, { vol: .18, f0: 5000, f1: 9000, type: "highpass" }); },   // a bright ping
+  block() { if (smpPlay("block", .145)) return; tone(1100, 820, .09, { type: "square", vol: .09, lp: 3000 }); tone(1650, 1400, .14, { type: "triangle", vol: .08 }); noise(.07, { vol: .22, f0: 3500, f1: 6000, type: "highpass" }); },
+  clash() { if (smpPlay("clash", .15)) return; tone(760, 1300, .07, { type: "square", vol: .1, lp: 2800 }); tone(2150, 1980, .36, { type: "triangle", vol: .1 }); tone(3240, 3060, .28, { type: "sine", vol: .05, delay: .01 }); noise(.1, { vol: .28, f0: 3200, f1: 7500, type: "highpass" }); },   // two blows meeting: a ringing clang
+  parry() { if (smpPlay("parry", .088, { rate: 1.08 })) return; tone(1500, 2600, .1, { type: "triangle", vol: .12 }); tone(2200, 3300, .16, { type: "sine", vol: .08 }); noise(.05, { vol: .18, f0: 5000, f1: 9000, type: "highpass" }); },   // a bright ping
 };
 addEventListener("pointerdown", startMusic);
 addEventListener("keydown", e => {
@@ -3461,7 +3486,7 @@ function startOpening() {
 }
 const OPEN_MOBS = [["leafy", "leaf", 820, 0], ["acorn", "bark", 1190, 1], ["twiggy", "olive", 1340, 2], ["pinecone", "rust", 1500, 3], ["thornball", "moss", 1680, 4], ["stumpy", "bark", 2070, 6]];   // [type, colour, where it lands, the palm it knocks down] (Glos takes palm 5)
 const gj_pre = o => !o.gj || o.gj.ph === "wait";
-function knockPalm(kk, dir) { if (!kk || kk.t >= 0) return; kk.t = 0; kk.dir = dir; SFX.hit(); SFX.thud(); sparks(kk.x - dir * 10, GROUND - 70, 10); slashFlair(kk.x - dir * 16, GROUND - 70, false); shake = Math.max(shake, 5); }   // a blow on the trunk: it starts to go
+function knockPalm(kk, dir) { if (!kk || kk.t >= 0) return; kk.t = 0; kk.dir = dir; SFX.wood(); SFX.thud(); sparks(kk.x - dir * 10, GROUND - 70, 10); slashFlair(kk.x - dir * 16, GROUND - 70, false); shake = Math.max(shake, 5); }   // a blow on the trunk: it starts to go
 function updateOpening(dt) {
   const o = opening; if (!o || o.picked) return; o.t += dt; const t = o.t, L = level, G = o.G, e = o.ge;
   const K = L.knock || [], allDown = K.length && K.every(k => k.down); if (allDown) o.endT = (o.endT || 0) + dt;
@@ -10773,7 +10798,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   if (titleUp || menuUp || comicUp || opening || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
   return mode === "play" ? "play" : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
-window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
+window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
