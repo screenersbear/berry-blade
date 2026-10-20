@@ -8,6 +8,7 @@
 // the one button nearest it, so a thumb between two can't set off the wrong one.
 // A small button in the top-left corner pauses (Esc), or goes back on the menu screens. The pad and buttons only show while you're playing; the menus are tapped directly.
 // Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
+// Full screen: any tap asks for it where a page can have it (Android, iPad); on an iPhone, a card asks you to swipe the bars away (see below).
 // The game tells this file what's on screen through window.BERRY_UI (added to the phone build's index.html by build_phone.py).
 // It also keeps the game working offline and updating itself (sw.js; see the bottom of this file).
 (() => {
@@ -95,12 +96,49 @@
   };
   if (document.body) ready(); else addEventListener("DOMContentLoaded", ready);
 
-  // ── first touch: full screen and sideways where the phone allows it (Android; on an iPhone, Add to Home Screen does it)
-  addEventListener("pointerdown", () => {
-    const el = document.documentElement;
-    if (!document.fullscreenElement && el.requestFullscreen && matchMedia("(pointer: coarse)").matches)
-      el.requestFullscreen({ navigationUI: "hide" }).then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock("landscape").catch(() => { })).catch(() => { });
-  }, { once: true });
+  // ── full screen, so the browser's bars don't cover the game (the user, 2026-10-20: "make sure that touching the screen hides safari or
+  // chrome's toolbars so the player can see the game"). Where a page can go full screen (Android; an iPad), any tap while it isn't asks
+  // for it, and turns it sideways. It asks as the finger lifts: a touch only counts as you doing something then (asking on touch-down was
+  // refused, and it only ever asked the once). An iPhone won't let a web page go full screen at all, in Safari or Chrome; there, swiping
+  // up tucks the bars away. So the page gets a little room to scroll, and while the bars are showing a card asks for that swipe (or
+  // mentions the home screen: added there, the game opens with no bars at all).
+  const root = document.documentElement, coarse = matchMedia("(pointer: coarse)").matches, iPhone = /iPhone|iPod/.test(navigator.userAgent);
+  const standalone = () => navigator.standalone === true || matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches;
+  const fsOn = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const fsAsk = root.requestFullscreen ? () => root.requestFullscreen({ navigationUI: "hide" }) : root.webkitRequestFullscreen ? () => root.webkitRequestFullscreen() : null;
+  let asking = false;
+  const goFull = e => {
+    if (!coarse || iPhone || !fsAsk || asking || fsOn() || standalone() || (e && e.pointerType === "mouse")) return;
+    asking = true;
+    try { Promise.resolve(fsAsk()).then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock("landscape").catch(() => { }); }).catch(() => { }).finally(() => { asking = false; }); }
+    catch { asking = false; }
+  };
+  addEventListener("pointerup", goFull, true); addEventListener("touchend", goFull, true);
+  if (iPhone && !standalone()) {
+    root.classList.add("tSwipe");
+    const st2 = document.createElement("style"); st2.textContent = `
+  html.tSwipe, html.tSwipe body { height: auto; overflow: visible; }
+  html.tSwipe body { min-height: calc(100vh + 240px); }   /* (room to swipe: that's what tucks Safari's bars away) */
+  html.tSwipe body > canvas { position: fixed; left: 0; top: 0; }
+  #tUp { position: fixed; inset: 0; z-index: 88; display: none; background: rgba(47, 59, 67, .95); color: #ffde00; align-items: center; justify-content: center;
+    flex-direction: column; gap: 10px; font: 18px "Bungee", sans-serif; text-align: center; padding: 24px; touch-action: pan-y; }
+  #tUp.on { display: flex; }
+  #tUp i { font-style: normal; font-size: 34px; line-height: 1; animation: tUpBob 1.1s ease-in-out infinite; }
+  #tUp span { font: 500 13px "Jost", sans-serif; letter-spacing: .2em; color: #fff; }
+  #tUp small { font: 500 10px "Jost", sans-serif; letter-spacing: .18em; color: #fff; opacity: .7; margin-top: 6px; }
+  @keyframes tUpBob { 0%, 100% { transform: translateY(6px); } 50% { transform: translateY(-8px); } }`; document.head.appendChild(st2);
+    const up = document.createElement("div"); up.id = "tUp";
+    up.innerHTML = "<i>↑</i>SWIPE UP FOR FULL SCREEN<span>OR TAP TO PLAY AS IT IS</span><small>NO BARS AT ALL: SHARE → ADD TO HOME SCREEN</small>";
+    const mountUp = () => document.body.appendChild(up); if (document.body) mountUp(); else addEventListener("DOMContentLoaded", mountUp);
+    let skip = false, moved = false, y0 = 0;
+    const bars = () => innerWidth > innerHeight && innerHeight < Math.min(screen.width, screen.height) - 40;   // (sideways, and clearly less tall than the screen: the bars are showing)
+    const check = () => { if (!bars()) skip = false; up.classList.toggle("on", bars() && !skip); };
+    addEventListener("resize", check); addEventListener("scroll", check, { passive: true }); if (window.visualViewport) visualViewport.addEventListener("resize", check);
+    up.addEventListener("touchstart", e => { moved = false; y0 = e.touches[0].clientY; }, { passive: true });
+    up.addEventListener("touchmove", e => { if (Math.abs(e.touches[0].clientY - y0) > 12) moved = true; }, { passive: true });
+    up.addEventListener("touchend", () => { if (!moved) { skip = true; up.classList.remove("on"); } else setTimeout(check, 450); });   // (a tap: leave the bars, till they next go and come back)
+    setInterval(check, 700); check();                 // (Safari doesn't always say when its bars slide away)
+  }
 
   // ── show the pad while playing; the corner button pauses, or goes back on the menu screens
   let was = "";
