@@ -513,8 +513,8 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
   if (S0.prev !== undefined) return S0.prev;
   if (entrySide === "top" || entrySide === "bottom") return null;
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
-const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
-const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
+const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !bossDown) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
+const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || bossDown) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
 const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight();   // (clearing the room isn't needed to go on: the user, 2026-10-20)
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight();   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
@@ -3981,13 +3981,14 @@ let exitOpen = false, transit = false;
 function openExit() {                                // the boss is down (or the patch is clear): say so, and point the way on
   if (skirmish && !skirmish.won) { skirmish.won = true; skirmish.t = 0; SFX.cheer(); const live = friends.filter(f => f.brawl && !f.gone); if (live.length) popText(live.reduce((a, f) => a + f.x, 0) / live.length, GROUND - 200, "YAY!"); }   // (the beps cheer, and head off right)
   exitOpen = true; SFX.fanfare(); cleared++; roomsDone.add(stage); startBeps(); if (level.openShrine) level.openShrine();   // (the shrine opens: on into the next world)
-  wayCue(); if (!mustClear()) return;   // (an ordinary room: nothing to say, every way on was open all along: the user, 2026-10-20)
+  const bossBeat = !!STAGES[stage].boss && bossIn;   // (the boss itself, just now)
+  wayCue(bossBeat); if (!bossBeat && !mustClear()) return;   // (an ordinary room: nothing to say, every way on was open all along: the user, 2026-10-20)
   const b = $("banner");
   b.innerHTML = `<div class="blk">${STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${wayOnText()}</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
-function wayCue() {                                  // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
-  const on = exitOpen && !stronghold && mustClear(); if (on) $("exitName").textContent = exitLabel(stage);
+function wayCue(bossBeat) {                          // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
+  const on = exitOpen && !stronghold && (bossBeat || mustClear()); if (on) $("exitName").textContent = exitLabel(stage);
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
@@ -4083,7 +4084,7 @@ function goWorldNow(w) {                             // on into the next world: 
   swapUnderFade(() => {
     $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd();   // (she stays in the world she joined you in)
-    worldStack.push({ w: world, trail: trail.slice() });             // (walk back off this world's first room and you're back where you left the last one)
+    worldStack.push({ w: world, trail: trail.slice(), bossDown });   // (walk back off this world's first room and you're back where you left the last one, its boss still beaten)
     setWorld(w); wstReset(); runStart = 0; trail = [0]; newStay(); roomsSeen.add(0); entrySide = "left"; entryHi = false; if (fromW === 9) dayClock = 0; clockEnter(0); rollSad(); setScreen(0);   // (off the beach: the woods start their own day, at midday; the beach's morning doesn't carry on into it)
     const gy = groundAt(40) ?? GROUND;
     Object.assign(player, { x: 40, y: gy, vx: 120, vy: 0, face: 1, onGround: true, plat: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, climb: null, safe: { x: 40, y: gy, plat: null } });
@@ -4106,7 +4107,7 @@ function goWorldBack() {                             // off the left of a world'
   const P0 = worldStack.pop() || { w: prevWorld(world), trail: pathTo(prevWorld(world), world) }; cine = null;   // You left it, so it's a new stay: its rooms all full again
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd();
-    setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); entryHi = false;
+    setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown; entryHi = false;   // (its boss isn't back: the user, 2026-10-20)
     const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
@@ -5144,11 +5145,9 @@ function catLeave(msg) {                           // your cat goes home: it run
   else { r.root.visible = r.shadow.visible = false; }
   if (q) pal = null; tamed = null; if (msg) toast(msg.replace("%", nm)); if (story) writeSave();
 }
-function catsOnKO() {                              // knocked out: your cat runs home, and one you were chasing gets away
-  const had = tamed ? WILD_CATS[tamed.w].name : null, chased = catRun && catRun.phase === "chase" ? WILD_CATS[catRun.w].name : null;
-  if (had) catLeave(null);
-  if (chased) { catRun.phase = "done"; catHud(false); if (wild && wildCatchable()) { wild.phase = "leave"; wild.t = 0; } }
-  if (had || chased) toast(had && chased ? had + " RAN OFF HOME · " + chased + " GOT AWAY" : had ? had + " RAN OFF HOME" : chased + " GOT AWAY", 3200);
+function catsOnKO() {                              // knocked out: your cat stays with you (the user, 2026-10-20); one you were chasing gets away
+  const chased = catRun && catRun.phase === "chase" ? WILD_CATS[catRun.w].name : null;
+  if (chased) { catRun.phase = "done"; catHud(false); if (wild && wildCatchable()) { wild.phase = "leave"; wild.t = 0; } toast(chased + " GOT AWAY", 3200); }
 }
 function updateStrays(dt) {
   strays = strays.filter(s => { const q = s.st; s.t += dt; q.vx = approach(q.vx, s.dir * 430, 2400 * dt); q.face = s.dir; q.x += q.vx * dt; q.vy = Math.min(q.vy + GRAV * dt, 1100); q.y += q.vy * dt;
@@ -11818,7 +11817,7 @@ function combat() {
     L.push({ e: b, top: b.y - b.h, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y - 2 }, hit: (d, k) => hitBaddy(b, d, k), touch: () => b.hurtT <= 0 && !b.sad && !b.sleep && !b.calm,
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
   if (wild && wildCatchable()) { const c = wild.st, h = Math.max(c.rig.heightPx || 56, 56);   // the wild cat: any hit at all catches it
-    L.push({ e: c, top: c.y - h, box: { x1: c.x - 30, x2: c.x + 30, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 36, x2: c.x + 36, y1: c.y - Math.max(h, 74), y2: c.y } }); }
+    L.push({ e: c, top: c.y - h, box: { x1: c.x - 40, x2: c.x + 40, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 46, x2: c.x + 46, y1: c.y - Math.max(h, 80), y2: c.y } }); }   // (land on it, or any hit: a little wider than it is, as it's small and quick)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
   if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) KIT.STRIKES[p.atkKind].hits.forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
@@ -12148,7 +12147,7 @@ function update(dt) {
   if (!transit && player.x < -30 && backOpen()) goBack();   // ... or off the left: back the way you came
   if (ejFight() && player.hitWall && (player.x < 60 || player.x > WORLD - 60) && (ej.bump -= dt) <= 0) { ej.bump = 1.6; popText(player.x, player.y - 140, "LOCKED!"); SFX.thud(); }   // (Evil June's shut the way out)
   else if (ej) ej.bump = Math.max(0, (ej.bump || 0) - dt);
-  if (player.dead && !player.catsGone) { player.catsGone = true; catsOnKO(); }   // (knocked out: your cat runs off home; one you were chasing gets away)
+  if (player.dead && !player.catsGone) { player.catsGone = true; catsOnKO(); }   // (knocked out: one you were chasing gets away; your own cat stays)
   if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) showModal("KNOCKED OUT", ejFight() ? "EVIL JUNE wins this round, and she's gone. Reset to carry on." : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
   shake = Math.max(0, shake - dt * 40);
   camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;   // (the blow's knock to the camera, springing back)
