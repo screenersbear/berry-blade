@@ -182,6 +182,11 @@
   #bepLife svg { width: 18px; height: 20px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
   #bepLife svg.lost .bb { fill: var(--s2); } #bepLife svg.lost .bl { fill: #8a9aa4; }
   #bepLife svg.pop { transform: scale(1.7); }
+  #team { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; gap: 8px; pointer-events: none; }   /* the final showdown: your three beps and their hearts */
+  #team .bm { display: flex; align-items: center; gap: 6px; background: var(--s); padding: 5px 10px 5px 6px; transition: opacity .4s; }
+  #team .bm.out { opacity: .3; }
+  #team .bm svg.face { width: 28px; height: 28px; flex: none; }
+  #team .hs { display: flex; gap: 2px; } #team .hs svg { width: 16px; height: 15px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); } #team .hs svg.lost path { fill: #56616b; } #team .hs svg.pop { transform: scale(1.7); }
   #catHud { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); z-index: 8; display: flex; align-items: center; gap: 10px; padding: 7px 14px 6px; background: var(--s); color: var(--y); font: 17px "Bungee", sans-serif; pointer-events: none; white-space: nowrap; }
   #catHud span { display: flex; gap: 4px; } #catHud svg { width: 20px; height: 20px; fill: var(--y); transition: opacity .3s, transform .3s; } #catHud svg.used { opacity: .22; transform: scale(.8); }
   @media (max-height: 520px) { #wsList { font-size: 10px; gap: 3px 22px; } #wsList b { font-size: 14px; } #wstats .wsIn { gap: 12px; } #wsUp .upHead { font-size: 10px; } #wsUp .upHead b { font-size: 15px; } #wsUp .upBar { height: 13px; } #wsUp .upSub { font-size: 9px; } #wsAsk .askQ { font-size: 14px; } #wsAsk { margin-top: 4px; gap: 8px; } #wsAsk button { font-size: 13px; padding: 7px 12px 4px; } #wstats .lockup.big .blk { font-size: 30px; } #wstats .lockup.big .bar { font-size: 10px; } #wstats .wsGo { font-size: 10px; } }
@@ -380,6 +385,7 @@
     <div id="wsAsk" class="hidden"><div class="askQ" id="wsAskQ"></div><div class="askB"><button data-a="yes" class="on">YES</button><button data-a="no">NOT YET</button></div></div></div>
   <div class="wsGo" id="wsGo">PRESS ANY BUTTON</div></div></div>
 <div id="bepLife"></div>
+<div id="team" class="hidden"></div>
 <div id="catHud" class="hidden"><b id="catName">CATCH THE CAT!</b><span id="catPaws"></span></div>
 <div id="fade"><div class="lockup big"><div class="blk" id="fadeName">&nbsp;</div><div class="bar">LOADING</div></div></div>
 <div id="weapon"></div>
@@ -480,7 +486,8 @@ const STAGES = WOOD_STAGES.slice();
 const runLen = () => { let n = 1, s = runStart; while (n < 60 && !(STAGES[s].toWorld !== undefined || STAGES[s].end || STAGES[s].next === undefined)) { s = nextOf(s); n++; } return n; };   // the rooms from the run's start to its end (by the main path)
 const isRunEnd = s => STAGES[s].toWorld === undefined && !!STAGES[s].end;
 const stageName = s => STAGES[s].name || (STAGES[s].boss ? SCREENS[STAGES[s].h].name : SCREENS[STAGES[s].h].name + " BERRY PATCH");
-let stage = 0, hour = 0;                  // hour: the time of day on screen (its light, its music, its critters)
+let stage = 0, hour = 0, arena = null;   // hour: the time of day on screen · arena: the final showdown under way (showdown below)
+const ARENA_W = 1150, ARENA_L = (WORLD - ARENA_W) / 2, ARENA_R = ARENA_L + ARENA_W, ARENA_BOSS_K = 1.5, ARENA_HP_K = 2.4;   // the showdown's one big screen, the boss's size and toughness (its light, its music, its critters)
 let trap = null, stronghold = null;      // a berry stronghold's open hatch, out on the map · the stronghold you're down in
 let trail = [0], roomsDone = new Set(), roomsSeen = new Set(), dayHeld = 0;   // this stay in this world: the rooms walked through to here · the ones cleared · seen · the hour now showing
 // the day goes round on a 7-step clock: 1–2 midday, 3 afternoon, 4–5 golden hour, 6 blue hour, 7 night, then midday again. Each room you go
@@ -3199,7 +3206,7 @@ function setSel(i) {
   const st = lineup[sel]; st.sq = -.1; st.sqv = 0;
 }
 function clearStage() {
-  ejEnd(); cheerHold = null; if (duo) duo.forEach(d => hideFoe(d.D)); duo = null; endGift(true);
+  arenaEnd(); ejEnd(); cheerHold = null; if (duo) duo.forEach(d => hideFoe(d.D)); duo = null; endGift(true);
   modalOpen = false; $("modal").classList.remove("show"); exitOpen = false; $("exitCue").classList.add("hidden");
   FOES.forEach(hideFoe); clearHz(); clearBaddies(); clearFriends(); parts.forEach(q => actors.remove(q.m)); parts = [];
   if (hideout) { hideout.beps.forEach(disposeBaddy); hideout.notes.forEach(n => actors.remove(n.m)); hideout = null; level.s = -2; }
@@ -3370,7 +3377,7 @@ function holdTipSoon(wait = 5000) {
   if (holdTipDone) return; clearTimeout(holdTipSoon.h);
   holdTipSoon.h = setTimeout(() => {
     if (holdTipDone) return;
-    const busy = mode !== "play" || intro || cine || opening || gift || comicUp || hideout || stronghold || paused || modalOpen || lvlOpen || $("achPop").classList.contains("show");
+    const busy = mode !== "play" || intro || cine || opening || gift || comicUp || hideout || stronghold || arena || paused || modalOpen || lvlOpen || $("achPop").classList.contains("show");
     if (busy) return holdTipSoon(2000);
     holdTipDone = true; const el = $("holdTip"); el.classList.add("show"); SFX.tick();
     setTimeout(() => el.classList.remove("show"), 8000);
@@ -3385,8 +3392,8 @@ function showLvl() {
   $("lvlList").innerHTML = WORLDS.map((W, w) => {
     const S = W.stages, b = (kind, arg, label) => `<button data-w="${w}" data-k="${kind}" data-a="${arg}">${label}</button>`;
     const home = S.findIndex(q => q.bep);
-    return `<div><h4>${W.name}</h4><h5>ROOMS</h5>` + S.map((q, i) => b("room", i, `${q.cell} · ${q.name || (q.boss ? "BOSS ROOM" : "PATCH")}`)).join("") +
-      `<h5>SECRETS</h5>` + (home >= 0 ? b("bep", home, `BEP HIDEOUT (from ${S[home].cell})`) : "") +
+    return `<div><h4>${W.name}</h4><h5>ROOMS</h5>` + S.map((q, i) => q.arena ? "" : b("room", i, `${q.cell} · ${q.name || (q.boss ? "BOSS ROOM" : "PATCH")}`)).join("") +
+      `<h5>SECRETS</h5>` + (S.some(q => q.arena) ? b("arena", S.findIndex(q => q.arena), "THE FINAL SHOWDOWN") : "") + (home >= 0 ? b("bep", home, `BEP HIDEOUT (from ${S[home].cell})`) : "") +
       (SH_SPOT[w] ? b("hatch", SH_SPOT[w].s, `STRONGHOLD HATCH · ${S[SH_SPOT[w].s].cell} AT NIGHT`) + SH_ROOMS.map((R, j) => b("sh", j, `STRONGHOLD ${j + 1} · ${R.name}`)).join("") : "") + `</div>`;
   }).join("");
   lvlOpen = true; $("lvl").classList.add("show"); $("pause").style.visibility = "hidden"; SFX.tick();   // (over the pause menu: that steps aside till it's closed)
@@ -3397,6 +3404,7 @@ $("lvl").addEventListener("click", e => { if (e.target.id === "lvl") closeLvl();
 $("bLvl").addEventListener("click", () => { if (mode === "select") showLvl(); });
 function levelGo(w, kind, a) {
   closeMenus(); story = null; tamed = null; hideCatRigs(); closeLvl(); if (paused) closePause(); SFX.confirm();
+  if (kind === "arena") return startShowdown(w);
   if (!(mode === "play" || mode === "world" || mode === "opp")) { rig = roster[sel]; if (rig.kind === "cat") KIT.paintCards(cards, rig.spec); }   // (from the character screen: whoever's highlighted)
   endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; } cine = null; clearStage(); bepEv = null; clearGifts();
   setWorld(w); level.s = -2;
@@ -3419,7 +3427,7 @@ const SAVE_KEY = "berry.saves.v1";
 const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); return [0, 1, 2].map(i => (a && a[i]) || null); } catch { return [null, null, null]; } };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, uprise: story.uprise || {}, rests: story.rests || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: arena ? arena.back : stage, uprise: story.uprise || {}, rests: story.rests || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, where: WORLDS[world].name + " · " + stageName(arena ? arena.back : stage), visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hms = t => { t = Math.floor(t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sc = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sc).padStart(2, "0"); };
@@ -3598,11 +3606,11 @@ function closeMap() { $("map").classList.remove("show"); menuUp = null; $("pause
 let mapPick = null;                              // { w, opts: [[label, room]], sel }: where in world w to start
 function mapGo(w, s) {
   if (!mapList().includes(w)) return;
-  const R = ((story && story.rests) || {})[w] || [];
-  if (s === undefined && R.length) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r])] }; SFX.tick(); drawMapPick(); return; }
+  const R = ((story && story.rests) || {})[w] || [], SD = !!story && upOn(w) && upPct(w) >= 100 && !(story.freed || {})[w];   // (at 100% and not yet free: the final showdown from here too)
+  if (s === undefined && (R.length || SD)) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r]), ...(SD ? [["THE FINAL SHOWDOWN", "arena"]] : [])] }; SFX.tick(); drawMapPick(); return; }
   SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null;
   if (tamed) { const nm = WILD_CATS[tamed.w].name; hideCatRigs(); tamed = null; pal = null; setTimeout(() => toast(nm + " STAYED BEHIND"), 700); }   // (a world from the map: your cat doesn't come along)
-  storyRun(w, s || 0, false);
+  if (s === "arena") startShowdown(w); else storyRun(w, s || 0, false);
 }
 function drawMapPick() {                          // (the map's buttons: BACK, or the choice of where to start)
   const P = mapPick, B = $("mapBtns");
@@ -3898,14 +3906,15 @@ function wsUprise(S) {                            // the stats card's bar: from 
     const tick = () => { if (!statsUp) return; const u = Math.min(1, (performance.now() - t0) / 1300); pct.textContent = Math.floor(p0 + (p1 - p0) * (1 - (1 - u) * (1 - u))) + "%"; if (u < 1) requestAnimationFrame(tick); else if (statsUp.full && !statsUp.asked) setTimeout(() => { if (statsUp && !statsUp.asked) askShowdown(); }, 350); };
     requestAnimationFrame(tick); }, 1000);
 }
-function askShowdown() {                          // at 100%: the uprising's ready (the showdown itself: still to be designed)
+function askShowdown() {                          // at 100%: the uprising's ready (YES: the final showdown)
   statsUp.asked = true; statsUp.ask = { sel: 0 }; $("wsAskQ").textContent = `READY FOR THE FINAL SHOWDOWN WITH ${statsUp.boss}?`;
   $("wsAsk").classList.remove("hidden"); $("wsGo").classList.add("hidden"); askMark(); SFX.reveal();
 }
 function askMark() { [...$("wsAsk").querySelectorAll("button")].forEach((q, i) => q.classList.toggle("on", i === statsUp.ask.sel)); }
 function askAnswer(yes) {
   if (!statsUp || !statsUp.ask) return; statsUp.ask = null; $("wsAsk").classList.add("hidden"); $("wsGo").classList.remove("hidden");
-  if (yes) { SFX.confirm(); toast("THE FINAL SHOWDOWN IS ON ITS WAY · COMING SOON", 3500); } else SFX.tick();   // (to be designed: the user, 2026-10-19)
+  if (yes) { SFX.confirm(); const w = world; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("wstats").classList.remove("show"); startShowdown(w); return; }
+  SFX.tick();
   statsUp.t0 = 0; statsGo();
 }
 function askKey(code) {
@@ -4425,7 +4434,7 @@ function updateGifts(dt) {
   gifts = gifts.filter(q => !q.got);
 }
 function restartRun() { beaten = 0; cleared = 0; stage = runStart; startTrail(); oppSel = STAGES[stage].foe; foe = FOES[oppSel]; setScreen(stage); rollSad(); resetTrial(); }
-function onReset() { if (modalKind === "clear") restartRun(); else resetTrial(); musicRestart(); }
+function onReset() { if (arena) { arenaRestart(); return; } if (modalKind === "clear") restartRun(); else resetTrial(); musicRestart(); }
 function musicRestart() {                            // (the user, 2026-10-17: after a knock-out and reset, this room's music starts again from the top)
   const S = window.BerryScore; syncMusic(0); if (S && S.restart) S.restart(); try { orig.currentTime = 0; } catch (e) { }
 }
@@ -4451,8 +4460,8 @@ function resetTrial() {
 function moveBody(b, dt, halfW) {
   const x0 = b.x;
   b.x += b.vx * dt;
-  const maxX = b === player && rightOpen() ? WORLD + 400 : WORLD - halfW;   // beat the opponent and the path on to the right opens (or it's the way you came in)
-  const minX = b === player && (backOpen() || (stronghold && stronghold.screen > 0)) ? -400 : halfW;                 // ... and once it's clear, the way back too
+  const maxX = arena ? arena.r - halfW : b === player && rightOpen() ? WORLD + 400 : WORLD - halfW;   // beat the opponent and the path on to the right opens (or it's the way you came in)
+  const minX = arena ? arena.l + halfW : b === player && (backOpen() || (stronghold && stronghold.screen > 0)) ? -400 : halfW;                 // ... and once it's clear, the way back too
   if (b.x < minX) { b.x = minX; b.vx = Math.max(0, b.vx); b.hitWall = -1; }
   else if (b.x > maxX) { b.x = maxX; b.vx = Math.min(0, b.vx); b.hitWall = 1; }
   else b.hitWall = 0;
@@ -5072,7 +5081,7 @@ function bossJumpTo(e, tx, ty, wind = .14) {         // a jump worked out to com
 }
 function bossThink(e, p, D) {
   const dx = p.x - e.x, adx = Math.abs(dx), dy = p.y - e.y, A2 = ATTACKS[e.plan || (e.plan = bossPlan(e, D))], keep = D.chase ? 90 : clamp(A2.range * .5, 170, 420);
-  const cornered = (e.x < 200 && dx > 0) || (e.x > WORLD - 200 && dx < 0);
+  const lo = arena ? arena.l : 0, hi = arena ? arena.r : WORLD, cornered = (e.x < lo + 200 && dx > 0) || (e.x > hi - 200 && dx < 0);   // (the arena's sides are walls too)
   if (p.dead) return (e.intent = { kind: "hold", tx: e.x });
   if (p.onGround && p.plat && p.plat !== e.plat && (dy < -60 || adx > 160)) {            // you're up on a ledge (or another one): up there after you
     const q = p.plat, tx = clamp(p.x - Math.sign(dx) * 60, q.x + 45, q.x + q.w - 45);
@@ -5094,7 +5103,7 @@ function bossMove(e, p, D, dt) {
   if (!p.dead) e.dir = Math.sign(dx) || e.dir;                                              // a fighter keeps its eyes on you
   // your swing coming, close in: sometimes it hops back out of it (or over you, backed into a wall)
   if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 190 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
-    e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < 200 && dx > 0) || (e.x > WORLD - 200 && dx < 0);
+    e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < (arena ? arena.l : 0) + 200 && dx > 0) || (e.x > (arena ? arena.r : WORLD) - 200 && dx < 0);
     e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; return;
   }
   let tv = 0;
@@ -5117,7 +5126,7 @@ function bossMove(e, p, D, dt) {
     if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
 }
 function updateEnemy(dt) {
-  const e = enemy, p = player, D = e.def, A = ATTACKS[e.move || D.atk];
+  const e = enemy, p = arena ? arenaFoeTgt() : player, D = e.def, A = ATTACKS[e.move || D.atk];   // (in the showdown: you, or one of the beps)
   if (e.gone) { e.deathT += dt; return; }
   if (!e.dead && e.y > WATER + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
@@ -5208,6 +5217,8 @@ function updateHazards(dt) {
     if ((bepEv || skirmish) && friends.length && !h.harmless && !h.grounded && h.t < h.life * .95 && h.owner && baddies.includes(h.owner))   // (walking the beps home: the baddies' blows land on them too)
       for (const f of friends) if (bepTargetable(f) && !(f.hurtT > 0) && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, { x1: f.x - f.hw, x2: f.x + f.hw, y1: f.y - f.h, y2: f.y })) {
         bepHurt(f, Math.sign(h.vx) || Math.sign(f.x - h.x) || 1); if (h.m) h.life = h.t; break; }
+    if (arena && !h.harmless && !h.grounded && h.t < h.life * .95) for (const f of arena.beps)   // (the showdown: everything the boss throws can land on the beps)
+      if (arenaUp(f) && !(f.inv > 0) && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, { x1: f.x - f.hw, x2: f.x + f.hw, y1: f.y - f.h, y2: f.y })) { arenaBepHurt(f, Math.sign(h.vx) || Math.sign(f.x - h.x) || 1); if (h.m) h.life = h.t; break; }
   }
   const ended = [];
   hz = hz.filter(h => { if (h.t < h.life) return true; ended.push(h); return false; });
@@ -9178,7 +9189,7 @@ const WORLDS = [
   { name: "THE BEACH", blurb: "Camila and Rose's home: a white beach outside the rainforest, coconut palms and a turquoise sea. Glos's berry baddies have come down onto the sand.",
     screens: BEACH_SCREENS, stages: BEACH_STAGES, roster: BEACH_ROSTER, foes: beachFoes, song: 1 },   // (world 9, though a story starts here)
 ];
-growWorlds();
+growWorlds(); addArenas();
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
 // every room keeps all its baddies, spread out (the user, 2026-10-17: "there should be more just like before. just space them out within
@@ -9459,6 +9470,7 @@ function bossArrive() {                          // all three popped: the boss d
   setFoeHud(); SFX.confirm();
   const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">THE BERRY BADDIES ARE DOWN · HERE COMES THE BOSS</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+  if (arena) arenaBoss();                                       // (the showdown: at the far side, and much tougher)
   if (ej && ej.phase === "partner" && !ej.kid) startChide();    // Evil June's along: the boss tells her off first
 }
 
@@ -9831,6 +9843,7 @@ function updateFriends(dt) {
     if (bepEv && f.task && bepTask(f, dt)) { spring(f, dt); f.yaw = lerp(f.yaw, f.yawT ?? f.yaw, 1 - Math.exp(-dt * 8)); continue; }   // going in: scripted
     if (f.hold || (bepEv && f.task)) { if (f.hold) f.vx = approach(f.vx, 0, 600 * dt); }
     else if (f.brawl) { if (brawlStep(f, dt)) { spring(f, dt); continue; } }
+    else if (f.arena) { if (arenaBepStep(f, dt)) { spring(f, dt); continue; } }
     else if (f.onGround) {
       if ((f.walkT -= dt) <= 0) { f.walkT = rand(1, 3); f.dir = Math.random() < .5 ? -1 : 1; f.stop = Math.random() < .3; }
       if ((f.dir > 0 && f.x > home + 160) || (f.dir < 0 && f.x < home - 160) || f.hitWall) f.dir = f.hitWall ? -f.hitWall : -f.dir;
@@ -9924,6 +9937,156 @@ function syncBepLife() {                          // (kept over the one that was
   bepLifeEl.style.left = ((_bl.x + 1) / 2 * innerWidth).toFixed(1) + "px"; bepLifeEl.style.top = ((1 - _bl.y) / 2 * innerHeight).toFixed(1) + "px";
 }
 function syncFriends(dt) { for (const f of friends) { if (f.popAt > 0 || f.gone) continue; syncBaddy(f, dt); } }
+// ── the final showdown (the user, 2026-10-20). At 100% (the stats card's "READY FOR THE FINAL SHOWDOWN?", the world map, or the level select):
+// an arena that's one big screen of the boss's own world (its last boss room, flat, with two ledges and a high one), the camera pulled back to
+// take it all in. The boss is half as big again, steaming swirly puffs of cloud, and much tougher. Three beps pop up beside you and fight it
+// with you, each with as many hearts as you; the boss goes after them too, and a bep it hits that many times goes down. Win: the world's free
+function addArenas() {
+  WORLDS.forEach((W, w) => {
+    if (w === 9 || !W.stages || W.stages.some(q => q.arena)) return;
+    const S0 = W.stages, col = q => +String(q.cell || "").slice(1) || 0;
+    const bi = S0.map((q, i) => i).filter(i => S0[i].boss && !S0[i].duo).sort((a, b) => col(S0[b]) - col(S0[a]))[0]; if (bi === undefined) return;
+    const B = S0[bi], P = (B.plats || []).filter(p => p[3] !== "jut"), kd = i => (P[i] || P[0] || [])[3], pl = (x, y, w2, k) => k ? [x, y, w2, k] : [x, y, w2];
+    const plats = [pl(ARENA_L + 150, 340, 210, kd(0)), pl(ARENA_R - 360, 340, 210, kd(1)), pl(WORLD / 2 - 110, 225, 220, kd(2))];   // (a ledge each side, a high one in the middle: the world's own kinds)
+    const A = { ...B, name: "THE FINAL SHOWDOWN", cell: "", arena: true, back: bi, boss: true, bossX: ARENA_R - 230, plats, plats2: plats, gaps: [], gifts: [], noLeft: true, noRight: true };
+    ["next", "nextHi", "up", "down", "upX", "downX", "upWall", "downWall", "toWorld", "end", "bep", "gift", "peace", "rest", "castle", "ground", "ceils", "duo", "mini"].forEach(k => delete A[k]);
+    S0.push(A);
+  });
+  STAGES.splice(0, STAGES.length, ...WORLDS[world].stages);
+}
+function startShowdown(w) {
+  const ai = WORLDS[w] ? WORLDS[w].stages.findIndex(q => q.arena) : -1; if (ai < 0) return;
+  closeMenus(); if (paused) closePause(); modalOpen = false; $("modal").classList.remove("show");
+  if (story) { const i = roster.findIndex(r => r.id === story.char); if (i >= 0) { sel = i; rig = roster[i]; } }   // (armed: it's long past the beach)
+  else if (!(mode === "play" || mode === "world" || mode === "opp")) rig = roster[sel];
+  swapUnderFade(() => {
+    endIntro(); endCameo(); clearTrap(); if (stronghold) stronghold = null; cine = null; clearStage(); bepEv = null; clearGifts();
+    setWorld(w); level.s = -2; const A0 = STAGES[ai];
+    oppSel = A0.foe; stage = runStart = ai; foe = FOES[oppSel]; beaten = 0; cleared = 0; trail = [ai]; newStay(); roomsSeen.add(ai); worldStack = []; entrySide = "left"; entryHi = false;
+    levelTest = !story; wstReset(); cameoWorlds = new Set(); dayClock = COLS; dayHeld = A0.h;   // (the boss room's own hour)
+    arena = { w, ai, back: A0.back, l: ARENA_L, r: ARENA_R, phase: "intro", t: 0, beps: [], steam: [], steamT: 0, tgt: null, tgtT: 0 };
+    mode = "play"; setScreen(ai); beginPlay(); arenaSetup();
+  }, "THE FINAL SHOWDOWN");
+}
+function arenaSetup() {                            // you at the left, the beps popping up beside you; the boss drops in when they're all up
+  const A = arena; bossIn = false; hideFoe(foe); setFoeHud(); clearHz();
+  Object.assign(player, { x: A.l + 190, y: GROUND, vx: 0, vy: 0, face: 1, onGround: true, plat: null, safe: { x: A.l + 190, y: GROUND, plat: null } });
+  if (pal) Object.assign(pal, { x: A.l + 120, y: GROUND, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
+  arenaGrow(true);
+  const cols = [...FRIEND_COLS].sort(() => Math.random() - .5), n = maxHp();
+  A.beps = ["M", "B", "S"].map((sz, i) => { const x = A.l + 290 + i * 95, f = makeFriend(sz, cols[i], x);
+    Object.assign(f, { popAt: .7 + i * .45, z: [.45, -.4, .1][i], arena: true, hp: n, maxHp: n, slot: i, col: cols[i], inv: 0, home: x }); f.r.root.visible = f.r.shadow.visible = false; friends.push(f); return f; });
+  teamHud(); camX = X((A.l + A.r) / 2); $("ename").textContent = foe.name;
+  const b = $("banner"); b.innerHTML = `<div class="blk">THE FINAL SHOWDOWN</div><div class="bar">${foe.name} · THE UPRISING'S WITH YOU</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show"); SFX.reveal();
+}
+function arenaGrow(on) {                           // the boss, half as big again (and its hit box with it)
+  const F = foe; if (!F || !F.rig) return;
+  if (on && !F.arenaK) { F.arenaK = { size: F.rig.size || 1, hw: F.hw, h: F.h }; F.rig.size = F.arenaK.size * ARENA_BOSS_K; F.hw *= ARENA_BOSS_K; F.h *= ARENA_BOSS_K; }
+  if (!on && F.arenaK) { F.rig.size = F.arenaK.size; F.hw = F.arenaK.hw; F.h = F.arenaK.h; F.arenaK = null; }
+}
+function arenaEnd() {
+  if (!arena) return; const A = arena; arenaGrow(false); A.steam.forEach(q => { actors.remove(q.m); q.m.material.dispose(); }); arena = null; teamHud(); $("banner").classList.remove("stay");
+}
+function arenaRestart() { const w = arena.w; startShowdown(w); }
+function arenaBoss() {                             // (from bossArrive) down it comes at the far side, much tougher
+  const e = enemy; e.x = arena.r - 230; e.dir = -1; e.hp = e.maxHp = Math.round(e.hp * ARENA_HP_K); e.atkCd = 2.2; shake = Math.max(shake, 8); arenaPick();
+  const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">THE FINAL SHOWDOWN</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+}
+const arenaUp = f => !!f && !f.down && !f.gone && !(f.popAt > 0);
+function arenaFoeTgt() { const A = arena; return A && A.tgt && A.tgt !== player && arenaUp(A.tgt) ? A.tgt : player; }
+function arenaPick() {                             // who the boss goes after next: you, more often than not, or one of the beps (the nearer, the likelier)
+  const A = arena, e = enemy, opts = [[player, player.dead ? 0 : 1.6], ...A.beps.filter(arenaUp).map(f => [f, 1 / (1 + Math.abs(f.x - e.x) / 300)])];
+  let r = Math.random() * opts.reduce((s, o) => s + o[1], 0); A.tgt = player; for (const [t, wgt] of opts) if ((r -= wgt) <= 0) { A.tgt = t; break; }
+  A.tgtT = rand(2.5, 4.5); e.brainT = 0;
+}
+function arenaBepHurt(f, dir) {                    // the boss's blow lands on a bep: a heart gone; out of hearts, it's down
+  if (!arenaUp(f) || f.inv > 0) return; f.hp--; f.inv = 1.1;
+  Object.assign(f, { hurtT: .5, flash: .15, vx: dir * 300, vy: -380, onGround: false, sq: .3, sqv: 0 });
+  sparks(f.x, f.y - f.h * .55, 6); SFX.startle(); shake = Math.max(shake, 3); rumble(30, .4); teamHud(f.slot);
+  glyph(HEART_MAT || (HEART_MAT = glyphMat("♥", "#ff7fb4")), X(f.x), Y(f.y - f.h - 8), (f.z || 0) + .4, V(0, 1.3, 0), .8, .42);
+  if (f.hp <= 0) { f.down = true; f.downT = 0; f.vy = -440; f.onGround = false; popText(f.x, f.y - f.h - 40, "A BEP IS DOWN!"); SFX.shy(); teamHud(); if (arena.tgt === f) arena.tgt = null; }
+}
+function arenaBonk(dir) {                          // a bep's bonk on the boss: it stings (never the last blow: that's yours)
+  const e = enemy; if (!bossIn || e.dead || e.gone || e.inv > 0) { SFX.clack(); return; }
+  if (e.hp > 1) e.hp--; e.flash = .1; SFX.blop(); sparks(e.x - dir * foe.hw * .5, e.y - foe.h * .5, 4);
+}
+function arenaBepStep(f, dt) {                     // close in, bonk it, back off; get clear when it winds up facing you (true: it's moved itself)
+  const A = arena; f.inv = Math.max(0, (f.inv || 0) - dt);
+  if (f.down) {                                    // knocked down: a spin, a puff, gone
+    f.downT += dt; f.yaw += dt * 14; f.vx = approach(f.vx, 0, 600 * dt); f.vy = Math.min(f.vy + 2000 * dt, 1000); moveBody(f, dt, f.hw); f.flash = (f.downT * 8) % 1 < .5 ? .3 : 0;
+    if (f.downT > 1.2 && !f.gone) { puffs(f.x, f.y - f.h * .5, 8, f.hw * 1.2, 160); sparks(f.x, f.y - f.h * .5, 6); f.gone = true; f.r.root.visible = f.r.shadow.visible = false; }
+    return true;
+  }
+  if (A.phase === "won") { f.look = true; f.vx = approach(f.vx, 0, 900 * dt); if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.25, .55); f.vy = -rand(380, 480); f.onGround = false; f.sq = .25; f.sqv = 0; if (Math.random() < .3) SFX.cheer(); } return false; }
+  if (!bossIn || enemy.dead || enemy.gone) {       // not here yet: by your side, facing the far end
+    const tx = player.x + 70 + f.slot * 70; f.vx = approach(f.vx, Math.abs(tx - f.x) > 24 ? Math.sign(tx - f.x) * 150 : 0, 700 * dt); f.dir = 1; f.look = false;
+    if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.8, 1.8); f.vy = -rand(260, 380); f.onGround = false; f.sq = .2; f.sqv = 0; }
+    return false;
+  }
+  const e = enemy, dx = e.x - f.x, adx = Math.abs(dx), reach = foe.hw + f.hw + 14; f.look = false; if (adx > 4) f.dir = Math.sign(dx);
+  const Ak = ATTACKS[e.move || foe.atk] || {}, danger = (e.atk === "charge" || e.atk === "act") && adx < (Ak.range || 300) * .85 && Math.sign(f.x - e.x) === e.dir;
+  f.bonkCd = (f.bonkCd ?? rand(.4, 1.4)) - dt; f.retreat = Math.max(0, (f.retreat || 0) - dt);
+  if (danger || f.retreat > 0) { f.vx = approach(f.vx, -Math.sign(dx) * 210, 900 * dt); if (danger && f.onGround && Math.random() < dt * 2.5) { f.vy = -540; f.onGround = false; f.sq = .2; f.sqv = 0; } }   // get clear (or jump it)
+  else if (adx > reach + 30 + f.slot * 28) f.vx = approach(f.vx, f.dir * 175, 800 * dt);
+  else { f.vx = approach(f.vx, 0, 900 * dt); if (f.onGround && f.bonkCd <= 0) { f.bonkCd = rand(.9, 1.6); f.vy = -360; f.vx = f.dir * 260; f.onGround = false; f.bonk = true; f.sq = .25; f.sqv = 0; } }
+  if (f.bonk && !f.onGround && adx < foe.hw + f.hw + 24 && f.y > e.y - foe.h - 20) { f.bonk = false; arenaBonk(f.dir); f.retreat = rand(.3, .6); }
+  if (f.onGround) f.bonk = false;
+  return false;
+}
+let STEAM_TEX = null;
+function steamTex() {                              // a soft puff of cloud with a curl of swirl on it
+  const c = document.createElement("canvas"); c.width = c.height = 128; const g = c.getContext("2d");
+  [[64, 72, 34], [40, 64, 24], [88, 62, 26], [62, 44, 26]].forEach(([x, y, r]) => { const gr = g.createRadialGradient(x, y, r * .2, x, y, r);
+    gr.addColorStop(0, "rgba(248,245,255,.96)"); gr.addColorStop(.72, "rgba(228,222,246,.92)"); gr.addColorStop(1, "rgba(228,222,246,0)"); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); });
+  g.strokeStyle = "rgba(146,132,196,.9)"; g.lineWidth = 4.5; g.lineCap = "round"; g.beginPath();
+  for (let i = 0; i <= 60; i++) { const a = i / 60 * TAU * 1.6, rr = 4 + i * .42, x = 62 + Math.cos(a) * rr, y = 60 + Math.sin(a) * rr; if (i) g.lineTo(x, y); else g.moveTo(x, y); }
+  g.stroke(); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function steamPuff() {
+  const e = enemy, D = foe, side = Math.random() < .5 ? -1 : 1, x = e.x + side * D.hw * rand(.2, 1), y = e.y - D.h * rand(.12, 1.02);
+  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: STEAM_TEX || (STEAM_TEX = steamTex()), transparent: true, depthWrite: false, opacity: 0, rotation: rand(0, TAU) }));
+  m.position.set(X(x), Y(y), (e.z || 0) + rand(-.5, .7)); m.renderOrder = 4; actors.add(m);
+  arena.steam.push({ m, vx: side * rand(.4, 1.4), vy: rand(1.4, 2.6), t: 0, life: rand(1.1, 1.8), s: rand(1.5, 2.5) * D.h / 240, spin: rand(-1.6, 1.6) });
+}
+function updateArena(dt) {
+  const A = arena; if (!A) return; A.t += dt;
+  if (A.phase === "intro" && A.t > 3.3) A.phase = "fight";
+  if (A.phase === "fight" && bossIn && !enemy.dead && !enemy.gone) {
+    if ((A.tgtT -= dt) <= 0 || (A.tgt && A.tgt !== player && !arenaUp(A.tgt))) arenaPick();
+    const e = enemy, fast = Math.abs(e.vx) > 230 || (!e.onGround && e.vy > 260) || e.atk === "act";   // charging, landing, mid-attack: its body hits them
+    if (fast) for (const f of A.beps) if (arenaUp(f) && !(f.inv > 0) && overlap({ x1: e.x - foe.hw, x2: e.x + foe.hw, y1: e.y - foe.h, y2: e.y }, { x1: f.x - f.hw, x2: f.x + f.hw, y1: f.y - f.h, y2: f.y })) arenaBepHurt(f, Math.sign(f.x - e.x) || 1);
+  }
+  if (bossIn && !enemy.dead && !enemy.gone && (A.steamT -= dt) <= 0) { A.steamT = rand(.04, .08); steamPuff(); }   // steaming
+  A.steam = A.steam.filter(q => { q.t += dt; const u = q.t / q.life; if (u >= 1) { actors.remove(q.m); q.m.material.dispose(); return false; }
+    q.m.position.x += q.vx * dt; q.m.position.y += q.vy * dt; q.vx *= 1 - dt * .6; q.m.material.rotation += q.spin * dt;
+    q.m.scale.setScalar(q.s * (.45 + u * 1.15)); q.m.material.opacity = .82 * Math.sin(Math.PI * Math.min(1, u * 1.25)) * (1 - u * .3); return true; });
+  if (A.phase === "won" && (A.wonT += dt) > 5.4) arenaFinish();
+}
+function arenaWin() {                              // the boss is down: the world's free
+  const A = arena; if (!A || A.phase === "won" || A.phase === "done") return; A.phase = "won"; A.wonT = 0; exitOpen = true; $("exitCue").classList.add("hidden");
+  SFX.fanfare(true); const W = WORLDS[A.w];
+  const b = $("banner"); b.innerHTML = `<div class="blk">${W.name} IS FREE!</div><div class="bar">${foe.name} IS BEATEN · THE UPRISING WON</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("stay");
+  if (story) { (story.freed || (story.freed = {}))[A.w] = true; writeSave(); }
+  for (let i = 0; i < 7; i++) setTimeout(() => { if (arena) sparks(rand(A.l + 100, A.r - 100), GROUND - rand(160, 360), 12); }, i * 260);
+}
+function arenaFinish() {                           // on into the world it's set free (free play: back to its first room)
+  const w = arena.w; arena.phase = "done";
+  if (story) storyRun(w, 0, false); else levelGo(w, "room", 0);
+}
+function arenaCam(sx, sy) {                        // fixed on the arena, pulled back far enough to take all of it in
+  const A = arena, half = (A.r - A.l) / 2 * S * 1.03, hw0 = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect, k = Math.max(1, half / hw0);
+  camX = X((A.l + A.r) / 2); camBase = Y(GROUND);
+  camera.position.set(camX + sx + camKick, camBase + CAM_Y * k + sy, CAM_Z * k); camera.lookAt(camX + sx + camKick * .6, camBase + LOOK_Y * k * 1.12 + sy, 0);
+}
+const BEP_FACE = col => `<svg class="face" viewBox="0 0 28 28"><circle cx="14" cy="16" r="10" fill="#9be04a"/><path d="M4 14 Q14 1 24 14 Q14 9 4 14Z" fill="${col}"/><circle cx="10.5" cy="16" r="1.9" fill="#1d2428"/><circle cx="17.5" cy="16" r="1.9" fill="#1d2428"/><path d="M11 20.5 Q14 23 17 20.5" stroke="#1d2428" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`;
+const TEAM_HEART = `<path d="M11 18.5 L3 10.5 Q-.5 6 3.2 2.6 Q7.5 -.6 11 4.2 Q14.5 -.6 18.8 2.6 Q22.5 6 19 10.5 Z" fill="#ff6fa8"/>`;
+function teamHud(hitSlot) {                        // the three beps and their hearts (the one just hit, its heart popping out)
+  const el = $("team"); if (!arena) { el.classList.add("hidden"); el.innerHTML = ""; return; }
+  el.innerHTML = arena.beps.map(f => `<div class="bm${f.down ? " out" : ""}">${BEP_FACE(f.col)}<span class="hs">` +
+    Array.from({ length: f.maxHp }, (_, i) => `<svg viewBox="0 0 22 20" class="${i < f.hp ? "" : "lost"}${f.slot === hitSlot && i === f.hp ? " pop" : ""}">${TEAM_HEART}</svg>`).join("") + `</span></div>`).join("");
+  el.classList.remove("hidden");
+  if (hitSlot !== undefined) setTimeout(() => el.querySelectorAll("svg.pop").forEach(s => s.classList.remove("pop")), 260);
+}
 // ── the beps' secret: one area in each world. Clear it and three beps pop up; one notices you, and they set off along a trail
 // of sticks and pebbles (there all along) to a hidden way in: a hedge that parts in the woods, a ledge they hop off on the coast.
 // Follow them and you follow them in, to their hideout: beps singing, chasing each other, lounging. Sit on the stump (or the rock)
@@ -11392,6 +11555,7 @@ function syncWorld(dt) {
     camPush = lerp(camPush, slowMo > 0 ? 1 : 0, 1 - Math.exp(-dt * (slowMo > 0 ? 9 : 3)));   // (the last kill: leaning in, then easing back)
     camera.position.set(camX + sx + camKick, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9 - camPush * .35, CAM_Z + camSit * 4.5 - camPush * 1.6);
     camera.lookAt(camX + sx + camKick * .6, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2, 0);
+    if (arena) arenaCam(sx, sy);
   }
   const dc = comicCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
@@ -11435,13 +11599,14 @@ function update(dt) {
   }
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
+  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : STAGES[stage].gift && story && !story.armed && !gift ? startGift() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : STAGES[stage].gift && story && !story.armed && !gift ? startGift() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (wst) wst.boss = foe.name;
     if (isRunEnd(stage)) level.openShrine && level.openShrine(), SFX.fanfare(true), showModal("ALL CLEAR!", `${rig.name} beat ${beaten === FOES.length ? "all " : ""}${beaten} opponent${beaten > 1 ? "s" : ""} in ${trialTime.toFixed(1)} seconds.`, "clear");   // the night boss ends the day, wherever the run began
+    else if (arena) arenaWin();
     else openExit();
   }
   if (rightOpen() && !transit && player.x > WORLD + 30) stronghold ? shNext() : goNext();   // walked off the right edge: on to the next clearing
@@ -11566,7 +11731,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
 window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
-  get sadSpots() { return sadSpots; }, get wild() { return wild; }, get catRun() { return catRun; }, get tamed() { return tamed; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
+  get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
   forceSad(b) { b.sad = true; sadFace(b); }, cheerUp, get sadFate() { return sadFate; },
   goNext, goRoom, goRoomV, goWorld, goWorldBack, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
