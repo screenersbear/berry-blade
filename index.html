@@ -40,6 +40,8 @@
   #hud { right: 16px; align-items: flex-end; }
   #hud .bar { margin-left: 0; margin-right: 22px; }
   #hearts, #pips { display: flex; gap: 5px; }
+  #life.wpn { display: none !important; }   /* (a hero with a weapon: no hearts in the corner, the user, 2026-10-20) */
+  #exitName:empty { display: none; }
   #hearts svg { width: 21px; height: 19px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
   #pips svg { width: 14px; height: 18px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
   #pips svg.mini { width: 21px; height: 27px; }   /* (a mini boss: a bigger berry in the row) */
@@ -1799,10 +1801,9 @@ function buildFactory(k = 0, seed = k) {
   }
   // signs: this room's cell and name where you come in; the next room's by the way on
   const sgn = (big, small, x) => { const sp = new THREE.Mesh(new THREE.PlaneGeometry(5.2, 1.95), new THREE.MeshBasicMaterial({ map: signTex(big, small, ACC) })); at(sp, x, 4.5, WZ + 1.8); scene.add(sp); keep.add(sp); scene.add(at(mk(new THREE.BoxGeometry(5.5, 2.2, .12), null, { mat: mDark, ol: .03 }), x, 4.5, WZ + 1.72)); };   // (at eye level, hung in front of the pipes)
-  if (ST.cell) sgn(ST.cell, ST.name || "", 7);
-  const nx = ST.next ?? seed + 1, nS = STAGES[nx];
-  if (nS && !ST.end && seed + 1 < STAGES.length) sgn("→ " + nS.cell, nS.name || "", WX - 6);
-  if (ST.nextHi !== undefined) { const hS = STAGES[ST.nextHi]; sgn("↑ " + hS.cell, hS.name || "", WX - 13); }
+  const nx = ST.next ?? seed + 1, nS = STAGES[nx];                                     // (just the arrows: no names of rooms, the user, 2026-10-20)
+  if (nS && !ST.end && !ST.noRight && seed + 1 < STAGES.length) sgn("→", "", WX - 6);
+  if (ST.nextHi !== undefined) sgn("↑", "", WX - 13);
   // girders overhead, lamps hanging from them
   for (let x = -20; x < WX + 22; x += 7) scene.add(at(mk(new THREE.BoxGeometry(.5, .5, 14), null, { mat: mBeam, ol: .03 }), x, 10.8, -1.4));
   scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .6, .5), null, { mat: mBeam, ol: .03 }), WX / 2, 11.1, 2.4)); scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .6, .5), null, { mat: mBeam, ol: .03 }), WX / 2, 11.1, -5));
@@ -3233,6 +3234,7 @@ function syncWeapon(dt) {
   weaponEl.classList.toggle("show", on);
 }
 function updateHearts(pop) {
+  { const pk = rig && rig.spec && rig.spec.outfit && rig.spec.outfit.prop && rig.spec.outfit.prop.kind; $("life").classList.toggle("wpn", pk === "sword" || pk === "gauntlet"); }   // (theirs is on the weapon: hold ↓)
   if (heartsEl.children.length !== maxHp()) fillHearts(maxHp());
   [...heartsEl.children].forEach((h, i) => {
     const lost = i >= player.hp;
@@ -3860,7 +3862,7 @@ function openingPicked(id) {                         // you're June (or Chase): 
   kidPartner(you.st.x, GROUND, 1);
   ["hud", "hint"].forEach(q => $(q).classList.remove("hidden")); $("life").classList.remove("hidden"); $("pname").textContent = rig.name;
   clearHz(); FOES.forEach(hideFoe); fillRoom(); setFoeHud();
-  const b = $("banner"); b.innerHTML = `<div class="blk">${stageName(stage)}</div><div class="bar">GLOS LEFT SOME BERRY BADDIES BEHIND · POP THEM</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+  const b = $("banner"); b.innerHTML = `<div class="blk">BERRY BADDIES!</div><div class="bar">GLOS LEFT SOME BEHIND · POP THEM</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
   story.visited.add(9); writeSave(); holdTipSoon();
 }
 function endOpening() { const o = opening; if (!o) return; finishOpening(); o.kids.forEach(k => { actors.remove(k.fruit); if (k.r !== rig) k.r.root.visible = k.r.shadow.visible = false; }); opening = null; $("skipHint").classList.remove("show"); }
@@ -3979,12 +3981,10 @@ function openExit() {                                // the boss is down (or the
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row
-const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dead = q.noRight && q.toWorld === undefined && upTo === undefined && q.down === undefined && q.below === undefined;   // (a dead end: back the way you came)
-  cue.classList.toggle("left", !!q.exitLeft || dead); cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : "NEXT →";   // (a way out on the left: the cue's over there)
-  if (q.toWorld !== undefined) return WORLDS[q.toWorld].name;
-  if (dead) return q.prev !== undefined ? stageName(q.prev) : "THE WAY YOU CAME";
-  if (q.noRight) return [upTo !== undefined ? "↑ " + stageName(upTo) : "", q.down !== undefined ? "↓ " + stageName(q.down) : q.below !== undefined ? "↓ " + stageName(q.below) : ""].filter(Boolean).join(" · ");
-  return q.nextHi !== undefined ? `↑ ${stageName(q.nextHi)} · → ${stageName(nextOf(s))}` : stageName(nextOf(s)); };
+const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
+  cue.classList.toggle("left", !!q.exitLeft || dead);
+  cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
+  return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
 const wayOnText = () => { const q = STAGES[stage];
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
   if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
@@ -4499,8 +4499,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   if (fresh) { player.hp = maxHp(); player.inv = 1; } updateHearts(false);
   wildRoom(fresh, back);                                              // (a wild cat: resting here, or still running on ahead of you)
   setFoeHud();
-  const b = $("banner"); b.innerHTML = `<div class="blk">${stageName(stage)}</div><div class="bar">${STAGES[stage].peace ? WORLDS[world].name : done ? "ALREADY CLEARED" : fresh ? "POP THE BERRY BADDIES · HEARTS REFILLED" : "POP THE BERRY BADDIES"}</div>`;
-  b.classList.remove("show"); void b.offsetWidth; b.classList.add("show");
+  $("banner").classList.remove("show");             // (no banner naming the room: the user, 2026-10-20)
   if (!maybeEJ(false, !fresh || back) && fresh && !back) maybeCameo();   // (now and then the partner's here ahead of you; or, rarely, Evil June: likelier back in a room you've been in)
   if (bossIn && STAGES[stage].boss && ej && ej.phase === "partner" && !ej.kid) startChide();   // (a boss already waiting: it tells her off first)
   maybeTrapdoor(back);                                                // (and at night, now and then, a stronghold's hatch)
@@ -4631,7 +4630,7 @@ function resetTrial() {
   setFoeHud();
   FOES.forEach(hideFoe); if (bossIn) showFoe(foe);
   modalOpen = false; document.getElementById("modal").classList.remove("show");
-  if (!bossIn && !stronghold) { const b = $("banner"); b.innerHTML = `<div class="blk">${stageName(stage)}</div><div class="bar">${done ? "ALREADY CLEARED" : "POP THE BERRY BADDIES"}</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show"); }
+  $("banner").classList.remove("show");
   updateHearts(false); { const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect; camX = clamp(X(rx), halfW - 1, X(WORLD) - halfW + 1); }
   jumpBuf = atkBuf = 0; renderer.domElement.focus();
 }
@@ -9028,7 +9027,7 @@ function buildLakebed(k = 0, seed = k) {
   // the fork (where the old shore steps go up): a signpost, as plain as can be: up to the shore, or on down into the deep
   if (ST.nextHi !== undefined) { const hi = STAGES[ST.nextHi], lo = STAGES[ST.next ?? seed + 1], sx = X(1300), P2 = group(scene, sx, gAt(sx), -1.1); keep.add(P2);
     P2.add(at(mk(cyl(.1, .12, 4.6, 8), null, { mat: mats.woodD, ol: .02 }), 0, 2.3, 0));
-    [[`↑ ${hi.cell}`, "UP THE OLD SHORE · " + (hi.name || ""), 4.0, .2], [`→ ${lo.cell}`, "ON DOWN INTO THE DEEP · " + (lo.name || ""), 2.9, -.14]].forEach(([big, small, y, tilt]) => {
+    [["↑", "UP", 4.0, .2], ["→", "ON DOWN", 2.9, -.14]].forEach(([big, small, y, tilt]) => {   // (no names: the user, 2026-10-20)
       const sh = new THREE.Shape(); sh.moveTo(0, -.42); sh.lineTo(2.5, -.42); sh.lineTo(3.05, 0); sh.lineTo(2.5, .42); sh.lineTo(0, .42); sh.closePath();
       const g3 = group(P2, 0, y, .12); g3.rotation.z = tilt; g3.add(mk(new THREE.ExtrudeGeometry(sh, { depth: .1, bevelEnabled: false }).translate(-.35, 0, -.05), null, { mat: mats.wood, ol: .04 }));
       const face = new THREE.Mesh(new THREE.PlaneGeometry(2.75, .8), new THREE.MeshBasicMaterial({ map: boardSign(big, small) })); at(face, 1.0, 0, .06); g3.add(face); g3.traverse(o => keep.add(o)); }); }
@@ -9927,7 +9926,7 @@ const bossPips = n => Array.from({ length: n }, (_, i) =>      // one pip per tw
   `<svg viewBox="0 0 16 20" style="animation-delay:${(i * .1).toFixed(1)}s"><path d="M8 1 L13 8 L14 13 Q14 19 8 19 Q2 19 2 13 L3 8 L6 5 Z" fill="#ffd203"/><path d="M8 10 L10.5 14 Q10 17 8 17 Q6 17 5.5 14 Z" fill="#2f3b43"/></svg>`).join("");
 const BERRY_PIP = `<svg viewBox="0 0 16 20"><path d="M3.2 4.6 L5.4 6.6 L6.8 3.4 L8 6 L9.2 3.4 L10.6 6.6 L12.8 4.6 L12.4 8 A6.6 6.6 0 1 1 3.6 8 Z" fill="#ffd203"/><path d="M8 11 L9.6 12.4 L9 14.4 L7 14.4 L6.4 12.4 Z" fill="#2f3b43"/></svg>`;
 function setFoeHud() {                           // while the baddies are up the bar counts them (berries); then it shows the boss's health
-  $("hud").classList.toggle("boss", !!bossIn);
+  $("hud").classList.toggle("boss", !!bossIn); $("hud").style.visibility = bossIn ? "" : "hidden";   // (no berry count: only a boss's name, while it's in)
   if (bossIn) { $("ename").textContent = foe.name; pipsEl.innerHTML = ""; }   // (the user, 2026-10-17: don't show the bosses' health)
   else { $("ename").textContent = "BERRY BADDIES"; pipsEl.innerHTML = baddies.map(b => b.T.move === "breach" ? BERRY_PIP.replace("<svg", '<svg class="opt"') : b.mini ? BERRY_PIP.replace("<svg", '<svg class="mini"') : BERRY_PIP).join(""); baddies.forEach((b, i) => { if (b.gone || b.dead) pipsEl.children[i].classList.add("lost"); }); }
 }
@@ -11282,7 +11281,7 @@ function shScreen(i, back) {
   if (pal) Object.assign(pal, { x: x - d * 60, y: GROUND, vx: 120 * d, vy: 0, onGround: true, plat: null, pounce: null });
   const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
   camX = back ? X(WORLD) - halfW + 1 : clamp(X(130), 10, 40); camBase = Y(GROUND);
-  const b = $("banner"); b.innerHTML = `<div class="blk">${WORLDS[world].name} STRONGHOLD</div><div class="bar">${SH_ROOMS[i].name}${done ? " · ALREADY CLEARED" : " · SHH… THEY HAVEN'T SEEN YOU YET"}</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">THE STRONGHOLD</div><div class="bar">${done ? "ALREADY CLEARED" : "SHH… THEY HAVEN'T SEEN YOU YET"}</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
   $("fade").classList.remove("on"); transit = false;
 }
@@ -11290,7 +11289,7 @@ function shFill() {                                // its crew (unless you've cl
   const H = stronghold, i = H.screen, done = H.done.has(i);
   clearBaddies(); if (!done) spawnShCrew(i); bossIn = false; bossCue = 0;
   exitOpen = done && (i < 2 || H.key);
-  if (exitOpen) { $("exitName").textContent = i < 2 ? SH_ROOMS[i + 1].name : "OUT · " + stageName(H.to); $("exitCue").classList.remove("hidden"); } else $("exitCue").classList.add("hidden");
+  if (exitOpen) { $("exitName").textContent = ""; $("exitCue").classList.remove("hidden"); } else $("exitCue").classList.add("hidden");
   if (i === 2 && done && level.openBox) { level.openBox(); if (H.key) { level.takeKey(); level.openHatch(); } }
   setFoeHud(); return done;
 }
@@ -11333,7 +11332,7 @@ function calmPose(b) {                             // laid over the usual pose
 function shClear() {
   const H = stronghold, i = H.screen; if (H.done.has(i)) return; H.done.add(i); SFX.fanfare();
   const b = $("banner");
-  if (i < 2) { exitOpen = true; b.innerHTML = `<div class="blk">ROOM CLEARED</div><div class="bar">ON THROUGH THE STRONGHOLD →</div>`; $("exitName").textContent = SH_ROOMS[i + 1].name; $("exitCue").classList.remove("hidden"); }
+  if (i < 2) { exitOpen = true; b.innerHTML = `<div class="blk">ROOM CLEARED</div><div class="bar">ON THROUGH THE STRONGHOLD →</div>`; $("exitName").textContent = ""; $("exitCue").classList.remove("hidden"); }
   else { b.innerHTML = `<div class="blk">THE STRONGBOX!</div><div class="bar">ITS KEY IS YOURS · GO AND GET IT</div>`; if (level.openBox) level.openBox(); H.keyOut = true; }
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
@@ -11344,9 +11343,9 @@ function updateStronghold(dt) {
 function takeKey() {
   const H = stronghold; H.key = true; const n = levelTest ? Object.keys(keysGot()).length : saveKey(world); level.takeKey(); level.openHatch();   // (a test run's key isn't kept)
   SFX.achieve(); sparks(level.keyObj.x, level.keyObj.y, 16); shake = Math.max(shake, 4);
-  const b = $("banner"); b.innerHTML = `<div class="blk">${KEY_ICON}STRONGHOLD KEY</div><div class="bar">${levelTest ? "TEST RUN · NOT SAVED" : `${n} OF ${KEY_TOTAL} · ${WORLDS[world].name}`} · THE WAY OUT IS OPEN →</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${KEY_ICON}STRONGHOLD KEY</div><div class="bar">${levelTest ? "TEST RUN · NOT SAVED" : `${n} OF ${KEY_TOTAL}`} · THE WAY OUT IS OPEN →</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
-  exitOpen = true; $("exitName").textContent = "OUT · " + stageName(H.to); $("exitCue").classList.remove("hidden");
+  exitOpen = true; $("exitName").textContent = ""; $("exitCue").classList.remove("hidden");
 }
 function shNext() {
   const H = stronghold; transit = true; $("fade").classList.add("on");
@@ -12081,7 +12080,7 @@ function update(dt) {
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > (STAGES[stage].boss && !bossDown ? .9 : .25)) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (STAGES[stage].boss && !arena) bossDown = true; if (wst) wst.boss = foe.name;
