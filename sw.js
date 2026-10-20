@@ -3,7 +3,7 @@
 // (three.js) and the fonts included. Whenever it's online it checks for a new version: this file is rewritten by build_phone.py
 // with a new VERSION every time the game changes, so the phone sees the difference, downloads the new files in the background and
 // swaps to them (touch.js reloads into it at the menu). Template: .claude/berry-tools/phone/sw.js; the build fills in the two lists.
-const VERSION = "berry-a4000875b897";
+const VERSION = "berry-ecc5978b5a4e";
 const LOCAL = ["./", "./ambience.js", "./beps.js", "./characters.js", "./charkit.js", "./dawn.js", "./editor.js", "./icon-180.png", "./icon-192.png", "./icon-512.png", "./index.html", "./manifest.webmanifest", "./score.js", "./sfx.js", "./shore.js", "./story.js", "./touch.js"];                       // the game's own files (this folder)
 const LIB = "berry-lib-three-0.160.0";         // the engine and the fonts: their addresses never change, so they're kept across versions
 const REMOTE = ["https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/geometries/RoundedBoxGeometry.js", "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/utils/BufferGeometryUtils.js"];                     // the engine's files (read from the game's import map by the build)
