@@ -1865,7 +1865,7 @@ function updatePoseHuman(p, dt) {
   const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
-  const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .34 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .15 * sk);   // (sprinting: longer strides, not quicker ones)   // (pumping: the knee drives a little higher)
+  const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .3 * sk);   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
     return { th, pt: lerp(R[2], Wl[2], wk), fx: Math.sin(th) * TH + Math.sin(th - tk) * SH, dy: Math.cos(th) * TH + Math.cos(th - tk) * SH }; };
   const L0 = D.run ? leg(0) : null, LS = D.run ? leg(stS) : null;
   const runPx = D.run ? Math.max(20, (L0.fx - LS.fx) / stS * 40 * (Bd.scale || 1) * Math.cos(p.bodyYaw ?? 0)) : 118 * L;   // planted feet keep pace with the ground (at the character's size)
@@ -1891,7 +1891,7 @@ function updatePoseHuman(p, dt) {
     const u = ph / TAU, uN = ((u % 1) + 1) % 1, uF = (uN + .5) % 1, N = leg(uN), F2 = leg(uF), stN = uN < stS, stF = uF < stS;
     if (stN) N.fx = lerp(L0.fx, LS.fx, uN / stS);           // a planted foot goes back exactly as fast as the ground goes by
     if (stF) F2.fx = lerp(L0.fx, LS.fx, uF / stS);
-    const hip = stN && stF ? Math.min(N.dy, F2.dy) : stN ? N.dy : stF ? F2.dy : Math.max(N.dy, F2.dy) + .05 * m.bounce;   // planted legs set the hip height (both down: the lower); airborne in between
+    const hip = stN && stF ? Math.min(N.dy, F2.dy) : stN ? N.dy : stF ? F2.dy : Math.max(N.dy, F2.dy) + .05 * m.bounce * (1 + 1.6 * sk);   // (sprinting: longer in the air between steps, light on her feet)   // planted legs set the hip height (both down: the lower); airborne in between
     o.bodyY = lerp(o.bodyY, (hip + D.ankle + .05 - D.hip * Bd.legs) / ds, g);
     o.lean += g * .03 * Math.sin(4 * Math.PI * u) * (1 - wk);
     const flut = .1 * m.swing * Math.sin(TAU * u), cw = Math.cos(TAU * u), held = p.rig.prop && p.rig.prop.kind !== "none", pf = leadFar(p);   // running, arms trail straight back, fluttering a little; walking, they swing against the legs (the hand holding something, less)
