@@ -195,6 +195,9 @@
   #wsAsk button.on, #wsAsk button:hover { background: var(--s); color: var(--y); border-color: var(--y); }
   #bepLife { position: fixed; left: 0; top: 0; z-index: 7; display: flex; gap: 3px; pointer-events: none; opacity: 0; transform: translate(-50%, -100%) scale(.6);
     transition: opacity .2s, transform .25s cubic-bezier(.2, 1.6, .4, 1); filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }   /* the beps' five berries of life, over them when one's hit */
+  #bepArrow { position: fixed; left: 0; top: 0; width: 38px; height: 38px; z-index: 7; pointer-events: none; display: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .35)); }   /* the way to the beps, when they're off the screen */
+  #bepArrow.show { display: block; animation: bepPulse .9s ease-in-out infinite; } @keyframes bepPulse { 50% { opacity: .6; } }
+  #bepArrow svg { width: 100%; height: 100%; display: block; }
   #bepLife.show { opacity: 1; transform: translate(-50%, -100%) scale(1); }
   #bepLife svg { width: 18px; height: 20px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
   #bepLife svg.lost .bb { fill: var(--s2); } #bepLife svg.lost .bl { fill: #8a9aa4; }
@@ -412,6 +415,7 @@
     <div id="wsAsk" class="hidden"><div class="askQ" id="wsAskQ"></div><div class="askB"><button data-a="yes" class="on">YES</button><button data-a="no">NOT YET</button></div></div></div>
   <div class="wsGo" id="wsGo">PRESS ANY BUTTON</div></div></div>
 <div id="bepLife"></div>
+<div id="bepArrow"><svg viewBox="0 0 40 40"><path d="M5 20 31 7 25 20 31 33Z" fill="#ffd203" stroke="#2f3b43" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
 <div id="team" class="hidden"></div>
 <div id="catHud" class="hidden"><b id="catName">CATCH THE CAT!</b><span id="catPaws"></span></div>
 <div id="koScr"><div class="lockup big"><div class="blk">KNOCKED OUT</div><div class="bar" id="koSub">&nbsp;</div></div></div>
@@ -2686,7 +2690,8 @@ function setScreen(s) {                              // build stage s (its platf
     level = frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
-    if (STAGES[s].climbUp) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
+    if (STAGES[s].climbUp) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));
+    if (mode === "play" && STAGES[s].bep && hideFound(world) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
@@ -3647,7 +3652,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -3739,6 +3744,9 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = MAP_ASPECT) {   // the rooms yo
     G0.ropes.forEach(([x, d]) => { const gy = stageGround(WORLDS[w].stages[s], x) ?? GROUND; g.beginPath(); g.moveTo(X(c, x), Y(r, gy)); g.lineTo(X(c, x), d < 0 ? by : by + ch); g.stroke(); });
     g.setLineDash([]); }
   for (const s of seen) { const a = M.at[s]; if (!a || s !== cur) continue; g.strokeStyle = "#ffd203"; g.lineWidth = 2 * k; g.strokeRect(ox + (a[0] - M.c0) * cw + 1, oy + (a[1] - M.r0) * ch + 1, cw - 2, ch - 2); }   // (the room you're in, on top)
+  if (hideFound(w)) { const hs = WORLDS[w].stages.findIndex(q => q.bep), a = M.at[hs];   // the beps' hideout, found: its sign
+    if (a && seen.has(hs)) { const B = WORLDS[w].stages[hs].bep, sx = X(a[0], B.zone), sy = Y(a[1], (stageGround(WORLDS[w].stages[hs], B.zone) ?? GROUND) - 30), z = 4.5 * k;
+      g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.moveTo(sx - z, sy + z); g.lineTo(sx - z, sy - z * .2); g.lineTo(sx, sy - z * 1.1); g.lineTo(sx + z, sy - z * .2); g.lineTo(sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } }
   if (cur >= 0 && M.at[cur] && player) { const [c, r] = M.at[cur], px = X(c, clamp(player.x, 0, WORLD)), py = Y(r, clamp(player.y - 40, MAP_TOP, MAP_BOT));   // you
     g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(px, py, 3.4 * k, 0, Math.PI * 2); g.fill(); g.stroke(); }
 }
@@ -3871,7 +3879,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] ? { w: q.cat, r: wildRig(q.cat) } : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, freed: q.freed || {} }; storyRun(q.w, q.s, false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] ? { w: q.cat, r: wildRig(q.cat) } : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {} }; storyRun(q.w, q.s, false); }
 function storyBegin(slot) { tamed = null; mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   const id = story.char || "camila", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
@@ -3885,6 +3893,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
     if (fresh && w === 9 && s === 0) startOpening();   // (a new game: Camila and Rose on the beach, and Glos coming down)
     else if (w === 9 && story.char) kidPartner();       // (the other one, alongside you on the beach)
     story.visited.add(w); writeSave();
+    if (hideNext) { hideNext = false; if (STAGES[stage].bep) enterHideout(); }   // (from the map: straight on in)
   }, WORLDS[w].name);
 }
 function quitToTitle() {                             // save (a story run) and back to the title card
@@ -3919,10 +3928,11 @@ let mapPick = null;                              // { w, opts: [[label, room]], 
 function mapGo(w, s) {
   if (!mapList().includes(w)) return;
   const R = ((story && story.rests) || {})[w] || [], SD = !!story && upOn(w) && upPct(w) >= 100 && !(story.freed || {})[w];   // (at 100% and not yet free: the final showdown from here too)
-  if (s === undefined && (R.length || SD)) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r]), ...(SD ? [["THE FINAL SHOWDOWN", "arena"]] : [])] }; SFX.tick(); drawMapPick(); return; }
+  const HF = hideFound(w) && WORLDS[w].stages.some(q => q.bep);
+  if (s === undefined && (R.length || SD || HF)) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r]), ...(HF ? [["THE BEPS' HIDEOUT", "hide"]] : []), ...(SD ? [["THE FINAL SHOWDOWN", "arena"]] : [])] }; SFX.tick(); drawMapPick(); return; }
   SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null;
   if (tamed) { const nm = WILD_CATS[tamed.w].name; hideCatRigs(); tamed = null; pal = null; setTimeout(() => toast(nm + " STAYED BEHIND"), 700); }   // (a world from the map: your cat doesn't come along)
-  if (s === "arena") startShowdown(w); else storyRun(w, s || 0, false);
+  if (s === "arena") startShowdown(w); else if (s === "hide") { hideNext = true; storyRun(w, WORLDS[w].stages.findIndex(q => q.bep), false); } else storyRun(w, s || 0, false);
 }
 function drawMapPick() {                          // (the map's buttons: BACK, or the choice of where to start)
   const P = mapPick, B = $("mapBtns");
@@ -3954,6 +3964,7 @@ function drawMap() {
       `<circle r="24" fill="${seen ? MAP_COL[w] : "#cfd6d8"}" stroke="${N}" stroke-width="4"/>` + (seen ? `<g fill="${N}">${MAP_ICON[w]}</g>` : `<text y="9" text-anchor="middle" font-size="24" fill="${N}">?</text>`) +
       `<g transform="translate(0 44)"><rect x="${-tw / 2}" y="-14" width="${tw}" height="24" fill="${sel ? "#ffd203" : N}"/><text y="4" text-anchor="middle" font-size="13" fill="${sel ? N : "#ffd203"}">${nm}</text></g>` +
       (seen && upOn(w) ? `<g transform="translate(0 67)"><rect x="-27" y="-10" width="54" height="19" rx="9.5" fill="${upPct(w) >= 100 ? "#ffd203" : "#ff5fa8"}" stroke="${N}" stroke-width="2.5"/><text y="4.5" text-anchor="middle" font-size="12" fill="${upPct(w) >= 100 ? N : "#fff"}">${Math.floor(upPct(w))}%</text></g>` : "") +
+      (seen && hideFound(w) ? `<g transform="translate(-20 -20)"><circle r="10" fill="${N}"/><path d="M-6 6V-1L0 -6L6 -1V6Z" fill="#ffd203"/><rect x="-2" y="1" width="4" height="5" fill="${N}"/></g>` : "") +   // (the beps' hideout found: a little sign)
       ((((story && story.rests) || {})[w] || []).length ? `<g transform="translate(20 -20)"><circle r="10" fill="${N}"/><path d="M0 -6Q5 0 3 5Q0 7 -3 5Q-5 0 0 -6Z" fill="#ffb35c"/></g>` : "") +
       (w === world ? `<g transform="translate(0 -40)"><path d="M-7 4 0 12 7 4Z" fill="${N}"/><rect x="-26" y="-14" width="52" height="19" fill="${N}"/><text y="1" text-anchor="middle" font-size="12" fill="#ffd203">YOU</text></g>` : "") + `</g>`; });
   $("mapBox").innerHTML = o + `</svg>`;
@@ -10679,6 +10690,16 @@ function showBepLife(f, hit) {                    // the five berries pop up ove
   bepLifeAt = f; el.classList.add("show"); clearTimeout(showBepLife.h); showBepLife.h = setTimeout(() => { el.classList.remove("show"); bepLifeAt = null; }, 2000);
 }
 const _bl = new THREE.Vector3();
+const _ba = new THREE.Vector3();
+function syncBepArrow() {                         // while they're leading you: off the screen, a little arrow at its edge points the way to them
+  const el = $("bepArrow"), live = mode === "play" && bepEv && !hideout && !paused ? friends.filter(f => !f.gone && !(f.popAt > 0)) : [];
+  if (!live.length) { el.classList.remove("show"); return; }
+  const x = live.reduce((a, f) => a + f.x, 0) / live.length, y = live.reduce((a, f) => a + f.y - f.h * .5, 0) / live.length;
+  _ba.set(X(x), Y(y), 0).project(camera); const W = innerWidth, H = innerHeight, sx = (_ba.x + 1) / 2 * W, sy = (1 - _ba.y) / 2 * H, m = 30;
+  if (sx > 0 && sx < W && sy > 0 && sy < H) { el.classList.remove("show"); return; }
+  const cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy, k = Math.min((W / 2 - m) / Math.max(1, Math.abs(dx)), (H / 2 - m) / Math.max(1, Math.abs(dy)));
+  el.style.transform = `translate(${(cx + dx * k - 19).toFixed(1)}px, ${(cy + dy * k - 19).toFixed(1)}px) rotate(${(Math.atan2(dy, dx) * 180 / Math.PI + 180).toFixed(1)}deg)`; el.classList.add("show");
+}
 function syncBepLife() {                          // (kept over the one that was hit, as it moves)
   const f = bepLifeAt; if (!f || !bepLifeEl) return;
   _bl.set(X(f.x), Y(f.y - f.h - 26), f.z || 0).project(camera);
@@ -10843,7 +10864,7 @@ const bepPath = (B, u, from = B.trail) => { const e = u * u * (3 - 2 * u); retur
 let bepEv = null, bepSeen = new Set(), hideout = null;
 function startBeps() {                            // the room's clear: was the sad berry here, and is it unhurt (left be, or cheered up)?
   const home = bepHome(), here = [...sadSpots].some(sp => +sp.split(":")[0] === stage);
-  if (!here || sadFate === "killed" || home < 0 || bepRun.seen) return;
+  if (!here || sadFate === "killed" || home < 0 || bepRun.seen || hideFound(world)) return;   // (their hideout found already: they don't come out for you again here)
   bepRun.seen = true;
   const B = home === stage ? STAGES[stage].bep : null, back = colOf(home) < colOf(stage);
   spawnFriends(["S", "M", "B"], B || { trail: back ? 0 : WORLD });
@@ -11022,7 +11043,10 @@ function autoPlayer(dt) {
   spring(p, dt); updatePose(p, dt);
 }
 // ── the hideout
+let freeHide = new Set(), hideNext = false, hideUpPrev = false, hideHint = false;   // (free play's found hideouts) · on the way in from the map · ↑ at the way in, held · its "↑" shown
+const hideFound = w => story ? !!(story.hideouts && story.hideouts[w]) : freeHide.has(w);   // this world's hideout: been in it?
 function enterHideout() {
+  if (story) { (story.hideouts || (story.hideouts = {}))[world] = true; } else freeHide.add(world);   // (found: on the maps from now on, and the way in stays open)
   endCameo(); if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = false; ej.away = true; }   // (Evil June waits outside)
   if (!levelTest) unlockAch(["grove", "cove", "workshop", "loft", "tent", "pod", "stash", "attic", "hut"][world]);
   const B = bepEv ? bepEv.B : STAGES[stage].bep; bepSeen.add(world + ":" + stage); bepRun.escort = null;
@@ -12383,6 +12407,11 @@ function update(dt) {
   if (mode === "opp") { updateOpp(dt); return; }
   if (mode === "world") { updateWorldSel(dt); return; }
   wstTick(dt);
+  if (mode === "play" && hideFound(world) && STAGES[stage] && STAGES[stage].bep && !hideout && !stronghold && !bepEv && !transit && player && !player.auto && !player.dead) {   // at the hideout's way in: ↑ and in you go
+    const B = STAGES[stage].bep, near = player.onGround && Math.abs(player.x - B.zone) < 70, up = !!(keys.ArrowUp || keys.KeyW || pad.u);
+    if (near && up && !hideUpPrev) { player.auto = { x: B.zone, kind: B.kind, t: 0, phase: "walk" }; player.combo = null; player.atkT = -1; player.block = false; player.chargeT = 0; SFX.confirm(); }
+    if (near && !hideHint) { hideHint = true; popText(B.zone, (groundAt(B.zone) ?? GROUND) - 170, "↑"); } else if (!near) hideHint = false;
+    hideUpPrev = up; }
   if (cheerHold && (cheerHold.t += dt) > cheerHold.dur) cheerHold = null;
   if (opening) { updateOpening(dt); shake = Math.max(0, shake - dt * 40); return; }   // the beach's opening: nobody's playing yet
   if (gift && gift.phase === "in") { updateGift(dt); updateEJ(dt); updateHazards(dt); shake = Math.max(0, shake - dt * 40); return; }   // the bep: everything waits
@@ -12430,7 +12459,7 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); syncCats(dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest(); syncRuin(); syncBloom();
+  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom();
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
