@@ -11040,7 +11040,7 @@ const _limb = new THREE.Vector3();
 // red fist, gold plates and gem, the cuff and the heart rings, in its own colours) shooting out from that hand to GHOST_REACH in front,
 // a streak trailing back to the hand, and the punch lands that far out. June's slash lands about 126 px out (her sword's hit box)
 const GHOST_REACH = 108, GHOST_SIZE = .46;         // (its fist about half the fighter's height, knuckle to palm: it was .36)
-const GHOST_OP = .5, GHOST_DEPTH_M = Object.fromEntries([THREE.FrontSide, THREE.BackSide, THREE.DoubleSide].map(s => [s, new THREE.MeshBasicMaterial({ colorWrite: false, side: s })]));   // see-through, as one layer (depth first, then colour)
+const GHOST_Z = .75, GHOST_FLAT = .5, GHOST_OP = .5, GHOST_DEPTH_M = Object.fromEntries([THREE.FrontSide, THREE.BackSide, THREE.DoubleSide].map(s => [s, new THREE.MeshBasicMaterial({ colorWrite: false, side: s })]));   // see-through, as one layer (depth first, then colour)
 const GHOST_RIM_M = new THREE.MeshBasicMaterial({ color: "#ffd27a", transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.BackSide });   // a glowing rim the shape of the fist
 const GHOST_TRAIL_M = new THREE.MeshBasicMaterial({ color: "#ff9a40", transparent: true, opacity: .28, blending: THREE.AdditiveBlending, depthWrite: false });
 const GHOST_TRAIL_G = new THREE.CylinderGeometry(.55, 1, 1, 12, 1, true).rotateZ(Math.PI / 2);   // (along x: the wide end at the fist)
@@ -11073,14 +11073,16 @@ function ghostFist(p, hand, up) {
   let ty = clamp(from.y, Y(p.y) + hpx * .45, Y(p.y) + hpx * .75);                                  // (straight out at the hand's height, kept between his chest and his shoulders)
   if (up) { to = X(p.x + p.face * GHOST_REACH * .45); ty = Y(p.y) + hpx * 1.15; }
   ghosts.forEach(o => { o.t = Math.max(o.t, .3); });   // (the one before starts fading as this one goes out: two never pile up into one blob)
-  ghosts.push({ fist, trail, mats: [...mats.values()], gm, tm, from, to, ty, k, f: p.face, t: 0 }); SFX.whoosh();
+  const nearArm = side === "near" || (side === "left") === (p.face < 0), fromNear = hand === "B" ? !nearArm : nearArm;   // (stood three-quarters on: facing right, her left arm's the far one)
+  const bz = r.root.getWorldPosition(new THREE.Vector3()).z, gz = bz + (fromNear ? 1 : -1) * GHOST_Z;   // behind her when it's her far arm, in front when it's her near one
+  ghosts.push({ fist, trail, mats: [...mats.values()], gm, tm, from, to, ty, k, gz, f: p.face, t: 0 }); SFX.whoosh();
 }
 function syncGhosts(dt) {
   ghosts = ghosts.filter(g => {
     g.t += dt; const out = sstep(0, .08, g.t), fade = 1 - sstep(.3, .48, g.t), x = g.from.x + (g.to - g.from.x) * out, y = g.from.y + (g.ty - g.from.y) * out;   // (out fast, hangs there a moment, then fades)
-    g.fist.position.set(x, y, g.from.z + .15); g.fist.scale.setScalar(g.k * (.55 + .45 * out)); g.mats.forEach(m => { m.opacity = GHOST_OP * fade; }); g.gm.opacity = .55 * fade;
+    const s = g.k * (.55 + .45 * out); g.fist.position.set(x, y, g.gz); g.fist.scale.set(s * GHOST_FLAT, s, s);   // (its own x is front to back: flattened that way) g.mats.forEach(m => { m.opacity = GHOST_OP * fade; }); g.gm.opacity = .55 * fade;
     const dx = x - g.from.x, dy = y - g.from.y, len = Math.hypot(dx, dy), rad = .06 * g.k;
-    g.trail.position.set((x + g.from.x) / 2, (y + g.from.y) / 2, g.from.z + .12); g.trail.scale.set(Math.max(.001, len), rad, rad); g.trail.rotation.set(0, 0, Math.atan2(dy, dx)); g.tm.opacity = .28 * fade;
+    g.trail.position.set((x + g.from.x) / 2, (y + g.from.y) / 2, g.gz - Math.sign(g.gz - g.from.z) * .05); g.trail.scale.set(Math.max(.001, len), rad, rad); g.trail.rotation.set(0, 0, Math.atan2(dy, dx)); g.tm.opacity = .28 * fade;
     if (g.t < .5) return true;
     actors.remove(g.fist, g.trail); g.mats.forEach(m => m.dispose()); g.gm.dispose(); g.tm.dispose(); return false;
   });
