@@ -3205,8 +3205,8 @@ function setSel(i) {
   [...$("roster").children].forEach((b, j) => b.classList.toggle("on", j === sel));
   const st = lineup[sel]; st.sq = -.1; st.sqv = 0;
 }
-function clearStage() {
-  arenaEnd(); ejEnd(); cheerHold = null; if (duo) duo.forEach(d => hideFoe(d.D)); duo = null; endGift(true);
+function clearStage() {                         // (the beach's bare-fisted heroes put away too: leaving a story game, they'd stayed standing about)
+  arenaEnd(); ejEnd(); Object.values(BARE).forEach(r => { r.root.visible = r.shadow.visible = false; }); cheerHold = null; if (duo) duo.forEach(d => hideFoe(d.D)); duo = null; endGift(true);
   modalOpen = false; $("modal").classList.remove("show"); exitOpen = false; $("exitCue").classList.add("hidden");
   FOES.forEach(hideFoe); clearHz(); clearBaddies(); clearFriends(); parts.forEach(q => actors.remove(q.m)); parts = [];
   if (hideout) { hideout.beps.forEach(disposeBaddy); hideout.notes.forEach(n => actors.remove(n.m)); hideout = null; level.s = -2; }
@@ -3766,18 +3766,20 @@ function endOpening() { const o = opening; if (!o) return; finishOpening(); o.ki
 // the end of the third room: a bep comes hopping out to them, and the page turns into a comic: it points the way Glos went, into the
 // forest, and gives them the berry sword and the gauntlet; they put them on, and after him
 let gift = null, comicUp = false, comicCam = null;
-function startGift() {
-  const b = makeFriend("M", "#7be04a", Math.min(WORLD - 60, player.x + 760)); Object.assign(b, { y: groundAt(b.x) ?? GROUND, onGround: true, dir: -1, z: 0 });
+function startGift() {                               // it hops in from the way on (off the right edge) and stops in front of you
+  const b = makeFriend("M", "#7be04a", WORLD + 90); Object.assign(b, { y: groundAt(WORLD - 40) ?? GROUND, onGround: true, dir: -1, z: 0 });
+  Object.assign(player, { vx: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, block: false, tackle: null });
   gift = { t: 0, b, phase: "in", hopT: .2 }; SFX.blop(); for (const k in keys) keys[k] = false;
 }
 function updateGift(dt) {
   const g = gift; if (!g) return; const b = g.b, p = player; g.t += dt;
   const tx = g.phase === "in" ? Math.min(p.x + 210, WORLD - 120) : WORLD + 200;
   if (b.onGround && (g.hopT -= dt) <= 0 && Math.abs(tx - b.x) > 14) { b.vy = -420; b.vx = Math.sign(tx - b.x) * Math.min(300, Math.abs(tx - b.x) / .42); b.onGround = false; g.hopT = .12; b.sq = .2; b.sqv = 0; b.dir = Math.sign(tx - b.x); }
-  b.vy = Math.min(b.vy + 2000 * dt, 1000); b.x += b.vx * dt; b.y += b.vy * dt; const gy = groundAt(b.x) ?? GROUND;
+  b.vy = Math.min(b.vy + 2000 * dt, 1000); b.x += b.vx * dt; b.y += b.vy * dt; const gy = groundAt(Math.min(b.x, WORLD - 20)) ?? GROUND;
   if (b.y >= gy) { if (!b.onGround) { b.sq = -.25; b.sqv = 0; } b.y = gy; b.vy = 0; b.vx = 0; b.onGround = true; }
   b.phase += dt * 4; spring(b, dt); b.yaw = lerp(b.yaw, g.phase === "in" && Math.abs(tx - b.x) < 30 ? -Math.PI / 2 : b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 8));
-  p.vx = approach(p.vx, 0, 2400 * dt); p.face = Math.sign(b.x - p.x) || 1;
+  if (g.phase === "in" && p.x > WORLD - 300) { p.vx = -230; p.x = Math.max(WORLD - 300, p.x - 230 * dt); p.face = 1; } else { p.vx = approach(p.vx, 0, 2400 * dt); p.face = Math.sign(b.x - p.x) || 1; }
+  updatePose(p, dt);
   if (g.phase === "in" && Math.abs(tx - b.x) < 30 && b.onGround && g.t > 1.2 && !g.shown) { g.shown = true; setTimeout(showComic, 450); }
   if (g.phase === "out" && b.x > WORLD + 120) endGift();
 }
@@ -3785,23 +3787,36 @@ function shot(cam) {                                 // one comic panel: the sce
   comicCam = cam; render(0); comicCam = null; const C = renderer.domElement, h = C.height, w = Math.min(C.width, h * 4 / 3), c = document.createElement("canvas"); c.width = 640; c.height = 480;
   c.getContext("2d").drawImage(C, (C.width - w) / 2, 0, w, h, 0, 0, 640, 480); return c.toDataURL("image/jpeg", .86);
 }
+function comicPose(st, x, face, startle) {         // a set pose on a set mark for the comic (the user: not whatever they were doing when it froze)
+  Object.assign(st, { x, atkT: -1, atkKind: null, combo: null, tackle: null, block: false, crouch: false, chargeT: 0, chargeLv: 0, jcharging: false, jcharge: 0, tpose: 0, hurtT: 0, dizzy: 0,
+    climb: null, sit: 0, eat: 0, vx: 0, vy: 0, onGround: true, plat: null, startle: startle ? 1 : 0, face });
+  st.y = groundAt(x) ?? GROUND; st.yaw = face > 0 ? -.55 : -Math.PI + .55; st.chains = {}; for (let i = 0; i < 40; i++) updatePose(st, 1 / 60);   // (hair and tails settle afresh where they now stand)
+}
 function showComic() {
-  if (!gift) return; const g = gift, b = g.b, p = player, s = ej && ej.kid ? ej.st : null, mid = X((p.x + (s ? s.x : p.x)) / 2), bx = X(b.x);
+  if (!gift) return; const g = gift, b = g.b, kid = () => (ej && ej.kid ? ej.st : null);
   $("comic").classList.add("show"); comicUp = true; $("holdTip").classList.remove("show"); $("comicGo").classList.remove("on"); [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.remove("on"));
-  const P = [];
-  b.yaw = -Math.PI / 2; P.push(shot({ x: (bx + mid) / 2, y: 1.9, z: 10, tx: (bx + mid) / 2, ty: 1.2, tz: 0 }));                       // a bep!
-  const bx0 = b.x, fx = X(WORLD - 170); b.x = WORLD - 170; b.y = groundAt(b.x) ?? GROUND; b.yaw = -Math.PI / 2 + .9; b.r.tilt.rotation.z = -.35;   // (staged at the room's far end: the bep in front, the forest beyond)
-  P.push(shot({ x: fx - 4.2, y: 1.5, z: 5, tx: fx + 15, ty: 2.8, tz: -8 }));                                                    // that way: the forest
-  b.x = bx0; b.y = groundAt(b.x) ?? GROUND; b.r.tilt.rotation.z = 0; b.yaw = -Math.PI / 2;
-  const glow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#fff2a0", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); at(glow, bx, Y(b.y) + 2.25, .4); actors.add(glow);
+  const ends = PLATFORMS.flatMap(q => [q.x, q.x + q.w]); let cx = WORLD - 720, best = -1;   // (the spot farthest from any platform's posts, so nothing stands in front of them)
+  for (let x = WORLD - 380; x > 520; x -= 20) { if (groundAt(x - 160) === null || groundAt(x + 190) === null) continue;
+    const d = Math.min(400, ...ends.map(e => e < x - 160 ? x - 160 - e : e > x + 190 ? e - x - 190 : 0)); if (d > best) { best = d; cx = x; } }
+  const P = [], back = [[player, player.x], [kid(), kid() && kid().x], [b, b.x]];
+  const putBep = (x, yaw, tilt = 0) => { b.x = x; b.y = groundAt(x) ?? GROUND; b.yaw = yaw; b.r.tilt.rotation.z = tilt; };
+  putBep(cx + 150, -Math.PI / 2 - .3); comicPose(player, cx, 1, true); if (kid()) comicPose(kid(), cx - 115, 1, true);   // a bep! (the two of them jumping at the sight of it)
+  P.push(shot({ x: X(cx + 18), y: 2.1, z: 11.5, tx: X(cx + 18), ty: 1.25, tz: 0 }));
+  comicPose(player, cx - 950, 1, false); if (kid()) comicPose(kid(), cx - 1050, 1, false);                                       // that way: the forest (just the bep, at the far end)
+  const fx = X(WORLD - 170); putBep(WORLD - 170, -Math.PI / 2 + .9, -.35);
+  P.push(shot({ x: fx - 4.2, y: 1.5, z: 5, tx: fx + 15, ty: 2.8, tz: -8 }));
+  putBep(cx + 120, -Math.PI / 2 - .25); comicPose(player, cx - 10, 1, false); if (kid()) comicPose(kid(), cx - 120, 1, false);   // for them: the berry sword and the gauntlet, held up
+  const bx = X(b.x), glow = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 2.4), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#fff2a0", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending })); at(glow, bx, Y(b.y) + 2.25, .4); actors.add(glow);
   const armed = ["rose", "camila"].map(id => roster.find(q => q.id === id)), props = armed.map(r => r && r.prop && r.prop.group ? r.prop.group.clone() : null).filter(Boolean);
   props.forEach((pg, i) => { pg.position.set(bx + (i ? .45 : -.45), Y(b.y) + 2.2, .5); pg.rotation.set(0, 0, i ? -.3 : .9); pg.scale.multiplyScalar(1.4); actors.add(pg); });
-  P.push(shot({ x: bx, y: 2.2, z: 6.2, tx: bx, ty: 1.75, tz: 0 }));                                                                   // for them
+  P.push(shot({ x: X(cx + 25), y: 2.5, z: 10.6, tx: X(cx + 25), ty: 1.95, tz: 0 }));
   props.forEach(pg => actors.remove(pg)); actors.remove(glow); glow.material.dispose();
-  armHeroes(); [player, ej && ej.kid ? ej.st : null].forEach(st => { if (!st) return; st.face = 1; st.yaw = -.85;   // (turned to the forest: a sword mid-slash, a gauntlet mid-jab)
+  armHeroes(); putBep(cx + 1100, -Math.PI / 2);                                                                                  // put on, and after Glos (the bep out of the picture)
+  [[player, cx + 30], [kid(), cx - 95]].forEach(([st, x]) => { if (!st) return; comicPose(st, x, 1, false); st.yaw = -.85;   // (turned to the forest: a sword mid-slash, a gauntlet mid-jab)
     const kind = { sword: "slash", gauntlet: "jab" }[st.rig.spec.outfit.prop.kind], S2 = kind && KIT.STRIKES[kind]; if (S2) { st.atkKind = kind; st.atkT = (S2.hits[0].t0 + S2.hits[0].t1) / 2; } else st.startle = 1; for (let i = 0; i < 24; i++) updatePose(st, 1 / 60); });
-  P.push(shot({ x: mid + .2, y: 2.2, z: 6.4, tx: mid + .2, ty: 1.55, tz: 0 }));                                                      // put on, and after Glos
-  [player, ej && ej.kid ? ej.st : null].forEach(st => { if (st) { st.startle = 0; st.atkKind = null; st.atkT = -1; } });
+  P.push(shot({ x: X(cx - 25), y: 2.2, z: 7.4, tx: X(cx - 25), ty: 1.55, tz: 0 }));
+  [[player, back[0][1]], [kid(), back[1][1]]].forEach(([st, x]) => { if (st && x !== null && x !== undefined) comicPose(st, x, 1, false); });   // back where they were
+  putBep(back[2][1], -Math.PI / 2);
   [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
   setTimeout(() => { $("comicGo").classList.add("on"); g.ready = true; }, 350 + 4 * 900);
 }
@@ -11018,8 +11033,12 @@ function hitFeel(e, dir, kind, boss) {
 const hitChain = () => { chainN = time - chainT < .7 ? chainN + 1 : 0; chainT = time; return chainN; };   // hits in a quick run (they climb in pitch)
 const jolt = e => hitstop > 0 && e.joltAt === time ? rand(-1, 1) * e.jolt : 0;       // (time stands still in the freeze, so this is only the blow just landed)
 function lastKill(b) {                            // the room's last baddy down: a beat of slow motion, the camera leaning in
-  if (bossIn || STAGES[stage].boss || !baddies.every(o => o === b || o.gone || o.dead || o.sad || o.T.move === "breach")) return;
+  b.seen = true; if (bossIn || STAGES[stage].boss || !baddies.every(o => o === b || !o.seen || o.gone || o.dead || o.sad || o.T.move === "breach")) return;   // (the last of all the ones you've seen in this room: the user, 2026-10-20)
   slowMo = .7; hitstop = Math.max(hitstop, .12); rumble(60, .7);
+}
+const _seenV = new THREE.Vector3();
+function markSeen() {                             // every baddy that's been on screen this visit counts toward the last kill
+  for (const b of baddies) { if (b.seen || b.dead || b.gone) continue; _seenV.set(X(b.x), Y(b.y - b.h * .5), b.z || 0).project(camera); if (Math.abs(_seenV.x) < 1.02 && Math.abs(_seenV.y) < 1.08) b.seen = true; }
 }
 function rumble(ms, k) {                          // a buzz in your hands: a controller that can, or a phone (Android; iPhones don't let a web page)
   try {
@@ -11599,9 +11618,10 @@ function update(dt) {
   }
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
+  if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
+  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) updateEnemy(dt); combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : STAGES[stage].gift && story && !story.armed && !gift ? startGift() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.sad || b.T.move === "breach") && (bossCue += dt) > .9) stronghold ? shClear() : STAGES[stage].boss ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (wst) wst.boss = foe.name;
