@@ -546,7 +546,7 @@ const H_TABS = {
     ["r", "hair.depth", "Depth", { if: capHair }], ["r", "hair.tilt", "Swept back", { if: capHair }],
     ["r", "hair.spike", "Top spike"],
     ["h", "Locks"], ["s", "hair.style", "Style", KIT.HAIR_STYLES], ["r", "hair.length", "Length", { if: s => s.hair.style !== "none" }],
-    ["r", "hair.flow", "Floppiness", { if: s => s.hair.style !== "none" }], ["r", "hair.thick", "Thickness", { if: s => s.hair.style !== "none" }],
+    ["r", "hair.flow", "Floppiness", { if: s => s.hair.style !== "none" }], ["r", "hair.thick", "Thickness", { if: s => s.hair.style !== "none" }], ["r", "hair.wave", "Waves", { if: s => s.hair.style !== "none" }],
     ["t", "hair.tie", "Hair tie", { if: s => s.hair.style !== "none" }], ["c", "colors.tie", "Tie color", { if: s => s.hair.tie && s.hair.style !== "none" }]],
   OUTFIT: "humanOutfit",
   MOVES: "moves",

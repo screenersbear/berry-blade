@@ -143,6 +143,8 @@ function updateChains(r, p, dt) {
     }
     simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm, (c.k1 || 60) / fm, c.damp || 8);
     st.w.forEach((w, i) => r.body.worldToLocal(c.tube.pts[i].copy(w)));
+    const wa = c.wv ? c.wv() : 0;                   // wavy hair: each lock's points pushed side to side along it (none at the root)
+    if (wa > 1e-4) for (let i = 1, n = c.tube.pts.length; i < n; i++) { const a = wa * Math.sin(i * 1.3 + (c.ph || 0)) * Math.min(1, i / (n - 1) * 3); c.tube.pts[i].z += a; c.tube.pts[i].x += a * .3; }
     c.tube.update(c.ref || FWD);
   });
 }
@@ -161,7 +163,7 @@ const BANGS = {          // painted fringe shapes (x, y on the 512×512 face she
 };
 const FORELOCK = [[246, 0], [268, 0], [264, 238], [250, 238]];
 const MASKS = ["none", "visor", "domino"];
-const HAIR_STYLES = ["none", "flip", "long", "bob", "ponytail", "pigtails", "lowtail", "sidetail", "hightail"];
+const HAIR_STYLES = ["none", "flip", "long", "bob", "ponytail", "pigtails", "lowtail", "sidetail", "hightail", "wavy"];
 const HANDS = ["bare", "ball", "sleeve", "cuffball", "glove", "fingerless", "claw"];
 const LAYERS = ["band", "panel", "buttons", "stripes", "gem", "poly"];
 const BUILDS = {      // the skeleton each build starts from; the body sliders multiply these
@@ -211,7 +213,7 @@ const HUMAN_DEFAULT = {
   head: { ...HEAD_DEF },
   face: { style: "chibi", eyeSize: 1, eyeGap: 1, eyeY: 0, ...EYE_DEF, iris: 1, shine: true, mouth: 1, mouthCurve: 1, chin: .07, ears: 1, blush: 0, lashes: true, browY: 0, browSize: 1, earY: -.09, mask: "none" },
   hair: { mode: "cap", bangs: "spiky", bangLen: 1, forelock: false, cover: .6, width: 1.18, height: 1.06, depth: 1.1, tilt: .48,
-    shell: .18, taper: 0, fringe: "oval", fringeDrop: 0, sides: .55, back: .75, curl: 0, curlFront: 0, tufts: [], style: "none", length: 1, flow: 1, thick: 1, spike: 0, tie: false },
+    shell: .18, taper: 0, fringe: "oval", fringeDrop: 0, sides: .55, back: .75, curl: 0, curlFront: 0, tufts: [], style: "none", length: 1, flow: 1, thick: 1, spike: 0, tie: false, wave: 0 },
   colors: { skin: SKIN, hair: "#4a2a18", eyes: "#2f86e0", lips: "#a33c3c", blush: "#ff8f9a", forelock: "#e3242b", mask: "#2a5bd6", maskLower: YEL,
     lash: "#000000", brows: "#2a1a1a", ring: "#ffffff", tie: "#ed145b", maskIn: "#050900", crest: "#2f373a", gem: "#e6001d" },
   outfit: {
@@ -251,11 +253,11 @@ const TOCSIN = {
   head: { ...HEAD_DEF },
   face: { eyeSize: 1, eyeGap: 1, eyeY: 0, ...EYE_DEF, mouth: 1, spikes: 1, ears: 1 },
   parts: { cheeks: true, forehead: true, brow: true, emblem: true, bow: true, button: true, trim: true, tailBands: true, claws: true,
-    calico: false, tabby: false, belly: false, collar: false, kitty: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
+    calico: false, tabby: false, belly: false, collar: false, kitty: false, points: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
   colors: { fur: "#ffd21a", marks: "#ff3214", ears: "#ff3214", mouth: "#a50a06", eyeRing: "#2a9fb2", pupil: "#9a0a0a", nose: "#e040c8",
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
-    patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff" },
+    patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326" },
   move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {} },
   pet: { on: false, with: "" },
 };
@@ -350,42 +352,49 @@ const PRESETS = [
       neck: { on: true, col: "#2d383c", h: .2, r: .095 },
       prop: { kind: "gauntlet", side: "left", main: "#ffde00", fill: "#fc0000", orb: "#d30102", trim: "#f6fc50", c1: "#3bfe00", c2: "#fe0000", c3: "#0d97f9", c4: "#c03cff", rings: 4, size: 1.2 } },   // (4 rings: Chase has 4 hearts)
     move: { set: "boxer" } }),   // (the user, 2026-10-17: the arms-back dash looked off on a taller boy: he runs like an athlete)
-  merge0(HUMAN_DEFAULT, { id: "sofia", name: "SOFIA",     // from the user's crayon drawing: teal tank dress with a white cat on it, teal cat-ear mask, silver eyes,
-    body: { build: "tall", head: .9 },                           //   brown curls, pink claw gloves, a teal cat tail with a pink tip, sandals (one teal strap, one pink); June's sword
-    head: { height: 1.12, jaw: .85, chinLen: .03 },
-    face: { style: "sofia", chin: .12, earY: -.17, ears: .75 },
-    hair: { mode: "sculpt", shell: .36, taper: -.55, fringe: "oval", fringeDrop: -.12, sides: 1.08, back: 1.15, curl: .85, curlFront: .7, style: "none", tufts: [{ yaw: 0, pitch: 72, len: .12, width: .42, sharp: .9 }, { yaw: -48, pitch: 46, len: .13, width: .42, sharp: .9 }, { yaw: 48, pitch: 46, len: .13, width: .42, sharp: .9 }, { yaw: -92, pitch: 20, len: .16, width: .44, sharp: .8 }, { yaw: 92, pitch: 20, len: .16, width: .44, sharp: .8 }, { yaw: -104, pitch: -24, len: .2, width: .44, sharp: .8 }, { yaw: 104, pitch: -24, len: .2, width: .44, sharp: .8 }, { yaw: -150, pitch: 18, len: .15, width: .44, sharp: .85 }, { yaw: 150, pitch: 18, len: .15, width: .44, sharp: .85 }, { yaw: 180, pitch: -18, len: .16, width: .44, sharp: .85 }, { yaw: -130, pitch: -46, len: .18, width: .42, sharp: .8 }, { yaw: 130, pitch: -46, len: .18, width: .42, sharp: .8 }] },
-    colors: { skin: "#d59e72", hair: "#7a4a2a", eyes: "#8a94a8", lips: "#5e3424", lash: "#1b1b1b", mask: "#2ec4b6" },
-    outfit: { top: "#2ec4b6", torsoProf: [[0, .2], [.15, .21], [.35, .16], [.5, .17], [.72, .19], [.9, .15], [1, .1]],
-      torso: [{ kind: "poly", pts: [-72, 0, 72, 0, 62, 34, 36, 58, 0, 66, -36, 58, -62, 34], mirror: false, col: "skin" },          // scoop neck
-        { kind: "poly", pts: [96, 0, 200, 0, 200, 170, 150, 152, 112, 92], mirror: true, col: "skin" },                                   // bare shoulders (a tank dress)
-        { kind: "poly", pts: [-58, 192, -56, 166, -50, 136, -32, 156, -12, 152, 12, 152, 32, 156, 50, 136, 56, 166, 58, 192, 50, 216, 30, 232, 0, 238, -30, 232, -50, 216], mirror: false, col: "#ffffff" },   // the cat
-        { kind: "buttons", dx: 18, y: 192, gap: 0, rows: 1, r: 7, col: "#4a4a4a" }, { kind: "buttons", dx: 0, y: 214, gap: 0, rows: 1, r: 6, col: "#4a4a4a" },
-        { kind: "buttons", dx: 0, y: 214, gap: 0, rows: 1, r: 3, col: "#ffffff" }],
-      arm: "skin", armBands: [], armProf: [[0, .05], [.3, .05], [.36, .06], [.8, .05], [1, .048]],
-      leg: "skin", legBands: [], legProf: [[0, .075], [.3, .065], [.44, .055], [.8, .05], [1, .045]],
-      hand: { style: "claw", col: "#f2709a" },
-      boot: { col: "skin", r: .08, len: .2, wide: 1.05, sole: true, soleCol: "#e9e2d6", strap: true, strapCol: "#2ec4b6", strapCol2: "#f2709a" },
-      skirts: [{ top: .17, bottom: .38, len: .32, y: .04, bell: .2, col: "#2ec4b6" }],
-      tail: { on: true, col: "#2ec4b6", tip: "#f48fb1", len: 1.1, thick: 1 },
-      prop: { kind: "sword", side: "right" } },
-    move: { set: "sword" } }),
-  merge0(HUMAN_DEFAULT, { id: "lydia", name: "LYDIA",     // from the user's marker drawing: all-green dress, green cat-ear mask with a light-blue outline, headphones,
-    body: { build: "tall", head: .9 },                           //   brown curls behind them with bangs forward, green claws, puffy green slippers, a green cat tail; she floats; June's sword
-    head: { height: 1.12, jaw: .85, chinLen: .03 },
-    face: { style: "lydia", chin: .12, earY: -.17, ears: .75 },
-    hair: { mode: "sculpt", shell: .34, taper: -.45, fringe: "bangs", fringeDrop: .05, sides: 1.2, back: 1.25, curl: .8, curlFront: .8, style: "none", tufts: [{ yaw: 0, pitch: 72, len: .12, width: .42, sharp: .9 }, { yaw: -48, pitch: 46, len: .13, width: .42, sharp: .9 }, { yaw: 48, pitch: 46, len: .13, width: .42, sharp: .9 }, { yaw: -92, pitch: 20, len: .16, width: .44, sharp: .8 }, { yaw: 92, pitch: 20, len: .16, width: .44, sharp: .8 }, { yaw: -104, pitch: -24, len: .2, width: .44, sharp: .8 }, { yaw: 104, pitch: -24, len: .2, width: .44, sharp: .8 }, { yaw: -150, pitch: 18, len: .15, width: .44, sharp: .85 }, { yaw: 150, pitch: 18, len: .15, width: .44, sharp: .85 }, { yaw: 180, pitch: -18, len: .16, width: .44, sharp: .85 }, { yaw: -14, pitch: 52, len: .1, width: .3, sharp: 1.4 }, { yaw: 14, pitch: 52, len: .1, width: .3, sharp: 1.4 }] },
-    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#8a94a8", lips: "#58b4ee", lash: "#1b1b1b", mask: "#19a87a", maskIn: "#58b4ee" },
-    outfit: { top: "#19a87a", torsoProf: [[0, .2], [.15, .21], [.35, .16], [.5, .17], [.72, .19], [.9, .15], [1, .1]], torso: [],
-      arm: "skin", armBands: [{ v0: 0, v1: .22, col: "#19a87a" }], armProf: [[0, .065], [.22, .062], [.3, .05], [.36, .06], [.8, .05], [1, .048]],
-      leg: "skin", legBands: [], legProf: [[0, .075], [.3, .065], [.44, .055], [.8, .05], [1, .045]],
-      hand: { style: "claw", col: "#3d9a46" },
-      boot: { col: "#4cbd45", r: .13, len: .24, wide: 1.35 },
-      skirts: [{ top: .17, bottom: .37, len: .3, y: .04, bell: .2, col: "#19a87a" }],
-      tail: { on: true, col: "#19a87a", tip: "#19a87a", len: 1.1, thick: 1 },
-      headphones: { on: true, col: "#1d1d1d", cup: "#6b3a1e" },
-      prop: { kind: "sword", side: "right" } },
-    move: { set: "sword", float: true } }),
+  merge0(HUMAN_DEFAULT, { id: "camila", name: "CAMILA",   // (was Sofia; the user, 2026-10-20) from the approved mockup: Chase's outfit with his jumpsuit legs made a
+    body: { build: "tall", head: .9 },                           //   slate dress (his red boot shafts from the knee), long wavy brown hair parted in the middle
+    head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },     //   (the user's Gabby reference), June's face and eyes (brown), no mask, no tail; Chase's gauntlet
+    face: { style: "june", chin: .1, ears: 1.1, earY: -.11 },
+    hair: { mode: "sculpt", shell: .24, taper: -.25, fringe: "oval", fringeDrop: -.04, sides: 1.05, back: 1.15, curl: 0, curlFront: 0, style: "wavy", length: 1.45, flow: 1.2, thick: 1.7, wave: 1, tie: false,
+      tufts: [{ yaw: -30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: 30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: -95, pitch: 0, len: .1, width: .6, sharp: 1 },
+        { yaw: 95, pitch: 0, len: .1, width: .6, sharp: 1 }, { yaw: 180, pitch: 5, len: .08, width: .8, sharp: 1 }] },
+    colors: { skin: "#d59e72", hair: "#7a4a2a", eyes: "#70421f", lips: "#b8645a", lash: "#1b1b1b", brows: "#3a2416", ring: "#f4fbff" },
+    outfit: { top: "#2d383c", torsoProf: [[0, .2], [.15, .21], [.35, .16], [.5, .17], [.72, .19], [.9, .15], [1, .1]],
+      torso: [{ kind: "band", y0: 0, y1: 210, col: "#ec1c24" }, { kind: "poly", pts: [-40, 0, 40, 0, 0, 200], mirror: false, col: "#2d383c" },
+        { kind: "buttons", dx: 52, y: 70, gap: 70, rows: 2, r: 15, col: "#fef200" }, { kind: "poly", pts: [-70, 300, -38, 280, -32, 290, -64, 310], mirror: true, col: "#fef200" }],
+      arm: "skin", armBands: [{ v0: 0, v1: .16, col: "#e3fdfe" }], armProf: [[0, .085], [.16, .08], [.2, .065], [1, .055]],
+      leg: "skin", legBands: [{ v0: .5, v1: 1, col: "#ec1c24" }], legProf: [[0, .075], [.3, .065], [.44, .055], [.48, .05], [.52, .13], [.75, .115], [1, .1]],
+      hand: { style: "glove", col: "#ec1c24" },
+      boot: { col: "#ec1c24", r: .12, len: .24, wide: 1.25, studs: true, studsCol: "#fef200", studsHigh: true, sole: true, soleCol: "#ffffff" },
+      skirts: [{ top: .17, bottom: .38, len: .32, y: .04, bell: .2, col: "#2d383c" }],
+      pads: { on: true, side: "both", shape: "scallop", col: "#fef200", size: 1 },
+      collar: { on: true, top: .27, bottom: .12, h: .17, y: .1, col: "#ec1c24", open: 1.1, lined: true, inner: "#fff701" },
+      neck: { on: true, col: "#2d383c", h: .2, r: .095 },
+      prop: { kind: "gauntlet", side: "left", main: "#ffde00", fill: "#fc0000", orb: "#d30102", trim: "#f6fc50", c1: "#3bfe00", c2: "#fe0000", c3: "#0d97f9", c4: "#c03cff", rings: 4, size: 1.2 } },
+    move: { set: "boxer" } }),                                  // (moves exactly like Chase)
+  merge0(HUMAN_DEFAULT, { id: "rose", name: "ROSE",       // (was Lydia; the user, 2026-10-20) from the approved mockup: June's outfit and June's hairstyle (in Rose's own
+    body: { build: "tall", head: .9 },                           //   brown), her headphones (magenta cups), Chase's face and eyes (brown), no mask, no tail; on her feet,
+    head: { height: 1.11, jaw: .78, chinLen: .04 },              //   June's sword
+    face: { style: "chase", chin: .18, earY: -.1, ears: .85 },
+    hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "lowtail", tie: true,
+      tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },
+        { yaw: -92, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },
+    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#f6b2a2", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },
+    outfit: { top: "#13d5ff", torsoProf: [[0, .2], [.15, .21], [.35, .17], [.5, .18], [.72, .2], [.9, .16], [1, .1]],
+      torso: [{ kind: "band", y0: 384, y1: 512, col: "#dd1355" }, { kind: "panel", w: 110, y0: 40, y1: 200, col: "#a0effe" },
+        { kind: "buttons", dx: 30, y: 70, gap: 70, rows: 2, r: 13, col: "#fffc01" }, { kind: "poly", pts: [-80, 280, -40, 265, -36, 277, -76, 292], mirror: true, col: "#fffc01" }],
+      arm: "#12cff5", armBands: [], armProf: [[0, .085], [.4, .085], [.62, .12], [.85, .17], [1, .2]],
+      leg: "skin", legBands: [{ v0: 0, v1: .34, col: "#dd1355" }], legProf: [[0, .1], [.3, .085], [.36, .06], [.5, .05], [1, .045]],
+      hand: { style: "sleeve", col: "#12cff5", dot: "#fffc01" },
+      boot: { col: "#3dddff", r: .11, len: .2, wide: 1.25, shaft: true, shaftH: .2, shaftR: .1, rimCol: "#3dddff", cuff: true, cuffCol: "#13d5ff", studs: true, studsCol: "#fffc01", studsHigh: false, sole: true, soleCol: "#ffffff" },
+      skirts: [{ top: .15, bottom: .34, len: .28, y: .1, col: "#13d5ff" }],
+      collar: { on: true, top: .24, bottom: .11, h: .16, y: .06, col: "#ed145b", open: .9 },
+      pads: { on: true, side: "right", shape: "block", col: "#ed145b", size: 1.25 },
+      headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
+      headphones: { on: true, col: "#1d1d1d", cup: "#ed145b" },
+      prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", size: 1 } },
+    move: { set: "sword" } }),                                  // (moves exactly like June: the user, 2026-10-20, no floating)
   merge0(HUMAN_DEFAULT, { id: "evil-june", name: "EVIL JUNE",   // the crashing waves' night boss, from the user's art: June gone bad. Navy beanie with a red band, lightning brows,
     body: { build: "tall", torso: .9 },                           //   buck teeth, a cyan jumpsuit with white leg bands and yellow buttons, a red collar, a long navy scarf; her own dark sword
     head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },
@@ -404,13 +413,13 @@ const PRESETS = [
       prop: { kind: "sword", side: "right", main: "#1d2b5c", fill: "#2ec8ea", orb: "#ff2a2a", trim: "#0d2550", c1: "#ff2a2a", c2: "#2ec8ea", c3: "#ffd21c", size: 1.05 } },
     move: { set: "sword" }, villain: { on: true } }),
   merge0(TOCSIN, { id: "luna", name: "LUNA",               // the family cat, as a chibi Tocsin: white with calico patches (orange, brown tabby with the M on her forehead, black),
-    body: { scale: .6, head: 1.35, torso: .8, girth: .95, arms: .75, legs: .72, limbs: .9, gloves: .72, feet: .78, tail: 1.15, tailThick: .85, hat: 0, pants: 0 },   //   green eyes, pink nose, collar with a bell; not playable: she follows Sofia and Lydia
+    body: { scale: .6, head: 1.35, torso: .8, girth: .95, arms: .75, legs: .72, limbs: .9, gloves: .72, feet: .78, tail: 1.15, tailThick: .85, hat: 0, pants: 0 },   //   green eyes, pink nose, collar with a bell; not playable: she follows Camila and Rose
     face: { eyeSize: 1.15, eyeY: 4, eyeH: 1.05, pupil: .9, mouth: 0, spikes: .3, ears: 1.1 },
     parts: { cheeks: false, forehead: false, brow: false, emblem: false, bow: false, button: false, trim: false, tailBands: true, claws: false, calico: true, tabby: true, belly: true, collar: true, kitty: true },
     colors: { fur: "#fbf9f4", marks: "#2b221d", ears: "#f4a7b5", mouth: "#7a3a3a", eyeRing: "#3d4a22", pupil: "#1a1a10", nose: "#f29aa8", outfit: "#fbf9f4",
       gloves: "#ffffff", shoes: "#ffffff", soles: "#f6c9d0", patch: "#e3893a", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#c5d86a" },
     move: { speed: 1.2, bounce: 1.4 },
-    pet: { on: true, with: "sofia,lydia" } }),
+    pet: { on: true, with: "camila,rose" } }),
 ];
 
 // value limits: normalize() clamps every number to these, so anything loaded (hand-written, or read off a picture) stays buildable
@@ -432,7 +441,7 @@ const RANGE = {
   "outfit.boot.r": [.07, .14], "outfit.boot.len": [.12, .3], "outfit.boot.wide": [.9, 1.5],
   "outfit.collar.top": [.06, .3], "outfit.collar.bottom": [.06, .3], "outfit.collar.h": [.04, .3], "outfit.collar.y": [-.15, .35], "outfit.collar.open": [0, 3],
   "outfit.neck.h": [.05, .3], "outfit.neck.r": [.05, .2], "outfit.boot.shaftH": [.1, .7], "outfit.boot.shaftR": [.06, .22], "outfit.prop.size": [.6, 1.6], "outfit.prop.rings": [3, 4],
-  "outfit.headband.tilt": [-.3, 1.2], "outfit.headband.width": [.5, 2], "hair.shell": [.03, .4], "hair.taper": [-1, 1], "face.earY": [-.25, .1], "hair.fringeDrop": [-.3, .3], "hair.sides": [.1, 1.2], "hair.back": [.2, 1.3], "hair.curl": [0, 1], "hair.curlFront": [0, 1],
+  "outfit.headband.tilt": [-.3, 1.2], "outfit.headband.width": [.5, 2], "hair.shell": [.03, .4], "hair.taper": [-1, 1], "face.earY": [-.25, .1], "hair.fringeDrop": [-.3, .3], "hair.sides": [.1, 1.2], "hair.back": [.2, 1.3], "hair.curl": [0, 1], "hair.curlFront": [0, 1], "hair.wave": [0, 1],
   "face.browY": [-40, 40], "face.browSize": [.5, 1.6],
   "outfit.pads.size": [.5, 1.8], "outfit.scarf.len": [.4, 2], "outfit.scarf.flow": [.4, 2.5], "outfit.scarf.flap": [0, 1.5],
   "outfit.tabard.len": [.2, .9], "outfit.tabard.width": [.15, .5], "outfit.tail.len": [.4, 1.8], "outfit.tail.thick": [.5, 1.8],
@@ -531,11 +540,8 @@ function normalize(input) {
 // alternate looks for the built-in cast, laid over the character's own spec (the game picks one on the select screen with ↑ ↓)
 const JUNE_FRONT = { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "hightail", length: 1.55, tie: true,
   tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: -92, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] };
-const LOOKS = {             // June's front with a headband in an accent colour, and a high ponytail down to the neck
-  sofia: [{ name: "PONYTAIL", hair: JUNE_FRONT, colors: { tie: "#f2709a" }, outfit: { headband: { on: true, col: "#f2709a", tilt: .72, width: 1.4 } } }],
-  lydia: [{ name: "PONYTAIL", hair: JUNE_FRONT, colors: { tie: "#58b4ee" }, outfit: { headband: { on: true, col: "#58b4ee", tilt: .8, width: 1.4 } } }],
-};
-const LOOK_BASE = { sofia: "CURLY", lydia: "CURLY" };          // what each character's own look is called next to the alternates
+const LOOKS = {};           // alternate looks by character id: [{ name, ...patch }] (Sofia's and Lydia's curly / ponytail looks went with them, 2026-10-20)
+const LOOK_BASE = {};       // what a character's own look is called next to its alternates
 const withLook = (spec, i) => { const L = i > 0 && (LOOKS[spec.id] || [])[i - 1]; if (!L) return spec; const { name, ...patch } = L; return normalize(merge0(spec, patch)); };   // (the look's name isn't the character's)
 const presets = () => PRESETS.map(p => normalize(p));
 
@@ -588,6 +594,10 @@ function catFaceArt(S, blink) {
     g.fillStyle = c.belly;
     g.beginPath(); g.moveTo(244, 150); g.lineTo(268, 150); g.quadraticCurveTo(276, 230, 330, 268); g.quadraticCurveTo(372, 330, 300, 380); g.quadraticCurveTo(256, 404, 212, 380);
     g.quadraticCurveTo(140, 330, 182, 268); g.quadraticCurveTo(236, 230, 244, 150); g.closePath(); g.fill();
+  }
+  if (P.points) {                                   // Siamese: the dark mask over the muzzle, fading out round the eyes
+    const gr = g.createRadialGradient(256, 266, 20, 256, 258, 196); gr.addColorStop(0, c.points); gr.addColorStop(.5, c.points); gr.addColorStop(1, c.fur);
+    g.fillStyle = gr; g.beginPath(); g.ellipse(256, 262, 196, 176, 0, 0, TAU); g.fill();
   }
   if (P.cheeks) [[1, 0], [-1, 512]].forEach(([s, o]) => { const X = v => o + s * v;               // cheek brackets
     fillPoly(g, [X(34), 168, X(58), 168, X(58), 230, X(86), 242, X(86), 262, X(58), 256, X(58), 320, X(34), 320], c.marks); });
@@ -708,8 +718,8 @@ function buildCat(R) {
   const mY = M(c.fur), mG = M(c.gloves), mHat = M(c.hat), mBand = M(c.hatBand), mShoe = M(c.shoes), mSole = M(c.soles);
   const ec = S.face.ears > .15 ? c.ears : null, bk = catBackArt(S), faceO = T(wrapFront(catFaceArt(S, false), ec, S.face.faceY, bk)), faceB = T(wrapFront(catFaceArt(S, true), ec, S.face.faceY, bk));
   const mFace = M("#ffffff", { map: faceO }), mGlove = M("#ffffff", { map: T(gloveArt(S)) });
-  const mBody = M("#ffffff", { map: T(catBodyArt(S)) }), mLeg = M("#ffffff", { map: T(bandArt(c.fur, [...(S.body.pants > .01 ? [[0, S.body.pants, c.outfit]] : []), ...(S.parts.belly ? [[.62, 1, c.belly]] : [])])) });
-  const mTail = M("#ffffff", { map: T(bandArt(S.parts.calico ? c.patch2 : c.fur, S.parts.tailBands ? (S.parts.tabby ? [[.3, .37, c.marks], [.47, .54, c.marks], [.64, .71, c.marks], [.81, .88, c.marks], [.95, 1, c.marks]] : [[.62, .7, c.marks], [.78, .86, c.marks]]) : [])) });
+  const mBody = M("#ffffff", { map: T(catBodyArt(S)) }), mLeg = M("#ffffff", { map: T(bandArt(c.fur, [...(S.body.pants > .01 ? [[0, S.body.pants, c.outfit]] : []), ...(S.parts.belly ? [[.62, 1, c.belly]] : []), ...(S.parts.points ? [[.5, 1, c.points]] : [])])) });
+  const mTail = M("#ffffff", { map: T(bandArt(S.parts.calico ? c.patch2 : S.parts.points ? c.points : c.fur, S.parts.tailBands ? (S.parts.tabby ? [[.3, .37, c.marks], [.47, .54, c.marks], [.64, .71, c.marks], [.81, .88, c.marks], [.95, 1, c.marks]] : [[.62, .7, c.marks], [.78, .86, c.marks]]) : [])) });
   const P = (geo, mat, ol, smooth = false) => mk(geo, null, { mat, smooth });
   const root = group(PARENT), yaw = group(root), spin = group(yaw, 0, 1, 0), body = group(spin, 0, -1, 0);
   const B = () => R.spec.body;
@@ -851,6 +861,14 @@ function hairChains(st) {                         // the flowing locks for each 
   if (st === "sidetail") return [{ parent: "head", anchor: [-.2, -.05, .26], dir: [-.4, -1, .5], n: 10, seg: .11, w: [.17, .09], hang: .45, k0: 170, k1: 35, sway: .05 }];
   if (st === "lowtail") return [{ parent: "head", anchor: [-.3, -.14, 0], dir: [-.25, -1, 0], n: 8, seg: .1, w: [.1, .05], hang: .65, k0: 190, k1: 45, sway: .04, tie: true }];
   if (st === "hightail") return [{ parent: "head", anchor: [-.26, .22, 0], dir: [-.7, -.55, 0], n: 7, seg: .1, w: [.13, .055], hang: .7, k0: 190, k1: 45, sway: .05, tie: true }];   // gathered high at the back, a short tail
+  if (st === "wavy") return [                       // long and wavy, parted in the middle (Camila, from the user's Gabby reference): the long style's locks,
+    ...[-.13, 0, .13].map((z, i) => ({ parent: "head", anchor: [-.22, 0, z], dir: [-.3, -1, z * 1.2], n: 9, seg: .1, w: [.11, .045], hang: .55, k0: 200, k1: 35, sway: .05, ph: i * 1.9 })),   //   two more over each
+    ...[-1, 1].map((s, i) => ({ parent: "head", anchor: [.04, -.12, s * .29], dir: [.08, -1, s * .05], n: 4, seg: .08, w: [.06, .03], hang: .3, ph: (3 + i) * 1.9 })),                        //   shoulder and one more
+    ...[-1, 1].flatMap((s, j) => [                                                                                                                                                          //   each side at the back,
+      { parent: "head", anchor: [.011, -.131, s * .327], dir: [.12, -1, s * .12], n: 8, seg: .1, w: [.1, .05], hang: .5, k0: 200, k1: 40, sway: .04, ph: (5 + j * 3) * 1.9 },             //   and two short ones
+      { parent: "head", anchor: [-.089, -.091, s * .337], dir: [-.1, -1, s * .2], n: 9, seg: .1, w: [.11, .05], hang: .55, k0: 200, k1: 35, sway: .05, ph: (6 + j * 3) * 1.9 },           //   sweeping off the
+      { parent: "head", anchor: [-.345, 0, s * .2], dir: [-.3, -1, s * .3], n: 9, seg: .1, w: [.11, .05], hang: .55, k0: 200, k1: 35, sway: .05, ph: (7 + j * 3) * 1.9 }]),               //   part (hair.wave
+    ...[-1, 1].map(s => ({ parent: "head", anchor: [.6, .78, s * .08], dir: [.4, -.3, s], curlX: s * .45, n: 5, seg: .075, w: [.09, .075], hang: .05, k0: 260, k1: 90, sway: .02, part: true }))];   //   ripples the rest)
   if (st === "pigtails") return [-1, 1].map(s => ({ parent: "head", anchor: [-.06, .1, s * .4], dir: [-.15, -.25, s * 1], n: 7, seg: .09, w: [.1, .045], hang: .5, k0: 190, k1: 45, sway: .04 }));
   return [];
 }
@@ -1273,7 +1291,8 @@ function buildHuman(R) {
   };
   hairChains(S.hair.style).forEach(ch => {
     const anchor = anchorOf(ch.anchor);
-    chains.push({ ...ch, anchor, lm: () => R.spec.hair.length * R.spec.body.head * hk, fm: () => R.spec.hair.flow,   // locks grow with the head
+    chains.push({ ...ch, anchor, lm: ch.part ? () => R.spec.body.head * hk * 1.6 : () => R.spec.hair.length * R.spec.body.head * hk, fm: () => R.spec.hair.flow,   // locks grow with the head (a part's short sweeps don't grow with the length)
+      wv: ch.part ? null : () => R.spec.hair.wave * R.spec.body.head * hk * .08,                                                                                // how far the waves push each lock side to side
       tube: new Tube(body, ch.n, 18, 8, t => lerp(ch.w[0], ch.w[1], t) * R.spec.hair.thick * R.spec.body.head * hk, mHair) });
     if (ch.tie && S.hair.tie) {                                       // hair tie where the tail is gathered
       const tm = P(new THREE.TorusGeometry(.075, .028, 8, 20).rotateX(Math.PI / 2), M(c.tie)); tm.position.set(...anchor); pointAlong(tm, new THREE.Vector3(...ch.dir)); head.add(tm);
