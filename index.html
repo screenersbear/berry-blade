@@ -515,7 +515,7 @@ const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left") &
 const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right") && !ejFight();
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && (exitOpen || entrySide === (L.rope === "up" ? "top" : "bottom"));   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
-  if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
+  if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
   return S0.noLeft ? dn ?? S0.upX ?? 130 : 130; };
 let cheerHold = null;                     // a sad berry just cheered up: you're held a moment while it celebrates (nothing can hurt you, nothing comes at you)
 let entryHi = false;                      // came in by a split room's upper way out (the woods' ledge, the keep's upper tier): a knockout puts you back up there
@@ -2490,6 +2490,8 @@ function buildLadders() {                          // wooden ladders up the clif
     return g;
   });
 }
+// a climb: three ledges standing out from a cliff face (a wall, indoors), zigzagging up; off the top one and on up into the room above
+const climbLedges = cu => { const g = groundAt(cu.x) ?? GROUND; return [[-150, 112, 130], [20, 220, 130], [-130, 328, 130]].map(([dx, h, w]) => ({ x: cu.x + dx, y: g - h, w, kind: "climb", deep: true })); };
 // the up-and-down rooms' own pieces, in each world's colours (the user, 2026-10-20: ladders and platforms "supported by the environment"):
 // the cliff (or wall) a rope ladder up to the room above is fixed to, a hatch where one goes down through a floor, the wall where a new
 // room is closed off. (Loof's sky and Crux's city build their own ladder walls.) [the wall, its trim]
@@ -2511,6 +2513,18 @@ function buildDeepBits(s) {
       const lid = mk(new THREE.BoxGeometry(1.1, .06, 1.1), null, { mat: mW, ol: .02 }); lid.rotation.x = -1.2; at(lid, x, y + .5, -1.05); g.add(lid);
     }
   });
+  const cu = S0.climbUp;
+  if (cu) {                                         // a climb: the cliff face (the wall, indoors) going up out of sight, the ledges standing out from it
+    const x = X(cu.x), y0 = Y(groundAt(cu.x) ?? GROUND) - .2, indoor = world === 2 || world === 6;
+    g.add(at(mk(new THREE.BoxGeometry(9.5, 25, 2), null, { mat: mW, ol: .05 }), x, y0 + 9.5, -2.2));   // (down below the floor too: on a stepped floor it still meets the ground)
+    if (indoor) for (let y = y0 + 1.4; y < y0 + 14; y += 1.8) g.add(at(mk(new THREE.BoxGeometry(9.7, .16, 2.1), null, { mat: mT, ol: .01 }), x, y, -2.2));
+    else for (let y = y0 + .5; y < y0 + 13; y += .9 + R() * .8) for (let k = 0; k < 3; k++) lump(x + (R() - .5) * 9, y, -1.15 + R() * .25, .25 + R() * .35);
+    climbLedges(cu).forEach(p => { const lx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S;
+      g.add(at(mk(new THREE.BoxGeometry(w, .38, 2.4), null, { mat: indoor ? mT : mW, ol: .04 }), lx, top - .19, -.1));
+      if (indoor) [-1, 1].forEach(s => { const b = mk(new THREE.BoxGeometry(.12, 1.3, .12), null, { mat: mT, ol: .01 }); b.rotation.x = .7; at(b, lx + s * w * .3, top - .75, -.75); g.add(b); });   // braced back to the wall
+      else { g.add(at(mk(new THREE.ConeGeometry(w * .45, 1.1, 5).rotateX(Math.PI), null, { mat: mW, ol: .03 }), lx, top - .9, -.6));   // the rock under it, back into the cliff
+        g.add(at(mk(new THREE.BoxGeometry(w + .1, .1, 2.45), null, { mat: mT, ol: 0 }), lx, top - .04, -.1)); } });   // (and a cap in the world's trim: moss, grit)
+  }
   [["wallL", -1], ["wallR", 1]].forEach(([k, sd]) => { if (!S0[k]) return;    // closed off that side: a wall of the world's own rock
     const ex = sd < 0 ? 0 : X(WORLD), gy = Y(groundAt(sd < 0 ? 30 : WORLD - 30) ?? GROUND);
     g.add(at(mk(new THREE.BoxGeometry(6, 26, 14.6), null, { mat: mW, ol: .05 }), ex + sd * 2.7, gy + 12.6, -2.7));   // (its front just behind the ground's: not drawn on it)
@@ -2631,6 +2645,7 @@ function setScreen(s) {                              // build stage s (its platf
     level = frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
+    if (STAGES[s].climbUp) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
@@ -3964,15 +3979,15 @@ function openExit() {                                // the boss is down (or the
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row
-const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), dead = q.noRight && q.toWorld === undefined && q.up === undefined && q.down === undefined && q.below === undefined;   // (a dead end: back the way you came)
+const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dead = q.noRight && q.toWorld === undefined && upTo === undefined && q.down === undefined && q.below === undefined;   // (a dead end: back the way you came)
   cue.classList.toggle("left", !!q.exitLeft || dead); cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : "NEXT →";   // (a way out on the left: the cue's over there)
   if (q.toWorld !== undefined) return WORLDS[q.toWorld].name;
   if (dead) return q.prev !== undefined ? stageName(q.prev) : "THE WAY YOU CAME";
-  if (q.noRight) return [q.up !== undefined ? "↑ " + stageName(q.up) : "", q.down !== undefined ? "↓ " + stageName(q.down) : q.below !== undefined ? "↓ " + stageName(q.below) : ""].filter(Boolean).join(" · ");
+  if (q.noRight) return [upTo !== undefined ? "↑ " + stageName(upTo) : "", q.down !== undefined ? "↓ " + stageName(q.down) : q.below !== undefined ? "↓ " + stageName(q.below) : ""].filter(Boolean).join(" · ");
   return q.nextHi !== undefined ? `↑ ${stageName(q.nextHi)} · → ${stageName(nextOf(s))}` : stageName(nextOf(s)); };
 const wayOnText = () => { const q = STAGES[stage];
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
-  if (q.noRight) return q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
+  if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
   return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
 // the stats card: fade to black, how the world went, and on into the next one only when you press something
 let wst = null, statsUp = null;
@@ -4141,8 +4156,9 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
     entrySide = up ? "bottom" : "top"; entryHi = false; clockEnter(ns); setScreen(ns);
-    const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")), x = R0 ? R0.x : 130;     // you come in on this room's rope, still climbing
-    const sx = R0 ? R0.face + (R0.wall || 0) * 40 : 130, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(130) ?? GROUND;
+    const foot = !up && STAGES[ns].climbUp ? STAGES[ns].climbUp.x + 230 : 130;   // (down a hatch with stairs back up, no ladder below: at the stairs' foot)
+    const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")), x = R0 ? R0.x : foot;     // you come in on this room's rope, still climbing
+    const sx = R0 ? R0.face + (R0.wall || 0) * 40 : foot, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(foot) ?? GROUND;
     Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
       carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x: sx, y: sy, plat: null } });
     if (pal) Object.assign(pal, { x: sx - 50, y: sy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
@@ -4166,6 +4182,23 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
       inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
     if (pal) Object.assign(pal, { x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
+    const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    enterStage(ns, back); spawnEscort(back);
+  });
+}
+function goRoomUp(ns) {                           // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge
+  cine = null;
+  swapSlide("up", () => {
+    const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
+    const back = trail.length > 1 && trail[trail.length - 2] === ns;
+    if (back) trail.pop(); else trail.push(ns);
+    entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
+    const S1 = STAGES[ns], x = S1.arriveX ?? 130, f = S1.arriveF || 1, gy = groundAt(x) ?? GROUND;
+    Object.assign(player, { x, y: gy - 4, vx: f * 70, vy: -560, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+      inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
+    if (pal) Object.assign(pal, { x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
+    ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
     camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back);
@@ -4813,6 +4846,8 @@ function updatePlayer(dt) {
   }
   const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(WATER - 6, GROUND + 200)) goRoomDrop(dropTo);
+  const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
+  if (cu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > WATER - 6 && overGap(p.x)) splashDown(p);
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
   if (p.landV > 0) { p.sq = -clamp(p.landV / 2100, .1, .45); p.sqv = 0; if (p.landV > 300) { dust(p.x, p.y, 5 + Math.round(p.landV / 250)); SFX.land(); } if (p.landV > 760) shake = Math.max(shake, 2.5); p.bounceT = -1; }   // a solid landing
@@ -9350,7 +9385,7 @@ function buildBeach(k = 0, seed = k) {
 }
 const ROOM_SPECIAL = new Set(["boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
   "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts",
-  "rest", "below", "prev", "exitLeft", "wallL", "wallR", "deepNew", "gen", "like", "arena", "back"]);
+  "rest", "below", "prev", "exitLeft", "wallL", "wallR", "deepNew", "gen", "like", "arena", "back", "climbUp", "arriveX", "arriveF", "hill", "gridNext"]);
 const mirrorRoom = q => {                            // the room flipped left to right (and no way up off it: a fork's upper ledge stays with the fork)
   const o = { pm: {} };
   if (q.plats) { o.plats = []; q.plats.forEach(([x, y, wd, k], i) => { if (k === "jut" || k === "upper") return; o.pm[i] = o.plats.length; o.plats.push([WORLD - x - wd, y, wd, k]); }); }
@@ -9384,21 +9419,22 @@ const stageGround = (q, x) => {                     // a room's ground height at
 //       No gaps up there: a pit's dug (at: where, roughly). rope: false, a drop only. chasm: the room's right end drops away into the
 //       room below. hatch: no drop, a ladder down through a hatch in the floor (the keep). clear: room for the ladder below is made
 //       if it has to be (a platform in its way taken out; in a new room, a gap)
-const DEEP = {
+const DEEP = {                                      // (link via: "ledge", a climb of ledges back up, the default · "rope", a rope ladder · "drop", no way back up there)
   0: { add: [["C14", "B14", "C7", { chamber: true, name: "THE NIGHT GATE'S RAVINE", bossX: 760 }]],   // the woods: the ridge (A) over the woods (B), the ravine (C) under them; the gate's way out, down in the ravine
-       link: [["A11", "B11", { at: 1450 }], ["A12", "B12", { at: 1100 }], ["A13", "B13", { at: 1650 }], ["B2", "C2", { at: 1250 }], ["B14", "C14", { chasm: true }]] },
-  1: { link: [["B8", "C8", { clear: true }], ["B9", "C9", { clear: true }], ["B10", "C10", { clear: true }]] },   // Cuss' waves: still climbing to the keep; under the cliff path, the shore at its foot, ladders up its face
-  2: { link: [["A10", "B10", { hatch: true }], ["A12", "B12", { hatch: true }]] },                                    // Volt Keep: ladders through hatches between the floors
+       link: [["A11", "B11", { at: 1450 }], ["A12", "B12", { at: 1100, via: "rope" }], ["A13", "B13", { at: 1650 }], ["B2", "C2", { at: 1250 }], ["B14", "C14", { chasm: true }]] },
+  1: { link: [["B8", "C8", { clear: true }], ["B9", "C9", { clear: true }], ["B10", "C10", { clear: true }]] },   // Cuss' waves: still climbing to the keep; off the cliff path, the shore at its foot, and ledges back up the cliff's side
+  2: { link: [["A10", "B10", { hatch: true }], ["A12", "B12", { hatch: true, via: "rope" }]] },                     // Volt Keep: down through hatches, up catwalk stairs (or the hatch's ladder)
   3: { add: [["B14", "A14", "B6", { chamber: true, name: "LOOF'S LANDING", bossX: 760 }]],                           // Loof's sky: off the high docks, down through the clouds to the low ones
-       link: [["A10", "B10"], ["A12", "B12"], ["A14", "B14", { chasm: true }]] },
+       link: [["A10", "B10", { via: "rope" }], ["A12", "B12"], ["A14", "B14", { chasm: true }]] },
   4: { add: [["B14", "A14", "B12", { chamber: true, name: "SIROCCO'S UNDERCREST", bossX: 760, noGaps: true }]],      // the dunes: down the sinkholes
        link: [["B11", "C11"], ["B12", "C12"], ["A14", "B14", { chasm: true }]] },
-  5: { add: [["B14", "C14", "B12", { chamber: true, above: true, name: "KESH'S DAWN STAIR" }]],                      // Kesh's garden: down through the rifts; up a stair of vine out of the dell
-       link: [["B11", "C11"], ["B12", "C12"], ["B14", "C14", { at: WORLD - 330, newPit: true }]] },
+  5: { add: [["B14", "C14", "B12", { chamber: true, above: true, name: "KESH'S DAWN STAIR" }]],                      // Kesh's garden: down through the rifts; up a stair out of the dell
+       link: [["B11", "C11"], ["B12", "C12", { via: "rope" }], ["B14", "C14", { at: WORLD - 330, newPit: true }]] },
   6: { link: [["A9", "B9"], ["A11", "B11", { clear: true }]] },                                                       // the candy works: down a vat's drain to the floor below
-  7: { link: [["A9", "B9"], ["A11", "B11", { clear: true }], ["B10", "C10"], ["B12", "C12", { clear: true }]] },     // the city: three streets deep
+  7: { link: [["A9", "B9", { via: "rope" }], ["A11", "B11", { clear: true }], ["B10", "C10", { via: "rope" }], ["B12", "C12", { clear: true }]] },   // the city: three streets deep
   8: { link: [["B7", "C7"], ["B9", "C9", { clear: true }], ["A12", "B12", { clear: true }]] },                        // the lakebed: off the shore path and the rim road, down to the floor
 };
+const HILL_WORLDS = new Set([0, 1, 4, 5, 8]);       // (the outdoor ones, where the ground can rise right up to the next row: the woods, the coast, the dunes, the garden, the lakebed)
 // the grid's rows, by world: what a new room's called (after its hour)
 const ROW_NAMES = { 0: ["RIDGE", "WOODS", "RAVINE"], 1: ["CLIFFTOP", "CLIFF PATH", "SHORE"], 2: ["HIGH WORKS", "MIDDLE WORKS", "FACTORY FLOOR"], 3: ["HIGH DOCKS", "SKY DOCKS", "LOW DOCKS"],
   4: ["CREST", "RIDGE", "DUNES"], 5: ["UPPER GARDEN", "TERRACE", "HOLLOW"], 6: ["TOP FLOOR", "MIDDLE FLOOR", "GROUND FLOOR"], 7: ["ROOFTOPS", "STREETS", "UNDERCITY"], 8: ["RIM", "SHORE", "LAKE FLOOR"] };
@@ -9423,13 +9459,54 @@ function dropInWay(q, row, x) {                    // make room for a ladder at 
     if (a.plat !== undefined) row[i] = [e[0], e[1], pm[a.plat] !== undefined ? { plat: pm[a.plat] } : x < 1280 ? x + 320 : x - 320, ...e.slice(3)];
     else if (a.gap !== undefined) { if (gm[a.gap] !== undefined) row[i] = [e[0], e[1], { gap: gm[a.gap] }, ...e.slice(3)]; else row.splice(i, 1); } }
 }
-function linkDown(S0, R0, u, l, o) {                // room u drops into room l, under it
-  const U = S0[u], L = S0[l], at = o.at ?? WORLD * .5;
-  if (o.hatch) { const x = pitX({ ...U, gaps: [] }, L, at, true); if (x === null) return console.warn("deepen: no hatch", U.cell);
-    if (L.deepNew) dropInWay(L, R0[l], x + 15); Object.assign(U, { down: l, downX: x, downWall: -1 }); Object.assign(L, { up: u, upX: x + 15 }); return; }
-  if (o.chasm) { for (let wd = 150; wd < 560; wd += 10) { const x = WORLD - wd; if (!ropeClear(L, x + 15) || stageGround(U, x - 30) === null) continue;
-      U.gaps = [...(U.gaps || []).filter(([a, b]) => b < x - 160), [x, WORLD + 1200]]; Object.assign(U, { below: l, down: l, downX: x, downWall: -1, noRight: true }); Object.assign(L, { up: u, upX: x + 15 }); return; }
+function ledgeSpot(L, cx) {                        // room for a climb of ledges at cx (px) in room L: flat ground, nothing in the way, open overhead
+  if (cx < 420 || cx > WORLD - 420) return false;                                    // (platforms in the way are taken out: see climb in linkDown)
+  const gs = []; for (let d = -210; d <= 180; d += 30) gs.push(stageGround(L, cx + d)); if (gs.some(g => g === null) || Math.max(...gs) - Math.min(...gs) > 70) return false;
+  if ((L.ceils || []).some(([a, b]) => a < cx + 280 && b > cx - 280) || (L.ladders || []).some(([f]) => Math.abs(f - cx) < 320)) return false;
+  return ![L.upX, L.downX, L.arriveX].some(v => v !== undefined && Math.abs(v - cx) < 320) && !L.climbUp && !(L.bep && Math.abs(L.bep.zone - cx) < 400);
+}
+function clearSpan(q, row, x0, x1, gapsToo = true) {   // a room's platforms (and gaps) between x0 and x1 taken out, the baddies on them put down on the ground
+  const pm = {}, keep = []; (q.plats || []).forEach((p, i) => { if (p[0] < x1 && p[0] + p[2] > x0) return; pm[i] = keep.length; keep.push(p); }); if (q.plats) q.plats = keep;
+  const gm = {}, gk = []; (q.gaps || []).forEach((g, i) => { if (gapsToo && g[0] < x1 && g[1] > x0 && g[1] <= WORLD) return; gm[i] = gk.length; gk.push(g); }); if (q.gaps) q.gaps = gk;
+  for (let i = (row || []).length - 1; i >= 0; i--) { const e = row[i], a = e[2]; if (!a || typeof a !== "object") continue;
+    if (a.plat !== undefined) row[i] = [e[0], e[1], pm[a.plat] !== undefined ? { plat: pm[a.plat] } : x0 > 1280 ? x0 - 300 : x1 + 300, ...e.slice(3)];
+    else if (a.gap !== undefined) { if (gm[a.gap] !== undefined) row[i] = [e[0], e[1], { gap: gm[a.gap] }, ...e.slice(3)]; else row.splice(i, 1); } }
+}
+function ledgePit(U, L, at) {                      // where to dig a pit in U (px, its left edge) with room under it in L for a climb
+  let best = null; const L2 = L.deepNew ? { ...L, plats: [], gaps: [] } : L;
+  for (let x = 400; x <= WORLD - 560; x += 20) {
+    const gs = [-100, 0, 75, 150, 250].map(d => stageGround(U, x + d)); if (gs.some(g => g === null) || Math.max(...gs) - Math.min(...gs) > 40) continue;
+    if ((U.plats || []).some(([px, py, pw]) => py > GROUND - 150 && px < x + 180 && px + pw > x - 30) || (U.ladders || []).some(([f]) => Math.abs(f - x) < 220)) continue;
+    if ((U.bep && Math.abs(U.bep.zone - x) < 350) || [U.upX, U.downX, U.arriveX].some(v => v !== undefined && Math.abs(v - x) < 260) || !ledgeSpot(L2, x + 75)) continue;
+    const sc = Math.abs(x - at); if (!best || sc < best.sc) best = { x, sc };
+  }
+  return best ? best.x : null;
+}
+function linkDown(S0, R0, u, l, o) {                // room u drops into room l, under it; and the way back up: a climb of ledges, a rope ladder, or none
+  const U = S0[u], L = S0[l], at = o.at ?? WORLD * .5, via = o.via || "ledge", clearL = L.deepNew ? { ...L, plats: [], gaps: [] } : L;
+  const climb = (cx, ax, af) => { clearSpan(L, R0[l], cx - 240, cx + 240, !!L.deepNew); L.climbUp = { x: cx, to: u }; Object.assign(U, { arriveX: ax, arriveF: af }); };   // (up the ledges, out beside the pit above)
+  if (o.hatch) {                                     // the keep: a ladder down through a hatch; back up, catwalk stairs (or the ladder)
+    const x = pitX({ ...U, gaps: [] }, L, at, true); if (x === null) return console.warn("deepen: no hatch", U.cell);
+    Object.assign(U, { down: l, downX: x, downWall: -1 });
+    const cx = x + 15 + (x + 15 < WORLD / 2 ? 340 : -340);
+    if (via === "ledge" && ledgeSpot(clearL, cx)) climb(cx, x - 40, -1);
+    else { if (L.deepNew) dropInWay(L, R0[l], x + 15); Object.assign(L, { up: u, upX: x + 15 }); }
+    return; }
+  if (o.chasm) { for (let wd = 660; wd < 1100; wd += 20) { const x = WORLD - wd, cx = x + 240;   // the room's right end drops away into the room below
+      if (stageGround(U, x - 60) === null) continue;
+      if (via === "ledge" ? !ledgeSpot(clearL, cx) : !ropeClear(L, x + 15)) continue;
+      clearSpan(U, R0[u], x - 20, WORLD + 1200); U.gaps = [...(U.gaps || []).filter(([a, b]) => b < x - 160), [x, WORLD + 1200]]; Object.assign(U, { below: l, noRight: true });
+      if (via === "ledge") climb(cx, x - 60, -1); else { Object.assign(U, { down: l, downX: x, downWall: -1 }); Object.assign(L, { up: u, upX: x + 15 }); }
+      return; }
     return console.warn("deepen: no chasm", U.cell); }
+  const gapsOf = q => (q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD);
+  if (via === "ledge" && !L.climbUp && U.arriveX === undefined && L.up === undefined) {   // a climb: under one of its gaps (or a new pit), ledges up a cliff face
+    let best = null;
+    if (!o.newPit) gapsOf(U).forEach(([a, b]) => { const cx = clamp((a + Math.min(b, WORLD)) / 2, 420, WORLD - 420), ax = stageGround(U, a - 60) !== null ? a - 60 : b + 60, af = ax < a ? -1 : 1;
+      if (ax < 80 || ax > WORLD - 80 || stageGround(U, ax) === null || !ledgeSpot(clearL, cx)) return; const sc = Math.abs(cx - at); if (!best || sc < best.sc) best = { sc, cx, ax, af }; });
+    if (!best && !o.noPit && (o.newPit || o.orPit || !gapsOf(U).length)) { const x = ledgePit(U, L, at); if (x !== null) { U.gaps = [...(U.gaps || []), [x, x + 150]].sort((p, q) => p[0] - q[0]); best = { cx: x + 75, ax: x - 60, af: -1 }; } }
+    if (best) { U.below = l; climb(best.cx, best.ax, best.af); return; }
+  }
   let best = null;
   if (!o.newPit) (U.gaps || []).forEach(([a, b]) => [[a, -1, a + 15], [b, 1, b - 15]].forEach(([e, wl, rx]) => {
     if (rx < 200 || rx > WORLD - 200 || stageGround(U, e + wl * 30) === null || !ropeClear(L, rx)) return;
@@ -9439,10 +9516,32 @@ function linkDown(S0, R0, u, l, o) {                // room u drops into room l,
     const sc = Math.abs(rx - at) + 500 * (L.plats || []).filter(([px, , pw]) => rx > px - 50 && rx < px + pw + 50).length; if (!best || sc < best.sc) best = { sc, e, wl, rx, clear: true }; }));
   if (!best && (o.newPit || o.orPit || !(U.gaps || []).length) && !o.noPit) { const x = pitX(U, L, at, true); if (x === null) return console.warn("deepen: no pit", U.cell);
     U.gaps = [...(U.gaps || []), [x, x + 140]].sort((p, q) => p[0] - q[0]); best = { e: x, wl: -1, rx: x + 15, clear: !!L.deepNew }; }
-  if (best && best.clear && o.rope !== false && U.down === undefined && L.up === undefined) dropInWay(L, R0[l], best.rx);
+  if (best && best.clear && via !== "drop" && U.down === undefined && L.up === undefined && !L.climbUp) dropInWay(L, R0[l], best.rx);
   if ((U.gaps || []).length) U.below = l;
-  if (!best || o.rope === false || U.down !== undefined || L.up !== undefined) return;
+  if (!best || via === "drop" || U.down !== undefined || L.up !== undefined || L.climbUp) return;
   Object.assign(U, { down: l, downX: best.e, downWall: best.wl }); Object.assign(L, { up: u, upX: best.rx });
+}
+// a hill: the ground rising across one end of a room (lo) right up to the row above, where you walk on into the room there (up), or
+// back down. side "R": up at its right end, into the next column's room above; "L": up at its left end, from the last column's room above
+function makeHill(S0, R0, cell, c, ru, rl, side) {
+  const lo = cell.get(rl + (side === "R" ? c : c + 1)), up = cell.get(ru + (side === "R" ? c + 1 : c)); if (lo === undefined || up === undefined) return false;
+  const L = S0[lo], U = S0[up], bad = q => q.boss || q.toWorld !== undefined || q.end || q.exitLeft || q.peace || q.rest || q.castle || q.bep || q.gift || q.duo;
+  if (!L.deepNew || bad(L) || bad(U) || lo === 0 || up === 0) return false;
+  const [x0, x1] = side === "R" ? [WORLD - 1050, WORLD] : [0, 1050];
+  if ([L.upX, L.downX, L.arriveX, L.climbUp && L.climbUp.x].some(v => v !== undefined && v > x0 - 200 && v < x1 + 200) || (L.ceils || []).some(([a, b]) => a < x1 && b > x0)) return false;
+  const nb = cell.get(rl + (side === "R" ? c + 1 : c)), nu = cell.get(ru + (side === "R" ? c : c + 1));   // (the walking links the hill replaces: they must be new ones, never the old way through)
+  if (side === "R") { if (L.next !== undefined && !L.gridNext) return false; if (nu !== undefined && S0[nu].next === up && !S0[nu].gridNext) return false;
+    if (S0.some((q, k) => k !== nu && k !== lo && !q.arena && (q.next === up || q.nextHi === up))) return false; }
+  else { if (U.next !== undefined && !U.gridNext) return false; if (nb !== undefined && S0[nb].next === lo && !S0[nb].gridNext) return false;
+    if (S0.some((q, k) => k !== nb && k !== up && !q.arena && (q.next === lo || q.nextHi === lo))) return false; }
+  if (side === "R") { if (nu !== undefined && S0[nu].next === up) delete S0[nu].next; L.next = up; L.gridNext = true; delete L.noRight; delete U.noLeft; }
+  else { if (nb !== undefined && S0[nb].next === lo) delete S0[nb].next; U.next = lo; U.gridNext = true; delete U.noRight; delete L.noLeft; }
+  clearSpan(L, R0[lo], x0 - 40, x1 + 40);
+  const PF = []; let d = 0; (L.steps || []).forEach(([sx, dy]) => { PF.push([sx, d], [sx, dy]); d = dy; }); (L.ground || []).forEach(p => PF.push(p.slice())); PF.sort((a, b) => a[0] - b[0]);
+  const dy0 = stageGround({ ...L, gaps: [] }, side === "R" ? x0 + 1 : x1 - 1) - GROUND, RISE = 230;
+  L.ground = side === "R" ? [...PF.filter(([x]) => x < x0 - 1), [x0, dy0], [x1 - 180, dy0 - RISE], [x1, dy0 - RISE]] : [[0, dy0 - RISE], [180, dy0 - RISE], [x1, dy0], ...PF.filter(([x]) => x > x1 + 1)];
+  delete L.steps; L.hill = side;
+  return true;
 }
 const plainRoom = q => {                           // a room copied as it is (the other way round from mirrorRoom): no way up off it, though
   const o = { pm: {} };
@@ -9490,18 +9589,25 @@ function gridLinks(W, w) {                         // the rooms joined up: along
     const A = S0[a], B = S0[b];
     if (A.next !== undefined || A.noRight || A.toWorld !== undefined || A.end || B.exitLeft || sameRowPred(b)) continue;
     if (B.noLeft && (B.toWorld !== undefined || S0.some(q => !q.arena && (q.next === b || q.nextHi === b)))) continue;
-    A.next = b; delete B.noLeft;                                                       // (a room up (or down) a rope with a new neighbour on its left: that side's open now)
+    A.next = b; A.gridNext = true; delete B.noLeft;                                    // (a room up (or down) a rope with a new neighbour on its left: that side's open now)
   }
   const noPit = i => { const U = S0[i]; return U.boss || U.toWorld !== undefined || U.end || U.peace || U.rest || U.bep || U.castle || U.gift || U.duo || i === 0; };
-  const tryRope = (u, l) => { const U = S0[u], L = S0[l]; if (U.down !== undefined || L.up !== undefined) return false;
-    if (w === 2) { if (noPit(u)) return false; linkDown(S0, R0, u, l, { hatch: true }); }
-    else linkDown(S0, R0, u, l, { clear: true, orPit: !noPit(u), noPit: noPit(u), at: WORLD * (.3 + R() * .4) });
-    return U.down === l && L.up === u; };
+  const tryRope = (u, l) => { const U = S0[u], L = S0[l]; if (U.down !== undefined || L.up !== undefined || L.climbUp || U.arriveX !== undefined) return false;
+    const via = R() < (w === 3 ? .45 : .72) ? "ledge" : "rope";                       // (mostly a climb of ledges; now and then a rope ladder: Loof's sky keeps more, it's all airships)
+    if (w === 2) { if (noPit(u)) return false; linkDown(S0, R0, u, l, { hatch: true, via }); }
+    else linkDown(S0, R0, u, l, { clear: true, orPit: !noPit(u), noPit: noPit(u), at: WORLD * (.3 + R() * .4), via });
+    return (U.down === l && (L.up === u || !!(L.climbUp && L.climbUp.to === u))) || (!!(L.climbUp && L.climbUp.to === u) && U.below === l); };
+  if (HILL_WORLDS.has(w)) {                                                            // a few hills, up to the next row (or down from it)
+    const B = []; for (let c = 1; c < 14; c++) for (const [ru, rl] of [["A", "B"], ["B", "C"]]) B.push([c, ru, rl, R() < .5 ? "R" : "L"]);
+    for (let k = B.length - 1; k > 0; k--) { const m = Math.floor(R() * (k + 1)); [B[k], B[m]] = [B[m], B[k]]; }
+    let made = 0; for (const [c, ru, rl, side] of B) { if (made >= 3) break; if (makeHill(S0, R0, cell, c, ru, rl, side)) made++; }
+  }
   const pieces = () => {                           // which rooms are joined both ways (walking either way, or a ladder)
     const par = S0.map((_, i) => i), f = i => par[i] === i ? i : (par[i] = f(par[i]));
     S0.forEach((q, i) => { if (q.arena) return; const both = n => { const pv = S0.map((p, k) => k).filter(k => !S0[k].arena && (S0[k].next === n || S0[k].nextHi === n) && rowOf(k) === rowOf(n)); return !pv.length || pv.includes(i); };
       for (const n of [q.noRight ? undefined : q.next, q.nextHi]) if (n !== undefined && both(n)) par[f(i)] = f(n);
-      for (const n of [q.up, q.down]) if (n !== undefined) par[f(i)] = f(n); });
+      for (const n of [q.up, q.down]) if (n !== undefined) par[f(i)] = f(n);
+      if (q.climbUp && (S0[q.climbUp.to].below === i || S0[q.climbUp.to].down === i)) par[f(i)] = f(q.climbUp.to); });
     return f;
   };
   for (let pass = 0; pass < 80; pass++) {                                              // every stretch joined to the start
@@ -9513,7 +9619,7 @@ function gridLinks(W, w) {                         // the rooms joined up: along
     cands.sort((a, b) => a.sc - b.sc);
     if (!cands.some(k => tryRope(k.u, k.l))) { console.warn("deepen: cut off", w, out.map(i => S0[i].cell).join(" ")); break; }
   }
-  for (let c = 1; c <= 14; c++) for (const [r1, r2] of [["A", "B"], ["B", "C"]]) { const u = cell.get(r1 + c), l = cell.get(r2 + c); if (u !== undefined && l !== undefined && R() < .3) tryRope(u, l); }   // a few more ladders
+  for (let c = 1; c <= 14; c++) for (const [r1, r2] of [["A", "B"], ["B", "C"]]) { const u = cell.get(r1 + c), l = cell.get(r2 + c); if (u !== undefined && l !== undefined && R() < .25) tryRope(u, l); }   // a few more ladders
   cell.forEach((i, k) => { const q = S0[i], r2 = GRID_ROWS[GRID_ROWS.indexOf(k[0]) + 1], j = r2 && cell.get(r2 + k.slice(1));   // falling: down into the room underneath, wherever there is one
     if (j !== undefined && q.below === undefined && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)) q.below = j; });
   S0.forEach((q, i) => { if (q.arena || !q.cell) return;                             // the ends of each stretch walled off; the way back left, spelled out
