@@ -513,9 +513,10 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
   if (S0.prev !== undefined) return S0.prev;
   if (entrySide === "top" || entrySide === "bottom") return null;
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
-const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
-const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right") && !ejFight();
-const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && (exitOpen || entrySide === (L.rope === "up" ? "top" : "bottom"));   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
+const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
+const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
+const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight();   // (clearing the room isn't needed to go on: the user, 2026-10-20)
+const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight();   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
   return S0.noLeft ? dn ?? S0.upX ?? 130 : 130; };
@@ -11479,7 +11480,8 @@ function updateBaddy(b, dt) {
   moveBody(b, dt, b.hw);
   if (p !== player && b.atk === "go" && !b.dead && Math.abs(p.x - b.x) < p.hw + b.hw && p.y - p.h < b.y && b.y - b.h < p.y) bepHurt(p, Math.sign(p.x - b.x) || b.dir);   // (rammed: a lunge, a roll, a leap)
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
-  if (GAPS.length && !b.dead && !fly && b.y > WATER - 4 && overGap(b.x) && !b.T.swim) { fallFx(b.x, .9); b.hp = 0; b.dead = true; b.deathT = 0; b.vx = 0; b.sunk = true; }   // into the sea: popped
+  if (GAPS.length && !b.dead && !fly && b.y > Math.min(WATER - 4, GROUND + 110) && overGap(b.x) && !b.T.swim) { fallFx(b.x, .9); b.hp = 0; b.dead = true; b.deathT = 0; b.vx = 0; b.sunk = true; }   // into the sea (or down a pit, out of reach): popped
+  if (!fly && !b.dead && !b.plat && !b.under) { const g = groundAt(b.x); if (g !== null && b.y > g + 24) { b.y = g; b.vy = Math.min(b.vy, 0); b.onGround = true; } }   // (never left inside the earth)
   if (b.landV > 0) { b.sq = -clamp(b.landV / 2000, .1, .35); b.sqv = 0; if (T.move === "hop" && !b.atk) b.vx *= .15; if (b.landV > 450) dust(b.x, b.y, 3); }
   if (!b.onGround) b.plat = null;
   if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
@@ -11866,7 +11868,8 @@ function unpinBaddies(p) {                         // a charged combo (or a tack
   for (const b of baddies) {                       // (no flying further: just room enough), and holds off a moment
     if (b.gone || b.dead || b.sad || b.calm || b.T.move === "breach") continue;
     const gap = 18 + (b.hw || 20) + 14, dx = b.x - p.x; if (Math.abs(dx) >= gap || Math.abs(b.y - p.y) > 90) continue;
-    const nx = p.x + (Math.sign(dx) || p.face || 1) * gap; if (b.plat || b.T.move === "float" || groundAt(nx) !== null) b.x = nx;
+    const nx = p.x + (Math.sign(dx) || p.face || 1) * gap, gn = groundAt(nx);
+    if (b.plat || b.T.move === "float") b.x = nx; else if (gn !== null && Math.abs(gn - b.y) < 30) { b.x = nx; b.y = gn; }   // (onto the ground there: never into a step or over a pit)
     b.vx = 0; b.recoil = Math.max(b.recoil || 0, .45); b.atkCd = Math.max(b.atkCd || 0, .6);
   }
 }
