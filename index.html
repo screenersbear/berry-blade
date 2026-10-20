@@ -42,6 +42,7 @@
   #hearts, #pips { display: flex; gap: 5px; }
   #hearts svg { width: 21px; height: 19px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
   #pips svg { width: 14px; height: 18px; transition: transform .25s cubic-bezier(.2, 2, .4, 1); }
+  #pips svg.mini { width: 21px; height: 27px; }   /* (a mini boss: a bigger berry in the row) */
   #hearts svg.lost path, #pips svg.lost path:first-child { fill: var(--s2); }
   #pips svg.lost path:last-child { display: none; }
   #hearts svg.pop, #pips svg.pop { transform: scale(1.7); }
@@ -365,7 +366,7 @@
 <div id="map" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">WORLD MAP</div><div class="bar" id="mapSub">THE ISLAND</div></div>
   <div id="mapBox"></div>
-  <div class="btns" style="margin-top: 12px"><button data-mb="back">BACK</button></div>
+  <div class="btns" id="mapBtns" style="margin-top: 12px"><button data-mb="back">BACK</button></div>
   <small>← → to choose a place you've been &middot; Enter to go there &middot; Esc to go back</small>
 </div></div>
 <div id="comic"><div class="page"><div class="cp"><span class="cap">A BEP!</span><span class="fx" style="right: 10%; top: 30%">!</span></div><div class="cp"><span class="cap">GLOS WENT THAT WAY: INTO THE FOREST!</span><span class="arrow"></span></div><div class="cp"><span class="cap">IT HAD SOMETHING FOR THEM...</span><span class="fx" style="left: 8%; bottom: 10%">✦</span></div><div class="cp"><span class="cap">THE BERRY SWORD! THE GAUNTLET! AFTER GLOS!</span></div><span class="go" id="comicGo">PRESS ANY BUTTON</span></div></div>
@@ -473,8 +474,8 @@ const WOOD_STAGES = [
   { h: 6, col: 6, cell: "B7", elev: 1, foe: 0, boss: true, bossX: 2000, toWorld: 3, name: "NIGHT GATE", plats: [[320, 360, 180, "shroom"], [620, 280, 200, "fungus"], [940, 330, 200, "slab"], [1240, 250, 160, "shroom"], [1550, 340, 220, "slab"], [1900, 270, 300, "slab"], [2300, 350, 200, "shroom"]] },
 ].map(st => ({ boss: false, ...st }));
 const STAGES = WOOD_STAGES.slice();
-const runLen = () => { let n = 1, s = runStart; while (n < 60 && !(STAGES[s].toWorld !== undefined || STAGES[s].end || s >= STAGES.length - 1)) { s = nextOf(s); n++; } return n; };   // the rooms from the run's start to its end (by the main path)
-const isRunEnd = s => STAGES[s].toWorld === undefined && (STAGES[s].end || s >= STAGES.length - 1);
+const runLen = () => { let n = 1, s = runStart; while (n < 60 && !(STAGES[s].toWorld !== undefined || STAGES[s].end || STAGES[s].next === undefined)) { s = nextOf(s); n++; } return n; };   // the rooms from the run's start to its end (by the main path)
+const isRunEnd = s => STAGES[s].toWorld === undefined && !!STAGES[s].end;
 const stageName = s => STAGES[s].name || (STAGES[s].boss ? SCREENS[STAGES[s].h].name : SCREENS[STAGES[s].h].name + " BERRY PATCH");
 let stage = 0, hour = 0;                  // hour: the time of day on screen (its light, its music, its critters)
 let trap = null, stronghold = null;      // a berry stronghold's open hatch, out on the map · the stronghold you're down in
@@ -488,8 +489,8 @@ const HOUR_OF = [0, 0, 0, 1, 3, 3, 5, 6];
 const colOf = s => +String(STAGES[s].cell || "").slice(1) || 0;
 function clockEnter(s) {
   const c = colOf(s);
-  if (!STAGES[s].peace && c > 0 && !stayCols.has(c)) { stayCols.add(c); dayClock = dayClock % 7 + 1; }   // (an intro screen, like the keep's gate, doesn't count)
-  dayHeld = (world === 5 ? KESH_HOUR : world === 9 ? BEACH_HOUR : HOUR_OF)[dayClock]; if (!roomHour.has(s)) roomHour.set(s, dayHeld);
+  if (c > 0 && !stayCols.has(c)) { stayCols.add(c); dayClock = dayClock % COLS + 1; }   // (an intro screen, like the keep's gate (column 0), doesn't count)
+  dayHeld = world === 9 ? BEACH_HOUR[dayClock] ?? 0 : (world === 5 ? KESH_HOUR : HOUR_OF)[Math.ceil(dayClock / 2)];   // (fourteen columns: each hour lasts two) if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
 function newStay() { roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); }
 const backOpen = () => (trail.length > 1 || worldStack.length > 0 || prevWorld(world) >= 0) && (exitOpen || entrySide === "left") && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight();   // the way you came in is always open; the other way needs the room cleared
@@ -2418,6 +2419,33 @@ function buildLadders() {                          // wooden ladders up the clif
     return g;
   });
 }
+let restCamp = null;
+function buildRestCamp() {                        // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
+  let x = 1280; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = 1280 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }
+  const y = groundAt(x) ?? GROUND, g = new THREE.Group(); g.position.set(X(x), Y(y), -.6); actors.add(g);
+  const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
+  for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
+  for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .62, 6), i % 2 ? wood : woodD); m.rotation.set(Math.PI / 2 - .35, i / 3 * TAU, 0); m.position.y = .14; g.add(m); }
+  const bench = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, 1.3, 9).rotateZ(Math.PI / 2), wood); bench.position.set(1.05, .17, .25); g.add(bench);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.7, 6), woodD); pole.position.set(-1.0, .85, -.1); g.add(pole);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(.62, .36), new THREE.MeshBasicMaterial({ color: "#ffd203", side: THREE.DoubleSide })); flag.position.set(-.68, 1.5, -.1); g.add(flag);
+  const fl = (c, s, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.17 * s, .62 * s, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .2 + .31 * s; g.add(m); return m; };
+  const flames = [fl("#ff7a1a", 1.25, .85), fl("#ffc23a", .95, .9), fl("#fff1b0", .55, .95)];
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#ffb35c", transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); glow.position.set(0, .55, .05); g.add(glow);
+  return { g, x, flames, glow, flag, healed: false };
+}
+function syncRest() {                             // the fire flickering; walk up to it and you're healed in full
+  const C = restCamp; if (!C) return;
+  C.flames.forEach((m, i) => { const f = 1 + .14 * Math.sin(time * (11 + i * 3) + i) + .08 * Math.sin(time * 23 + i * 2); m.scale.set(1 / f, f, 1 / f); m.rotation.y = time * (1 + i); });
+  C.glow.material.opacity = .45 + .1 * Math.sin(time * 9) + .05 * Math.sin(time * 17); C.flag.rotation.y = Math.sin(time * 2.2) * .35;
+  const p = player; if (C.healed || !p || p.dead || mode !== "play" || Math.abs(p.x - C.x) > 150) return;
+  C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");
+}
+function restArrive() {                           // in the story, a rest stop you've reached is a checkpoint: the world map can bring you back here
+  if (!story) return; const R = story.rests || (story.rests = {}), L = R[world] || (R[world] = []);
+  if (!L.includes(stage)) { L.push(stage); toast("REST STOP · CHECKPOINT SAVED · BACK HERE ANY TIME FROM THE WORLD MAP", 3800); }
+  writeSave();
+}
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
   if (level.s !== s || level.w !== world || level.h !== h) {
@@ -2426,6 +2454,7 @@ function setScreen(s) {                              // build stage s (its platf
     level = world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
+    restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     dropTextures();
   }
   setLook(h);
@@ -3276,7 +3305,7 @@ function levelGo(w, kind, a) {
   setWorld(w); level.s = -2;
   const s = kind === "room" || kind === "bep" ? a : SH_SPOT[w].s, night = kind === "hatch" || kind === "sh";
   oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); rollSad(); levelTest = true; wstReset(); cameoWorlds = new Set();
-  if (night) { dayClock = 7; dayHeld = (world === 5 ? KESH_HOUR : HOUR_OF)[7]; roomsDone.add(s); }   // (the hatch only turns up at night, in a room you've cleared)
+  if (night) { dayClock = COLS; dayHeld = (world === 5 ? KESH_HOUR : HOUR_OF)[7]; roomsDone.add(s); }   // (the hatch only turns up at night, in a room you've cleared)
   mode = "play"; setScreen(s); beginPlay();
   if (kind === "bep") enterHideout();
   else if (kind === "hatch") spawnTrapdoor(SH_SPOT[w].x);
@@ -3293,7 +3322,7 @@ const SAVE_KEY = "berry.saves.v1";
 const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_KEY) || "[]"); return [0, 1, 2].map(i => (a && a[i]) || null); } catch { return [null, null, null]; } };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, uprise: story.uprise || {}, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: stage, uprise: story.uprise || {}, rests: story.rests || {}, where: WORLDS[world].name + " · " + stageName(stage), visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hms = t => { t = Math.floor(t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, sc = t % 60; return (h ? h + ":" + String(m).padStart(2, "0") : m) + ":" + String(sc).padStart(2, "0"); };
@@ -3387,6 +3416,7 @@ function menuNav(d, ok, back) {
   else if (M === "hero") {
     if (heroAsk) { if (d) { heroAskSel = 1 - heroAskSel; SFX.tick(); markMenu(); } if (ok) heroAnswer(!heroAskSel); if (back) heroAnswer(false); return; }
     if (d) { heroSel = step(heroSel, 2); SFX.tick(); markMenu(); } if (ok) heroPick(["june", "chase"][heroSel]); if (back && !opening) { SFX.tick(); showSlots(slotKind); } }
+  else if (M === "map" && mapPick) { if (d) { mapPick.sel = (mapPick.sel + d + mapPick.opts.length) % mapPick.opts.length; SFX.tick(); drawMapPick(); } if (ok) mapGo(mapPick.w, mapPick.opts[mapPick.sel][1]); if (back) { mapPick = null; SFX.tick(); drawMapPick(); drawMap(); } }
   else if (M === "map") { const V = mapList(); if (d && V.length) { mapSel = V[(Math.max(0, V.indexOf(mapSel)) + d + V.length) % V.length]; SFX.tick(); drawMap(); } if (ok) mapGo(mapSel); if (back) closeMap(); }
 }
 function menuKey(e) {
@@ -3395,7 +3425,7 @@ function menuKey(e) {
     ["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(c), c === "Escape" || c === "Backspace");
 }
 function storyNew(slot, id) { story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {} }; storyRun(q.w, q.s, false); }
+function storyLoad(slot, q) { story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {} }; storyRun(q.w, q.s, false); }
 function storyBegin(slot) { story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   const id = story.char || "june", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
@@ -3437,9 +3467,20 @@ const MAP_ICON = [   // each world's little mark, in navy on its colour
   '<path d="M-3 14Q-1 2 2-6" fill="none" stroke="#2f3b43" stroke-width="3.4" stroke-linecap="round"/><path d="M2-6Q-8-12-13-2Q-6-9 2-6Q-3-15-10-15Q0-16 2-6Q6-15 14-13Q6-11 2-6Q11-8 14 1Q8-5 2-6Z"/>',
 ];
 const mapList = () => WORLDS.map((_, w) => w).filter(w => w < MAP_AT.length && (!story || story.visited.has(w)));
-function openMap() { if (!story) return; menuUp = "map"; mapSel = world; $("pause").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); }
+function openMap() { if (!story) return; menuUp = "map"; mapSel = world; mapPick = null; drawMapPick(); $("pause").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); }
 function closeMap() { $("map").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); }
-function mapGo(w) { if (!mapList().includes(w)) return; SFX.confirm(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null; storyRun(w, 0, false); }
+let mapPick = null;                              // { w, opts: [[label, room]], sel }: where in world w to start
+function mapGo(w, s) {
+  if (!mapList().includes(w)) return;
+  const R = ((story && story.rests) || {})[w] || [];
+  if (s === undefined && R.length) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r])] }; SFX.tick(); drawMapPick(); return; }
+  SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null; storyRun(w, s || 0, false);
+}
+function drawMapPick() {                          // (the map's buttons: BACK, or the choice of where to start)
+  const P = mapPick, B = $("mapBtns");
+  B.innerHTML = P ? P.opts.map(([lb], i) => `<button data-mp="${i}" class="${i === P.sel ? "on" : ""}">${lb}</button>`).join("") + `<button data-mp="x">BACK</button>` : `<button data-mb="back">BACK</button>`;
+  $("mapSub").textContent = P ? "WHERE IN " + WORLDS[P.w].name + "?" : $("mapSub").textContent;
+}
 function drawMap() {
   const V = new Set(mapList()), N = "#2f3b43", R = rngF(77);
   const isl = "M150 330C150 222 262 152 380 140C470 131 524 121 602 128C722 140 842 190 870 280C896 360 860 452 760 492C660 532 560 540 450 535C330 530 220 502 175 442C150 406 150 372 150 330Z";
@@ -3464,6 +3505,7 @@ function drawMap() {
     o += `<g class="node${seen ? "" : " lock"}" data-w="${w}" transform="translate(${x} ${y})">` + (sel ? `<circle class="ring" r="33" fill="none" stroke="#ffd203" stroke-width="7"/>` : "") +
       `<circle r="24" fill="${seen ? MAP_COL[w] : "#cfd6d8"}" stroke="${N}" stroke-width="4"/>` + (seen ? `<g fill="${N}">${MAP_ICON[w]}</g>` : `<text y="9" text-anchor="middle" font-size="24" fill="${N}">?</text>`) +
       `<g transform="translate(0 44)"><rect x="${-tw / 2}" y="-14" width="${tw}" height="24" fill="${sel ? "#ffd203" : N}"/><text y="4" text-anchor="middle" font-size="13" fill="${sel ? N : "#ffd203"}">${nm}</text></g>` +
+      ((((story && story.rests) || {})[w] || []).length ? `<g transform="translate(20 -20)"><circle r="10" fill="${N}"/><path d="M0 -6Q5 0 3 5Q0 7 -3 5Q-5 0 0 -6Z" fill="#ffb35c"/></g>` : "") +
       (w === world ? `<g transform="translate(0 -40)"><path d="M-7 4 0 12 7 4Z" fill="${N}"/><rect x="-26" y="-14" width="52" height="19" fill="${N}"/><text y="1" text-anchor="middle" font-size="12" fill="#ffd203">YOU</text></g>` : "") + `</g>`; });
   $("mapBox").innerHTML = o + `</svg>`;
   $("mapSub").textContent = V.has(mapSel) ? (mapSel === world ? "YOU ARE HERE · " : "GO TO · ") + WORLDS[mapSel].name : "THE ISLAND";
@@ -3476,7 +3518,8 @@ $("slots").addEventListener("click", e => { if (e.target.closest("[data-s]")) { 
 $("heroList").addEventListener("click", e => { const b = e.target.closest("[data-h]"); if (b && !heroAsk) { heroSel = [...$("heroList").children].indexOf(b); heroPick(b.dataset.h); } });
 $("heroAsk").addEventListener("click", e => { const b = e.target.closest("[data-y]"); if (b) heroAnswer(b.dataset.y === "1"); });
 $("hero").addEventListener("click", e => { if (e.target.closest("[data-hb]")) { SFX.tick(); showSlots(slotKind); } });
-$("mapBox").addEventListener("click", e => { const n = e.target.closest("[data-w]"); if (n && !n.classList.contains("lock")) { mapSel = +n.dataset.w; mapGo(mapSel); } });
+$("mapBox").addEventListener("click", e => { const n = e.target.closest("[data-w]"); if (n && !n.classList.contains("lock")) { mapSel = +n.dataset.w; mapPick = null; drawMap(); mapGo(mapSel); } });
+$("mapBtns").addEventListener("click", e => { const b = e.target.closest("[data-mp]"); if (!b || !mapPick) return; if (b.dataset.mp === "x") { mapPick = null; SFX.tick(); drawMapPick(); drawMap(); } else mapGo(mapPick.w, mapPick.opts[+b.dataset.mp][1]); });
 $("map").addEventListener("click", e => { if (e.target.closest("[data-mb]")) closeMap(); });
 window.__story = { get story() { return story; }, get menuUp() { return menuUp; }, get duo() { return duo; }, get opening() { return opening; }, get gift() { return gift; }, get comicUp() { return comicUp; }, showMainMenu, loadSaves, writeSave, storyRun, storyNew, openMap, showSlots, heroURL, heroImg, drawMap };
 
@@ -3687,7 +3730,7 @@ let wst = null, statsUp = null;
 const UP_PTS = { S: 1, M: 2, B: 3, G: 5 }, UP_RUNS = 5, UPRISE_KEY = "berry.uprise.v1", upGoals = {};
 function upRunPts(w) {                            // what one run through world w is worth, averaged over its ways through (to each of its boss rooms)
   const W = WORLDS[w], S0 = W.stages, R0 = W.roster || [], ends = [];
-  const worth = s => (R0[s] || []).reduce((a, q) => a + (UP_PTS[(BB_TYPES[q[0]] || {}).size] || 0), 0);
+  const worth = s => (R0[s] || []).reduce((a, q) => a + (UP_PTS[(BB_TYPES[q[0]] || {}).size] || 0) * (q[3] === "mini" ? 3 : 1), 0);
   const walk = (s, seen, pts) => {
     if (s === undefined || s >= S0.length || seen.has(s)) return; seen = new Set(seen).add(s); pts += worth(s);
     const q = S0[s]; if (q.boss || q.toWorld !== undefined || q.end) { ends.push(pts); return; }
@@ -3702,7 +3745,7 @@ const upStore = () => story ? (story.uprise || (story.uprise = {})) : upFree;
 const upPct = w => Math.min(100, (upStore()[w] || 0) / upGoal(w) * 100);
 function upAdd(b) {                               // one more won back
   if (!upOn(world)) return;
-  const pts = UP_PTS[b.T.size] || 1, U = upStore(); U[world] = (U[world] || 0) + pts; if (wst) wst.up = (wst.up || 0) + pts;
+  const pts = (UP_PTS[b.T.size] || 1) * (b.mini ? 3 : 1), U = upStore(); U[world] = (U[world] || 0) + pts; if (wst) wst.up = (wst.up || 0) + pts;
   if (!story) try { localStorage.setItem(UPRISE_KEY, JSON.stringify(upFree)); } catch { }
 }
 const bossNameOf = () => { const q = STAGES.find(s => s.boss); return (q && FOES[q.foe] && FOES[q.foe].name) || "THE BOSS"; };
@@ -3824,7 +3867,7 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     entrySide = up ? "bottom" : "top"; entryHi = false; clockEnter(ns); setScreen(ns);
     const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")), x = R0 ? R0.x : 130;     // you come in on this room's rope, still climbing
     const sx = R0 ? R0.face + (R0.wall || 0) * 40 : 130, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(130) ?? GROUND;
-    Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0,
+    Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
       carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x: sx, y: sy, plat: null } });
     if (pal) Object.assign(pal, { x: sx - 50, y: sy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
     ejPlace(sx - 100, sy, 1);
@@ -3836,7 +3879,7 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
 function fillRoom() {                                // a new room fills up with baddies and you clear it to go on; back in one you've cleared, they're all back but the way out's already open
   if (stronghold) return shFill();
   const S0 = STAGES[stage];
-  if (S0.peace) { const first = !roomsDone.has(stage); roomsDone.add(stage); clearBaddies(); bossIn = false; exitOpen = true; spawnGifts();   // no fighting here (the castle gate)
+  if (S0.peace) { const first = !roomsDone.has(stage); roomsDone.add(stage); clearBaddies(); bossIn = false; exitOpen = true; spawnGifts(); if (S0.rest) restArrive();   // no fighting here (the castle gate)
     if (first && S0.castle && !cineSeen.has(world)) { cineSeen.add(world); startCine(); } else { $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden"); } return true; }
   const done = roomsDone.has(stage); spawnBaddies(stage, done); spawnGifts();
   if (done) { bossIn = false; exitOpen = true; $("exitName").textContent = exitLabel(stage); $("exitCue").classList.remove("hidden"); }
@@ -4131,7 +4174,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   if (story) { story.visited.add(world); writeSave(); }             // a story run saves itself in every new room
 }
 function startTrail() { ejEnd(); trail = roomPath(runStart); newStay(); roomsSeen.add(runStart); worldStack = []; cineSeen = new Set(); entrySide = "left"; entryHi = false; dayClock = Math.max(0, colOf(runStart) - 1);
-  trail.forEach(s => { if (s !== runStart && colOf(s) > 0 && !STAGES[s].peace) stayCols.add(colOf(s)); }); clockEnter(runStart); }   // a fresh run (started part-way in: as if you'd walked here, the columns behind you already counted)
+  trail.forEach(s => { if (s !== runStart && colOf(s) > 0) stayCols.add(colOf(s)); }); clockEnter(runStart); }   // a fresh run (started part-way in: as if you'd walked here, the columns behind you already counted)
 function roomPath(s) {                            // the way from this world's first room to room s: a run started there walks back room by room
   const from = new Map([[0, -1]]), Q = [0];
   while (Q.length) { const a = Q.shift(); if (a === s) break; const S0 = STAGES[a]; if (S0.toWorld !== undefined || S0.end) continue;
@@ -8823,6 +8866,7 @@ const WORLDS = [
   { name: "THE BEACH", blurb: "June and Chase's home: a white beach outside the rainforest, coconut palms and a turquoise sea. Glos's berry baddies have come down onto the sand.",
     screens: BEACH_SCREENS, stages: BEACH_STAGES, roster: BEACH_ROSTER, foes: beachFoes, song: 1 },   // (world 9, though a story starts here)
 ];
+growWorlds();
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
 // every room keeps all its baddies, spread out (the user, 2026-10-17: "there should be more just like before. just space them out within
@@ -8861,6 +8905,84 @@ function thinRoster(W) {
     const at = new Map(free.map((q, n) => [q.i, spots[n]]));
     return row.map((e, i) => at.has(i) ? [e[0], e[1], at.get(i), ...e.slice(3)] : e);
   }));
+}
+// ── fourteen columns (the user, 2026-10-20: "let's expand level design to 14 columns ... use the same philosophy and general ideas we've
+// had for each level and spread it out across 14 columns"). Each old room keeps its number (saves still point to it) and its looks, and
+// moves to its new column; beside it comes a new room, a mirrored variation of it (its hour, its style, its kinds of baddies): before a
+// boss room or a fork, after anything else. A room reached by rope ladder stays in its parent's column. Two of each world's biggest kinds
+// of berry come back bigger, as mini bosses (about columns 5 and 11), a rest stop sits at column 7 (or 8) of every way through, and
+// there are four more health crates. The beach (four set screens) stays as it is.
+const COLS = 14, MINI_K = 1.4;
+function growWorlds() { WORLDS.forEach((W, w) => { if (w !== 9 && !W.grown) growWorld(W, w); }); STAGES.splice(0, STAGES.length, ...WORLDS[world].stages); }
+function growWorld(W, w) {
+  W.grown = true;
+  const S0 = W.stages, R0 = W.roster || (W.roster = []), n0 = S0.length, cq = q => +String(q.cell || "").slice(1) || 0, row = q => String(q.cell || "B")[0];
+  const succ = S0.map((q, s) => q.boss || q.toWorld !== undefined || q.end || q.noRight ? undefined : q.next ?? s + 1);   // (the old walking order)
+  const SPECIAL = new Set(["boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
+    "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts"]);
+  const mirror = q => {                            // the room flipped left to right (and no way up off it: a fork's upper ledge stays with the fork)
+    const o = { pm: {} };
+    if (q.plats) { o.plats = []; q.plats.forEach(([x, y, wd, k], i) => { if (k === "jut" || k === "upper") return; o.pm[i] = o.plats.length; o.plats.push([WORLD - x - wd, y, wd, k]); }); }
+    if (q.gaps) o.gaps = q.gaps.map(([a, b]) => [WORLD - b, WORLD - a]).sort((p, r) => p[0] - r[0]);
+    const PF = []; let d = 0; (q.steps || []).forEach(([x, dy]) => { PF.push([x, d], [x, dy]); d = dy; }); (q.ground || []).forEach(p => PF.push(p.slice())); PF.sort((a, b) => a[0] - b[0]);
+    if (PF.length) o.ground = PF.reverse().map(([x, dy]) => [WORLD - x, dy]);
+    if (q.ceils) o.ceils = q.ceils.map(([a, b, y]) => [WORLD - b, WORLD - a, y]);
+    if (q.ladders) o.ladders = q.ladders.map(([f, wl]) => [WORLD - f, -wl]);
+    if (q.gifts) o.gifts = q.gifts.map(([x, y]) => [WORLD - x, y]);
+    return o;
+  };
+  const flipRow = (row, pm, ng) => (row || []).map(([type, col, at, ...rest]) => [type, col,
+    typeof at === "number" ? WORLD - at : at && at.plat !== undefined ? (pm[at.plat] !== undefined ? { plat: pm[at.plat] } : 1280) : at && at.gap !== undefined ? { gap: ng - 1 - at.gap } : at, ...rest]);
+  let made = 0;
+  const mk = (tpl, col) => {                       // a new room beside old room tpl, in column col
+    const T0 = S0[tpl], L = mirror(T0), s = S0.length, q = { h: T0.h, col: 100 + col * 4 + (made++ % 4), cell: row(T0) + col, foe: 0, gen: true, like: tpl };
+    for (const k in T0) if (!SPECIAL.has(k)) q[k] = T0[k];
+    for (const k of ["plats", "gaps", "ground", "ceils", "ladders", "gifts"]) if (L[k]) q[k] = L[k];
+    q.name = T0.name ? (T0.boss ? "THE WAY TO " + T0.name : T0.name + " II") : undefined;
+    S0.push(q); R0[s] = flipRow(R0[tpl], L.pm, (L.gaps || []).length); return s;
+  };
+  // each old room: its column now, and a new room before it or after it
+  const head = [], tail = [];
+  for (let s = 0; s < n0; s++) {
+    const q = S0[s], c = cq(q); head[s] = tail[s] = s;
+    if (c === 0) continue;                                                        // (the keep's gate: no column of its own)
+    if (q.noLeft && (q.up !== undefined || q.down !== undefined)) { q.cell = row(q) + 2 * c; continue; }   // up or down a rope from its fork: the fork's column
+    const before = q.boss || q.toWorld !== undefined || q.end || q.nextHi !== undefined || q.noRight || q.up !== undefined || q.down !== undefined;
+    if (before) { const n = mk(s, 2 * c - 1); head[s] = n; q.cell = row(q) + 2 * c; }
+    else { q.cell = row(q) + (2 * c - 1); tail[s] = mk(s, 2 * c); }
+  }
+  // the links, all of them spelled out
+  for (let s = 0; s < n0; s++) {
+    const q = S0[s];
+    if (head[s] !== s) S0[head[s]].next = s;
+    if (tail[s] !== s) q.next = tail[s];
+    if (succ[s] !== undefined) S0[tail[s]].next = head[succ[s]];
+    if (q.nextHi !== undefined) q.nextHi = head[q.nextHi];
+  }
+  // every way through, start to end (for the rest stops, the mini bosses and the crates)
+  const ways = [], walk = (s, path) => { if (s === undefined || path.includes(s)) return; path = [...path, s]; const q = S0[s];
+    if (q.boss || q.toWorld !== undefined || q.end) { ways.push(path); return; }
+    new Set([q.next, q.nextHi, q.noLeft ? undefined : q.up, q.noLeft ? undefined : q.down].filter(n => n !== undefined)).forEach(n => walk(n, path)); };
+  walk(0, []);
+  const pickOn = (way, cols, ok) => { for (const c of cols) { const s = way.find(r => cq(S0[r]) === c && S0[r].gen && ok(r)); if (s !== undefined) return s; } return undefined; };
+  const rest = new Set(), free = r => !S0[r].rest && !rest.has(r);
+  ways.forEach(way => { if (way.some(r => rest.has(r))) return; const r = pickOn(way, [7, 8, 6, 9], () => true); if (r !== undefined) rest.add(r); });
+  rest.forEach(r => { const q = S0[r], scr = (W.screens || SCREENS)[q.h]; Object.assign(q, { peace: true, rest: true, name: ((scr && scr.name) || "") + " REST STOP" }); R0[r] = []; });
+  // the mini bosses: the world's two biggest kinds of berry (giants first, then the most common big ones)
+  const tally = new Map(); for (let s = 0; s < n0; s++) (R0[s] || []).forEach(([type, col]) => { const z = (BB_TYPES[type] || {}).size; if (z === "G" || z === "B") { const e = tally.get(type) || { type, col, n: 0, g: z === "G" }; e.n++; tally.set(type, e); } });
+  const big = [...tally.values()].sort((a, b) => (b.g - a.g) || (b.n - a.n));
+  if (big.length) {
+    const kinds = [big[0], big[1] || big[0]], placed = new Map();          // (room → which of the two)
+    ways.forEach(way => [[5, 4, 6, 3], [11, 10, 12, 9]].forEach((cols, m) => {
+      if (way.some(x => placed.get(x) === m)) return;                          // (this way already meets that one)
+      const r = pickOn(way, cols, r2 => free(r2) && !placed.has(r2)); if (r === undefined) return;
+      placed.set(r, m); const row0 = R0[r] || (R0[r] = []); if (row0.length > 3) row0.pop(); row0.push([kinds[m].type, kinds[m].col, 1700, "mini"]);
+    }));
+  }
+  // more health crates: about every third column on each way
+  const crates = CRATE_AT[w] || (CRATE_AT[w] = []), have = new Set(crates.map(c => c[0]));
+  ways.forEach(way => [3, 6, 9, 12].forEach(c => { const r = pickOn(way, [c, c + 1, c - 1], r2 => free(r2) && !have.has(r2) && !S0[r2].boss); if (r !== undefined) { have.add(r); crates.push([r, 1280]); } }));
+  W.rosterThin = null;
 }
 function setWorld(i) {                             // swap in a world's hours, stages, baddies and bosses
   if (i === world) return;
@@ -8929,11 +9051,11 @@ function disposeBaddy(b) {
 function clearBaddies() { clearCaps(); baddies.forEach(disposeBaddy); baddies = []; bossIn = true; }
 function spawnBaddies(k, revisit) {              // fill clearing k with its three baddies; the boss waits until they're popped
   clearBaddies();
-  baddies = (BB_ROSTER[k] || []).map(([type, col, at], i) => {
+  baddies = (BB_ROSTER[k] || []).map(([type, col, at, tag], i) => {
     const spot = k + ":" + i; if (sadDone.has(spot)) return null;                  // a sad berry you cheered up has gone for the rest of the run
     const sleepy = revisit && sleepersFor(k).includes(i);
     if (sleepy) { const b = makeSpawn(type, col, at); b.spot = spot; b.idx = i; if (b.r.segs) { disposeBaddy(b); return null; } b.sleep = true; b.zT = rand(0, 1); b.dir = Math.random() < .5 ? -1 : 1; return b; }   // ... and after dark, some asleep
-    const b = makeSpawn(type, col, at); b.spot = spot;
+    const b = makeSpawn(type, col, at); b.spot = spot; if (tag === "mini") makeMini(b);
     if (sadSpots.has(spot) && !(revisit && sadFate === "killed")) { b.sad = true; sadFace(b); sadFate = null; sadSpots = new Set([spot]); }   // (met it: the other branch's candidate is dropped)   (one you popped comes back an ordinary baddy)
     return b;
   }).filter(Boolean);
@@ -8944,7 +9066,7 @@ let sleepPlan = new Map();                       // this run: room → the roste
 function sleepersFor(k) {
   if (!(hour >= 5 && (roomHour.get(k) ?? STAGES[k].h) < 5)) return [];
   if (!sleepPlan.has(k)) {
-    const pool = (BB_ROSTER[k] || []).map(([type, , at], i) => ({ type, at, i })).filter(q => !(q.at && q.at.gap !== undefined) && !sadSpots.has(k + ":" + q.i) && BB_TYPES[q.type] && !["float", "breach"].includes(BB_TYPES[q.type].move)).map(q => q.i);
+    const pool = (BB_ROSTER[k] || []).map(([type, , at, tag], i) => ({ type, at, i, tag })).filter(q => q.tag !== "mini" && !(q.at && q.at.gap !== undefined) && !sadSpots.has(k + ":" + q.i) && BB_TYPES[q.type] && !["float", "breach"].includes(BB_TYPES[q.type].move)).map(q => q.i);
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     sleepPlan.set(k, pool.slice(0, Math.random() < .75 ? (Math.random() < .5 ? 2 : 1) : 0));
   }
@@ -8975,6 +9097,10 @@ function updateFlee(b, dt) {
     const plan = sleepPlan.get(stage); if (plan && plan.includes(b.idx)) plan.splice(plan.indexOf(b.idx), 1);
   }
 }
+function makeMini(b) {                            // a mini boss: one of the world's big berries, grown, heavier and much tougher (no health bar: the user, 2026-10-17)
+  b.mini = true; b.miniCue = true; b.h *= MINI_K; b.hw *= MINI_K; b.r.sz.scale.multiplyScalar(MINI_K); b.r.shadowR *= MINI_K;
+  b.hp = Math.round(b.hp * 2.5); b.wt *= 1.6; b.T = { ...b.T, speed: b.T.speed * .9, range: (b.T.range || 100) * 1.15 };
+}
 function makeSpawn(type, col, at) {             // one roster entry: on the ground, on a platform, or lurking in open water
   if (at && at.gap !== undefined) { const g = GAPS[at.gap], b = makeBaddy(type, col, (g[0] + g[1]) / 2, WATER + 30); b.gap = g; b.under = true; b.atkCd = rand(.8, 2); return b; }
   const q = typeof at === "object" ? PLATFORMS[at.plat] : null;
@@ -8986,7 +9112,7 @@ const BERRY_PIP = `<svg viewBox="0 0 16 20"><path d="M3.2 4.6 L5.4 6.6 L6.8 3.4 
 function setFoeHud() {                           // while the baddies are up the bar counts them (berries); then it shows the boss's health
   $("hud").classList.toggle("boss", !!bossIn);
   if (bossIn) { $("ename").textContent = foe.name; pipsEl.innerHTML = ""; }   // (the user, 2026-10-17: don't show the bosses' health)
-  else { $("ename").textContent = "BERRY BADDIES"; pipsEl.innerHTML = baddies.map(b => b.T.move === "breach" ? BERRY_PIP.replace("<svg", '<svg class="opt"') : BERRY_PIP).join(""); baddies.forEach((b, i) => { if (b.gone || b.dead) pipsEl.children[i].classList.add("lost"); }); }
+  else { $("ename").textContent = "BERRY BADDIES"; pipsEl.innerHTML = baddies.map(b => b.T.move === "breach" ? BERRY_PIP.replace("<svg", '<svg class="opt"') : b.mini ? BERRY_PIP.replace("<svg", '<svg class="mini"') : BERRY_PIP).join(""); baddies.forEach((b, i) => { if (b.gone || b.dead) pipsEl.children[i].classList.add("lost"); }); }
 }
 function bossArrive() {                          // all three popped: the boss drops in at the far end of the clearing
   if (STAGES[stage].duo) return duoArrive();     // (the beach's end: Noro and Doir, together)
@@ -9178,13 +9304,14 @@ const SAD_SKIP = new Set(["leaper", "jelly", "cuttle", "puffer", "starfish", "ch
 let sadSpots = new Set(), sadDone = new Set();
 let sadFate = null, bepRun = { escort: null, seen: false };      // sadFate: "killed" / "cheered" / null · escort: the beps leading you on to their hideout
 const bepHome = () => STAGES.findIndex(q => q.bep);   // the room with the hideout (always the same one)
-function rollSad() {                             // this run's one sad berry: on screen 5, 6 or 7 (the beps' hideout is back on 2–4: they lead you back to it)
-  const colOf = q => +String(q.cell || "").slice(1), ok = (s2, type, at) => !SAD_SKIP.has(type) && typeof at === "number" && !["float", "breach"].includes((BB_TYPES[type] || {}).move) && !STAGES[s2].peace;
-  const want = 5 + Math.floor(Math.random() * 3);
-  let rooms = STAGES.map((q, s2) => s2).filter(s2 => s2 >= runStart && colOf(STAGES[s2]) === want);
-  if (!rooms.length) rooms = STAGES.map((q, s2) => s2).filter(s2 => s2 >= runStart && colOf(STAGES[s2]) >= 5);
+function rollSad() {                             // this run's one sad berry: three to five columns past the beps' hideout (they lead you back to it)
+  const colOf = q => +String(q.cell || "").slice(1), ok = (s2, type, at, tag) => tag !== "mini" && !SAD_SKIP.has(type) && typeof at === "number" && !["float", "breach"].includes((BB_TYPES[type] || {}).move) && !STAGES[s2].peace;
+  const home = STAGES.findIndex(q => q.bep), hc = home >= 0 ? colOf(STAGES[home]) : 99, rc = colOf(STAGES[runStart] || {}) || 0;
+  const want = hc + 3 + Math.floor(Math.random() * 3);
+  let rooms = STAGES.map((q, s2) => s2).filter(s2 => !STAGES[s2].peace && colOf(STAGES[s2]) >= rc && colOf(STAGES[s2]) === want);
+  if (!rooms.length) rooms = STAGES.map((q, s2) => s2).filter(s2 => !STAGES[s2].peace && colOf(STAGES[s2]) >= Math.max(rc, hc + 3) && colOf(STAGES[s2]) <= hc + 6);   // (the rest stop's column: the ones round it instead)
   const spots = [];
-  rooms.forEach(s2 => { const pool = []; (BB_ROSTER[s2] || []).forEach(([type, , at], i) => { if (ok(s2, type, at)) pool.push(s2 + ":" + i); }); if (pool.length) spots.push(pool[Math.floor(Math.random() * pool.length)]); });
+  rooms.forEach(s2 => { const pool = []; (BB_ROSTER[s2] || []).forEach(([type, , at, tag], i) => { if (ok(s2, type, at, tag)) pool.push(s2 + ":" + i); }); if (pool.length) spots.push(pool[Math.floor(Math.random() * pool.length)]); });
   sadSpots = new Set(spots); sadDone = new Set(); bepSeen = new Set(); sadFate = null; bepRun = { escort: null, back: false, seen: false, life: 5 };
 }
 const TEAR_M = new THREE.MeshBasicMaterial({ color: "#8fd8ff" });
@@ -9425,7 +9552,7 @@ function startBeps() {                            // the room's clear: was the s
   const home = bepHome(), here = [...sadSpots].some(sp => +sp.split(":")[0] === stage);
   if (!here || sadFate === "killed" || home < 0 || bepRun.seen) return;
   bepRun.seen = true;
-  const B = home === stage ? STAGES[stage].bep : null, back = home < stage;
+  const B = home === stage ? STAGES[stage].bep : null, back = colOf(home) < colOf(stage);
   spawnFriends(["S", "M", "B"], B || { trail: back ? 0 : WORLD });
   bepEv = { B: STAGES[home].bep, mode: B ? "trail" : back ? "escortBack" : "escort", phase: "pop", t: 0, lead: null, wait: false };
   if (!B) { bepRun.escort = friends.map(f => "#" + f.r.mB.color.getHexString()); bepRun.back = back; }   // from here on they lead you room by room (back the way you came, mostly)
@@ -9433,7 +9560,7 @@ function startBeps() {                            // the room's clear: was the s
 function spawnEscort(cameBack) {                  // still leading you: they come into each room a little ahead of you (from its right, when they're taking you back)
   if (!bepRun.escort) return;
   const home = bepHome(), cols = bepRun.escort, back = bepRun.back;
-  if (back ? !cameBack || home > stage : cameBack || home < stage) return;     // (you've turned the other way: they wait where they were)
+  if (back ? !cameBack || colOf(home) > colOf(stage) : cameBack || colOf(home) < colOf(stage)) return;     // (you've turned the other way: they wait where they were)
   const jut = back && entryHi ? hiPlat() : null;   // (back into a split room by its upper way: they come in up on that ledge with you, not on the lower path. The user, 2026-10-18)
   const R0 = entrySide === "top" || entrySide === "bottom" ? LADDERS.find(q => q.rope === (entrySide === "bottom" ? "down" : "up")) : null;   // (in by a rope ladder: they come in by it too, just ahead of you)
   ["S", "M", "B"].forEach((sz, i) => { let x = back ? WORLD - 70 - i * 50 : 70 + i * 50; if (jut) x = clamp(x, jut.x + 24, jut.x + jut.w - 24);
@@ -10243,6 +10370,7 @@ function bbTarget(b) {                            // who a baddy's after: you; b
 }
 function updateBaddy(b, dt) {
   const T = b.T, p = b.tgt = bbTarget(b), A = BB_ATK[T.atk];
+  if (b.miniCue && !transit && !b.dead) { b.miniCue = false; popText(b.x, b.y - b.h - 30, "MINI BOSS!"); SFX.trumpet(); }
   b.inv = Math.max(0, b.inv - dt); b.flash = Math.max(0, b.flash - dt); b.hurtT = Math.max(0, b.hurtT - dt);
   if (b.hurtT > 0 && b.onGround && Math.abs(b.vx) > 110 && (b.skidT = (b.skidT || 0) - dt) <= 0) { b.skidT = .07; dust(b.x - Math.sign(b.vx) * b.hw * .4, b.y, 2, -Math.sign(b.vx)); }   // knocked back along the ground: a skid
   if (b.sleep) { b.vx = 0; spring(b, dt); if ((b.zT -= dt) <= 0) { b.zT = rand(.9, 1.4); zzz(b); } return; }
@@ -10934,7 +11062,7 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife();
+  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncRest();
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
@@ -11029,7 +11157,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   if (titleUp || menuUp || comicUp || opening || edOpen || achOpen || lvlOpen || paused || modalOpen) return "none";
   return mode === "play" ? (hideout && player && player.sit ? "sit" : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
-window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
+window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
