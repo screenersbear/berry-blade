@@ -3703,6 +3703,7 @@ function beginPlay() {                               // into the game (from pick
 // a little nudge, once a visit, a few seconds into play: hold the buttons you already use and other moves come out (the user, 2026-10-16)
 let holdTipDone = false;
 function holdTipSoon(wait = 5000) {
+  return;                                            // (the tip's gone: the user, 2026-10-21, "remove the banner tip that keeps coming up to remind you to try holding buttons")
   if (holdTipDone) return; clearTimeout(holdTipSoon.h);
   holdTipSoon.h = setTimeout(() => {
     if (holdTipDone) return;
@@ -4877,6 +4878,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   if (!maybeEJ(false, !fresh || back) && fresh && !back) maybeCameo();   // (now and then the partner's here ahead of you; or, rarely, Evil June: likelier back in a room you've been in)
   if (bossIn && STAGES[stage].boss && ej && ej.phase === "partner" && !ej.kid) startChide();   // (a boss already waiting: it tells her off first)
   maybeTrapdoor(back);                                                // (and at night, now and then, a stronghold's hatch)
+  maybePatrol(!fresh);                                                // (at night, back in a room you've been in: perhaps one of King P's patrols)
   if (story) { story.visited.add(world); writeSave(); }             // a story run saves itself in every new room
 }
 function startTrail() { ejEnd(); trail = roomPath(runStart); newStay(); roomsSeen.add(runStart); worldStack = []; cineSeen = new Set(); entrySide = "left"; entryHi = false; dayClock = Math.max(0, colOf(runStart) - 1);
@@ -5887,7 +5889,7 @@ const allyHide = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.vi
 const allyShow = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = true; }); };
 function alliesOff() { allyHide(ally); allyHide(allyHere); ally = allyHere = null; allyBring = null; }   // (a new game, the title, the character screen, the level select)
 function allyRoom() {                              // into a room: this world's ally, if this is where it waits (and it isn't with you already)
-  npcRoom(); coinHud();                              // (and the hub's beps, if it's one of the hub's rooms)
+  npcRoom(); coinHud(); patrolClear();               // (and the hub's beps, if it's one of the hub's rooms; last room's patrol gone)
   if (allyHere && !(ally && ally.r === allyHere.r)) allyHide(allyHere); allyHere = null;
   const A = ALLIES.find(a => a.w === world && buddyAt.w === world && buddyAt.rooms[a.id] === stage && !(ally && ally.A === a)); if (!A || stronghold || hideout || arena || mode !== "play" || !player) return;
   const r = allyRig(A); let x = Math.abs(player.x - 600) > Math.abs(player.x - (WORLD - 600)) ? rand(500, 1100) : rand(WORLD - 1100, WORLD - 500);   // (somewhere along the room, away from where you came in)
@@ -12106,6 +12108,115 @@ function swapHero(r) {                               // the diplomat's work: the
   $("pname").textContent = rig.name; updateHearts(false); sparks(player.x, player.y - 60, 14); SFX.power && SFX.power(2);
   closeNpc(); toast("YOU'RE " + rig.name.toUpperCase() + " NOW", 2600); if (story) writeSave();
 }
+// ── King P's night patrols (the user, 2026-10-21). In the night hour (the casino: always; Kesh's garden: its nights), going back into a
+// room you've already been in (never one you're seeing for the first time) there's a 1 in 4 chance one's out: outdoors a little
+// pineapple plane of King P's, drifting back and forth up high, sweeping a spotlight over the ground; indoors a drone with a pineapple
+// berry already hanging under it. Keep out of the light, or under a ledge where it can't reach you. Caught in it, the light goes red and
+// there's an "!"; still in it half a second later and you're spotted: the plane drops a pineapple squad (three little ones, two middling
+// ones or one big one), the drone lets its berry go, and it flies off. Spotted once, there are no more patrols till the night's over. It
+// can't be fought: it's up out of reach and nothing hurts it
+const PATROL_P = 1 / 4, PATROL_WARN = .5;
+const isNightNow = () => world === 11 || /NIGHT/.test((SCREENS[hour] || {}).name || "");
+let patrol = null, patrolOff = false, BANG_RED = null;   // the patrol in this room · spotted once tonight: no more till it's day
+SFX.alarm = () => { [0, .22, .44].forEach((d, i) => tone(i % 2 ? 640 : 900, i % 2 ? 900 : 640, .2, { type: "square", vol: .055, delay: d })); };
+function bbPinebrute(r) {                              // a big pineapple brute: broad, its leaves in a spiky crest, great green fists
+  const { P, body } = r; pineBody(r, P, body, .38, .05, 1.05);
+  r.eye(body, .62, .72, -.18, .085); r.eye(body, .62, .72, .18, .085); r.brow(body, .68, .84, -.18, .14, .5); r.brow(body, .68, .84, .18, .14, -.5); r.mouth(body, .7, .46, 0, .1);
+  r.arms = [-1, 1].map(s => { const A = group(body, .15, .62, s * .66); A.add(at(P(new THREE.CapsuleGeometry(.09, .2, 4, 8), r.M("#3fa83a")), 0, -.14, 0)); A.add(at(P(ball(.15, 10, 8), r.M("#2a7a2a")), 0, -.34, 0)); return A; });
+  [-1, 1].forEach(s => r.foot(body, .08, s * .26, .14)); }
+BB_TYPES.pinebrute = { b: bbPinebrute, size: "B", speed: 55, move: "walk", atk: "pound", range: 180, mh: 1.0, jumpy: .1 };
+const kpInside = q => { const row = String(q.cell || "C")[0], col = +String(q.cell || "C1").slice(1) || 1; return row === "D" || (row === "B" && col % 3 !== 0) || (row === "C" && col % 4 === 2) || !!q.hall; };   // (King P's castle: its halls and cellars)
+const roomInside = () => { const q = STAGES[stage] || {}; return world === 2 || world === 6 || (world === 12 && kpInside(q)) || !!(q.ceils && q.ceils.length); };
+function patrolPlane() {                               // King P's little plane: a pineapple for a body, its leaves for a tail, red wings with gold P roundels, a propeller
+  const G = group(actors), M = c => toon(c), ol = { ol: .03 };
+  const body = mk(new THREE.LatheGeometry(PINE_PROF, 20).rotateZ(-Math.PI / 2).scale(1.5, .62, .62), null, { mat: PINE_M, ...ol }); at(body, -.78, 0, 0); G.add(body);
+  for (let i = 0; i < 5; i++) { const a = (i - 2) * .42, l = mk(new THREE.ConeGeometry(.08, .7, 5).scale(1, 1, .35), null, { mat: i % 2 ? M("#2a7a2a") : M("#3fa83a"), ol: .015 }); pointAlong(at(l, -.9, .1, 0), new THREE.Vector3(-1, Math.cos(a) * .6, Math.sin(a))); G.add(l); }
+  const wing = mk(bx(.55, .06, 2.6), null, { mat: M("#c8282a"), ...ol }); at(wing, -.05, -.05, 0); G.add(wing);
+  [-1, 1].forEach(s => { const rd = mk(cyl(.17, .17, .02, 18), null, { mat: M("#ffd21f"), ol: 0 }); at(rd, -.05, -.015, s * .9); G.add(rd); G.add(at(mk(cyl(.08, .08, .025, 14), null, { mat: M("#6a0606"), ol: 0 }), -.05, -.01, s * .9)); });
+  G.add(at(mk(bx(.3, .05, 1), null, { mat: M("#c8282a"), ...ol }), -.85, .02, 0));
+  G.add(at(mk(new THREE.SphereGeometry(.2, 14, 8, 0, TAU, 0, Math.PI / 2), null, { mat: new THREE.MeshToonMaterial({ color: "#bfe8ff", transparent: true, opacity: .7 }), ol: .01 }), .1, .22, 0));   // the cockpit, a pinelet pilot in it
+  G.add(at(mk(ball(.12, 10, 8), null, { mat: PINE_M, ol: .01 }), .1, .26, 0));
+  G.add(at(mk(cyl(.07, .1, .12, 12).rotateZ(Math.PI / 2), null, { mat: M("#3a3a40"), ol: .01 }), .72, 0, 0));
+  const prop = group(G, .79, 0, 0); [0, 1].forEach(k => { const b = mk(bx(.03, .9, .1), null, { mat: M("#5a4632"), ol: .01 }); b.rotation.x = k * Math.PI / 2; prop.add(b); });
+  const lamp = group(G, .2, -.22, 0); lamp.add(mk(cyl(.1, .07, .16, 12), null, { mat: M("#3a3a40"), ol: .01 }));
+  G.scale.setScalar(1.6); return { G, prop, rotors: [], lamp, k: 1.6 };
+}
+function patrolDrone() {                               // a quadcopter: a white body, four arms and their rotors, a camera on a gimbal underneath, a cable
+  const G = group(actors), W = toon("#eef0f2"), K = toon("#3a3c44"), ol = { ol: .03 };
+  G.add(mk(bx(.7, .22, .5), null, { mat: W, ...ol })); G.add(at(mk(bx(.4, .1, .3), null, { mat: K, ol: .01 }), 0, .14, 0));
+  const rotors = [];
+  [[1, 1], [1, -1], [-1, 1], [-1, -1]].forEach(([sx, sz]) => { const arm = mk(bx(.7, .05, .07), null, { mat: K, ol: .01 }); arm.rotation.y = Math.atan2(sz, sx) * -1; at(arm, sx * .3, .04, sz * .22); G.add(arm);
+    G.add(at(mk(cyl(.05, .05, .12, 10), null, { mat: K, ol: .01 }), sx * .55, .08, sz * .42));
+    const rt = group(G, sx * .55, .15, sz * .42); [0, 1].forEach(k => { const b = mk(bx(.5, .01, .06), null, { mat: K, ol: 0 }); b.rotation.y = k * Math.PI / 2; rt.add(b); }); rotors.push(rt);
+    rt.add(new THREE.Mesh(new THREE.CircleGeometry(.28, 18).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#d8dce4", transparent: true, opacity: .22, depthWrite: false }))); });
+  [-1, 1].forEach(s => G.add(at(mk(bx(.04, .24, .04), null, { mat: K, ol: 0 }), 0, -.2, s * .2)));
+  const lamp = group(G, .2, -.2, 0); lamp.add(mk(ball(.1, 10, 8), null, { mat: K, ol: .01 })); lamp.add(at(new THREE.Mesh(new THREE.CircleGeometry(.06, 12).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#bfe8ff" })), .1, 0, 0));
+  G.add(at(new THREE.Mesh(ball(.03, 6, 6), new THREE.MeshBasicMaterial({ color: "#ff3a3a" })), -.36, 0, .2)); G.add(at(new THREE.Mesh(ball(.03, 6, 6), new THREE.MeshBasicMaterial({ color: "#3aff6a" })), -.36, 0, -.2));
+  const cable = new THREE.Mesh(cyl(.012, .012, 1, 5), K); G.add(cable);
+  G.scale.setScalar(1.45); return { G, prop: null, rotors, lamp, cable, k: 1.45 };
+}
+function patrolClear() {
+  if (!patrol) return; const P = patrol; patrol = null;
+  [P.rig.G, P.cone, P.pool].forEach(o => { if (!o) return; actors.remove(o); o.traverse(c => { if (c.geometry) c.geometry.dispose(); }); });
+  if (P.hang && !P.hang.dropped) disposeBaddy(P.hang);
+}
+const PINE_SQUADS = [["pinelet", "pinelet", "pinelet"], ["pineguard", "pineguard"], ["pinebrute"]];   // (three small ones, two middling ones, or one big one)
+function maybePatrol(revisit, force) {                 // into a room: is one out?
+  patrolClear();
+  if (!isNightNow()) { patrolOff = false; return; }   // (day again: tonight's patrols are over, the next night's are on)
+  const q = STAGES[stage];
+  if (!force && (!revisit || patrolOff || Math.random() >= PATROL_P)) return;
+  if (world === 9 || !q || q.boss || q.peace || q.arena || q.duo || q.bep || stronghold || hideout || arena || cine || intro || opening || ejFight() || freedNow() || mode !== "play" || !player) return;
+  const inside = roomInside(), fromL = Math.random() < .5, rig = inside ? patrolDrone() : patrolPlane();
+  const cone = new THREE.Mesh(new THREE.ConeGeometry(1, 1, 24, 1, true), new THREE.MeshBasicMaterial({ color: "#fff3c0", transparent: true, opacity: .16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+  const pool = new THREE.Mesh(new THREE.CircleGeometry(1, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#fff3c0", transparent: true, opacity: .42, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+  actors.add(cone); actors.add(pool);
+  patrol = { inside, rig, cone, pool, x: fromL ? -220 : WORLD + 220, dir: fromL ? 1 : -1, alt: inside ? 235 : 255, t: 0, ph: Math.random() * TAU, lit: 0, warn: false, phase: "in", sp: inside ? 80 : 95, r: inside ? 90 : 115, hang: null };
+  if (inside) { const ty = PINE_SQUADS[Math.floor(Math.random() * 3)][0], h = makeBaddy(ty, "pine", patrol.x, GROUND - 200); Object.assign(h, { onGround: false, vy: 0, hold: true }); patrol.hang = h; }   // (its berry, hanging under it)
+}
+function patrolLightAt(x, top) {                       // where the light lands at x: the first ledge under it, or the ground
+  let y = groundAt(x) ?? GROUND + 400;
+  for (const P of PLATFORMS) if (x > P.x && x < P.x + P.w && P.y > top && P.y < y) y = P.y;
+  return y;
+}
+function updatePatrol(dt) {
+  const P = patrol; if (!P || !player) return; const p = player; P.t += dt;
+  const top = GROUND - P.alt + Math.sin(P.t * 1.6) * 10;   // (low enough to be in the picture: up over the ledges)
+  if (P.phase === "in") { P.x += P.dir * P.sp * 2 * dt; if (P.x > 320 && P.x < WORLD - 320) P.phase = "patrol"; }
+  else if (P.phase === "patrol") { P.x += P.dir * P.sp * dt; if ((P.x > WORLD - 300 && P.dir > 0) || (P.x < 300 && P.dir < 0)) P.dir *= -1; }
+  else if (P.phase === "alert") { P.x = approach(P.x, clamp(p.x, 200, WORLD - 200), 260 * dt);
+    if (!P.dropped && P.t - P.at > .35) { P.dropped = true; patrolDrop(); } if (P.t - P.at > 1.4) { P.phase = "out"; P.dir = p.x < WORLD / 2 ? 1 : -1; } }
+  else { P.x += P.dir * 420 * dt; if (P.x < -400 || P.x > WORLD + 400) { patrolClear(); return; } }
+  const sweep = P.phase === "alert" ? 0 : Math.sin(P.t * 1.15 + P.ph) * (P.inside ? 200 : 280), lx = clamp(P.x + sweep, -100, WORLD + 100), ly = patrolLightAt(lx, top + 20);
+  // the light: does it have you? (not under a ledge it can't reach past)
+  const H = p.rig.heightPx || 92, shaded = PLATFORMS.some(Q => p.x > Q.x + 8 && p.x < Q.x + Q.w - 8 && Q.y < p.y - H * .6 && Q.y > top + 20);
+  const inLight = P.phase === "patrol" && !p.dead && !p.auto && Math.abs(p.x - lx) < P.r && !shaded && p.y <= ly + 6;
+  if (inLight) { if (!P.warn) { P.warn = true; SFX.chirp(); glyph(BANG_RED || (BANG_RED = glyphMat("!", "#ff3a3a")), X(p.x), Y(p.y - H - 18), .4, V(0, 1.1, 0), .9, .62); } P.lit += dt; if (P.lit >= PATROL_WARN) patrolSpotted(); }
+  else { P.lit = Math.max(0, P.lit - dt * 2); if (P.lit <= 0) P.warn = false; }
+  // drawing it
+  const G = P.rig.G, gx = X(P.x), gy = Y(top); G.position.set(gx, gy, -.6); G.rotation.y = P.dir > 0 ? 0 : Math.PI; G.rotation.z = Math.sin(P.t * 1.3) * .05 + (P.phase === "in" || P.phase === "out" ? -.08 * P.dir : 0);
+  if (P.rig.prop) P.rig.prop.rotation.x += dt * 40; P.rig.rotors.forEach((rt, i) => { rt.rotation.y += dt * (i % 2 ? 50 : -50); });
+  const red = P.warn || P.phase === "alert", col = red ? "#ff5040" : "#fff3c0"; P.cone.material.color.set(col); P.pool.material.color.set(col);
+  const ax = gx + .2 * (P.dir > 0 ? 1 : -1), ay = gy - .25, bxp = X(lx), byp = Y(ly) + .03, dx = bxp - ax, dy = ay - byp, len = Math.hypot(dx, dy), rr = P.r * S;
+  P.cone.scale.set(rr, len, rr * .5); P.cone.position.set((ax + bxp) / 2, (ay + byp) / 2, -.6); P.cone.rotation.set(0, 0, Math.atan2(dx, dy)); P.cone.visible = P.phase !== "out";
+  P.pool.scale.set(rr, 1, rr * .55); P.pool.position.set(bxp, byp, -.3); P.pool.visible = P.phase !== "out" && ly < GROUND + 300;
+  P.cone.material.opacity = (red ? .24 : .16) * (P.phase === "out" ? 0 : 1); P.pool.material.opacity = red ? .55 : .42;
+  if (P.inside && P.rig.cable) { P.rig.cable.scale.y = 50 * S / P.rig.k; P.rig.cable.position.set(0, -25 * S / P.rig.k, 0);
+    const h = P.hang; if (h && !h.dropped) { h.x = P.x; h.y = top + 50 + h.h; h.vy = 0; h.vx = 0; h.onGround = false; h.dir = Math.sign(p.x - h.x) || 1; syncBaddy(h, dt); } }
+}
+function patrolSpotted() {                             // caught in the light: the alarm, and it comes over to drop its berries on you
+  const P = patrol; if (!P || P.phase !== "patrol") return;
+  P.phase = "alert"; P.at = P.t; patrolOff = true; SFX.alarm(); shake = Math.max(shake, 3);
+  popText(player.x, player.y - (player.rig.heightPx || 92) - 50, "SPOTTED!");
+}
+function patrolDrop() {                                // its berries: down they come, and they're mad
+  const P = patrol, top = GROUND - P.alt;
+  const drop = b => { Object.assign(b, { angry: true, home: b.x, dir: Math.sign(player.x - b.x) || 1, vy: 120, onGround: false, plat: null, atkCd: rand(.5, 1), think: .3, hold: false, dropped: true }); tierUp(b); baddies.push(b); puffs(b.x, b.y - b.h * .5, 3, 20, 120); };
+  if (P.hang) { const h = P.hang; drop(h); SFX.blop(); return; }
+  const set = PINE_SQUADS[Math.floor(Math.random() * 3)];
+  set.forEach((ty, i) => { const x = clamp(P.x + (i - (set.length - 1) / 2) * 70, 120, WORLD - 120), b = makeBaddy(ty, "pine", x, top + 60); drop(b); });
+  SFX.blop();
+}
 const ZONE = 250;                                   // how far either side of where it starts a baddy will roam (or chase you)
 // the ones that fight up close (no projectiles) are a little keener (the user, 2026-10-17: "a little more aggressive and aware of what
 // the player is doing"): they notice you from further off, come on faster, strike again sooner, and they read you. They hop back out of
@@ -13082,7 +13193,7 @@ function enterHideout() {
   { const i = Math.max(0, hideIdx(world, stage));   // (found: on the maps from now on, and that way in stays open)
     if (story) { const H = story.hideouts || (story.hideouts = {}), L = H[world] === true ? [0] : Array.isArray(H[world]) ? H[world] : []; if (!L.includes(i)) L.push(i); H[world] = L; }
     else if (![...freeHide].some(k => k[0] === world && k[1] === i)) freeHide.add([world, i]); }
-  endCameo(); if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = false; ej.away = true; }   // (Evil June waits outside)
+  endCameo(); patrolClear(); if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = false; ej.away = true; }   // (Evil June waits outside)
   if (ally) { allyHide(ally); ally.away = true; } allyHide(allyHere);   // (and so does your ally)
   if (!levelTest) unlockAch(["grove", "cove", "workshop", "loft", "tent", "pod", "stash", "attic", "hut", null, "bazaar", "casino", "kingp"][world]);
   const B = bepEv ? bepEv.B : STAGES[stage].bep; bepSeen.add(world + ":" + stage); bepRun.escort = null;
@@ -13371,7 +13482,7 @@ function keysGot() { try { return JSON.parse(localStorage.getItem(KEY_STORE) || 
 function saveKey(w) { const k = keysGot(); k[w] = Date.now(); try { localStorage.setItem(KEY_STORE, JSON.stringify(k)); } catch { } return Object.keys(k).length; }
 const KEY_ICON = `<svg viewBox="0 0 40 20" style="height:.9em;vertical-align:-.12em;margin-right:.25em"><circle cx="9" cy="10" r="6.5" fill="none" stroke="#ffd203" stroke-width="4"/><path d="M15.5 8 H38 V12 H34 V17 H30 V12 H26 V16 H22 V12 H15.5 Z" fill="#ffd203"/></svg>`;
 function shTypes(sizes) {                          // this world's walkers, by size (the stronghold's crew, and the ones queuing at the hatch)
-  const set = new Set(); BB_ROSTER.forEach(row => row.forEach(([t]) => { const T = BB_TYPES[t]; if (T && sizes.includes(T.size) && !["float", "breach"].includes(T.move) && !SAD_SKIP.has(t)) set.add(t); }));
+  const set = new Set(); BB_ROSTER.forEach(row => (row || []).forEach(([t]) => { const T = BB_TYPES[t]; if (T && sizes.includes(T.size) && !["float", "breach"].includes(T.move) && !SAD_SKIP.has(t)) set.add(t); }));
   return [...set];
 }
 const pickOf = L => L[Math.floor(Math.random() * L.length)], bbCol = () => pickOf(Object.keys(BB_COL));
@@ -13634,7 +13745,7 @@ function shPath(s) {                               // the rooms three on from s 
 }
 function enterStronghold() {
   const from = stage, path = shPath(from);
-  clearTrap(); endCameo(); clearFriends(); bepEv = null; clearGifts(); hideFoe(foe); clearHz();
+  clearTrap(); endCameo(); patrolClear(); clearFriends(); bepEv = null; clearGifts(); hideFoe(foe); clearHz();
   stronghold = { w: world, from, path, to: path.length ? path[path.length - 1] : from, screen: 0, done: new Set(), seen: new Set(), keyOut: false, key: false };
   player.auto = null; shScreen(0, false);
 }
@@ -14463,7 +14574,7 @@ function update(dt) {
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateLoot(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
+  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
   if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (STAGES[stage].boss && !bossDown ? .9 : .25)) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
@@ -14605,7 +14716,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   if (menuUp || achOpen || lvlOpen || paused || modalOpen || statsUp) return "menu";   // (the menus: the pad shows, to move through them; the corner goes back)
   return mode === "play" ? (hideout && player && player.sit ? "sit" : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
-window.__game = { get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
+window.__game = { get patrol() { return patrol; }, maybePatrol, patrolSpotted, get patrolOff() { return patrolOff; }, get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, ALLIES, allyRig, get ally() { return ally; }, get allyHere() { return allyHere; }, get buddyAt() { return buddyAt; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
