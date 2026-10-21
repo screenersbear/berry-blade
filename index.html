@@ -12845,7 +12845,8 @@ function updateFriends(dt) {
     moveBody(f, dt, f.hw);
     if (f.landV > 0) { f.sq = -clamp(f.landV / 2000, .1, .3); f.sqv = 0; }
     if (f.onGround && !(GAPS.length && overGap(f.x))) f.safe = { x: f.x, y: f.y };
-    else if (GAPS.length && f.y > WATER - 4 && overGap(f.x) && f.safe && f.dropIn === undefined) { fallFx(f.x, .6); Object.assign(f, { x: f.safe.x, y: f.safe.y, vx: 0, vy: 0, onGround: true }); puffs(f.x, f.y - 20, 3, 16, 100); }   // knocked in: back up where it was
+    else if (GAPS.length && f.y > WATER - 4 && overGap(f.x) && f.safe && f.dropIn === undefined) { fallFx(f.x, .6); Object.assign(f, { x: f.safe.x, y: f.safe.y, vx: 0, vy: 0, onGround: true }); puffs(f.x, f.y - 20, 3, 16, 100);   // knocked in: back up where it was
+      if (f.task && f.prog) f.prog.t = 99; }   // (on its way somewhere: puffed over to it next, not left walking back in, round and round)
     if (!f.onGround) f.plat = null;
     if (f.onGround) f.phase += dt * Math.abs(f.vx) * .1 * Math.sqrt(58 / f.h);
     spring(f, dt);
@@ -12913,7 +12914,9 @@ function bepStuck(f, dx, dt, tx, leaving) {          // no nearer for 3 s (a wal
   if ((P.t += dt) < 3) return false; P.t = 0; P.d = 1e9;
   puffs(f.x, f.y - f.h * .5, 3, f.hw, 100);
   if (leaving) { f.gone = true; f.r.root.visible = f.r.shadow.visible = false; return true; }   // (on their way out of the room: gone on ahead)
-  const x = clamp(tx, 40, WORLD - 40), g = groundAt(x); if (g === null) return false;
+  let x = clamp(tx, 40, WORLD - 40);
+  if (!solidAt(x)) for (let k = 1; k < 120; k++) { const c = [x - Math.sign(dx || 1) * k * 20, x + Math.sign(dx || 1) * k * 20].find(v => v > 40 && v < WORLD - 40 && solidAt(v)); if (c !== undefined) { x = c; break; } }   // (its spot over the water, or a hole: the nearest firm ground by it, this side first)
+  const g = groundAt(x); if (g === null) return false;
   Object.assign(f, { x, y: g, vx: 0, vy: 0, onGround: true, plat: null, gapHop: null, wallAt: undefined }); puffs(x, g - f.h * .5, 3, f.hw, 100); SFX.blop(); return true;
 }
 function bepHurt(f, dir) {                        // a baddy's blow lands on a bep: knocked back, and one of their five berries gone
@@ -13150,7 +13153,8 @@ function spawnEscort(cameBack) {                  // still leading you: they com
   if (!bepRun.escort) return;
   const home = bepHome(), cols = bepRun.escort; if (home < 0) return;
   const rt = home === stage ? null : bepRoute(); if (home !== stage && !rt) return;     // (no way on from here: they wait where they were)
-  const back = home === stage ? bepRun.back : rt.x < player.x;
+  const B0 = STAGES[home].bep, vert = entrySide === "top" || entrySide === "bottom";   // (into the hideout's room: on the side you came in by, or toward its way in beside you)
+  const back = home === stage ? (vert ? B0.zone < player.x : entrySide === "right") : rt.x < player.x;
   const jut = back && entryHi ? hiPlat() : null;   // (back into a split room by its upper way: they come in up on that ledge with you, not on the lower path. The user, 2026-10-18)
   const R0 = entrySide === "top" || entrySide === "bottom" ? LADDERS.find(q => q.rope === (entrySide === "bottom" ? "down" : "up")) : null;   // (in by a rope ladder: they come in by it too, just ahead of you)
   ["S", "M", "B"].forEach((sz, i) => { let x = back ? WORLD - 70 - i * 50 : 70 + i * 50; if (jut) x = clamp(x, jut.x + 24, jut.x + jut.w - 24);
@@ -13161,9 +13165,10 @@ function spawnEscort(cameBack) {                  // still leading you: they com
       if (on) x = clamp(x, on.x + 20, on.x + on.w - 20); }
     if (!on && !solidAt(x)) { for (let k = 1; k < 120; k++) { const c = [x + k * 20, x - k * 20].find(solidAt); if (c !== undefined) { x = c; break; } } }   // (never over the water, or a hole: the nearest firm ground)
     const f = makeFriend(sz, cols[i], x); Object.assign(f, { popAt: 0, y: on ? on.y : groundAt(x) ?? GROUND, plat: on, onGround: true, z: .4 - i * .3 }); friends.push(f); });
-  bepEv = { B: STAGES[home].bep, mode: home === stage ? (back ? "trail" : "arrive") : back ? "escortBack" : "escort", route: rt, phase: "walk", t: 0, lead: friends[back ? 0 : 2], wait: false };
-  const B = STAGES[home].bep;
-  friends.forEach((f, i) => { f.task = { u: home === stage && !back ? clamp((f.x - B.left) / (B.zone - B.left) - (2 - i) * .075, 0, .6) : -1, lag: (back ? i : 2 - i) * .075 }; });
+  const B = STAGES[home].bep, mx = friends.reduce((a, f) => a + f.x, 0) / (friends.length || 1), trailSide = (mx - B.zone) * (B.trail - B.zone) > 0;   // (the hideout's room: the trail's side of the way in, or the far edge's)
+  bepEv = { B, mode: home === stage ? (trailSide ? "trail" : "arrive") : back ? "escortBack" : "escort", route: rt, phase: "walk", t: 0, lead: friends[back ? 0 : 2], wait: false };
+  friends.forEach((f, i) => { const lag = (back ? i : 2 - i) * .075, from = trailSide ? B.trail : B.left, u0 = (f.x - from) / (B.zone - from);   // (from where it stands along the path: before its start, to the start first)
+    f.task = { u: home === stage && u0 >= 0 ? clamp(u0 - lag, 0, .6) : -1, lag }; });
 }
 function bepArc(b, from, to, u, h) {             // a hop from one point (x px, y px, z) to another, u 0..1
   b.x = lerp(from[0], to[0], u); b.z = lerp(from[2], to[2], u); b.y = lerp(from[1], to[1], u) - Math.sin(u * Math.PI) * h;
