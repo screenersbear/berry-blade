@@ -4633,14 +4633,24 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
-function goRoomUp(ns) {                           // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge
+function holeAbove(px) {                           // the room above that drops into this one by a hole, and the hole nearest x (in this room's terms: rooms line up)
+  if (holeAbove.k !== world + ":" + stage) { holeAbove.k = world + ":" + stage; holeAbove.v = null;
+    STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.below !== stage) return; const G0 = (q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }
+  const v = holeAbove.v; if (!v) return null;
+  const [a, b] = v.gaps.reduce((m, g) => Math.abs((g[0] + g[1]) / 2 - px) < Math.abs((m[0] + m[1]) / 2 - px) ? g : m);
+  return { to: v.to, x: (a + b) / 2 };
+}
+function goRoomUp(ns, holeX) {                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
   cine = null;
   swapSlide("up", () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
     entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
-    const S1 = STAGES[ns], x = S1.arriveX ?? 130, f = S1.arriveF || 1, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
+    let ax = STAGES[ns].arriveX ?? 130, af = STAGES[ns].arriveF || 1;
+    if (holeX !== undefined) { const G0 = GAPS.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => Math.abs((p[0] + p[1]) / 2 - holeX) - Math.abs((q[0] + q[1]) / 2 - holeX))[0];   // (the hole: out onto its nearer lip)
+      if (G0) { const [a, b] = G0; af = holeX < (a + b) / 2 ? -1 : 1; if (af < 0 && a - 40 < 60) af = 1; if (af > 0 && b + 40 > WORLD - 60) af = -1; ax = af < 0 ? a - 40 : b + 40; } }
+    const S1 = STAGES[ns], x = ax, f = af, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
     Object.assign(player, { x: rx, y: gy + 180, vx: f * 120, vy: -1200, fullJump: true, jumpT: time, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
       inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
     if (pal) Object.assign(pal, { x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
@@ -5314,7 +5324,9 @@ function updatePlayer(dt) {
   const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(WATER - 6, GROUND + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
+  const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (groundAt(p.x) ?? GROUND) - 400 ? holeAbove(p.x) : null;   // (fallen in by a hole, no way back up: jumped high enough near under it)
   if (cu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);
+  else if (hu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - hu.x) < 640) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > WATER - 6 && overGap(p.x)) splashDown(p);
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
   if (p.landV > 0) { p.sq = -clamp(p.landV / 2100, .1, .45); p.sqv = 0; if (p.landV > 300) { dust(p.x, p.y, 5 + Math.round(p.landV / 250)); SFX.land(); } if (p.landV > 760) shake = Math.max(shake, 2.5); p.bounceT = -1; }   // a solid landing
