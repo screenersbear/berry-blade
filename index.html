@@ -431,12 +431,12 @@
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
-  <div class="btns" id="setBtns"><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="dev">DEVELOPER</button><button data-g="back">BACK</button></div>
+  <div class="btns" id="setBtns"><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="dev">DEVELOPER</button><button data-g="back">BACK</button></div>
   <small>↑ ↓ to choose &middot; Enter to change &middot; Esc to go back</small>
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="ach">ACHIEVEMENTS</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="uprise" id="dUprise">UPRISING PREVIEW: AS PLAYED</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="uprise" id="dUprise">UPRISING PREVIEW: AS PLAYED</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -3959,6 +3959,7 @@ function renderSettings() { const g = settingsGet(), B = $("setBtns").children; 
 function settingsChoose(k) {
   if (k === "back") { SFX.tick(); showMainMenu(); return; }
   if (k === "dev") { showDev(); return; }         // (free play and testing: was the gear on the main screen)
+  if (k === "ach") { SFX.confirm(); showAch(); return; }   // (over the settings; closing it comes back here. Was in the developer menu: the user, 2026-10-21)
   const g = settingsGet(); g[k] = !g[k]; try { localStorage.setItem(SET_KEY, JSON.stringify(g)); } catch { } settingsApply(); SFX.confirm(); renderSettings();
 }
 function showSlots(kind) {
@@ -4010,6 +4011,7 @@ function markMenu() {
 }
 function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ or ↓)
   if (transit) return;                               // (on the way into the game: the menus are still up under the fade)
+  if (achOpen) { if (ok || back) closeAch(); return; }   // (the achievements over a menu: a controller's pick or back closes them, not the menu under them)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "main") { const B = [...$("mbtns").children];
     if (d) { do mainSel = step(mainSel, B.length); while (B[mainSel].classList.contains("off")); SFX.tick(); markMenu(); }
@@ -4037,7 +4039,16 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] && q.cat === q.w ? { w: q.cat, r: wildRig(q.cat) } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null ? [q.cat] : []), itemTip: !!q.itemTip }; storyRun(q.w, q.s, false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] && q.cat === q.w ? { w: q.cat, r: wildRig(q.cat) } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null ? [q.cat] : []), itemTip: !!q.itemTip }; storyRun(q.w, fixRests(q.w, q.s), false); }
+function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
+  let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
+  for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
+    const ok = L.filter(r => S0[r] && S0[r].rest), cur = S0.map((q, i) => i).filter(i => S0[i].rest && !ok.includes(i)).sort((a, b) => colOf(S0[a]) - colOf(S0[b]));
+    L.forEach(r => { if ((S0[r] && S0[r].rest) || !cur.length) return; const n = cur.shift(); ok.push(n); if (+w === w0 && r === s0) s1 = n; });
+    story.rests[w] = ok; }
+  return s1;
+}
+const restOK = w => !!story && ((story.rests || {})[w] || []).some(r => ((WORLDS[w] && WORLDS[w].stages[r]) || {}).rest);   // (a rest stop you can start from there)
 function storyBegin(slot) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   const id = story.char || "camila", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
@@ -4132,6 +4143,7 @@ function drawMap() {
       `<g transform="translate(0 44)"><rect x="${-tw / 2}" y="-14" width="${tw}" height="24" fill="${sel ? "#ffd203" : N}"/><text y="4" text-anchor="middle" font-size="13" fill="${sel ? N : "#ffd203"}">${nm}</text></g>` +
       (seen && upOn(w) ? `<g transform="translate(0 67)"><rect x="-27" y="-10" width="54" height="19" rx="9.5" fill="${upPct(w) >= 100 ? "#ffd203" : "#ff5fa8"}" stroke="${N}" stroke-width="2.5"/><text y="4.5" text-anchor="middle" font-size="12" fill="${upPct(w) >= 100 ? N : "#fff"}">${Math.floor(upPct(w))}%</text></g>` : "") +
       (seen && hideFound(w) ? `<g transform="translate(-20 -20)"><circle r="10" fill="${N}"/><path d="M-6 6V-1L0 -6L6 -1V6Z" fill="#ffd203"/><rect x="-2" y="1" width="4" height="5" fill="${N}"/></g>` : "") +   // (the beps' hideout found: a little sign)
+      (seen && restOK(w) ? `<g transform="translate(20 -20)"><circle r="10" fill="${N}"/><path d="M0 7C-5 7-6 2-3-3C-2 0 0 0-1-4C0-6 2-7 2-8C3-4 6-2 5 3C4 6 2 7 0 7Z" fill="#ff8a1e"/><path d="M0 7C-2 7-3 5-1 2C0 4 2 3 2 2C3 4 2 7 0 7Z" fill="#ffd203"/></g>` : "") +   // (a rest stop to start from: a campfire)
       (w === world ? `<g transform="translate(0 -40)"><path d="M-7 4 0 12 7 4Z" fill="${N}"/><rect x="-26" y="-14" width="52" height="19" fill="${N}"/><text y="1" text-anchor="middle" font-size="12" fill="#ffd203">YOU</text></g>` : "") + `</g>`; });
   $("mapBox").innerHTML = o + `</svg>`;
   $("mapSub").textContent = V.has(mapSel) ? (mapSel === world ? "YOU ARE HERE · " : "GO TO · ") + WORLDS[mapSel].name + (upOn(mapSel) ? ` · UPRISING ${Math.floor(upPct(mapSel))}%` : "") : "THE ISLAND";
