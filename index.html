@@ -2697,6 +2697,26 @@ function syncRest() {                             // the fire flickering; walk u
   const p = player; if (C.healed || !p || p.dead || mode !== "play" || Math.abs(p.x - C.x) > 150) return;
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");
 }
+const CAMP_SPOT = { pal: [-66, -.1], ej: [42, -.35], ally: [-140, -.45] };   // where each one sits: [px from the fire, depth (3D)]
+function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
+  const C = restCamp;
+  if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } return false; }
+  const [dx0, dz] = CAMP_SPOT[key], tx = C.x + dx0;
+  if (s.sitAt !== C) {
+    const dx = tx - s.x; s.campT = (s.campT || 0) + dt;
+    if ((Math.abs(dx) > 10 || !s.onGround) && s.campT < 4 && s.y < WATER) {   // on its way over (down off a ledge first)
+      if (s.onGround && s.plat) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }
+      s.vx = approach(s.vx, Math.sign(dx) * Math.min(340, Math.abs(dx) * 5 + 40), 1800 * dt); s.face = Math.sign(dx) || s.face; s.sprint = false; return true;
+    }
+    s.sitAt = C; s.campT = 0; s.x = tx; s.y = groundAt(tx) ?? s.y; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
+    if (key === "ally" && r && !C.stump) {        // a stump of its own, as high as it sits
+      const D = r.D, B = r.spec.body, h = Math.max(.2, (D.hip * B.legs - .42 * D.step) * B.scale - .03), gy = groundAt(tx) ?? GROUND;
+      C.stump = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); C.stump.position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(C.stump);
+    }
+  }
+  s.x = tx; s.vx = 0; s.sit = 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  return true;
+}
 function restArrive() {                           // in the story, a rest stop you've reached is a checkpoint: the world map can bring you back here
   if (!story) return; const R = story.rests || (story.rests = {}), L = R[world] || (R[world] = []);
   if (!L.includes(stage)) { L.push(stage); toast("REST STOP · CHECKPOINT SAVED · BACK HERE ANY TIME FROM THE WORLD MAP", 3800); }
@@ -4594,6 +4614,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   if (stronghold || cine) { r.root.visible = r.shadow.visible = false; ej.away = true; return; }   // (she waits outside the stronghold)
   if (ej.away) { ej.away = false; ejPlace(p.x - p.face * 90, p.y, p.face); r.root.visible = r.shadow.visible = true; }
   if (ej.phase === "chided") { ejChided(dt); return; }
+  if (campSit(s, "ej", dt)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on the log by the fire)
   if (s.wave > 0 && (ej.waveT -= dt) <= 0) s.wave = 0;
   ej.atkCd -= dt; ej.hopT -= dt;
   const SET = KIT.MOVESETS[r.spec.move.set] || KIT.MOVESETS.sword, first = SET.ground[0];
@@ -5271,6 +5292,7 @@ function palLeap(tgt, T) {
 function updatePal(dt) {
   const q = pal; if (!q) return;
   const p = player, far = Math.abs(p.x - q.x);
+  if (campSit(q, "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire)
   if (player.combo && player.combo.palAt !== player.combo.idx) { player.combo.palAt = player.combo.idx; palPounce(); }   // each move of the combo
   palDefend(dt);
   if (q.pounce) {                                // in the air on the pounce: land the hit as she reaches it
@@ -5289,6 +5311,7 @@ function updatePal(dt) {
     else if (q.plat && p.onGround && p.y - q.y > 40 && Math.abs(dx) < 140) { q.dropPlat = q.plat; q.dropT = .3; q.onGround = false; q.vy = 140; q.y += 2; }
   }
   if (far > 720 || q.y > GROUND + 40) { q.x = p.x - p.face * 70; q.y = p.y; q.vx = q.vy = 0; q.pounce = null; puffs(q.x, q.y - 20, 3, 20, 100); }   // left behind: pop back in
+  }
   q.dropT = Math.max(0, (q.dropT || 0) - dt);
   q.vy = Math.min(q.vy + GRAV * dt, 1100);
   moveBody(q, dt, 14);
@@ -5543,6 +5566,7 @@ function updateAlly(dt) {                          // with you: just behind you,
   if (stronghold || cine || hideout || opening) { r.root.visible = r.shadow.visible = false; ally.away = true; return; }   // (it waits outside)
   const behind = 90 + (pal ? 50 : 0) + (ejPal() ? 50 : 0);
   if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face); r.root.visible = r.shadow.visible = true; }   // (a new room, or back on your feet: at your side)
+  if (campSit(s, "ally", dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on its stump by the fire)
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
   const SET = KIT.MOVESETS[r.spec.move.set] || KIT.MOVESETS.brawler;
