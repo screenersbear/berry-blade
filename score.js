@@ -250,6 +250,70 @@ window.BerryScore = (() => {
     { lead: "soft", pad: .015, bass: "walk", drums: "brush", arp: .015, verb: .22, gain: .93 },
     { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' mud hut
   ];
+  // Trumpeto's bazaar (original): the market in full swing, D Phrygian dominant
+  const MEL11 = [[0,2,62],[2,2,63],[4,4,66],[8,2,67],[10,2,66],[12,4,63],
+    [16,2,62],[18,2,63],[20,2,66],[22,2,67],[24,4,69],[28,4,67],
+    [32,2,70],[34,2,69],[36,4,67],[40,2,66],[42,2,67],[44,4,66],
+    [48,4,63],[52,4,62],[56,8,62],
+    [64,2,69],[66,2,70],[68,4,72],[72,2,70],[74,2,69],[76,4,67],
+    [80,2,66],[82,2,67],[84,2,69],[86,2,70],[88,4,72],[92,4,74],
+    [96,2,75],[98,2,74],[100,4,72],[104,2,70],[106,2,69],[108,4,67],
+    [112,4,66],[116,4,63],[120,8,62],
+    [128,4,74],[132,2,75],[134,2,74],[136,4,72],[140,4,70],
+    [144,2,69],[146,2,70],[148,2,72],[150,2,74],[152,8,75],
+    [160,4,78],[164,2,79],[166,2,78],[168,4,75],[172,4,74],
+    [176,2,72],[178,2,74],[180,4,75],[184,8,74],
+    [192,2,62],[194,2,63],[196,4,66],[200,2,67],[202,2,66],[204,4,63],
+    [208,2,62],[210,2,63],[212,2,66],[214,2,67],[216,4,69],[220,4,70],
+    [224,2,72],[226,2,70],[228,2,69],[230,2,67],[232,4,66],[236,4,63],
+    [240,12,62],[252,4,57]];
+  const CH11 = ["D","D","Eb","Eb","Gm","Gm","D","D","Cm","Cm","D","D","Eb","Eb","D","D",
+    "Gm","Gm","Eb","Eb","D","D","Cm","D","D","D","Eb","Eb","Gm","Cm","D","D"];
+  const VOICE11 = { D: [50, 54, 57, 62], Eb: [51, 55, 58, 63], Gm: [50, 55, 58, 62], Cm: [51, 55, 60, 63] };
+  const ROOT11 = { D: 38, Eb: 39, Gm: 43, Cm: 36 };
+  const STYLES11 = [
+    { lead: "bright", pad: .012, bass: "groove", drums: "march", arp: .02, verb: .18, gain: .95 },            // midday: the market in full swing
+    { lead: "bright", pad: .013, bass: "groove", drums: "march", arp: .02, verb: .2, gain: .93 },
+    { lead: "bright", pad: .014, bass: "groove", drums: "tres", arp: .02, verb: .2, gain: .91 },
+    { lead: "warm", pad: .015, bass: "tres", drums: "tres", arp: .015, verb: .24, gain: .88 },
+    { lead: "warm", pad: .016, bass: "walk", drums: "rim", arp: .012, verb: .28, gain: .82 },
+    { lead: "keys", pad: .018, bass: "walk", drums: "rim", arp: .01, verb: .32, gain: .77 },
+    { lead: "bell", pad: .02, bass: "pump", drums: "full", arp: 0, verb: .38, gain: .72, dark: true },          // night: Trumpeto's concert
+    { lead: "bright", pad: .012, bass: "groove", drums: "march", arp: .02, verb: .18, gain: .95 },
+    { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' tent
+  ];
+  // Master No's casino (original): a late-night lounge, A minor
+  const MEL12 = [[0,3,76],[3,1,74],[4,4,72],[8,2,69],[10,2,72],[12,4,76],
+    [16,3,78],[19,1,76],[20,4,74],[24,2,72],[26,2,74],[28,4,78],
+    [32,6,79],[38,2,78],[40,4,74],[44,4,71],
+    [48,4,72],[52,4,76],[56,8,74],
+    [64,3,77],[67,1,76],[68,4,72],[72,2,69],[74,2,72],[76,4,77],
+    [80,3,74],[83,1,72],[84,4,71],[88,2,69],[90,2,71],[92,4,74],
+    [96,4,76],[100,2,74],[102,2,72],[104,4,71],[108,4,68],
+    [112,8,69],[120,4,72],[124,4,76],
+    [128,2,81],[130,2,79],[132,4,76],[136,2,74],[138,2,76],[140,4,72],
+    [144,2,78],[146,2,76],[148,4,74],[152,2,72],[154,2,74],[156,4,78],
+    [160,4,79],[164,4,83],[168,6,81],[174,2,79],
+    [176,4,76],[180,4,79],[184,8,76],
+    [192,3,77],[195,1,79],[196,4,81],[200,4,77],[204,4,72],
+    [208,3,74],[211,1,77],[212,4,74],[216,4,71],[220,4,69],
+    [224,4,68],[228,4,71],[232,4,74],[236,4,76],
+    [240,12,69],[252,4,64]];
+  const CH12 = ["Am7","Am7","D7","D7","Gmaj7","Gmaj7","Cmaj7","Cmaj7","Fmaj7","Fmaj7","Bm7b5","Bm7b5","E7","E7","Am","Am",
+    "Am7","Am7","D7","D7","Gmaj7","Gmaj7","Cmaj7","Cmaj7","Fmaj7","Fmaj7","Bm7b5","Bm7b5","E7","E7","Am","Am"];
+  const VOICE12 = { Am7: [57, 60, 64, 67], D7: [54, 57, 60, 62], Gmaj7: [55, 59, 62, 66], Cmaj7: [55, 59, 60, 64], Fmaj7: [53, 57, 60, 64], Bm7b5: [53, 57, 59, 62], E7: [52, 56, 59, 62], Am: [57, 60, 64, 69] };
+  const ROOT12 = { Am7: 45, D7: 38, Gmaj7: 43, Cmaj7: 36, Fmaj7: 41, Bm7b5: 47, E7: 40, Am: 45 };
+  const STYLES12 = [
+    { lead: "keys", pad: .014, bass: "groove", drums: "tres", arp: .015, verb: .26, gain: .9 },                 // dusk: the doors open
+    { lead: "keys", pad: .014, bass: "groove", drums: "tres", arp: .015, verb: .27, gain: .89 },
+    { lead: "warm", pad: .015, bass: "groove", drums: "tres", arp: .02, verb: .28, gain: .88 },
+    { lead: "bright", pad: .015, bass: "groove", drums: "full", arp: .02, verb: .26, gain: .86 },
+    { lead: "keys", pad: .016, bass: "walk", drums: "tresBrush", arp: .015, verb: .3, gain: .82 },
+    { lead: "warm", pad: .018, bass: "walk", drums: "brush", arp: .012, verb: .34, gain: .78 },
+    { lead: "bell", pad: .02, bass: "pump", drums: "full", arp: 0, verb: .38, gain: .74, dark: true },          // the small hours: Master No's high table
+    { lead: "keys", pad: .014, bass: "groove", drums: "tres", arp: .015, verb: .26, gain: .9 },
+    { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' back room
+  ];
   const SONGS = [
     { MEL, CH, VOICE, ROOT, DARK, STYLES, bars: 16, bpm: 100, drone: 43, darkLead: { 11: -1, 4: -1, 1: -1 }, clipVar: null },
     { MEL: MEL2, CH: CH2, VOICE: VOICE2, ROOT: ROOT2, DARK: { G: "Gm", Em: "Edim", E: "E7b5" }, STYLES: STYLES2, bars: 16, bpm: 84, drone: 45, darkLead: { 11: -1, 6: -1 }, clipVar: null },
@@ -261,6 +325,8 @@ window.BerryScore = (() => {
     { MEL: MEL8, CH: CH8, VOICE: VOICE8, ROOT: ROOT8, DARK: {}, STYLES: STYLES8, bars: 16, bpm: 112, drone: 38, darkLead: {}, clipVar: null },
     { MEL: MEL9, CH: CH9, VOICE: VOICE9, ROOT: ROOT9, DARK: {}, STYLES: STYLES9, bars: 16, bpm: 128, drone: 36, darkLead: {}, clipVar: null },
     { MEL: MEL10, CH: CH10, VOICE: VOICE10, ROOT: ROOT10, DARK: {}, STYLES: STYLES10, bars: 16, bpm: 88, drone: 40, darkLead: {}, clipVar: null },
+    { MEL: MEL11, CH: CH11, VOICE: VOICE11, ROOT: ROOT11, DARK: {}, STYLES: STYLES11, bars: 16, bpm: 120, drone: 38, darkLead: {}, clipVar: null },   // 10: Trumpeto's bazaar (original)
+    { MEL: MEL12, CH: CH12, VOICE: VOICE12, ROOT: ROOT12, DARK: {}, STYLES: STYLES12, bars: 16, bpm: 112, drone: 45, darkLead: {}, clipVar: null },   // 11: Master No's casino (original)
   ];
   SONGS.forEach(S => { S.LOOP = S.bars * BAR; S.MELAT = {}; S.MEL.forEach(n => (S.MELAT[n[0]] = S.MELAT[n[0]] || []).push(n)); S.clip = { buf: null, busy: false, bar0: 0, intro: 0 }; });
   const DRUMS = {
