@@ -5386,6 +5386,7 @@ function wildSpawn(chasing) {
   let x = clamp(player.x + fwd * (chasing ? rand(560, 780) : rand(640, 820)), 200, WORLD - 200);
   for (let k = 0; k < 60 && !solidAt(x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on firm ground, not over the water)
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: -fwd, sit: chasing ? 0 : 1, hopT: 0 });
+  if (!chasing && Math.random() < .45) { const P = PLATFORMS.find(q => q.w >= 80 && Math.abs(q.x + q.w / 2 - x) < 520 && (q.x + q.w / 2 - player.x) * fwd > 360 && st.y - q.y > 60 && st.y - q.y < 420); if (P) Object.assign(st, { x: P.x + P.w / 2, y: P.y, plat: P }); }   // (now and then napping up on a ledge)
   st.yaw = fwd > 0 ? -Math.PI + .5 : -.5;
   wild = { w: world, r, st, phase: chasing ? "flee" : "rest", t: 0, fwd, dodgeT: .6, leapT: 0, clearT: 0 };
   r.root.visible = r.shadow.visible = true; if (chasing) puffs(x, st.y - 20, 3, 20, 80);
@@ -5609,10 +5610,22 @@ function gapEnd(x, dir) {                        // the far side of the water ah
   for (; k <= 16; k++) { const xx = x + dir * k * 24; if (groundAt(xx) !== null && groundAt(xx + dir * 24) !== null) return Math.abs(xx - x) < 360 ? xx + dir * 30 : null; }
   return null;
 }
+function catLeap(c, tx, ty) {                    // a leap that comes down on (tx, ty): up over it and down on it
+  const up = Math.max(30, c.y - ty + 40), fall = ty - (c.y - up), T = Math.sqrt(2 * up / GRAV) + Math.sqrt(2 * Math.max(4, fall) / GRAV);
+  c.vy = -Math.sqrt(2 * GRAV * up); c.vx = clamp((tx - c.x) / T, -720, 720); c.onGround = false; c.plat = null; c.sq = .25; c.sqv = 0; c.face = Math.sign(tx - c.x) || c.face;
+}
+function catLedge(c, dir, px, on) {               // a ledge to leap to: ahead of it (away from you), in reach, not the one it's on
+  let best = null;
+  for (const P of PLATFORMS) { if (P === on || P.w < 60) continue;
+    const rise = c.y - P.y; if (rise < (on ? -230 : 50) || rise > 250) continue;
+    const tx = clamp(c.x + dir * 150, P.x + 26, P.x + P.w - 26), d = (tx - c.x) * dir; if (d < 30 || d > 330 || Math.abs(tx - px) < Math.abs(c.x - px)) continue;
+    const sc = d + Math.abs(rise) * .3; if (!best || sc < best.sc) best = { P, tx, ty: P.y, sc }; }
+  return best;
+}
 function updateWild(dt) {
   const W0 = wild; if (!W0) return; const c = W0.st, p = player;
   if (stronghold) { if (catRun && catRun.phase === "chase") { catRun.phase = "done"; catHud(false); } wildClear(); return; }   // (down a hatch: it doesn't follow)
-  W0.t += dt; W0.dodgeT -= dt; W0.leapT -= dt; if (exitOpen) W0.clearT += dt;
+  W0.t += dt; W0.dodgeT -= dt; W0.leapT -= dt; W0.perchT = (W0.perchT || 0) - dt; if (exitOpen) W0.clearT += dt;
   const dx = c.x - p.x, dist = Math.abs(dx);
   if (W0.phase === "rest") { c.vx = 0; c.face = -W0.fwd; if (W0.t > 1.4 || dist < 520) catStartle(); }
   else if (W0.phase === "startle") { if (c.onGround && W0.t > .3) W0.phase = "flee"; }
@@ -5624,6 +5637,8 @@ function updateWild(dt) {
         c.vy = -840; c.vx = -dir * 540; c.onGround = false; c.plat = null; W0.leapT = 1.3; c.face = -dir; c.sq = .25; c.sqv = 0; SFX.jump();
       } else if (p.atkT >= 0 && p.atkT < .12 && dist < 170 && Math.sign(dx) === p.face && W0.dodgeT <= 0 && Math.random() < .6) {   // your swing coming: a hop away
         c.vy = -560; c.vx = dir * 430; c.onGround = false; c.plat = null; W0.dodgeT = 1.1; c.sq = .2; c.sqv = 0;
+      } else if (W0.perchT <= 0 && !p.dead && (sp || dist < 560) && (!c.plat || (dir > 0 ? c.plat.x + c.plat.w - c.x : c.x - c.plat.x) < 70) && (W0.ledge = catLedge(c, dir, p.x, c.plat))) {   // up onto a ledge (or on to the next one): cats like it high (the user, 2026-10-20)
+        catLeap(c, W0.ledge.tx, W0.ledge.ty); W0.perchT = .8 + Math.random() * .7; SFX.jump();
       } else if (sp && !footAhead(c.x, dir * 50) && !c.plat) {      // water (or a drop) ahead: bound over it
         const land = gapEnd(c.x, dir); if (land !== null) { const T = .62; c.vy = -GRAV * T / 2; c.vx = (land - c.x) / T; c.onGround = false; W0.leapT = .4; } else c.vx = approach(c.vx, 0, 2400 * dt);
       } else if (c.hitWall && sp && c.x > 60 && c.x < WORLD - 60) { c.vy = -720; c.onGround = false; c.plat = null; }   // a step up: jump it
