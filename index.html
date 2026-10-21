@@ -5378,9 +5378,9 @@ function catAway() {                               // five rooms and you never t
 }
 function catchCat(d) {                             // a hit, any hit: it tumbles, lands, and it's yours
   const W0 = wild; if (!wildCatchable()) return false; const c = W0.st;
-  W0.phase = "caught"; W0.t = 0; c.sit = 0; c.vx = d * 220; c.vy = -480; c.onGround = false; c.plat = null; c.sq = .3; c.sqv = 0;
+  W0.phase = "caught"; W0.t = 0; c.sit = 0; c.vx = d * 320; c.vy = -520; c.onGround = false; c.plat = null; c.sq = .3; c.sqv = 0; c.hurtT = .45;   // (it flashes and flinches)
   if (c.x < 40 || c.x > WORLD - 40) c.x = clamp(c.x, 40, WORLD - 40);
-  hitstop = Math.max(hitstop, .06); puffs(c.x, c.y - 30, 5, 30, 140); SFX.meow(1.15);
+  hitstop = Math.max(hitstop, .1); shake = Math.max(shake, 3); puffs(c.x, c.y - 30, 5, 30, 140); sparks(c.x - d * 12, c.y - 34, 10); SFX.hit(1, 0); SFX.meow(1.15);   // (a hit you can see: the user, 2026-10-20)
   if (catRun) catRun.phase = "done"; catHud(false); return true;
 }
 function catJoin() {                               // it's with you now: the old one (if there was one) goes home
@@ -5619,6 +5619,13 @@ function updateWild(dt) {
     if (c.x < -60 || c.x > WORLD + 60) { W0.phase = "away"; W0.r.root.visible = W0.r.shadow.visible = false; if (catRun && catRun.rooms >= CAT_ROOMS && catRun.phase === "chase") catAway(); }
   } else if (W0.phase === "caught") { c.vx = approach(c.vx, 0, 600 * dt); if (c.onGround && W0.t > .5) return catJoin(); }
   if (W0.phase === "away") return;
+  if (c.hurtT > 0) c.hurtT -= dt;
+  W0.bumpT = (W0.bumpT || 0) - dt;
+  if (wildCatchable() && W0.phase !== "caught" && !p.dead && !p.climb && W0.bumpT <= 0 && Math.abs(p.x - c.x) < 38 && Math.abs(p.y - c.y) < 34) {   // solid: run into it and you bump off it (from above, it's a stomp)
+    const s = Math.sign(p.x - c.x) || -c.face; p.x = c.x + s * 38; p.vx = s * 170; p.sq = -.12; p.sqv = 0;
+    c.vx = -s * 380; c.vy = -380; c.onGround = false; c.plat = null; c.sq = .25; c.sqv = 0; c.face = -s; W0.bumpT = .4;
+    dust((p.x + c.x) / 2, c.y, 5); SFX.thud(); if (W0.phase === "rest") catStartle();
+  }
   const out = W0.phase === "leave" && (c.x < 80 || c.x > WORLD - 80);
   c.vy = Math.min(c.vy + GRAV * dt, 1100);
   if (out) { c.x += c.vx * dt; c.y += c.vy * dt; const gy = groundAt(clamp(c.x, 0, WORLD)); if (gy !== null && c.y >= gy) { c.y = gy; c.vy = 0; c.onGround = true; } }   // (off the edge: past where the walls would stop it)
