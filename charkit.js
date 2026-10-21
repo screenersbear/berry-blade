@@ -1108,6 +1108,15 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     const nl = P(new THREE.SphereGeometry(1, 12, 8).scale(.014, .026, .042), mGold); nl.rotation.x = -ts * .45; t.add(at(nl, .104, -.142, ts * .03));   // gold thumbnail
     return t;
   });
+  // ATK power (the user, 2026-10-20: "3 colored spikes on the knuckles … the way rose's sword has the teeth"): up to three spikes grow out of the
+  // knuckles of the first three fingers, the one by the thumb first, out over the top of the fist (seen side on in a guard) and fanned a little. The thumb's side is picked at run time: they move with it (spikeAim)
+  const SR = [.056, .062, .062], SZ = [.102, .034, -.034], ka = Math.PI * 1.22, sa = Math.PI * 1.12, spikeAim = [];
+  const teeth = SR.map((R, i) => {
+    const sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), SZ[i]), aim = group(sp);
+    aim.add(at(P(new THREE.ConeGeometry(.032, .16, 10), M([Q.c3, Q.c2, Q.c1][i])), 0, .072, 0));
+    const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * SZ[i] * 2.2).normalize()));
+    aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: SZ[i], q }); sp.scale.setScalar(0); sp.visible = false; return sp;
+  });
   fist.add(at(P(new THREE.SphereGeometry(1, 20, 14).scale(.036, .056, .056), mOrb), -.108, -.075, 0));    // the orb, set in the back of the hand
   fist.add(at(P(new THREE.TorusGeometry(.06, .012, 8, 24).rotateY(Math.PI / 2), mGold), -.106, -.075, 0));
   fist.add(at(P(new THREE.TorusGeometry(.03, .007, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.138, -.068, .006));
@@ -1115,7 +1124,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     halo(new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x + .085, v.y)), 28), gc, .2), halo(new THREE.SphereGeometry(.2, 20, 14), gc, .5), halo(new THREE.SphereGeometry(.26, 20, 14), gc, .2)];
   glow[0].material.side = glow[1].material.side = THREE.DoubleSide; g.add(glow[0], glow[1]);
   glow[2].material.side = glow[3].material.side = THREE.BackSide; fist.add(at(glow[2], 0, -.13, 0), at(glow[3], 0, -.13, 0));   // (round the fist, not over it: the fingers stay clear)
-  return { kind: "gauntlet", group: g, rings, wr, fist, thumbs, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc };
+  return { kind: "gauntlet", group: g, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc };
 }
 
 function buildHuman(R) {
@@ -2251,7 +2260,8 @@ function syncHuman(p, r, dt = 0) {
     r.hands[i].position.copy(_W); r.hands[i].quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa);
     r.hands[i].visible = !(pr && pr.hideHand && s === propS);
     if (pr && s === propS) {                                          // the prop hand
-      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk; pr.wr.rotation.y = -near * GAUNT.turn * fk; pr.thumbs[0].visible = s < 0; pr.thumbs[1].visible = s > 0; }
+      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk; pr.wr.rotation.y = -near * GAUNT.turn * fk; pr.thumbs[0].visible = s < 0; pr.thumbs[1].visible = s > 0;
+        if (pr.spikeAim && pr.spikeSide !== s) { pr.spikeSide = s; pr.spikeAim.forEach(k => { k.sp.position.z = s * k.z; k.aim.quaternion.copy(k.q[s > 0 ? 1 : 0]); }); } }   // (the knuckle spikes: over to the thumb's side)
       if (pr.inner) { pr.inner.rotation.z = (o.wrist ?? -.6) + wristFix; pr.inner.rotation.x = o.roll || 0; }
     }
   });
@@ -2267,7 +2277,7 @@ function syncHuman(p, r, dt = 0) {
   });
   if (pr && pr.rings) pr.rings.forEach((m, i) => { const on = i < hp; m.visible = true;              // gauntlet rings = health: a lost one stays, gone white (the user: not vanished)
     if (m.userData.on !== on) { m.userData.on = on; m.material.color.set(on ? m.userData.col0 || "#ffffff" : "#ffffff"); } });
-  if (pr && pr.teeth) {                                               // sword teeth = ATK power (0–3): each one pops out with a little overshoot, or shrinks away
+  if (pr && pr.teeth) {                                               // sword teeth / gauntlet spikes = ATK power (0–3): each one pops out with a little overshoot, or shrinks away
     const n = p.power || 0, h = Math.min(dt || 0, .1), T = r.teethS || (r.teethS = pr.teeth.map(() => ({ x: 0, v: 0 })));
     pr.teeth.forEach((g, i) => {
       const s = T[i], want = i < n ? 1 : 0;
