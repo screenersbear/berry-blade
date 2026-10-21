@@ -556,8 +556,8 @@ function clockEnter(s) {
 }
 let bossDown = false;                              // this stay: the world's boss is beaten (so it isn't waiting at its other way out too)
 let koStay = 0, koScr = null;                       // knock-outs this stay (each costs the uprising one point less, down to 2) · the black screen up
-function koShow() {                                 // knocked out in the story: the uprising loses 5% (4, 3, then 2 for every one after, this stay), on a black screen, then the room again
-  const pen = upOn(world) && !freedNow() ? Math.max(2, 5 - koStay) : 0; koStay++;
+function koShow() {                                 // knocked out in the story: the uprising loses 5%, every time (the user, 2026-10-20), on a black screen, then the room again
+  const pen = upOn(world) && !freedNow() ? 5 : 0; koStay++;
   if (pen) { const U = upStore(); U[world] = Math.max(0, (U[world] || 0) - upGoal(world) * pen / 100); }
   modalKind = "ko"; modalOpen = true; koScr = { t0: performance.now(), timer: setTimeout(() => onReset(), 2800) };
   $("koSub").textContent = pen ? `UPRISING −${pen}% · NOW ${Math.floor(upPct(world))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");
@@ -3443,7 +3443,7 @@ function clearStage() {                         // (the beach's bare-fisted hero
 }
 function showSelect() {
   mode = "select"; lookPick = false; endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; level.s = -2; } cine = null; clearStage(); setLook(0);
-  roster.forEach((r, i) => { lineup[i].x = lineTarget(i); r.root.visible = r.shadow.visible = Math.abs(lineup[i].x - 480) < 900; }); pets.forEach(q => { q.root.visible = q.shadow.visible = false; }); pal = null; tamed = null; hideCatRigs();
+  roster.forEach((r, i) => { lineup[i].x = lineTarget(i); r.root.visible = r.shadow.visible = Math.abs(lineup[i].x - 480) < 900; }); pets.forEach(q => { q.root.visible = q.shadow.visible = false; }); pal = null; tamed = null; hideCatRigs(); alliesOff();
   $("stitle").textContent = "CHOOSE"; $("ssub").textContent = "YOUR CHARACTER"; $("blurb").textContent = ""; fillRoster(roster.map(r => r.name));
   $("shint").innerHTML = "TAP TO PICK";
   $("tools").classList.remove("hidden");
@@ -3639,7 +3639,7 @@ $("lvlList").addEventListener("click", e => { const t = e.target.closest("[data-
 $("lvl").addEventListener("click", e => { if (e.target.id === "lvl") closeLvl(); });
 $("bLvl").addEventListener("click", () => { if (mode === "select") showLvl(); });
 function levelGo(w, kind, a) {
-  closeMenus(); story = null; tamed = null; hideCatRigs(); closeLvl(); if (paused) closePause(); SFX.confirm();
+  closeMenus(); story = null; tamed = null; hideCatRigs(); alliesOff(); closeLvl(); if (paused) closePause(); SFX.confirm();
   if (kind === "arena") return startShowdown(w);
   if (!(mode === "play" || mode === "world" || mode === "opp")) { rig = roster[sel]; if (rig.kind === "cat") KIT.paintCards(cards, rig.spec); }   // (from the character screen: whoever's highlighted)
   endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; } cine = null; clearStage(); bepEv = null; clearGifts();
@@ -3666,7 +3666,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, cat: tamed ? tamed.w : null, ally: ally ? ally.A.w : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -3761,6 +3761,10 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = MAP_ASPECT) {   // the rooms yo
   if (hideFound(w)) { const hs = WORLDS[w].stages.findIndex(q => q.bep), a = M.at[hs];   // the beps' hideout, found: its sign
     if (a && seen.has(hs)) { const B = WORLDS[w].stages[hs].bep, sx = X(a[0], B.zone), sy = Y(a[1], (stageGround(WORLDS[w].stages[hs], B.zone) ?? GROUND) - 30), z = 4.5 * k;
       g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.moveTo(sx - z, sy + z); g.lineTo(sx - z, sy - z * .2); g.lineTo(sx, sy - z * 1.1); g.lineTo(sx + z, sy - z * .2); g.lineTo(sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } }
+  { const AL = ALLIES.find(a => a.w === w), a = AL && M.at[AL.room];   // this world's ally, waiting in its room (once you've been in it)
+    if (a && seen.has(AL.room) && !(ally && ally.A === AL)) { const sx = X(a[0], AL.x), sy = Y(a[1], (stageGround(WORLDS[w].stages[AL.room], AL.x) ?? GROUND) - 40), z = 4.2 * k;
+      g.fillStyle = AL.col; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.arc(sx, sy - z * .9, z * .8, 0, TAU); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(sx - z, sy + z); g.quadraticCurveTo(sx, sy - z * .4, sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } }
   if (cur >= 0 && M.at[cur] && player) { const [c, r] = M.at[cur], px = X(c, clamp(player.x, 0, WORLD)), py = Y(r, clamp(player.y - 40, MAP_TOP, MAP_BOT));   // you
     g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(px, py, 3.4 * k, 0, Math.PI * 2); g.fill(); g.stroke(); }
 }
@@ -3892,9 +3896,9 @@ function menuKey(e) {
     ["Enter", "Space", "KeyZ", "KeyX", "KeyC", "KeyJ", "KeyK"].includes(c), c === "Escape" || c === "Backspace", ["ArrowUp", "KeyW", "ArrowDown", "KeyS"].includes(c));
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
-function storyNew(slot, id) { tamed = null; mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] ? { w: q.cat, r: wildRig(q.cat) } : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {} }; storyRun(q.w, q.s, false); }
-function storyBegin(slot) { tamed = null; mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
+function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] && q.cat === q.w ? { w: q.cat, r: wildRig(q.cat) } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {} }; storyRun(q.w, q.s, false); }
+function storyBegin(slot) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   const id = story.char || "camila", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
   if (transit) return; if (paused) closePause(); sel = i; rig = w === 9 && !story.armed ? bareRig(id) : roster[i];   // (on the beach, till the bep's given them their weapons: bare fists)
@@ -3911,7 +3915,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
   }, WORLDS[w].name);
 }
 function quitToTitle() {                             // save (a story run) and back to the title card
-  if (story) writeSave(); story = null; tamed = null; modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
+  if (story) writeSave(); story = null; tamed = null; alliesOff(); modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
   showSelect(); titleUp = true; $("title").classList.remove("hidden"); bgm.pause();
 }
 function storyModal() {                              // knocked out in a story run: try again, or save and quit (the testing tools are under the gear)
@@ -3945,7 +3949,7 @@ function mapGo(w, s) {
   const HF = hideFound(w) && WORLDS[w].stages.some(q => q.bep);
   if (s === undefined && (R.length || SD || HF)) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...R.map(r => [(WORLDS[w].stages[r] || {}).name || "THE REST STOP", r]), ...(HF ? [["THE BEPS' HIDEOUT", "hide"]] : []), ...(SD ? [["THE FINAL SHOWDOWN", "arena"]] : [])] }; SFX.tick(); drawMapPick(); return; }
   SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null;
-  if (tamed) { const nm = WILD_CATS[tamed.w].name; hideCatRigs(); tamed = null; pal = null; setTimeout(() => toast(nm + " STAYED BEHIND"), 700); }   // (a world from the map: your cat doesn't come along)
+  if (w !== world) palsStay();                      // (another world from the map: your cat and your ally stay in this one)
   if (s === "arena") startShowdown(w); else if (s === "hide") { hideNext = true; storyRun(w, WORLDS[w].stages.findIndex(q => q.bep), false); } else storyRun(w, s || 0, false);
 }
 function drawMapPick() {                          // (the map's buttons: BACK, or the choice of where to start)
@@ -4311,7 +4315,7 @@ function goWorldNow(w) {                             // on into the next world: 
   const fromW = world;
   swapUnderFade(() => {
     $("wstats").classList.remove("show");
-    clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd();   // (she stays in the world she joined you in)
+    clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd(); palsStay();   // (she stays in the world she joined you in; so do your cat and your ally)
     worldStack.push({ w: world, trail: trail.slice(), bossDown });   // (walk back off this world's first room and you're back where you left the last one, its boss still beaten)
     setWorld(w); wstReset(); runStart = 0; trail = [0]; newStay(); if (story) { story.entry = { w, s: 0 }; story.check = null; } roomsSeen.add(0); entrySide = "left"; entryHi = false; dayClock = 0; clockEnter(0); rollSad(); setScreen(0);   // (through a world's way in: a new day, at midday (the user, 2026-10-20; Kesh's garden: its own first hour, night); the beach's morning doesn't carry on into it)
     const gy = groundAt(40) ?? GROUND;
@@ -4334,7 +4338,7 @@ function pathTo(pw, w) {
 function goWorldBack() {                             // off the left of a world's first room: back into the world before, at the room you left it from.
   const P0 = worldStack.pop() || { w: prevWorld(world), trail: pathTo(prevWorld(world), world) }; cine = null;   // You left it, so it's a new stay: its rooms all full again
   swapUnderFade(() => {
-    clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd();
+    clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd(); palsStay();
     setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown; entryHi = false;   // (its boss isn't back: the user, 2026-10-20)
     const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
@@ -4561,6 +4565,7 @@ function ejJoin() {                                  // beaten: up she gets, and
   const D = ejDef(), e = enemy, r = D.rig, st = makeState(e.x, r);
   Object.assign(st, { y: e.y, vy: 0, onGround: e.onGround, plat: e.plat, face: Math.sign(player.x - e.x) || 1, sq: -.3, sqv: 0, wave: 1 }); FLASHSET(r.mats, 0); r.root.visible = r.shadow.visible = true;
   e.ks = null; ej = { phase: "partner", st, r, t: 0, atkCd: 1.6, waveT: 1.3, hopT: 0 };
+  if (tamed && ally) allyLeave("% HEADS HOME");   // (two companions at most: with your cat along too, the ally goes)
   foe = FOES[STAGES[stage].foe] || FOES[0]; enemy = makeFoeState(foe, WORLD - 360); bossIn = false; bossCue = 0; setFoeHud();
   wayCue();
   puffs(st.x, st.y - 40, 8, 40, 160); SFX.fanfare();
@@ -4755,6 +4760,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   const fresh = !done && !roomsSeen.has(stage); roomsSeen.add(stage);
   if (fresh) { player.hp = maxHp(); player.inv = 1; } updateHearts(false);
   wildRoom(fresh, back);                                              // (a wild cat: resting here, or still running on ahead of you)
+  allyRoom();                                                         // (this world's ally, if this is where it waits)
   setFoeHud();
   $("banner").classList.remove("show");             // (no banner naming the room: the user, 2026-10-20)
   if (!maybeEJ(false, !fresh || back) && fresh && !back) maybeCameo();   // (now and then the partner's here ahead of you; or, rarely, Evil June: likelier back in a room you've been in)
@@ -4885,7 +4891,7 @@ function resetTrial() {
   rig.root.visible = rig.shadow.visible = true;
   enemy = makeFoeState(foe, WORLD - 360); player.power = 0;
   clearHz(); const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; const done = fillRoom(); spawnEscort(bepRun.back);
-  parts.forEach(q => actors.remove(q.m)); parts = [];
+  parts.forEach(q => actors.remove(q.m)); parts = []; allyRoom();
   shake = 0; hitstop = 0; slowMo = 0; camKick = camKickV = 0; if (beaten === 0) trialTime = 0; aura.show = aura.flare = aura.burst = 0; guardFx.show = guardFx.hit = 0; sprintDir = 0;
   setFoeHud();
   FOES.forEach(hideFoe); if (bossIn) showFoe(foe);
@@ -5371,6 +5377,7 @@ function catchCat(d) {                             // a hit, any hit: it tumbles
 function catJoin() {                               // it's with you now: the old one (if there was one) goes home
   const W0 = wild, c = W0.st, C = WILD_CATS[W0.w], old = tamed ? WILD_CATS[tamed.w].name : null;
   if (tamed) catLeave(null);
+  if (ally && ejPal()) allyLeave("% HEADS HOME");   // (two at most: Evil June and the cat stay, the ally goes)
   pets.forEach(q => { q.root.visible = q.shadow.visible = false; });
   tamed = { w: W0.w, r: W0.r }; wild = null;
   pal = c; Object.assign(pal, { hopT: 0, pounce: null, defT: 0, sit: 0 });
@@ -5395,6 +5402,173 @@ function updateStrays(dt) {
 function syncCats(dt) {
   if (wild && wild.phase !== "away") wild.r.sync(wild.st, wild.r, dt);
   strays.forEach(s => s.r.sync(s.st, s.r, dt));
+}
+// ── allies (the user, 2026-10-20): one in each world, from the user's drawings. Each waits in its own room of its world and joins you
+// when you get to it; it stays only in that world (like your cat), and through knock-outs. Two companions at most: Evil June first, then
+// your cat, then the ally
+const ALLIES = [
+  { id: "burr", name: "BURR", w: 0, room: 10, x: 1500, hi: "EN GARDE!", hit: "slash", reach: 100, col: "#93c93b" },   // the spiky one with the rapier: the berry woods, B4
+  { id: "stilt", name: "STILT", w: 1, room: 21, x: 1100, hi: "YES WAY!", hit: "punch", reach: 110, col: "#a9dcea" },  // the lanky one: Cuss' Waves' clifftop, A7
+];
+const ALLY_RIGS = {};
+let ally = null, allyHere = null, allyBring = null;   // the one with you · the one waiting in this room · (a loaded game: the one to bring back)
+function allySpec(id) {
+  const M0 = KIT.merge0, H = KIT.HUMAN_DEFAULT, G = "#93c93b", S = "#a9dcea";
+  if (id === "burr") return M0(H, { id, name: "BURR",
+    body: { build: "tall", head: .8, torso: 1.1, girth: 1, shoulders: 1.15, arms: 1.3, legs: 1.4, limbs: .5, hands: .85, feet: .7 },
+    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: G, hair: G },
+    outfit: { top: G, arm: G, leg: G, hand: { style: "bare" }, boot: { col: G, r: .07, len: .2, wide: 1, point: true }, prop: { kind: "sword", side: "right", size: 1 } },
+    move: { set: "sword", bounce: 1.2 } });
+  return M0(H, { id, name: "STILT",
+    body: { build: "tall", scale: 1.1, head: .9, torso: 1.15, girth: .92, shoulders: 1.2, arms: 1.6, legs: 1.5, limbs: .55, hands: 1, feet: .8 },
+    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: S, hair: "#1d3f8f" },
+    outfit: { top: "#fff1dc", torsoProf: [[0, .14], [.15, .15], [.4, .115], [.65, .18], [.85, .23], [.95, .19], [1, .09]],
+      torso: [{ kind: "poly", pts: [-80, 0, 80, 0, 0, 200], col: "skin" }, { kind: "poly", pts: [-80, 0, -50, 0, 60, 230, 30, 250], col: "#f3dcc0" }, { kind: "band", y0: 285, y1: 335, col: "#ff5a3c" }],
+      arm: "skin", leg: "skin", hand: { style: "bare" }, boot: { col: S, r: .07, len: .22, wide: .9, point: true } },
+    move: { set: "brawler", stride: 1.25, bounce: .8 } });
+}
+function dressAlly(r, id) {                        // what the kit can't make: Burr's spiky body, column head, pleated shorts and rapier; Stilt's head and hands
+  const U = KIT.util, M = col => { const m = U.toonT(col); r.mats.push(m); return m; }, P = (g, m) => new THREE.Mesh(g, m), pos = U.at;
+  const hideKids = g => g.children.forEach(c => { c.visible = false; });
+  hideKids(r.head); const post = [];
+  if (id === "burr") {
+    const G = M("#93c93b"), K = M("#1d1f24");
+    r.torso.mesh.visible = false;                  // his body: a big spiky burr, along his spine
+    const ball = new THREE.Group(); r.body.add(ball); ball.add(P(new THREE.IcosahedronGeometry(.4, 3), G));
+    for (let i = 0, N = 22; i < N; i++) {
+      const y = 1 - (i + .5) / N * 1.7, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.399963, d = new THREE.Vector3(Math.cos(th) * rr, y, Math.sin(th) * rr).normalize();
+      if (d.y < -.55) continue;
+      const s = P(new THREE.ConeGeometry(.06, .2, 6), G); s.position.copy(d).multiplyScalar(.44); s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); ball.add(s);
+    }
+    post.push(() => { const p = r.torso.pts; ball.position.lerpVectors(p[1], p[3], .55); ball.rotation.z = -Math.atan2(p[3].x - p[1].x, p[3].y - p[1].y); });
+    const head = new THREE.Group(); r.head.add(head);   // his head: a little column, a crown of spikes, a tiny face
+    head.add(pos(P(new THREE.CylinderGeometry(.17, .2, .62, 16), G), 0, .02, 0));
+    head.add(pos(P(new THREE.SphereGeometry(.17, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), G), 0, .33, 0));
+    [[0, .26, 0, 0], [.1, .2, .12, .35], [.1, .2, -.12, -.35], [-.08, .18, .12, .35], [-.08, .18, -.12, -.35]].forEach(([x, h, z, t]) => {
+      const s = P(new THREE.ConeGeometry(.05, h, 6), G); pos(s, x, .38 + h / 2, z); s.rotation.x = t; s.rotation.z = -x * 2; head.add(s); });
+    [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.028, 8, 6).scale(.6, 1.3, 1), K), .18, .2, s * .06)));
+    const mouth = P(new THREE.TorusGeometry(.04, .01, 4, 10, Math.PI), K); mouth.rotation.set(0, Math.PI / 2, Math.PI); pos(mouth, .19, .1, 0); head.add(mouth);
+    const sh = new THREE.Group(); r.hips.add(sh);  // pleated shorts and a belt
+    const [cv, g] = U.cv2(256, 64); g.fillStyle = "#7b4bb8"; g.fillRect(0, 0, 256, 64); g.fillStyle = "#b48be0"; for (let i = 0; i < 16; i++) g.fillRect(i * 16, 0, 5, 64);
+    const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(tex);
+    const sm = U.toonT("#ffffff", { map: tex, side: THREE.DoubleSide }); r.mats.push(sm);
+    sh.add(P(new THREE.LatheGeometry([[.2, .02], [.26, -.12], [.31, -.28]].map(([x, y]) => new THREE.Vector2(x, y)), 16), sm));
+    sh.add(pos(P(new THREE.TorusGeometry(.205, .035, 6, 20).rotateX(Math.PI / 2), M("#6b3f1e")), 0, .02, 0));
+    sh.add(pos(P(new THREE.BoxGeometry(.03, .07, .1), M("#f2c230")), .21, .02, 0));
+    const pr = r.prop; pr.inner.children.slice().forEach(c => pr.inner.remove(c));   // his rapier: a thin blade, a cup guard, a gem on the pommel
+    const Au = M("#f2c230");
+    pr.inner.add(pos(P(new THREE.CylinderGeometry(.012, .016, 1.05, 6).rotateZ(-Math.PI / 2), M("#e9eef2")), .6, 0, 0));
+    pr.inner.add(pos(P(new THREE.SphereGeometry(.08, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(Math.PI / 2), Au), .06, 0, 0));
+    pr.inner.add(pos(P(new THREE.CylinderGeometry(.022, .022, .16, 8).rotateZ(Math.PI / 2), M("#6b3f1e")), -.05, 0, 0));
+    pr.inner.add(pos(P(new THREE.TorusGeometry(.03, .01, 6, 12).rotateY(Math.PI / 2), Au), -.14, 0, 0));
+    pr.inner.add(pos(P(new THREE.OctahedronGeometry(.06, 0).scale(1.3, 1, 1), M("#e8264a")), -.21, 0, 0));
+  } else {
+    const Sk = M("#a9dcea"), Hr = M("#1d3f8f"), K = M("#1d1f24");
+    const head = new THREE.Group(); r.head.add(head);   // a long V of a face, pointed ears, a tall quiff swept back, a fang
+    head.add(pos(P(new THREE.ConeGeometry(.27, .7, 18).rotateZ(Math.PI).scale(1, 1, .85), Sk), .02, -.05, 0));
+    head.add(pos(P(new THREE.SphereGeometry(.27, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .45, .85), Sk), .02, .3, 0));
+    const q = P(new THREE.ConeGeometry(.15, .85, 10).scale(1.3, 1, .7), Hr); q.rotation.z = .28; pos(q, -.04, .7, 0); head.add(q);
+    const q2 = P(new THREE.ConeGeometry(.08, .32, 8).scale(1.4, 1, .7), Hr); q2.rotation.z = .9; pos(q2, .02, .78, 0); head.add(q2);
+    [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.06, .3, 8), Sk); e.rotation.x = s * 1.25; pos(e, -.02, .22, s * .3); head.add(e); });
+    [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.03, 8, 6).scale(.6, 1, 1.2), K), .22, .14, s * .085)));
+    [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .02, .09), K); b.rotation.x = -s * .4; pos(b, .23, .2, s * .09); head.add(b); });
+    head.add(pos(P(new THREE.BoxGeometry(.02, .015, .1), K), .2, .02, 0));
+    head.add(pos(P(new THREE.ConeGeometry(.012, .04, 4).rotateZ(Math.PI), M("#ffffff")), .205, 0, .03));
+    r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);   // great big hands
+      g.add(pos(P(new THREE.SphereGeometry(.1, 12, 10).scale(1, 1.25, .55), Sk), 0, -.11, 0));
+      [-.06, -.02, .02, .06].forEach((x, i) => { const f = P(new THREE.CapsuleGeometry(.025, .14 - Math.abs(i - 1.5) * .02, 3, 6), Sk); pos(f, x * .9, -.29, 0); f.rotation.z = x * .6; g.add(f); });
+      const t = P(new THREE.CapsuleGeometry(.025, .09, 3, 6), Sk); pos(t, .1, -.13, 0); t.rotation.z = .9; g.add(t); });
+    const tl = P(new THREE.BoxGeometry(.05, .26, .1), M("#ff5a3c")); pos(tl, .02, -.05, .12); tl.rotation.x = .15; r.hips.add(tl);   // the sash's tail
+  }
+  const s0 = r.sync; r.sync = (p, rr, dt) => { s0(p, rr, dt); post.forEach(f => f()); };
+}
+function allyRig(A) {
+  if (ALLY_RIGS[A.id]) return ALLY_RIGS[A.id];
+  const r = buildChar(KIT.normalize(allySpec(A.id))); dressAlly(r, A.id); r.root.visible = r.shadow.visible = false; return (ALLY_RIGS[A.id] = r);
+}
+const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" : "") + (arena ? ":ar" : "");
+const allyHide = q => { if (q) q.r.root.visible = q.r.shadow.visible = false; };
+function alliesOff() { allyHide(ally); allyHide(allyHere); ally = allyHere = null; allyBring = null; }   // (a new game, the title, the character screen, the level select)
+function allyRoom() {                              // into a room: this world's ally, if this is where it waits (and it isn't with you already)
+  if (allyHere && !(ally && ally.r === allyHere.r)) allyHide(allyHere); allyHere = null;
+  const A = ALLIES.find(a => a.w === world); if (!A || stage !== A.room || (ally && ally.A === A) || stronghold || hideout || arena || mode !== "play" || !player) return;
+  const r = allyRig(A); let x = A.x; for (let k = 0; k < 60 && !solidAt(x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);
+  const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: Math.sign(player.x - x) || -1 });
+  allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0 }; r.root.visible = r.shadow.visible = true;
+}
+function allyJoin(A, r, st, quiet) {               // it's with you now
+  ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0 }; allyHere = null; r.root.visible = r.shadow.visible = true;
+  if (quiet) return;
+  st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(A.name + " JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
+  if (story) writeSave();
+}
+function allyLeave(msg) {                          // it heads home: off out of the picture
+  if (!ally) return; const a = ally; ally = null;
+  if (msg && a.r.root.visible && mode === "play") { strays.push({ st: a.st, r: a.r, dir: a.st.x < player.x ? -1 : 1, t: 0 }); toast(msg.replace("%", a.A.name), 3200); }
+  else allyHide(a);
+  if (story) writeSave();
+}
+function palsStay() {                              // off into another world: your cat and your ally stay in this one (the user, 2026-10-20: "they only stay for the world you found them in")
+  const nm = [tamed && WILD_CATS[tamed.w].name, ally && ally.A.name].filter(Boolean);
+  if (tamed) { hideCatRigs(); tamed = null; pal = null; }
+  allyHide(ally); allyHide(allyHere); ally = allyHere = null;
+  if (nm.length) setTimeout(() => toast(nm.join(" AND ") + (nm.length > 1 ? " STAY" : " STAYS") + " BEHIND"), 700);
+}
+function updateAllyHere(dt) {                      // waiting: it turns to watch you, waves when it sees you, and joins when you reach it
+  const H = allyHere; if (!H || mode !== "play" || !player) return; const s = H.st, p = player, d = Math.abs(p.x - s.x); H.t += dt;
+  s.face = Math.sign(p.x - s.x) || s.face; s.vx = 0;
+  if (!H.said && d < 700 && !p.dead) { H.said = true; s.wave = 1; H.waveT = 1.6; popText(s.x, s.y - H.r.heightPx * 1.3 - 20, H.A.hi); }
+  if (s.wave > 0 && (H.waveT -= dt) <= 0) s.wave = 0;
+  if (d < 140 && Math.abs(p.y - s.y) < 130 && !p.dead) {
+    if (tamed && ejPal()) { if (!H.full) { H.full = true; popText(s.x, s.y - H.r.heightPx * 1.3 - 20, "NEXT TIME!"); } }   // (two along already: it waits for you)
+    else allyJoin(H.A, H.r, s, false);
+  }
+  s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt);
+}
+function allyPlace(x, y, face) { const s = ally.st; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player; }
+function updateAlly(dt) {                          // with you: just behind you, hopping up and down after you, and at any baddy (or the boss) that comes near
+  if (allyBring !== null && mode === "play" && player && !transit) { const A = ALLIES.find(a => a.w === allyBring && a.w === world); allyBring = null;
+    if (A) { const r = allyRig(A), st = makeState(player.x, r); allyJoin(A, r, st, true); allyPlace(player.x - player.face * 90, player.y, player.face); } }
+  if (!ally || mode !== "play" || !player) return;
+  const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt;
+  if (stronghold || cine || hideout || opening) { r.root.visible = r.shadow.visible = false; ally.away = true; return; }   // (it waits outside)
+  const behind = 90 + (pal ? 50 : 0) + (ejPal() ? 50 : 0);
+  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face); r.root.visible = r.shadow.visible = true; }   // (a new room, or back on your feet: at your side)
+  if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
+  ally.atkCd -= dt; ally.hopT -= dt;
+  const SET = KIT.MOVESETS[r.spec.move.set] || KIT.MOVESETS.brawler;
+  if (s.atkKind) {                                 // its swing: the hit lands at the move's own moment
+    s.atkT += dt; const S = KIT.STRIKES[s.atkKind], h = S.hits && S.hits[0], b = ally.tgt;
+    if (b && !ally.hit && s.atkT >= (h ? h.t0 : .1)) { ally.hit = true;
+      const D2 = duo && duo.find(d => d.e === b);
+      if (D2) { if (!b.dead && !b.gone && Math.abs(b.x - s.x) < A.reach + 20) withBoss(D2, () => hitEnemy(s.face, "punch")); }
+      else if (b === enemy) { if (!b.dead && !b.gone && Math.abs(b.x - s.x) < A.reach + 20 && Math.abs(b.y - s.y) < 140) hitEnemy(s.face, "punch"); }
+      else if (!b.dead && !b.gone && Math.abs(b.x - s.x) < A.reach && Math.abs(b.y - s.y) < 120) { b.inv = 0; hitBaddy(b, s.face, A.hit); sparks(b.x - s.face * b.hw * .5, b.y - b.h * .55, 6); } }
+    s.vx = approach(s.vx, 0, 1400 * dt);
+    if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ally.atkCd = b === enemy ? rand(1.6, 2.4) : rand(.9, 1.5); ally.tgt = null; }
+  } else {
+    const bossT = bossIn && !duo && enemy && !enemy.dead && !enemy.gone && !enemy.chide && enemy.onGround && Math.abs(enemy.x - s.x) < 380 && Math.abs(enemy.y - s.y) < 140 ? [enemy] : [];
+    const tgt = ally.atkCd <= 0 && !p.dead && s.wave <= 0 ? [...bossT, ...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
+    if (tgt) {
+      s.face = Math.sign(tgt.x - s.x) || s.face; s.sprint = true;
+      if (Math.abs(tgt.x - s.x) < A.reach * .65 && s.onGround) { s.sprint = false; ally.tgt = tgt; ally.hit = false; startStrike(s, SET.ground[ally.n++ % SET.ground.length]); }
+      else s.vx = approach(s.vx, s.face * 470, 2400 * dt);
+    } else {
+      s.sprint = false; const far = Math.abs(p.x - s.x), want = p.x - p.face * behind, dx = want - s.x;
+      s.vx = approach(s.vx, s.wave > 0 ? 0 : Math.abs(dx) > 18 ? Math.sign(dx) * Math.min(far > 240 ? 520 : 380, Math.abs(dx) * 6) : 0, 1800 * dt);
+      s.face = Math.abs(s.vx) > 25 ? Math.sign(s.vx) : Math.sign(p.x - s.x) || s.face;
+    }
+  }
+  if (s.onGround && !s.atkKind) {
+    if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ally.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ally.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
+    else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
+    else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
+  }
+  if (Math.abs(p.x - s.x) > 760 || s.y > WATER + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  s.dropT = Math.max(0, (s.dropT || 0) - dt);
+  s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
+  if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
+  ejLook(s, dt);
 }
 const footAhead = (x, d) => groundAt(x + d) !== null;
 function gapEnd(x, dir) {                        // the far side of the water ahead (or null: none, or too far to jump)
@@ -11062,6 +11236,7 @@ const hideFound = w => story ? !!(story.hideouts && story.hideouts[w]) : freeHid
 function enterHideout() {
   if (story) { (story.hideouts || (story.hideouts = {}))[world] = true; } else freeHide.add(world);   // (found: on the maps from now on, and the way in stays open)
   endCameo(); if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = false; ej.away = true; }   // (Evil June waits outside)
+  if (ally) { allyHide(ally); ally.away = true; } allyHide(allyHere);   // (and so does your ally)
   if (!levelTest) unlockAch(["grove", "cove", "workshop", "loft", "tent", "pod", "stash", "attic", "hut"][world]);
   const B = bepEv ? bepEv.B : STAGES[stage].bep; bepSeen.add(world + ":" + stage); bepRun.escort = null;
   clearFriends(); bepEv = null; clearHz();
@@ -12436,7 +12611,7 @@ function update(dt) {
     player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideout(dt);
     shake = Math.max(0, shake - dt * 40); return;
   }
-  updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt);
+  updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
@@ -12469,6 +12644,7 @@ function render(dt) {
   else { if (intro) intro.cast.forEach(c => { if (c.phase !== "gone") { c.r.sync(c.st, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; } });
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
+    if (ally && !ally.away) ally.r.sync(ally.st, ally.r, dt); if (allyHere) allyHere.r.sync(allyHere.st, allyHere.r, dt);
     rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
@@ -12575,7 +12751,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
 window.__game = { get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
-  get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
+  get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, ALLIES, allyRig, get ally() { return ally; }, get allyHere() { return allyHere; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
   bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
   forceSad(b) { b.sad = true; sadFace(b); }, cheerUp, get sadFate() { return sadFate; },
   goNext, goRoom, goRoomV, goWorld, goWorldBack, pollPad, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
