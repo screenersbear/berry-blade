@@ -2807,6 +2807,7 @@ function setScreen(s) {                              // build stage s (its platf
     if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
+    if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
     bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
     dropTextures();
@@ -11357,10 +11358,25 @@ function buildKingP() {
 let KP_FOES = null;
 const kpFoes = () => KP_FOES || (KP_FOES = [{ id: "kingp", name: "KING P", rig: buildKingP(), sync: syncFoe, hw: 48, h: 182, hp: 34, speed: 105, jumpy: .5, atk: "grenades", atk2: "grenades2", portraitY: .72 }]);
 // the road up: shut till you've beaten the bosses of this many worlds (the user: "not easily accessible without having to do most of the maps")
-const KP_GATE = 8;
-const bossesBeaten = () => !story ? 99 : Math.max((story.beat || []).length, story.beat0 || 0);   // (a save from before 2026-10-21: the worlds it had been on to, less one)
+const kpNeed = () => WORLDS.map((W0, i) => i).filter(i => i !== 9 && i !== 12 && WORLDS[i].stages.some(q => q.boss));   // (every other world's boss, at least once: not the beach's, not his own)
+const bossesBeaten = () => !story ? 99 : Math.max((story.beat || []).filter(w => kpNeed().includes(w)).length, story.beat0 || 0);   // (a save from before 2026-10-21: the worlds it had been on to, less one)
 let kpTipT = -9;
-const kpOpen = () => bossesBeaten() >= KP_GATE;
+const kpOpen = () => bossesBeaten() >= kpNeed().length;
+function buildKpGate() {                               // the gate across the road up the mountain: stone pillars, an iron portcullis, a board with the count
+  const open = kpOpen(), n = Math.min(bossesBeaten(), kpNeed().length), N = kpNeed().length, x = WORLD - 70, gy = groundAt(x) ?? GROUND;
+  const G = group(actors, X(x), Y(gy), -.9), st = toon("#d8d2c4"), stD = toon("#a8a294"), iron = toon("#3a3a42"), gold = toon("#ffd21f");
+  [-1, 1].forEach(s => { G.add(at(mk(bx(.9, 6.4, .9), null, { mat: st, ol: .04 }), 0, 3.2, s * 2.1)); G.add(at(mk(bx(1.1, .5, 1.1), null, { mat: stD, ol: .03 }), 0, 6.6, s * 2.1));
+    G.add(at(mk(ball(.32, 12, 10).scale(1, 1.3, 1), null, { mat: gold, ol: .02 }), 0, 7.2, s * 2.1));
+    for (let k = 0; k < 4; k++) G.add(at(mk(new THREE.ConeGeometry(.07, .4, 4), null, { mat: toon("#3fa83a"), ol: .01 }), Math.cos(k * 1.57) * .08, 7.7, s * 2.1 + Math.sin(k * 1.57) * .08)); });
+  G.add(at(mk(bx(.7, .7, 5.1), null, { mat: st, ol: .04 }), 0, 6.1, 0));                                       // the lintel
+  const pc = group(G, 0, open ? 5.2 : 0, 0);                                                                  // the portcullis: down till every boss is beaten
+  for (let z = -1.6; z <= 1.61; z += .4) pc.add(at(mk(cyl(.06, .06, 5.4, 6), null, { mat: iron, ol: .01 }), .05, 2.7, z));
+  for (let y = .6; y < 5.4; y += 1.1) pc.add(at(mk(bx(.08, .1, 3.4), null, { mat: iron, ol: .01 }), .05, y, 0));
+  for (let z = -1.6; z <= 1.61; z += .4) pc.add(at(mk(new THREE.ConeGeometry(.08, .25, 4), null, { mat: iron, ol: 0 }), .05, -.05, z));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .93), new THREE.MeshBasicMaterial({ map: boardSign(open ? "THE ROAD UP" : `${n} / ${N}`, open ? "TO KING P'S CASTLE" : "BOSSES BEATEN · BEAT THEM ALL") }));
+  sign.rotation.y = -Math.PI / 2 + .35; at(sign, -.7, open ? 6.1 : 2.6, 0); G.add(sign);
+  return G;
+}
 const DEEP = {                                      // (link via: "ledge", a climb of ledges back up, the default · "rope", a rope ladder · "drop", no way back up there)
   0: { add: [["C14", "B14", "C7", { chamber: true, name: "THE NIGHT GATE'S RAVINE", bossX: 760 }]],   // the woods: the ridge (A) over the woods (B), the ravine (C) under them; the gate's way out, down in the ravine
        link: [["A11", "B11", { at: 1450 }], ["A12", "B12", { at: 1100, via: "rope" }], ["A13", "B13", { at: 1650 }], ["B2", "C2", { at: 1250 }], ["B14", "C14", { chasm: true }]] },
@@ -14635,7 +14651,7 @@ function update(dt) {
     else if (arena) arenaWin();
     else openExit();
   }
-  if (STAGES[stage].toWorld === 12 && !kpOpen() && !transit && player.x > WORLD - 90 && time - kpTipT > 4.5) { kpTipT = time; toast(`THE ROAD UP THE MOUNTAIN IS SEALED · BEAT THE BOSSES OF ${KP_GATE} WORLDS FIRST (${bossesBeaten()} SO FAR)`, 3800); }
+  if (STAGES[stage].toWorld === 12 && !kpOpen() && !transit && player.x > WORLD - 90 && time - kpTipT > 4.5) { kpTipT = time; toast(`THE ROAD UP THE MOUNTAIN IS SEALED · BEAT EVERY OTHER BOSS FIRST (${Math.min(bossesBeaten(), kpNeed().length)} OF ${kpNeed().length})`, 3800); }
   if (rightOpen() && !transit && player.x > WORLD + 30) stronghold ? shNext() : story && isRunEnd(stage) && !arena ? endMap() : goNext();   // walked off the right edge: on to the next clearing (or, at the end of the line, the island map)
   if (stronghold && !transit && player.x < -30 && stronghold.screen > 0) shBack();
   if (!transit && player.x < -30 && backOpen()) goBack();   // ... or off the left: back the way you came
