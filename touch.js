@@ -1,12 +1,14 @@
 // Berry Blade on a phone (the user, 2026-10-17: "touch screen … a low opacity, clear d-pad and two buttons … over the game").
 // A see-through d-pad on the left and four buttons on the right, laid out like a console pad (the user, 2026-10-17: "make the buttons
 // 4 of them like a regular console. it's easier to have jump as a button and the fourth button should what on computer is attack and
-// block held together"): A jump (Z), B attack (X), X block (C), Y tackle (X and C at once; hold it to charge) (the user swapped B and X
+// block held together"): A jump (C), B attack (X), X block (Z), Y tackle (X and Z at once; hold it to charge; the keys since 2026-10-20) (the user swapped B and X
 // round: "B is attack, X is block"). They press the same keys the keyboard does, so the game needs no changes. The d-pad: ← → move,
 // ↑ climbs ladders (and jumps, like the keyboard's ↑, but only pushed clearly up), ↓ is down (twice quickly drops through a ledge).
 // The buttons sit close ("slightly closer to each other but not enough to make you press the wrong one"): a touch only ever presses
 // the one button nearest it, so a thumb between two can't set off the wrong one.
-// A small button in the top-left corner pauses (Esc), or goes back on the menu screens. The pad and buttons only show while you're playing; the menus are tapped directly.
+// A small button in the top-left corner pauses (Esc), or goes back on the menu screens. The pad and buttons show on the menus too (the user,
+// 2026-10-20: "make the player able to scroll through menues with virtual control arrows or actual control, not just touch screen"):
+// the d-pad moves through a menu and ✕ (or ○) picks; the menus can still be tapped directly.
 // Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
 // Full screen: any tap asks for it where a page can have it (Android, iPad); on an iPhone, a card asks you to swipe the bars away (see below).
 // The game tells this file what's on screen through window.BERRY_UI (added to the phone build's index.html by build_phone.py).
@@ -61,7 +63,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyZ"], b: ["KeyX"], x: ["KeyC"], y: ["KeyX", "KeyC"] };
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyC"], b: ["KeyX"], x: ["KeyZ"], y: ["KeyX", "KeyZ"] };   // (the keyboard's keys since 2026-10-20: C jump, X attack, Z block)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
@@ -155,11 +157,11 @@
   let was = "";
   setInterval(() => {
     const U = window.BERRY_UI; if (!U) return;
-    const s = U.state;                            // "play" | "sit" | "back" | "none"
+    const s = U.state;                            // "play" | "sit" | "back" | "menu" | "none"
     if (s === was) return; was = s;
-    T.classList.toggle("off", s !== "play" && s !== "sit"); T.classList.toggle("sit", s === "sit");
+    T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit");
     if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
-    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit"); C.textContent = s === "back" ? "‹" : "❚❚";
+    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "menu"); C.textContent = s === "play" || s === "sit" ? "❚❚" : "‹";
   }, 120);
 
   // ── offline, and updating itself (sw.js keeps every file on the phone). Whenever it's online it looks for a new version: on opening,
