@@ -68,7 +68,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyC"], b: ["KeyX"], x: ["KeyZ"], y: ["KeyX", "KeyZ"] };   // (the keyboard's keys since 2026-10-20: C jump, X attack, Z block)
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyZ"], b: ["KeyX"], x: ["KeyC"], y: ["KeyX", "KeyC"] };   // (the keyboard's keys, back to the first layout 2026-10-21: Z jump, X attack, C block)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
