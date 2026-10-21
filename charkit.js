@@ -2417,7 +2417,7 @@ function syncCards(cards, p, on = true) {
 
 // ↑ + attack (the user, 2026-10-16): a rising hit in each style that lifts you a little and reaches baddies on the platforms above you.
 // Attack while floating down in the bubble after a big jump: straight down fast, in each style, hitting whatever's under you (slamLand: a thump on landing)
-STRIKES.up_fist = { ...STRIKES.bx_c3, dur: .52, step: 50, hop: -580, sq: .14, hits: [{ t0: .06, t1: .32, reach: 70, back: 25, y0: 300, y1: 40, kind: "launch" }] };   // a rocket uppercut
+STRIKES.up_fist = { ...STRIKES.bx_c3, dur: .52, step: 50, hop: -580, sq: .14, hits: [{ t0: .06, t1: .32, reach: 70, back: 25, y0: 175, y1: 40, kind: "launch" }] };   // a rocket uppercut (its reach overhead: a little over the fist, the user, 2026-10-21)
 STRIKES.up_sword = { ...STRIKES.rise, dur: .44, step: 50, hop: -580, hits: [{ t0: .08, t1: .32, reach: 85, back: 30, y0: 310, y1: 30, kind: "slash" }] };       // the rising cut, carrying her up
 STRIKES.up_kick = { ...STRIKES.nj_c3, dur: .56, step: 60, hop: -580, hits: [{ t0: .06, t1: .32, reach: 80, back: 20, y0: 300, y1: 40, kind: "launch" }] };       // a rising knee
 STRIKES.dn_fist = { ...STRIKES.hammer, dur: 1.2, step: 0, dive: [.05, 1250], diveStill: true, landEnd: true, slamLand: true, hits: [{ t0: .05, t1: 1.2, reach: 50, back: 50, y0: 50, y1: -60, kind: "smash" }] };   // fists clasped, straight down
