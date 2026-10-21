@@ -2697,7 +2697,7 @@ function syncRest() {                             // the fire flickering; walk u
   const p = player; if (C.healed || !p || p.dead || mode !== "play" || Math.abs(p.x - C.x) > 150) return;
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");
 }
-const CAMP_SPOT = { pal: [-66, -.1], ej: [42, -.35], ally: [-140, -.45] };   // where each one sits: [px from the fire, depth (3D)]
+const CAMP_SPOT = { pal: [-66, -.1], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85] };   // where each one sits: [px from the fire, depth (3D)]
 function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
   const C = restCamp;
   if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } return false; }
@@ -2709,12 +2709,12 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
       s.vx = approach(s.vx, Math.sign(dx) * Math.min(340, Math.abs(dx) * 5 + 40), 1800 * dt); s.face = Math.sign(dx) || s.face; s.sprint = false; return true;
     }
     s.sitAt = C; s.campT = 0; s.x = tx; s.y = groundAt(tx) ?? s.y; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
-    if (key === "ally" && r && !C.stump) {        // a stump of its own, as high as it sits
-      const D = r.D, B = r.spec.body, h = Math.max(.2, (D.hip * B.legs - .42 * D.step) * B.scale - .03), gy = groundAt(tx) ?? GROUND;
-      C.stump = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); C.stump.position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(C.stump);
+    if (r) {                                       // a stump of its own, as high as it sits (low enough, it sits on the ground; legs too short to sit at all, it stands)
+      const D = r.D, B = r.spec.body, h = (D.hip * B.legs - .42 * D.step) * B.scale - .03, gy = groundAt(tx) ?? GROUND, S2 = C.stumps || (C.stumps = {}); s.noSit = h < -.06;
+      if (h > .2 && !S2[key]) { S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); S2[key].position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(S2[key]); }
     }
   }
-  s.x = tx; s.vx = 0; s.sit = 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
   return true;
 }
 function restArrive() {                           // in the story, a rest stop you've reached is a checkpoint: the world map can bring you back here
@@ -5442,6 +5442,8 @@ function syncCats(dt) {
 const ALLIES = [
   { id: "burr", name: "BURR", w: 0, room: 10, x: 1500, hi: "EN GARDE!", hit: "slash", reach: 100, col: "#93c93b" },   // the spiky one with the rapier: the berry woods, B4
   { id: "stilt", name: "STILT", w: 1, room: 21, x: 1100, hi: "YES WAY!", hit: "punch", reach: 110, col: "#a9dcea" },  // the lanky one: Cuss' Waves' clifftop, A7
+  { id: "plumbers", name: "THE PLUMBERS", w: 8, room: 13, x: 1300, hi: "WE'RE ON IT!", hit: "punch", reach: 100, col: "#9cc3d5",   // the pipe trio: Turtle's lakebed, C5
+    lead: "pipe", crew: ["pipelet", "pipe"], crewAt: [[80, 62], [-90, 120]] },   // (the other two: where each waits from the leader, and how far behind it each keeps)
 ];
 const ALLY_RIGS = {};
 let ally = null, allyHere = null, allyBring = null;   // the one with you · the one waiting in this room · (a loaded game: the one to bring back)
@@ -5452,6 +5454,13 @@ function allySpec(id) {
     face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: G, hair: G },
     outfit: { top: G, arm: G, leg: G, hand: { style: "bare" }, boot: { col: G, r: .07, len: .2, wide: 1, point: true }, prop: { kind: "sword", side: "right", size: 1 } },
     move: { set: "sword", bounce: 1.2 } });
+  if (id === "pipe" || id === "pipelet") {        // the plumbers: steel pipe (the little one copper), short legs, big work gloves
+    const col = id === "pipe" ? "#9cc3d5" : "#e0965a", base = { id, name: "THE PLUMBERS", face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: col, hair: col },
+      outfit: { top: col, arm: col, leg: col, hand: { style: "bare" }, boot: { col: "#3a3f4a", r: .1, len: .16, wide: 1.2 } }, move: { set: "brawler" } };
+    return M0(H, M0(base, id === "pipe" ? { body: { build: "tall", scale: 1.05, head: 1, torso: 1.4, girth: 1, shoulders: 1.25, arms: 1.05, legs: .6, limbs: 1.25, hands: 1, feet: 1 },
+      outfit: { armProf: [[0, .085], [1, .08]], legProf: [[0, .1], [1, .09]] } } : { body: { build: "chibi", scale: .8, head: 1, torso: 1, girth: 1, shoulders: 1.2, arms: .9, legs: .7, limbs: .9, hands: .8, feet: .8 },
+      outfit: { armProf: [[0, .06], [1, .06]], legProf: [[0, .07], [1, .065]], boot: { col: "#a8643a", r: .08, len: .12, wide: 1 } } }));
+  }
   return M0(H, { id, name: "STILT",
     body: { build: "tall", scale: 1.1, head: .9, torso: 1.15, girth: .92, shoulders: 1.2, arms: 1.6, legs: 1.5, limbs: .55, hands: 1, feet: .8 },
     face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: S, hair: "#1d3f8f" },
@@ -5495,6 +5504,37 @@ function dressAlly(r, id) {                        // what the kit can't make: B
     pr.inner.add(pos(P(new THREE.CylinderGeometry(.022, .022, .16, 8).rotateZ(Math.PI / 2), M("#6b3f1e")), -.05, 0, 0));
     pr.inner.add(pos(P(new THREE.TorusGeometry(.03, .01, 6, 12).rotateY(Math.PI / 2), Au), -.14, 0, 0));
     pr.inner.add(pos(P(new THREE.OctahedronGeometry(.06, 0).scale(1.3, 1, 1), M("#e8264a")), -.21, 0, 0));
+  } else if (id === "pipe" || id === "pipelet") {
+    r.torso.mesh.visible = false; const K = M("#1d1f24"), Wh = M("#ffffff"), Hm = M("#ff5a7a"), Gl = M("#f7f4ee");
+    const heart = s => { const h = new THREE.Shape(); h.moveTo(0, -.5); h.bezierCurveTo(-.15, -.3, -.55, -.1, -.5, .2); h.bezierCurveTo(-.45, .5, -.08, .55, 0, .28); h.bezierCurveTo(.08, .55, .45, .5, .5, .2); h.bezierCurveTo(.55, -.1, .15, -.3, 0, -.5);
+      return new THREE.ExtrudeGeometry(h, { depth: .12, bevelEnabled: false }).translate(0, 0, -.06).scale(s, s, s); };
+    const eye = (par, x, y, z, s = 1) => { par.add(pos(P(new THREE.SphereGeometry(.06 * s, 10, 8).scale(.5, 1, 1), Wh), x, y, z)); par.add(pos(P(new THREE.SphereGeometry(.032 * s, 8, 6).scale(.5, 1, 1), K), x + .02 * s, y, z)); };
+    const glove = (h, s) => { hideKids(h); const g = new THREE.Group(); h.add(g); g.scale.setScalar(s);   // a big blocky work glove with a cuff
+      g.add(pos(P(new THREE.CylinderGeometry(.075, .085, .08, 10), Gl), 0, -.02, 0)); g.add(pos(P(new THREE.BoxGeometry(.17, .2, .13), Gl), 0, -.15, 0));
+      const t = P(new THREE.BoxGeometry(.06, .11, .07), Gl); t.rotation.z = .5; pos(t, .1, -.12, 0); g.add(t); };
+    const body = new THREE.Group(); r.body.add(body);   // the body, along the spine
+    post.push(() => { const p = r.torso.pts; body.position.copy(p[1]); body.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+    const head = new THREE.Group(); r.head.add(head);
+    if (id === "pipe") {
+      const S = M("#9cc3d5"), SD = M("#6f97ab"), C = M("#c4dde8"), H = 1.22;
+      body.add(P(new THREE.LatheGeometry([[0, -.22], [.2, -.2], [.36, -.08], [.43, .12], [.41, .36], [.33, .62], [.22, .86], [.17, 1.02], [.17, H + .02]].map(([x, y]) => new THREE.Vector2(x, y)), 22), S));   // swelling out like a vase
+      body.add(pos(P(new THREE.TorusGeometry(.415, .018, 6, 28).rotateX(Math.PI / 2), SD), 0, .3, 0));   // the seam round its middle
+      body.add(pos(P(new THREE.CylinderGeometry(.21, .21, .06, 20), SD), 0, H, 0));                       // the flange at the top of its neck
+      const ht = P(heart(.2), Hm); ht.rotation.y = Math.PI / 2; pos(ht, .37, .52, 0); body.add(ht);
+      head.position.y = -.12;                     // its head: a pipe cap with a spout and two eyes
+      head.add(pos(P(new THREE.BoxGeometry(.4, .3, .5), C), 0, -.05, 0)); head.add(pos(P(new THREE.BoxGeometry(.44, .06, .54), SD), 0, .12, 0));
+      head.add(pos(P(new THREE.CylinderGeometry(.075, .075, .1, 14).rotateZ(Math.PI / 2), SD), .23, -.06, 0)); head.add(pos(P(new THREE.CircleGeometry(.05, 14).rotateY(Math.PI / 2), K), .285, -.06, 0));
+      eye(head, .2, 0, -.15); eye(head, .2, 0, .15); r.hands.forEach(h => glove(h, 1.25));
+    } else {
+      const Cu = M("#e0965a"), CD = M("#a8643a");
+      body.add(pos(P(new THREE.SphereGeometry(.42, 22, 14, 0, Math.PI * 2, Math.PI * .28, Math.PI * .72), Cu), 0, .2, 0));   // a round pot, open at the top
+      body.add(pos(P(new THREE.CircleGeometry(.36, 22).rotateX(-Math.PI / 2), K), 0, .45, 0)); body.add(pos(P(new THREE.TorusGeometry(.36, .03, 6, 24).rotateX(Math.PI / 2), CD), 0, .46, 0));
+      const ht = P(heart(.16), Hm); ht.rotation.y = Math.PI / 2; ht.rotation.z = -.25; pos(ht, .38, .3, 0); body.add(ht);
+      head.add(pos(P(new THREE.CylinderGeometry(.13, .13, .3, 16), Cu), -.08, -.05, 0));                  // its head: an elbow of pipe, its open end to the front
+      const el = P(new THREE.TorusGeometry(.17, .13, 12, 18, Math.PI / 2), Cu); el.rotation.set(0, 0, Math.PI / 2); pos(el, .09, .1, 0); head.add(el);
+      head.add(pos(P(new THREE.CylinderGeometry(.16, .16, .07, 16).rotateZ(Math.PI / 2), CD), .11, .27, 0)); head.add(pos(P(new THREE.CircleGeometry(.12, 16).rotateY(Math.PI / 2), K), .15, .27, 0));
+      eye(head, .07, -.02, -.12, .9); eye(head, .07, -.02, .12, .9); r.hands.forEach(h => glove(h, .8));
+    }
   } else {
     const Sk = M("#a9dcea"), Hr = M("#1d3f8f"), K = M("#1d1f24");
     const head = new THREE.Group(); r.head.add(head);   // a long V of a face, pointed ears, a tall quiff swept back, a fang
@@ -5517,35 +5557,66 @@ function dressAlly(r, id) {                        // what the kit can't make: B
 }
 function allyRig(A) {
   if (ALLY_RIGS[A.id]) return ALLY_RIGS[A.id];
-  const r = buildChar(KIT.normalize(allySpec(A.id))); dressAlly(r, A.id); r.root.visible = r.shadow.visible = false; return (ALLY_RIGS[A.id] = r);
+  const id = A.lead || A.id, r = buildChar(KIT.normalize(allySpec(id))); dressAlly(r, id); r.root.visible = r.shadow.visible = false; return (ALLY_RIGS[A.id] = r);
+}
+function crewOf(A, x, y) {                         // the rest of a crew (the plumbers), round the leader at (x, y)
+  return (A.crew || []).map((sid, i) => { const k = A.id + ":" + i;
+    if (!ALLY_RIGS[k]) { const r = buildChar(KIT.normalize(allySpec(sid))); dressAlly(r, sid); ALLY_RIGS[k] = r; }
+    const r = ALLY_RIGS[k], [hx, off] = A.crewAt[i], cx = clamp(x + hx, 40, WORLD - 40), st = makeState(cx, r); Object.assign(st, { y: groundAt(cx) ?? y, vy: 0, onGround: true, face: 1 });
+    r.root.visible = r.shadow.visible = true; return { r, st, off, home: cx, key: "crew" + i, go: 0, hopT: 0, n: i }; });
+}
+function crewStep(Q, dt, waiting) {                // each of the rest of a crew: a step behind the leader, hopping after it, swinging a beat after it does
+  const L = Q.st;
+  (Q.crew || []).forEach(m => { const s = m.st;
+    if (!waiting && campSit(s, m.key, dt, m.r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: by the fire)
+    if (s.atkKind) { s.atkT += dt; const S = KIT.STRIKES[s.atkKind], h = S.hits && S.hits[0], b = m.tgt;
+      if (b && !m.hit && s.atkT >= (h ? h.t0 : .1)) { m.hit = true; if (b !== enemy && b.hw !== undefined && !b.dead && !b.gone && Math.abs(b.x - s.x) < 105 && Math.abs(b.y - s.y) < 120) { b.inv = 0; hitBaddy(b, s.face, "punch"); } }   // (on baddies; the boss is the leader's)
+      s.vx = approach(s.vx, 0, 1400 * dt); if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; m.tgt = null; } }
+    else if (m.go > 0 && (m.go -= dt) <= 0 && s.onGround) { if (m.tgt) s.face = Math.sign(m.tgt.x - s.x) || L.face; m.hit = false; startStrike(s, KIT.MOVESETS.brawler.ground[m.n++ % 2]); }
+    else {
+      const want = waiting ? m.home : L.x - L.face * m.off, dx = want - s.x, far = Math.abs(dx);
+      s.vx = approach(s.vx, far > 14 ? Math.sign(dx) * Math.min(far > 200 ? 520 : 380, far * 6) : 0, 1800 * dt);
+      s.face = Math.abs(s.vx) > 25 ? Math.sign(s.vx) : waiting ? Math.sign(player.x - s.x) || s.face : L.face; s.wave = L.wave; m.hopT -= dt;
+      if (s.onGround) {
+        if (L.onGround && s.y - L.y > 40 && Math.abs(L.x - s.x) < 260 && m.hopT <= 0) { const hh = s.y - L.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((L.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; m.hopT = .5; }   // up after it
+        else if (s.plat && L.onGround && L.y - s.y > 40 && Math.abs(L.x - s.x) < 200) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after it
+        else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; }   // over a gap
+      }
+    }
+    if (!waiting && (Math.abs(L.x - s.x) > 640 || s.y > WATER + 20)) { puffs(s.x, Math.min(s.y, WATER) - 30, 3, 20, 100); Object.assign(s, { x: clamp(L.x - L.face * m.off, 30, WORLD - 30), y: L.y, vx: 0, vy: 0, onGround: L.onGround, plat: L.plat, atkKind: null, atkT: -1 }); }   // left behind: back with the others
+    s.dropT = Math.max(0, (s.dropT || 0) - dt); s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
+    if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
+    ejLook(s, dt);
+  });
 }
 const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" : "") + (arena ? ":ar" : "");
-const allyHide = q => { if (q) q.r.root.visible = q.r.shadow.visible = false; };
+const allyHide = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); };
+const allyShow = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = true; }); };
 function alliesOff() { allyHide(ally); allyHide(allyHere); ally = allyHere = null; allyBring = null; }   // (a new game, the title, the character screen, the level select)
 function allyRoom() {                              // into a room: this world's ally, if this is where it waits (and it isn't with you already)
   if (allyHere && !(ally && ally.r === allyHere.r)) allyHide(allyHere); allyHere = null;
   const A = ALLIES.find(a => a.w === world); if (!A || stage !== A.room || (ally && ally.A === A) || stronghold || hideout || arena || mode !== "play" || !player) return;
   const r = allyRig(A); let x = A.x; for (let k = 0; k < 60 && !solidAt(x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: Math.sign(player.x - x) || -1 });
-  allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0 }; r.root.visible = r.shadow.visible = true;
+  allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0, crew: crewOf(A, x, st.y) }; r.root.visible = r.shadow.visible = true;
 }
-function allyJoin(A, r, st, quiet) {               // it's with you now
-  ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0 }; allyHere = null; r.root.visible = r.shadow.visible = true;
+function allyJoin(A, r, st, quiet, crew) {         // it's with you now
+  ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0, crew: crew || crewOf(A, st.x, st.y) }; allyHere = null; allyShow(ally);
   if (quiet) return;
-  st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(A.name + " JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
+  st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(A.name + (A.crew ? " JOIN YOU!" : " JOINS YOU!"), 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
   if (story) writeSave();
 }
 function allyLeave(msg) {                          // it heads home: off out of the picture
   if (!ally) return; const a = ally; ally = null;
-  if (msg && a.r.root.visible && mode === "play") { strays.push({ st: a.st, r: a.r, dir: a.st.x < player.x ? -1 : 1, t: 0 }); toast(msg.replace("%", a.A.name), 3200); }
+  if (msg && a.r.root.visible && mode === "play") { [a, ...(a.crew || [])].forEach(m => strays.push({ st: m.st, r: m.r, dir: a.st.x < player.x ? -1 : 1, t: 0 })); toast(msg.replace("%", a.A.name).replace(" HEADS ", a.A.crew ? " HEAD " : " HEADS "), 3200); }
   else allyHide(a);
   if (story) writeSave();
 }
 function palsStay() {                              // off into another world: your cat and your ally stay in this one (the user, 2026-10-20: "they only stay for the world you found them in")
-  const nm = [tamed && WILD_CATS[tamed.w].name, ally && ally.A.name].filter(Boolean);
+  const nm = [tamed && WILD_CATS[tamed.w].name, ally && ally.A.name].filter(Boolean), many = nm.length > 1 || !!(ally && ally.A.crew);
   if (tamed) { hideCatRigs(); tamed = null; pal = null; }
   allyHide(ally); allyHide(allyHere); ally = allyHere = null;
-  if (nm.length) setTimeout(() => toast(nm.join(" AND ") + (nm.length > 1 ? " STAY" : " STAYS") + " BEHIND"), 700);
+  if (nm.length) setTimeout(() => toast(nm.join(" AND ") + (many ? " STAY" : " STAYS") + " BEHIND"), 700);
 }
 function updateAllyHere(dt) {                      // waiting: it turns to watch you, waves when it sees you, and joins when you reach it
   const H = allyHere; if (!H || mode !== "play" || !player) return; const s = H.st, p = player, d = Math.abs(p.x - s.x); H.t += dt;
@@ -5554,20 +5625,22 @@ function updateAllyHere(dt) {                      // waiting: it turns to watch
   if (s.wave > 0 && (H.waveT -= dt) <= 0) s.wave = 0;
   if (d < 140 && Math.abs(p.y - s.y) < 130 && !p.dead) {
     if (tamed && ejPal()) { if (!H.full) { H.full = true; popText(s.x, s.y - H.r.heightPx * 1.3 - 20, "NEXT TIME!"); } }   // (two along already: it waits for you)
-    else allyJoin(H.A, H.r, s, false);
+    else allyJoin(H.A, H.r, s, false, H.crew);
   }
   s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt);
+  if (allyHere === H) crewStep(H, dt, true);
 }
-function allyPlace(x, y, face) { const s = ally.st; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player; }
+function allyPlace(x, y, face) { const s = ally.st; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player;
+  (ally.crew || []).forEach(m => Object.assign(m.st, { x: clamp(x - face * m.off, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 })); }
 function updateAlly(dt) {                          // with you: just behind you, hopping up and down after you, and at any baddy (or the boss) that comes near
   if (allyBring !== null && mode === "play" && player && !transit) { const A = ALLIES.find(a => a.w === allyBring && a.w === world); allyBring = null;
     if (A) { const r = allyRig(A), st = makeState(player.x, r); allyJoin(A, r, st, true); allyPlace(player.x - player.face * 90, player.y, player.face); } }
   if (!ally || mode !== "play" || !player) return;
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt;
-  if (stronghold || cine || hideout || opening) { r.root.visible = r.shadow.visible = false; ally.away = true; return; }   // (it waits outside)
+  if (stronghold || cine || hideout || opening) { allyHide(ally); ally.away = true; return; }   // (it waits outside)
   const behind = 90 + (pal ? 50 : 0) + (ejPal() ? 50 : 0);
-  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face); r.root.visible = r.shadow.visible = true; }   // (a new room, or back on your feet: at your side)
-  if (campSit(s, "ally", dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on its stump by the fire)
+  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face); allyShow(ally); }   // (a new room, or back on your feet: at your side)
+  if (campSit(s, "ally", dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); crewStep(ally, dt, false); return; }   // (at a rest stop: on its stump by the fire)
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
   const SET = KIT.MOVESETS[r.spec.move.set] || KIT.MOVESETS.brawler;
@@ -5585,7 +5658,7 @@ function updateAlly(dt) {                          // with you: just behind you,
     const tgt = ally.atkCd <= 0 && !p.dead && s.wave <= 0 ? [...bossT, ...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
     if (tgt) {
       s.face = Math.sign(tgt.x - s.x) || s.face; s.sprint = true;
-      if (Math.abs(tgt.x - s.x) < A.reach * .65 && s.onGround) { s.sprint = false; ally.tgt = tgt; ally.hit = false; startStrike(s, SET.ground[ally.n++ % SET.ground.length]); }
+      if (Math.abs(tgt.x - s.x) < A.reach * .65 && s.onGround) { s.sprint = false; ally.tgt = tgt; ally.hit = false; startStrike(s, SET.ground[ally.n++ % SET.ground.length]); (ally.crew || []).forEach((m, i) => { m.go = .12 + i * .14; m.tgt = tgt; }); }
       else s.vx = approach(s.vx, s.face * 470, 2400 * dt);
     } else {
       s.sprint = false; const far = Math.abs(p.x - s.x), want = p.x - p.face * behind, dx = want - s.x;
@@ -5603,6 +5676,7 @@ function updateAlly(dt) {                          // with you: just behind you,
   s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
+  crewStep(ally, dt, false);
 }
 const footAhead = (x, d) => groundAt(x + d) !== null;
 function gapEnd(x, dir) {                        // the far side of the water ahead (or null: none, or too far to jump)
@@ -12702,7 +12776,7 @@ function render(dt) {
   else { if (intro) intro.cast.forEach(c => { if (c.phase !== "gone") { c.r.sync(c.st, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; } });
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
-    if (ally && !ally.away) ally.r.sync(ally.st, ally.r, dt); if (allyHere) allyHere.r.sync(allyHere.st, allyHere.r, dt);
+    for (const q of [ally && !ally.away ? ally : null, allyHere]) if (q) [q, ...(q.crew || [])].forEach(m => m.r.sync(m.st, m.r, dt));
     rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
