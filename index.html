@@ -2787,6 +2787,33 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
   s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
   return true;
 }
+const HIDE_SIT = { pal: [-88, .3], ej: [98, .05], ally: [-172, -.25], crew0: [-246, -.5], crew1: [176, -.55] };   // sat beside you in a hideout: [px from the seat, depth (3D)]
+function hideSit(s, key, dt, r) {                 // in a hideout, once you've sat down: over beside you, and down it sits too (the user, 2026-10-21). True while it's sat (or on its way)
+  const H = hideout, p = player, L = level.spots;
+  if (!H || !p || !p.sit || H.leaving || !L) { if (s.hideAt) { s.hideAt = false; s.sit = 0; s.z = 0; } return false; }
+  const [dx0, dz] = HIDE_SIT[key] || [130, -.3], tx = L.seat + dx0;
+  if (!s.hideAt) {
+    const dx = tx - s.x; s.hideT = (s.hideT || 0) + dt;
+    if ((Math.abs(dx) > 10 || !s.onGround) && s.hideT < 4) { s.vx = approach(s.vx, Math.sign(dx) * Math.min(320, Math.abs(dx) * 5 + 40), 1800 * dt); s.face = Math.sign(dx) || s.face; s.sprint = false; return true; }   // (on its way over)
+    s.hideAt = true; s.hideT = 0; s.x = tx; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
+    if (r) {                                       // a stump of its own, as at a rest stop (low enough, it sits on the floor; legs too short to sit at all, it stands)
+      const D = r.D, B = r.spec.body, h = (D.hip * B.legs - .42 * D.step) * B.scale - .03, gy = groundAt(tx) ?? GROUND, S2 = H.stumps || (H.stumps = {}); s.noSit = h < -.06;
+      if (h > .2 && !S2[key]) { const m = S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); m.position.set(X(tx), Y(gy) + h / 2, dz); actors.add(m); level.objs.push(m); }
+    }
+  }
+  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(L.seat - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  return true;
+}
+function hideGuest(s, key, dt, r, behind) {        // a partner in a hideout with you: a step behind you, and sat beside you when you sit
+  if (!hideSit(s, key, dt, r)) { const p = player, dx = p.x - p.face * behind - s.x;
+    s.vx = approach(s.vx, Math.abs(dx) > 18 ? Math.sign(dx) * Math.min(380, Math.abs(dx) * 6) : 0, 1800 * dt);
+    s.face = Math.abs(s.vx) > 25 ? Math.sign(s.vx) : Math.sign(p.x - s.x) || s.face; }
+  s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); s.x = clamp(s.x, hideout.cx - 470, hideout.cx + 470); ejLook(s, dt);
+}
+function updateHideGuests(dt) {
+  if (ej && ej.inHide && ej.st) hideGuest(ej.st, "ej", dt, ej.r, 95);
+  if (ally && ally.inHide) { hideGuest(ally.st, "ally", dt, ally.r, 145); (ally.crew || []).forEach((m, i) => hideGuest(m.st, m.key, dt, m.r, 195 + i * 50)); }
+}
 function restArrive() {                           // in the story, a rest stop you've reached is a checkpoint: the world map can bring you back here
   if (!story) return; const R = story.rests || (story.rests = {}), L = R[world] || (R[world] = []);
   if (!L.includes(stage)) { L.push(stage); toast("REST STOP · CHECKPOINT SAVED · BACK HERE ANY TIME FROM THE WORLD MAP", 3800); }
@@ -5417,7 +5444,7 @@ function palLeap(tgt, T) {
 function updatePal(dt) {
   const q = pal; if (!q) return;
   const p = player, far = Math.abs(p.x - q.x);
-  if (campSit(q, "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire)
+  if (campSit(q, "pal", dt) || hideSit(q, "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
   if (player.combo && player.combo.palAt !== player.combo.idx) { player.combo.palAt = player.combo.idx; palPounce(); }   // each move of the combo
   palDefend(dt);
   if (q.pounce) {                                // in the air on the pounce: land the hit as she reaches it
@@ -11915,9 +11942,10 @@ const itemGot = id => story ? (story.got || (story.got = [])).includes(id) : fre
 const markGot = id => { if (story) { (story.got || (story.got = [])).includes(id) || story.got.push(id); } else freeGot.add(id); };
 const catsCaught = () => [...new Set([...(story ? story.cats || [] : [...freeCats]), ...(tamed ? [tamed.w] : [])])].filter(w => WILD_CATS[w]);
 function noteCat(w) { if (story) { const L = story.cats || (story.cats = []); if (!L.includes(w)) L.push(w); } else freeCats.add(w); }
+let coinShowT = 0;                                   // (the coin count shows till then: a few seconds after it changes. The user, 2026-10-21: "only show it when you get some")
 function coinHud(pop) {                              // the coin count, by the hearts
   const el = $("coinN"); if (!el) return; el.textContent = bag().coins;
-  if (pop) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+  if (pop) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); coinShowT = performance.now() + 3200; }
 }
 SFX.coin = () => { tone(1320, 1320, .05, { type: "square", vol: .045 }); tone(1760, 1980, .1, { type: "square", vol: .045, delay: .05 }); };
 SFX.buy = () => { tone(660, 990, .1, { type: "triangle", vol: .12 }); tone(990, 1320, .16, { type: "triangle", vol: .1, delay: .09 }); };
@@ -13247,8 +13275,9 @@ function enterHideout() {
   { const i = Math.max(0, hideIdx(world, stage));   // (found: on the maps from now on, and that way in stays open)
     if (story) { const H = story.hideouts || (story.hideouts = {}), L = H[world] === true ? [0] : Array.isArray(H[world]) ? H[world] : []; if (!L.includes(i)) L.push(i); H[world] = L; }
     else if (![...freeHide].some(k => k[0] === world && k[1] === i)) freeHide.add([world, i]); }
-  endCameo(); patrolClear(); if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = false; ej.away = true; }   // (Evil June waits outside)
-  if (ally) { allyHide(ally); ally.away = true; } allyHide(allyHere);   // (and so does your ally)
+  endCameo(); patrolClear(); const ejIn = !!(ej && ej.st && ej.phase === "partner");
+  if (ej && ej.st) { ej.r.root.visible = ej.r.shadow.visible = ejIn; ej.away = true; ej.inHide = ejIn; }   // (your partner comes in with you: the user, 2026-10-21)
+  if (ally) { ally.away = true; ally.inHide = true; allyShow(ally); } allyHide(allyHere);   // (and so does your ally; one still waiting in its own room stays there)
   if (!levelTest) unlockAch(["grove", "cove", "workshop", "loft", "tent", "pod", "stash", "attic", "hut", null, "bazaar", "casino", "kingp"][world]);
   const B = bepEv ? bepEv.B : STAGES[stage].bep; bepSeen.add(world + ":" + stage); bepRun.escort = null;
   clearFriends(); bepEv = null; clearHz();
@@ -13259,6 +13288,8 @@ function enterHideout() {
   spawnHideoutBeps();
   Object.assign(player, { x: 960 - 420, y: GROUND, z: 0, vx: 0, vy: 0, onGround: true, plat: null, auto: { x: 960 - 300, kind: "enter", t: 0, phase: "walk" }, sit: 0, face: 1, combo: null, atkT: -1 });
   if (pal) Object.assign(pal, { x: 960 - 470, y: GROUND, vx: 0, vy: 0, onGround: true, pounce: null });
+  const inAt = (s, x) => Object.assign(s, { x, y: GROUND, z: 0, vx: 0, vy: 0, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0, sit: 0, hideAt: false, hideT: 0, face: 1 });
+  if (ej && ej.inHide) inAt(ej.st, 960 - 515); if (ally && ally.inHide) [ally, ...(ally.crew || [])].forEach((m, i) => inAt(m.st, 960 - 565 - i * 50));
   camX = X(960); $("exitCue").classList.add("hidden"); $("hud").classList.add("hidden");
   $("fade").classList.remove("on");
 }
@@ -13269,7 +13300,9 @@ function leaveHideout() {                         // back out to where the hidde
     level.s = -2; setScreen(stage); gifts.forEach(q => { q.g.visible = true; }); crates.forEach(c => { c.g.visible = true; }); healBerries.forEach(b => { b.g.visible = true; });
     const out = B.trail > B.zone ? 1 : -1;            // step out toward where the trail came from
     Object.assign(player, { x: B.zone + out * 50, y: GROUND, z: 0, vx: out * 60, vy: 0, onGround: true, plat: null, sit: 0, auto: null, face: out, inv: 1 });
-    if (pal) Object.assign(pal, { x: B.zone + out * 110, y: GROUND, vx: 0, vy: 0, onGround: true, pounce: null });
+    if (pal) Object.assign(pal, { x: B.zone + out * 110, y: GROUND, vx: 0, vy: 0, onGround: true, pounce: null, sit: 0, hideAt: false, z: 0 });
+    const up = s => Object.assign(s, { sit: 0, hideAt: false, z: 0 });   // (your partner and ally: back at your side, as ever, now ej.away / ally.away are set)
+    if (ej && ej.inHide) { ej.inHide = false; up(ej.st); } if (ally && ally.inHide) { ally.inHide = false; [ally, ...(ally.crew || [])].forEach(m => up(m.st)); }
     camX = clamp(X(player.x), 10, 40); $("hud").classList.remove("hidden");
     wayCue();
     $("fade").classList.remove("on");
@@ -14632,7 +14665,7 @@ function update(dt) {
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);
     if (player.auto && player.auto.kind === "enter" && player.auto.phase !== "walk") player.auto = null;
-    player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideout(dt);
+    player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideGuests(dt); updateHideout(dt);
     shake = Math.max(0, shake - dt * 40); return;
   }
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt);
@@ -14668,7 +14701,9 @@ function render(dt) {
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);
-  else if (hideout) { rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = true; if (pal) pal.rig.sync(pal, pal.rig, dt); syncHideoutBeps(dt); if (wild) wild.r.root.visible = wild.r.shadow.visible = false; }
+  else if (hideout) { rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = true; if (pal) pal.rig.sync(pal, pal.rig, dt); syncHideoutBeps(dt);
+    if (ej && ej.inHide && ej.st) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }   // (your partner and ally, in with you)
+    if (ally && ally.inHide) [ally, ...(ally.crew || [])].forEach(m => { m.r.sync(m.st, m.r, dt); m.r.root.visible = m.r.shadow.visible = true; }); if (wild) wild.r.root.visible = wild.r.shadow.visible = false; }
   else { if (intro) intro.cast.forEach(c => { if (c.phase !== "gone") { c.r.sync(c.st, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; } });
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
@@ -14731,7 +14766,7 @@ const PERF = { u: 0, r: 0, n: 0, dt: 0 };      // frame timing, for tuning (wind
 $("reset").onclick = onReset;
 $("npcRows").addEventListener("click", e => { const b = e.target.closest("button[data-nr]"); if (!b || !npcUp) return; npcUp.sel = +b.dataset.nr; npcNav(0, true, false); });
 $("itemRow").addEventListener("pointerdown", e => { const c = e.target.closest("[data-it]"); if (c) { e.preventDefault(); useItem(c.dataset.it); } });
-function syncCoinHud() { const el = $("coinHud"), on = mode === "play" && !!player && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && (!story || !!story.armed) && !(menuUp && menuUp !== "npc"); if (el.classList.contains("hidden") === on) el.classList.toggle("hidden", !on); }
+function syncCoinHud() { const el = $("coinHud"), on = mode === "play" && !!player && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && (!story || !!story.armed) && !(menuUp && menuUp !== "npc") && (menuUp === "npc" || performance.now() < coinShowT); if (el.classList.contains("hidden") === on) el.classList.toggle("hidden", !on); }
 $("change").onclick = showSelect;
 $("mQuit").onclick = () => quitToTitle();
 $("comic").addEventListener("pointerdown", e => { e.preventDefault(); comicNext(); });
