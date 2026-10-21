@@ -624,6 +624,7 @@ const hiPlat = () => PLATFORMS.filter(q => q.kind === "jut" || q.kind === "upper
 const GAPS = [];                          // the clearing's open water (or drops): [x0, x1] spans with no ground. Fall in: down into the room below, or back up where you jumped
 const PROFILE = [];                       // the ground's shape: [x, dy] points (dy < 0 is up). Two at one x make a sheer step; between points it slopes
 let WATER = GROUND + 46;                  // the sea's surface: just under the ground on row C, far below on the clifftops (row A)
+let FLOOR_LOW = GROUND, SINK = WATER;     // this room's lowest floor, and the line below which you've fallen in (WATER, or under a floor that dips below it: the lakebed's)
 const ROW_RISE = 240;
 const CEILS = [];                         // overhead: the underside of the land above, [x0, x1, y] (you bump your head on it)
 const LADDERS = [];                       // the clearing's ladders: { face (the cliff face's x), wall (which side the cliff is: -1 left, 1 right), x (where you climb), top, bot (px) }                     // px of climb from one row of the map to the next
@@ -646,6 +647,7 @@ function setPlatforms(s) {
   if (S.upX !== undefined) { const g = groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - 360, bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
   if (S.downX !== undefined) { const w = S.downWall || -1, g = groundAt(S.downX + w * 20) ?? GROUND; LADDERS.push({ rope: "down", to: S.down, face: S.downX, wall: w, x: S.downX - w * 15, top: g, bot: g + 360 }); }
   WATER = GROUND + 46 + (S.elev || 0) * ROW_RISE;
+  FLOOR_LOW = GROUND + PROFILE.reduce((m, q) => Math.max(m, q[1]), 0); SINK = Math.max(WATER, FLOOR_LOW + 46);
 }
 setPlatforms(0);
 // ── world 2: CUSS' WAVES (was CRASHING WAVES; renamed 2026-10-16). The same day, midday to night, on a rocky coast in the woodblock-print style:
@@ -4811,7 +4813,7 @@ function updateEJ(dt) {                              // the partner: at your sid
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if (Math.abs(p.x - s.x) > 760 || s.y > WATER + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  if (Math.abs(p.x - s.x) > 760 || s.y > SINK + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
   s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
@@ -4839,7 +4841,7 @@ function ejChided(dt) {                              // startled (a jump and a "
     if (!s.onGround) { s.vy = Math.min(s.vy + GRAV * dt, 1100); s.y += s.vy * dt; if (gy !== null && s.vy > 0 && s.y >= gy) { s.y = gy; s.vy = 0; s.onGround = true; s.plat = null; } }
     else if (s.plat) { if (s.x < s.plat.x - 6 || s.x > s.plat.x + s.plat.w + 6) { s.onGround = false; s.plat = null; } }   // off the end of a platform: down she drops
     else if (gy === null || gy > s.y + 2) s.onGround = false; else s.y = gy;
-    if (s.x < -90 || s.x > WORLD + 90 || s.y > WATER + 30 || ej.t > 6) { if (s.y > WATER + 30 || ej.t > 6) puffs(s.x, Math.min(s.y, WATER) - 30, 6, 30, 140); ejGone(); return; }
+    if (s.x < -90 || s.x > WORLD + 90 || s.y > SINK + 30 || ej.t > 6) { if (s.y > SINK + 30 || ej.t > 6) puffs(s.x, Math.min(s.y, WATER) - 30, 6, 30, 140); ejGone(); return; }
   }
   ejLook(s, dt);
 }
@@ -5322,12 +5324,12 @@ function updatePlayer(dt) {
     else if (!GAPS.some(([a, c]) => p.x > a - 34 && p.x < c + 34) && !stepXs().some(sx => Math.abs(p.x - sx) < 26)) p.safe = { x: p.x, y: groundAt(p.x) ?? GROUND, plat: null };
   }
   const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
-  if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(WATER - 6, GROUND + 200)) goRoomDrop(dropTo);
+  if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(SINK - 6, FLOOR_LOW + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
   const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (groundAt(p.x) ?? GROUND) - 400 ? holeAbove(p.x) : null;   // (fallen in by a hole, no way back up: jumped high enough near under it)
   if (cu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);
   else if (hu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - hu.x) < 640) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21)
-  else if (GAPS.length && !p.dead && !p.sunkT && p.y > WATER - 6 && overGap(p.x)) splashDown(p);
+  else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
   if (p.landV > 0) { p.sq = -clamp(p.landV / 2100, .1, .45); p.sqv = 0; if (p.landV > 300) { dust(p.x, p.y, 5 + Math.round(p.landV / 250)); SFX.land(); } if (p.landV > 760) shake = Math.max(shake, 2.5); p.bounceT = -1; }   // a solid landing
   if (p.bounceT >= 0) { p.bounceT += dt; if (p.bounceT > .5) p.bounceT = -1; }
@@ -5487,7 +5489,7 @@ function updatePal(dt) {
     if (p.onGround && q.y - p.y > 40 && far < 200 && q.hopT <= 0) { const hh = q.y - p.y + 50; q.vy = -Math.sqrt(2 * GRAV * hh); q.vx = clamp((p.x - q.x) / .5, -520, 520); q.onGround = false; q.plat = null; q.hopT = .5; q.sq = .2; q.sqv = 0; }
     else if (q.plat && p.onGround && p.y - q.y > 40 && Math.abs(dx) < 140) { q.dropPlat = q.plat; q.dropT = .3; q.onGround = false; q.vy = 140; q.y += 2; }
   }
-  if (far > 720 || q.y > GROUND + 40) { q.x = p.x - p.face * 70; q.y = p.y; q.vx = q.vy = 0; q.pounce = null; puffs(q.x, q.y - 20, 3, 20, 100); }   // left behind: pop back in
+  if (far > 720 || q.y > FLOOR_LOW + 40) { q.x = p.x - p.face * 70; q.y = p.y; q.vx = q.vy = 0; q.pounce = null; puffs(q.x, q.y - 20, 3, 20, 100); }   // left behind: pop back in
   }
   q.dropT = Math.max(0, (q.dropT || 0) - dt);
   q.vy = Math.min(q.vy + GRAV * dt, 1100);
@@ -5969,7 +5971,7 @@ function crewStep(Q, dt, waiting) {                // each of the rest of a crew
         else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; }   // over a gap
       }
     }
-    if (!waiting && (Math.abs(L.x - s.x) > 640 || s.y > WATER + 20)) { puffs(s.x, Math.min(s.y, WATER) - 30, 3, 20, 100); Object.assign(s, { x: clamp(L.x - L.face * m.off, 30, WORLD - 30), y: L.y, vx: 0, vy: 0, onGround: L.onGround, plat: L.plat, atkKind: null, atkT: -1 }); }   // left behind: back with the others
+    if (!waiting && (Math.abs(L.x - s.x) > 640 || s.y > SINK + 20)) { puffs(s.x, Math.min(s.y, WATER) - 30, 3, 20, 100); Object.assign(s, { x: clamp(L.x - L.face * m.off, 30, WORLD - 30), y: L.y, vx: 0, vy: 0, onGround: L.onGround, plat: L.plat, atkKind: null, atkT: -1 }); }   // left behind: back with the others
     s.dropT = Math.max(0, (s.dropT || 0) - dt); s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
     if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
     ejLook(s, dt);
@@ -6067,7 +6069,7 @@ function updateAlly(dt) {                          // with you: just behind you,
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if (Math.abs(p.x - s.x) > 760 || s.y > WATER + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  if (Math.abs(p.x - s.x) > 760 || s.y > SINK + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
   s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
@@ -6140,7 +6142,7 @@ function updateWild(dt) {
   if (out) { c.x += c.vx * dt; c.y += c.vy * dt; const gy = groundAt(clamp(c.x, 0, WORLD)); if (gy !== null && c.y >= gy) { c.y = gy; c.vy = 0; c.onGround = true; } }   // (off the edge: past where the walls would stop it)
   else moveBody(c, dt, 14);
   c.dropT = Math.max(0, (c.dropT || 0) - dt);
-  if (c.y > GROUND + 60) { const x = clamp(c.x + W0.fwd * 160, 200, WORLD - 200); let xx = x; for (let k = 0; k < 40 && !solidAt(xx); k++) xx += W0.fwd * 40; Object.assign(c, { x: clamp(xx, 200, WORLD - 200), y: groundAt(clamp(xx, 200, WORLD - 200)) ?? GROUND, vx: 0, vy: 0, onGround: true }); puffs(c.x, c.y - 20, 3, 20, 100); }   // (in the water: out the other side)
+  if (c.y > FLOOR_LOW + 60) { const x = clamp(c.x + W0.fwd * 160, 200, WORLD - 200); let xx = x; for (let k = 0; k < 40 && !solidAt(xx); k++) xx += W0.fwd * 40; Object.assign(c, { x: clamp(xx, 200, WORLD - 200), y: groundAt(clamp(xx, 200, WORLD - 200)) ?? GROUND, vx: 0, vy: 0, onGround: true }); puffs(c.x, c.y - 20, 3, 20, 100); }   // (in the water: out the other side)
   if (c.landV > 300) { c.sq = -clamp(c.landV / 2600, .08, .3); c.sqv = 0; }
   spring(c, dt);
   c.prof = approach(c.prof || 0, !c.onGround ? 1 : c.gaitAmt || 0, dt * 5); c.bodyYaw = lerp(.85, .3, c.prof);
@@ -6284,7 +6286,7 @@ function foeOffGaps() {                           // a boss never walks (or land
 function updateEnemy(dt) {
   const e = enemy, p = arena ? arenaFoeTgt() : player, D = e.def, A = ATTACKS[e.move || D.atk];   // (in the showdown: you, or one of the beps)
   if (e.gone) { e.deathT += dt; return; }
-  if (!e.dead && e.y > WATER + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
+  if (!e.dead && e.y > SINK + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
   if (e.chide) chideStep(e, dt);                      // telling Evil June off before the fight
@@ -12857,7 +12859,7 @@ function updateFriends(dt) {
     moveBody(f, dt, f.hw);
     if (f.landV > 0) { f.sq = -clamp(f.landV / 2000, .1, .3); f.sqv = 0; }
     if (f.onGround && !(GAPS.length && overGap(f.x))) f.safe = { x: f.x, y: f.y };
-    else if (GAPS.length && f.y > WATER - 4 && overGap(f.x) && f.safe && f.dropIn === undefined) { fallFx(f.x, .6); Object.assign(f, { x: f.safe.x, y: f.safe.y, vx: 0, vy: 0, onGround: true }); puffs(f.x, f.y - 20, 3, 16, 100);   // knocked in: back up where it was
+    else if (GAPS.length && f.y > SINK - 4 && overGap(f.x) && f.safe && f.dropIn === undefined) { fallFx(f.x, .6); Object.assign(f, { x: f.safe.x, y: f.safe.y, vx: 0, vy: 0, onGround: true }); puffs(f.x, f.y - 20, 3, 16, 100);   // knocked in: back up where it was
       if (f.task && f.prog) f.prog.t = 99; }   // (on its way somewhere: puffed over to it next, not left walking back in, round and round)
     if (!f.onGround) f.plat = null;
     if (f.onGround) f.phase += dt * Math.abs(f.vx) * .1 * Math.sqrt(58 / f.h);
@@ -13337,7 +13339,7 @@ function enterHideout() {
   const B = bepEv ? bepEv.B : STAGES[stage].bep; bepSeen.add(world + ":" + stage); bepRun.escort = null;
   clearFriends(); bepEv = null; clearHz();
   baddies.forEach(b => { b.r.root.visible = b.r.shadow.visible = false; if (b.r.segRoot) b.r.segRoot.visible = false; }); gifts.forEach(q => { q.g.visible = false; }); crates.forEach(c => { c.g.visible = false; }); healBerries.forEach(b => { b.g.visible = false; });
-  disposeLevel(level); PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0;
+  disposeLevel(level); PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0; FLOOR_LOW = GROUND; SINK = WATER;
   level = buildHideout(world, hour); level.s = -1; level.w = world; setLook(hour);
   hideout = { cx: 960, from: B, t: 0, beps: [], sitIdle: 0, notes: [] };
   spawnHideoutBeps();
@@ -13903,7 +13905,7 @@ function enterStronghold() {
 }
 function shScreen(i, back) {
   const H = stronghold; H.screen = i;
-  disposeLevel(level); PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0; WATER = GROUND + 400;
+  disposeLevel(level); PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0; WATER = GROUND + 400; FLOOR_LOW = GROUND; SINK = WATER;
   SH_ROOMS[i].plats.forEach(([x, y, w, kind]) => PLATFORMS.push({ x, y, w, kind }));
   level = buildStronghold(i, hour); level.s = -3; level.w = world; level.h = -1; setLook(hour);
   entrySide = back ? "right" : "left"; const done = shFill(), x = back ? WORLD - 40 : 60, d = back ? -1 : 1;
@@ -14098,7 +14100,7 @@ function updateBaddy(b, dt) {
   moveBody(b, dt, b.hw);
   if (p !== player && b.atk === "go" && !b.dead && Math.abs(p.x - b.x) < p.hw + b.hw && p.y - p.h < b.y && b.y - b.h < p.y) bepHurt(p, Math.sign(p.x - b.x) || b.dir);   // (rammed: a lunge, a roll, a leap)
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
-  if (GAPS.length && !b.dead && !fly && b.y > Math.min(WATER - 4, GROUND + 110) && overGap(b.x) && !b.T.swim) { fallFx(b.x, .9); b.hp = 0; b.dead = true; b.deathT = 0; b.vx = 0; b.sunk = true; }   // into the sea (or down a pit, out of reach): popped
+  if (GAPS.length && !b.dead && !fly && b.y > Math.min(SINK - 4, FLOOR_LOW + 110) && overGap(b.x) && !b.T.swim) { fallFx(b.x, .9); b.hp = 0; b.dead = true; b.deathT = 0; b.vx = 0; b.sunk = true; }   // into the sea (or down a pit, out of reach): popped
   if (!fly && !b.dead && !b.plat && !b.under) { const g = groundAt(b.x); if (g !== null && b.y > g + 24) { b.y = g; b.vy = Math.min(b.vy, 0); b.onGround = true; } }   // (never left inside the earth)
   if (b.landV > 0) { b.sq = -clamp(b.landV / 2000, .1, .35); b.sqv = 0; if (T.move === "hop" && !b.atk) b.vx *= .15; if (b.landV > 450) dust(b.x, b.y, 3); }
   if (!b.onGround) b.plat = null;
