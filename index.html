@@ -2554,9 +2554,18 @@ const climbLedges = cu => { const g = groundAt(cu.x) ?? GROUND; return [[-150, 1
 // the cliff (or wall) a rope ladder up to the room above is fixed to, a hatch where one goes down through a floor, the wall where a new
 // room is closed off. (Loof's sky and Crux's city build their own ladder walls.) [the wall, its trim]
 const DEEP_LOOK = { 0: ["#a39d93", "#6e9c48"], 1: ["#d0623e", "#33364a"], 2: ["#4a5468", "#ffd21f"], 3: ["#f0a868", "#c97a40"], 4: ["#b8452c", "#7a2a1c"], 5: ["#4a4f86", "#7a7fc0"], 6: ["#e88ab4", "#fff0f6"], 7: ["#8e8e8e", "#565656"], 8: ["#8a6a4a", "#5a4430"] };
+const dropRoom = s => !!STAGES[s] && STAGES[s].below !== undefined;   // its gaps drop into the room below (rather than into the sea, a vat, a pool)
+let SHAFT_TEX = null;
+function dropShaft(par, a, b, ty, z0, z1, floor, col) {   // a way down: a shaft from the ground (ty) down into the dark, between z0 and z1 (open at the front and the top)
+  if (!SHAFT_TEX) SHAFT_TEX = tex(4, 128, (g, w, h) => { const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#ffffff"); gr.addColorStop(.45, "#4a4a4a"); gr.addColorStop(.8, "#000000"); g.fillStyle = gr; g.fillRect(0, 0, w, h); });
+  const xa = X(Math.max(a, -900)), xb = X(Math.min(b, WORLD + 900)), w = Math.max(.2, xb - xa - .04), h = Math.max(1, ty - floor);
+  const wall = new THREE.MeshBasicMaterial({ color: col, map: SHAFT_TEX, side: THREE.BackSide, fog: false }), dark = new THREE.MeshBasicMaterial({ color: "#000000", side: THREE.BackSide, fog: false });
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, z1 - z0), [wall, wall, dark, dark, wall, wall]); m.position.set((xa + xb) / 2, ty - h / 2 + .01, (z0 + z1) / 2); par.add(m); return m;
+}
 function buildDeepBits(s) {
   const S0 = STAGES[s], g = new THREE.Group(); scene.add(g); const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], mW = toon(c0), mT = toon(c1), R = rngF(4242 + s * 7 + world * 131);
   const lump = (x, y, z, r) => g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mW, ol: .03 }), x, y, z));
+  if (world === 1 && dropRoom(s)) GAPS.forEach(([a, b]) => { if (b <= -800 || a >= WORLD + 800) return; dropShaft(g, a, b, Y(groundAt(a - 1) ?? GROUND) - .3, -3.56, 3.56, Y(WATER) + .75, "#3a3346"); });   // (a way down: not the sea)
   if (world !== 3 && world !== 7) LADDERS.filter(L => L.rope).forEach(L => {
     const x = X(L.x);
     if (L.rope === "up") {                          // a cliff (a wall) rising up out of sight, the ladder fixed to its face
@@ -8008,6 +8017,7 @@ function buildDunes(k = 0, seed = k) {
   // the sinkholes: sand pouring down into a dark funnel, turning slowly
   const pits = [];
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND), depth = Math.max(2, ty - WY + 1.5);
+    if (dropRoom(seed)) { dropShaft(scene, a, b, ty, -7, 4.2, gY - 11, "#5c2c16"); return; }   // (a way down: a shaft, not a sinkhole)
     const f = new THREE.Mesh(new THREE.CylinderGeometry(w * .5, .15, depth, 24, 1, true), mPit); f.material.side = THREE.DoubleSide; at(f, cx, ty - depth / 2, -1.5); f.scale.z = 2.2; scene.add(f);
     const sw = group(scene, cx, ty - .05, -1.5); keep.add(sw);
     for (let i = 0; i < 3; i++) { const ring = new THREE.Mesh(new THREE.TorusGeometry(w * (.45 - i * .12), .04, 3, 30, Math.PI * 1.4).rotateX(Math.PI / 2), mSandD); ring.scale.z = 2.2; ring.position.y = -i * .25; sw.add(ring); keep.add(ring); }
@@ -8607,6 +8617,7 @@ function buildCandyFactory(k = 0, seed = k) {
   // the taffy vats: a teal tank under each gap, full of bubbling purple taffy
   const bubbles = [];
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND);
+    if (dropRoom(seed)) { dropShaft(scene, a, b, ty, -8.6, 3.8, ty - 12, "#0e3a36"); return; }   // (a way down: a shaft, not a vat)
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(w + .1, 12, 12.4), new THREE.MeshToonMaterial({ color: CANDY.tealD, side: THREE.BackSide })), cx, ty - 6.1, -2.4));
     const top = new THREE.Mesh(new THREE.PlaneGeometry(w + .1, 12.4).rotateX(-Math.PI / 2), mTaffy); at(top, cx, WY, -2.4); scene.add(top);
     for (let i = 0; i < 6; i++) { const bb = new THREE.Mesh(ball(.2, 10, 8), mTaffy); bb.position.set(cx + R(-w / 2 + .2, w / 2 - .2), WY, R(-6, 3)); bb.userData.ph = rng() * 3; scene.add(bb); keep.add(bb); bubbles.push(bb); } });
@@ -9389,6 +9400,7 @@ function buildLakebed(k = 0, seed = k) {
     cr.count = n; scene.add(cr); }
   const bubbles = [];
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND);   // a sinkhole: down to a pool of wet mud
+    if (dropRoom(seed)) { dropShaft(scene, a, b, ty, -8.6, 3.8, ty - 14, "#3e2737"); return; }   // (a way down: a shaft, not a pool)
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(w + .1, 14, 12.4), mats.mudDeep), cx, ty - 7.6, -2.4));
     const pool = mk(new THREE.BoxGeometry(w + .1, .1, 12.4), null, { mat: mats.pool, ol: 0 }); at(pool, cx, Math.max(WY + .6, ty - 2.2), -2.4); scene.add(pool);
     for (let i = 0; i < 6; i++) { const bm = mk(ball(.12, 8, 6), null, { mat: mats.pool, ol: .01 }); at(bm, cx + R(-w / 2 + .2, w / 2 - .2), pool.position.y, R(-5, 2.5)); scene.add(bm); keep.add(bm); bubbles.push([bm, R(0, 3), pool.position.y]); } });
