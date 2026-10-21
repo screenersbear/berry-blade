@@ -376,7 +376,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261021b"></script>
+<script src="charkit.js?v=20261021c"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261020a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -5330,7 +5330,8 @@ function updatePlayer(dt) {
   const diving = attacking;     // punches, kicks and card moves read best side-on
   p.prof = approach(p.prof || 0, Math.max(p.onGround ? p.gaitAmt : 0, diving ? 1 : 0), dt * (diving ? 10 : 4));
   p.bodyYaw = lerp(.85, .3, p.prof);
-  const yT0 = p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, yT = p.tpose > 0 ? lerp(yT0, -Math.PI / 2, Math.min(1, p.tpose * 2.5)) : yT0;   // opening out to the T: turn to face us
+  const yT0 = p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, yT1 = p.tpose > 0 ? lerp(yT0, -Math.PI / 2, Math.min(1, p.tpose * 2.5)) : yT0;   // opening out to the T: turn to face us
+  const yT = p.eat > 0 && p.eatFar && !attacking ? lerp(yT1, -Math.PI / 2, .75) : yT1;   // (eating with the far hand, your weapon in the near one: turned to us, so the bite shows)
   p.yaw = lerp(p.yaw, yT, 1 - Math.exp(-dt * 16));
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   // lean into acceleration, rock back when braking (springy)
@@ -12071,7 +12072,24 @@ function useItem(k) {
   if (k === "fruit") { const was = p.hp; p.hp = maxHp(); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, 3); SFX.heal(true); popText(p.x, p.y - H - 30, "HEARTS FULL"); }
   else if (k === "power") { p.power = 3; sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER FULL"); }
   else { if (p.bubble) { actors.remove(p.bubble.m); p.bubble.m.geometry.dispose(); p.bubble = null; } makeBubble(p, 3); }
-  drawItems(k); if (story) writeSave();
+  startEat(p, k); drawItems(k); if (story) writeSave();
+}
+// eating what you took from your bag (the user, 2026-10-21: "characters should have an eating animation for when they consume the item"): your
+// free hand brings it up to your mouth, two bites, and it's gone. Only a look: the item's done its work already; fighting, blocking or climbing stops it
+const EAT_DUR = 1.1, _eatV = new THREE.Vector3(), _eatH = new THREE.Vector3();
+function startEat(p, k) { stopEat(p); const m = lootRig(k); m.scale.setScalar(.5); Object.assign(p, { eatM: m, eatT: 0, eat: 1, eatB: 0 }); }
+function stopEat(p) { if (!p) return; if (p.eatM) { actors.remove(p.eatM); p.eatM = null; } p.eat = 0; p.eatB = undefined; p.eatT = 0; }
+function syncEat(p, dt) {
+  if (!p || !p.eatM) return;
+  const u = (p.eatT += dt) / EAT_DUR, r = p.rig;
+  if (u >= 1 || p.dead || p.atkT >= 0 || p.block || p.combo || p.climb || p.sunk || !r || !r.hands || !r.hands.length) { stopEat(p); return; }
+  const pr = r.spec.outfit && r.spec.outfit.prop, armed = !!pr && pr.kind !== "none", far = armed && pr.side !== "near" && (pr.side === "left") === (p.face > 0);   // (is your weapon in the far hand?)
+  p.eatFar = armed && !far; p.eatB = (1 - Math.cos(4 * Math.PI * Math.min(1, u * 1.08))) / 2;   // (two bites)
+  const near = p.face > 0 ? 1 : -1, s = p.eatFar ? -near : near, h = r.hands[s < 0 ? 0 : Math.min(1, r.hands.length - 1)];
+  r.root.updateMatrixWorld(true); h.getWorldPosition(_eatV);
+  const m = p.eatM, k = u < .3 ? 1 : u < .78 ? .72 : .42; m.visible = u < .9; m.scale.setScalar(.5 * k); const hp = r.head ? r.head.getWorldPosition(_eatH) : null, b = p.eatB * .8;   // (in your hand; each bite, to your mouth: under the head's middle, out in front of it)
+  m.position.set(_eatV.x, _eatV.y + .06, s === near ? _eatV.z + .14 : Math.max(_eatV.z, (hp ? hp.z : _eatV.z) + .14)); m.rotation.y = p.face > 0 ? .4 : -.4;
+  if (hp) m.position.set(lerp(m.position.x, hp.x + p.face * .06, b), lerp(m.position.y, hp.y - .2, b), lerp(m.position.z, hp.z + .5, b));
 }
 
 // ── the hubs: each world's three vagabond beps. Their own colours and hats, world by world; what they carry, by what they do
@@ -14721,14 +14739,14 @@ function render(dt) {
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);
-  else if (hideout) { rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = true; if (pal) pal.rig.sync(pal, pal.rig, dt); syncHideoutBeps(dt);
+  else if (hideout) { rig.sync(player, rig, dt); syncEat(player, dt); rig.root.visible = rig.shadow.visible = true; if (pal) pal.rig.sync(pal, pal.rig, dt); syncHideoutBeps(dt);
     if (ej && ej.inHide && ej.st) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }   // (your partner and ally, in with you)
     if (ally && ally.inHide) [ally, ...(ally.crew || [])].forEach(m => { m.r.sync(m.st, m.r, dt); m.r.root.visible = m.r.shadow.visible = true; }); if (wild) wild.r.root.visible = wild.r.shadow.visible = false; }
   else { if (intro) intro.cast.forEach(c => { if (c.phase !== "gone") { c.r.sync(c.st, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; } });
     if (cameo) { cameo.r.sync(cameo.st, cameo.r, dt); cameo.r.root.visible = cameo.r.shadow.visible = true; }
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
     for (const q of [ally && !ally.away ? ally : null, allyHere]) if (q) [q, ...(q.crew || [])].forEach(m => m.r.sync(m.st, m.r, dt));
-    rig.sync(player, rig, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
+    rig.sync(player, rig, dt); syncEat(player, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); syncCats(dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
