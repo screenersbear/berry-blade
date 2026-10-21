@@ -4742,7 +4742,7 @@ function ejJoin() {                                  // beaten: up she gets, and
   const D = ejDef(), e = enemy, r = D.rig, st = makeState(e.x, r);
   Object.assign(st, { y: e.y, vy: 0, onGround: e.onGround, plat: e.plat, face: Math.sign(player.x - e.x) || 1, sq: -.3, sqv: 0, wave: 1 }); FLASHSET(r.mats, 0); r.root.visible = r.shadow.visible = true;
   e.ks = null; ej = { phase: "partner", st, r, t: 0, atkCd: 1.6, waveT: 1.3, hopT: 0 };
-  if (tamed && ally) allyLeave("% HEADS HOME");   // (two companions at most: with your cat along too, the ally goes)
+  if (tamed && ally) allyToCheck();   // (two companions at most: with your cat along too, the ally goes to wait at the last rest stop)
   foe = FOES[STAGES[stage].foe] || FOES[0]; enemy = makeFoeState(foe, WORLD - 360); bossIn = false; bossCue = 0; setFoeHud();
   wayCue();
   puffs(st.x, st.y - 40, 8, 40, 160); SFX.fanfare();
@@ -5566,7 +5566,7 @@ function catchCat(d) {                             // a hit, any hit: it tumbles
 function catJoin() {                               // it's with you now: the old one (if there was one) goes home
   const W0 = wild, c = W0.st, C = WILD_CATS[W0.w], old = tamed ? WILD_CATS[tamed.w].name : null;
   if (tamed) catLeave(null);
-  if (ally && ejPal()) allyLeave("% HEADS HOME");   // (two at most: Evil June and the cat stay, the ally goes)
+  if (ally && ejPal()) allyToCheck();   // (two at most: Evil June and the cat stay, the ally goes to wait at the last rest stop)
   pets.forEach(q => { q.root.visible = q.shadow.visible = false; });
   tamed = { w: W0.w, r: W0.r }; wild = null; noteCat(W0.w);
   pal = c; Object.assign(pal, { hopT: 0, pounce: null, defT: 0, sit: 0 });
@@ -5620,7 +5620,7 @@ function allyStay() {                              // a new stay in this world: 
 }
 function allyWander() {                            // now and then, as you go from room to room, each wanders on next door (never into your room, or another's)
   if (buddyAt.w !== world) return;
-  for (const id in buddyAt.rooms) { const rm = buddyAt.rooms[id]; if (rm < 0 || Math.random() > .2) continue; const q = STAGES[rm], taken = Object.values(buddyAt.rooms);
+  for (const id in buddyAt.rooms) { const rm = buddyAt.rooms[id]; if (rm < 0 || (buddyAt.stay && buddyAt.stay[id]) || Math.random() > .2) continue;   // (one waiting at a rest stop for you stays put) const q = STAGES[rm], taken = Object.values(buddyAt.rooms);
     const n = [q.next ?? rm + 1, q.prev, q.nextHi, q.up, q.down, q.below, q.climbUp && q.climbUp.to].filter(i => i !== undefined && i !== null && i !== stage && buddyOK(i) && !taken.includes(i));
     if (n.length) buddyAt.rooms[id] = n[Math.floor(Math.random() * n.length)]; }
 }
@@ -5964,10 +5964,18 @@ function allyRoom() {                              // into a room: this world's 
   allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0, crew: crewOf(A, x, st.y) }; r.root.visible = r.shadow.visible = true;
 }
 function allyJoin(A, r, st, quiet, crew) {         // it's with you now
+  if (buddyAt.stay) delete buddyAt.stay[A.id];     // (one that waited at a rest stop: free to wander again once it's left you)
   ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0, crew: crew || crewOf(A, st.x, st.y) }; allyHere = null; allyShow(ally);
   if (quiet) return;
   st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(A.crew ? A.name + ", BERRY BUDDIES, JOIN YOU!" : A.name + " THE BERRY BUDDY JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
   if (story) writeSave();
+}
+function allyToCheck() {                           // a full party and someone else joins: your ally goes to wait at the last rest stop you were at in this world
+  const a = ally; if (!a) return;                  // (the user, 2026-10-21: "send the non cat party member to a checkpoint you were at"); none yet, it heads home
+  const R = story && story.rests && story.rests[world], ck = story && story.check && story.check.w === world ? story.check.s : R && R.length ? R[R.length - 1] : null;
+  if (ck === null || ck === undefined || buddyAt.w !== world) { allyLeave("% HEADS HOME"); return; }
+  buddyAt.rooms[a.A.id] = ck; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true;   // (there it stays: no wandering off)
+  allyLeave(a.A.crew ? "% WAIT FOR YOU AT THE REST STOP" : "% WAITS FOR YOU AT THE REST STOP");
 }
 function allyLeave(msg) {                          // it heads home: off out of the picture
   if (!ally) return; const a = ally; ally = null;
@@ -12177,7 +12185,7 @@ function callCat(w) {
   const U = npcUp;
   if (tamed && tamed.w === w) { U.msg = WILD_CATS[w].name + "'S RIGHT HERE WITH YOU."; SFX.tick(); drawNpc(); return; }
   if (tamed) catLeave(null);
-  if (ally && ejPal()) allyLeave("% HEADS HOME");      // (two at most, as ever)
+  if (ally && ejPal()) allyToCheck();      // (two at most, as ever: the ally waits at the last rest stop)
   tamed = { w, r: wildRig(w) }; setupPal(); if (pal) { pal.x = clamp(player.x - player.face * 260, 60, WORLD - 60); pal.y = groundAt(pal.x) ?? player.y; }
   SFX.meow(1.2); closeNpc(); toast(WILD_CATS[w].name + " COMES RUNNING!", 3200); if (story) writeSave();
 }
