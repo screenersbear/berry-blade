@@ -9,6 +9,8 @@
 // A small button in the top-left corner pauses (Esc), or goes back on the menu screens. The pad and buttons show on the menus too (the user,
 // 2026-10-20: "make the player able to scroll through menues with virtual control arrows or actual control, not just touch screen"):
 // the d-pad moves through a menu and ✕ (or ○) picks; the menus can still be tapped directly.
+// Over the d-pad, an L2 button (the user, 2026-10-21: "a left trigger button over the d-pad on the virtual controller"): hold it and
+// the game stops with your items over it; press a button on one (✕ ○ □) to use it. It holds the / key down, as the keyboard does.
 // Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
 // Full screen: any tap asks for it where a page can have it (Android, iPad); on an iPhone, a card asks you to swipe the bars away (see below).
 // The game tells this file what's on screen through window.BERRY_UI (added to the phone build's index.html by build_phone.py).
@@ -16,8 +18,8 @@
 (() => {
   const css = `
   #touch { position: fixed; inset: 0; z-index: 60; pointer-events: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-  #touch.off .pad, #touch.off #tPad, #touch.off #tBtns { display: none; }
-  #tPad, #tBtns, #tCorner { position: absolute; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
+  #touch.off .pad, #touch.off #tPad, #touch.off #tBtns, #touch.off #tLT { display: none; }
+  #tPad, #tBtns, #tCorner, #tLT { position: absolute; pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent; }
   #tPad { left: calc(18px + env(safe-area-inset-left)); bottom: calc(18px + env(safe-area-inset-bottom)); width: 156px; height: 156px; opacity: .34; }
   #tPad svg { width: 100%; height: 100%; display: block; overflow: visible; }
   #tPad .arm { fill: rgba(255, 255, 255, .16); stroke: #fff; stroke-width: 2.5; transition: fill .06s; }
@@ -29,15 +31,18 @@
   #tBtns .b.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
   #tBtns .b svg { width: 25px; height: 25px; display: block; overflow: visible; }   /* (the PlayStation shapes, like the Backbone's buttons) */
   #tBtns .b svg * { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
-  #touch.gp #tPad, #touch.gp #tBtns { display: none; }   /* (a controller in use: no on-screen pad) */
+  #touch.gp #tPad, #touch.gp #tBtns, #touch.gp #tLT { display: none; }
+  #tLT { left: calc(66px + env(safe-area-inset-left)); bottom: calc(184px + env(safe-area-inset-bottom)); width: 60px; height: 34px; border-radius: 17px; border: 2.5px solid #fff;
+    background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center; font: 13px/1 "Bungee", sans-serif; box-sizing: border-box; padding-top: 2px; }
+  #tLT.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }   /* (a controller in use: no on-screen pad) */
   #tBtns .b i { font: 600 8px/1 "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 3px; }
   #tBtns .bY { left: 58px; top: 0; } #tBtns .bX { left: 0; top: 58px; } #tBtns .bB { left: 116px; top: 58px; } #tBtns .bA { left: 58px; top: 116px; }
   #tCorner { left: calc(12px + env(safe-area-inset-left)); top: calc(10px + env(safe-area-inset-top)); width: 44px; height: 44px; border-radius: 50%;
     border: 2px solid #fff; background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center;
     font: 16px/1 "Bungee", sans-serif; box-sizing: border-box; }
   #tCorner.hide { display: none; }
-  #tPad, #tBtns, #tCorner { transition: opacity .7s; }
-  #touch.sit #tPad, #touch.sit #tBtns, #touch.sit #tCorner { opacity: 0; pointer-events: none; }   /* (sitting in the beps' hideout: the controls fade away) */
+  #tPad, #tBtns, #tCorner, #tLT { transition: opacity .7s; }
+  #touch.sit #tPad, #touch.sit #tBtns, #touch.sit #tCorner, #touch.sit #tLT { opacity: 0; pointer-events: none; }   /* (sitting in the beps' hideout: the controls fade away) */
   #tSit { position: absolute; inset: 0; pointer-events: auto; touch-action: none; display: none; } #touch.sit #tSit { display: block; }
   #tCorner.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
   #tTurn { position: fixed; inset: 0; z-index: 90; display: none; background: #2f3b43; color: #ffde00; align-items: center; justify-content: center;
@@ -54,7 +59,7 @@
   const arm = (d, rot) => `<g transform="rotate(${rot} 78 78)"><path class="arm" data-d="${d}" d="M58 6 Q58 2 62 2 L94 2 Q98 2 98 6 L98 58 L78 78 L58 58 Z"/><path class="tri" d="M78 16 L88 30 L68 30 Z"/></g>`;
   T.innerHTML = `<div id="tSit"></div><div id="tPad"><svg viewBox="0 0 156 156">${arm("u", 0)}${arm("r", 90)}${arm("d", 180)}${arm("l", 270)}<circle cx="78" cy="78" r="9" fill="rgba(255,255,255,.3)"/></svg></div>
     <div id="tBtns"><div class="b bY" data-b="y"><svg viewBox="0 0 24 24"><path d="M12 3.5 L21.5 19.5 L2.5 19.5 Z"/></svg><i>TACKLE</i></div><div class="b bX" data-b="x"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg><i>BLOCK</i></div><div class="b bB" data-b="b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg><i>ATTACK</i></div><div class="b bA" data-b="a"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg><i>JUMP</i></div></div>
-    <div id="tCorner" class="hide">❚❚</div>`;
+    <div id="tLT">L2</div><div id="tCorner" class="hide">❚❚</div>`;
   const turn = document.createElement("div"); turn.id = "tTurn"; turn.innerHTML = "TURN YOUR PHONE SIDEWAYS<span>BERRY BLADE PLAYS IN LANDSCAPE</span>";
   const mount = () => { document.body.appendChild(T); document.body.appendChild(turn); };
   if (document.body) mount(); else addEventListener("DOMContentLoaded", mount);
@@ -92,11 +97,13 @@
   };
   const ready = () => {
     hook(document.getElementById("tPad"), padPtr, padDirs); hook(document.getElementById("tBtns"), btnPtr, btnsAt);
-    const C = document.getElementById("tCorner");
+    const C = document.getElementById("tCorner"), LT = document.getElementById("tLT");
     C.addEventListener("pointerdown", e => { e.preventDefault(); C.classList.add("on"); tap("Escape"); });
+    LT.addEventListener("pointerdown", e => { e.preventDefault(); try { LT.setPointerCapture(e.pointerId); } catch { } LT.classList.add("on"); key("Slash", true); });   // (held: the items)
+    ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => LT.addEventListener(t, () => { LT.classList.remove("on"); key("Slash", false); }));
     document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyX"); });   // sitting: a tap anywhere gets you up
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => C.addEventListener(t, () => C.classList.remove("on")));
-    ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner")) e.preventDefault(); }, { passive: false }));
+    ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner, #tLT")) e.preventDefault(); }, { passive: false }));
   };
   if (document.body) ready(); else addEventListener("DOMContentLoaded", ready);
 
@@ -161,6 +168,7 @@
     if (s === was) return; was = s;
     T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit");
     if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
+    if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); }
     const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "menu"); C.textContent = s === "play" || s === "sit" ? "❚❚" : "‹";
   }, 120);
 

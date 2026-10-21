@@ -314,6 +314,38 @@ window.BerryScore = (() => {
     { lead: "keys", pad: .014, bass: "groove", drums: "tres", arp: .015, verb: .26, gain: .9 },
     { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' back room
   ];
+  // King P's castle (original): a stately march, B-flat major
+  const MEL13 = [[0,2,65],[2,2,70],[4,4,74],[8,2,77],[10,2,74],[12,4,70],
+    [16,2,72],[18,2,74],[20,4,75],[24,2,74],[26,2,72],[28,4,70],
+    [32,2,67],[34,2,70],[36,4,74],[40,2,72],[42,2,70],[44,4,69],
+    [48,6,70],[54,2,69],[56,8,65],
+    [64,2,77],[66,2,79],[68,4,81],[72,2,79],[74,2,77],[76,4,75],
+    [80,2,74],[82,2,75],[84,4,77],[88,2,75],[90,2,74],[92,4,72],
+    [96,2,70],[98,2,72],[100,4,74],[104,2,75],[106,2,77],[108,4,79],
+    [112,6,77],[118,2,75],[120,8,74],
+    [128,4,82],[132,2,81],[134,2,79],[136,4,77],[140,4,82],
+    [144,2,84],[146,2,82],[148,2,81],[150,2,79],[152,8,81],
+    [160,4,79],[164,2,77],[166,2,75],[168,4,74],[172,4,79],
+    [176,2,77],[178,2,75],[180,4,74],[184,8,72],
+    [192,2,65],[194,2,70],[196,4,74],[200,2,77],[202,2,74],[204,4,70],
+    [208,2,72],[210,2,74],[212,4,75],[216,2,77],[218,2,79],[220,4,81],
+    [224,4,82],[228,2,81],[230,2,79],[232,4,77],[236,4,72],
+    [240,12,70],[252,4,65]];
+  const CH13 = ["Bb","Bb","Cm","F","Gm","F","Bb","F","F","Cm","Bb","F","Gm","Eb","F","Bb",
+    "Bb","Eb","F","F","Gm","Eb","F","F","Bb","Bb","Cm","F","Eb","F","Bb","Bb"];
+  const VOICE13 = { Bb: [53, 58, 62, 65], Eb: [51, 55, 58, 63], F: [53, 57, 60, 65], Gm: [55, 58, 62, 67], Cm: [55, 60, 63, 67] };
+  const ROOT13 = { Bb: 34, Eb: 39, F: 41, Gm: 43, Cm: 36 };
+  const STYLES13 = [
+    { lead: "bright", pad: .013, bass: "groove", drums: "march", arp: .018, verb: .22, gain: .93 },            // midday: up the mountain to the gate
+    { lead: "bright", pad: .013, bass: "groove", drums: "march", arp: .018, verb: .23, gain: .92 },
+    { lead: "warm", pad: .014, bass: "groove", drums: "march", arp: .016, verb: .24, gain: .9 },
+    { lead: "warm", pad: .015, bass: "tres", drums: "tres", arp: .015, verb: .27, gain: .87 },
+    { lead: "keys", pad: .016, bass: "walk", drums: "rim", arp: .012, verb: .3, gain: .82 },
+    { lead: "keys", pad: .018, bass: "walk", drums: "rim", arp: .01, verb: .34, gain: .77 },
+    { lead: "bell", pad: .02, bass: "pump", drums: "full", arp: 0, verb: .38, gain: .74, dark: true },          // night: King P on his throne
+    { lead: "bright", pad: .013, bass: "groove", drums: "march", arp: .018, verb: .22, gain: .93 },
+    { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' pineapple hut
+  ];
   const SONGS = [
     { MEL, CH, VOICE, ROOT, DARK, STYLES, bars: 16, bpm: 100, drone: 43, darkLead: { 11: -1, 4: -1, 1: -1 }, clipVar: null },
     { MEL: MEL2, CH: CH2, VOICE: VOICE2, ROOT: ROOT2, DARK: { G: "Gm", Em: "Edim", E: "E7b5" }, STYLES: STYLES2, bars: 16, bpm: 84, drone: 45, darkLead: { 11: -1, 6: -1 }, clipVar: null },
@@ -327,6 +359,7 @@ window.BerryScore = (() => {
     { MEL: MEL10, CH: CH10, VOICE: VOICE10, ROOT: ROOT10, DARK: {}, STYLES: STYLES10, bars: 16, bpm: 88, drone: 40, darkLead: {}, clipVar: null },
     { MEL: MEL11, CH: CH11, VOICE: VOICE11, ROOT: ROOT11, DARK: {}, STYLES: STYLES11, bars: 16, bpm: 120, drone: 38, darkLead: {}, clipVar: null },   // 10: Trumpeto's bazaar (original)
     { MEL: MEL12, CH: CH12, VOICE: VOICE12, ROOT: ROOT12, DARK: {}, STYLES: STYLES12, bars: 16, bpm: 112, drone: 45, darkLead: {}, clipVar: null },   // 11: Master No's casino (original)
+    { MEL: MEL13, CH: CH13, VOICE: VOICE13, ROOT: ROOT13, DARK: {}, STYLES: STYLES13, bars: 16, bpm: 104, drone: 34, darkLead: {}, clipVar: null },   // 12: King P's castle (original)
   ];
   SONGS.forEach(S => { S.LOOP = S.bars * BAR; S.MELAT = {}; S.MEL.forEach(n => (S.MELAT[n[0]] = S.MELAT[n[0]] || []).push(n)); S.clip = { buf: null, busy: false, bar0: 0, intro: 0 }; });
   const DRUMS = {

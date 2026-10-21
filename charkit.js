@@ -296,7 +296,7 @@ const PRESETS = [
       prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", size: 1 } },
     move: { set: "sword" } }),
   merge0(HUMAN_DEFAULT, { id: "doir", name: "DOIR",       // from the sheet: green dress over a dark petticoat, magenta mask, crest gem, long side ponytail
-    body: { build: "tall", head: .82 },
+    body: { build: "tall", head: 1.02, girth: 1.15, limbs: 1.3, shoulders: 1.05 },   // (fuller, closer to the sheet: the user, 2026-10-21, "less skinny")
     head: { height: 1.11, jaw: .8, chinLen: .03 },
     face: { style: "doir", chin: .14, earY: -.19, ears: .7 },
     hair: { mode: "sculpt", shell: .16, taper: .3, fringe: "doir", sides: .75, back: .85, style: "sidetail", thick: 1.2, length: 1.1, flow: 1.1, tufts: [] },
@@ -314,7 +314,7 @@ const PRESETS = [
       earStuds: { on: true, col: "#9b1091" } },
     move: { set: "kunoichi" } }),
   merge0(HUMAN_DEFAULT, { id: "noro", name: "NORO",       // from the sheet: purple coat, red tabard and two-tail scarf, blue mask, balloon pants
-    body: { build: "tall", head: .9, hands: 1.4 },
+    body: { build: "tall", head: 1.06, hands: 1.45, girth: 1.2, limbs: 1.3, shoulders: 1.12 },   // (fuller, closer to the sheet: the user, 2026-10-21, "less skinny")
     head: { height: 1.17, jaw: .78, chinLen: .05 },
     face: { style: "noro", chin: .14, earY: -.16, ears: .7 },
     hair: { mode: "sculpt", shell: .2, taper: -.6, fringe: "noro", sides: 1.05, back: .9, style: "none",
