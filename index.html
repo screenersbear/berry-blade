@@ -388,7 +388,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261022f"></script>
+<script src="charkit.js?v=20261022g"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261020a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -660,6 +660,10 @@ function setPlatforms(s) {
   LADDERS.length = 0; (S.ladders || []).forEach(([face, wall]) => LADDERS.push({ face, wall, x: face - wall * 15, top: groundAt(face + wall * 20) ?? GROUND, bot: groundAt(face - wall * 30) ?? GROUND }));   // ladders: [the cliff face's x, its side]
   if (S.upX !== undefined) { const g = groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - 360, bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
   if (S.downX !== undefined) { const w = S.downWall || -1, g = groundAt(S.downX + w * 20) ?? GROUND; LADDERS.push({ rope: "down", to: S.down, face: S.downX, wall: w, x: S.downX - w * 15, top: g, bot: g + 360 }); }
+  if (S.climbWall && S.climbUp) { const cu = S.climbUp, g = groundAt(cu.x) ?? GROUND; LADDERS.push({ wallClimb: "back", camila: true, to: cu.to, face: cu.x, wall: 0, x: cu.x, top: g - 440, bot: g }); }
+  if (S.cell && !stronghold) { const m = /^([A-D])(\d+)$/.exec(S.cell), upCell = m && "ABCD"["ABCD".indexOf(m[1]) - 1], above = upCell ? STAGES.findIndex(q => !q.arena && q.cell === upCell + m[2]) : -1;
+    if (above >= 0) [["wallL", -1], ["wallR", 1]].forEach(([k, sd]) => { if (!S[k]) return; const x = sd < 0 ? 30 : WORLD - 30, g = groundAt(x) ?? GROUND;   // (the end of the room walled off: up it into the room over it)
+      LADDERS.push({ wallClimb: "side", camila: true, to: above, face: x, wall: sd, x, top: g - 440, bot: g }); }); }
   WATER = GROUND + 46 + (S.elev || 0) * ROW_RISE;
   FLOOR_LOW = GROUND + PROFILE.reduce((m, q) => Math.max(m, q[1]), 0); SINK = Math.max(WATER, FLOOR_LOW + 46);
 }
@@ -2672,7 +2676,8 @@ function buildDeepBits(s) {
     g.add(at(mk(new THREE.BoxGeometry(9.5, 25, 2), null, { mat: mW, ol: .05 }), x, y0 + 9.5, -2.2));   // (down below the floor too: on a stepped floor it still meets the ground)
     if (indoor) for (let y = y0 + 1.4; y < y0 + 14; y += 1.8) g.add(at(mk(new THREE.BoxGeometry(9.7, .16, 2.1), null, { mat: mT, ol: .01 }), x, y, -2.2));
     else for (let y = y0 + .5; y < y0 + 13; y += .9 + R() * .8) for (let k = 0; k < 3; k++) lump(x + (R() - .5) * 9, y, -1.15 + R() * .25, .25 + R() * .35);
-    climbLedges(cu).forEach(p => { const lx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S;
+    if (S0.climbWall) for (let y = y0 + .9; y < y0 + 12; y += 1.1) lump(x + (R() - .5) * 2.4, y, -1.12, .14 + R() * .1);   // (a bare face: only a few knobs to grip, for a gauntlet)
+    if (!S0.climbWall) climbLedges(cu).forEach(p => { const lx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S;
       g.add(at(mk(new THREE.BoxGeometry(w, .38, 2.4), null, { mat: indoor ? mT : mW, ol: .04 }), lx, top - .19, -.1));
       if (indoor) [-1, 1].forEach(s => { const b = mk(new THREE.BoxGeometry(.12, 1.3, .12), null, { mat: mT, ol: .01 }); b.rotation.x = .7; at(b, lx + s * w * .3, top - .75, -.75); g.add(b); });   // braced back to the wall
       else { g.add(at(mk(new THREE.ConeGeometry(w * .45, 1.1, 5).rotateX(Math.PI), null, { mat: mW, ol: .03 }), lx, top - .9, -.6));   // the rock under it, back into the cliff
@@ -2850,7 +2855,7 @@ function setScreen(s) {                              // build stage s (its platf
     level = frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
     if (LADDERS.length) level.objs.push(...buildLadders());
-    if (STAGES[s].climbUp) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));
+    if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
     if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
@@ -4733,7 +4738,7 @@ function holeAbove(px) {                           // the room above that drops 
   const [a, b] = v.gaps.reduce((m, g) => Math.abs((g[0] + g[1]) / 2 - px) < Math.abs((m[0] + m[1]) / 2 - px) ? g : m);
   return { to: v.to, x: (a + b) / 2 };
 }
-function goRoomUp(ns, holeX) {                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
+function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out at that edge of the room above)                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
   cine = null;
   swapSlide("up", () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
@@ -4741,6 +4746,7 @@ function goRoomUp(ns, holeX) {                    // up off a climb: into the ro
     if (back) trail.pop(); else trail.push(ns);
     entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
     let ax = STAGES[ns].arriveX ?? 130, af = STAGES[ns].arriveF || 1;
+    if (edgeX !== undefined) { ax = clamp(edgeX, 90, WORLD - 90); af = edgeX < WORLD / 2 ? 1 : -1; }
     if (holeX !== undefined) { const G0 = GAPS.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => Math.abs((p[0] + p[1]) / 2 - holeX) - Math.abs((q[0] + q[1]) / 2 - holeX))[0];   // (the hole: out onto its nearer lip)
       if (G0) { const [a, b] = G0; af = holeX < (a + b) / 2 ? -1 : 1; if (af < 0 && a - 40 < 60) af = 1; if (af > 0 && b + 40 > WORLD - 60) af = -1; ax = af < 0 ? a - 40 : b + 40; } }
     const S1 = STAGES[ns], x = ax, f = af, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
@@ -5324,6 +5330,7 @@ function updatePlayer(dt) {
   const upHeld = keys.ArrowUp || keys.KeyW || pad.u;
   if (!p.climb && control && p.atkT < 0 && !p.combo && !p.tackle && !(p.ladderCd > 0) && LADDERS.length) for (const L of LADDERS) {
     if (L.rope && !ropeOpen(L)) continue;
+    if (L.camila && p.rig.id !== "camila") continue;   // (a bare wall: only her gauntlet grips it)
     const fromBot = upHeld && Math.abs(p.x - L.x) < 26 && p.y > L.top + 2 && p.y <= L.bot + 2;
     const fromTop = held.down && p.onGround && Math.abs(p.y - L.top) < 4 && Math.abs(p.x - (L.face + L.wall * 24)) < 30;
     const fromFall = L.rope === "down" && !p.onGround && p.vy > 60 && Math.abs(p.x - L.x) < 44 && p.y > L.top + 24 && p.y < L.bot - 90;   // dropping off the dock beside it: you catch it (the user, 2026-10-19: jumping down next to it, you fell)
@@ -5468,7 +5475,7 @@ function updatePlayer(dt) {
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(SINK - 6, FLOOR_LOW + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
   const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (groundAt(p.x) ?? GROUND) - 400 ? holeAbove(p.x) : null;   // (fallen in by a hole, no way back up: jumped high enough near under it)
-  if (cu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);
+  if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
   else if (hu && !stronghold && !hideout && !arena && !transit && !p.dead && !p.climb && Math.abs(p.x - hu.x) < 640) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
@@ -5506,17 +5513,20 @@ function doJump(p, mv, k, full) {                 // k: how wound up (0 a plain 
 }
 function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ climb, jump lets go; over the top (or at the foot) you step off
   const L = p.climb, upHeld = keys.ArrowUp || keys.KeyW || pad.u, dir = p.climbAuto || ((held.down ? 1 : 0) - (upHeld ? 1 : 0));   // (climbAuto: climbing on in from the room before)
-  p.x = approach(p.x, L.x, 300 * dt); p.vx = 0; p.vy = dir * 200; p.y += p.vy * dt; p.onGround = false;
-  p.climbPh += Math.abs(p.vy) * dt * .06; p.rot = 0; p.bounceT = -1; p.atkT = -1; p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt);
+  p.x = approach(p.x, L.x, 300 * dt); p.vx = 0; p.vy = dir * (L.wallClimb ? 150 : 200); p.y += p.vy * dt; p.onGround = false;
+  const ph0 = p.climbPh || 0; p.climbPh += Math.abs(p.vy) * dt * (L.wallClimb ? .045 : .06);
+  if (L.wallClimb && Math.floor(ph0 / Math.PI) !== Math.floor(p.climbPh / Math.PI)) { SFX.punch(); const H = p.rig.heightPx || 92; dust(p.x + (L.wall || 0) * 14, p.y - H * 1.05, 2, -(L.wall || 0)); shake = Math.max(shake, 1.2); }   // each grip: the gauntlet punched into the rock p.rot = 0; p.bounceT = -1; p.atkT = -1; p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt);
   if (p.vy && (p.climbT = (p.climbT || 0) - dt) <= 0) { p.climbT = .26; SFX.climb(); }
   if (p.hurtT > 0 || p.dead) p.climb = null;
+  else if (L.wallClimb && !transit && p.y <= L.top + 40 && dir < 0) { p.climb = null; p.climbAuto = 0; goRoomUp(L.to, undefined, L.wallClimb === "side" ? L.x - L.wall * 40 : undefined); }   // up off the top: on into the room above
   else if (L.rope && !transit && (L.rope === "up" ? p.y <= L.top + 60 : p.y >= L.bot - 60) && !p.climbAuto) { if (ropeOpen(L)) goRoomV(L.to, L.rope === "up"); else p.y = L.rope === "up" ? L.top + 60 : L.bot - 60; }   // a rope ladder: off the top (or the bottom) into the room above (or below)
   else if (jumpBuf > 0 && (JUMP_KEYS.some(k => keys[k]) || pad.j)) {   // jump: let go and hop off, anywhere on it (the user, 2026-10-20: "so they dont have to climb all the way up or down")
     const hd = (held.right ? 1 : 0) - (held.left ? 1 : 0), d = hd || (L.wall ? -L.wall : p.face || 1);
     p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.vy = -460; p.vx = d * 260; p.face = d; p.airJumps = 1; p.ladderCd = .45; SFX.jump(); }
   else if (p.y <= L.top) { p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.y = L.top; p.x = L.face + L.wall * 24; p.face = L.wall; p.vy = 0; p.onGround = true; p.plat = null; p.sq = -.15; p.sqv = 0; }
   else if (p.y >= L.bot) { p.climb = null; p.climbAuto = 0; p.y = L.bot; p.vy = 0; p.onGround = true; }
-  p.yaw = lerp(p.yaw, p.yaw < -Math.PI / 2 ? -1.5 * Math.PI : Math.PI / 2, 1 - Math.exp(-dt * 12));   // back to us, facing the ladder
+  if (L.wallClimb === "side") { p.face = L.wall; p.yaw = lerp(p.yaw, L.wall > 0 ? 0 : -Math.PI, 1 - Math.exp(-dt * 12)); }   // side on, facing the wall
+  else p.yaw = lerp(p.yaw, p.yaw < -Math.PI / 2 ? -1.5 * Math.PI : Math.PI / 2, 1 - Math.exp(-dt * 12));   // back to us, facing the ladder
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   spring(p, dt); updatePose(p, dt);
 }
@@ -11831,6 +11841,17 @@ function placeSecrets(W, w) {
       R0[i] = (R0[i] || []).filter(e => ex(e) < SECRET_X - 160 && !(e[2] && e[2].gap !== undefined && !(q.gaps || [])[e[2].gap])); break; }   // (none of its baddies behind the wall, nor in a hole that's been filled)
   }
 }
+// Camila climbs (the user, 2026-10-22): "once in each level, if there is a wall with platforms sticking out of it that goes up a level, remove
+// the platforms and just leave the wall". One climb of ledges a world loses them: a bare face only Camila's gauntlet can climb, her back to
+// us. Only one whose room above has another way in, so Rose isn't shut out of anything
+function placeClimbWall(W, w) {
+  if (w === 9) return; const S0 = W.stages, R = rngF(9931 + w * 17);
+  const reach = (cut) => { const adj = S0.map(() => []), two = (a, b) => { if (b === undefined || !S0[b]) return; adj[a].push(b); adj[b].push(a); };
+    S0.forEach((q, i) => { if (q.arena) return; if (!q.noRight) two(i, q.next); two(i, q.nextHi); two(i, q.up); two(i, q.down); if (q.climbUp && i !== cut) two(i, q.climbUp.to); if (q.below !== undefined && S0[q.below]) adj[i].push(q.below); });
+    const seen = new Set([0]), st = [0]; while (st.length) { const i = st.pop(); for (const j of adj[i]) if (!seen.has(j)) { seen.add(j); st.push(j); } } return seen; };
+  const all = reach(-1), L = S0.map((q, i) => i).filter(i => S0[i].climbUp && !S0[i].arena && !S0[i].secret).sort(() => R() - .5);
+  for (const i of L) { const r = reach(i); if ([...all].every(k => r.has(k))) { S0[i].climbWall = true; return; } }
+}
 function placeHub(W, w) {                            // the hub: two rooms about the middle of the map, one over the other (built places) or side by side (out in nature)
   const S0 = W.stages, R0 = W.roster, R = rngF(6607 + w * 41), deep = DEEP_CELLS(w), cell = gridCell(S0), vert = HUB_VERT.has(w), colN = q => +String(q.cell || "").slice(1) || 0;
   const ok = i => i !== undefined && plainCell(S0, R0, i, deep) && !S0[i].hill && !!(S0[i].gen || S0[i].deepNew), pairs = [];
@@ -11926,7 +11947,7 @@ function deepenWorlds() {
     S0.forEach(q => { if (q.boss && q.toWorld === undefined && !q.end && !q.arena) delete q.boss; });   // a boss waits only where there's a way out (the user, 2026-10-20: "bosses should only appear at the exit door screens")
     fillGrid(W, w); worldExits(W, w); placeRests(W, w); secondHideout(W, w); placeHub(W, w);
     (D.link || []).forEach(([uc, lc, o = {}]) => { const u = at(uc), l = at(lc); if (u < 0 || l < 0) return console.warn("deepen: no link", w, uc, lc); linkDown(S0, R0, u, l, o); });
-    gridLinks(W, w); landingLedges(W, w); placeSecrets(W, w);
+    gridLinks(W, w); landingLedges(W, w); placeSecrets(W, w); placeClimbWall(W, w);
     if (w === 0) { const q = W.stages.find(s => s.cell === "C1"); if (q) { q.plats = [...q.plats, [2060, 130, 120, "fungus2"]]; q.berry = [2120, 130]; } }   // the great tree by the wall: high up it, a berry (the user, 2026-10-20)
     (CRATE_AT[w] || []).forEach(c => { const q = S0[c[0]]; if (!q) return; const ok = x => [-80, 0, 80].every(d => stageGround(q, x + d) !== null);   // (a crate never left standing in a pit)
       if (!ok(c[1])) for (let d = 20; d < WORLD; d += 20) { const x = [c[1] - d, c[1] + d].find(v => v > 200 && v < WORLD - 200 && ok(v)); if (x !== undefined) { c[1] = x; break; } } });

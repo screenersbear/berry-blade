@@ -1597,11 +1597,18 @@ const BLOCK_DEF = { lean: .16, bodyY: -.1, armF: 1.85, elbF: 1.95, armB: 1.65, e
 // new poses (2026-10-15): climbing a ladder side-on (hands over hands, knees up in turn), the arms opening out to a T as the bubble
 // shield forms, too tired to block with it up, a wave goodbye, and the squat while a jump charges
 function climbPose(p, cat) {
+  if (!cat && p.climb && p.climb.wallClimb) return wallPose(p);
   const s = Math.sin(p.climbPh || 0), up = Math.max(0, s), dn = Math.max(0, -s);
   const T = { lean: cat ? .4 : .1, arch: cat ? .15 : 0, bodyY: -.04, headRot: .22, armF: 2.45 + .45 * s, elbF: .8 - .45 * s, armB: 2.45 - .45 * s, elbB: .8 + .45 * s,
     spF: .08, spB: .08, fNx: .17, fNy: .1 + .22 * dn, fFx: .13, fFy: .1 + .22 * up, fP: -.25 };
   if (cat) Object.assign(T, { tailBase: 1.1, tailCurl: .12, tailSwish: .25 * s, hatTilt: -.1 });
   return T;
+}
+function wallPose(p) {                             // up a bare wall (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
+  const ph = p.climbPh || 0, s = Math.sin(ph), a = Math.max(0, s), b = Math.max(0, -s), hit = Math.pow(Math.abs(Math.cos(ph)), 6);   // wall with her gauntlet ... to cling, and then climb up with the other": elbows out,
+  return { lean: .3, arch: .12, bodyY: -.16 + .03 * hit, headRot: -.1,                                            // a hunched crouch against it, one arm driving straight up into the rock as the other hauls
+    armF: 2.35 + .55 * a, elbF: 1.25 - 1.0 * a, armB: 2.35 + .55 * b, elbB: 1.25 - 1.0 * b, spF: .3, spB: .3,
+    fNx: .22, fNy: .3 + .25 * b, fFx: .16, fFy: .3 + .25 * a, fP: -.35 };
 }
 const TPOSE = { lean: 0, arch: 0, bodyY: 0, headRot: -.08, armF: 0, elbF: .04, armB: 0, elbB: .04, spF: 1.52, spB: 1.52, fNx: .1, fFx: -.1, fNy: 0, fFy: 0 };
 const TIRED_H = { lean: .62, arch: .2, bodyY: -.14, headRot: .32, armF: .78, elbF: .18, armB: .68, elbB: .18, spF: .05, spB: .05, fNx: .18, fFx: -.16 };   // bent over, hands on knees
