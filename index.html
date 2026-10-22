@@ -397,6 +397,7 @@
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
 <script src="sfx.js?v=20261020a" defer></script>
+<script src="voices.js?v=20261022a" defer></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -3089,6 +3090,23 @@ function smpPlay(k, vol, { rate = 1, delay = 0 } = {}) {
   src.buffer = L[i]; src.playbackRate.value = rate * sfxPitch() * rand(.97, 1.03); g.gain.value = vol;
   src.connect(g); g.connect(sfxBus); src.start(ac.currentTime + delay); return true;
 }
+// the heroes' voices (voices.js, CC0; the user, 2026-10-22: "license free character voices for attacking sounds and getting hurt etc."): Camila,
+// Rose and June each their own; the cats a catgirl's. One line at a time (a new one cuts the last off), the attack shouts not on every blow
+const VOICE_OF = { camila: "camila", rose: "rose", june: "june" }, vox = { state: "idle", bank: {}, last: {}, src: null };
+function voiceInit() {
+  const A = window.BERRY_VOICE; if (!A || !ac || vox.state !== "idle") return; vox.state = "loading";
+  const bytes = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
+  Promise.all(Object.keys(A).map(k => Promise.all(A[k].map(b => ac.decodeAudioData(bytes(b)))).then(bufs => { vox.bank[k] = bufs; }))).then(() => { vox.state = "ready"; }).catch(() => { vox.state = "failed"; });
+}
+function voice(kind, chance = 1) {                    // the player's own voice: "attack" | "hurt" | "jump" | "heal" | "ko"
+  if (!live() || !rig || Math.random() > chance) return; if (vox.state === "idle") voiceInit();
+  const who = rig.kind === "cat" ? "cat" : VOICE_OF[rig.id]; const L = who && vox.bank[who + "_" + kind]; if (!L || !L.length) return;
+  let i = Math.floor(Math.random() * L.length); if (L.length > 1 && i === vox.last[kind]) i = (i + 1) % L.length; vox.last[kind] = i;
+  if (vox.src) try { vox.src.stop(); } catch (e) { }
+  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = L[i]; src.playbackRate.value = rand(.98, 1.02); g.gain.value = VOICE_VOL[kind] || .1;
+  src.connect(g); g.connect(sfxBus); src.start(ac.currentTime); vox.src = src;
+}
+const VOICE_VOL = { attack: .09, hurt: .11, jump: .06, heal: .08, ko: .12 };
 const SFX = {
   meow(k = 1) { if (!live()) return; const t = ac.currentTime, o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(), p = sfxPitch() * k;   // a sliding "mi-aow": a buzzy voice through a moving vowel
     o.type = "sawtooth"; o.frequency.setValueAtTime(560 * p, t); o.frequency.linearRampToValueAtTime(820 * p, t + .14); o.frequency.linearRampToValueAtTime(500 * p, t + .5);
@@ -5096,22 +5114,29 @@ function clearSecret() { if (!secret) return; [secret.g, secret.chest && secret.
 function spawnSecret() {
   clearSecret(); const q = STAGES[stage].secret; if (!q || stronghold || hideout || arena) return;
   const k = world + ":" + stage + ":", gy = groundAt(q.x + 60) ?? GROUND; secret = { who: q.who, x: q.x, hp: itemGot(k + "wall") ? 0 : 3, g: null, chest: null, wob: 0, said: false };
-  if (secret.hp > 0) { const g = group(actors); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g;
-    if (q.who === "camila") {                        // a heap of big cracked rocks, piled up out of reach
-      for (let i = 0; i < 18; i++) { const r = .75 + (i % 3) * .18, m = mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: i % 2 ? SECRET_M.rock2 : SECRET_M.rock, ol: .04 });
-        at(m, (i % 3 - 1) * .5 + (Math.floor(i / 3) % 2) * .25, .7 + Math.floor(i / 3) * 1.35, (i % 2 ? -.35 : .3)); m.rotation.set(i * .7, i * 1.3, i * .4); g.add(m); }
-      for (let i = 0; i < 12; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.05, .55 + (i % 3) * .2, .05), SECRET_M.crack); c.position.set(-.55 + (i % 3) * .1, .8 + i * .6, .9); c.rotation.z = (i % 2 ? .5 : -.4); g.add(c); }   // the cracks: it'll give
-    } else {                                         // a thicket of tall grass and brambles, tied to stakes
-      for (let i = 0; i < 40; i++) { const h = 2.2 + (i % 5) * .45, m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });
-        at(m, (i % 6 - 2.5) * .32, h / 2 + Math.floor(i / 6) * 1.1, (i % 4 - 1.5) * .3); m.rotation.z = ((i * 37) % 9 - 4) * .05; g.add(m); }
-      [-.7, .7].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, 9, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, 4.5, .45); g.add(st); });
-      [1.4, 3.2, 5, 6.8].forEach(y => { const b = mk(new THREE.BoxGeometry(1.7, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
-    } }
-  if (!itemGot(k + "chest")) { const cx = q.x + 460, cy = groundAt(cx) ?? GROUND, g = group(actors); g.position.set(X(cx), Y(cy), -.2);   // the chest behind it
-    g.add(at(mk(new THREE.BoxGeometry(1.1, .6, .7), null, { mat: SECRET_M.wood, ol: .03 }), 0, .3, 0)); const lid = group(g, 0, .6, -.35);
-    lid.add(at(mk(new THREE.CylinderGeometry(.35, .35, 1.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), null, { mat: SECRET_M.wood, ol: .03 }), 0, 0, .35));
-    [-.35, .35].forEach(x => g.add(at(mk(new THREE.BoxGeometry(.1, .62, .72), null, { mat: SECRET_M.band, ol: .01 }), x, .31, 0)));
-    secret.chest = { g, lid, x: cx, y: cy, open: false }; }
+  if (secret.hp > 0) { const g = secretWallRig(q.who); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g; }
+  if (!itemGot(k + "chest")) { const cx = q.x + 460, cy = groundAt(cx) ?? GROUND, C = secretChestRig(); C.g.position.set(X(cx), Y(cy), -.2);   // the chest behind it
+    secret.chest = { g: C.g, lid: C.lid, x: cx, y: cy, open: false }; }
+}
+function secretWallRig(who) {                       // (built here and exported for the 3DS: pickups.js)
+  const g = group(actors);
+  if (who === "camila") {                            // a heap of big cracked rocks, piled up out of reach
+    for (let i = 0; i < 18; i++) { const r = .75 + (i % 3) * .18, m = mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: i % 2 ? SECRET_M.rock2 : SECRET_M.rock, ol: .04 });
+      at(m, (i % 3 - 1) * .5 + (Math.floor(i / 3) % 2) * .25, .7 + Math.floor(i / 3) * 1.35, (i % 2 ? -.35 : .3)); m.rotation.set(i * .7, i * 1.3, i * .4); g.add(m); }
+    for (let i = 0; i < 12; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.05, .55 + (i % 3) * .2, .05), SECRET_M.crack); c.position.set(-.55 + (i % 3) * .1, .8 + i * .6, .9); c.rotation.z = (i % 2 ? .5 : -.4); g.add(c); }   // the cracks: it'll give
+  } else {                                           // a thicket of tall grass and brambles, tied to stakes
+    for (let i = 0; i < 40; i++) { const h = 2.2 + (i % 5) * .45, m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });
+      at(m, (i % 6 - 2.5) * .32, h / 2 + Math.floor(i / 6) * 1.1, (i % 4 - 1.5) * .3); m.rotation.z = ((i * 37) % 9 - 4) * .05; g.add(m); }
+    [-.7, .7].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, 9, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, 4.5, .45); g.add(st); });
+    [1.4, 3.2, 5, 6.8].forEach(y => { const b = mk(new THREE.BoxGeometry(1.7, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
+  }
+  return g;
+}
+function secretChestRig() {
+  const g = group(actors); g.add(at(mk(new THREE.BoxGeometry(1.1, .6, .7), null, { mat: SECRET_M.wood, ol: .03 }), 0, .3, 0)); const lid = group(g, 0, .6, -.35);
+  lid.add(at(mk(new THREE.CylinderGeometry(.35, .35, 1.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), null, { mat: SECRET_M.wood, ol: .03 }), 0, 0, .35));
+  [-.35, .35].forEach(x => g.add(at(mk(new THREE.BoxGeometry(.1, .62, .72), null, { mat: SECRET_M.band, ol: .01 }), x, .31, 0)));
+  return { g, lid };
 }
 function secretHit(d, kind) {                        // a blow on the wall: only the right hero's charged combo counts, a part at a time
   const B = secret; if (!B || B.hp <= 0) return false; const p = player, c = p.combo;
@@ -5206,7 +5231,7 @@ function updateCrates(dt) {
       if (b.y >= b.gy) { b.y = b.gy; b.vy = b.vy > 200 ? -b.vy * .35 : 0; b.vx *= .6; } }
     b.g.position.set(X(b.x), Y(b.y) + .3 + (b.vy ? 0 : Math.sin(b.t * 3) * .06), 0); b.g.rotation.y = b.t * 1.6;
     if (!p.dead && Math.abs(p.x - b.x) < 34 && p.y > b.y - 70 && p.y < b.y + 40) {             // (taken even at full health: the user)
-      b.got = true; healTaken.add(b.id); actors.remove(b.g); const was = p.hp; p.hp = Math.min(maxHp(), p.hp + 1); updateHearts(true); healFx(p, 0); SFX.heal(); popText(b.x, b.y - 50, p.hp > was ? "+1 HEART" : "YUM!"); }
+      b.got = true; healTaken.add(b.id); actors.remove(b.g); const was = p.hp; p.hp = Math.min(maxHp(), p.hp + 1); updateHearts(true); healFx(p, 0); SFX.heal(); voice("heal", .7); popText(b.x, b.y - 50, p.hp > was ? "+1 HEART" : "YUM!"); }
   }
   healBerries = healBerries.filter(b => !b.got);
 }
@@ -5508,6 +5533,7 @@ function updatePlayer(dt) {
 function doJump(p, mv, k, full) {                 // k: how wound up (0 a plain jump, 1 a full second's wind-up) · full: fired on letting go, so it doesn't cut short
   p.coyote = 0; p.jumpT = time; p.bigJ = k; p.vy = -830 * JUMPK * Math.sqrt(mv.jump) * (1 + .2 * k); p.onGround = false; p.sq = .3 + .2 * k; p.sqv = 0; p.bounceT = -1; p.fullJump = full;
   dust(p.x, p.y, 6 + Math.round(k * 8));
+  if (p === player) voice("jump", k > .05 ? .8 : .3);   // (a hup now and then; a big jump nearly always)
   if (k > .05) { SFX.bigjump(k); for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; spawn("dust", X(p.x), Y(p.y) + .05, 0, V(Math.cos(a) * 4 * k + Math.cos(a), .4, Math.sin(a) * 2.5), .45, .13, { g: 0, spin: 6, drag: 3 }); } }
   else SFX.jump();
 }
@@ -5561,6 +5587,7 @@ function startStrike(p, kind, idx = 0) {
   (SFX[S.sfx] || SFX.punch)();
   if (idx >= 1) p.lastStrikeT = -9;
   const ch = p.chain && !p.combo ? p.chain.kind : null;
+  if (p === player && !p.combo && p.chain) voice("attack", idx === p.chain.list.length - 1 ? .9 : idx === 0 ? .45 : .15);   // (the finisher nearly always; now and then otherwise)
   if (ch === "up" && idx === 1 && !p.onGround) p.vy = -800;                                          // (the launch's second hit: a full jump up after them)
   if (!p.onGround && ch === "air1") { p.vx *= .3; p.vy = Math.min(p.vy, -150); }                  // air combo 1: hanging there, mostly in place
   else if (!p.onGround && (ch === "air2" || (ch === "up" && idx >= 2))) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // air combo 2, and the launch's last hit: on forward with them
@@ -6319,6 +6346,7 @@ function updateWild(dt) {
   updatePose(c, dt);
 }
 function startCombo(p, lv) {
+  if (p === player) voice("attack");                 // (letting a charge go: always)
   const list = p.rig.kind === "cat" ? KIT.CAT_CHARGE : (KIT.MOVESETS[p.rig.spec.move.set] || {}).charge || KIT.MOVESETS.brawler.charge;
   p.combo = { list, level: lv, idx: 0 }; p.comboSpan = p.onGround ? supportSpan(p) : null;
   aura.flare = .35; aura.lv = lv; SFX.release(lv); sparks(p.x, p.y - (p.rig.heightPx || 92) / 2, 6 + lv * 4); hitstop = .05; shake = Math.max(shake, 2 + lv * 2);
@@ -12301,7 +12329,7 @@ function useItem(k) {
   if (k === "fruit") { const was = p.hp; p.hp = maxHp(); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, 3); SFX.heal(true); popText(p.x, p.y - H - 30, "HEARTS FULL"); }
   else if (k === "power") { p.power = 3; sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER FULL"); }
   else { if (p.bubble) { actors.remove(p.bubble.m); p.bubble.m.geometry.dispose(); p.bubble = null; } makeBubble(p, 3); }
-  startEat(p, k); drawItems(k); if (story) writeSave();
+  startEat(p, k); drawItems(k); if (k !== "gum") voice("heal"); if (story) writeSave();
 }
 // eating what you took from your bag (the user, 2026-10-21: "characters should have an eating animation for when they consume the item"): your
 // free hand brings it up to your mouth, two bites, and it's gone. Only a look: the item's done its work already; fighting, blocking or climbing stops it
@@ -14732,7 +14760,7 @@ function hurtPlayer(d, src) {
   if (p.bubble && (p.bubble.hits || 1) > 1) { p.bubble.hits--; p.inv = .8; SFX.bubblePop(); shake = Math.max(shake, 3); sparks(p.x, p.y - (p.rig.heightPx || 92) * .5, 8); if (src) src.life = Math.min(src.life, src.t); return false; }   // (the bubblegum's: it shrinks)
   if (p.bubble) { popBubble(p); p.inv = .8; p.climb = null; if (src) src.life = Math.min(src.life, src.t); return false; }   // the bubble takes it, and pops
   if (p.tackle || (p.combo && p.combo.tackle)) {  // mid-tackle (or the charged one): it costs the heart (and a level of ATK), but no knockback, no stun: you keep going
-    p.hp = Math.max(0, p.hp - hurtK(src)); updateHearts(true); p.power = Math.max(0, (p.power || 0) - 1); p.inv = .6; p.hitFlash = .25; shake = Math.max(shake, 5); sparks(p.x, p.y - 40, 6); SFX.hurt();
+    p.hp = Math.max(0, p.hp - hurtK(src)); updateHearts(true); p.power = Math.max(0, (p.power || 0) - 1); p.inv = .6; p.hitFlash = .25; shake = Math.max(shake, 5); sparks(p.x, p.y - 40, 6); SFX.hurt(); voice(p.hp <= 0 ? "ko" : "hurt");
     if (src) src.life = Math.min(src.life, src.t);
     if (p.hp <= 0) { p.tackle = null; p.combo = null; p.dead = true; p.hurtT = 99; p.inv = 0; p.vy = -560; p.vx = d * 300; shake = 12; hitstop = .14; puffs(p.x, p.y - 40, 6, 30, 160); SFX.ko(); }
     return true;
@@ -14745,7 +14773,7 @@ function hurtPlayer(d, src) {
   p.hp = Math.max(0, p.hp - hurtK(src)); updateHearts(true); p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.tkCharge = null; p.power = Math.max(0, (p.power || 0) - 1);   // each hit costs a level of ATK power
   p.vx = d * 260; p.vy = -420; p.onGround = false; p.hurtT = .45; p.inv = 1.3; p.atkT = -1; p.bounceT = -1;   // a little bounce back (the user: no long slide)
   shake = Math.max(shake, 6); hitstop = .05; sparks(p.x, p.y - 40, 8); rumble(70, .9);
-  SFX.hurt();
+  SFX.hurt(); voice(p.hp <= 0 ? "ko" : "hurt");
   if (p.hp <= 0) { p.dead = true; p.hurtT = 99; p.inv = 0; p.vy = -560; p.vx = d * 300; shake = 12; hitstop = .14; puffs(p.x, p.y - 40, 6, 30, 160); SFX.ko(); }
   return true;
 }
