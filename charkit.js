@@ -1113,7 +1113,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
   const SR = [.056, .062, .062], SZ = [.102, .034, -.034], ka = Math.PI * 1.22, sa = Math.PI * 1.12, spikeAim = [];
   const teeth = SR.map((R, i) => {
     const sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), SZ[i]), aim = group(sp);
-    aim.add(at(P(new THREE.ConeGeometry(.032, .16, 10), M([Q.c3, Q.c2, Q.c1][i])), 0, .072, 0));
+    aim.add(at(P(new THREE.ConeGeometry(.032, .16, 10), M([Q.c3, Q.c4 || Q.c2, Q.c1][i])), 0, .072, 0));   // (the middle one the sleeve's purple, not red: the user 2026-10-22)
     const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * SZ[i] * 2.2).normalize()));
     aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: SZ[i], q }); sp.scale.setScalar(0); sp.visible = false; return sp;
   });
@@ -1825,6 +1825,7 @@ const RUN_STANCE = .3;                       // tall run, per leg: [phase, thigh
 const RUN_KEYS = [[0, .62, .1, .25], [.1, .3, .38, .05], [.2, -.1, .3, 0], [.3, -.52, .16, -.4], [.4, -.88, .32, -1.0], [.54, -.5, 1.55, -.8], [.68, .35, 2.05, -.35], [.82, 1.08, 1.15, .1], [.93, .95, .32, .3], [1, .62, .1, .25]];
 const WALK_STANCE = .6;
 const WALK_KEYS = [[0, .42, .06, .3], [.12, .28, .2, 0], [.3, 0, .08, 0], [.5, -.32, .14, -.32], [.6, -.4, .5, -.7], [.72, -.12, 1.0, -.45], [.85, .3, .78, .02], [.95, .45, .16, .3], [1, .42, .06, .3]];
+const GATHER = .18;                                   // the run's gather: how long (about two drawn frames, then into the stride)
 const CROUCH = { lean: .38, arch: .12, bodyY: -.24, fNx: .24, fFx: -.2, fNy: 0, fFy: 0, armF: .6, elbF: 1.5, armB: .4, elbB: 1.6, headRot: -.1 };
 function updatePoseHuman(p, dt) {
   const T = { ...POSE_H0 }, t = api.time, sp = Math.abs(p.vx), a = p.atkT, m = p.rig.spec.move, Bd = p.rig.spec.body;
@@ -1934,6 +1935,17 @@ function updatePoseHuman(p, dt) {
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
     const BB = p.block && a < 0 ? { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }.blade : undefined, bl = BB !== undefined ? BB : ST && ST.blade;
     if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
+  }
+  // starting to run: a gather before the first stride (the user, 2026-10-22: "bring their torso up and forward and almost step up before
+  // crouching down into the full run, almost like winding it up"): up onto the toes leaning in, arms drawn back, then down into the run
+  if (moving && !p.wasMoving && p.gaitAmt < .35 && a < 0) p.gatherT = 0;
+  p.wasMoving = moving;
+  if (p.gatherT != null) {
+    p.gatherT += dt; const u = p.gatherT / GATHER;
+    if (u >= 1 || !moving || a >= 0) p.gatherT = null;
+    else { const up = u < .4 ? Math.sin(u / .4 * Math.PI / 2) : Math.cos((u - .4) / .6 * Math.PI / 2), down = u < .4 ? 0 : Math.sin((u - .4) / .6 * Math.PI);
+      o.bodyY += .07 * up - .15 * down; o.lean += .2 * up + .32 * down; o.arch -= .06 * up; o.headRot -= .06 * up;
+      o.armF = lerp(o.armF, -.55, up * .6); o.armB = lerp(o.armB, .65, up * .6); o.fNy += .07 * up * Bd.legs; }
   }
   tackleOver(p, o, false);
   if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) o[key] = lerp(o[key], TKDIG_H[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held

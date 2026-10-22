@@ -388,7 +388,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261021d"></script>
+<script src="charkit.js?v=20261022a"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261020a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -610,9 +610,10 @@ function clockEnter(s) {
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
 let bossDown = false;                              // this stay: the world's boss is beaten (so it isn't waiting at its other way out too)
-let koStay = 0, koScr = null;                       // knock-outs this stay (each costs the uprising one point less, down to 2) · the black screen up
+let koStay = 0, koScr = null; const koRoom = new Map();                       // knock-outs this stay (each costs the uprising one point less, down to 2) · the black screen up
 function koShow() {                                 // knocked out in the story: the uprising loses 5%, every time (the user, 2026-10-20), on a black screen, then the room again
-  const pen = upOn(world) && !freedNow() ? 5 : 0; koStay++;
+  const kk = world + ":" + stage; koRoom.set(kk, (koRoom.get(kk) || 0) + 1);   // (the user 2026-10-22: lose 5 times in the same room and further losses there cost nothing; never below 0)
+  const pen = upOn(world) && !freedNow() && koRoom.get(kk) <= 5 ? 5 : 0; koStay++;
   if (pen) { const U = upStore(); U[world] = Math.max(0, (U[world] || 0) - upGoal(world) * pen / 100); }
   modalKind = "ko"; modalOpen = true; koScr = { t0: performance.now(), timer: setTimeout(() => onReset(), 2800) };
   $("koSub").textContent = pen ? `UPRISING −${pen}% · NOW ${Math.floor(upPct(world))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");
@@ -2791,6 +2792,10 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
     const dx = tx - s.x; s.campT = (s.campT || 0) + dt;
     if ((Math.abs(dx) > 10 || !s.onGround) && s.campT < 4 && s.y < WATER) {   // on its way over (down off a ledge first)
       if (s.onGround && s.plat) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }
+      else if (s.onGround && Math.abs(dx) > 40 && !footAhead(s.x, Math.sign(dx) * 40)) {   // a pit on the way: hop it (too wide: it's just there, by the fire), never into it (the user 2026-10-22)
+        const land = gapEnd(s.x, Math.sign(dx)); if (land === null) { s.campT = 4; return true; }
+        const T = .62; s.vy = -GRAV * T / 2; s.vx = (land - s.x) / T; s.onGround = false; s.face = Math.sign(dx); s.campHop = true; return true; }
+      if (s.onGround) s.campHop = false; else if (s.campHop) return true;   // (mid-hop over it: keep the hop's speed)
       s.vx = approach(s.vx, Math.sign(dx) * Math.min(340, Math.abs(dx) * 5 + 40), 1800 * dt); s.face = Math.sign(dx) || s.face; s.sprint = false; return true;
     }
     s.sitAt = C; s.campT = 0; s.x = tx; s.y = groundAt(tx) ?? s.y; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
@@ -3476,6 +3481,7 @@ fillHearts(3);
 // June (and anyone with her sword): the blade's pink bar in three parts (one per heart), the red/green/blue notches, the ATK teeth along its
 // back (tip first). Chase: his gauntlet, hand up, a ring per heart, white once it's lost, the ATK spikes on his knuckles (by the thumb first)
 const weaponEl = document.getElementById("weapon"); let weaponKey = "", weaponT = 0;
+// (the gauntlet's a left hand: its thumb on the right, the user 2026-10-22; the ATK spikes from the thumb's side, the middle one the sleeve's purple life ring, not red)
 function weaponSvg(r, hp, pow) {
   const Q = r.spec.outfit.prop;
   if (Q.kind === "sword") {
@@ -3495,8 +3501,8 @@ function weaponSvg(r, hp, pow) {
   return `<svg viewBox="18 ${cy - 82} 104 ${350 - (cy - 82)}">
     <path d="M26 346 L114 346 L93 264 L47 264 Z" fill="${Q.main}"/>${[0, 1, 2, 3].map(k => `<path d="M${36 + k * 21} 346 L${43 + k * 21} 346 L${56 + k * 9} 264 L${52 + k * 9} 264 Z" fill="${Q.trim}"/>`).join("")}
     ${cols.map((c, i) => `<rect x="38" y="${263 - (i + 1) * 17 + 1}" width="64" height="14" rx="7" fill="${i < hp ? c : "#ffffff"}"/>`).join("")}
-    ${[-34, -12, 10, 32].map((a, i) => finger(a, 44 - Math.abs(i - 1.5) * 6, i < 3 && pow > i ? [Q.c3, Q.c2, Q.c1][i] : "")).join("")}
-    <g transform="rotate(-70 70 ${cy})"><rect x="63" y="${cy - 52}" width="14" height="34" rx="7" fill="#e3141c"/></g>
+    ${[-34, -12, 10, 32].map((a, i) => finger(a, 44 - Math.abs(i - 1.5) * 6, i > 0 && pow > 3 - i ? [Q.c3, Q.c4 || Q.c2, Q.c1][3 - i] : "")).join("")}
+    <g transform="rotate(70 70 ${cy})"><rect x="63" y="${cy - 52}" width="14" height="34" rx="7" fill="#e3141c"/></g>
     <circle cx="70" cy="${cy}" r="32" fill="${Q.orb}"/><circle cx="70" cy="${cy}" r="13" fill="#8e0008"/><circle cx="66" cy="${cy - 4}" r="21" fill="none" stroke="#fff" stroke-width="5" opacity=".95"/><circle cx="58" cy="${cy - 13}" r="4" fill="#fff"/></svg>`;
 }
 function syncWeapon(dt) {
@@ -4664,7 +4670,7 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
     for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null) && !CEILS.some(([c0, c1]) => v > c0 - 50 && v < c1 + 50)); if (c !== undefined) { x = c; break; } }
     const gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy - 430, vx: 0, vy, face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
-      inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
+      safeT: 1, safe: { x, y: gy, plat: null } });   // (in a new room: a moment's protection, not shown: no blink, the user 2026-10-22)
     if (pal) Object.assign(pal, { x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
@@ -4691,7 +4697,7 @@ function goRoomUp(ns, holeX) {                    // up off a climb: into the ro
       if (G0) { const [a, b] = G0; af = holeX < (a + b) / 2 ? -1 : 1; if (af < 0 && a - 40 < 60) af = 1; if (af > 0 && b + 40 > WORLD - 60) af = -1; ax = af < 0 ? a - 40 : b + 40; } }
     const S1 = STAGES[ns], x = ax, f = af, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
     Object.assign(player, { x: rx, y: gy + 180, vx: f * 120, vy: -1200, fullJump: true, jumpT: time, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
-      inv: Math.max(player.inv || 0, 1), safe: { x, y: gy, plat: null } });
+      safeT: 1, safe: { x, y: gy, plat: null } });   // (in a new room: a moment's protection, not shown: no blink, the user 2026-10-22)
     if (pal) Object.assign(pal, { x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
@@ -4997,7 +5003,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   const done = fillRoom(); maybeSkirmish(done);                         // the berry baddies first; on a boss stage the boss drops in once they're popped
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
   const fresh = !done && !roomsSeen.has(stage); roomsSeen.add(stage);
-  if (fresh) { player.hp = maxHp(); player.inv = 1; } updateHearts(false);
+  if (fresh) { player.hp = maxHp(); player.safeT = 1; } updateHearts(false);
   wildRoom(fresh, back);                                              // (a wild cat: resting here, or still running on ahead of you)
   allyWander(); allyRoom();                                           // (this world's berry buddies, if one's in here; they wander now and then)
   setFoeHud();
@@ -5211,7 +5217,7 @@ function updatePlayer(dt) {
   const p = player;
   p.dizzy = Math.max(0, (p.dizzy || 0) - dt);
   const ax = ((held.right ? 1 : 0) - (held.left ? 1 : 0)) * (p.dizzy > 0 ? -1 : 1);   // (dizzy: left and right swapped)
-  p.inv = Math.max(0, p.inv - dt); p.stompGrace = Math.max(0, p.stompGrace - dt);
+  p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt); p.stompGrace = Math.max(0, p.stompGrace - dt);
   p.hurtT = Math.max(0, p.hurtT - dt);
   jumpBuf -= dt; atkBuf -= dt;
   p.calmT = Math.max(0, (p.calmT || 0) - dt); p.ladderCd = Math.max(0, (p.ladderCd || 0) - dt);
@@ -5403,7 +5409,7 @@ function doJump(p, mv, k, full) {                 // k: how wound up (0 a plain 
 function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ climb, jump lets go; over the top (or at the foot) you step off
   const L = p.climb, upHeld = keys.ArrowUp || keys.KeyW || pad.u, dir = p.climbAuto || ((held.down ? 1 : 0) - (upHeld ? 1 : 0));   // (climbAuto: climbing on in from the room before)
   p.x = approach(p.x, L.x, 300 * dt); p.vx = 0; p.vy = dir * 200; p.y += p.vy * dt; p.onGround = false;
-  p.climbPh += Math.abs(p.vy) * dt * .06; p.rot = 0; p.bounceT = -1; p.atkT = -1; p.inv = Math.max(0, p.inv - dt);
+  p.climbPh += Math.abs(p.vy) * dt * .06; p.rot = 0; p.bounceT = -1; p.atkT = -1; p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt);
   if (p.vy && (p.climbT = (p.climbT || 0) - dt) <= 0) { p.climbT = .26; SFX.climb(); }
   if (p.hurtT > 0 || p.dead) p.climb = null;
   else if (L.rope && !transit && (L.rope === "up" ? p.y <= L.top + 60 : p.y >= L.bot - 60) && !p.climbAuto) { if (ropeOpen(L)) goRoomV(L.to, L.rope === "up"); else p.y = L.rope === "up" ? L.top + 60 : L.bot - 60; }   // a rope ladder: off the top (or the bottom) into the room above (or below)
@@ -5422,7 +5428,8 @@ const SHIELD_M = new THREE.ShaderMaterial({ transparent: true, depthWrite: false
   fragmentShader: `uniform float uT; varying vec3 vN; varying vec3 vV; void main() { float f = 1.0 - abs(dot(vN, vV)); float rim = pow(f, 2.4);
     float hue = .5 + .5 * sin(f * 9.0 + uT * 2.0); vec3 c = mix(vec3(1.0, .45, .78), vec3(1.0, .72, .92), hue); float shine = smoothstep(.93, .99, dot(vN, normalize(vec3(-.45, .6, .65))));
     gl_FragColor = vec4(mix(c, vec3(1.0), rim * .5 + shine), .13 + rim * .62 + shine * .7); }` });
-function makeBubble(p, hits = 1) {                  // (hits: the bubblegum's takes three, three times the size at first, shrinking back with each)
+const GUM_GROW = .22;                               // each hit the bubblegum's bubble has left: this much bigger (3 hits: 1.44× the plain bubble)
+function makeBubble(p, hits = 1) {                  // (hits: the bubblegum's takes three, a bit bigger at first, shrinking back with each)
   if (p.bubble) return;
   const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), SHIELD_M); m.renderOrder = 5; actors.add(m);
   p.bubble = { m, t: 0, hits, k: hits }; if (hits === 1) p.tpose = 1; SFX.bubble(); sparks(p.x, p.y - (p.rig.heightPx || 92) * .5, hits > 1 ? 14 : 6);
@@ -5437,8 +5444,8 @@ function popBubble(p) {
 function syncBubble(dt) {
   const p = player, B = p && p.bubble; SHIELD_M.uniforms.uT.value = time; if (!B) return;
   B.t += dt; const H = (p.rig.heightPx || 92) * S, u = Math.min(1, B.t / .4), pop = u < 1 ? 1 + Math.sin(u * Math.PI) * .25 - (1 - u) * (1 - u) * .9 : 1;
-  B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const r = H * .64 * pop * (B.k || 1), w = Math.sin(time * 5.5) * .035;
-  B.m.position.set(X(p.x), Y(p.y) + H * .5, p.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;
+  B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const big = 1 + ((B.k || 1) - 1) * GUM_GROW, r = H * .64 * pop * big, w = Math.sin(time * 5.5) * .035;   // (the bubblegum's: a bit bigger than the plain one, not three times: the user 2026-10-22)
+  B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0);   // (sits on the ground like the plain one, not sunk into it) B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;
 }
 function startStrike(p, kind, idx = 0) {
   const S = KIT.STRIKES[kind];
@@ -5462,6 +5469,7 @@ function startCatMove(p, kind, idx = 0) {   // Tocsin's air attacks and charged 
 }
 const startMove = (p, kind, idx = 2) => p.rig.kind === "cat" ? startCatMove(p, kind, idx) : startStrike(p, kind, idx);
 function blockHit(p, d) {                  // a blocked hit: pushed back a little, the shield flashes, clang
+  p.blockHold = 0;                            // (and it knocks you out of opening into the bubble: start that again. the user 2026-10-22)
   p.inv = .3; p.vx = d * 170; guardFx.hit = .25; hitstop = .03; shake = Math.max(shake, 2);
   SFX.block(); sparks(p.x - d * 30, p.y - (p.rig.heightPx || 92) * .55, 5);
   bounceOff(p, d);
@@ -5519,8 +5527,16 @@ function updatePal(dt) {
     }
     if (q.onGround && P2.t > .12) q.pounce = null;
   } else if (q.onGround) {                       // follow: trot to a spot just behind, run to catch up, hop up after you, drop down after you
-    const want = p.x - p.face * 75, dx = want - q.x, sp = far > 220 ? 500 : 370;
+    const want = p.x - p.face * 75, dx = want - q.x, sp = far > 220 ? 500 : 370, dir = Math.sign(dx) || q.face;
     q.vx = approach(q.vx, Math.abs(dx) > 18 ? Math.sign(dx) * Math.min(sp, Math.abs(dx) * 6) : 0, 1800 * dt);
+    if (Math.abs(dx) > 18 && !q.plat && !footAhead(q.x, dir * 40) && q.hopT <= 0) {   // a pit (or the water) ahead: over it, never into it (the user 2026-10-22)
+      const land = gapEnd(q.x, dir), gy = groundAt(p.x);
+      if (land !== null) { const T = .62; q.vy = -GRAV * T / 2; q.vx = (land - q.x) / T; q.onGround = false; q.hopT = .5; q.sq = .2; q.sqv = 0; }
+      else if (p.onGround && gy !== null && Math.abs(p.x - q.x) < 700) {   // too wide to clear in a hop: one big bound to you
+        const tx = p.x - dir * 40, T = clamp(Math.abs(tx - q.x) / 650, .62, 1.1); q.vx = (tx - q.x) / T; q.vy = (p.y - q.y) / T - GRAV * T / 2;
+        q.onGround = false; q.plat = null; q.hopT = .5; q.sq = .25; q.sqv = 0; q.face = dir; }
+      else q.vx = 0;                             // (you're in the air over it: it waits at the edge)
+    }
     q.face = Math.abs(q.vx) > 25 ? Math.sign(q.vx) : Math.sign(p.x - q.x) || q.face;
     q.hopT -= dt;
     if (p.onGround && q.y - p.y > 40 && far < 200 && q.hopT <= 0) { const hh = q.y - p.y + 50; q.vy = -Math.sqrt(2 * GRAV * hh); q.vx = clamp((p.x - q.x) / .5, -520, 520); q.onGround = false; q.plat = null; q.hopT = .5; q.sq = .2; q.sqv = 0; }
@@ -5539,8 +5555,8 @@ function updatePal(dt) {
   updatePose(q, dt);
 }
 // ── wild cats (the user, 2026-10-20). One in every world (not the beach), waiting in a random room at golden hour, blue hour or night
-// (which of the three is rolled each stay). Walk in and it startles and bolts; from then on it keeps a room ahead of you, and you've 5 rooms
-// to land a hit on it: any hit catches it. Then it's yours: it follows you and fights beside you like Luna, on into the next worlds, till
+// (which of the three is rolled each stay). Walk in and it startles and bolts round the room: any hit catches it. It never leaves its room
+// (the user, 2026-10-22: "make sure cats stay on one screen only"): go and it's back at its spot when you return, all this stay. Then it's yours: it follows you and fights beside you like Luna, on into the next worlds, till
 // you're knocked out, take a world from the map, or tame another (that one goes home). Miss it in 5 rooms and it's gone till your next stay
 // in that world. For now they're all cats, a different iconic coat in each world (other kinds of pet later). Names: my picks, easy to change
 const WILD_CATS = [
@@ -5587,26 +5603,27 @@ function wildClear() { if (wild && !(tamed && tamed.r === wild.r)) wild.r.root.v
 function strayClear() { strays.forEach(s => { if (!(tamed && tamed.r === s.r)) s.r.root.visible = s.r.shadow.visible = false; }); strays = []; }
 function catHud(on) {
   const el = $("catHud"); if (!on || !catRun) { el.classList.add("hidden"); return; }
-  const left = CAT_ROOMS - catRun.rooms + 1; $("catName").textContent = "CATCH " + WILD_CATS[catRun.w].name + "!";
-  $("catPaws").innerHTML = Array.from({ length: CAT_ROOMS }, (_, i) => `<svg viewBox="0 0 20 20" class="${i < left ? "" : "used"}">${PAW}</svg>`).join("");
+  $("catName").textContent = "CATCH " + WILD_CATS[catRun.w].name + "!"; $("catPaws").innerHTML = "";   // (no rooms to count down any more: it stays in its room)
   el.classList.remove("hidden");
 }
-function wildRoom(fresh, back) {                   // into a room: the cat that's waiting here, or the one you're chasing (always a room ahead of you)
+function wildRoom(fresh, back) {                   // into a room: the cat that's waiting here (or back in its own room: there again, at its spot)
   strayClear(); wildClear();
-  if (!catRun || stronghold || hideout || opening || world === 9) return;
-  if (catRun.phase === "chase") { if (++catRun.rooms > CAT_ROOMS) return catAway(); wildSpawn(true); catHud(true); return; }
+  if (!catRun || stronghold || hideout || opening || world === 9) { catHud(false); return; }
+  if (catRun.phase === "done") return;
+  if (catRun.room !== undefined) { const home = catRun.room === stage; if (home) wildSpawn(false, catRun.x); catHud(home && catRun.phase === "chase"); return; }   // (it's found its room: there and nowhere else)
   if (catRun.phase !== "wait" || !fresh || !catRoomOK(stage) || catKind(hour) !== catRun.kind) return;
   const c0 = colOf(stage); let left = 0;           // a fair pick among this hour's columns still to come (that have a room it could be in)
   for (let c = c0; c <= COLS; c++) { const d = (dayClock - 1 + (c - c0)) % COLS + 1; if (catKind(clockHour(d)) === catRun.kind && STAGES.some((q, i) => colOf(i) === c && catRoomOK(i))) left++; }
   if (Math.random() * Math.max(1, left) < 1) wildSpawn(false);
 }
 const solidAt = x => x > 60 && x < WORLD - 60 && groundAt(x) !== null && !GAPS.some(([a, b]) => x > a - 30 && x < b + 30);
-function wildSpawn(chasing) {
+function wildSpawn(chasing, at) {
   const r = wildRig(world), fwd = entrySide === "right" ? -1 : 1;   // the way on: away from where you came in
-  let x = clamp(player.x + fwd * (chasing ? rand(560, 780) : rand(640, 820)), 200, WORLD - 200);
+  let x = at ?? clamp(player.x + fwd * (chasing ? rand(560, 780) : rand(640, 820)), 200, WORLD - 200);
   for (let k = 0; k < 60 && !solidAt(x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on firm ground, not over the water)
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: -fwd, sit: chasing ? 0 : 1, hopT: 0 });
-  if (!chasing && Math.random() < .45) { const P = PLATFORMS.find(q => q.w >= 80 && Math.abs(q.x + q.w / 2 - x) < 520 && (q.x + q.w / 2 - player.x) * fwd > 360 && st.y - q.y > 60 && st.y - q.y < 420); if (P) Object.assign(st, { x: P.x + P.w / 2, y: P.y, plat: P }); }   // (now and then napping up on a ledge)
+  if (catRun) { catRun.room = stage; catRun.x = x; }   // (its room, and its spot in it)
+  if (!chasing && at === undefined && Math.random() < .45) { const P = PLATFORMS.find(q => q.w >= 80 && Math.abs(q.x + q.w / 2 - x) < 520 && (q.x + q.w / 2 - player.x) * fwd > 360 && st.y - q.y > 60 && st.y - q.y < 420); if (P) Object.assign(st, { x: P.x + P.w / 2, y: P.y, plat: P }); }   // (now and then napping up on a ledge)
   st.yaw = fwd > 0 ? -Math.PI + .5 : -.5;
   wild = { w: world, r, st, phase: chasing ? "flee" : "rest", t: 0, fwd, dodgeT: .6, leapT: 0, clearT: 0 };
   r.root.visible = r.shadow.visible = true; if (chasing) puffs(x, st.y - 20, 3, 20, 80);
@@ -5615,14 +5632,14 @@ const wildCatchable = () => wild && ["rest", "startle", "flee", "leave"].include
 function catStartle() {                            // you've walked in: up it jumps, fur on end, and it's off
   const W0 = wild, c = W0.st; W0.phase = "startle"; W0.t = 0; c.sit = 0; c.vy = -560; c.vx = 0; c.onGround = false; c.plat = null; c.sq = -.35; c.sqv = 0; c.face = -Math.sign(player.x - c.x) || c.face;
   glyph(BANG_MAT || (BANG_MAT = glyphMat("!", "#ffd203")), X(c.x), Y(c.y - 90), .4, V(0, 1.1, 0), .9, .6); SFX.hiss(); dust(c.x, c.y, 4);
-  catRun.phase = "chase"; catRun.rooms = 1; catHud(true);
+  catRun.phase = "chase"; catHud(true);
 }
 function catAway() {                               // five rooms and you never touched it: gone, till your next stay in this world
   if (!catRun) return; const nm = WILD_CATS[catRun.w].name; catRun.phase = "done"; catHud(false); wildClear(); toast(nm + " GOT AWAY");
 }
 function catchCat(d) {                             // a hit, any hit: it tumbles, lands, and it's yours
   const W0 = wild; if (!wildCatchable()) return false; const c = W0.st;
-  W0.phase = "caught"; W0.t = 0; c.sit = 0; c.vx = d * 320; c.vy = -520; c.onGround = false; c.plat = null; c.sq = .3; c.sqv = 0; c.hurtT = .45;   // (it flashes and flinches)
+  W0.phase = "caught"; W0.t = 0; c.sit = 0; c.vx = d * 320; c.vy = -520; if (c.onGround) catSafe(c); c.onGround = false; c.plat = null; c.sq = .3; c.sqv = 0; c.hurtT = .45;   // (it flashes and flinches)
   if (c.x < 40 || c.x > WORLD - 40) c.x = clamp(c.x, 40, WORLD - 40);
   hitstop = Math.max(hitstop, .1); shake = Math.max(shake, 3); puffs(c.x, c.y - 30, 5, 30, 140); sparks(c.x - d * 12, c.y - 34, 10); SFX.hit(1, 0); SFX.meow(1.15);   // (a hit you can see: the user, 2026-10-20)
   if (catRun) catRun.phase = "done"; catHud(false); return true;
@@ -5643,10 +5660,7 @@ function catLeave(msg) {                           // your cat goes home: it run
   else { r.root.visible = r.shadow.visible = false; }
   if (q) pal = null; tamed = null; if (msg) toast(msg.replace("%", nm)); if (story) writeSave();
 }
-function catsOnKO() {                              // knocked out: your cat stays with you (the user, 2026-10-20); one you were chasing gets away
-  const chased = catRun && catRun.phase === "chase" ? WILD_CATS[catRun.w].name : null;
-  if (chased) { catRun.phase = "done"; catHud(false); if (wild && wildCatchable()) { wild.phase = "leave"; wild.t = 0; } toast(chased + " GOT AWAY", 3200); }
-}
+function catsOnKO() { }                            // knocked out: your cat stays with you (the user, 2026-10-20); one you were chasing stays in its room (2026-10-22)
 function updateStrays(dt) {
   strays = strays.filter(s => { const q = s.st; s.t += dt; q.vx = approach(q.vx, s.dir * 430, 2400 * dt); q.face = s.dir; q.x += q.vx * dt; q.vy = Math.min(q.vy + GRAV * dt, 1100); q.y += q.vy * dt;
     const gy = groundAt(q.x); if (gy !== null && q.y >= gy) { q.y = gy; q.vy = 0; q.onGround = true; } q.yaw = lerp(q.yaw, s.dir > 0 ? -.3 : -Math.PI + .3, 1 - Math.exp(-dt * 10)); spring(q, dt); updatePose(q, dt);
@@ -6120,6 +6134,10 @@ function gapEnd(x, dir) {                        // the far side of the water ah
   for (; k <= 16; k++) { const xx = x + dir * k * 24; if (groundAt(xx) !== null && groundAt(xx + dir * 24) !== null) return Math.abs(xx - x) < 360 ? xx + dir * 30 : null; }
   return null;
 }
+function catSafe(c) {                            // a cat's jump (c.vx, c.vy set) that would come down over a pit: stretched or shortened onto firm ground (the user 2026-10-22: cats always clear the holes)
+  const T = 2 * Math.max(0, -c.vy) / GRAV, x1 = c.x + c.vx * T; if (T <= 0 || solidAt(x1)) return;
+  for (let k = 1; k <= 12; k++) for (const s of [Math.sign(c.vx) || 1, -(Math.sign(c.vx) || 1)]) { const xx = x1 + s * k * 30; if (solidAt(xx)) { c.vx = clamp((xx - c.x) / T, -760, 760); return; } }
+}
 function catLeap(c, tx, ty) {                    // a leap that comes down on (tx, ty): up over it and down on it
   const up = Math.max(30, c.y - ty + 40), fall = ty - (c.y - up), T = Math.sqrt(2 * up / GRAV) + Math.sqrt(2 * Math.max(4, fall) / GRAV);
   c.vy = -Math.sqrt(2 * GRAV * up); c.vx = clamp((tx - c.x) / T, -720, 720); c.onGround = false; c.plat = null; c.sq = .25; c.sqv = 0; c.face = Math.sign(tx - c.x) || c.face;
@@ -6134,7 +6152,7 @@ function catLedge(c, dir, px, on) {               // a ledge to leap to: ahead o
 }
 function updateWild(dt) {
   const W0 = wild; if (!W0) return; const c = W0.st, p = player;
-  if (stronghold) { if (catRun && catRun.phase === "chase") { catRun.phase = "done"; catHud(false); } wildClear(); return; }   // (down a hatch: it doesn't follow)
+  if (stronghold) { catHud(false); wildClear(); return; }   // (down a hatch: it doesn't follow, it stays in its room)
   W0.t += dt; W0.dodgeT -= dt; W0.leapT -= dt; W0.perchT = (W0.perchT || 0) - dt; if (exitOpen) W0.clearT += dt;
   const dx = c.x - p.x, dist = Math.abs(dx);
   if (W0.phase === "rest") { c.vx = 0; c.face = -W0.fwd; if (W0.t > 1.4 || dist < 520) catStartle(); }
@@ -6144,9 +6162,9 @@ function updateWild(dt) {
       let dir = Math.sign(dx) || W0.fwd; const blocked = (dir > 0 && c.x > WORLD - 170) || (dir < 0 && c.x < 170);
       const sp = blocked && dist >= 280 ? 0 : dist < 230 ? CAT_DASH : dist < 440 ? CAT_RUN : 0;   // (backed into a corner: it waits there, watching)
       if ((blocked || (sp && !footAhead(c.x, dir * 50) && gapEnd(c.x, dir) === null)) && dist < 280 && W0.leapT <= 0 && !p.dead) {   // cornered: right over your head
-        c.vy = -840; c.vx = -dir * 540; c.onGround = false; c.plat = null; W0.leapT = 1.3; c.face = -dir; c.sq = .25; c.sqv = 0; SFX.jump();
+        c.vy = -840; c.vx = -dir * 540; catSafe(c); c.onGround = false; c.plat = null; W0.leapT = 1.3; c.face = -dir; c.sq = .25; c.sqv = 0; SFX.jump();
       } else if (p.atkT >= 0 && p.atkT < .12 && dist < 170 && Math.sign(dx) === p.face && W0.dodgeT <= 0 && Math.random() < .6) {   // your swing coming: a hop away
-        c.vy = -560; c.vx = dir * 430; c.onGround = false; c.plat = null; W0.dodgeT = 1.1; c.sq = .2; c.sqv = 0;
+        c.vy = -560; c.vx = dir * 430; catSafe(c); c.onGround = false; c.plat = null; W0.dodgeT = 1.1; c.sq = .2; c.sqv = 0;
       } else if (W0.perchT <= 0 && !p.dead && (sp || dist < 560) && (!c.plat || (dir > 0 ? c.plat.x + c.plat.w - c.x : c.x - c.plat.x) < 70) && (W0.ledge = catLedge(c, dir, p.x, c.plat))) {   // up onto a ledge (or on to the next one): cats like it high (the user, 2026-10-20)
         catLeap(c, W0.ledge.tx, W0.ledge.ty); W0.perchT = .8 + Math.random() * .7; SFX.jump();
       } else if (sp && !footAhead(c.x, dir * 50) && !c.plat) {      // water (or a drop) ahead: bound over it
@@ -6156,7 +6174,7 @@ function updateWild(dt) {
       else { c.vx = approach(c.vx, 0, 1800 * dt); c.face = -dir; }  // far enough: it stops and watches you
       if (c.plat && dist < 200 && Math.abs(p.y - c.y) < 30) { c.dropPlat = c.plat; c.dropT = .3; c.onGround = false; c.vy = 140; c.y += 2; c.vx = dir * 300; }   // you're up here too: off it hops
     }
-    if ((W0.clearT > 3.5 || W0.t > 40) && !p.dead) { W0.phase = "leave"; W0.t = 0; }   // the room's clear (or it's had enough): on it goes, ahead of you
+    // (it doesn't run on out of the room any more: it stays here till it's caught, the user 2026-10-22)
   } else if (W0.phase === "leave") {
     const dir = W0.fwd;
     if (c.onGround) {
@@ -6172,7 +6190,7 @@ function updateWild(dt) {
   W0.bumpT = (W0.bumpT || 0) - dt;
   if (wildCatchable() && W0.phase !== "caught" && !p.dead && !p.climb && W0.bumpT <= 0 && Math.abs(p.x - c.x) < 38 && Math.abs(p.y - c.y) < 34) {   // solid: run into it and you bump off it (from above, it's a stomp)
     const s = Math.sign(p.x - c.x) || -c.face; p.x = c.x + s * 38; p.vx = s * 170; p.sq = -.12; p.sqv = 0;
-    c.vx = -s * 380; c.vy = -380; c.onGround = false; c.plat = null; c.sq = .25; c.sqv = 0; c.face = -s; W0.bumpT = .4;
+    c.vx = -s * 380; c.vy = -380; if (c.onGround) catSafe(c); c.onGround = false; c.plat = null; c.sq = .25; c.sqv = 0; c.face = -s; W0.bumpT = .4;
     dust((p.x + c.x) / 2, c.y, 5); SFX.thud(); if (W0.phase === "rest") catStartle();
   }
   const out = W0.phase === "leave" && (c.x < 80 || c.x > WORLD - 80);
@@ -11858,6 +11876,7 @@ function thinRoster(W) {
   if (W.rosterThin) return W.rosterThin;
   const HEAVY = t => ({ B: 1, G: 1 })[(BB_TYPES[t] || {}).size] === 1;
   return (W.rosterThin = (W.roster || []).map((row, k) => {
+    if ((W.stages[k] || {}).boss) return [];             // (a boss room: the boss alone, the user 2026-10-22)
     if (!row || row.length < 2) return row;
     const st = W.stages[k] || {}, pl = st.plats || [], gaps = st.gaps || [];
     const fixedX = at => at && at.plat !== undefined && pl[at.plat] ? pl[at.plat][0] + pl[at.plat][2] / 2 : at && at.gap !== undefined && gaps[at.gap] ? (gaps[at.gap][0] + gaps[at.gap][1]) / 2 : null;
@@ -12392,7 +12411,7 @@ function patrolDrop() {                                // its berries: down they
 const ZONE = 250;                                   // how far either side of where it starts a baddy will roam (or chase you)
 // the ones that fight up close (no projectiles) are a little keener (the user, 2026-10-17: "a little more aggressive and aware of what
 // the player is doing"): they notice you from further off, come on faster, strike again sooner, and they read you. They hop back out of
-// a swing, wait out your block and punish the moment it drops (or leap over it), take the opening when your back's turned, meet you
+// a swing, hammer on your block (it breaks the bubble's wind-up) and punish the moment it drops (or leap over it), take the opening when your back's turned, meet you
 // as you land instead of swinging at the air, and rush in on you while you're charging up or dizzy. Their wind-ups are unchanged, so
 // every attack can still be seen coming
 const BB_MELEE = new Set(["lunge", "leap", "bite", "slam", "swipe", "pound", "flop", "lash", "sting", "roll", "zap", "blink"]);
@@ -13394,7 +13413,7 @@ function leaveHideout() {                         // back out to where the hidde
     const B = hideout.from; hideout.beps.forEach(disposeBaddy); hideout.notes.forEach(n => actors.remove(n.m)); hideout = null;
     level.s = -2; setScreen(stage); gifts.forEach(q => { q.g.visible = true; }); crates.forEach(c => { c.g.visible = true; }); healBerries.forEach(b => { b.g.visible = true; });
     const out = B.trail > B.zone ? 1 : -1;            // step out toward where the trail came from
-    Object.assign(player, { x: B.zone + out * 50, y: GROUND, z: 0, vx: out * 60, vy: 0, onGround: true, plat: null, sit: 0, auto: null, face: out, inv: 1 });
+    Object.assign(player, { x: B.zone + out * 50, y: GROUND, z: 0, vx: out * 60, vy: 0, onGround: true, plat: null, sit: 0, auto: null, face: out, safeT: 1 });
     if (pal) Object.assign(pal, { x: B.zone + out * 110, y: GROUND, vx: 0, vy: 0, onGround: true, pounce: null, sit: 0, hideAt: false, z: 0 });
     const up = s => Object.assign(s, { sit: 0, hideAt: false, z: 0 });   // (your partner and ally: back at your side, as ever, now ej.away / ally.away are set)
     if (ej && ej.inHide) { ej.inHide = false; up(ej.st); } if (ally && ally.inHide) { ally.inHide = false; [ally, ...(ally.crew || [])].forEach(m => up(m.st)); }
@@ -13948,7 +13967,7 @@ function shScreen(i, back) {
   level = buildStronghold(i, hour); level.s = -3; level.w = world; level.h = -1; setLook(hour);
   entrySide = back ? "right" : "left"; const done = shFill(), x = back ? WORLD - 40 : 60, d = back ? -1 : 1;
   Object.assign(player, { x, y: GROUND, vx: 120 * d, vy: 0, face: d, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, auto: null, safe: { x, y: GROUND, plat: null } });
-  if (!done && !H.seen.has(i)) { player.hp = maxHp(); player.inv = 1; } H.seen.add(i); updateHearts(false);   // (a fresh room: hearts back)
+  if (!done && !H.seen.has(i)) { player.hp = maxHp(); player.safeT = 1; } H.seen.add(i); updateHearts(false);   // (a fresh room: hearts back)
   if (pal) Object.assign(pal, { x: x - d * 60, y: GROUND, vx: 120 * d, vy: 0, onGround: true, plat: null, pounce: null });
   const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
   camX = back ? X(WORLD) - halfW + 1 : clamp(X(130), 10, 40); camBase = Y(GROUND);
@@ -14098,8 +14117,8 @@ function updateBaddy(b, dt) {
       if (p.atkT >= 0 && p.atkT < .1 && facing && adx < 150 && b.dodgeCd <= 0 && b.onGround) {   // your swing coming: sometimes it hops back out of it
         b.dodgeCd = 1.8; if (Math.random() < (T.move === "hop" || T.move === "pogo" ? .45 : .3) + .08 * (b.smart || 0)) { b.vx = -Math.sign(dx) * 300; b.vy = -330; b.onGround = false; b.sq = -.2; b.sqv = 0; b.atkCd = Math.max(b.atkCd, .35); }
       }
-      if (blocking && adx < T.range + 40) {      // you're blocking: no point hitting the guard. It waits just outside, or (a leaper) goes over the top
-        if (T.atk === "leap" && b.atkCd <= 0 && Math.random() < dt * 1.5) b.crossUp = true; else { hold = true; if (adx < Math.max(70, T.range * .7)) stop = true; }
+      if (blocking && adx < T.range + 40) {      // you're blocking: it doesn't wait you out (the user 2026-10-22): it keeps swinging at the guard, knocking you out of opening into the bubble (a leaper may go over the top)
+        if (T.atk === "leap" && b.atkCd <= 0 && Math.random() < dt * 1.5) b.crossUp = true; else cdRate = Math.max(cdRate, 1.6);
       }
       if (b.sawBlock && !p.block && adx < T.range + 20) b.atkCd = Math.min(b.atkCd, .12);   // ... and the moment the guard drops, it's in
       b.sawBlock = blocking;
@@ -14146,7 +14165,7 @@ function updateBaddy(b, dt) {
   spring(b, dt);
   b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9));   // three-quarters on, so you see their faces
 }
-const KBT = { sweep: [150, -470], cut: [25, -130], cleave: [460, -420], jab: [25, -130], haymaker: [470, -380], tackle: [420, -300], punch: [90, -200], slash: [150, -240], upper: [70, -520], hook: [330, -260], smash: [200, -160], launch: [360, -640] };   // knockback by hit kind
+const KBT = { sweep: [150, -470], cut: [25, -130], cleave: [460, -420], jab: [25, -130], haymaker: [470, -380], tackle: [500, -320], punch: [90, -200], slash: [150, -240], upper: [70, -520], hook: [330, -260], smash: [200, -160], launch: [360, -640] };   // knockback by hit kind
 // ── the weight of a blow (game feel)
 const HIT_W = { sweep: 1.1, cut: .85, cleave: 1.4, jab: .8, haymaker: 1.4, punch: .75, slash: .85, stomp: .8, kick: 1, hook: 1.05, upper: 1.1, tackle: 1.2, smash: 1.35, launch: 1.35 };   // how heavy each kind lands
 let camKick = 0, camKickV = 0, camPush = 0, slowMo = 0, chainN = 0, chainT = -9;
@@ -14435,6 +14454,7 @@ function tryClash(p, T, hb, pb) {
   slashFlair(cx, cy, false); sparks(cx, cy, 14); hitstop = Math.max(hitstop, .11); shake = Math.max(shake, 6); SFX.clash(); popText(cx, cy - 50, "CLASH!");
   return true;
 }
+const SAFE_AFTER_HIT = .45;                          // (a landed tackle or charged combo: this long untouchable after its last hit lands, to step back out of the enemy)
 function combat() {
   const p = player, L = [];
   if (p.dead) return;
@@ -14454,7 +14474,8 @@ function combat() {
   let clashed = false;
   const strike = (got, hb, kind, dirOf, lead) => { for (const T of L) { if (clashed) return; if (got.has(T.e)) continue;   // each window hits each target once
     if (!p.combo && tryClash(p, T, hb, pb)) { clashed = true; got.add(T.e); return; }   // both attacks at once: a clash instead
-    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) got.add(T.e); } };   // (lead: the swing's not landed yet, so only a clash)
+    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) { got.add(T.e); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT);
+      if (kind === "tackle" && p.tackle && p.tackle.t < TKL.wind + TKL.lunge) { p.tackle.t = TKL.wind + TKL.lunge; p.vx *= .3; } } } };   // (the tackle that lands stops driving: it doesn't run on into what it knocked away, the user 2026-10-22)   // (a tackle or charged combo that's landed: not hurt for a moment after, the user 2026-10-22: still open while winding up)   // (lead: the swing's not landed yet, so only a clash)
   const hitsOf = i => (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set());
   const CM = p.rig.kind === "cat" && p.atkT >= 0 && p.atkKind && KIT.CAT_MOVES[p.atkKind];
   if (CM) CM.hits.forEach((h, i) => {                                // Tocsin's card moves: the ring of cards is the hitbox
@@ -14534,7 +14555,7 @@ function unpinBaddies(p) {                         // a charged combo (or a tack
 }
 function hurtPlayer(d, src) {
   const p = player;
-  if (p.inv > 0 || p.stompGrace > 0 || p.dead) return false;
+  if (p.inv > 0 || p.safeT > 0 || p.stompGrace > 0 || p.dead) return false;   // (safeT: protection that isn't shown: a new room, a move that's landed)
   if (climbSafe()) { if (src) src.life = Math.min(src.life, src.t); return false; }
   if (p.calmT > 0 || cheerHold) { if (src) src.life = Math.min(src.life, src.t); return false; }   // calming a sad berry (or just cheered one up): nothing gets through
   if (intro) { if (src) src.life = Math.min(src.life, src.t); return false; }   // the opening: nothing can hurt you till your partner's waved and gone
@@ -14913,7 +14934,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
 window.__game = { goWorldNow, arrivalRoom, get patrol() { return patrol; }, maybePatrol, patrolSpotted, get patrolOff() { return patrolOff; }, get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, ALLIES, allyRig, get ally() { return ally; }, get allyHere() { return allyHere; }, get buddyAt() { return buddyAt; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
-  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; },
+  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; }, get GAPS() { return GAPS; }, groundAt,
   forceSad(b) { b.sad = true; sadFace(b); }, cheerUp, get sadFate() { return sadFate; },
   goNext, goRoom, goRoomV, goWorld, goWorldBack, pollPad, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
   step(n) { for (let i = 0; i < n; i++) update(STEP); render(n * STEP); } };
