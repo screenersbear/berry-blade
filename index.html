@@ -3939,7 +3939,7 @@ function treasureMarks(w) {                          // the treasure map's marks
     const ok = S0.map((q, i) => i).filter(i => i > 0 && catRoomOK(i) && mapGrid(w).at[i]); if (ok.length) catRun.room = ok[Math.floor(Math.random() * ok.length)]; }
   if (catRun && catRun.w === w && catRun.room !== undefined && catRun.phase !== "done") add(catRun.room, "cat");
   S0.forEach((q, s) => { if (q.bep) add(s, "dungeon"); if (q.rest) add(s, "rest");
-    if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret) add(s, "loot"); });
+    if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret && !itemGot(w + ":" + s + ":chest")) add(s, "loot"); });
   if (SH_SPOT[w]) add(SH_SPOT[w].s, "dungeon");
   (CRATE_AT[w] || []).forEach(([s, x], i) => { if (!(w === world && cratesBroken.has(w + ":" + s + ":" + i))) add(s, "loot"); });
   if (w !== 9) itemPlan(w).forEach((q, i) => { if (!itemGot(w + ":" + q.s + ":" + q.k + i)) add(q.s, "loot"); });
@@ -5083,7 +5083,51 @@ function spawnGifts() {
     gifts.push({ g, x, y, id, t: Math.random() * 6 }); });
   spawnCrates();
 }
-function clearGifts() { gifts.forEach(q => actors.remove(q.g)); gifts = []; clearCrates(); }
+function clearGifts() { gifts.forEach(q => actors.remove(q.g)); gifts = []; clearCrates(); clearSecret(); }
+let secret = null;                                   // this room's hero wall: { who, x, hp, g, chest, said }
+const SECRET_M = { rock: toon("#8d8478"), rock2: toon("#6f675d"), crack: new THREE.MeshBasicMaterial({ color: "#2b2622" }), grass: toon("#4f9a3a"), grass2: toon("#3c7f2d"), stake: toon("#7a5634"), wood: toon("#9a6a3c"), band: toon("#d8a636") };
+function clearSecret() { if (!secret) return; [secret.g, secret.chest && secret.chest.g].forEach(g => { if (g) { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }); secret = null; }
+function spawnSecret() {
+  clearSecret(); const q = STAGES[stage].secret; if (!q || stronghold || hideout || arena) return;
+  const k = world + ":" + stage + ":", gy = groundAt(q.x + 60) ?? GROUND; secret = { who: q.who, x: q.x, hp: itemGot(k + "wall") ? 0 : 3, g: null, chest: null, wob: 0, said: false };
+  if (secret.hp > 0) { const g = group(actors); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g;
+    if (q.who === "camila") {                        // a heap of big cracked rocks, piled up out of reach
+      for (let i = 0; i < 18; i++) { const r = .75 + (i % 3) * .18, m = mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: i % 2 ? SECRET_M.rock2 : SECRET_M.rock, ol: .04 });
+        at(m, (i % 3 - 1) * .5 + (Math.floor(i / 3) % 2) * .25, .7 + Math.floor(i / 3) * 1.35, (i % 2 ? -.35 : .3)); m.rotation.set(i * .7, i * 1.3, i * .4); g.add(m); }
+      for (let i = 0; i < 12; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.05, .55 + (i % 3) * .2, .05), SECRET_M.crack); c.position.set(-.55 + (i % 3) * .1, .8 + i * .6, .9); c.rotation.z = (i % 2 ? .5 : -.4); g.add(c); }   // the cracks: it'll give
+    } else {                                         // a thicket of tall grass and brambles, tied to stakes
+      for (let i = 0; i < 40; i++) { const h = 2.2 + (i % 5) * .45, m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });
+        at(m, (i % 6 - 2.5) * .32, h / 2 + Math.floor(i / 6) * 1.1, (i % 4 - 1.5) * .3); m.rotation.z = ((i * 37) % 9 - 4) * .05; g.add(m); }
+      [-.7, .7].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, 9, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, 4.5, .45); g.add(st); });
+      [1.4, 3.2, 5, 6.8].forEach(y => { const b = mk(new THREE.BoxGeometry(1.7, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
+    } }
+  if (!itemGot(k + "chest")) { const cx = q.x + 460, cy = groundAt(cx) ?? GROUND, g = group(actors); g.position.set(X(cx), Y(cy), -.2);   // the chest behind it
+    g.add(at(mk(new THREE.BoxGeometry(1.1, .6, .7), null, { mat: SECRET_M.wood, ol: .03 }), 0, .3, 0)); const lid = group(g, 0, .6, -.35);
+    lid.add(at(mk(new THREE.CylinderGeometry(.35, .35, 1.1, 10, 1, false, 0, Math.PI).rotateZ(Math.PI / 2), null, { mat: SECRET_M.wood, ol: .03 }), 0, 0, .35));
+    [-.35, .35].forEach(x => g.add(at(mk(new THREE.BoxGeometry(.1, .62, .72), null, { mat: SECRET_M.band, ol: .01 }), x, .31, 0)));
+    secret.chest = { g, lid, x: cx, y: cy, open: false }; }
+}
+function secretHit(d, kind) {                        // a blow on the wall: only the right hero's charged combo counts, a part at a time
+  const B = secret; if (!B || B.hp <= 0) return false; const p = player, c = p.combo;
+  if (!c || p.rig.id !== B.who) { SFX.block(); sparks(B.x, p.y - 60, 4); B.wob = .4;
+    if (!B.said) { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THESE ROCKS" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
+    return true; }
+  if (B.lastC === c && B.lastIdx === c.idx) return true; B.lastC = c; B.lastIdx = c.idx;   // (a part counts once, however many hits it has)
+  B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX[B.who === "camila" ? "crack" : "slash"](); puffs(B.x + 20, p.y - 70, 4, 30, 160);
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.14, .12, .12), B.who === "camila" ? SECRET_M.rock2 : SECRET_M.grass); m.position.set(X(B.x + 40), Y(p.y - 60) + rand(-.6, .6), .3); actors.add(m);
+    parts.push({ m, v: V(rand(-4, 2), rand(3, 8), rand(-2, 2)), life: rand(.5, .9), t: 0, size: rand(.7, 1.2), g: 24, spin: 10, drag: .3, kind: "drop" }); }
+  if (B.hp <= 0) { markGot(world + ":" + stage + ":wall"); actors.remove(B.g); B.g = null; SFX.slam(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .12);
+    for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, .18), B.who === "camila" ? (i % 2 ? SECRET_M.rock : SECRET_M.rock2) : (i % 2 ? SECRET_M.grass : SECRET_M.grass2)); m.position.set(X(B.x + 60) + rand(-.6, .6), Y(GROUND) + rand(.3, 7), rand(-.4, .4)); actors.add(m);
+      parts.push({ m, v: V(rand(-3, 8), rand(2, 9), rand(-3, 3)), life: rand(.7, 1.3), t: 0, size: rand(.8, 1.5), g: 22, spin: 9, drag: .25, kind: "drop" }); }
+    toast(B.who === "camila" ? "THE ROCKS GIVE WAY!" : "THE THICKET'S CUT THROUGH!", 2600); if (story) writeSave(); }
+  return true;
+}
+function updateSecret(dt) {
+  const B = secret; if (!B) return; B.wob = Math.max(0, B.wob - dt * 3); if (B.g) B.g.rotation.z = Math.sin(B.wob * 30) * .03 * B.wob;
+  const C = B.chest, p = player; if (!C || C.open || !p || p.dead) return;
+  if (Math.abs(p.x - C.x) < 50 && Math.abs(p.y - C.y) < 60) { C.open = true; C.lid.rotation.x = -1.1; markGot(world + ":" + stage + ":chest"); SFX.gift(); sparks(C.x, C.y - 30, 14);   // walk up to it: open, and what's in it
+    dropLoot(C.x, C.y - 40, 10, true); spawnLoot(B.who === "camila" ? "power" : "gum", C.x, C.y - 50, true); toast("A HIDDEN CHEST!", 2200); if (story) writeSave(); }
+}
 // ── breakable containers (the user, 2026-10-16): a couple in every world, each in that world's look (a berry basket in the woods, a barrel
 // on the coast, a bolted crate in Volt Keep, a roped cargo crate in the sky, a clay urn in the dunes, a seed pod in Kesh's garden, a gumball
 // machine in the candy works, a cartoon crate in Crux's city). Two hits break one open and a berry rolls out: walk over it (when you're hurt)
@@ -5129,6 +5173,7 @@ function spawnCrates() {
     const [g, cols] = crateRig(world); g.position.set(X(x), Y(y), 0); crates.push({ g, x, y, id, hp: 2, cols, wob: 0 }); });
   const tb = STAGES[stage].berry, tid = world + ":" + stage + ":tree"; if (tb && !healTaken.has(tid)) spawnHealBerry(tb[0], tb[1], tid, false);   // (a berry up a tree)
   spawnRoomItems();                                  // (and the world's items lying about, if one's here)
+  spawnSecret();                                     // (and a hero's wall, in one of their rooms)
 }
 function clearCrates() { clearLoot(); const drop = g => { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }; crates.forEach(c => drop(c.g)); healBerries.forEach(b => drop(b.g)); crates = []; healBerries = []; }   // (their geometry freed too)
 function spawnHealBerry(x, y, id, pop) {             // a fat red berry with a green crown, bobbing; it hops out of a broken container
@@ -5205,6 +5250,7 @@ function moveBody(b, dt, halfW) {
   if (b.x < minX) { b.x = minX; b.vx = Math.max(0, b.vx); b.hitWall = -1; }
   else if (b.x > maxX) { b.x = maxX; b.vx = Math.min(0, b.vx); b.hitWall = 1; }
   else b.hitWall = 0;
+  if (secret && secret.hp > 0 && (b === player || b === pal || b.hw !== undefined) && x0 <= secret.x - halfW + 1 && b.x > secret.x - halfW) { b.x = secret.x - halfW; b.vx = Math.min(0, b.vx); b.hitWall = 1; }   // a hero's wall: no way past it, over or under, till it's broken
   if (GAPS.length) for (const [a, c] of GAPS) if (x0 > a && x0 < c) {                // down in the water: the rock faces either side are walls
     if (b.x <= a && b.y > (groundAt(a - 1) ?? GROUND) + 1) { b.x = a + .5; b.vx = 0; } else if (b.x >= c && b.y > (groundAt(c + 1) ?? GROUND) + 1) { b.x = c - .5; b.vx = 0; } }
   if (PROFILE.length) { const gN = groundAt(b.x); if (gN !== null && gN < b.y - 6 - Math.abs(b.x - x0) * .6) { b.hitWall = Math.sign(b.x - x0) || b.hitWall; b.x = x0; b.vx = 0; } }   // a sheer step up: jump it (slopes you walk)
@@ -11758,6 +11804,33 @@ function secondHideout(W, w) {                       // the beps' second way in:
 }
 const HUB_START = new Set([7, 10]);                 // the worlds you come into at their hub (the user, 2026-10-22: two of them; my pick: Crux's city and Trumpeto's bazaar)
 const HUB_VERT = new Set([2, 3, 6, 7, 10, 11, 12]);   // (built places stack their hub's two rooms; out in nature they sit side by side)
+// the heroes' own rooms (the user, 2026-10-22): in each world two rooms at the end of a row, a wall part way in that only one of them can
+// get through, and a chest behind it. Camila's: a heap of cracked rock her gauntlet can smash; Rose's: a thicket her sword can cut. Only a
+// charged combo does it, three of its blows landed in all (one full combo; three of one charge; one of one and one of two)
+const SECRET_X = 1720;                                // the wall's left face; behind it, a dead end to the room's right edge
+function placeSecrets(W, w) {
+  if (w === 9) return; const S0 = W.stages, R0 = W.roster, R = rngF(4421 + w * 53), colN = q => +String(q.cell || "").slice(1) || 0;
+  const above = new Map(); S0.forEach((q, i) => { if (q.below !== undefined) above.set(q.below, (above.get(q.below) || []).concat(i)); });
+  const reach = (cut) => {                           // the rooms you can get to from the first (cut: a room whose way right is shut)
+    const adj = S0.map(() => []), two = (a, b) => { if (b === undefined || !S0[b]) return; adj[a].push(b); adj[b].push(a); };
+    S0.forEach((q, i) => { if (q.arena) return; if (i !== cut && !q.noRight) two(i, q.next); two(i, q.nextHi); two(i, q.up); two(i, q.down); if (q.climbUp) two(i, q.climbUp.to); if (q.below !== undefined && S0[q.below]) adj[i].push(q.below); });
+    const seen = new Set([0]), st = [0]; while (st.length) { const i = st.pop(); for (const j of adj[i]) if (!seen.has(j)) { seen.add(j); st.push(j); } } return seen; };
+  const all = reach(-1);
+  const clear = (q, i) => [q.upX, q.downX, q.arriveX, q.climbUp && q.climbUp.x, q.bep && q.bep.zone].every(v => v === undefined || v < SECRET_X - 200) && !(q.ladders || []).some(([f]) => f > SECRET_X - 200)
+    && !(above.get(i) || []).some(u => (S0[u].gaps || []).some(([a, b]) => b > SECRET_X - 100));   // (its own holes back there get filled in; one from above can't be)
+  const ok = S0.map((q, i) => i).filter(i => { const q = S0[i], j = q.next; return i && !q.arena && q.cell && j !== undefined && S0[j] && S0[j].cell && S0[j].cell[0] === q.cell[0] && q.nextHi === undefined
+    && q.toWorld === undefined && !q.end && !q.boss && !q.peace && !q.rest && !q.bep && !q.hub && !q.gift && !q.duo && !q.castle && colN(q) >= 4 && clear(q, i); });
+  const picks = [];
+  for (const who of ["camila", "rose"]) {
+    const L = ok.filter(i => !picks.includes(i) && !picks.some(j => S0[j].next === i || S0[i].next === j)).sort(() => R() - .5);
+    for (const i of L) { const q = S0[i], gaps0 = q.gaps, below0 = q.below;
+      q.gaps = (q.gaps || []).filter(([a, b]) => b <= SECRET_X - 100); if (!q.gaps.length && q.below !== undefined) delete q.below;   // (the floor behind the wall: solid)
+      const r = reach(i); if (r.size < all.size || [...all].some(k => !r.has(k))) { q.gaps = gaps0; if (below0 !== undefined) q.below = below0; continue; }   // (shutting its way right mustn't cut anything off)
+      const j = q.next; picks.push(i); delete q.next; q.noRight = true; q.wallR = true; const N = S0[j]; delete N.prev; N.noLeft = true; if (w !== 3) N.wallL = true;
+      q.secret = { who, x: SECRET_X }; const ex = e => typeof e[2] === "number" ? e[2] : e[2] && e[2].plat !== undefined && q.plats && q.plats[e[2].plat] ? q.plats[e[2].plat][0] : 0;
+      R0[i] = (R0[i] || []).filter(e => ex(e) < SECRET_X - 160 && !(e[2] && e[2].gap !== undefined && !(q.gaps || [])[e[2].gap])); break; }   // (none of its baddies behind the wall, nor in a hole that's been filled)
+  }
+}
 function placeHub(W, w) {                            // the hub: two rooms about the middle of the map, one over the other (built places) or side by side (out in nature)
   const S0 = W.stages, R0 = W.roster, R = rngF(6607 + w * 41), deep = DEEP_CELLS(w), cell = gridCell(S0), vert = HUB_VERT.has(w), colN = q => +String(q.cell || "").slice(1) || 0;
   const ok = i => i !== undefined && plainCell(S0, R0, i, deep) && !S0[i].hill && !!(S0[i].gen || S0[i].deepNew), pairs = [];
@@ -11853,7 +11926,7 @@ function deepenWorlds() {
     S0.forEach(q => { if (q.boss && q.toWorld === undefined && !q.end && !q.arena) delete q.boss; });   // a boss waits only where there's a way out (the user, 2026-10-20: "bosses should only appear at the exit door screens")
     fillGrid(W, w); worldExits(W, w); placeRests(W, w); secondHideout(W, w); placeHub(W, w);
     (D.link || []).forEach(([uc, lc, o = {}]) => { const u = at(uc), l = at(lc); if (u < 0 || l < 0) return console.warn("deepen: no link", w, uc, lc); linkDown(S0, R0, u, l, o); });
-    gridLinks(W, w); landingLedges(W, w);
+    gridLinks(W, w); landingLedges(W, w); placeSecrets(W, w);
     if (w === 0) { const q = W.stages.find(s => s.cell === "C1"); if (q) { q.plats = [...q.plats, [2060, 130, 120, "fungus2"]]; q.berry = [2120, 130]; } }   // the great tree by the wall: high up it, a berry (the user, 2026-10-20)
     (CRATE_AT[w] || []).forEach(c => { const q = S0[c[0]]; if (!q) return; const ok = x => [-80, 0, 80].every(d => stageGround(q, x + d) !== null);   // (a crate never left standing in a pit)
       if (!ok(c[1])) for (let d = 20; d < WORLD; d += 20) { const x = [c[1] - d, c[1] + d].find(v => v > 200 && v < WORLD - 200 && ok(v)); if (x !== undefined) { c[1] = x; break; } } });
@@ -14541,6 +14614,7 @@ function combat() {
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
   if (wild && wildCatchable()) { const c = wild.st, h = Math.max(c.rig.heightPx || 56, 56);   // the wild cat: any hit at all catches it
     L.push({ e: c, top: c.y - h, box: { x1: c.x - 40, x2: c.x + 40, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 46, x2: c.x + 46, y1: c.y - Math.max(h, 80), y2: c.y } }); }   // (land on it, or any hit: a little wider than it is, as it's small and quick)
+  if (secret && secret.hp > 0) { const B = secret; L.push({ e: B, top: -9999, box: { x1: B.x - 10, x2: B.x + 120, y1: -9999, y2: GROUND + 400 }, hit: (d, k) => secretHit(d, k), touch: () => false }); }   // (the hero's wall: hits on it, none from it)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
   if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) KIT.STRIKES[p.atkKind].hits.forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
@@ -14862,7 +14936,7 @@ function update(dt) {
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
+  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
   if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (STAGES[stage].boss && !bossDown ? .9 : .25)) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
@@ -15009,7 +15083,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
 window.__game = { goWorldNow, arrivalRoom, get patrol() { return patrol; }, maybePatrol, patrolSpotted, get patrolOff() { return patrolOff; }, get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, ALLIES, allyRig, get ally() { return ally; }, get allyHere() { return allyHere; }, get buddyAt() { return buddyAt; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
-  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; }, get GAPS() { return GAPS; }, groundAt, treasureMarks, mapOwned, openPause, closePause, drawPauseMap, syncMini, openNpc,
+  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; }, get GAPS() { return GAPS; }, groundAt, treasureMarks, mapOwned, SECRET_X, openPause, closePause, drawPauseMap, syncMini, openNpc,
   forceSad(b) { b.sad = true; sadFace(b); }, cheerUp, get sadFate() { return sadFate; },
   goNext, goRoom, goRoomV, goWorld, goWorldBack, pollPad, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
   step(n) { for (let i = 0; i < n; i++) update(STEP); render(n * STEP); } };
