@@ -443,7 +443,7 @@
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
-  <div class="btns" id="setBtns"><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="dev">DEVELOPER</button><button data-g="back">BACK</button></div>
+  <div class="btns" id="setBtns"><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="debug">DEBUG MODE: OFF</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="dev">DEVELOPER</button><button data-g="back">BACK</button></div>
   <small>↑ ↓ to choose &middot; Enter to change &middot; Esc to go back</small>
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
@@ -3220,6 +3220,8 @@ addEventListener("keydown", e => {
   if (modalOpen) { if (e.code === "Enter" || e.code === "Space" || e.code === "KeyZ") { e.preventDefault(); onReset(); } else if (story) { if (e.code === "KeyQ" && !koScr) quitToTitle(); } else if (e.code === "KeyC") showSelect(); else if (e.code === "KeyO" || e.code === "KeyW") showWorlds(); return; }
   if (paused) {
     if (e.repeat) return;
+    if (dbgPick && !achOpen && !lvlOpen) { const dx = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1 }[e.code] || 0, dy = { ArrowUp: -1, KeyW: -1, ArrowDown: 1, KeyS: 1 }[e.code] || 0;
+      if (dx || dy) dbgMove(dx, dy); else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(e.code)) { e.preventDefault(); dbgGo(); } else if (e.code === "Escape" || e.code === "KeyC") pauseChoose("dback"); return; }
     if (["ArrowUp", "ArrowLeft", "KeyW", "KeyA"].includes(e.code)) setPauseSel(pauseSel - 1);
     else if (["ArrowDown", "ArrowRight", "KeyS", "KeyD"].includes(e.code)) setPauseSel(pauseSel + 1);
     else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(e.code)) { e.preventDefault(); pauseChoose(PAUSE_OPTS[pauseSel]); }
@@ -3249,6 +3251,7 @@ function pollPad() {
     if (itemsUp) { const pr = k => pad[k] && !padPrev[k]; if (pr("j")) useItem("fruit"); else if (pr("a")) useItem("power"); else if (pr("sq")) useItem("gum"); padPrev = { ...pad }; return; } }
   if (pad.st && !padPrev.st && mode === "play" && !modalOpen && !edOpen) { paused ? closePause() : openPause(); }
   if (paused && $("pause").classList.contains("show") && !achOpen && !lvlOpen) { const pr = k => pad[k] && !padPrev[k];   // (the pause menu: ← → or ↑ ↓ to choose, ✕ or ○ to pick)
+    if (dbgPick) { if (pr("l")) dbgMove(-1, 0); else if (pr("r")) dbgMove(1, 0); else if (pr("u")) dbgMove(0, -1); else if (pr("d")) dbgMove(0, 1); else if (pr("j") || pr("a")) dbgGo(); else if (pr("sq")) pauseChoose("dback"); padPrev = { ...pad }; return; }
     if (pr("l") || pr("u")) setPauseSel(pauseSel - 1); else if (pr("r") || pr("d")) setPauseSel(pauseSel + 1); else if (pr("j") || pr("a")) pauseChoose(PAUSE_OPTS[pauseSel]);
     padPrev = { ...pad }; return; }
   if (statsUp) { if (statsUp.ask && ((pad.l && !padPrev.l) || (pad.r && !padPrev.r))) askKey("ArrowLeft"); else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) statsUp.ask ? askKey("Enter") : statsGo(); padPrev = { j: pad.j, a: pad.a, l: pad.l, r: pad.r, st: pad.st, d: pad.d, u: pad.u }; return; }
@@ -3660,12 +3663,35 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME" };
+const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", dgo: "DEBUG: GO TO A ROOM", dreset: "DEBUG: RESET THIS ROOM" };
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "ach", "quit"] : ["resume", "ach", "lvl", "home", "quit"];   // (a story run: no testing tools here, they're under the gear)
+  if (settingsGet().debug && !stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "dgo", "dreset");   // (debug mode, from the game settings: the user, 2026-10-22)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
 function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); syncMini(); drawPauseMap(); }
-function closePause() { if (!paused) return; $("pAsk").classList.add("hidden"); paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("pause").classList.remove("show"); }
+// debug mode (the user, 2026-10-22: "move to a new map on a world to test things and also the option to reset that room to new"): from the
+// pause menu, any room of this world (picked on the map, every room shown), and the room you're in set back to new: its baddies, its
+// boss, its gifts, crates and items all back
+let dbgPick = null;                                  // the room picker: { sel: the room the cursor's on }
+function dbgMove(dx, dy) {
+  const M = mapGrid(world), a = M.at[dbgPick.sel]; if (!a) return; let best = -1, bd = 1e9;
+  M.at.forEach((b, s) => { if (!b || s === dbgPick.sel) return; const ddx = b[0] - a[0], ddy = b[1] - a[1];
+    if ((dx && Math.sign(ddx) !== dx) || (dy && Math.sign(ddy) !== dy)) return;
+    const d = dx ? Math.abs(ddx) + Math.abs(ddy) * 3 : Math.abs(ddy) + Math.abs(ddx) * 3; if (d < bd) { bd = d; best = s; } });
+  if (best >= 0) { dbgPick.sel = best; SFX.tick(); drawPauseMap(); }
+}
+function dbgGo() {
+  const s = dbgPick.sel; dbgPick = null; closePause(); SFX.confirm();
+  if (story) storyRun(world, s, false); else levelGo(world, "room", s);
+}
+function debugResetRoom() {
+  const k = world + ":" + stage + ":", drop = S => [...S].forEach(id => { if (String(id).startsWith(k)) S.delete(id); });
+  roomsDone.delete(stage); drop(giftsTaken); drop(cratesBroken); drop(healTaken); freeGot.forEach(id => { if (id.startsWith(k)) freeGot.delete(id); });
+  if (story && story.got) story.got = story.got.filter(id => !id.startsWith(k));
+  if (STAGES[stage].boss) bossDown = false;
+  resetTrial(); toast("DEBUG: THIS ROOM'S BACK TO NEW", 2400);
+}
+function closePause() { if (!paused) return; dbgPick = null; $("pAsk").classList.add("hidden"); paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("pause").classList.remove("show"); }
 function pauseChoose(what) {
   if (what === "quit" && story && $("pAsk").classList.contains("hidden")) {   // SAVE & QUIT: asked first, and told where you'll start (the user, 2026-10-20)
     const c = story.check && story.check.w === world; SFX.confirm(); PAUSE_OPTS = ["qno", "qyes"];
@@ -3674,6 +3700,10 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
+  if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
+    $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
+  if (what === "dback") { SFX.tick(); dbgPick = null; $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("dgo")); drawPauseMap(); return; }
+  if (what === "dreset") { closePause(); SFX.confirm(); debugResetRoom(); return; }
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
   if (what === "lvl") { SFX.confirm(); showLvl(); return; }
   if (what === "map") { SFX.confirm(); openMap(); return; }
@@ -3916,7 +3946,7 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = 1) {   // the rooms you've been
   const M = mapGrid(w), ch = cw * asp, pad = cw * .04, seen = seenOf(w), cur = mapGrid(world) === M ? stage : -1;
   const X = (c, x) => ox + (c - M.c0) * cw + pad + (x / WORLD) * (cw - pad * 2), Y = (r, y) => oy + (r - M.r0) * ch + ((y - MAP_TOP) / (MAP_BOT - MAP_TOP)) * ch;
   g.lineCap = g.lineJoin = "round"; const VW = g.canvas.clientWidth || 9999, VH = g.canvas.clientHeight || 9999;
-  const owned = mapOwned(w), rooms = owned ? M.at.map((a, s) => a ? s : -1).filter(s => s >= 0) : [...seen];   // (the treasure map: the rooms you've not been in too, darker)
+  const owned = mapOwned(w), all = owned || (!!dbgPick && w === world), rooms = all ? M.at.map((a, s) => a ? s : -1).filter(s => s >= 0) : [...seen];   // (the debug picker: all of them too)   // (the treasure map: the rooms you've not been in too, darker)
   for (const s of rooms) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
     if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;   // (off the little map: not drawn)
     const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); }
@@ -3951,6 +3981,8 @@ function drawPauseMap() {                            // the whole world on the p
   cw = Math.max(14, Math.min(cw, bh / (nr * asp)));
   const W0 = nc * cw + padX * 2, H0 = nr * cw * asp + padY * 2; el.style.width = W0 + 6 + "px"; el.style.height = H0 + 6 + "px";
   const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp);
+  if (dbgPick && M.at[dbgPick.sel]) { const [c, r] = M.at[dbgPick.sel]; g.strokeStyle = "#ff3e8a"; g.lineWidth = 3; g.strokeRect(padX + (c - M.c0) * cw + 1.5, padY + (r - M.r0) * cw * asp + 1.5, cw - 3, cw * asp - 3);
+    g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
 }
 addEventListener("resize", () => { if (paused && $("pause").classList.contains("show")) drawPauseMap(); });
 function closeMenus() { ["menu", "dev", "settings", "slots", "hero", "map"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); menuUp = null; }
@@ -3981,7 +4013,7 @@ function settingsApply() {                         // (index.html?mute, for test
   sfxOn = g.sfx; if (!g.music) { bgm.dataset.muted = "1"; bgm.pause(); } else if (bgm.dataset.muted) { delete bgm.dataset.muted; if (!titleUp) bgm.play().catch(() => { }); }
 }
 function showSettings() { closeMenus(); menuUp = "settings"; setgSel = 0; renderSettings(); $("settings").classList.add("show"); }
-function renderSettings() { const g = settingsGet(), B = $("setBtns").children; B[0].textContent = "MUSIC: " + (g.music ? "ON" : "OFF"); B[1].textContent = "SOUND EFFECTS: " + (g.sfx ? "ON" : "OFF"); markMenu(); }
+function renderSettings() { const g = settingsGet(), B = $("setBtns").children; B[0].textContent = "MUSIC: " + (g.music ? "ON" : "OFF"); B[1].textContent = "SOUND EFFECTS: " + (g.sfx ? "ON" : "OFF"); B[2].textContent = "DEBUG MODE: " + (g.debug ? "ON" : "OFF"); markMenu(); }
 function settingsChoose(k) {
   if (k === "back") { SFX.tick(); showMainMenu(); return; }
   if (k === "dev") { showDev(); return; }         // (free play and testing: was the gear on the main screen)
