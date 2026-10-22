@@ -875,6 +875,92 @@ function hairChains(st) {                         // the flowing locks for each 
 // ───────────────────────────── drawn faces: features measured off a character sheet ─────────────────────────────
 // Front-view head coords (u right, v down; 1 = the head's half width / half height) → face-sheet pixels, undoing the head shape,
 // so a feature lands where the drawing has it whatever the head sliders do.
+// carved eyes (the user, 2026-10-22: "the playable heroes' eyes as 3D carved shapes with visible lashes, like Sora in Kingdom Hearts"): the
+// painted eye's own shapes (its opening, iris, lash line, lower lash) made into real ones on the head: the white set just proud of the face,
+// the iris and pupil on it with a glint, and the lash line a thick dark ridge standing out from the face, with three lashes flicking out at
+// the outer corner. Each eye's a pivot facing out of the face, so a blink squashes it shut (the 3DS does the same with them)
+const CARVED = ["june", "chase", "camila", "rose"];     // the heroes you play (the rivals and bosses keep their painted eyes)
+const carvedOn = S => S.face.eyes3d ?? CARVED.includes(S.id);
+function headPointer(mesh, faceY) {                   // a flat-face pixel → the point on the head mesh (its local space) and the normal there
+  const g = mesh.geometry, P = g.attributes.position, UV = g.attributes.uv, N = g.attributes.normal, I = g.index, nT = I ? I.count / 3 : P.count / 3, at = k => I ? I.getX(k) : k;
+  const tris = []; for (let t = 0; t < nT; t++) { const a = at(t * 3), b = at(t * 3 + 1), c = at(t * 3 + 2);
+    const u0 = UV.getX(a), u1 = UV.getX(b), u2 = UV.getX(c); if (Math.max(u0, u1, u2) - Math.min(u0, u1, u2) > .5) continue;   // (not across the seam)
+    tris.push([a, b, c, u0, UV.getY(a), u1, UV.getY(b), u2, UV.getY(c)]); }
+  return (x, y) => {
+    const zz = 1 - x / 256, yy = 1 - (y + faceY) / 256, xx = Math.sqrt(Math.max(0, 1 - yy * yy - zz * zz));   // (the face is the x > 0 half: wrapFront)
+    let ph = Math.atan2(zz, -xx); if (ph < 0) ph += TAU; const u = ph / TAU, v = 1 - Math.acos(clamp(yy, -1, 1)) / Math.PI;
+    for (const [a, b, c, ax, ay, bx, by, cx, cy] of tris) {
+      const d = (by - cy) * (ax - cx) + (cx - bx) * (ay - cy); if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((by - cy) * (u - cx) + (cx - bx) * (v - cy)) / d, l2 = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / d, l3 = 1 - l1 - l2;
+      if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+      const pos = new THREE.Vector3(), nor = new THREE.Vector3();
+      [[a, l1], [b, l2], [c, l3]].forEach(([k, w]) => { pos.x += P.getX(k) * w; pos.y += P.getY(k) * w; pos.z += P.getZ(k) * w; nor.x += N.getX(k) * w; nor.y += N.getY(k) * w; nor.z += N.getZ(k) * w; });
+      return { pos, nor: nor.normalize() }; }
+    return null; };
+}
+function clipConvex(subj, clip) {                     // Sutherland-Hodgman: the polygon subj ([[x, y]...]) cut to the convex polygon clip
+  let out = subj; const n = clip.length, area = clip.reduce((s, p, i) => { const q = clip[(i + 1) % n]; return s + p[0] * q[1] - q[0] * p[1]; }, 0), sg = Math.sign(area) || 1;
+  for (let i = 0; i < n && out.length; i++) { const A = clip[i], B = clip[(i + 1) % n], inside = p => sg * ((B[0] - A[0]) * (p[1] - A[1]) - (B[1] - A[1]) * (p[0] - A[0])) >= 0, inp = out; out = [];
+    for (let j = 0; j < inp.length; j++) { const P0 = inp[j], P1 = inp[(j + 1) % inp.length], i0 = inside(P0), i1 = inside(P1);
+      if (i0) out.push(P0); if (i0 !== i1) { const dx = P1[0] - P0[0], dy = P1[1] - P0[1], ex = B[0] - A[0], ey = B[1] - A[1], den = dx * ey - dy * ex; if (Math.abs(den) > 1e-12) { const t = ((A[0] - P0[0]) * ey - (A[1] - P0[1]) * ex) / den; out.push([P0[0] + dx * t, P0[1] + dy * t]); } } } }
+  return out;
+}
+function hull2(P) {                                   // the convex hull (monotone chain) of [[x, y]...]
+  const p = P.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]), cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]), lo = [], up = [];
+  for (const q of p) { while (lo.length >= 2 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+  for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length >= 2 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function carvedEyes(S, mesh, M) {
+  const c = S.colors, f = S.face, F = DRAWN[f.style] || DRAWN.june, T = headInverse(S), dy = f.eyeY / 256, onHead = headPointer(mesh, f.faceY || 0), out = [];
+  const darker = (hex, k) => { const n = parseInt(hex.slice(1), 16); return "#" + [n >> 16, (n >> 8) & 255, n & 255].map(v => Math.round(v * k).toString(16).padStart(2, "0")).join(""); };
+  const mWhite = M("#fbfbf4"), mIris = M(c.eyes), mPupil = M(darker(c.eyes, .3)), mLash = M(c.lash), mGlint = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+  ["L", "R"].forEach(side => {
+    const E = F[side], s = side === "L" ? -1 : 1, [ex, ey] = E.c, cx = ex * f.eyeGap, cy = ey + dy;
+    const kx = f.eyeSize * f.eyeW, ky = f.eyeSize * f.eyeH, rot = -s * f.eyeTilt, cs = Math.cos(rot), sn = Math.sin(rot);
+    const pix = (u, v) => { const du = (u - ex) * kx, dv = (v - ey) * ky; return T(cx + du * cs - dv * sn, cy + du * sn + dv * cs); };   // a point of the drawn eye → the flat face's pixel
+    const pts = arr => { const o = []; for (let i = 0; i < arr.length; i += 2) o.push(pix(arr[i], arr[i + 1])); return o; };
+    const C0 = onHead(...pix(ex, ey)); if (!C0) return;
+    const open = pts(E.open), L = open.reduce((a, p) => p[0] < a[0] ? p : a), R = open.reduce((a, p) => p[0] > a[0] ? p : a);
+    const PL = onHead(...L), PR = onHead(...R); if (!PL || !PR) return;
+    const w = PL.pos.distanceTo(PR.pos), across = new THREE.Vector3().subVectors(PR.pos, PL.pos).normalize(), nrm = C0.nor.clone();
+    const up = new THREE.Vector3().crossVectors(nrm, across).normalize(); across.crossVectors(up, nrm).normalize();
+    const pivot = new THREE.Group(); pivot.position.copy(C0.pos); pivot.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(across, up, nrm)); pivot.updateMatrix();
+    const inv = new THREE.Matrix4().copy(pivot.matrix).invert();
+    const rotInv = new THREE.Matrix3().setFromMatrix4(inv), nrmAt = p2 => { const q = onHead(p2[0], p2[1]); return q ? q.nor.clone().applyMatrix3(rotInv).normalize() : new THREE.Vector3(0, 0, 1); };
+    const lift = (p2, h) => { const q = onHead(p2[0], p2[1]); return q ? q.pos.clone().addScaledVector(q.nor, h).applyMatrix4(inv) : null; };   // a pixel, h out from the face, in the pivot's space
+    const patch = (poly, h, mat) => {                   // a flat shape on the face, h out from it
+      if (poly.length < 3) return; const V = poly.map(p => lift(p, h)); if (V.some(v => !v)) return;
+      const tri = THREE.ShapeUtils.triangulateShape(poly.map(p => new THREE.Vector2(p[0], -p[1])), []), pos = [], e1 = new THREE.Vector3(), e2 = new THREE.Vector3();
+      const Nv = poly.map(nrmAt), nor = [];
+      tri.forEach(([a, b, c2]) => { e1.subVectors(V[b], V[a]); e2.subVectors(V[c2], V[a]); if (e1.cross(e2).z < 0) [b, c2] = [c2, b];   // (every face turned out of the face, whichever eye)
+        [a, b, c2].forEach(i => { pos.push(V[i].x, V[i].y, V[i].z); nor.push(Nv[i].x, Nv[i].y, Nv[i].z); }); });
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.Float32BufferAttribute(nor, 3));   // (lit as the face under it is)
+      const m = new THREE.Mesh(geo, mat); pivot.add(m); return m; };
+    const ridge = (poly, h0, h1, mat) => {              // a raised shape: its top h1 out, its sides down to h0 (the lash line standing off the face)
+      patch(poly, h1, mat); const A = poly.map(p => lift(p, h0)), B = poly.map(p => lift(p, h1)); if (A.some(v => !v) || B.some(v => !v)) return;
+      const pos = []; for (let i = 0; i < poly.length; i++) { const j = (i + 1) % poly.length; pos.push(A[i].x, A[i].y, A[i].z, A[j].x, A[j].y, A[j].z, B[j].x, B[j].y, B[j].z, A[i].x, A[i].y, A[i].z, B[j].x, B[j].y, B[j].z, B[i].x, B[i].y, B[i].z); }
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
+      const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: c.lash, side: THREE.DoubleSide })); pivot.add(m); };
+    const oval = (u, v, ru, rv) => { const o = []; for (let i = 0; i < 40; i++) { const a = i / 40 * TAU; o.push(pix(u + Math.cos(a) * ru, v + Math.sin(a) * rv)); } return o; };
+    patch(open, w * .015, mWhite);                                                   // the white
+    const ic = [ex + f.lookX * E.iris[0] * .55, ey + f.lookY * E.iris[1] * .45];
+    const hull = hull2(open);                                                        // (the opening's outline isn't always convex: cut to its hull)
+    patch(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris, E.iris[1] * f.iris), hull), w * .03, mIris);   // the iris, inside the opening
+    patch(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris * .48, E.iris[1] * f.iris * .48), hull), w * .042, mPupil);   // the pupil
+    const lash = pts(E.lash); ridge(lash, w * .005, w * .1, mLash);                  // the lash line, standing off the face
+    if (E.low) ridge(pts(E.low), w * .005, w * .05, mLash);                          // the lower lash
+    const G = lift(pix(ic[0] - E.iris[0] * f.iris * .35, ic[1] - E.iris[1] * f.iris * .35), w * .055);   // the glint, up and in
+    if (G) { const gl = new THREE.Mesh(new THREE.SphereGeometry(w * .07, 10, 8), mGlint); gl.scale.z = .4; gl.position.copy(G); pivot.add(gl); }
+    const outer = lash.reduce((a, p) => (p[0] - a[0]) * s > 0 ? p : a), top = lash.reduce((a, p) => p[1] < a[1] ? p : a);   // three lashes flicking out of the outer corner
+    [0, .35, .7].forEach((k, i) => { const at2 = [outer[0] + (top[0] - outer[0]) * k * .5, outer[1] + (top[1] - outer[1]) * k * .5], base = lift(at2, w * .06); if (!base) return;
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(w * .045, w * (.32 - i * .05), 6), mLash);
+      const dir = new THREE.Vector3(s * (1 - k * .5), .55 + k * .5, .45).normalize(); cone.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
+      cone.position.copy(base).addScaledVector(dir, w * (.14 - i * .02)); pivot.add(cone); });
+    mesh.add(pivot); out.push(pivot);
+  });
+  return out;
+}
 function headInverse(S) {
   const H = S.head, chin = S.face.chin, ss = THREE.MathUtils.smoothstep;
   return (u, v) => {
@@ -889,7 +975,7 @@ function headInverse(S) {
   };
 }
 const centroid = pts => { let x = 0, y = 0; for (let i = 0; i < pts.length; i += 2) { x += pts[i]; y += pts[i + 1]; } const n = pts.length / 2; return [x / n, y / n]; };
-function drawnFaceArt(S, blink) {
+function drawnFaceArt(S, blink, noEyes) {           // (noEyes: a hero with carved eyes: the brows, nose and mouth only)
   const c = S.colors, f = S.face, F = DRAWN[f.style] || DRAWN.june, T = headInverse(S), [cv, g] = cv2(512, 512);
   g.fillStyle = c.skin; g.fillRect(0, 0, 512, 512);
   const shape = (pts, map, fresh = true) => { if (fresh) g.beginPath(); for (let i = 0; i < pts.length; i += 2) { const [x, y] = T(...map(pts[i], pts[i + 1])); if (i) g.lineTo(x, y); else g.moveTo(x, y); } g.closePath(); };
@@ -909,6 +995,7 @@ function drawnFaceArt(S, blink) {
       const su = bc[0] + (u - bc[0]) * f.browSize, sv = bc[1] + (v - bc[1]) * f.browSize, du = (su - ex) * f.eyeSize, dv = (sv - ey) * f.eyeSize;
       return [cx + du * Math.cos(rot * .5) - dv * Math.sin(rot * .5), cy + du * Math.sin(rot * .5) + dv * Math.cos(rot * .5) + f.browY / 256]; };
     if (!F.bolt3d) { g.fillStyle = c.brows; shape(E.brow, bmap); g.fill(); }
+    if (noEyes) return;
     let vmin = 9, vmax = -9; for (let i = 1; i < E.open.length; i += 2) { vmin = Math.min(vmin, E.open[i]); vmax = Math.max(vmax, E.open[i]); }
     if (blink) { g.fillStyle = c.lash; shape(E.lash, (u, v) => map(u, ey + (v - ey) * .45 + (vmax - ey) * .6)); g.fill(); return; }
     const lid = f.lids * (vmax - vmin) * .85;
@@ -1134,8 +1221,8 @@ function buildHuman(R) {
   const T = t => { texs.push(t); return t; };
   const P = (geo, mat, ol, smooth = true) => mk(geo, null, { mat, smooth });
   const root = group(PARENT), yaw = group(root), spin = group(yaw, 0, .85, 0), body = group(spin, 0, -.85, 0);
-  const art = S.face.style === "chibi" ? humanFaceArt : drawnFaceArt;
-  const faceO = T(wrapFront(art(S, false), null, S.face.faceY)), faceB = T(wrapFront(art(S, true), null, S.face.faceY));
+  const art = S.face.style === "chibi" ? humanFaceArt : drawnFaceArt, e3 = carvedOn(S);
+  const faceO = T(wrapFront(art(S, false, e3), null, S.face.faceY)), faceB = T(wrapFront(art(S, true, e3), null, S.face.faceY));
   const plain = isPlainHead(S.head), shape = headShaper(S.head), sh = (x, y, z) => plain ? new THREE.Vector3(x, y, z) : shape(new THREE.Vector3(x, y, z));
   const mFace = M("#ffffff", { map: faceO }), mSkin = M(c.skin), mHair = M(c.hair, { side: THREE.DoubleSide });
   const B = () => R.spec.body;
@@ -1188,7 +1275,8 @@ function buildHuman(R) {
     return g;
   });
   const head = group(body), chest = group(body), hips = group(body);
-  head.add(P(bulbHeadGeo(S.head, S.face.chin), mFace));
+  const faceMesh = P(bulbHeadGeo(S.head, S.face.chin), mFace); head.add(faceMesh);
+  const eyes3d = e3 ? carvedEyes(S, faceMesh, M) : null;
   const mEar = M(tint(c.skin, .947, .85, .83));
   const ears = [-1, 1].map(s => {                 // big round ears sticking straight out at eye level
     const ep = sh(-.02, S.face.earY, s * .33), e = group(head, ep.x, ep.y, ep.z);
@@ -1291,7 +1379,7 @@ function buildHuman(R) {
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
   const prop = O.prop.kind === "sword" ? buildSword(body, M, P, O.prop) : O.prop.kind === "gauntlet" ? buildGauntlet(body, M, P, O.prop) : null;
   Object.assign(R, { kind: "human", root, yaw, spin, body, torso, arms, legs, hands, feet, head, chest, hips, ears, cap, spike, pads, headband, tail,
-    mats, texs, mFace, faceO, faceB, mHair, chains, shadow, prop, D, sculpt, heightPx: D.px * S.body.scale, faceArt: art });
+    mats, texs, mFace, faceO, faceB, mHair, chains, shadow, prop, D, sculpt, heightPx: D.px * S.body.scale, faceArt: art, eyes3d });
   const hk = D.head / 1.45;                                           // locks are sized for the chibi head
   const anchorOf = a => {                                             // on sculpted hair, locks grow out of the hair surface
     if (!sculpt) return sh(...a).toArray();
@@ -2135,7 +2223,7 @@ function syncCat(p, r, dt = 0) {
   r.head.rotation.y = -p.face * (.85 - (p.bodyYaw ?? .85));
   r.hat.position.y = r.hatY + o.hatLift; r.hat.rotation.z = .18 - o.hatTilt;
   r.hatG.scale.setScalar(Math.max(Bd.hat, .001)); r.hat.visible = Bd.hat > .03;
-  r.mFace.map = p.blink < 0 ? r.faceB : r.faceO;
+  r.mFace.map = p.blink < 0 ? r.faceB : r.faceO; if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1; });
 
   // arms: world-relative swing angles, so they hang naturally under the hunch
   [-1, 1].forEach((s, i) => {
@@ -2229,6 +2317,7 @@ function syncHuman(p, r, dt = 0) {
   r.head.position.set(p.neck.x + Math.sin(ang[2]) * D.headOff * Bd.head, p.neck.y + Math.cos(ang[2]) * D.headOff * Bd.head, 0);
   r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)), -(ang[2] * .7 + o.headRot));
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)
+  if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1; });   // (carved eyes: shut with the face)
   if (!r.sculpt) { r.cap.scale.set(Hr.depth, Hr.height, Hr.width); r.cap.rotation.z = Hr.tilt; }
   if (r.headband) r.headband.scale.set(1, Hr.height / 1.06, Hr.width / 1.24);   // hugs the hair (sized for June's, so she's unchanged)
   r.spike.scale.setScalar(Math.max(Hr.spike, .001)); r.spike.visible = Hr.spike > .03;
@@ -2444,7 +2533,7 @@ const CAT_UP = "up_cards", CAT_DOWN = "dn_cards";
 { const seen = new Set(); ["slash", "rise", "spin", "chop", "sw_c1", "sw_c2", "sw_c3", "up_sword", "dn_sword"].forEach(k => (STRIKES[k].hits || []).forEach(h => { if (!seen.has(h)) { seen.add(h); h.reach += 12; } })); }   // the longer blade reaches a little further
 function shyFace(r) {                           // a copy of the face with full blush (Evil June, told off by a boss); made once, the first time
   if (r.faceS || !r.faceArt) return !!r.faceS; const S = r.spec, S2 = { ...S, face: { ...S.face, blush: 1 } };
-  r.faceS = wrapFront(r.faceArt(S2, false), null, S.face.faceY); r.texs.push(r.faceS); return true;
+  r.faceS = wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY); r.texs.push(r.faceS); return true;
 }
 
 return Object.assign(api, {
