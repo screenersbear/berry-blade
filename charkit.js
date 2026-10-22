@@ -374,9 +374,9 @@ const PRESETS = [
       prop: { kind: "gauntlet", side: "left", main: "#ffde00", fill: "#fc0000", orb: "#d30102", trim: "#f6fc50", c1: "#3bfe00", c2: "#fe0000", c3: "#0d97f9", c4: "#c03cff", rings: 4, size: 1.2 } },
     move: { set: "boxer" } }),                                  // (moves exactly like Chase)
   merge0(HUMAN_DEFAULT, { id: "rose", name: "ROSE",       // (was Lydia; the user, 2026-10-20) from the approved mockup: June's outfit and June's hairstyle (in Rose's own
-    body: { build: "tall", head: .9 },                           //   brown), her headphones (magenta cups), Chase's face and eyes (brown), no mask, no tail; on her feet,
-    head: { height: 1.11, jaw: .78, chinLen: .04 },              //   June's sword
-    face: { style: "chase", chin: .18, earY: -.1, ears: .85 },
+    body: { build: "tall", torso: .9 },                          //   brown), her headphones (magenta cups), Chase's face and eyes (brown), no mask, no tail; on her feet,
+    head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },     //   June's sword. Her body and head exactly June's (the user, 2026-10-22: "make rose the same proportions
+    face: { style: "chase", chin: .1, ears: 1.1, earY: -.11 },   //   as june and poses and everything"): the same pose then sits the same on both
     hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "lowtail", tie: true,
       tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },
         { yaw: -92, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },
