@@ -3825,7 +3825,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], itemTip: !!story.itemTip, cat: tamed ? tamed.w : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], maps: story.maps || [], itemTip: !!story.itemTip, cat: tamed ? tamed.w : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -3884,39 +3884,46 @@ function heroShot(id, part, sil) {                // a hero as the game draws th
 // rope ladders out of them); the rest stay hidden. No names on it (no room names anywhere: the user, 2026-10-20)
 let mapSeen = {};                                    // the rooms you've been in, world by world: { [world]: Set of rooms }
 const seenOf = w => mapSeen[w] || (mapSeen[w] = new Set());
-const MAP_TOP = -90, MAP_BOT = 640, MAP_ASPECT = .58;   // the slice of a room the map shows (px, y down: over the highest ledges to under the ground) · a room's height on the map, to its width
-const mapGeoC = new Map(), mapGridC = new Map();
-function roomGeo(w, s) {                             // a room's lines for the map, worked out once: its ground (in runs, broken at the pits), its platforms, its rope ladders
-  const k = w + ":" + s; if (mapGeoC.has(k)) return mapGeoC.get(k);
-  const q = WORLDS[w].stages[s], ground = []; let run = null;
-  for (let x = 0; x <= WORLD; x += 40) { const g = stageGround(q, x); if (g === null) { run = null; continue; } if (!run) ground.push(run = []); run.push([x, g]); }
-  const plats = (q.plats || []).map(([x, y, pw]) => [Math.max(0, x), y, Math.min(WORLD, x + pw)]).filter(p => p[2] > p[0]);
-  const ropes = [q.upX !== undefined && [q.upX, -1], q.downX !== undefined && [q.downX, 1]].filter(Boolean);   // (up out of the top, down out of the bottom)
-  const g = { ground, plats, ropes }; mapGeoC.set(k, g); return g;
-}
+const MAP_TOP = -90, MAP_BOT = 640;                  // the slice of a room the map's marks are placed in (px, y down: over the highest ledges to under the ground)
+const mapGridC = new Map();
 function mapGrid(w) {                                // where each room sits (its column, and its row: A top, B, C, D bottom), and how far the world goes
   if (mapGridC.has(w)) return mapGridC.get(w);
   const at = []; let c0 = 99, c1 = -99, r0 = 9, r1 = -9;
   WORLDS[w].stages.forEach((q, s) => { const m = /^([A-D])(\d+)$/.exec(q.cell || ""); if (!m || q.arena) return; const c = +m[2], r = "ABCD".indexOf(m[1]); at[s] = [c, r]; c0 = Math.min(c0, c); c1 = Math.max(c1, c); r0 = Math.min(r0, r); r1 = Math.max(r1, r); });
   const G0 = { at, c0, c1, r0, r1 }; mapGridC.set(w, G0); return G0;
 }
-function drawWorldMap(g, w, cw, ox, oy, k, asp = MAP_ASPECT) {   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
+function treasureMarks(w) {                          // the treasure map's marks, room by room: { [room]: ["cat" | "dungeon" | "rest" | "loot", ...] }
+  const S0 = WORLDS[w].stages, out = {}, add = (s, kind) => { if (s === undefined || s === null || !S0[s]) return; const L = out[s] || (out[s] = []); if (!L.includes(kind)) L.push(kind); };
+  if (catRun && catRun.w === w && w === world && catRun.phase === "wait" && catRun.room === undefined) {   // (not turned up yet: the map knows where it'll be)
+    const ok = S0.map((q, i) => i).filter(i => i > 0 && catRoomOK(i) && mapGrid(w).at[i]); if (ok.length) catRun.room = ok[Math.floor(Math.random() * ok.length)]; }
+  if (catRun && catRun.w === w && catRun.room !== undefined && catRun.phase !== "done") add(catRun.room, "cat");
+  S0.forEach((q, s) => { if (q.bep) add(s, "dungeon"); if (q.rest) add(s, "rest");
+    if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret) add(s, "loot"); });
+  if (SH_SPOT[w]) add(SH_SPOT[w].s, "dungeon");
+  (CRATE_AT[w] || []).forEach(([s, x], i) => { if (!(w === world && cratesBroken.has(w + ":" + s + ":" + i))) add(s, "loot"); });
+  if (w !== 9) itemPlan(w).forEach((q, i) => { if (!itemGot(w + ":" + q.s + ":" + q.k + i)) add(q.s, "loot"); });
+  return out;
+}
+function treasureMark(g, kind, x, y, z) {                 // one mark, centred at (x, y), about 2z across
+  g.lineWidth = Math.max(1, z * .28); g.strokeStyle = "#2f3b43"; g.lineJoin = "round";
+  if (kind === "rest") { g.fillStyle = "#ff7a2e"; g.beginPath(); g.moveTo(x, y - z); g.quadraticCurveTo(x + z * .95, y - z * .05, x + z * .55, y + z * .8); g.lineTo(x - z * .55, y + z * .8); g.quadraticCurveTo(x - z * .95, y - z * .05, x, y - z); g.fill(); g.stroke(); }   // a flame
+  else if (kind === "dungeon") { g.fillStyle = "#2f3b43"; g.strokeStyle = "#fff6e0"; g.beginPath(); g.moveTo(x - z * .75, y + z * .85); g.lineTo(x - z * .75, y - z * .1); g.arc(x, y - z * .1, z * .75, Math.PI, 0); g.lineTo(x + z * .75, y + z * .85); g.closePath(); g.fill(); g.stroke(); }   // a doorway
+  else if (kind === "cat") { g.fillStyle = "#fff6e0"; g.beginPath(); g.ellipse(x, y + z * .3, z * .5, z * .42, 0, 0, TAU); g.fill(); g.stroke(); [[-.62, -.22], [-.22, -.68], [.22, -.68], [.62, -.22]].forEach(([a, b]) => { g.beginPath(); g.arc(x + a * z, y + b * z, z * .22, 0, TAU); g.fill(); g.stroke(); }); }   // a paw
+  else { g.fillStyle = "#ffd203"; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? z * .42 : z; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }   // a star: treasure
+}
+function drawWorldMap(g, w, cw, ox, oy, k, asp = 1) {   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
+  // (as the 3DS draws it, the user 2026-10-22: a square block a room, none of its ground or ledges; grey, the one you're in yellow; a room you've not been in isn't there)
   const M = mapGrid(w), ch = cw * asp, pad = cw * .04, seen = seenOf(w), cur = mapGrid(world) === M ? stage : -1;
   const X = (c, x) => ox + (c - M.c0) * cw + pad + (x / WORLD) * (cw - pad * 2), Y = (r, y) => oy + (r - M.r0) * ch + ((y - MAP_TOP) / (MAP_BOT - MAP_TOP)) * ch;
   g.lineCap = g.lineJoin = "round"; const VW = g.canvas.clientWidth || 9999, VH = g.canvas.clientHeight || 9999;
-  for (const s of seen) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
+  const owned = mapOwned(w), rooms = owned ? M.at.map((a, s) => a ? s : -1).filter(s => s >= 0) : [...seen];   // (the treasure map: the rooms you've not been in too, darker)
+  for (const s of rooms) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
     if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;   // (off the little map: not drawn)
-    const G0 = roomGeo(w, s);
-    if (s === cur) { g.fillStyle = "rgba(255, 210, 3, .12)"; g.fillRect(bx + 1, by + 1, cw - 2, ch - 2); }
-    g.strokeStyle = "rgba(255, 246, 224, .3)"; g.lineWidth = Math.max(1, k * .7); g.strokeRect(bx + .5, by + .5, cw - 1, ch - 1);   // the room's outline
-    g.strokeStyle = "#fff6e0"; g.lineWidth = 1.8 * k;
-    G0.ground.forEach(run => { g.beginPath(); run.forEach(([x, y], i) => i ? g.lineTo(X(c, x), Y(r, y)) : g.moveTo(X(c, x), Y(r, y))); g.stroke(); });
-    g.strokeStyle = "rgba(255, 246, 224, .8)"; g.lineWidth = 1.3 * k;
-    G0.plats.forEach(([x0, y, x1]) => { g.beginPath(); g.moveTo(X(c, x0), Y(r, y)); g.lineTo(X(c, x1), Y(r, y)); g.stroke(); });
-    g.setLineDash([2 * k, 2.5 * k]); g.lineWidth = 1.2 * k;
-    G0.ropes.forEach(([x, d]) => { const gy = stageGround(WORLDS[w].stages[s], x) ?? GROUND; g.beginPath(); g.moveTo(X(c, x), Y(r, gy)); g.lineTo(X(c, x), d < 0 ? by : by + ch); g.stroke(); });
-    g.setLineDash([]); }
-  for (const s of seen) { const a = M.at[s]; if (!a || s !== cur) continue; g.strokeStyle = "#ffd203"; g.lineWidth = 2 * k; g.strokeRect(ox + (a[0] - M.c0) * cw + 1, oy + (a[1] - M.r0) * ch + 1, cw - 2, ch - 2); }   // (the room you're in, on top)
+    const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); }
+  if (owned) { const MK = treasureMarks(w), z = Math.min(cw * .19, 9 * k);   // its marks, in a row across the middle of each room
+    for (const s in MK) { const a = M.at[s]; if (!a) continue; const L = MK[s], bx = ox + (a[0] - M.c0) * cw, by = oy + (a[1] - M.r0) * ch;
+      if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;
+      L.forEach((kind, i) => treasureMark(g, kind, bx + cw / 2 + (i - (L.length - 1) / 2) * z * 2.3, by + ch / 2, z)); } }
   WORLDS[w].stages.forEach((qh, hs) => { if (!qh.bep || !hideFound(w, hs)) return; const a = M.at[hs];   // the beps' hideouts, found: their signs
     if (a && seen.has(hs)) { const B = WORLDS[w].stages[hs].bep, sx = X(a[0], B.zone), sy = Y(a[1], (stageGround(WORLDS[w].stages[hs], B.zone) ?? GROUND) - 30), z = 4.5 * k;
       g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.moveTo(sx - z, sy + z); g.lineTo(sx - z, sy - z * .2); g.lineTo(sx, sy - z * 1.1); g.lineTo(sx + z, sy - z * .2); g.lineTo(sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } });
@@ -3924,8 +3931,6 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = MAP_ASPECT) {   // the rooms yo
     if (a && seen.has(rm) && !(ally && ally.A === AL)) { const sx = X(a[0], WORLD / 2), sy = Y(a[1], (stageGround(WORLDS[w].stages[rm], WORLD / 2) ?? GROUND) - 40), z = 4.2 * k;
       g.fillStyle = AL.col; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.arc(sx, sy - z * .9, z * .8, 0, TAU); g.fill(); g.stroke();
       g.beginPath(); g.moveTo(sx - z, sy + z); g.quadraticCurveTo(sx, sy - z * .4, sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } });
-  if (cur >= 0 && M.at[cur] && player) { const [c, r] = M.at[cur], px = X(c, clamp(player.x, 0, WORLD)), py = Y(r, clamp(player.y - 40, MAP_TOP, MAP_BOT));   // you
-    g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.5 * k; g.beginPath(); g.arc(px, py, 3.4 * k, 0, Math.PI * 2); g.fill(); g.stroke(); }
 }
 const mapCanvas = (el, w, h) => { const d = Math.min(2, window.devicePixelRatio || 1); if (el.width !== Math.round(w * d) || el.height !== Math.round(h * d)) { el.width = Math.round(w * d); el.height = Math.round(h * d); } const g = el.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h); return g; };
 let miniKey = "";
@@ -3934,16 +3939,16 @@ function syncMini() {                                // the little map, top righ
   const on = !!M && !!M.at[stage] && !paused && !statsUp && !stronghold && !hideout && !arena && !edOpen && !menuUp && !comicUp && !opening && !cine && !modalOpen && !!player;
   el.classList.toggle("hidden", !on); $("hud").classList.toggle("low", on);
   if (!on) { miniKey = ""; return; }
-  const W0 = el.clientWidth - 4, H0 = el.clientHeight - 4, cw = W0 / 1.5, ch = cw * MAP_ASPECT, [c, r] = M.at[stage];
-  const px = (c - M.c0) * cw + (player.x / WORLD) * cw, py = (r - M.r0) * ch + ((clamp(player.y - 40, MAP_TOP, MAP_BOT) - MAP_TOP) / (MAP_BOT - MAP_TOP)) * ch;
-  const key = [world, stage, Math.round(px * 2), Math.round(py * 2), seenOf(world).size, W0].join(); if (key === miniKey) return; miniKey = key;
+  const W0 = el.clientWidth - 4, H0 = el.clientHeight - 4, cw = W0 / 3.4, ch = cw, [c, r] = M.at[stage];   // (square rooms, about three across, the one you're in in the middle)
+  const px = (c - M.c0) * cw + cw / 2, py = (r - M.r0) * ch + ch / 2;
+  const key = [world, stage, seenOf(world).size, W0, buddyAt.w === world ? JSON.stringify(buddyAt.rooms) : "", mapOwned(world) ? JSON.stringify(treasureMarks(world)) : ""].join(); if (key === miniKey) return; miniKey = key;
   const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, W0 / 2 - px, H0 / 2 - py, .8);
 }
 function drawPauseMap() {                            // the whole world on the pause screen, as big as it'll go
   const el = $("pmap"), box = $("pmapBox"), M = mapGrid(world); if (!M || M.c1 < M.c0) { el.style.display = "none"; return; } el.style.display = "";
   const nc = M.c1 - M.c0 + 1, nr = M.r1 - M.r0 + 1, padX = 18, padY = 16, bw = box.clientWidth - 6 - padX * 2, bh = box.clientHeight - 6 - padY * 2;
-  let cw = bw / nc; const asp = clamp(bh / (nr * cw), MAP_ASPECT, .9);   // (room to spare up and down: the rooms drawn a little taller)
-  cw = Math.max(20, Math.min(cw, bh / (nr * asp)));
+  let cw = bw / nc; const asp = 1;                     // (square rooms, as the 3DS draws them)
+  cw = Math.max(14, Math.min(cw, bh / (nr * asp)));
   const W0 = nc * cw + padX * 2, H0 = nr * cw * asp + padY * 2; el.style.width = W0 + 6 + "px"; el.style.height = H0 + 6 + "px";
   const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp);
 }
@@ -4060,7 +4065,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] && q.cat === q.w ? { w: q.cat, r: wildRig(q.cat) } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null ? [q.cat] : []), itemTip: !!q.itemTip }; storyRun(q.w, fixRests(q.w, q.s), false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && WILD_CATS[q.cat] && q.cat === q.w ? { w: q.cat, r: wildRig(q.cat) } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null ? [q.cat] : []), maps: q.maps || [], itemTip: !!q.itemTip }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -12026,9 +12031,15 @@ const ITEM_SVG = {                                  // (the item cards' little p
   fruit: '<svg viewBox="0 0 40 40"><path d="M21 9q9 1 11 11t-8 14q-11 3-15-6t4-16q4-3 8-3z" fill="#ffb02e" stroke="#2f3b43" stroke-width="2.4"/><path d="M14 13q3-4 9-4" fill="none" stroke="#ff7a2e" stroke-width="3" stroke-linecap="round"/><path d="M21 9q2-6 9-6q-1 6-9 6z" fill="#3fc24a" stroke="#2f3b43" stroke-width="2"/></svg>',
   power: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" fill="#ffd203" stroke="#2f3b43" stroke-width="2.4"/><path d="M22 7 L12 22 H19 L17 33 L28 17 H21 Z" fill="#ff6a3d" stroke="#2f3b43" stroke-width="2" stroke-linejoin="round"/></svg>',
   gum: '<svg viewBox="0 0 40 40"><path d="M6 20 L1 14 L2 26 Z M34 20 L39 14 L38 26 Z" fill="#ff9ad8" stroke="#2f3b43" stroke-width="2" stroke-linejoin="round"/><circle cx="20" cy="20" r="12" fill="#ff6ab8" stroke="#2f3b43" stroke-width="2.4"/><circle cx="15" cy="15" r="3.4" fill="#fff" opacity=".8"/></svg>',
+  map: '<svg viewBox="0 0 40 40"><path d="M5 9 L14 6 L26 10 L35 7 L35 31 L26 34 L14 30 L5 33 Z" fill="#f3e2b0" stroke="#2f3b43" stroke-width="2.4" stroke-linejoin="round"/><path d="M14 6 L14 30 M26 10 L26 34" stroke="#c9a96a" stroke-width="1.6"/><path d="M9 25 Q14 18 19 21 T29 15" fill="none" stroke="#d8952a" stroke-width="1.8" stroke-dasharray="2.4 2.2"/><path d="M27 12 L32 17 M32 12 L27 17" stroke="#e3141c" stroke-width="2.4" stroke-linecap="round"/></svg>',
   coin: '<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="16" fill="#ffc93a" stroke="#2f3b43" stroke-width="2.4"/><circle cx="20" cy="20" r="11.5" fill="none" stroke="#d8952a" stroke-width="2.2"/><text x="20.5" y="26.5" text-anchor="middle" font-family="Bungee, Arial Black, sans-serif" font-size="17" fill="#a8620e">P</text></svg>',
 };
-let freeBag = { coins: 0, fruit: 0, gum: 0, power: 0 }, freeGot = new Set(), freeCats = new Set();
+let freeBag = { coins: 0, fruit: 0, gum: 0, power: 0 }, freeGot = new Set(), freeCats = new Set(), freeMaps = new Set();
+// the treasure map (the user, 2026-10-22): the seller's, one per region. On your map from then on: every room of the region, and where its
+// cat, its dungeons (the beps' hideouts, the hatch down to the stronghold), its checkpoints (the rest stops) and its treasure (the gifts,
+// the crates, the items lying about, not yet taken) are
+const MAP_PRICE = 60;
+const mapOwned = w => story ? (story.maps || []).includes(w) : freeMaps.has(w);
 const bag = () => story ? (story.bag || (story.bag = { coins: 0, fruit: 0, gum: 0, power: 0 })) : freeBag;
 const itemGot = id => story ? (story.got || (story.got = [])).includes(id) : freeGot.has(id);
 const markGot = id => { if (story) { (story.got || (story.got = [])).includes(id) || story.got.push(id); } else freeGot.add(id); };
@@ -12250,7 +12261,8 @@ function openNpc(f) {
 function closeNpc() { npcUp = null; document.body.classList.remove("talking"); if (menuUp === "npc") menuUp = null; $("npc").classList.add("hidden"); jumpBuf = atkBuf = 0; npcBlockPrev = true; if (player) { player.block = false; player.blockHold = 0; } SFX.tick(); }
 function npcRows() {                                 // [label, sub, action]
   const U = npcUp, role = U.f.npc, B = bag();
-  if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]), ["<b>LEAVE</b>", "", closeNpc]];
+  if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]),
+    [`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, AND ITS CAT, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap], ["<b>LEAVE</b>", "", closeNpc]];
   if (role === "caller") { const C = catsCaught();
     return [...C.map(w => [`<b>${WILD_CATS[w].name}</b>`, `THE ${WILD_CATS[w].coat} CAT${tamed && tamed.w === w ? " · WITH YOU NOW" : ""}`, () => callCat(w)]), ["<b>LEAVE</b>", "", closeNpc]]; }
   const other = otherHero();
@@ -12281,6 +12293,13 @@ function buy(it) {
   if (B.coins < it.price) { SFX.nope(); U.msg = `THAT'S ${it.price} COINS, FRIEND. YOU'VE ONLY GOT ${B.coins}.`; drawNpc(); return; }
   if (B[it.k] >= BAG_MAX) { SFX.nope(); U.msg = `YOUR BAG'S FULL OF THOSE (${BAG_MAX}).`; drawNpc(); return; }
   B.coins -= it.price; B[it.k]++; coinHud(true); SFX.buy(); U.msg = `ONE ${it.name}! HOLD ${window.BERRY_TOUCH ? "L2" : "L2 OR /"} TO USE IT.`; drawNpc(); if (story) writeSave();
+}
+function buyMap() {
+  const B = bag(), U = npcUp;
+  if (mapOwned(world)) { SFX.tick(); U.msg = "YOU'VE ALREADY GOT THIS REGION'S MAP. THE NEXT REGION'S SELLER HAS THAT ONE."; drawNpc(); return; }
+  if (B.coins < MAP_PRICE) { SFX.nope(); U.msg = `THAT'S ${MAP_PRICE} COINS, FRIEND. YOU'VE ONLY GOT ${B.coins}.`; drawNpc(); return; }
+  B.coins -= MAP_PRICE; if (story) (story.maps || (story.maps = [])).push(world); else freeMaps.add(world);
+  coinHud(true); SFX.buy(); miniKey = ""; U.msg = `THE MAP OF ${WORLDS[world].name}! IT'S ALL ON YOUR MAP NOW: PAUSE TO SEE IT.`; drawNpc(); if (story) writeSave();
 }
 function callCat(w) {
   const U = npcUp;
@@ -14934,7 +14953,7 @@ window.BERRY_UI = { get state() {           // (phone build: what's on screen, f
 window.__game = { goWorldNow, arrivalRoom, get patrol() { return patrol; }, maybePatrol, patrolSpotted, get patrolOff() { return patrolOff; }, get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
   get sadSpots() { return sadSpots; }, get wild() { return wild; }, get arena() { return arena; }, startShowdown, arenaPick, get catRun() { return catRun; }, get tamed() { return tamed; }, ALLIES, allyRig, get ally() { return ally; }, get allyHere() { return allyHere; }, get buddyAt() { return buddyAt; }, get strays() { return strays; }, WILD_CATS, wildRig, wildSpawn, catchCat, catStay, heroShot, maybeCameo, get cameo() { return cameo; }, hurtPlayer, makeBubble, onReset, maybeEJ, ejJoin, ejEnd, startChide, syncMusic, syncWeapon, weaponSvg, dazePlayer, get crates() { return crates; }, get healBerries() { return healBerries; }, hitCrate, CRATE_AT, ejDef, CHIDES, get ej() { return ej; }, bossArrive, get bossIn() { return bossIn; }, get baddies() { return baddies; }, bossPortrait, get trap() { return trap; }, get dayClock() { return dayClock; }, get worldStack() { return worldStack; }, get entrySide() { return entrySide; }, get stayCols() { return stayCols; }, showLvl, levelGo, get lvlOpen() { return lvlOpen; }, get stronghold() { return stronghold; }, spawnTrapdoor, maybeTrapdoor, enterStronghold, keysGot, shClear, get bepEv() { return bepEv; }, get bepRun() { return bepRun; }, get sadFate() { return sadFate; }, gotoStage(i) { cine = null; stage = i; trail.push(i); exitOpen = false; $("exitCue").classList.add("hidden"); oppSel = STAGES[i].foe; FOES.forEach(hideFoe); foe = FOES[oppSel]; enemy = makeFoeState(foe, WORLD - 360); { const c = colOf(i); if (c > dayClock) dayClock = c; stayCols.add(c); dayHeld = HOUR_OF[dayClock]; } setScreen(i); clearBaddies(); spawnBaddies(i); spawnGifts(); }, get gifts() { return gifts; }, get intro() { return intro; }, get cine() { return cine; }, showAch, showSelect, get trail() { return trail; }, get exitOpen() { return exitOpen; }, get sleepPlan() { return sleepPlan; }, get roomsDone() { return roomsDone; }, get dayHeld() { return dayHeld; }, goBack, groundAt, get hideout() { return hideout; }, startBeps, enterHideout, get shore() { return shore; }, get friends() { return friends; }, spawnFriends, rollSad, cheerUp, showWorlds, setWorldSel, chooseWorld, setWorld, get world() { return world; }, get level() { return level; }, get stage() { return stage; }, get hour() { return hour; }, GAPS, PLATFORMS, STAGES, splashDown,
-  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; }, get GAPS() { return GAPS; }, groundAt,
+  bossStep, bbStep, makeBaddy, syncBaddy, setWorld, get enemyState() { return enemy; }, get GAPS() { return GAPS; }, groundAt, treasureMarks, mapOwned, openPause, closePause, drawPauseMap, syncMini, openNpc,
   forceSad(b) { b.sad = true; sadFace(b); }, cheerUp, get sadFate() { return sadFate; },
   goNext, goRoom, goRoomV, goWorld, goWorldBack, pollPad, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
   step(n) { for (let i = 0; i < n; i++) update(STEP); render(n * STEP); } };
