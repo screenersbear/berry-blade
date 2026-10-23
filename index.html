@@ -3040,6 +3040,7 @@ const JUMP_KEYS = ["Space", "KeyZ", "KeyK"], ATK_KEYS = ["KeyX", "KeyJ"], UP_KEY
 // you walk into the next clearing. (Until 2026-10-17 the woods and the waves used borrowed tunes and their recordings; both are original now.)
 // Browsers only allow sound after the player interacts, so it starts on the first key/click. `bgm` is just music on/off now.
 const orig = document.getElementById("bgm"), MUSIC_VOL = .34;
+let recMix = 0, recLevel = MUSIC_VOL;               // the recording's fade: how far in (0..1, shaped to equal-power) and the level it's going to (or from)
 orig.volume = 0;
 let musicErr = null, musicOn = false;
 orig.addEventListener("error", () => { musicErr = "file"; });
@@ -3047,7 +3048,10 @@ orig.addEventListener("error", () => { musicErr = "file"; });
 // clearings, the score everywhere else. The woods' midday (and the menus) At Artiela; since 2026-10-22 R23X's beat tape (the user: "use
 // the original during the day then make alternate versions for the rest of it"): Kesh's garden at sunrise and dawn (its day comes last),
 // the Turtle's lakebed and King P's castle at midday. Since 2026-10-23 (the user's two more): the beach, all of it (its one hour), coming in
-// as Glos drops down in the opening; and "tale", under the story so far's voice. Never published (build_phone.py empties this)
+// as Glos drops down in the opening; and "tale", under the story so far's voice. Later the same day, four more (the user: "keep them for the
+// daytime song and then create your own versions of the other timed songs"): Loof's sky, Sirocco's dunes, Vinella's candy works and Master
+// No's casino, each at midday (the casino: its first evening), and the other hours a companion tune of my own (wip/pc_songs.py).
+// Never published (build_phone.py empties this)
 const PC_REC = {};   // (the phone build: no recordings, the all-original score everywhere)
 const inHub = () => mode === "play" && !hideout && !stronghold && !arena && !!(STAGES[stage] && STAGES[stage].hub);   // (a world's hub: its own take on the tune, the score's HUB, never a recording)
 const scoreHour = () => { if ((hideout || ejFight() || inHub()) && mode === "play") return 0; const h = mode === "play" || mode === "opp" ? hour : 0; const R = PC_REC[world]; return !R || !R.hours.includes(h) || orig.error || !window.BERRY_PC ? h : -1; };   // −1: the recording itself (midday in the woods, and the menus), on the PC build only (its own score sets BERRY_PC); everywhere else the game's own score
@@ -3071,8 +3075,9 @@ function syncMusic(dt) {                         // every frame: the right music
   const R = pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
   const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) : 0;
-  const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : easing() ? 1.2 : 2.4;   // (Glos's song in at once as he drops; the story's quicker too)
-  if (orig.volume !== ov) orig.volume = clamp(approach(orig.volume, ov, dt * MUSIC_VOL / fadeT), 0, 1);   // a crossfade with the score (shorter into the in-between, which restarts the same song)
+  const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
+  if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / fadeT);   // equal-power (2026-10-23: "make sure there's a fadeout cross over always"): the recording along a
+  orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);               // sine as the score goes along a cosine, so the handover holds its loudness   // a crossfade with the score (shorter into the in-between, which restarts the same song)
   if (ov > 0 && orig.paused) orig.play().catch(() => {});
   if (ov === 0 && orig.volume < .003 && !orig.paused) orig.pause();
   if (!S) return;
@@ -3084,7 +3089,7 @@ function syncMusic(dt) {                         // every frame: the right music
   else if (inHub() && S.HUB !== undefined && world !== 9) S.setHour(S.HUB, .94);   // (a hub: this world's tune, its hub take: the user, 2026-10-22)
   else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
-  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL); else if (S.state.playing) S.stop(on ? 1.5 : .12);
+  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
 }
 function startMusic() {
   audio();
