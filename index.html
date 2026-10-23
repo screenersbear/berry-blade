@@ -387,6 +387,25 @@
   #comic.tri .cap { left: 10px; right: 10px; top: auto; bottom: 10px; max-width: none; font-size: 14px; }
   #comic.tri .cp:nth-child(even) .cap { left: 10px; right: 10px; }
   #comic .key { display: inline-block; background: var(--s); color: var(--y); padding: 1px 7px 0; margin: 0 2px; border-radius: 4px; }
+  /* the story so far, off the beach: two comic pages, a panel at a time (the ones before it grayed), read out; the first page turns over onto the second */
+  #tale { position: fixed; inset: 0; z-index: 49; display: none; align-items: center; justify-content: center; background: var(--s); perspective: 1900px; overflow: hidden; }
+  #tale.show { display: flex; }
+  #tale .page { position: absolute; width: min(94vw, 172vh); background: var(--y); padding: 14px; box-sizing: border-box; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 12px;
+    box-shadow: 10px 10px 0 #000; transform-origin: left center; transition: transform 1s cubic-bezier(.55, 0, .35, 1), opacity .35s .65s, box-shadow 1s; }
+  #tale .page.p1 { z-index: 2; } #tale .page.p2 { z-index: 1; }
+  #tale .page.away { transform: rotateY(-112deg); opacity: 0; box-shadow: 40px 10px 40px rgba(0, 0, 0, .5); pointer-events: none; }
+  #tale .page.out { opacity: 0; transition: opacity .35s; }
+  #tale .cp { position: relative; width: calc((100% - 24px) / 3); aspect-ratio: 4 / 3; box-sizing: border-box; border: 5px solid var(--s); background: #fff center / cover no-repeat;
+    opacity: 0; transform: scale(.85) rotate(-1.5deg); transition: opacity .35s, transform .4s cubic-bezier(.2, 1.5, .4, 1), filter .7s; }
+  #tale .cp:nth-child(even) { transform: scale(.85) rotate(1.5deg); }
+  #tale .cp.on { opacity: 1; transform: none; }
+  #tale .cp.past { filter: grayscale(1) brightness(.48) contrast(.9); }
+  #tale .cp::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle, rgba(47, 59, 67, .32) 1.1px, transparent 1.6px) 0 0 / 7px 7px; mix-blend-mode: multiply; pointer-events: none; }
+  #tale .cap { position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 2; background: var(--y); color: var(--s); border: 3px solid var(--s); font: clamp(8px, .98vw, 15px)/1.22 "Bungee", sans-serif;
+    padding: 5px 8px 2px; box-shadow: 3px 3px 0 var(--s); }
+  #tale .cap.top { top: 8px; bottom: auto; }
+  #tale .go { position: absolute; right: 18px; bottom: 12px; font: 600 12px "Jost", sans-serif; letter-spacing: .4em; color: var(--y); opacity: .75; pointer-events: none; }
+  #tale .skip { position: absolute; right: 18px; top: 14px; font: 600 12px "Jost", sans-serif; letter-spacing: .35em; color: var(--y); background: none; border: 2px solid var(--y); padding: 7px 10px 6px 14px; cursor: pointer; }
   #skipHint { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: var(--s); color: var(--y); font: 600 11px "Jost", sans-serif; letter-spacing: .26em; padding: 7px 12px; display: none; }
   #skipHint.show { display: block; }
   @media (max-height: 520px) {
@@ -515,6 +534,7 @@
   <div id="mapCard" class="off"><div class="lockup"><div class="blk" id="mcName"></div><div class="bar" id="mcSub"></div></div><canvas id="mcMap"></canvas><div id="mcLow"><ul id="mcInfo"></ul><div class="btns" id="mcBtns"></div></div></div>
   <small data-pad="← → to choose a place you've been &middot; {j} to go there &middot; {sq} to go back">← → to choose a place you've been &middot; Enter to go there &middot; Esc to go back</small>
 </div></div>
+<div id="tale"></div>
 <div id="comic"><div class="page"><div class="cp"><span class="cap">A BEP!</span><span class="fx" style="right: 10%; top: 30%">!</span></div><div class="cp"><span class="cap">GLOS WENT THAT WAY: INTO THE FOREST!</span><span class="arrow"></span></div><div class="cp"><span class="cap">IT HAD SOMETHING FOR THEM...</span><span class="fx" style="left: 8%; bottom: 10%">✦</span></div><div class="cp"><span class="cap">THE BERRY SWORD! THE GAUNTLET! AFTER GLOS!</span></div><span class="go" id="comicGo">PRESS ANY BUTTON</span></div></div>
 <div id="skipHint">ENTER: SKIP</div>
 <div id="banner" class="lockup"></div>
@@ -3044,7 +3064,7 @@ const bgm = {
   pause() { musicOn = false; orig.pause(); orig.volume = 0; if (window.BerryScore) window.BerryScore.stop(); },
 };
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
-  const S = window.BerryScore, h = scoreHour(), on = musicOn && !bgm.dataset.muted;
+  const S = window.BerryScore, h = scoreHour(), on = musicOn && !bgm.dataset.muted && !tale;   // (the story so far: the music out under the voice)
   const R = PC_REC[world] || PC_REC[0];                // (this world's recording: swapped in once the last one has faded right out)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
   const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL : 0;
@@ -3348,7 +3368,7 @@ addEventListener("keydown", e => {
   if (itemsUp) { e.preventDefault(); if (!e.repeat) { const it = ITEMS.find(q => q.key === e.code); if (it) useItem(it.k); else if (e.code === "Escape") closeItems(); } return; }   // the items, held open: their keys
   if (e.code === "Slash" && !e.repeat && mode === "play" && openItems()) { e.preventDefault(); return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
-  if (comicUp) { if (!e.repeat) { e.preventDefault(); comicNext(); } return; }     // the bep's comic page: any key
+  if (comicUp) { if (!e.repeat) { e.preventDefault(); if (tale && ["Escape", "Enter"].includes(e.code)) taleSkip(); else comicNext(); } return; }     // the bep's comic page: any key (the story's: Esc / Enter skips it)
   if (opening && !e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); skipOpening(); return; }   // (the opening can be skipped)
   if (mode === "select") {
     if (e.repeat) return;
@@ -3456,7 +3476,7 @@ function pollPad() {
       if (pr("j") || pr("a")) { const q = B[modalSel]; modalWas = false; if (q) q.click(); else onReset(); }   // (no buttons showing: on, as ever)
       padPrev = { ...pad }; return; }
     if (!modalOpen) modalWas = false; }
-  if (comicUp) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
+  if (comicUp) { if (tale && pad.st && !padPrev.st) taleSkip(); else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
   if (opening && ((pad.st && !padPrev.st) || (pad.j && !padPrev.j))) { skipOpening(); padPrev = { ...pad }; return; }
   if (menuUp && !titleUp) { const pr = k => pad[k] && !padPrev[k];
     menuNav(pr("l") || pr("u") ? -1 : pr("r") || pr("d") ? 1 : 0, pr("j") || pr("a"), pr("bl") || pr("st"), pr("u") || pr("d")); padPrev = { ...pad }; return; }
@@ -3897,7 +3917,7 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dback: "BACK" };
+const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK" };
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "ach", "quit"] : ["resume", "ach", "lvl", "home", "quit"];   // (a story run: no testing tools here, they're under the gear)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
@@ -3934,10 +3954,11 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dreset", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dreset", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, OR SET THIS ROOM BACK TO NEW"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
+  if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
   if (what === "dback") { SFX.tick(); dbgPick = null; $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("debug")); drawPauseMap(); return; }
   if (what === "dreset") { closePause(); SFX.confirm(); debugResetRoom(); return; }
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
@@ -4348,7 +4369,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -4614,7 +4635,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -4947,6 +4968,7 @@ function showComic() {
   setTimeout(() => { $("comicGo").classList.add("on"); g.ready = true; }, 350 + 4 * 900);
 }
 function comicNext() {                               // a press: all the panels at once, or (all shown) close the page and on
+  if (tale) return taleNext();
   if (tutor && comicUp) { if (!tutor.ready) { [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.add("on")); $("comicGo").classList.add("on"); tutor.ready = true; return; }
     comicUp = false; $("comic").classList.remove("show", "tri"); SFX.confirm(); tutor = null; jumpBuf = atkBuf = 0; return; }   // (a lesson: closed, and on you go)
   const g = gift; if (!comicUp) return;
@@ -5024,6 +5046,73 @@ function showTutor(id) {
   [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
   setTimeout(() => { if (tutor && tutor.id === id) { $("comicGo").classList.add("on"); tutor.ready = true; } }, 350 + T.panels.length * 900);
 }
+// ── the story so far (the user, 2026-10-23: "After the beach, create a cutscene that's those same panels appearing one at a time and graying
+// out the previous one so that only the new one is visible. have a voice that sounds like the voice model used for camila tell this story,
+// reading it in chunks with every slide"; "in that intro show clips of some of the villains"; "then, the page flips. more comic strips and
+// voice over"). Once a story, as you go off the beach into the woods (or from DEBUG in the pause menu). The pictures were shot with the
+// game's own models (.claude/berry-tools/tests/storyshots.js); the voice is Kokoro's af_heart (Apache-2.0), slowed and raised to sit near
+// Camila's own takes (~/BerryBlade3DS-tools/narration-tools), in story/tale.js as AAC (base64, so it plays from a folder too). A press: on
+// to the next panel; Start / Esc (or SKIP): the lot
+const TALE = [
+  { img: "story/p1.jpg", top: true, text: "Berry Island, as you can imagine, was peaceful... until the baddies came." },
+  { img: "story/p2.jpg", text: "They convinced the berries to let them build upon their land." },
+  { img: "story/p3.jpg", text: "Soon, factories, casinos, and military bases appeared all over the island." },
+  { img: "story/p4.jpg", text: "And somehow, they convinced, too, some of our own people to work for them, with promises upon promises of everything they've ever wanted." },
+  { img: "story/p5.jpg", text: "But now, our lives are not our own. And we've been without peace for too long..." },
+  { img: "story/p6.jpg", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
+  { img: "story/p7.jpg", text: "Please, help us now to bring our friends back on our side." },
+  { img: "story/p8.jpg", text: "And fight for our home." },
+];
+const TALE_P1 = 5, TALE_VOL = .62;                   // (the first page's panels; then it turns over)
+let tale = null; const taleVo = { state: "idle", bufs: [] };
+function taleLoad() {                                // the voice (decoded once) and the pictures, fetched ahead
+  if (taleVo.state !== "idle") return; taleVo.state = "loading"; TALE.forEach(q => { new Image().src = q.img; });
+  const go = () => { const A = window.BERRY_TALE, c = audio(); if (!A || !c) { taleVo.state = "failed"; return; }
+    const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
+    Promise.all(A.map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { taleVo.bufs[i] = buf; }).catch(() => { }))).then(() => { taleVo.state = "ready"; }); };
+  if (window.BERRY_TALE) return go();
+  const el = document.createElement("script"); el.src = "story/tale.js"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
+}
+function startTale(then) {
+  taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show");
+  const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span></div>`;
+  $("tale").innerHTML = `<div class="page p2">${TALE.slice(TALE_P1).map((q, i) => panel(q, i + TALE_P1)).join("")}</div><div class="page p1">${TALE.slice(0, TALE_P1).map(panel).join("")}</div>
+    <button class="skip">SKIP ${padUse ? padName("st") : window.BERRY_TOUCH ? "" : "· ESC"}</button><span class="go">${window.BERRY_TOUCH ? "TAP FOR THE NEXT ONE" : "ANY BUTTON FOR THE NEXT ONE"}</span>`;
+  $("tale").classList.add("show");
+  tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now() };
+}
+function taleTick(dt) {                              // (every frame, paused or not: the game's paused under it)
+  const T = tale; if (T.sayAt >= 0 && (T.sayAt -= dt) < 0) taleSay(T.i);
+  if (T.i < 0 && taleVo.state === "loading" && sfxOn && (T.hold -= dt) > 0) return;   // (the first panel waits for the voice, a moment or two at most)
+  if ((T.wait -= dt) <= 0) taleStep();
+}
+function taleSay(i) {
+  const T = tale, b = taleVo.bufs[i]; if (!b || !live()) return;
+  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = TALE_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime); T.src = src;
+  T.wait = Math.max(T.wait, b.duration + .8);
+}
+function taleHush() { const T = tale; if (T && T.src) { try { T.src.stop(); } catch (e) { } T.src = null; } }
+function taleStep() {
+  const T = tale, n = T.i + 1; taleHush();
+  if (n >= TALE.length) return endTale();
+  const cp = k => k < TALE_P1 ? $("tale").querySelector(".p1").children[k] : $("tale").querySelector(".p2").children[k - TALE_P1];
+  if (n === TALE_P1 && !T.turned) { T.turned = true; $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; }   // the page turns over
+  for (let k = 0; k < n; k++) cp(k).classList.add("past");
+  cp(n).classList.add("on"); SFX.tick(); T.i = n;
+  const words = TALE[n].text.split(/\s+/).length; T.wait = 1.2 + words * .36; T.sayAt = .35;   // (no voice, or none yet: time to read it)
+}
+function taleNext() { const T = tale; if (!T || performance.now() - T.t0 < 600) return; if (T.turned && T.i < TALE_P1) return; T.sayAt = -1; T.wait = 0; }   // (not in the first moment: a button held from the stats screen; not mid-turn)
+function taleSkip() { if (tale) endTale(); }
+function endTale() {
+  const T = tale; taleHush(); tale = null; if (story) story.tale = true;
+  $("tale").querySelectorAll(".page").forEach(el => el.classList.add("out"));
+  setTimeout(() => { comicUp = false; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (T.then) T.then(); }, 380);
+  setTimeout(() => { if (!tale) $("tale").classList.remove("show"); }, T.then ? 380 + 520 : 380);   // (under the fade to the woods by then)
+}
+Object.assign(SFX, { page() { if (!live()) return; const t = ac.currentTime, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();   // a page turning: a soft swish of paper
+  s.buffer = noiseBuf; f.type = "bandpass"; f.Q.value = .8; f.frequency.setValueAtTime(700, t); f.frequency.exponentialRampToValueAtTime(2600, t + .32); env(g, t, .09, .42, .16);
+  s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + .6); } });
+$("tale").addEventListener("pointerdown", e => { e.preventDefault(); if (e.target.closest(".skip")) taleSkip(); else taleNext(); });
 function armHeroes() {                               // on with the weapons: you, and the other one
   const id = story ? story.char : null, r = roster.find(q => q.id === id); if (!r) return;
   const old = player; rig.root.visible = rig.shadow.visible = false; rig = r;
@@ -5153,7 +5242,7 @@ function wstReset() { wst = { t: 0, pops: 0, caps: 0, up: 0, lost: 0, kos: 0, ch
 function wstTick(dt) { if (!wst || !player || mode !== "play") return; wst.t += dt; if (wst.hp !== null && player.hp < wst.hp) wst.lost += wst.hp - player.hp; wst.hp = player.hp; if (player.dead && !wst.dead) wst.kos++; wst.dead = !!player.dead; }
 const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
 function goWorld(w) {
-  if (statsUp) return; const S = wst || { t: 0, pops: 0, lost: 0, kos: 0, cheered: 0, rooms: new Set(), boss: null };
+  if (statsUp) return; if (story && world === 9 && w === 0 && !story.tale) taleLoad(); const S = wst || { t: 0, pops: 0, lost: 0, kos: 0, cheered: 0, rooms: new Set(), boss: null };
   statsUp = { w, t0: performance.now() }; paused = true; for (const k in keys) keys[k] = false;
   $("wsName").textContent = WORLDS[world].name;
   const rows = [["TIME", mmss(S.t)], ["ROOMS", Math.max(1, S.rooms.size)], [world === 9 ? "BADDIES SENT PACKING" : "BADDIES WON BACK", S.pops], ["SAD BERRIES CHEERED UP", S.cheered], ["HEARTS LOST", S.lost], ["KNOCK-OUTS", S.kos]];
@@ -5191,6 +5280,7 @@ function goWorldDoor(w, ns) {                        // in at a door: at its wor
 }
 function goWorldNow(w) {                             // on into the next world: its first room, a new day
   const fromW = world;
+  if (story && fromW === 9 && w === 0 && !story.tale && !tale) return startTale(() => goWorldNow(w));   // off the beach for the first time: the story so far first
   if (story && STAGES[stage] && STAGES[stage].toWorld === w) (story.lastDoor || (story.lastDoor = {}))[fromW] = stage;   // (the door you left this world by)
   { const ns = arrivalRoom(w, fromW); if (ns > 0) return goWorldDoor(w, ns); }
   swapUnderFade(() => {
@@ -15879,7 +15969,7 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); syncMusic(dt); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); syncMusic(dt); if (tale) taleTick(dt); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (window.__pause || paused || itemsUp || npcUp) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
