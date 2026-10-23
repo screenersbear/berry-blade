@@ -1929,7 +1929,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
   if (airKeyed(p.atkKind)) return false;
   const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
   const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
-  const L = { fNx: .16 + .1 * w, fNy: .42 + .08 * up + .06 * w, fFx: -.12 - .2 * w, fFy: .3 + .06 * up - .1 * w, fP: -.35 - .12 * w, fNz: 0, fFz: 0, hN: 0, hF: 0 }, sw = leadFar(p);
+  const L = { fNx: .14 + .06 * w, fNy: .44 + .08 * up + .06 * w, fFx: -.02 - .08 * w, fFy: .36 + .06 * up - .02 * w, fP: -.35 - .12 * w, fNz: .12, fFz: .12, hN: 0, hF: 0 }, sw = leadFar(p);   // both knees up, a little apart (the user, 2026-10-23: "rose's legs get all twisted in the air": a wide split front to back crossed them in an X once she turned toward us)
   for (const k in L) T[sw ? SWAP[k] || k : k] = L[k];   // (the lead leg forward, as the move's own keys have it: Camila's gauntlet hand, facing right, is the far one; unswapped her legs crossed, 2026-10-22)
   return true;
 }

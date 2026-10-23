@@ -394,7 +394,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261023a"></script>
+<script src="charkit.js?v=20261023b"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3185,11 +3185,15 @@ const SFX = {
   whoosh() { noise(.28, { vol: .3, f0: 700, f1: 2600, type: "bandpass", q: 1.4 }); },
   punch() { noise(.06, { vol: .3, f0: 1500, f1: 6500, type: "bandpass", q: 1.4 }); noise(.035, { vol: .22, f0: 7000, f1: 3800, type: "highpass", delay: .03 }); tone(320, 170, .06, { type: "sine", vol: .1, delay: .02 }); },   // a swish, a crisp snap, a light knock under it (2026-10-22: brighter, it was a dull thud)
   kick() { noise(.09, { vol: .32, f0: 1000, f1: 5500, type: "bandpass", q: 1.4 }); noise(.04, { vol: .2, f0: 6000, f1: 3200, type: "highpass", delay: .045 }); tone(260, 140, .07, { type: "sine", vol: .11, delay: .04 }); },   // (brighter too)
-  slash() { if (smpPlay("slash", .1, { delay: .03 })) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
+  slash() { noise(.075, { vol: .15, f0: 1100, f1: 6200, type: "bandpass", q: 2.4 }); if (smpPlay("slash", .1, { delay: .03 })) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
   hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) { noise(.03, { vol: .11, f0: 6500, f1: 3500, type: "highpass" }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
   impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
     noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
+  bite(sword, w = 1) { const k = .8 + .2 * Math.min(w, 1.6);   // a blow of yours landing, with more bite (the user, 2026-10-23, after Odin Sphere: "a more aggressive sound effect"): a sharp crack on top, a short thump under it;
+    noise(.028, { vol: .19 * k, f0: 9000, f1: 4200, type: "highpass" }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack
+    if (sword) { noise(.07, { vol: .14 * k, f0: 5400, f1: 2700, type: "bandpass", q: 3 }); tone(3150, 2550, .12, { type: "triangle", vol: .045 * k, delay: .004 }); tone(4700, 4300, .08, { type: "sine", vol: .025 * k, delay: .004 }); }
+    else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); tone(420, 150, .05, { type: "square", vol: .045 * k, lp: 2200 }); } },
   hurt() { tone(620, 180, .28, { type: "square", vol: .09, lp: 2200 }); },
   ko() { [523, 440, 349, 262].forEach((f, i) => tone(f, f * .97, .2, { type: "triangle", vol: .12, delay: .2 + i * .16 })); },
   explode(big) { noise(big ? .9 : .4, { vol: big ? .32 : .2, f0: 1800, f1: 120 }); tone(90, 35, big ? .7 : .3, { type: "sine", vol: big ? .3 : .16 }); },
@@ -5539,7 +5543,8 @@ function updatePlayer(dt) {
       else if (p.atkT < 0 && p.onGround && held.down) { atkBuf = 0; p.chain = null; startStrike(p, "slide"); }   // ↓ then attack: the slide
       else if (p.atkT < 0) { atkBuf = 0; const fwd = !!(held.left || held.right), air = !p.onGround, kind = air ? (fwd ? "air2" : "air1") : (fwd ? "B" : "A");
         const L = (air ? (fwd ? SET.air2 : SET.air1) : (fwd ? SET.groundB : SET.ground)) || list, again = p.chain && p.chain.kind === kind && time - (p.lastStrikeT ?? -9) < .3 && (!p.chain.needHit || p.chainHit);
-        const nx = again && (p.lastIdx ?? 0) + 1 < L.length ? (p.lastIdx ?? 0) + 1 : 0; p.chain = { kind, list: L, needHit: air }; startStrike(p, L[nx], nx); }   // (pressed again just after one: the next in it)
+        const nx = again && (p.lastIdx ?? 0) + 1 < L.length ? (p.lastIdx ?? 0) + 1 : 0;
+        if (!(air && nx === 0 && (p.airN || 0) > 0)) { p.chain = { kind, list: L, needHit: air }; startStrike(p, L[nx], nx); } }   // (one air combo a jump: once one's landed a blow, another can't start till you're down)   // (pressed again just after one: the next in it)
       else if (p.chain && p.atkIdx < p.chain.list.length - 1 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; }   // (the air's single rising hit is a move on its own: nothing chains off it)
     }
   }
@@ -5603,7 +5608,7 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
-  if (p.onGround) { p.upUsed = false; p.bigJ = 0; p.floatB = false; }   // back on your feet: the rising hit and the bubble's drift reset
+  if (p.onGround) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; }   // back on your feet: the rising hit and the bubble's drift reset
   const span = p.combo ? p.comboSpan : p.tackle ? p.tackle.span : null;   // (charging an attack or the tackle, you can walk off a ledge: only a combo under way, the charged tackle's included, holds you to your footing; the user, 2026-10-17)
   if (span) { const [a, b] = span; if (p.x < a || p.x > b) { p.x = clamp(p.x, a, b); p.vx = 0; } }   // a combo (or a tackle) stops at the edge: it never carries you off a ledge
   if (p.onGround && !p.dead) {                       // remember solid footing (a little back from the water's edge) to come back to after a fall
@@ -5695,7 +5700,64 @@ function syncBubble(dt) {
   B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const big = 1 + ((B.k || 1) - 1) * GUM_GROW, r = H * .64 * pop * big, w = Math.sin(time * 5.5) * .035;   // (the bubblegum's: a bit bigger than the plain one, not three times: the user 2026-10-22)
   B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;   // (sits on the ground like the plain one, not sunk into it. This line's scale had slipped into the comment, 10-22: both bubbles stuck small)
 }
+// swing trails (the user, 2026-10-23, after Odin Sphere: "a visual trail of the sword ... have the punches have the trail too for camila"): a
+// ribbon swept out behind the blade (hilt to tip) or the punching fist through each blow, bright at its head and gone in a moment. On game
+// time, so a hit's freeze holds it there too
+const TRAIL_LIFE = .13, FIST_LIFE = .17, TRAIL_N = 14, TRAIL_SUB = 3, TRAIL_PTS = (TRAIL_N - 1) * TRAIL_SUB + 1, FIST_W = .2;   // (a punch travels less than a blade's tip: its streak wider and a beat longer)
+const TRAIL_VS = `attribute float u; attribute float e; varying float vU; varying float vE; void main() { vU = u; vE = e; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+const TRAIL_FS = `uniform vec3 cA; uniform vec3 cB; uniform float uA; varying float vU; varying float vE; void main() { float f = 1.0 - vU; vec3 c = mix(cB, cA, vE); c = mix(c, vec3(1.0), f * f * f * .45);
+  gl_FragColor = vec4(c, uA * pow(f, 1.1) * mix(.3, 1.0, vE)); }`;   // (the head white hot; the far edge of the blade's sweep (the tip) solid, the hilt's side fainter)
+function makeTrail() {
+  const geo = new THREE.BufferGeometry(), pos = new Float32Array(TRAIL_PTS * 6), u = new Float32Array(TRAIL_PTS * 2), e = new Float32Array(TRAIL_PTS * 2), idx = [];
+  for (let k = 0; k < TRAIL_PTS - 1; k++) idx.push(2 * k, 2 * k + 1, 2 * k + 2, 2 * k + 1, 2 * k + 3, 2 * k + 2);
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("u", new THREE.BufferAttribute(u, 1)); geo.setAttribute("e", new THREE.BufferAttribute(e, 1)); geo.setIndex(idx);
+  const mat = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, side: THREE.DoubleSide, vertexShader: TRAIL_VS, fragmentShader: TRAIL_FS, uniforms: { cA: { value: new THREE.Color() }, cB: { value: new THREE.Color() }, uA: { value: .95 } } });
+  const mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; mesh.renderOrder = 6; mesh.visible = false; actors.add(mesh);
+  return { mesh, geo, pos, u, e, S: [], who: null };
+}
+const crInt = (p0, p1, p2, p3, t, o) => { const t2 = t * t, t3 = t2 * t; return o.set(   // (Catmull-Rom: the sweep curved between the frames, not a fan of straight cuts)
+  .5 * (2 * p1.x + (-p0.x + p2.x) * t + (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 + (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
+  .5 * (2 * p1.y + (-p0.y + p2.y) * t + (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 + (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3),
+  .5 * (2 * p1.z + (-p0.z + p2.z) * t + (2 * p0.z - 5 * p1.z + 4 * p2.z - p3.z) * t2 + (-p0.z + 3 * p1.z - 3 * p2.z + p3.z) * t3)); };
+const _ta = new THREE.Vector3(), _tb = new THREE.Vector3(), _tc = new THREE.Vector3();
+function trailPush(T, a, b) {                        // a new sample (b null: a fist's path, the ribbon's width put round it as it's drawn)
+  const L = T.S[T.S.length - 1]; if (L && (L.t === time || L.a.distanceTo(a) > 3)) { if (L.t === time) return; T.S.length = 0; }   // (once a frame; a jump across the room (a room change): start again)
+  T.S.push({ a: a.clone(), b: b ? b.clone() : null, t: time }); if (T.S.length > TRAIL_N) T.S.shift();
+}
+function trailDraw(T) {
+  const life = T.S.length && !T.S[0].b ? FIST_LIFE : TRAIL_LIFE; while (T.S.length && time - T.S[0].t > life) T.S.shift();
+  const n = T.S.length; T.mesh.visible = n >= 2; if (n < 2) return;
+  let k = 0; const fist = !T.S[0].b, put = (a, b, age) => { a.toArray(T.pos, k * 6); b.toArray(T.pos, k * 6 + 3); T.u[2 * k] = T.u[2 * k + 1] = clamp(age / life, 0, 1); T.e[2 * k] = fist ? 1 : .0; T.e[2 * k + 1] = 1; k++; };
+  const pts = []; for (let i = 0; i < n - 1; i++) for (let j = 0; j < TRAIL_SUB; j++) pts.push([i, j / TRAIL_SUB]); pts.push([n - 2, 1]);
+  const at = (i, t, key) => { const P = T.S, g = q => P[clamp(q, 0, n - 1)][key]; return crInt(g(i - 1), g(i), g(i + 1), g(i + 2), t, key === "a" ? _ta : _tb); };
+  const cs = fist ? pts.map(([i, t]) => at(i, t, "a").clone()) : null;
+  pts.forEach(([i, t], m) => { const age = time - lerp(T.S[i].t, T.S[i + 1].t, t);
+    if (!fist) { at(i, t, "a"); at(i, t, "b"); put(_ta, _tb, age); return; }
+    const c = cs[m], p0 = cs[Math.max(0, m - 1)], p1 = cs[Math.min(cs.length - 1, m + 1)], dx = p1.x - p0.x, dy = p1.y - p0.y, d = Math.hypot(dx, dy) || 1, w = FIST_W * Math.pow(1 - clamp(age / life, 0, 1), .6);
+    put(_ta.set(c.x + dy / d * w, c.y - dx / d * w, c.z), _tb.set(c.x - dy / d * w, c.y + dx / d * w, c.z), age); });
+  T.geo.attributes.position.needsUpdate = T.geo.attributes.u.needsUpdate = T.geo.attributes.e.needsUpdate = true; T.geo.setDrawRange(0, (k - 1) * 6);
+}
+const swordOn = () => !!(player && player.rig && player.rig.prop && player.rig.prop.kind === "sword");
+const swingTr = [];                                  // [blade] for a sword; [near fist, far fist] bare-handed or gauntleted
+function syncSwingTrail() {
+  const p = player, r = p && p.rig; if (!r || r.kind !== "human") { swingTr.forEach(T => T.mesh.visible = false); return; }
+  const pr = r.prop, sword = !!(pr && pr.kind === "sword"), need = sword ? 1 : 2;
+  while (swingTr.length < 2) swingTr.push(makeTrail());
+  swingTr.forEach((T, i) => { if (T.who !== r) { T.who = r; T.S.length = 0; const P = r.spec.outfit.prop, gold = P.kind === "gauntlet", U = T.mesh.material.uniforms;   // (its colours: the blade's own, its pink fill out at the tip, its pale main by the hilt; a gauntlet's red going to gold; bare fists pink)
+    if (sword) { U.cA.value.set(P.fill || "#f32782"); U.cB.value.set(P.main || "#fff7c0"); } else if (gold) { U.cA.value.set(P.fill || "#fc0000").lerp(new THREE.Color(P.main || "#ffde00"), .38); U.cB.value.copy(U.cA.value); } else { U.cA.value.set("#ff5fb4"); U.cB.value.set("#ff5fb4"); } } });
+  const S = p.atkT >= 0 && p.atkKind ? KIT.STRIKES[p.atkKind] : null, on = !!S && !p.dead && !transit && (S.hits || []).some(h => p.atkT >= h.t0 - .05 && p.atkT <= h.t1 + .02);   // (only through the blows themselves)
+  if (on && sword) { pr.inner.updateWorldMatrix(true, false); trailPush(swingTr[0], pr.inner.localToWorld(_ta.set(.14, 0, 0)), pr.inner.localToWorld(_tb.set(1.2, 0, 0))); }
+  else if (!sword) r.hands.forEach((h, i) => { h.updateWorldMatrix(true, false); h.localToWorld(_tc.set(0, -.07, 0)); const T = swingTr[i], L = T.last;   // fists: the one that's punching (flying), not the one held back
+    if (!L) { T.last = { p: _tc.clone(), t: time }; return; } if (L.t === time) return;
+    const v = _tc.distanceTo(L.p) / (time - L.t); L.p.copy(_tc); L.t = time; if (on && v > 4.5) T.hot = time;
+    if (on && time - (T.hot ?? -9) < .035) trailPush(T, _tc, null); });   // (a beat on past the fastest of it, so the head isn't cut off)
+  swingTr.forEach((T, i) => { if (i >= need) { T.S.length = 0; T.mesh.visible = false; } else trailDraw(T); });
+}
 const HANG_AIR = 1.6;                                // how long an air combo can hold you up there, a jump (then you come down as ever)
+const AIR_HITS = 3;                                  // one air combo a jump (or a launch): only its blows that land hold you up, three at most; after it, no more air combos till you're down (the user, 2026-10-23)
+const airCh = p => { const ch = p.chain && !p.combo ? p.chain.kind : null, S = KIT.STRIKES[p.atkKind] || {}; return !p.onGround && (ch === "air1" || ch === "air2") && !S.dive && !S.slamLand ? ch : null; };
+function airHold(p, ch) { p.hangT = Math.max(p.hangT || 0, ((KIT.STRIKES[p.atkKind] || {}).dur || .4) - Math.max(0, p.atkT) + .06); p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, a little lift; the forward combo drifts on)
+function airLanded(p) { if (p.strikeLanded) return; p.strikeLanded = true; const ch = airCh(p); if (ch && (p.airN = (p.airN || 0) + 1) <= AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) airHold(p, ch); }   // an air combo's blow just landed: held there
 function startStrike(p, kind, idx = 0) {
   const S = KIT.STRIKES[kind];
   p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.atkHits = []; p.queued = false; p.bounceT = -1; p.solo = false; if (!idx) p.chainHit = false;
@@ -5704,8 +5766,8 @@ function startStrike(p, kind, idx = 0) {
   const ch = p.chain && !p.combo ? p.chain.kind : null;
   if (p === player && !p.combo && p.chain) voice("attack", idx === p.chain.list.length - 1 ? .9 : idx === 0 ? .45 : .15);   // (the finisher nearly always; now and then otherwise)
   if (ch === "up" && idx === 1 && !p.onGround) p.vy = -800;                                          // (the launch's second hit: a full jump up after them)
-  const hang = !p.onGround && (ch === "air1" || ch === "air2") && !S.dive && !S.slamLand && (p.hangLeft ?? HANG_AIR) > 0;   // an air combo: held there in the air, nearly still, each blow (the user, 2026-10-23, after Odin Sphere)
-  if (hang) { p.hangT = S.dur || .4; p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, with a little lift each blow; the second combo drifts on forward)
+  const landed = !!p.strikeLanded; p.strikeLanded = false;
+  if (idx > 0 && landed && airCh(p) && (p.airN || 0) < AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) airHold(p, airCh(p));   // an air combo's next blow, the last one landed: still held up there (the user, 2026-10-23, after Odin Sphere; a miss and you drop)
   else if (!p.onGround && ch === "up" && idx >= 2) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // the launch's last hit: on forward with them
   if (p.onGround) { p.vx = p.face * S.step; if (S.hop) { p.vy = p.chain && p.chain.kind === "up" && idx === 1 && !p.combo ? -800 : S.hop; p.onGround = false; } }   // small step, no skating (the launch's second hit: a full jump up after them)
   else if (p.combo) { p.vx = p.face * (S.lunge || S.step * .8); if (S.hop) p.vy = Math.min(p.vy, S.hop * .75); }   // combo parts keep going in the air
@@ -14560,7 +14622,7 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   }
   b.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1;
   b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
-  if (kind === "stomp") SFX.stomp(); else SFX.hit(HIT_W[kind] || 1, hitChain());
+  if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
   if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .85; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
   else { b.vx = dir * KB[0] * 1.2 / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
@@ -14713,7 +14775,7 @@ function hitEnemy(dir, kind) {
   const e = enemy;
   if (e.inv > 0 || e.dead) return false;
   e.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
-  if (kind === "stomp") SFX.stomp(); else SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain());
+  if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
   e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; e.windup = 0;
@@ -14833,7 +14895,7 @@ function combat() {
   let clashed = false;
   const strike = (got, hb, kind, dirOf, lead) => { for (const T of L) { if (clashed) return; if (got.has(T.e)) continue;   // each window hits each target once
     if (!p.combo && tryClash(p, T, hb, pb)) { clashed = true; got.add(T.e); return; }   // both attacks at once: a clash instead
-    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) { got.add(T.e); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) p.chainHit = true;
+    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) { got.add(T.e); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) { p.chainHit = true; airLanded(p); }
       if (kind === "tackle" && p.tackle && p.tackle.t < TKL.wind + TKL.lunge) { p.tackle.t = TKL.wind + TKL.lunge; p.vx *= .3; } } } };   // (the tackle that lands stops driving: it doesn't run on into what it knocked away, the user 2026-10-22)   // (a tackle or charged combo that's landed: not hurt for a moment after, the user 2026-10-22: still open while winding up)   // (lead: the swing's not landed yet, so only a clash)
   const hitsOf = i => (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set());
   const CM = p.rig.kind === "cat" && p.atkT >= 0 && p.atkKind && KIT.CAT_MOVES[p.atkKind];
@@ -15187,7 +15249,7 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); if (pal) pal.rig.sync(pal, pal.rig, dt); syncCats(dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom();
+  syncCards(); syncHazards(); syncBubble(dt); syncSwingTrail(); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom();
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
