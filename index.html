@@ -388,7 +388,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261022h"></script>
+<script src="charkit.js?v=20261022m"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261020a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3081,11 +3081,24 @@ function syncDawn(dt) {
 // never the same take twice running. The synthesized sound plays until they've decoded (or if they can't be). Each level matches the synthesized
 // sound it replaced, measured after the effects bus and its limiter (loudest 30 ms); night pitches them down like everything else.
 const smp = { state: "idle", bank: {}, last: {} };
+// the recorded hits, brightened (the user, 2026-10-22: "can the attack sound have more treble so it's not a dull thud kind of sound?"): the
+// rumble under 160 Hz cut, everything over ~2.8 kHz lifted 7 dB, then 1 dB down overall (brighter reads louder). Done once, on the
+// decoded take (RBJ biquads: a high-pass, then a high shelf); the 3DS's sfx.cpp does the same to its takes as they load
+const SMP_EQ = { hit: { hp: 160, f: 2800, db: 7, trim: -1 } };
+function eqTake(buf, Q) {
+  const sr = buf.sampleRate, w = f => 2 * Math.PI * f / sr;
+  const run = (d, b0, b1, b2, a0, a1, a2) => { let x1 = 0, x2 = 0, y1 = 0, y2 = 0; for (let i = 0; i < d.length; i++) { const x = d[i], y = (b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2) / a0; x2 = x1; x1 = x; y2 = y1; y1 = y; d[i] = y; } };
+  for (let c = 0; c < buf.numberOfChannels; c++) { const d = buf.getChannelData(c);
+    { const o = w(Q.hp), cs = Math.cos(o), al = Math.sin(o) / (2 * Math.SQRT1_2); run(d, (1 + cs) / 2, -(1 + cs), (1 + cs) / 2, 1 + al, -2 * cs, 1 - al); }
+    { const A = Math.pow(10, Q.db / 40), o = w(Q.f), cs = Math.cos(o), al = Math.sin(o) / 2 * Math.SQRT2, sa = 2 * Math.sqrt(A) * al;
+      run(d, A * ((A + 1) + (A - 1) * cs + sa), -2 * A * ((A - 1) + (A + 1) * cs), A * ((A + 1) + (A - 1) * cs - sa), (A + 1) - (A - 1) * cs + sa, 2 * ((A - 1) - (A + 1) * cs), (A + 1) - (A - 1) * cs - sa); }
+    const g = Math.pow(10, Q.trim / 20); for (let i = 0; i < d.length; i++) d[i] *= g; }
+}
 function smpInit() {
   const A = window.BERRY_SFX; if (!A || !ac || smp.state !== "idle") return;     // (sfx.js is deferred: until it's in, the next sound tries again)
   smp.state = "loading";
   const bytes = b64 => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
-  Promise.all(Object.keys(A).map(k => Promise.all(A[k].map(b => ac.decodeAudioData(bytes(b)))).then(bufs => { smp.bank[k] = bufs; })))
+  Promise.all(Object.keys(A).map(k => Promise.all(A[k].map(b => ac.decodeAudioData(bytes(b)))).then(bufs => { if (SMP_EQ[k]) bufs.forEach(b => eqTake(b, SMP_EQ[k])); smp.bank[k] = bufs; })))
     .then(() => { smp.state = "ready"; }).catch(() => { smp.state = "failed"; });
 }
 function smpPlay(k, vol, { rate = 1, delay = 0 } = {}) {
@@ -3126,10 +3139,10 @@ const SFX = {
   cards() { [880, 1175, 1480].forEach((f, i) => tone(f, f, .09, { type: "triangle", vol: .07, delay: i * .045 })); },
   dash() { noise(.12, { vol: .26, f0: 500, f1: 1400, type: "bandpass" }); },
   whoosh() { noise(.28, { vol: .3, f0: 700, f1: 2600, type: "bandpass", q: 1.4 }); },
-  punch() { noise(.07, { vol: .3, f0: 900, f1: 4200, type: "bandpass", q: 1.6 }); noise(.045, { vol: .26, f0: 3600, f1: 1100, type: "bandpass", delay: .035 }); tone(210, 80, .1, { type: "sine", vol: .22, delay: .02 }); },   // a swish, a snap, a thump under it
-  kick() { noise(.1, { vol: .32, f0: 600, f1: 3400, type: "bandpass", q: 1.5 }); noise(.05, { vol: .24, f0: 2800, f1: 800, type: "bandpass", delay: .05 }); tone(170, 70, .11, { type: "sine", vol: .2, delay: .04 }); },
+  punch() { noise(.06, { vol: .3, f0: 1500, f1: 6500, type: "bandpass", q: 1.4 }); noise(.035, { vol: .22, f0: 7000, f1: 3800, type: "highpass", delay: .03 }); tone(320, 170, .06, { type: "sine", vol: .1, delay: .02 }); },   // a swish, a crisp snap, a light knock under it (2026-10-22: brighter, it was a dull thud)
+  kick() { noise(.09, { vol: .32, f0: 1000, f1: 5500, type: "bandpass", q: 1.4 }); noise(.04, { vol: .2, f0: 6000, f1: 3200, type: "highpass", delay: .045 }); tone(260, 140, .07, { type: "sine", vol: .11, delay: .04 }); },   // (brighter too)
   slash() { if (smpPlay("slash", .1, { delay: .03 })) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
-  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.12 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) return; tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack
+  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) { noise(.03, { vol: .11, f0: 6500, f1: 3500, type: "highpass" }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
   impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
     noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
@@ -3428,9 +3441,11 @@ Object.assign(KIT.STRIKES, {
       fNx: [[0, .3], [.05, .66], [.34, .66], [.52, .3]], fNy: [[0, 0], [.05, .12], [.34, .12], [.52, 0]], fFx: [[0, -.3], [.05, -.02], [.34, -.02], [.52, -.3]],
       armF: [[0, .5], [.05, 1.0], [.34, 1.0], [.52, .55]], elbF: [[0, 1.3], [.05, .5], [.52, 1.3]], armB: [[0, .6], [.05, -.8], [.34, -.8], [.52, .7]], elbB: [[0, 1.3], [.05, .5], [.52, 1.3]] } },
   gu_fist: { dur: .4, chain: .3, step: 60, sq: .1, sfx: "punch", hits: [{ t0: .08, t1: .22, reach: 85, back: 30, y0: 165, y1: 50, kind: "upper", wide: true }],   // ↑ + attack on the ground: an uppercut straight up, feet on the ground
-    keys: { armF: [[0, .55], [.05, .1], [.14, 2.6], [.24, 2.5], [.34, .7], [.4, .55]], elbF: [[0, 1.35], [.05, 1.9], [.14, .5], [.24, .6], [.34, 1.4], [.4, 1.35]],
-      aS: [[0, 0], [.12, .3], [.22, .25], [.3, 0]], gF: [[0, 0], [.12, .4], [.22, .35], [.3, 0]], armB: [[0, .75], [.4, .75]], elbB: [[0, 1.3], [.4, 1.3]],
-      lean: [[0, .2], [.05, .3], [.14, -.2], [.26, -.15], [.4, .2]], bodyY: [[0, -.06], [.05, -.2], [.14, .04], [.3, -.04], [.4, -.06]], twist: [[0, 0], [.05, .2], [.14, -.25], [.4, 0]] } },
+    keys: { armF: [[0, .55], [.06, .05], [.11, 1.6], [.16, 2.7], [.24, 2.85], [.33, 1.2], [.4, .55]], elbF: [[0, 1.35], [.06, 1.95], [.11, 1.1], [.16, .45], [.24, .5], [.33, 1.3], [.4, 1.35]],
+      aS: [[0, 0], [.12, .25], [.22, .22], [.3, 0]], gF: [[0, 0], [.12, .4], [.22, .35], [.3, 0]], armB: [[0, .75], [.06, 1.0], [.16, .2], [.26, -.2], [.4, .75]], elbB: [[0, 1.3], [.06, 1.6], [.16, 1.0], [.4, 1.3]],
+      lean: [[0, .2], [.06, .42], [.12, .05], [.18, -.25], [.26, -.28], [.4, .2]], arch: [[0, 0], [.06, .1], [.18, -.15], [.26, -.15], [.4, 0]], bodyY: [[0, -.06], [.06, -.24], [.13, .03], [.2, .08], [.3, 0], [.4, -.06]],
+      twist: [[0, 0], [.06, .35], [.13, -.15], [.2, -.38], [.28, -.3], [.4, 0]], headRot: [[0, 0], [.06, .12], [.18, -.2], [.26, -.2], [.4, 0]],
+      fNx: [[0, .37], [.06, .4], [.16, .32], [.4, .37]], fNy: [[0, 0], [.1, 0], [.18, .22], [.26, .2], [.36, 0]], fFx: [[0, -.4], [.06, -.42], [.18, -.44], [.4, -.4]] } },   // (2026-10-22: a dip, then up through the knee, leaning back after the fist: it was upright and stiff)
   gu_sword: { ...KIT.STRIKES.rise, hop: 0, step: 60, hits: [{ t0: .1, t1: .26, reach: 100, back: 40, y0: 190, y1: 20, kind: "upper" }] },   // (the sword swept up overhead, on the ground; its reach: a little over the blade's tip)
 });
 const GROUND_UP = { up_fist: "gu_fist", up_sword: "gu_sword" };   // ↑ + attack on the ground: the swipe up; in the air, the rising hit

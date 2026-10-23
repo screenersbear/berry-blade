@@ -1696,10 +1696,13 @@ const STRIKES = {
       lean: [[0, .26], [.07, -.08], [.2, .45], [.28, .4], [.36, .2]], twist: [[0, 0], [.07, -.35], [.2, .5], [.36, .05]], spF: [[0, 0], [.07, .8], [.14, .3], [.2, 0]], bodyY: [[0, -.08], [.07, -.02], [.2, -.16], [.36, -.08]],
       fNx: [[0, .24], [.1, .4], [.36, .28]], fFx: [[0, -.2], [.1, -.3], [.36, -.22]] } },
   rise: { dur: .42, step: 110, sq: .1, hop: -230, sfx: "slash", hits: [{ t0: .1, t1: .26, reach: 95, back: 10, y0: 165, y1: 20, kind: "slash" }],   // two-handed rising cut from low in front up over her head
-    keys: { armF: [[0, .6], [.07, .2], [.2, 3.0], [.3, 2.85], [.42, .7]], elbF: [[0, .4], [.07, .6], [.2, .15], [.3, .2], [.42, .5]],
-      blade: [[0, -.5], [.07, -1.0], [.2, 1.45], [.3, 1.75], [.42, .1]], grip: [[0, 0], [.05, 1], [.36, 1], [.42, .6]],
-      armB: [[0, -.2], [.18, 2.0], [.3, -.4], [.42, 0]], elbB: [[0, .4], [.3, .5], [.42, .5]],
-      lean: [[0, .3], [.07, .5], [.2, -.18], [.32, -.12], [.42, .08]], twist: [[0, .3], [.07, .35], [.2, -.25], [.42, 0]], spF: [[0, 0], [.1, .2], [.2, .6], [.3, .6], [.42, 0]], bodyY: [[0, 0], [.07, -.14], [.2, .04], [.42, 0]] } },
+    keys: { armF: [[0, .6], [.08, .05], [.14, 1.5], [.21, 3.0], [.29, 3.3], [.42, .75]], elbF: [[0, .4], [.08, .7], [.14, .35], [.21, .15], [.29, .2], [.42, .5]],
+      blade: [[0, -.5], [.08, -1.25], [.14, .15], [.21, 1.5], [.29, 1.95], [.42, .15]], grip: [[0, 0], [.05, 1], [.36, 1], [.42, .6]],
+      armB: [[0, -.2], [.08, .3], [.16, 1.6], [.24, -.35], [.32, -.55], [.42, 0]], elbB: [[0, .4], [.16, .6], [.3, .5], [.42, .5]],
+      lean: [[0, .3], [.08, .55], [.15, .1], [.22, -.36], [.3, -.42], [.42, .08]], arch: [[0, 0], [.08, .12], [.22, -.24], [.3, -.28], [.42, 0]],
+      twist: [[0, .3], [.08, .45], [.16, -.1], [.24, -.4], [.32, -.42], [.42, 0]], spF: [[0, 0], [.1, .2], [.2, .6], [.3, .6], [.42, 0]],
+      bodyY: [[0, 0], [.08, -.2], [.16, .02], [.24, .07], [.32, .04], [.42, -.04]], headRot: [[0, 0], [.08, .15], [.22, -.22], [.3, -.25], [.42, 0]],
+      fNx: [[0, .24], [.12, .24], [.22, .34], [.3, .34], [.42, .24]], fNy: [[0, 0], [.12, 0], [.22, .22], [.3, .24], [.42, 0]], fFx: [[0, -.2], [.08, -.26], [.22, -.32], [.42, -.2]] } },   // (2026-10-22: wound down low, then up and over, leaning back, the front knee driven up: it was bolt upright)
   chop: { dur: .34, chain: .2, step: 0, sq: -.05, sfx: "slash", hits: [{ t0: .08, t1: .2, reach: 100, back: 0, y0: 110, y1: -40, kind: "slash" }],   // both hands up, then down hard
     keys: { armF: [[0, 2.4], [.06, 3.0], [.17, .95], [.26, .75], [.34, 1.2]], elbF: [[0, .5], [.06, 1.0], [.17, .05], [.26, .15], [.34, .3]],
       blade: [[0, 2.4], [.06, 3.0], [.17, -.35], [.26, -.6], [.34, .1]], grip: [[0, .6], [.04, 1], [.3, 1], [.34, .6]],
@@ -1753,8 +1756,10 @@ const STRIKES = {
   upperhook: { dur: .52, step: 120, sq: .1, hop: -260, sfx: "kick", sfx2: [.28, "punch"], hits: [{ t0: .08, t1: .19, reach: 64, back: -8, y0: 165, y1: 40, kind: "upper" }, { t0: .28, t1: .38, reach: 78, back: -8, y0: 115, y1: 55, kind: "hook" }],
     keys: { armF: [[0, .3], [.05, .1], [.16, 2.5], [.24, 2.4], [.34, .6], [.52, .2]], elbF: [[0, 1.5], [.05, 1.9], [.16, 1.3], [.24, 1.3], [.34, 1.6], [.52, 1.4]],
       armB: [[0, .3], [.22, .1], [.32, 1.45], [.38, 1.35], [.46, .4], [.52, .2]], elbB: [[0, 1.5], [.22, 1.7], [.32, 1.45], [.38, 1.5], [.46, 1.5], [.52, 1.4]],
-      twist: [[0, 0], [.16, -.2], [.32, .7], [.42, .3], [.52, 0]], lean: [[0, .1], [.05, .25], [.16, -.2], [.24, -.1], [.32, .35], [.52, .12]],
-      bodyY: [[0, 0], [.05, -.1], [.16, .06], [.3, 0]], fNx: [[0, .25], [.52, .25]], fFx: [[0, -.22], [.52, -.22]] } },
+      twist: [[0, 0], [.05, .25], [.16, -.3], [.24, -.25], [.32, .7], [.42, .3], [.52, 0]], lean: [[0, .1], [.05, .35], [.16, -.28], [.24, -.18], [.32, .4], [.52, .12]],
+      arch: [[0, 0], [.05, .1], [.16, -.18], [.24, -.1], [.32, .08], [.52, 0]], headRot: [[0, 0], [.05, .1], [.16, -.18], [.26, -.05], [.34, .08], [.52, 0]],
+      bodyY: [[0, 0], [.05, -.2], [.16, .06], [.26, -.04], [.34, -.14], [.52, -.04]], fNx: [[0, .25], [.05, .3], [.16, .3], [.32, .34], [.52, .25]], fNy: [[0, 0], [.08, 0], [.16, .18], [.24, .1], [.3, 0]],
+      fFx: [[0, -.22], [.05, -.3], [.32, -.38], [.52, -.22]] } },   // (2026-10-22: a dip into the uppercut and the knee up with it, then down low into the hook: it was upright)
   haymaker: { dur: .62, step: 210, sq: -.1, sfx: "kick", sfx2: [.42, "punch"],   // overhand: loops over the top in a lunge, then a quick hook
     hits: [{ t0: .2, t1: .3, reach: 92, back: -8, y0: 140, y1: 55, kind: "haymaker" }, { t0: .42, t1: .5, reach: 80, back: -8, y0: 115, y1: 55, kind: "hook" }],
     keys: { armF: [[0, .4], [.08, -1.0], [.16, 2.7], [.24, 1.45], [.32, 1.3], [.44, .5], [.62, .3]], elbF: [[0, 1.6], [.08, 1.2], [.16, .6], [.24, 0], [.32, .1], [.44, 1.5], [.62, 1.4]],
@@ -1821,9 +1826,10 @@ const STRIKES = {
       aS: [[0, 0], [.1, .165], [.28, .15], [.36, 0]], gF: [[0, 0], [.1, .375], [.28, .35], [.36, -.05], [.44, 0]], armB: [[0, .5], [.1, .3], [.5, .5]], elbB: [[0, 2], [.5, 2]],
       lean: [[0, .15], [.5, .15]], bodyY: [[0, 0], [.08, -.08], [.3, -.08], [.5, 0]], fNx: [[0, .25], [.5, .25]], fFx: [[0, -.22], [.5, -.22]] } },
   bx_c3: { dur: .62, step: 150, hop: -780, sq: .14, sfx: "kick", sfx2: [.1, "punch"], hits: [{ t0: .06, t1: .26, reach: 85, back: 10, y0: 235, y1: 30, kind: "launch" }],   // rocket uppercut
-    keys: { armF: [[0, .2], [.05, -.3], [.12, 3.0], [.3, 3.1], [.44, 1.2], [.62, .5]], elbF: [[0, 1.8], [.05, 2.0], [.12, .1], [.3, .1], [.44, 1.4], [.62, 1.6]],
-      aS: [[0, 0], [.1, .18], [.3, .15], [.4, 0]], gF: [[0, 0], [.05, -.1], [.12, .6], [.3, .55], [.4, -.06], [.48, 0]], armB: [[0, .5], [.12, -.6], [.4, -.4], [.62, .5]], elbB: [[0, 2], [.62, 1.9]],
-      lean: [[0, .25], [.05, .4], [.12, -.25], [.3, -.2], [.62, .15]], bodyY: [[0, 0], [.05, -.2], [.12, .05], [.62, 0]], twist: [[0, 0], [.05, -.3], [.15, .35], [.62, 0]],
+    keys: { armF: [[0, .2], [.05, -.3], [.09, 1.4], [.13, 2.9], [.3, 3.15], [.44, 1.2], [.62, .5]], elbF: [[0, 1.8], [.05, 2.0], [.09, 1.0], [.13, .2], [.3, .15], [.44, 1.4], [.62, 1.6]],
+      aS: [[0, 0], [.1, .18], [.3, .15], [.4, 0]], gF: [[0, 0], [.05, -.1], [.12, .6], [.3, .55], [.4, -.06], [.48, 0]], armB: [[0, .5], [.05, .9], [.13, -.6], [.3, -.75], [.44, -.3], [.62, .5]], elbB: [[0, 2], [.13, 1.2], [.44, 1.6], [.62, 1.9]],
+      lean: [[0, .25], [.05, .45], [.13, -.3], [.3, -.4], [.62, .15]], arch: [[0, 0], [.05, .12], [.15, -.28], [.32, -.26], [.62, 0]], bodyY: [[0, 0], [.05, -.2], [.12, .05], [.62, 0]],
+      twist: [[0, 0], [.05, -.3], [.15, .35], [.3, .4], [.62, 0]], headRot: [[0, 0], [.05, .15], [.15, -.25], [.32, -.25], [.62, 0]],
       fNy: [[0, 0], [.1, .1], [.2, .4], [.45, .3], [.62, 0]], fFy: [[0, 0], [.2, .15], [.45, .2], [.62, 0]], fNx: [[0, .25], [.2, .35], [.62, .25]], fFx: [[0, -.22], [.2, -.3], [.62, -.22]] } },
   nj_c1: { dur: .4, chain: .3, step: 400, slide: .18, sq: -.1, sfx: "punch", hits: [{ t0: .09, t1: .2, reach: 120, back: -8, y0: 125, y1: 45, kind: "punch" }],   // dashing double palm
     keys: { armF: [[0, .3], [.05, -.3], [.1, 1.55], [.22, 1.5], [.32, .6], [.4, .3]], elbF: [[0, 1.4], [.05, 2.1], [.1, 0], [.22, .1], [.32, 1.2], [.4, 1.2]],
@@ -1865,6 +1871,7 @@ const STRIKES = {
       lean: [[0, .1], [.12, -.4], [.22, -.35], [.32, .9], [.5, .6]], arch: [[0, 0], [.12, -.3], [.32, .3], [.5, .1]],
       fNy: [[0, .35], [.5, .35]], fFy: [[0, .3], [.5, .3]], fNx: [[0, .2], [.5, .2]], fFx: [[0, -.1], [.5, -.1]] } },
 };
+const PUNCH_S = { dur: .3, hits: [{ t0: .06, t1: .22 }] };   // (the air punch's timing, for its legs)
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
 const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
 function leadFar(p) {                       // is the prop (lead) hand on the far side right now?
@@ -1899,6 +1906,20 @@ function keyv(tr, t) {
   return tr[tr.length - 1][1];
 }
 function updatePose(p, dt) { if (p.rig.kind === "cat") updatePoseCat(p, dt); else updatePoseHuman(p, dt); }
+// the legs a move doesn't key itself (the user, 2026-10-22: "the combos in the air keep their feet straight almost as if they're standing.
+// they just dont look fluid enough"): on the ground, the stance's (feet apart, knees bent; never the rest pose's feet together); in the air,
+// unless the move's made for the air, a jump's tuck that kicks back as the blow goes in (a ground move's own leg keys stand it on the floor)
+let AIR_KEYED = null;
+const airKeyed = k => (AIR_KEYED || (AIR_KEYED = new Set([...Object.values(MOVESETS).flatMap(q => q.air || []), "kick", "up_fist", "up_kick", "dn_fist", "dn_sword", "dn_kick"].filter(q => q !== "punch")))).has(k);   // (the plain punch's feet are a standing jab's)
+const STANCE_LEGS = ["fNx", "fFx", "fNz", "fFz", "hN", "hF", "fP", "bodyY"];
+function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move's leg keys are left out
+  if (p.onGround) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }
+  if (airKeyed(p.atkKind)) return false;
+  const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
+  const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
+  Object.assign(T, { fNx: .16 + .1 * w, fNy: .42 + .08 * up + .06 * w, fFx: -.12 - .2 * w, fFy: .3 + .06 * up - .1 * w, fP: -.35 - .12 * w, fNz: 0, fFz: 0, hN: 0, hF: 0 });
+  return true;
+}
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
   const k = 1 - Math.exp(-dt * 16);
@@ -1923,6 +1944,7 @@ const WALK_KEYS = [[0, .42, .06, .3], [.12, .28, .2, 0], [.3, 0, .08, 0], [.5, -
 const GATHER = .18;                                   // the run's gather: how long (about two drawn frames, then into the stride)
 const CROUCH = { lean: .38, arch: .12, bodyY: -.24, fNx: .24, fFx: -.2, fNy: 0, fFy: 0, armF: .6, elbF: 1.5, armB: .4, elbB: 1.6, headRot: -.1 };
 function updatePoseHuman(p, dt) {
+  p.airLegs = false;
   const T = { ...POSE_H0 }, t = api.time, sp = Math.abs(p.vx), a = p.atkT, m = p.rig.spec.move, Bd = p.rig.spec.body;
   const D = p.rig.D || BUILDS.chibi, SET = MOVESETS[m.set] || MOVESETS.brawler, ds = D.step;
   const ST = m.stance && Object.keys(m.stance).length ? { ...(SET.stance || {}), ...m.stance } : SET.stance;     // the character's own standing pose wins
@@ -1936,11 +1958,13 @@ function updatePoseHuman(p, dt) {
     if (a < .06) Object.assign(T, { lean: .04, armF: -.45, elbF: 1.9, armB: .6, elbB: 1.8, fNx: .2, fFx: -.18 });                 // cock the fist
     else if (a < .22) Object.assign(T, { lean: .38, armF: 1.6, elbF: 0, armB: .2, elbB: 2.1, fNx: .3, fFx: -.26, headRot: -.05 }); // straight jab
     else Object.assign(T, { lean: .12, armF: .6, elbF: 1.2, armB: .4, elbB: 1.8, fNx: .22, fFx: -.2 });
+    if (!p.onGround) p.airLegs = strikeLegs(p, T, ST, PUNCH_S, a);   // (in the air: the legs tucked, not standing)
   } else if (a >= 0 && p.atkKind === "kick") {
     if (a < .1) Object.assign(T, { lean: -.1, armF: .7, elbF: 1.4, armB: -.5, elbB: .8, fNx: .1, fNy: .28, fFx: -.05, fP: .2 });   // chamber the knee
     else if (a < .32) Object.assign(T, { lean: -.42, armF: -.75, elbF: .6, armB: 1.35, elbB: .5, fNx: .62, fNy: .46, fP: .5, fFx: -.14 }); // snap kick
     else Object.assign(T, { lean: -.05, armF: .4, elbF: 1, armB: .2, elbB: .9, fNx: .25, fNy: .1, fFx: -.1 });
-  } else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const K = keysOf(p, STRIKES[p.atkKind]), sw = leadFar(p); for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0) T[kk] = kv(p, K, k, a) * (sw && k === "twist" ? -1 : 1); } }
+  } else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
+    for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && k === "twist" ? -1 : 1); } }
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
   else if (!p.onGround) {
     if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .12, fNy: .34, fFx: -.15, fFy: .08, fP: -.4 }), layPose(T, m.rise, p);
@@ -2022,8 +2046,9 @@ function updatePoseHuman(p, dt) {
   o.fFx = lerp(o.fFx, sf[0], g); o.fFy = lerp(o.fFy, sf[1], g); o.pF = lerp(o.fP, sf[2], g); o.sF = 0;
   runLayer(p, o, ph / TAU, g);
   const SK = a >= 0 && STRIKES[p.atkKind];
-  if (SK && SK.keys) { const w = p.keysFull ? 1 : clamp(Math.min(a / .025, (SK.dur - a) / .06), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);
-    for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; let v = kv(p, KK, k, a) * (sw && k === "twist" ? -1 : 1);
+  if (SK && SK.keys) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
+    for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
+      let v = kv(p, KK, k, a) * (sw && k === "twist" ? -1 : 1);
       if (k === "spin" || k === "flip") v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round
       o[kk] = lerp(o[kk] ?? 0, v, w); }
     if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
@@ -2527,6 +2552,9 @@ function syncCards(cards, p, on = true) {
 // ↑ + attack (the user, 2026-10-16): a rising hit in each style that lifts you a little and reaches baddies on the platforms above you.
 // Attack while floating down in the bubble after a big jump: straight down fast, in each style, hitting whatever's under you (slamLand: a thump on landing)
 STRIKES.up_fist = { ...STRIKES.bx_c3, dur: .52, step: 50, hop: -580, sq: .14, hits: [{ t0: .06, t1: .32, reach: 70, back: 25, y0: 175, y1: 40, kind: "launch" }] };   // a rocket uppercut (its reach overhead: a little over the fist, the user, 2026-10-21)
+STRIKES.up_fist.keys = { ...STRIKES.bx_c3.keys,   // (in the air only, so its own legs: the near knee driven up, the far leg trailing, toes pointed. bx_c3's stood her up in the air, the user 2026-10-22)
+  fNy: [[0, .3], [.05, .18], [.12, .55], [.3, .62], [.44, .4], [.52, .32]], fNx: [[0, .17], [.05, .12], [.12, .38], [.3, .42], [.52, .2]],
+  fFy: [[0, .3], [.05, .3], [.12, .12], [.3, .15], [.44, .25], [.52, .3]], fFx: [[0, .13], [.05, 0], [.12, -.28], [.3, -.32], [.52, -.05]], fP: [[0, -.25], [.12, -.55], [.3, -.6], [.52, -.3]] };
 STRIKES.up_sword = { ...STRIKES.rise, dur: .44, step: 50, hop: -580, hits: [{ t0: .08, t1: .32, reach: 85, back: 30, y0: 200, y1: 30, kind: "slash" }] };       // the rising cut, carrying her up (its reach overhead: a little over the blade's tip, as the uppercut's)
 STRIKES.up_kick = { ...STRIKES.nj_c3, dur: .56, step: 60, hop: -580, hits: [{ t0: .06, t1: .32, reach: 80, back: 20, y0: 155, y1: 40, kind: "launch" }] };       // a rising knee (its reach overhead: as the uppercut's)
 STRIKES.dn_fist = { ...STRIKES.hammer, dur: 1.2, step: 0, dive: [.05, 1250], diveStill: true, landEnd: true, slamLand: true, hits: [{ t0: .05, t1: 1.2, reach: 50, back: 50, y0: 50, y1: -60, kind: "smash" }] };   // fists clasped, straight down
