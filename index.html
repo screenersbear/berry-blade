@@ -618,6 +618,8 @@ function clockEnter(s) {
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
 let bossDown = false;                              // this stay: the world's boss is beaten (so it isn't waiting at its other way out too)
+let bossNotAt = -1;                                // this stay: the door you walked back into the world by, its boss not beaten: it waits at the world's other doors, not that one (the user, 2026-10-23)
+const bossHere = k => !!STAGES[k].boss && !bossDown && k !== bossNotAt;
 let koStay = 0, koScr = null; const koRoom = new Map();                       // knock-outs this stay (each costs the uprising one point less, down to 2) · the black screen up
 function koShow() {                                 // knocked out in the story: the uprising loses 5%, every time (the user, 2026-10-20), on a black screen, then the room again
   const kk = world + ":" + stage; koRoom.set(kk, (koRoom.get(kk) || 0) + 1);   // (the user 2026-10-22: lose 5 times in the same room and further losses there cost nothing; never below 0)
@@ -628,7 +630,7 @@ function koShow() {                                 // knocked out in the story:
   $("koSub").textContent = lost > 0 ? `UPRISING −${lost}% · NOW ${Math.floor(upPct(world))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");
   if (story) writeSave();
 }
-function newStay() { koStay = 0; bossDown = false; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); }
+function newStay() { koStay = 0; bossDown = false; bossNotAt = -1; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); }
 const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a way out of the world, the room to the left, back the way you came, or the world before
   if (S0.exitLeft && S0.toWorld !== undefined) return "out";
   if (S0.prev !== undefined) return S0.prev;
@@ -3788,7 +3790,7 @@ function debugResetRoom() {
   const k = world + ":" + stage + ":", drop = S => [...S].forEach(id => { if (String(id).startsWith(k)) S.delete(id); });
   roomsDone.delete(stage); drop(giftsTaken); drop(cratesBroken); drop(healTaken); freeGot.forEach(id => { if (id.startsWith(k)) freeGot.delete(id); });
   if (story && story.got) story.got = story.got.filter(id => !id.startsWith(k));
-  if (STAGES[stage].boss) bossDown = false;
+  if (STAGES[stage].boss) { bossDown = false; bossNotAt = -1; }
   resetTrial(); toast("DEBUG: THIS ROOM'S BACK TO NEW", 2400);
 }
 function closePause() { if (!paused) return; dbgPick = null; $("pAsk").classList.add("hidden"); paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("pause").classList.remove("show"); }
@@ -4751,8 +4753,8 @@ function goWorldBack() {                             // off the left of a world'
   const P0 = worldStack.pop() || { w: prevWorld(world), trail: pathTo(prevWorld(world), world) }; cine = null;   // You left it, so it's a new stay: its rooms all full again
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd(); palsStay();
-    setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown; entryHi = false;   // (its boss isn't back: the user, 2026-10-20)
-    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
+    setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown || !!(story && (story.beat || []).includes(P0.w)); entryHi = false;   // (its boss isn't back: the user, 2026-10-20; nor after a load, the way back not remembered)
+    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; bossNotAt = bossDown ? -1 : ns; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
     if (pal) Object.assign(pal, { x: lf ? 0 : WORLD, y: gy, vx: lf ? 120 : -120, vy: 0, onGround: true, plat: null, pounce: null });
@@ -12794,7 +12796,7 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
     if (sadSpots.has(spot) && !(revisit && sadFate[sadHome.get(spot)] === "killed")) { const h = sadHome.get(spot); b.sad = true; sadFace(b); sadFate[h] = null; sadSpots = new Set([...sadSpots].filter(sp => sp === spot || sadHome.get(sp) !== h)); }   // (met it: that hideout's other candidates are dropped)   (one you popped comes back an ordinary baddy)
     return b;
   }).filter(Boolean);
-  bossIn = !baddies.length && !!STAGES[k].boss && !bossDown; bossCue = 0;
+  bossIn = !baddies.length && bossHere(k); bossCue = 0;
 }
 // walk back after dark into a room that was daytime and a baddy or two may be asleep there. Jump on one (don't hit it): it shoots up, startled, and runs off
 let sleepPlan = new Map();                       // this run: room → the roster entries asleep in it
@@ -15146,7 +15148,7 @@ function update(dt) {
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (STAGES[stage].boss && !bossDown ? .9 : .25)) stronghold ? shClear() : STAGES[stage].boss && !bossDown ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (STAGES[stage].boss && !arena) { bossDown = true; if (story) { const B2 = story.beat || (story.beat = []); if (!B2.includes(world)) B2.push(world); } } if (wst) wst.boss = foe.name; dropLoot(enemy.x, enemy.y - 90, 3, true);   // (a boss: three coins)
