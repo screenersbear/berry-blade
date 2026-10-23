@@ -1309,42 +1309,56 @@ function syncFoe(e, r, dt = 0) {
   const fw = Math.sign(e.vx) * e.dir || 1, w = walking ? clamp(Math.abs(e.vx) / (e.def.speed || 80), .5, 1) : 0;   // fw: +1 walking the way it faces
   const sw = Math.sin(ph) * fw, cw = Math.cos(ph) * fw;
   const air = !e.onGround, rising = air && e.vy < 0, crouch = e.windup > 0, charge = e.atk === "charge", act = e.atk === "act", hurt = e.hurtT > 0 || e.dead;
-  // torso: a fighter's stoop, leaning into the walk and rolling over whichever foot is planted; just breathing when it stands still
-  let lean = sty.hunch + (walking ? sty.walkLean * w * fw + Math.sin(ph * 2) * .025 : Math.sin(ck * 1.8) * .014);
-  if (crouch) lean += .14;
-  if (air) lean += rising ? .05 : -.04;
-  if (charge) lean -= .15 * sty.wind;                                        // rear back...
-  if (act) lean += .2 * sty.wind * (1 - .5 * clamp(e.actT / .5, 0, 1));    // ...and throw the weight into it
+  // its weight (bossFeel, 2026-10-22, as the heroines'): a run's longer stride, a skid, how deep into a jump's wind-up, a landing taken in the knees,
+  // a strike's wind-up building to the end and its follow-through
+  const ez = u => u * u * (3 - 2 * u), run = walking ? e.runK || 0 : 0, stride = r.stride * (walking ? bossStrideK(e) : 1);
+  const sk = e.skidK || 0, md = Math.sign(e.vx) * e.dir || 0, wu = crouch ? (e.windup0 ? ez(clamp(1 - e.windup / e.windup0, 0, 1)) : 1) : 0;
+  const lk = e.onGround && (e.landT ?? 9) < .32 ? (e.landK || .5) * (1 - e.landT / .32) ** 2 : 0;
+  const A0 = charge ? ATTACKS[e.move] : null, kc = A0 ? ez(clamp(1 - e.atkTm / A0.charge, 0, 1)) : 0;
+  const ka = act ? (e.actT < .07 ? ez(e.actT / .07) : 1 - .55 * ez(clamp((e.actT - .07) / .45, 0, 1))) : 0;
+  // torso: a fighter's stoop, leaning into the walk (right into a sprint) and rolling over whichever foot is planted; just breathing when it stands still
+  let lean = sty.hunch + (walking ? sty.walkLean * w * fw * (1 + 2.2 * run) + Math.sin(ph * 2) * .025 * (1 + run) : Math.sin(ck * 1.8) * .014);
+  if (!e.atk && !hurt) lean += (e.accLean || 0) * .85;                  // into a burst of speed, rocking back on the brakes
+  lean -= sk * md * .2;                                                  // a skid: thrown back over its heels
+  if (crouch) lean += .1 + .16 * wu;                                     // gathering for a jump...
+  if (air) lean += (rising ? .05 : -.04) + clamp(e.vx * e.dir / 1100, -.12, .16);   // ...and into the leap's way
+  lean += .16 * lk;                                                       // a landing: over its knees, then up out of it
+  if (charge) lean -= .22 * sty.wind * (.4 + .8 * kc);                    // rear back, more and more...
+  if (act) lean += .3 * sty.wind * ka;                                   // ...throw the weight into it, and settle
   if (hurt) lean -= e.dead ? .38 : .3;
-  const roll = walking ? cw * sty.roll * w : Math.sin(ck * 1.1) * .02;
+  const roll = walking ? cw * sty.roll * w * (1 + .5 * run) : Math.sin(ck * 1.1) * .02;
   r.tilt.rotation.z = -lean; r.tilt.rotation.x = roll;
-  // the body rides highest as the legs pass under it and dips as each foot lands (stiff legs, so the planted foot stays on the floor)
+  // the body rides highest as the legs pass under it and dips as each foot lands (stiff legs, so the planted foot stays on the floor); at a run
+  // it's the other way: lowest over the planted foot, up in the stride
   const hip = r.legs.length ? r.legs[0].userData.y0 : 1;
-  let by = walking ? hip * (Math.cos(r.stride * sw) - Math.cos(r.stride)) + r.bobAmt * .6 * (.5 + .5 * Math.cos(2 * ph)) * w
+  let by = walking ? hip * (Math.cos(stride * sw) - Math.cos(stride)) * (1 - .7 * run) + r.bobAmt * .6 * (.5 + .5 * Math.cos(2 * ph)) * w * (1 - .5 * run) + run * r.bobAmt * 1.3 * (Math.abs(sw) - .45)
     : sty.bounce ? Math.abs(Math.sin(ck * sty.beat)) * sty.bounce : Math.sin(ck * 2.2) * .02;
-  if (crouch) by -= .16; if (charge) by -= .1;
+  if (crouch) by -= .1 + .22 * wu; if (charge) by -= .06 + .1 * kc; if (act) by -= .06 * ka; by -= .28 * lk;
   r.bob.position.y = by;
   r.legs.forEach((L, i) => {
     const s = i ? -1 : 1;
-    let a = walking ? s * sw * r.stride
-      : air ? (rising ? s * .32 + .06 : s * .1 + .08) : hurt ? .22 + s * .08 : s * (sty.stance + (charge || act ? .08 : 0));
+    let a = walking ? s * sw * stride
+      : air ? (rising ? s * .32 + .06 : s * .1 + .08) : hurt ? .22 + s * .08
+      : s * (sty.stance + .1 * wu + .08 * lk) + (charge ? (s > 0 ? .08 : -.18) * (.4 + .6 * kc) : 0) + (act ? (s > 0 ? .28 : -.14) * ka : 0);   // (a strike: weight back on the rear foot, then a step into it)
+    if (sk) a = lerp(a, md * (s > 0 ? .45 : .15), sk);                    // a skid: both feet braced ahead of it
     L.rotation.z = a + lean;                          // legs stay under the body while the torso leans
-    L.rotation.x = s * (sty.splay + (charge || act || crouch ? .05 : 0)) - roll;
-    L.position.y = L.userData.y0 + (walking ? Math.max(0, s * cw) * sty.lift * w : air && rising ? (i ? .08 : 0) : 0);   // the stepping foot lifts clear
+    L.rotation.x = s * (sty.splay + (charge || act || crouch ? .05 : 0) + .06 * wu + .05 * lk) - roll;
+    L.position.y = L.userData.y0 + (walking ? Math.max(0, s * cw) * sty.lift * w * (1 + 1.2 * run) * (1 - sk) : air && rising ? (i ? .08 : 0) : 0);   // the stepping foot lifts clear (high, at a sprint)
   });
-  // arms swing against the legs and hang under their own weight while the body leans; the springs give them drag and follow-through
+  // arms swing against the legs (pumping at a sprint) and hang under their own weight while the body leans; the springs give them drag and follow-through
   const raise = air ? (rising ? .9 : .5) : hurt ? 1.1 : crouch ? .2 : 0;
   r.arms.forEach((A, i) => {
     const s = i ? -1 : 1;
-    let z = walking ? -s * sw * r.swing * 1.3 : .08 + Math.sin(ck * 1.6 + i * 1.3) * .045;
+    let z = walking ? -s * sw * r.swing * 1.3 * (1 + .8 * run) : .08 + Math.sin(ck * 1.6 + i * 1.3) * .045;
     z += lean * .6;
-    if (crouch) z -= .4; if (rising) z += .35; if (charge) z -= .25 * sty.wind; if (act) z += .3 * sty.wind; if (hurt) z += .35;
-    A.rotation.z = z; A.rotation.x = s * (sty.flare + raise * .5 + (walking ? .03 : 0)); A.rotation.y = 0;
+    if (crouch) z -= .25 + .45 * wu; if (rising) z += .35; if (charge) z -= .3 * sty.wind * (.4 + .8 * kc); if (act) z += .4 * sty.wind * ka; if (hurt) z += .35;
+    z -= .35 * lk; z += md * .6 * sk;                                    // (a landing: the arms swing down with the weight · a skid: thrown out ahead for balance)
+    A.rotation.z = z; A.rotation.x = s * (sty.flare + raise * .5 + (walking ? .03 + .05 * run : 0)); A.rotation.y = 0;
     A.position.y = A.userData.y0;
   });
   if (r.head) {   // keeps its eyes on you: counters part of the lean, nods a beat after each step, glances around when still
     const H = r.head;
-    H.rotation.z = lean * .45 + (walking ? Math.sin(2 * ph - .9) * .04 * w : Math.sin(ck * .9) * .025) + (hurt ? .3 : 0) + (charge ? -.07 : 0) + (act ? .05 : 0);
+    H.rotation.z = lean * .45 + (walking ? Math.sin(2 * ph - .9) * .04 * w : Math.sin(ck * .9) * .025) + (hurt ? .3 : 0) + (charge ? -.07 - .05 * kc : 0) + (act ? .05 * ka : 0);
     H.rotation.x = -roll * .5 + Math.sin(ck * .7) * .03;
     H.rotation.y = walking ? 0 : Math.sin(ck * .45) * .12;
   }
@@ -6444,7 +6458,24 @@ const ATTACKS = {
 // far off), keep there on its toes facing you, give ground after a strike or a hit, go up onto the ledge you're on with a jump worked out
 // to land there, drop down after you, hop gaps, leap over you when it's cornered, and now and then hop back out of your swing. It moves
 // like you do: speeding up and braking, never one flat walking speed, skidding round when it turns.
-const BRAIN = { think: [.16, .3], accel: 1500, brake: 2400, airAccel: 700, walk: 1.5, sprint: 2.7, dodge: .3, dodgeCd: 2.2, cd: .85 };
+// (2026-10-22, the user: "more agile and their movements more realistic and weighted the same way we've done for the heroines": quicker to
+// react, harder off the mark and on the brakes, backsteps out of your swing and after its own, a feint in now and then; bossFeel below)
+const BRAIN = { think: [.12, .24], accel: 2100, brake: 3000, airAccel: 850, walk: 1.5, sprint: 2.7, dodge: .4, dodgeCd: 1.7, cd: .85, dash: 560, feint: .3, feintCd: [1.6, 3] };
+const BOSS_RUN = .45;                                // a sprint's stride: this much longer than the walk's (bossStep's phase slows to match)
+const bossStrideK = e => (1 + BOSS_RUN * (e.runK || 0)) * (Math.sign(e.vx) * e.dir < 0 ? .8 : 1);   // (backing off: shorter steps)
+function bossDash(e, d, k = 1, T = .2) {             // a quick burst along the ground (a backstep, a feint): its own momentum, then braking
+  e.vx = d * BRAIN.dash * k; e.dashT = T; e.sq = -.1; e.sqv = 0; dust(e.x, e.y, 3, -d);
+}
+function bossFeel(e, dt) {                           // the heroines' weight for a boss's body (read by syncFoe): into a run, leaning into speed changes, skids, take-offs, landings
+  const ax = Math.abs(e.vx);
+  e.runK = approach(e.runK || 0, e.onGround ? clamp((ax / (e.def.speed || 80) - 1.8) / 1.6, 0, 1) : e.runK || 0, dt * 4);
+  if (dt > 0) { const acc = (e.vx - (e.prevVx || 0)) / dt * e.dir; e.prevVx = e.vx;   // lean into a burst of speed, rock back on the brakes (springy, as the player's accLean)
+    e.accLeanV = (e.accLeanV || 0) + ((clamp(acc * .00011, -.32, .28) * (e.onGround ? 1 : .3) - (e.accLean || 0)) * 140 - (e.accLeanV || 0) * 14) * dt;
+    e.accLean = (e.accLean || 0) + e.accLeanV * dt; }
+  e.skidK = approach(e.skidK || 0, e.onGround && ax > 150 && e.braking ? 1 : 0, dt * 10);
+  e.windup0 = e.windup > 0 ? Math.max(e.windup0 || 0, e.windup) : 0;   // (how deep into a jump's wind-up)
+  e.landT = (e.landT ?? 9) + dt;
+}
 function bossPlan(e, D) { const last = e.lastMoves || []; return !D.atk2 ? D.atk : last.length >= 2 && last[0] === last[1] ? (last[0] === D.atk ? D.atk2 : D.atk) : Math.random() < .5 ? D.atk2 : D.atk; }   // never the same move three times running
 function bossJumpTo(e, tx, ty, wind = .14) {         // a jump worked out to come down at (tx, ty): up past it a little, then down onto it
   const h = Math.max(40, e.y - ty + 45), vy = -Math.sqrt(2 * 2000 * h), T = -vy / 2000 + Math.sqrt(2 * Math.max(10, h - (e.y - ty)) / 2000);
@@ -6463,18 +6494,23 @@ function bossThink(e, p, D) {
   if (cornered && adx < 220 && !e.plat && Math.random() < .5) return (e.intent = { kind: "over" });   // backed into a wall with you right there: over your head
   if (adx > keep + 70) return (e.intent = { kind: "close", tx: p.x - Math.sign(dx) * keep });
   if (adx < keep - 80 && !cornered) return (e.intent = { kind: "space", tx: p.x - Math.sign(dx) * keep });
+  if (!D.chase && !e.plat && (e.feintCd || 0) <= 0 && adx > 200 && Math.random() < BRAIN.feint) return (e.intent = { kind: "feint" });   // a feint: a quick step in at you, and back out
   e.intent = { kind: "hold", tx: e.x + rand(-70, 70) };                                     // on its toes: little steps in and out
 }
 function bossMove(e, p, D, dt) {
   if (p.calmT > 0 || cheerHold) { e.vx = approach(e.vx, 0, BRAIN.brake * dt); e.atkCd = Math.max(e.atkCd, .6); return; }   // (you're calming a sad berry: it holds off)
   const dx = p.x - e.x, adx = Math.abs(dx); e.steer = false;
-  e.backoff = Math.max(0, (e.backoff || 0) - dt); e.dodgeCd = Math.max(0, (e.dodgeCd || 0) - dt);
+  e.backoff = Math.max(0, (e.backoff || 0) - dt); e.dodgeCd = Math.max(0, (e.dodgeCd || 0) - dt); e.feintCd = Math.max(0, (e.feintCd || 0) - dt);
+  if (e.dashT > 0) { e.dashT -= dt; e.vx = approach(e.vx, 0, 1100 * dt); e.atkCd -= dt;   // mid-dash: carried by its own momentum (never off into a drop)
+    if (!e.plat && groundAt(e.x + Math.sign(e.vx) * (D.hw + 20)) === null && groundAt(e.x) !== null) e.vx = 0;
+    e.braking = Math.abs(e.vx) > 150 && e.dashT < .08; return; }
   if ((e.brainT = (e.brainT || 0) - dt) <= 0) { e.brainT = rand(...BRAIN.think); bossThink(e, p, D); }
   const I = e.intent || { kind: "hold", tx: e.x }, base = D.speed * (D.chase ? 1 : BRAIN.walk);
   if (!p.dead) e.dir = Math.sign(dx) || e.dir;                                              // a fighter keeps its eyes on you
   // your swing coming, close in: sometimes it hops back out of it (or over you, backed into a wall)
   if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 190 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
     e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < (arena ? arena.l : 0) + 200 && dx > 0) || (e.x > (arena ? arena.r : WORLD) - 200 && dx < 0);
+    if (!wall && !e.plat && groundAt(e.x - Math.sign(dx) * 130) !== null && Math.random() < .5) { bossDash(e, -Math.sign(dx) || -e.dir, 1.15, .24); return; }   // a backstep along the ground, out of reach
     e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; return;
   }
   let tv = 0;
@@ -6482,6 +6518,8 @@ function bossMove(e, p, D, dt) {
     if (Math.abs(d) < 330 && Math.abs(d) > 20 || (Math.abs(d) <= 20 && e.y - q.y > 20)) { bossJumpTo(e, I.tx, q.y); e.dir = Math.sign(d) || e.dir; e.brainT = .5; return; }
     tv = Math.sign(d) * base * BRAIN.sprint * .7; }
   else if (I.kind === "drop") { tv = I.d * base * 1.3; e.steer = true; }
+  else if (I.kind === "feint") { e.intent = { kind: "hold", tx: e.x }; e.feintCd = rand(...BRAIN.feintCd);   // in at you for a step, then (holding where it was) back out
+    if (groundAt(e.x + Math.sign(dx) * (D.hw + 90)) !== null) { bossDash(e, Math.sign(dx) || e.dir, .9, .16); e.brainT = .3; } return; }
   else if (I.kind === "over") { e.jumpVy = -900; e.jumpVx = Math.sign(dx) * 480; e.windup = .12; e.sq = -.25; e.sqv = 0; e.intent = { kind: "hold", tx: e.x }; e.brainT = .5; return; }
   else { let tx = I.tx; if (e.plat && I.kind !== "drop") tx = clamp(tx, e.plat.x + 30, e.plat.x + e.plat.w - 30);   // (on a ledge it keeps to the ledge)
     const d = tx - e.x, sp = I.kind === "close" && Math.abs(d) > 380 ? BRAIN.sprint : I.kind === "hold" ? .55 : I.kind === "back" ? .9 : 1.15;
@@ -6491,6 +6529,7 @@ function bossMove(e, p, D, dt) {
   if (e.hitWall && Math.sign(tv) === Math.sign(e.hitWall) && I.kind !== "back") { e.jumpVy = -760; e.jumpVx = Math.sign(tv) * 300; e.windup = .1; return; }   // a step up in the way: hop it
   const turning = tv && e.vx && Math.sign(tv) !== Math.sign(e.vx);
   e.vx = approach(e.vx, tv, (tv === 0 || turning ? BRAIN.brake : BRAIN.accel) * dt);       // speeding up, braking, skidding round
+  e.braking = (tv === 0 || turning) && Math.abs(e.vx) > 150;                                 // (syncFoe: a skid, heels dug in)
   if (turning && Math.abs(e.vx) > 120 && Math.random() < dt * 12) dust(e.x, e.y, 2, -Math.sign(tv));
   e.atkCd -= dt;
   if (e.atkCd <= 0 && !p.dead) { const pick = e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];
@@ -6507,6 +6546,7 @@ function updateEnemy(dt) {
   if (!e.dead && e.y > SINK + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
+  e.braking = false; if (e.recoil > 0 || e.hurtT > 0 || e.atk || !e.onGround || e.dead) e.dashT = 0;   // (a dash is only ever on its own feet)
   if (e.chide) chideStep(e, dt);                      // telling Evil June off before the fight
   else if (e.dead) {
     e.deathT += dt; e.vx = approach(e.vx, 0, 900 * dt);
@@ -6523,7 +6563,8 @@ function updateEnemy(dt) {
   else if (e.atk) {                              // wind up, then the signature attack
     e.vx = approach(e.vx, 0, 1400 * dt); e.atkTm -= dt;
     if (e.atk === "charge" && e.atkTm <= 0) { e.atk = "act"; e.atkTm = A.act; e.actT = 0; e.emitN = 0; e.emitT = 0; shake = Math.max(shake, 3); if (A.sfx) SFX[A.sfx](); }
-    else if (e.atk === "act") { e.actT += dt; hzOwner = e; A.tick(e, dt); hzOwner = null; if (e.atkTm <= 0) { e.atk = null; e.atkCd = rand(...A.cd) * BRAIN.cd; e.backoff = rand(.35, .8); e.brainT = 0; } }   // (after a strike it gives a little ground)
+    else if (e.atk === "act") { e.actT += dt; hzOwner = e; A.tick(e, dt); hzOwner = null; if (e.atkTm <= 0) { e.atk = null; e.atkCd = rand(...A.cd) * BRAIN.cd; e.backoff = rand(.35, .8); e.brainT = 0;   // (after a strike it gives a little ground...
+      if (!D.chase && e.onGround && !e.plat && Math.random() < .35) { const d = -Math.sign(p.x - e.x) || -e.dir; if (groundAt(e.x + d * 140) !== null) bossDash(e, d, .9, .2); } } }   // ...sometimes in a backstep)
   } else if (e.windup > 0) {
     e.windup -= dt; e.vx = approach(e.vx, 0, 1400 * dt);
     if (e.windup <= 0) { e.vx = e.jumpVx; e.vy = e.jumpVy; e.onGround = false; e.sq = .32; e.sqv = 0; dust(e.x, e.y, 6); puffs(e.x, e.y - 8, 2, 30, 80); if (D.quake) { shake = Math.max(shake, 5); dust(e.x, e.y, 10); SFX.thud(); } }   // (a heavy one: the floor jolts as it goes)
@@ -6536,14 +6577,15 @@ function updateEnemy(dt) {
 
   e.vy = Math.min(e.vy + 2000 * dt, 1000);
   moveBody(e, dt, D.hw + 2);
-  if (e.landV > 0) { e.sq = -clamp(e.landV / 2200, .12, .42); e.sqv = 0; dust(e.x - 20, e.y, 4, -1); dust(e.x + 20, e.y, 4, 1); if (e.landV > 500) { shake = Math.max(shake, 4); SFX.thud(); }
+  if (e.landV > 0) { e.sq = -clamp(e.landV / 2200, .12, .42); e.sqv = 0; e.landT = 0; e.landK = clamp(e.landV / 1000, .25, 1); dust(e.x - 20, e.y, 4, -1); dust(e.x + 20, e.y, 4, 1); if (e.landV > 500) { shake = Math.max(shake, 4); SFX.thud(); }
     if (D.quake && e.landV > 300 && !e.dead) { shake = Math.max(shake, 11); SFX.slam(); rumble(80, .7); dust(e.x - 40, e.y, 10, -1); dust(e.x + 40, e.y, 10, 1); puffs(e.x, e.y - 10, 6, 50, 220);   // the ground shakes, and a shock wave runs out both ways
       [-1, 1].forEach(d => { const m = crestT.clone(); m.scale.setScalar(.9); hzOwner = e; addHz({ m, x: e.x + d * (D.hw + 30), y: e.y - 10, vx: d * 430, life: .95, r: 15, z: .2, sync: h => { h.m.position.y += Math.abs(Math.sin(h.t * 28)) * .18; } }); hzOwner = null; }); } }
   if (!e.onGround) e.plat = null;
-  if (e.onGround) e.phase += dt * Math.abs(e.vx) * bossStep(e.def.rig);
+  bossFeel(e, dt);
+  if (e.onGround) e.phase += dt * Math.abs(e.vx) * bossStep(e.def.rig) / bossStrideK(e);   // (a longer stride at a sprint: the planted foot still keeps pace)
   spring(e, dt);
-  const yT = e.dir > 0 ? -.5 : -Math.PI + .5;
-  e.yaw = lerp(e.yaw, yT, 1 - Math.exp(-dt * 7));
+  const yo = .5 - .22 * (e.runK || 0) * (Math.sign(e.vx) === e.dir ? 1 : 0), yT = e.dir > 0 ? -yo : -Math.PI + yo;   // (into a sprint it turns side-on to where it's going, as the heroines do)
+  e.yaw = lerp(e.yaw, yT, 1 - Math.exp(-dt * 9));   // (turning round a touch quicker, 2026-10-22)
   if (D.puffs && (e.puffT -= dt) <= 0 && !e.dead) {
     e.puffT = .7 + Math.random() * 1.1;
     const side = Math.random() < .5 ? -1 : 1;
