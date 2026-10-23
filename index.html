@@ -383,6 +383,10 @@
   #comic .arrow { position: absolute; z-index: 2; right: 6%; top: 42%; width: 34%; height: 18%; background: var(--y); border: 4px solid var(--s); clip-path: polygon(0 30%, 62% 30%, 62% 0, 100% 50%, 62% 100%, 62% 70%, 0 70%); }
   #comic .go { position: absolute; right: 14px; bottom: 10px; z-index: 3; font: 600 12px "Jost", sans-serif; letter-spacing: .4em; color: var(--y); background: var(--s); padding: 6px 12px; opacity: 0; transition: opacity .4s; }
   #comic .go.on { opacity: 1; animation: blink 1.1s steps(2, start) infinite; }
+  #comic.tri .page { grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr; aspect-ratio: 16 / 7.2; }   /* the beach's lessons: three panels in a row */
+  #comic.tri .cap { left: 10px; right: 10px; top: auto; bottom: 10px; max-width: none; font-size: 14px; }
+  #comic.tri .cp:nth-child(even) .cap { left: 10px; right: 10px; }
+  #comic .key { display: inline-block; background: var(--s); color: var(--y); padding: 1px 7px 0; margin: 0 2px; border-radius: 4px; }
   #skipHint { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: var(--s); color: var(--y); font: 600 11px "Jost", sans-serif; letter-spacing: .26em; padding: 7px 12px; display: none; }
   #skipHint.show { display: block; }
   @media (max-height: 520px) {
@@ -427,7 +431,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261023c"></script>
+<script src="charkit.js?v=20261023d"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3261,6 +3265,13 @@ const SFX = {
     noise(.028, { vol: .19 * k, f0: 9000, f1: 4200, type: "highpass" }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack
     if (sword) { noise(.07, { vol: .14 * k, f0: 5400, f1: 2700, type: "bandpass", q: 3 }); tone(3150, 2550, .12, { type: "triangle", vol: .045 * k, delay: .004 }); tone(4700, 4300, .08, { type: "sine", vol: .025 * k, delay: .004 }); }
     else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); tone(420, 150, .05, { type: "square", vol: .045 * k, lp: 2200 }); } },
+  body(h = 58, boss = false, w = 1) {   // the blow landing on THEM (the user, 2026-10-23: "sounds the enemies make when hit ... not grunt or anything ... just sounds of getting hit"):
+    // a fruit body taking it: a wet splat, a hollow thump under it, a crunch of skin on top; deeper and heavier the bigger it is, heaviest on a boss
+    const s = clamp(58 / Math.max(30, h), .6, 1.4), k = (boss ? 1.25 : 1) * (.85 + .15 * Math.min(w, 1.6));
+    noise(.1, { vol: .2 * k, f0: 1700 * s, f1: 320 * s, type: "bandpass", q: 1.3 });                 // the splat
+    tone((boss ? 150 : 230) * s, (boss ? 42 : 80) * s, boss ? .2 : .12, { type: "sine", vol: .2 * k, delay: .004 });   // the thump through it
+    noise(.03, { vol: .07 * k, f0: 5200, f1: 2600, type: "highpass", delay: .006 });                     // the skin's crunch
+    if (boss) tone(70, 34, .26, { type: "sine", vol: .16 * k, delay: .01 }); },
   hurt() { tone(620, 180, .28, { type: "square", vol: .09, lp: 2200 }); },
   ko() { [523, 440, 349, 262].forEach((f, i) => tone(f, f * .97, .2, { type: "triangle", vol: .12, delay: .2 + i * .16 })); },
   explode(big) { noise(big ? .9 : .4, { vol: big ? .32 : .2, f0: 1800, f1: 120 }); tone(90, 35, big ? .7 : .3, { type: "sine", vol: big ? .3 : .16 }); },
@@ -3704,8 +3715,8 @@ fillHearts(3);
 // ── your weapon, top left, showing your health (the user, 2026-10-23: "remove crouching as a way of showing your life. instead, move each
 // character's respective weapon to the top left of the screen to be the new hud and the health will always be visible"; it used to come in
 // while you held crouch). Drawn flat like the user's sheet of June and Chase.
-// June (and anyone with her sword): the blade's pink bar in three parts (one per heart), the red/green/blue notches, the ATK teeth along its
-// back (tip first). Chase: his gauntlet, hand up, a ring per heart, white once it's lost, the ATK spikes on his knuckles (by the thumb first)
+// June (and anyone with her sword): the blade's pink bar in three parts (one per heart), and the red/green/blue notches as its ATK power
+// (tip first; none at 0: the user, 2026-10-23, no teeth along its back any more). Chase: his gauntlet, hand up, a ring per heart, white once it's lost, the ATK spikes on his knuckles (by the thumb first)
 const weaponEl = document.getElementById("weapon"); let weaponKey = "", weaponHp = -1;
 // (the gauntlet's a left hand: its thumb on the right, the user 2026-10-22; the ATK spikes from the thumb's side, the middle one the sleeve's purple life ring, not red)
 function weaponSvg(r, hp, pow) {
@@ -3714,10 +3725,9 @@ function weaponSvg(r, hp, pow) {
     const cols = [Q.c1, Q.c2, Q.c3], ys = [205, 150, 95];                                     // hilt to tip
     const chunk = i => `<rect x="53" y="${236 - (i + 1) * 58 + 4}" width="14" height="52" rx="7" fill="${i < hp ? Q.fill : "#ece6c4"}"/>`;
     const notch = (y, c) => `<path d="M43 ${y - 10} L43 ${y + 10} L30 ${y} Z" fill="${c}"/><circle cx="38.5" cy="${y}" r="2.6" fill="#fff"/>`;
-    const tooth = (y, c) => `<path d="M77 ${y + 9} L77 ${y - 7} L93 ${y - 16} Z" fill="${c}"/>`;
     return `<svg viewBox="0 -12 120 300">
       <path d="M43 44 Q43 16 60 10 Q77 16 77 44 L77 248 L43 248 Z" fill="${Q.main}"/><path d="M47 46 Q47 24 57 16 L57 246 L47 246 Z" fill="#fff" opacity=".35"/>
-      ${[0, 1, 2].map(chunk).join("")}${ys.map((y, i) => notch(y, cols[i])).join("")}${ys.map((y, i) => pow >= 3 - i ? tooth(y, cols[i]) : "").join("")}
+      ${[0, 1, 2].map(chunk).join("")}${ys.map((y, i) => pow >= 3 - i ? notch(y, cols[i]) : "").join("")}
       <path d="M60 266 Q34 256 39 224 Q50 246 69 252 Z" fill="${Q.trim}"/>
       <circle cx="60" cy="268" r="21" fill="${Q.orb}"/><circle cx="56" cy="264" r="12" fill="none" stroke="#fff" stroke-width="3.5" opacity=".9"/><circle cx="51" cy="258" r="3" fill="#fff"/></svg>`;
   }
@@ -4338,7 +4348,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -4604,7 +4614,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip }; storyRun(q.w, fixRests(q.w, q.s), false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -4909,6 +4919,7 @@ function comicPose(st, x, face, startle) {         // a set pose on a set mark f
 }
 function showComic() {
   if (!gift) return; const g = gift, b = g.b, kid = () => (ej && ej.kid ? ej.st : null);
+  $("comic").innerHTML = COMIC_GIFT; $("comic").classList.remove("tri");   // (its own four panels: a lesson may have had the page)
   $("comic").classList.add("show"); comicUp = true; $("holdTip").classList.remove("show"); $("comicGo").classList.remove("on"); [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.remove("on"));
   const ends = PLATFORMS.flatMap(q => [q.x, q.x + q.w]); let cx = WORLD - 720, best = -1;   // (the spot farthest from any platform's posts, so nothing stands in front of them)
   for (let x = WORLD - 380; x > 520; x -= 20) { if (groundAt(x - 160) === null || groundAt(x + 190) === null) continue;
@@ -4936,13 +4947,83 @@ function showComic() {
   setTimeout(() => { $("comicGo").classList.add("on"); g.ready = true; }, 350 + 4 * 900);
 }
 function comicNext() {                               // a press: all the panels at once, or (all shown) close the page and on
+  if (tutor && comicUp) { if (!tutor.ready) { [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.add("on")); $("comicGo").classList.add("on"); tutor.ready = true; return; }
+    comicUp = false; $("comic").classList.remove("show", "tri"); SFX.confirm(); tutor = null; jumpBuf = atkBuf = 0; return; }   // (a lesson: closed, and on you go)
   const g = gift; if (!comicUp) return;
   if (!g || !g.ready) { [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.add("on")); $("comicGo").classList.add("on"); if (g) g.ready = true; return; }
   comicUp = false; $("comic").classList.remove("show"); SFX.confirm(); g.phase = "out"; g.hopT = .6;
   story.armed = true; writeSave(); openExit();
   const b = $("banner"); b.innerHTML = `<div class="blk">AFTER GLOS!</div><div class="bar">THE BERRY SWORD AND THE GAUNTLET · INTO THE FOREST →</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
-function endGift(all) { if (gift && gift.b) disposeBaddy(gift.b); gift = null; if (all) { comicUp = false; $("comic").classList.remove("show"); } }
+function endGift(all) { if (gift && gift.b) disposeBaddy(gift.b); gift = null; if (all) { comicUp = false; tutor = null; $("comic").classList.remove("show", "tri"); } }
+// ── the beach's lessons (the user, 2026-10-23): on the first screen, once you've picked who you are and you near the baddies, a page of
+// three panels on fighting ("if you attack by just using the attack button you can combo, and holding a direction will change it ... jumping up
+// will launch enemies for a combo ... pressing down leads to a slide"); on the third, armed now and about to fight, three on the weapons ("your
+// weapons show your health ... the spikes increase power ... charge your attacks"). Each panel the game's own models, posed and shot like the
+// bep's comic. Once a save: story.tut
+const COMIC_GIFT = document.getElementById("comic").innerHTML;
+let tutor = null;                                    // the lesson on show: { id, ready }
+const kn = k => { const T = window.BERRY_TOUCH; if (k === "atk") return T ? "○" : padUse ? padName("a") : "X"; return { up: "↑", down: "↓", lr: "← →" }[k] || k; };
+const keyTag = k => `<span class="key">${kn(k)}</span>`;
+const TUTOR = {
+  moves: { room: 0, armed: false, panels: [
+    { cap: () => `TAP ${keyTag("atk")} AGAIN AND AGAIN: A COMBO! HOLD ${keyTag("lr")} AS YOU DO AND IT CHANGES`, pose: "combo" },
+    { cap: () => `${keyTag("up")} AND ${keyTag("atk")}: UP IT GOES! JUMP AFTER IT AND KEEP HITTING`, pose: "launch" },
+    { cap: () => `${keyTag("down")} AND ${keyTag("atk")}: A SLIDE, RIGHT INTO THEM`, pose: "slide" } ] },
+  weapon: { room: 2, armed: true, panels: [
+    { cap: () => `YOUR WEAPON IS YOUR HEALTH: EVERY HIT YOU TAKE COSTS A PIECE OF IT`, pose: "health" },
+    { cap: () => `BEAT BADDIES AND ITS SPIKES COME OUT: MORE POWER IN EVERY BLOW`, pose: "power" },
+    { cap: () => `HOLD ${keyTag("atk")} TO CHARGE IT UP, THEN LET GO FOR A BIG COMBO`, pose: "charge" } ] },
+};
+function maybeTutor() {                              // into the lesson's room, the baddies near (or well on in): the page
+  if (!story || world !== 9 || tutor || comicUp || gift || opening || cine || intro || transit || mode !== "play" || !player || player.dead || paused || modalOpen || menuUp) return;
+  for (const id in TUTOR) { const T = TUTOR[id]; if (T.room !== stage || !!story.armed !== T.armed || (story.tut || []).includes(id)) continue;
+    const near = baddies.filter(b => !b.dead && !b.gone && !b.under).reduce((m, b) => Math.min(m, Math.abs(b.x - player.x)), 1e9);
+    if (near > 560 && player.x < 560) continue;
+    (story.tut || (story.tut = [])).push(id); writeSave(); showTutor(id); return; }
+}
+function tutorShot(cam, warm = 0) {                  // shot(), with a few frames of the effects run on first (an aura, the spikes growing out)
+  comicCam = cam; for (let i = 0; i < warm; i++) render(1 / 30); const u = shot(cam); comicCam = null; return u;
+}
+function showTutor(id) {
+  const T = TUTOR[id], p = player, kid = ej && ej.kid ? ej : null, SET = setOf(rig.spec) || {};
+  tutor = { id, ready: false }; comicUp = true; for (const k in keys) keys[k] = false;
+  Object.assign(p, { vx: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, block: false, tackle: null });
+  const C = $("comic"); C.innerHTML = `<div class="page">${T.panels.map(q => `<div class="cp"><span class="cap">${q.cap()}</span></div>`).join("")}<span class="go" id="comicGo">${window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON"}</span></div>`;
+  C.classList.add("show", "tri"); $("holdTip").classList.remove("show");
+  const keep = { x: p.x, y: p.y, face: p.face, yaw: p.yaw, hp: p.hp, power: p.power || 0, onGround: p.onGround, plat: p.plat };
+  const hidden = []; baddies.forEach(b => { if (b.r.root.visible) { b.r.root.visible = false; hidden.push(b); } }); const kidX = kid ? kid.st.x : 0; if (kid) kid.st.x = -4000;   // (the other one: well out of the picture)
+  const ends = PLATFORMS.flatMap(q => [q.x, q.x + q.w]); let cx = 900, best = -1;   // (a spot well clear of the platforms' posts)
+  for (let x = 420; x < WORLD - 420; x += 20) { if (groundAt(x - 200) === null || groundAt(x + 260) === null) continue;
+    const d = Math.min(400, ...ends.map(e => e < x - 200 ? x - 200 - e : e > x + 260 ? e - x - 260 : 0)); if (d > best) { best = d; cx = x; } }
+  const gy = groundAt(cx) ?? GROUND, extras = [];
+  const prop = (type, col, x, y, hurt) => { const b = makeBaddy(type, col, x, y); Object.assign(b, { dir: -1, onGround: y >= (groundAt(x) ?? GROUND) - 1, hurtT: hurt ? .3 : 0, flash: 0, yaw: -Math.PI / 2 - .5 }); extras.push(b); for (let i = 0; i < 10; i++) syncBaddy(b, 1 / 60); return b; };   // (hurt: its flinch, not the white flash)
+  const strikeAt = (kind, f = .5) => { const S = KIT.STRIKES[kind]; if (!S) return; p.atkKind = kind; p.atkT = S.hits && S.hits[0] ? S.hits[0].t0 + (S.hits[0].t1 - S.hits[0].t0) * f : (S.dur || .4) * f; for (let i = 0; i < 24; i++) updatePose(p, 1 / 60); };
+  const closeCam = (dx, dy, z) => ({ x: X(cx + dx), y: Y(gy) + dy + .6, z, tx: X(cx + dx), ty: Y(gy) + dy, tz: 0 });
+  const P = [];
+  for (const q of T.panels) {
+    extras.splice(0).forEach(disposeBaddy); comicPose(p, cx, 1, false); p.yaw = -.85; p.hp = keep.hp; p.power = keep.power;   // (turned to it, as she is when she fights)
+    if (q.pose === "combo") { prop("leafy", "orange", cx + 74, gy, true); strikeAt((SET.ground || []).includes("jab") ? "jab" : (SET.ground || ["jab"])[0], .25); P.push(tutorShot(closeCam(45, 1.25, 6.6))); }
+    else if (q.pose === "launch") { prop("leafy", "leaf", cx + 52, gy - 118, true); strikeAt(SET.up || "up_fist", .45); P.push(tutorShot(closeCam(35, 1.9, 7.2))); }
+    else if (q.pose === "slide") { prop("acorn", "bark", cx + 108, gy, true); strikeAt("slide", .6); P.push(tutorShot(closeCam(65, 1, 6.8))); }
+    else {                                           // the weapon: close on it in her hand
+      const pr = rig.prop, gaunt = pr && pr.kind === "gauntlet";
+      if (q.pose === "health") { p.hp = Math.max(1, maxHp() - 2); p.power = 0; } else if (q.pose === "power") { p.hp = Math.max(1, maxHp() - 2); p.power = 3; } else { p.hp = maxHp(); p.power = 0; p.chargeT = 1.4; p.chargeLv = 2; }   // (two pieces down: what a lost one looks like, and no full-health glow over it)
+      if (q.pose !== "charge" && gaunt) strikeAt("jab", .25);   // (the arm out straight: its rings along it)
+      for (let i = 0; i < 40; i++) { updatePose(p, 1 / 60); rig.sync(p, rig, 1 / 30); }
+      if (q.pose === "charge") { P.push(tutorShot(closeCam(10, 1.2, 6.4), 12)); p.chargeT = 0; p.chargeLv = 0; aura.show = 0; }
+      else { rig.root.updateMatrixWorld(true); const w = new THREE.Vector3(X(cx), Y(gy) + 1.2, 0), v = new THREE.Vector3();
+        if (gaunt && pr.rings && pr.rings.length) { w.set(0, 0, 0); pr.rings.forEach(m => w.add(m.getWorldPosition(v))); w.multiplyScalar(1 / pr.rings.length); }   // the gauntlet: on its rings
+        else if (pr && pr.inner) w.copy(pr.inner.localToWorld(new THREE.Vector3(.6, 0, 0)));                                                 // the sword: the middle of its blade
+        if (gaunt) w.x += .28;                                                                                                           // (between its rings and the knuckles' spikes)
+        P.push(tutorShot({ x: w.x + (gaunt ? .1 : .2), y: w.y + .3, z: w.z + (gaunt ? 2.6 : 2.3), tx: w.x, ty: w.y, tz: w.z })); }
+    }
+  }
+  extras.splice(0).forEach(disposeBaddy); hidden.forEach(b => { b.r.root.visible = true; }); if (kid) kid.st.x = kidX;
+  comicPose(p, keep.x, keep.face, false); Object.assign(p, { y: keep.y, yaw: keep.yaw, hp: keep.hp, power: keep.power, chargeT: 0, chargeLv: 0 }); for (let i = 0; i < 20; i++) rig.sync(p, rig, 1 / 30);
+  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
+  setTimeout(() => { if (tutor && tutor.id === id) { $("comicGo").classList.add("on"); tutor.ready = true; } }, 350 + T.panels.length * 900);
+}
 function armHeroes() {                               // on with the weapons: you, and the other one
   const id = story ? story.char : null, r = roster.find(q => q.id === id); if (!r) return;
   const old = player; rig.root.visible = rig.shadow.visible = false; rig = r;
@@ -5002,7 +5083,7 @@ function wayCue(bossBeat) {                          // the way-on arrow: only w
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row
 const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
-  cue.classList.toggle("left", !!q.exitLeft || dead);
+  cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
   cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
   return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
 const wayOnText = () => { const q = STAGES[stage];
@@ -6975,6 +7056,12 @@ function slashFlair(x, y, big) {                  // two crossing slash arcs and
   const st = mk2(FLAIR_STAR, "#fffef4"); st.scale.setScalar(.75); st.rotation.z = rot;
   g.position.set(X(x), Y(y), 1.2); actors.add(g);
   flairs.push({ g, t0: performance.now(), dur: big ? 560 : 320, s: big ? 2.6 : 1.5 });
+}
+function hitSpark(x, y, w = 1) {                  // every blow that lands (the user, 2026-10-23: more force, after Odin Sphere): a small white star and a ring snapping out at the hit, gone in a blink
+  const g = new THREE.Group(), rot = rand(-.8, .8), mk2 = (geo, c) => { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: c, transparent: true, depthWrite: false, side: THREE.DoubleSide })); g.add(m); return m; };
+  mk2(FLAIR_STAR, "#ffffff").rotation.z = rot; mk2(new THREE.RingGeometry(.6, .95, 28), "#ffe98a");
+  g.position.set(X(x), Y(y), 1.2); actors.add(g);
+  flairs.push({ g, t0: performance.now(), dur: 160 + 50 * Math.min(w, 2), s: .9 + .4 * Math.min(w, 2) });
 }
 function syncFlairs() {                           // (real time: they play out during the freeze)
   const now = performance.now();
@@ -11071,8 +11158,8 @@ const CARIB_SEA = { deep: "#0b7896", mid: "#13adc0", light: "#7fe6d4", foam: "#f
 const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#f4e4b4", plats: [], plats2: [] }));
 const BEACH_STAGES = [   // plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk)
   { h: 0, foe: 0, cell: "B1", elev: 0, name: "HOME BEACH", home: true, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },
-  { h: 0, foe: 0, cell: "B2", elev: 0, name: "PALM SHORE", plats: [[460, 360, 200, "rock"], [860, 300, 230, "plank"], [1300, 385, 170, "drift"], [1700, 320, 200, "rock"], [2120, 365, 190, "boat"]] },
-  { h: 0, foe: 0, cell: "B3", elev: 0, name: "COCONUT COVE", gift: true, plats: [[500, 380, 180, "boat"], [880, 310, 210, "rock"], [1280, 360, 220, "plank"], [1700, 300, 190, "rock"], [2100, 385, 170, "drift"]] },
+  { h: 0, foe: 0, cell: "B2", elev: 0, name: "PALM SHORE", gift: true, plats: [[460, 360, 200, "rock"], [860, 300, 230, "plank"], [1300, 385, 170, "drift"], [1700, 320, 200, "rock"], [2120, 365, 190, "boat"]] },
+  { h: 0, foe: 0, cell: "B3", elev: 0, name: "COCONUT COVE", plats: [[500, 380, 180, "boat"], [880, 310, 210, "rock"], [1280, 360, 220, "plank"], [1700, 300, 190, "rock"], [2100, 385, 170, "drift"]] },
   { h: 0, foe: 0, cell: "B4", elev: 0, name: "THE FOREST'S EDGE", boss: true, duo: true, edge: true, bossX: 1700, toWorld: 0, plats: [[420, 370, 190, "drift"], [820, 300, 210, "rock"], [1240, 380, 180, "boat"]] },
 ];
 const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the sand
@@ -15086,9 +15173,11 @@ const HIT_W = { sweep: 1.1, cut: .85, cleave: 1.4, jab: .8, haymaker: 1.4, punch
 let camKick = 0, camKickV = 0, camPush = 0, slowMo = 0, chainN = 0, chainT = -9;
 function hitFeel(e, dir, kind, boss) {
   const w = HIT_W[kind] || 1;
-  hitstop = Math.max(hitstop, (boss ? .056 : .045) + .04 * w);   // (a touch longer since 2026-10-23, the Odin Sphere feel: each blow lands, and everything stops on it) shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);
+  hitstop = Math.max(hitstop, (boss ? .056 : .045) + .04 * w);   // (a touch longer since 2026-10-23, the Odin Sphere feel: each blow lands, and everything stops on it)
+  shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);   // (2026-10-23 evening: this had slipped into the comment above, so no blow shook the picture)
   e.jolt = .05 + .045 * w; e.joltAt = time;                                           // (it shudders while the picture's held: see syncBaddy / syncFoe)
   camKick += dir * (.07 + .07 * w);                                                   // the camera knocked the way the blow went (it springs back in update)
+  if (kind !== "stomp") { const hw = e.hw ?? (e.def && e.def.hw) ?? 30, h = e.h ?? (e.def && e.def.h) ?? 80; hitSpark(e.x - dir * hw * .6, e.y - h * .55, w); }   // (the star at the hit)
   if (player && kind !== "stomp") { player.sq = Math.min(player.sq || 0, -.05 - .06 * w); player.sqv = 0; }   // your body into it
   rumble(12 + 18 * w, .2 + .3 * w);
 }
@@ -15121,6 +15210,7 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   b.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1;
   b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
   if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
+  SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1);   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
   if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .85; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
   else { b.vx = dir * KB[0] * 1.2 / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
@@ -15274,6 +15364,7 @@ function hitEnemy(dir, kind) {
   if (e.inv > 0 || e.dead) return false;
   e.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
   if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
+  SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15);   // (on the boss's body: heavier)
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
   e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; e.windup = 0;
@@ -15696,6 +15787,8 @@ function update(dt) {
   if (cheerHold && (cheerHold.t += dt) > cheerHold.dur) cheerHold = null;
   if (opening) { updateOpening(dt); shake = Math.max(0, shake - dt * 40); return; }   // the beach's opening: nobody's playing yet
   if (gift && gift.phase === "in") { updateGift(dt); updateEJ(dt); updateHazards(dt); shake = Math.max(0, shake - dt * 40); return; }   // the bep: everything waits
+  if (tutor) { shake = Math.max(0, shake - dt * 40); return; }   // a lesson's page: so does everything here
+  maybeTutor();
   if (gift) updateGift(dt);
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);

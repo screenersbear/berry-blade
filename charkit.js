@@ -1155,15 +1155,16 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   const fl = new THREE.Shape(); fl.moveTo(.03, 0); fl.quadraticCurveTo(.03, .12, -.09, .21); fl.quadraticCurveTo(-.05, .1, -.05, 0); fl.closePath();   // pink flame guard
   inner.add(at(P(slab(fl, .03, .01), M(Q.trim)), 0, .05, 0));
   inner.add(at(P(new THREE.CylinderGeometry(.028, .028, .14, 10).rotateZ(Math.PI / 2), M(tint(Q.orb, .45, .45, .45))), -.09, 0, 0));   // grip through the fist
-  [Q.c1, Q.c2, Q.c3].forEach((col, i) => {                                                                // colored notches with white studs
+  // ATK power: the three coloured notches with their white studs, each growing out of the edge as you win power (tip first: blue, green,
+  // then red by the hilt); none at all to start with or after a knock-out (the user, 2026-10-23: "there shouldnt be extra spikes on it. only the
+  // three main ones ... THOSE are the ones that appear as you kill enemies"; the shark teeth that grew along the back edge are gone)
+  const notches = [Q.c1, Q.c2, Q.c3].map((col, i) => {
     const x = (.34 + i * .25) * LK, tri = new THREE.Shape(); tri.moveTo(-.045, 0); tri.lineTo(.045, 0); tri.lineTo(0, -.075); tri.closePath();
-    inner.add(at(P(slab(tri, .028, .006), M(col)), x, -W / 2 + .012, 0));
-    [-1, 1].forEach(z => inner.add(at(P(new THREE.SphereGeometry(.014, 8, 6), M("#ffffff")), x, -W / 2 - .018, z * .02)));
+    const g = group(inner, x, -W / 2 + .012, 0); g.add(P(slab(tri, .028, .006), M(col)));                    // (its pivot on the blade's edge: it grows out of it)
+    [-1, 1].forEach(z => g.add(at(P(new THREE.SphereGeometry(.014, 8, 6), M("#ffffff")), 0, -.03, z * .02)));
+    g.scale.setScalar(0); g.visible = false; return g;
   });
-  const teeth = [.86, .67, .48].map(x => x * LK).map((x, i) => {                                                       // ATK power: up to three shark teeth grow along the back edge, tip first
-    const tri = new THREE.Shape(); tri.moveTo(-.1, 0); tri.lineTo(.09, 0); tri.lineTo(.07, .17); tri.closePath();          // (coloured like the user's drawing: blue at the tip, green, red by the hilt)
-    const g = group(inner, x, W / 2 - .012, 0); g.add(P(slab(tri, .024, .008), M([Q.c3, Q.c2, Q.c1][i]))); g.scale.setScalar(0); g.visible = false; return g;
-  });
+  const teeth = [notches[2], notches[1], notches[0]];      // (the order they come in: the tip's first)
   const gc = glowCol(Q.fill), glow = [halo(slab(roundRect(L + .08, W + .08, .1, .06, -(W + .08) / 2), .08, .02), gc, .55),
     halo(slab(roundRect(L + .24, W + .26, .17, -.02, -(W + .26) / 2), .05, .05), gc, .22), halo(new THREE.SphereGeometry(.16, 18, 12), gc, .5)];
   glow.forEach(m => inner.add(m));
@@ -1870,13 +1871,15 @@ const STRIKES = {
     keys: { armF: [[0, 1.6], [.03, .9], [.08, 1.1], [.14, 1.1], [.2, .6], [.38, .9]], elbF: [[0, 1.4], [.03, 1.8], [.08, 0], [.14, .1], [.2, 1.4], [.38, 1.2]],
       aS: [[0, 0], [.06, 0], [.09, .15], [.14, .12], [.18, 0]], armB: [[0, .6], [.14, .9], [.2, 1.1], [.27, 1.1], [.33, .6], [.38, .6]],
       elbB: [[0, 1.4], [.14, 1.8], [.2, 0], [.27, .1], [.33, 1.4], [.38, 1.3]], bS: [[0, 0], [.18, 0], [.21, .135], [.27, .105], [.31, 0]],
-      lean: [[0, .3], [.08, .6], [.2, .6], [.38, .35]], fNy: [[0, .3], [.38, .3]], fFy: [[0, .25], [.38, .25]], fNx: [[0, .1], [.38, .1]], fFx: [[0, -.1], [.38, -.1]] } },
+      lean: [[0, .3], [.08, .6], [.2, .6], [.38, .35]],
+      fNx: [[0, .26], [.1, .34], [.38, .3]], fNy: [[0, .36], [.1, .42], [.38, .38]], fFx: [[0, -.3], [.1, -.4], [.38, -.34]], fFy: [[0, .18], [.38, .16]], fP: [[0, -.6], [.38, -.6]], fNz: [[0, .06], [.38, .06]], fFz: [[0, .04], [.38, .04]] } },   // (the air's high knee, 2026-10-23: they were both folded up under her)
   hammer: { dur: .5, step: 0, sq: .08, dive: [.24, 600], sfx: "kick", hits: [{ t0: .26, t1: .42, reach: 70, back: 30, y0: 70, y1: -60, kind: "smash" }],   // both hands clasped overhead, then slammed down
     keys: { armF: [[0, 1.4], [.12, 3.1], [.22, 2.9], [.32, .6], [.42, .4], [.5, .8]], elbF: [[0, 1.0], [.12, .5], [.22, .3], [.32, 0], [.5, .4]],
       armB: [[0, 1.4], [.12, 3.1], [.22, 2.9], [.32, .6], [.42, .4], [.5, .8]], elbB: [[0, 1.0], [.12, .5], [.22, .3], [.32, 0], [.5, .4]],
       aS: [[0, 0], [.28, 0], [.32, .075], [.42, 0]], bS: [[0, 0], [.28, 0], [.32, .075], [.42, 0]],
       lean: [[0, .1], [.12, -.4], [.22, -.35], [.32, .9], [.5, .6]], arch: [[0, 0], [.12, -.3], [.32, .3], [.5, .1]],
-      fNy: [[0, .35], [.5, .35]], fFy: [[0, .3], [.5, .3]], fNx: [[0, .2], [.5, .2]], fFx: [[0, -.1], [.5, -.1]] } },
+      fNx: [[0, .24], [.22, .3], [.32, .12], [.5, .18]], fNy: [[0, .36], [.22, .42], [.32, .12], [.5, .2]], fFx: [[0, -.2], [.22, -.24], [.32, -.16], [.5, -.2]], fFy: [[0, .22], [.22, .3], [.32, .08], [.5, .14]],
+      fP: [[0, -.6], [.32, -.9], [.5, -.65]], fNz: [[0, .06], [.5, .06]], fFz: [[0, .04], [.5, .04]] } },   // (knees up as the arms go up, then the legs thrown down with the slam: 2026-10-23, they were folded up under her the whole way)
 };
 const PUNCH_S = { dur: .3, hits: [{ t0: .06, t1: .22 }] };   // (the air punch's timing, for its legs)
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
@@ -1930,12 +1933,16 @@ function updatePose(p, dt) { if (p.rig.kind === "cat") updatePoseCat(p, dt); els
 let AIR_KEYED = null;
 const airKeyed = k => (AIR_KEYED || (AIR_KEYED = new Set([...Object.values(MOVESETS).flatMap(q => q.air || []), "kick", "up_fist", "up_kick", "dn_fist", "dn_sword", "dn_kick"].filter(q => q !== "punch")))).has(k);   // (the plain punch's feet are a standing jab's)
 const STANCE_LEGS = ["fNx", "fFx", "fNz", "fFz", "hN", "hF", "fP", "bodyY"];
+// the air legs (the user, 2026-10-23: "camila's legs are all twisted and distorted in so many moves, especially the ones in the air ... make them be in
+// natural leg positions"): no more both knees folded up under her (a kneel in mid-air, the boots piled together); a fighter's leap instead, the lead
+// knee driving forward and up, the other leg trailing back and down, toes pointed, the hips' width apart (on api: tuned live from a page)
+api.airLegs = (w, up) => ({ fNx: .28 + .08 * w, fNy: .38 + .06 * w + .05 * up, fFx: -.3 - .1 * w, fFy: .16 + .04 * up, fP: -.6, fNz: .06, fFz: .04, hN: 0, hF: 0 });
 function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move's leg keys are left out
   if (p.onGround) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }
   if (airKeyed(p.atkKind)) return false;
   const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
   const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
-  const L = { fNx: .14 + .06 * w, fNy: .44 + .08 * up + .06 * w, fFx: -.02 - .08 * w, fFy: .36 + .06 * up - .02 * w, fP: -.35 - .12 * w, fNz: .12, fFz: .12, hN: 0, hF: 0 }, sw = leadFar(p);   // both knees up, a little apart (the user, 2026-10-23: "rose's legs get all twisted in the air": a wide split front to back crossed them in an X once she turned toward us)
+  const L = api.airLegs(w, up, p), sw = leadFar(p);   // both knees up, a little apart (the user, 2026-10-23: "rose's legs get all twisted in the air": a wide split front to back crossed them in an X once she turned toward us)
   for (const k in L) T[sw ? SWAP[k] || k : k] = L[k];   // (the lead leg forward, as the move's own keys have it: Camila's gauntlet hand, facing right, is the far one; unswapped her legs crossed, 2026-10-22)
   return true;
 }
@@ -1986,9 +1993,10 @@ function updatePoseHuman(p, dt) {
     for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && k === "twist" ? -1 : 1); } }
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
   else if (!p.onGround) {
-    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .12, fNy: .34, fFx: -.15, fFy: .08, fP: -.4 }), layPose(T, m.rise, p);
-    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .14, fNy: .36, fFx: 0, fFy: .28, fP: -.2 }), layPose(T, m.top, p);
-    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .1, fNy: .08, fFx: -.08, fFy: .14, fP: .1 }), layPose(T, m.fall, p);
+    // (the legs a stride apart, 2026-10-23: they hung close together front to back, one boot stacked over the other: "twisted and distorted ... in the air")
+    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .3, fNy: .4, fFx: -.26, fFy: .06, fP: -.55, fNz: .06, fFz: .04 }), layPose(T, m.rise, p);   // rising: the lead knee driven up, the other leg pushing down and back
+    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .26, fNy: .38, fFx: -.22, fFy: .22, fP: -.45, fNz: .06, fFz: .04 }), layPose(T, m.top, p);   // the top: both bent, still a stride apart
+    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .18, fNy: .12, fFx: -.16, fFy: .18, fP: -.1, fNz: .05, fFz: .04 }), layPose(T, m.fall, p);   // dropping: reaching down for the landing
   } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
   else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
@@ -2089,9 +2097,9 @@ function updatePoseHuman(p, dt) {
   tackleOver(p, o, false);
   if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) o[key] = lerp(o[key], TKDIG_H[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
   if (p.onGround && p.sq < 0 && a < 0 && !m.float) { o.bodyY += p.sq * .3; o.lean -= p.sq * .15; }   // landing: the knees take the weight
-  if (p.rig.prop && p.rig.prop.kind === "sword") {          // a toothed sword: in a swing, the blade turns over so the teeth (its back edge) lead the cut, into the enemy
-    let want = 0;
-    if (SK && SK.keys && SK.hits && SK.hits[0]) { const KK = keysOf(p, SK), h = SK.hits[0]; if (KK.blade && kv(p, KK, "blade", h.t1) - kv(p, KK, "blade", h.t0) < -.3) want = Math.PI; }   // swinging down / over: the other edge leads, so turn it over
+  if (p.rig.prop && p.rig.prop.kind === "sword") {          // a spiked sword: in a swing, the blade turns over so its spikes (the notched edge) lead the cut, into the enemy
+    let want = 0;                                           // (2026-10-23: the spikes moved to the notched edge, which leads a down or over cut as it is: it turns over for the up cuts now)
+    if (SK && SK.keys && SK.hits && SK.hits[0]) { const KK = keysOf(p, SK), h = SK.hits[0]; if (KK.blade && kv(p, KK, "blade", h.t1) - kv(p, KK, "blade", h.t0) > .3) want = Math.PI; }   // swinging down / over: the other edge leads, so turn it over
     p.bladeRoll = lerp(p.bladeRoll || 0, want, 1 - Math.exp(-dt * (want ? 26 : 9)));
     o.roll = p.bladeRoll;
   }
