@@ -1917,7 +1917,8 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
   if (airKeyed(p.atkKind)) return false;
   const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
   const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
-  Object.assign(T, { fNx: .16 + .1 * w, fNy: .42 + .08 * up + .06 * w, fFx: -.12 - .2 * w, fFy: .3 + .06 * up - .1 * w, fP: -.35 - .12 * w, fNz: 0, fFz: 0, hN: 0, hF: 0 });
+  const L = { fNx: .16 + .1 * w, fNy: .42 + .08 * up + .06 * w, fFx: -.12 - .2 * w, fFy: .3 + .06 * up - .1 * w, fP: -.35 - .12 * w, fNz: 0, fFz: 0, hN: 0, hF: 0 }, sw = leadFar(p);
+  for (const k in L) T[sw ? SWAP[k] || k : k] = L[k];   // (the lead leg forward, as the move's own keys have it: Camila's gauntlet hand, facing right, is the far one; unswapped her legs crossed, 2026-10-22)
   return true;
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
