@@ -151,8 +151,9 @@
   .npcBox { background: #fff6e0; border: 3px solid var(--s); box-shadow: 5px 5px 0 var(--s); padding: 12px 16px 12px; position: relative; color: var(--s); }
   #npcText { margin: 9px 0 9px; font: 600 13px/1.45 "Jost", sans-serif; letter-spacing: .1em; }
   #npcRows { display: flex; flex-direction: column; gap: 6px; }
-  #npcRows button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: var(--y); color: var(--s); border: 3px solid var(--s); border-radius: 0; padding: 6px 10px 5px; cursor: pointer; }
-  #npcRows button.on { background: var(--s); color: var(--y); }
+  #npcRows button { display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: #dcd7ca; color: #7d858a; border: 3px solid #a9afb3; border-radius: 0; padding: 6px 10px 5px; cursor: pointer; }
+  #npcRows button.on { background: var(--y); color: var(--s); border-color: var(--s); box-shadow: 4px 4px 0 var(--s); }   /* (the pick: yellow; the rest greyed out. The user, 2026-10-22: it was hard to tell which was picked) */
+  #npcRows button:not(.on) svg { filter: grayscale(.7) opacity(.7); }
   #npcRows .nl { display: flex; align-items: center; gap: 8px; font: 15px "Bungee", sans-serif; width: 100%; } #npcRows .nl svg { width: 24px; height: 24px; }
   #npcRows .pr { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; } #npcRows .pr svg { width: 18px; height: 18px; }
   #npcRows i { font: 600 10px "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 2px; }
@@ -194,6 +195,9 @@
   #pause .ptitle { align-self: flex-start; }
   #pmapBox { flex: 1; min-height: 0; width: 100%; display: flex; align-items: center; justify-content: center; }   /* the whole world's map, most of the screen */
   #pmap { display: block; background: rgba(47, 59, 67, .7); border: 3px solid var(--y); box-sizing: border-box; box-shadow: 8px 8px 0 var(--s); }
+  #pmapKey { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; max-width: 900px; font: 600 11px/1 "Jost", sans-serif; letter-spacing: .14em; color: var(--y); }   /* what the map's marks mean */
+  #pmapKey:empty { display: none; } #pmapKey span { display: inline-flex; align-items: center; gap: 6px; background: rgba(47, 59, 67, .82); padding: 3px 9px 3px 4px; }
+  #pmapKey canvas { width: 18px; height: 18px; }
   #pause .panel { max-width: none; padding: 14px 20px 12px; }
   #pause .btns { justify-content: center; }
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
@@ -390,9 +394,9 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261022n"></script>
+<script src="charkit.js?v=20261022o"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="score.js?v=20261020a"></script>
+<script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="story.js?v=20261018a"></script>
@@ -517,6 +521,7 @@
 <div id="pause"><div class="pwrap">
   <div class="lockup ptitle"><div class="blk">PAUSED</div><div class="bar">BERRY BLADE</div></div>
   <div id="pmapBox"><canvas id="pmap"></canvas></div>
+  <div id="pmapKey"></div>
   <div class="panel">
     <p id="pAsk" class="hidden"></p>
     <div class="btns" id="pbtns"><button data-p="resume">RETURN TO GAME</button><button data-p="ach">ACHIEVEMENTS</button><button data-p="lvl">LEVEL SELECT</button><button data-p="home">HOME SCREEN</button><button data-p="quit">QUIT GAME</button></div>
@@ -617,9 +622,10 @@ let koStay = 0, koScr = null; const koRoom = new Map();                       //
 function koShow() {                                 // knocked out in the story: the uprising loses 5%, every time (the user, 2026-10-20), on a black screen, then the room again
   const kk = world + ":" + stage; koRoom.set(kk, (koRoom.get(kk) || 0) + 1);   // (the user 2026-10-22: lose 5 times in the same room and further losses there cost nothing; never below 0)
   const pen = upOn(world) && !freedNow() && koRoom.get(kk) <= 5 ? 5 : 0; koStay++;
-  if (pen) { const U = upStore(); U[world] = Math.max(0, (U[world] || 0) - upGoal(world) * pen / 100); }
+  const was = upOn(world) ? upPct(world) : 0; if (pen) { const U = upStore(); U[world] = Math.max(0, (U[world] || 0) - upGoal(world) * pen / 100); }
+  const lost = Math.round(was - (upOn(world) ? upPct(world) : 0));   // (what it really cost: nothing at 0%, less if there wasn't 5% to lose. It read −5% at 0%, the user 2026-10-22)
   modalKind = "ko"; modalOpen = true; koScr = { t0: performance.now(), timer: setTimeout(() => onReset(), 2800) };
-  $("koSub").textContent = pen ? `UPRISING −${pen}% · NOW ${Math.floor(upPct(world))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");
+  $("koSub").textContent = lost > 0 ? `UPRISING −${lost}% · NOW ${Math.floor(upPct(world))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");
   if (story) writeSave();
 }
 function newStay() { koStay = 0; bossDown = false; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); }
@@ -2937,7 +2943,8 @@ orig.addEventListener("error", () => { musicErr = "file"; });
 // the original during the day then make alternate versions for the rest of it"): Kesh's garden at sunrise and dawn (its day comes last),
 // the Turtle's lakebed and King P's castle at midday. Never published (build_phone.py empties this)
 const PC_REC = {};   // (the phone build: no recordings, the all-original score everywhere)
-const scoreHour = () => { if ((hideout || ejFight()) && mode === "play") return 0; const h = mode === "play" || mode === "opp" ? hour : 0; const R = PC_REC[world]; return !R || !R.hours.includes(h) || orig.error || !window.BERRY_PC ? h : -1; };   // −1: the recording itself (midday in the woods, and the menus), on the PC build only (its own score sets BERRY_PC); everywhere else the game's own score
+const inHub = () => mode === "play" && !hideout && !stronghold && !arena && !!(STAGES[stage] && STAGES[stage].hub);   // (a world's hub: its own take on the tune, the score's HUB, never a recording)
+const scoreHour = () => { if ((hideout || ejFight() || inHub()) && mode === "play") return 0; const h = mode === "play" || mode === "opp" ? hour : 0; const R = PC_REC[world]; return !R || !R.hours.includes(h) || orig.error || !window.BERRY_PC ? h : -1; };   // −1: the recording itself (midday in the woods, and the menus), on the PC build only (its own score sets BERRY_PC); everywhere else the game's own score
 const easing = () => mode === "play" ? hour === 1 : mode === "opp" ? STAGES[foeStart(oppSel)] === STAGES.find(q => q.h === 1) : false;   // the afternoon's first clearing: the in-between version
 const bgm = {
   dataset: {},
@@ -2962,9 +2969,10 @@ function syncMusic(dt) {                         // every frame: the right music
   if (!S) return;
   const ejM = ejFight() && mode === "play" && S.EJ !== undefined;   // Evil June's here: her quiet theme (the room's ambience carries on)
   if (S.setSong) S.setSong(ejM ? S.EJ : WORLDS[world].song ?? world);    // the woods' song, the waves' or Volt Keep's
-  if (S.setGloom) S.setGloom(mode === "play" && !hideout && !ejM && world !== 9 && (level.ruin || 0) >= 3);   // (the room's own tier: it changes on the next screen, never while you're in one)   // (the uprising at 75%: every hour played darker)
+  if (S.setGloom) S.setGloom(mode === "play" && !hideout && !inHub() && !ejM && world !== 9 && (level.ruin || 0) >= 3);   // (the room's own tier: it changes on the next screen, never while you're in one)   // (the uprising at 75%: every hour played darker)
   if (ejM) S.setHour(0, 1);
   else if (hideout && S.SERENE) S.setHour(S.SERENE, .76);
+  else if (inHub() && S.HUB !== undefined && world !== 9) S.setHour(S.HUB, .94);   // (a hub: this world's tune, its hub take: the user, 2026-10-22)
   else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
   if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL); else if (S.state.playing) S.stop(on ? 1.5 : .12);
@@ -3168,6 +3176,8 @@ const SFX = {
   fanfare(long) { const n = long ? [523, 659, 784, 1047, 784, 1047] : [523, 659, 784, 1047];
     n.forEach((f, i) => tone(f, f, i === n.length - 1 ? .35 : .12, { type: "square", vol: .06, lp: 2500, delay: i * .11 })); },
   tick() { tone(660, 660, .04, { type: "triangle", vol: .08 }); },
+  bell(n = 3) { for (let i = 0; i < n; i++) { const d = i * .32;   // a hand bell rung n times: a bright strike, then its ringing partials (inharmonic, as a bell's are), the high ones gone first (the cat caller's: the user, 2026-10-22)
+    noise(.025, { vol: .1, f0: 7000, f1: 4200, type: "highpass", delay: d }); [[1320, .15, 1.3], [2640, .07, .85], [3610, .07, .6], [5280, .04, .4], [7150, .03, .25]].forEach(([f, v, du]) => tone(f, f * .998, du, { type: "sine", vol: v, delay: d, a: .002 })); } },
   climb() { tone(240, 200, .05, { type: "triangle", vol: .07 }); noise(.03, { vol: .035, f0: 1800 }); },
   jcharge(n) { tone(n > 1 ? 880 : 520, n > 1 ? 1320 : 700, .09, { type: "triangle", vol: .08 }); },
   bigjump(k) { tone(220, 700 + 500 * k, .2, { type: "triangle", vol: .17 }); tone(440, 1400 + 600 * k, .16, { type: "sine", vol: .09, delay: .04 }); noise(.12, { vol: .08, f0: 900 }); },
@@ -4001,40 +4011,58 @@ function treasureMarks(w) {                          // the treasure map's marks
   if (catRun && catRun.w === w && w === world && catRun.phase === "wait" && catRun.room === undefined) {   // (not turned up yet: the map knows where it'll be)
     const ok = S0.map((q, i) => i).filter(i => i > 0 && catRoomOK(i) && mapGrid(w).at[i]); if (ok.length) catRun.room = ok[Math.floor(Math.random() * ok.length)]; }
   if (catRun && catRun.w === w && catRun.room !== undefined && catRun.phase !== "done") add(catRun.room, "cat");
-  S0.forEach((q, s) => { if (q.bep) add(s, "dungeon"); if (q.rest) add(s, "rest");
+  S0.forEach((q, s) => { if (q.bep) add(s, "dungeon"); if (q.rest) add(s, restReached(w, s) ? "rest" : "restx"); if (q.hub === 1) add(s, "hub");
     if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret && !itemGot(w + ":" + s + ":chest")) add(s, "loot"); });
   if (SH_SPOT[w]) add(SH_SPOT[w].s, "dungeon");
   (CRATE_AT[w] || []).forEach(([s, x], i) => { if (!(w === world && cratesBroken.has(w + ":" + s + ":" + i))) add(s, "loot"); });
   if (w !== 9) itemPlan(w).forEach((q, i) => { if (!itemGot(w + ":" + q.s + ":" + q.k + i)) add(q.s, "loot"); });
   return out;
 }
+const restReached = (w, s) => !!story && ((story.rests || {})[w] || []).includes(s);   // (a rest stop you've been to: its checkpoint)
 function treasureMark(g, kind, x, y, z) {                 // one mark, centred at (x, y), about 2z across
   g.lineWidth = Math.max(1, z * .28); g.strokeStyle = "#2f3b43"; g.lineJoin = "round";
+  if (kind === "restx") { g.save(); g.setLineDash([z * .32, z * .26]); g.strokeStyle = "#ffb27a"; g.fillStyle = "rgba(255, 178, 122, .18)"; g.beginPath(); g.moveTo(x, y - z); g.quadraticCurveTo(x + z * .95, y - z * .05, x + z * .55, y + z * .8); g.lineTo(x - z * .55, y + z * .8); g.quadraticCurveTo(x - z * .95, y - z * .05, x, y - z); g.fill(); g.stroke(); g.restore(); return; }   // a rest stop not found yet: a pale dashed flame (the user, 2026-10-22)
+  if (kind === "hub") { g.fillStyle = "#3ec6e0"; g.beginPath(); g.moveTo(x, y - z); g.lineTo(x + z, y + z * .8); g.lineTo(x - z, y + z * .8); g.closePath(); g.fill(); g.stroke(); g.fillStyle = "#2f3b43"; g.beginPath(); g.moveTo(x, y - z * .05); g.lineTo(x + z * .3, y + z * .8); g.lineTo(x - z * .3, y + z * .8); g.closePath(); g.fill(); return; }   // the hub: a tent
   if (kind === "rest") { g.fillStyle = "#ff7a2e"; g.beginPath(); g.moveTo(x, y - z); g.quadraticCurveTo(x + z * .95, y - z * .05, x + z * .55, y + z * .8); g.lineTo(x - z * .55, y + z * .8); g.quadraticCurveTo(x - z * .95, y - z * .05, x, y - z); g.fill(); g.stroke(); }   // a flame
   else if (kind === "dungeon") { g.fillStyle = "#2f3b43"; g.strokeStyle = "#fff6e0"; g.beginPath(); g.moveTo(x - z * .75, y + z * .85); g.lineTo(x - z * .75, y - z * .1); g.arc(x, y - z * .1, z * .75, Math.PI, 0); g.lineTo(x + z * .75, y + z * .85); g.closePath(); g.fill(); g.stroke(); }   // a doorway
   else if (kind === "cat") { g.fillStyle = "#fff6e0"; g.beginPath(); g.ellipse(x, y + z * .3, z * .5, z * .42, 0, 0, TAU); g.fill(); g.stroke(); [[-.62, -.22], [-.22, -.68], [.22, -.68], [.62, -.22]].forEach(([a, b]) => { g.beginPath(); g.arc(x + a * z, y + b * z, z * .22, 0, TAU); g.fill(); g.stroke(); }); }   // a paw
   else { g.fillStyle = "#ffd203"; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? z * .42 : z; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }   // a star: treasure
 }
-function drawWorldMap(g, w, cw, ox, oy, k, asp = 1) {   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
+function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true) {   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
   // (as the 3DS draws it, the user 2026-10-22: a square block a room, none of its ground or ledges; grey, the one you're in yellow; a room you've not been in isn't there)
   const M = mapGrid(w), ch = cw * asp, pad = cw * .04, seen = seenOf(w), cur = mapGrid(world) === M ? stage : -1;
   const X = (c, x) => ox + (c - M.c0) * cw + pad + (x / WORLD) * (cw - pad * 2), Y = (r, y) => oy + (r - M.r0) * ch + ((y - MAP_TOP) / (MAP_BOT - MAP_TOP)) * ch;
-  g.lineCap = g.lineJoin = "round"; const VW = g.canvas.clientWidth || 9999, VH = g.canvas.clientHeight || 9999;
+  g.lineCap = g.lineJoin = "round"; const VW = g.canvas.clientWidth || 9999, VH = g.canvas.clientHeight || 9999, drawn = new Set();   // (drawn: what's on it, for the key)
   const owned = mapOwned(w), all = owned || (!!dbgPick && w === world), rooms = all ? M.at.map((a, s) => a ? s : -1).filter(s => s >= 0) : [...seen];   // (the debug picker: all of them too)   // (the treasure map: the rooms you've not been in too, darker)
   for (const s of rooms) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
     if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;   // (off the little map: not drawn)
-    const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); }
-  if (owned) { const MK = treasureMarks(w), z = Math.min(cw * .19, 9 * k);   // its marks, in a row across the middle of each room
-    for (const s in MK) { const a = M.at[s]; if (!a) continue; const L = MK[s], bx = ox + (a[0] - M.c0) * cw, by = oy + (a[1] - M.r0) * ch;
+    const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); drawn.add(s === cur ? "you" : seen.has(s) ? "been" : "unseen"); }
+  const MK = !marks ? {} : owned ? treasureMarks(w) : {}, z = Math.min(cw * .19, 9 * k);   // the treasure map's marks, in a row across the middle of each room
+  if (marks) for (const s of seen) { const q = WORLDS[w].stages[s]; if (!q) continue; const L = MK[s] || (MK[s] = []);   // (and, map or no map, what's in a room you've been in: a rest stop you've reached, the hub)
+    if (q.rest && restReached(w, s) && !L.includes("rest")) L.push("rest"); if (q.hub === 1 && !L.includes("hub")) L.push("hub"); if (!L.length) delete MK[s]; }
+  { for (const s in MK) { const a = M.at[s]; if (!a) continue; const L = MK[s], bx = ox + (a[0] - M.c0) * cw, by = oy + (a[1] - M.r0) * ch;
       if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;
-      L.forEach((kind, i) => treasureMark(g, kind, bx + cw / 2 + (i - (L.length - 1) / 2) * z * 2.3, by + ch / 2, z)); } }
-  WORLDS[w].stages.forEach((qh, hs) => { if (!qh.bep || !hideFound(w, hs)) return; const a = M.at[hs];   // the beps' hideouts, found: their signs
+      L.forEach((kind, i) => { treasureMark(g, kind, bx + cw / 2 + (i - (L.length - 1) / 2) * z * 2.3, by + ch / 2, z); drawn.add(kind); }); } }
+  if (marks) WORLDS[w].stages.forEach((qh, hs) => { if (!qh.bep || !hideFound(w, hs)) return; const a = M.at[hs];   // the beps' hideouts, found: their signs
     if (a && seen.has(hs)) { const B = WORLDS[w].stages[hs].bep, sx = X(a[0], B.zone), sy = Y(a[1], (stageGround(WORLDS[w].stages[hs], B.zone) ?? GROUND) - 30), z = 4.5 * k;
-      g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.moveTo(sx - z, sy + z); g.lineTo(sx - z, sy - z * .2); g.lineTo(sx, sy - z * 1.1); g.lineTo(sx + z, sy - z * .2); g.lineTo(sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } });
-  ALLIES.filter(AL => AL.w === w).forEach(AL => { const rm = buddyAt.w === w ? buddyAt.rooms[AL.id] ?? -1 : -1, a = rm >= 0 && M.at[rm];   // this world's berry buddies, where they are now (in rooms you've been in)
+      mapSign(g, sx, sy, z, k); drawn.add("sign"); } });
+  if (marks) ALLIES.filter(AL => AL.w === w).forEach(AL => { const rm = buddyAt.w === w ? buddyAt.rooms[AL.id] ?? -1 : -1, a = rm >= 0 && M.at[rm];   // this world's berry buddies, where they are now (in rooms you've been in)
     if (a && seen.has(rm) && !(ally && ally.A === AL)) { const sx = X(a[0], WORLD / 2), sy = Y(a[1], (stageGround(WORLDS[w].stages[rm], WORLD / 2) ?? GROUND) - 40), z = 4.2 * k;
-      g.fillStyle = AL.col; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.arc(sx, sy - z * .9, z * .8, 0, TAU); g.fill(); g.stroke();
-      g.beginPath(); g.moveTo(sx - z, sy + z); g.quadraticCurveTo(sx, sy - z * .4, sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); } });
+      mapBuddy(g, sx, sy, z, k, AL.col); drawn.add("buddy"); } });
+  return drawn;
+}
+function mapSign(g, sx, sy, z, k) { g.fillStyle = "#ffd203"; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.moveTo(sx - z, sy + z); g.lineTo(sx - z, sy - z * .2); g.lineTo(sx, sy - z * 1.1); g.lineTo(sx + z, sy - z * .2); g.lineTo(sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); }   // a beps' hideout's sign
+function mapBuddy(g, sx, sy, z, k, col) { g.fillStyle = col; g.strokeStyle = "#2f3b43"; g.lineWidth = 1.4 * k; g.beginPath(); g.arc(sx, sy - z * .9, z * .8, 0, TAU); g.fill(); g.stroke();   // a berry buddy
+  g.beginPath(); g.moveTo(sx - z, sy + z); g.quadraticCurveTo(sx, sy - z * .4, sx + z, sy + z); g.closePath(); g.fill(); g.stroke(); }
+// the map's key (the user, 2026-10-22: "show a key for what the marks mean on the map, especially when you get a treasure map"): what's on it now
+const MAP_KEY = [["you", "YOU ARE HERE"], ["been", "BEEN THERE"], ["unseen", "NOT BEEN THERE YET"], ["rest", "REST STOP"], ["restx", "REST STOP, NOT FOUND YET"], ["hub", "HUB"],
+  ["sign", "BEPS' HIDEOUT"], ["dungeon", "HIDEOUT OR STRONGHOLD"], ["cat", "THE CAT"], ["loot", "TREASURE"], ["buddy", "BERRY BUDDY"]];
+function drawMapKey(el, drawn) {
+  const L = MAP_KEY.filter(([k]) => drawn.has(k)), sig = L.map(q => q[0]).join(); if (el.dataset.sig === sig) return; el.dataset.sig = sig;
+  el.innerHTML = L.map(([k, t]) => `<span><canvas data-k="${k}"></canvas>${t}</span>`).join("");
+  el.querySelectorAll("canvas").forEach(c => { const k = c.dataset.k, g = mapCanvas(c, 18, 18);
+    if (k === "you" || k === "been" || k === "unseen") { g.fillStyle = { you: "#ffd203", been: "#55636c", unseen: "#36424a" }[k]; g.fillRect(2, 2, 14, 14); g.strokeStyle = "#9aa6ad"; g.lineWidth = 1; g.strokeRect(2.5, 2.5, 13, 13); }
+    else if (k === "sign") mapSign(g, 9, 9.5, 6, 1); else if (k === "buddy") mapBuddy(g, 9, 9.5, 5.5, 1, "#8fd16a"); else treasureMark(g, k, 9, 9.5, 7.5); });
 }
 const mapCanvas = (el, w, h) => { const d = Math.min(2, window.devicePixelRatio || 1); if (el.width !== Math.round(w * d) || el.height !== Math.round(h * d)) { el.width = Math.round(w * d); el.height = Math.round(h * d); } const g = el.getContext("2d"); g.setTransform(d, 0, 0, d, 0, 0); g.clearRect(0, 0, w, h); return g; };
 let miniKey = "";
@@ -4045,7 +4073,7 @@ function syncMini() {                                // the little map, top righ
   if (!on) { miniKey = ""; return; }
   const W0 = el.clientWidth - 4, H0 = el.clientHeight - 4, cw = W0 / 3.4, ch = cw, [c, r] = M.at[stage];   // (square rooms, about three across, the one you're in in the middle)
   const px = (c - M.c0) * cw + cw / 2, py = (r - M.r0) * ch + ch / 2;
-  const key = [world, stage, seenOf(world).size, W0, buddyAt.w === world ? JSON.stringify(buddyAt.rooms) : "", mapOwned(world) ? JSON.stringify(treasureMarks(world)) : ""].join(); if (key === miniKey) return; miniKey = key;
+  const key = [world, stage, seenOf(world).size, ((story && story.rests || {})[world] || []).length, W0, buddyAt.w === world ? JSON.stringify(buddyAt.rooms) : "", mapOwned(world) ? JSON.stringify(treasureMarks(world)) : ""].join(); if (key === miniKey) return; miniKey = key;
   const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, W0 / 2 - px, H0 / 2 - py, .8);
 }
 function drawPauseMap() {                            // the whole world on the pause screen, as big as it'll go
@@ -4054,7 +4082,8 @@ function drawPauseMap() {                            // the whole world on the p
   let cw = bw / nc; const asp = 1;                     // (square rooms, as the 3DS draws them)
   cw = Math.max(14, Math.min(cw, bh / (nr * asp)));
   const W0 = nc * cw + padX * 2, H0 = nr * cw * asp + padY * 2; el.style.width = W0 + 6 + "px"; el.style.height = H0 + 6 + "px";
-  const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp);
+  const sig0 = $("pmapKey").dataset.sig, g = mapCanvas(el, W0, H0); drawMapKey($("pmapKey"), drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp));
+  if ($("pmapKey").dataset.sig !== sig0 && !drawPauseMap.again) { drawPauseMap.again = true; drawPauseMap(); drawPauseMap.again = false; return; }   // (the key changed size: the map fitted again round it)
   if (dbgPick && M.at[dbgPick.sel]) { const [c, r] = M.at[dbgPick.sel]; g.strokeStyle = "#ff3e8a"; g.lineWidth = 3; g.strokeRect(padX + (c - M.c0) * cw + 1.5, padY + (r - M.r0) * cw * asp + 1.5, cw - 3, cw * asp - 3);
     g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
 }
@@ -4276,7 +4305,7 @@ function drawStartMap() {                         // the card's map (the user, 2
   const nc = M.c1 - M.c0 + 1, nr = M.r1 - M.r0 + 1, pad = 10, low = innerHeight <= 520;
   const cw = clamp(Math.min((Math.min(620, innerWidth - 100) - pad * 2) / nc, ((low ? .24 : .3) * innerHeight - pad * 2) / nr), 7, 34);
   const W0 = nc * cw + pad * 2, H0 = nr * cw + pad * 2; el.style.width = W0 + "px"; el.style.height = H0 + "px";
-  const g = mapCanvas(el, W0, H0), k = clamp(cw / 34, .55, 1); drawWorldMap(g, P.w, cw, pad, pad, k);
+  const g = mapCanvas(el, W0, H0), k = clamp(cw / 34, .55, 1); drawWorldMap(g, P.w, cw, pad, pad, k, 1, false);   // (its own marks below: where you can start)
   const N = "#2f3b43";
   P.opts.forEach(([, s], i) => { const room = s === "arena" ? -1 : typeof s === "string" ? +s.slice(4) : s, a = M.at[room]; if (!a) return;
     const bx = pad + (a[0] - M.c0) * cw, by = pad + (a[1] - M.r0) * cw, cx = bx + cw / 2, cy = by + cw / 2, z = Math.max(3.4, cw * .27);
@@ -5642,7 +5671,7 @@ function syncBubble(dt) {
   const p = player, B = p && p.bubble; SHIELD_M.uniforms.uT.value = time; if (!B) return;
   B.t += dt; const H = (p.rig.heightPx || 92) * S, u = Math.min(1, B.t / .4), pop = u < 1 ? 1 + Math.sin(u * Math.PI) * .25 - (1 - u) * (1 - u) * .9 : 1;
   B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const big = 1 + ((B.k || 1) - 1) * GUM_GROW, r = H * .64 * pop * big, w = Math.sin(time * 5.5) * .035;   // (the bubblegum's: a bit bigger than the plain one, not three times: the user 2026-10-22)
-  B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0);   // (sits on the ground like the plain one, not sunk into it) B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;
+  B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;   // (sits on the ground like the plain one, not sunk into it. This line's scale had slipped into the comment, 10-22: both bubbles stuck small)
 }
 function startStrike(p, kind, idx = 0) {
   const S = KIT.STRIKES[kind];
@@ -6930,7 +6959,7 @@ function buildTurtle() {                     // built to the user's sheet (refs/
       const v = P(bx(len + .06, .085, .03), YL); v.quaternion.setFromRotationMatrix(m); v.position.copy(pa.clone().add(pb).multiplyScalar(.5)); head.add(v); }); });
   r.hat = group(head, -.02, SY(390) - SY(785), 0);
   r.hat.add(P(new THREE.LatheGeometry([[0, .71], [.12, .5], [.24, .27], [.33, .1], [.4, .01], [.43, -.02], [.36, -.02]].map(([a, b]) => new THREE.Vector2(a, b)), 30), DR));
-  Object.assign(r, { bobAmt: .06, stride: .26, swing: .14, style: { hunch: .06, roll: .05, lift: .1, beat: 4, head: [100, .4], flare: 0 } });
+  Object.assign(r, { bobAmt: .1, stride: .36, swing: .34, style: { hunch: .06, walkLean: .14, roll: .11, lift: .17, beat: 4, head: [65, .3], arm: [55, .32], flare: 0 } });   // (a waddle: longer steps, arms swinging, rocking foot to foot, a looser head. It was .06 / .26 / .14, roll .05, lift .1, head 100: stiff, the user 2026-10-22)
   r.tk = 0;
   r.animate = (e, rr, st) => {                                                            // tucked into the shell to spin, or stamping
     r.tk = lerp(r.tk, e.tuck ? 1 : 0, .25); const k = r.tk, out = Math.max(1 - k * 1.05, .001);
@@ -6938,6 +6967,17 @@ function buildTurtle() {                     // built to the user's sheet (refs/
     r.head.position.y = SY(785) - k * 1.1; r.body.position.y = -1.4 - k * .95;
     r.shell.rotation.y = k > .5 ? (time * 22) % TAU : 0;
     r.capes.forEach((C, i) => { C.rotation.x = (i ? 1 : -1) * (.06 + Math.sin(time * 2 + i) * .04 + (st && st.walking ? .08 : 0)); C.rotation.z = st && st.walking ? .12 : .03; });
+    if (k < .5) {                                                                         // out of the shell: the waddle, and a real stamp for the geysers (the user, 2026-10-22: "still moving incredibly stiffly")
+      const ez = u => u * u * (3 - 2 * u), w = st && st.walking ? st.w : 0, ph = st ? st.ph : 0;
+      r.body.rotation.y = Math.sin(ph) * .14 * w;                                         // the shell swings round with each step
+      r.head.rotation.z += Math.sin(2 * ph - 1.2) * .07 * w; r.head.rotation.y += Math.sin(ph + .6) * .1 * w;   // the head bobs and turns a beat behind
+      const geo = e.move === "geyser", n = Math.floor((e.actT || 0) / .5), u = ((e.actT || 0) % .5) / .5;   // (three stamps, at 0, .5 and 1 s into it: up between them, down on each)
+      const lift = !geo ? 0 : e.atk === "charge" ? ez(clamp(1 - e.atkTm / ATTACKS.geyser.charge, 0, 1)) : e.atk === "act" && n < 2 ? ez(clamp((u - .3) / .6, 0, 1)) : 0;
+      const slam = geo && e.atk === "act" && n < 3 ? Math.max(0, 1 - u / .24) : 0, L = r.legs[e.atk === "act" ? (n + 1) % 2 : 0];
+      if (L && (lift > 0 || slam > 0)) { L.rotation.z += lift * .85; L.position.y += lift * .3;   // the knee up high, then down hard
+        r.tilt.rotation.z += lift * .14 - slam * .06; r.bob.position.y += lift * .05 - slam * .18;
+        r.arms.forEach((A, i) => { A.rotation.z += lift * .5 - slam * .3; A.rotation.x += (i ? -1 : 1) * lift * .3; }); }
+    }
   };
   return r;
 }
@@ -12501,7 +12541,7 @@ function npcRoom() {                                 // into a room: the hub's b
   npcs.forEach(disposeBaddy); npcs = []; npcNear = null; $("npcTip").classList.add("hidden");
   const q = STAGES[stage]; if (!q || !q.hub || mode !== "play" || stronghold || hideout || arena || world === 9) return;
   const firm = x0 => { let x = x0; for (let k = 0; k < 60 && !solidAt(x); k++) x = clamp(x0 + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200); return x; };
-  const spots = q.hub === 1 ? [["seller", 900], ["caller", 1560]] : [["diplomat", 1200]];
+  const spots = q.hub === 1 ? [["seller", 700], ["caller", 1280], ["diplomat", 1860]] : [];   // (all three in the hub's first room: the diplomat was a room over, the user 2026-10-22)
   spots.forEach(([role, x0]) => { const x = firm(x0); npcs.push(makeNpc(role, world, x)); });
 }
 function updateNpcs(dt) {
@@ -12510,7 +12550,7 @@ function updateNpcs(dt) {
   for (const f of npcs) {
     f.dir = Math.sign(p.x - f.x) || f.dir; f.vx = 0; f.phase += dt;
     const gy = groundAt(f.x); if (gy !== null) f.y = gy; f.onGround = true;
-    if (f.r.bell) f.r.bell.rotation.x = Math.sin(time * 9) * .35 * (Math.abs(p.x - f.x) < 400 ? 1 : .2);
+    if (f.r.bell) f.r.bell.rotation.x = catCall && catCall.f === f && catCall.t > .55 ? Math.sin(time * 26) * .9 : Math.sin(time * 9) * .35 * (Math.abs(p.x - f.x) < 400 ? 1 : .2);   // (ringing it: swung hard)
     spring(f, dt); f.yaw = lerp(f.yaw, f.dir > 0 ? -Math.PI / 2 + .5 : -Math.PI / 2 - .5, 1 - Math.exp(-dt * 6));
     if (Math.abs(p.x - f.x) < 120 && Math.abs(p.y - f.y) < 90 && !p.dead) near = f;
   }
@@ -12572,8 +12612,13 @@ function callCat(w) {
   if (tamed && tamed.w === w) { U.msg = WILD_CATS[w].name + "'S RIGHT HERE WITH YOU."; SFX.tick(); drawNpc(); return; }
   if (tamed) catLeave(null);
   if (ally && ejPal()) allyToCheck();      // (two at most, as ever: the ally waits at the last rest stop)
-  tamed = { w, r: wildRig(w) }; setupPal(); if (pal) { pal.x = clamp(player.x - player.face * 260, 60, WORLD - 60); pal.y = groundAt(pal.x) ?? player.y; }
-  SFX.meow(1.2); closeNpc(); toast(WILD_CATS[w].name + " COMES RUNNING!", 3200); if (story) writeSave();
+  catCall = { w, t: 1.6, f: U.f }; SFX.bell(3); closeNpc(); toast("DING-A-LING! " + WILD_CATS[w].name + " HEARS IT…", 1800);   // the bell rung, and a moment's wait for the cat (the user, 2026-10-22)
+}
+let catCall = null;                                  // a cat called with the bell: { w, t: till it turns up, f: the caller }
+function catCallTick(dt) {
+  if (!catCall || (catCall.t -= dt) > 0) return; const { w } = catCall; catCall = null; if (!player || player.dead || mode !== "play") return;
+  tamed = { w, r: wildRig(w) }; setupPal(); if (pal) { const d = player.face || 1; let x = clamp(player.x - d * 900, 60, WORLD - 60); if (groundAt(x) === null) x = clamp(player.x - d * 260, 60, WORLD - 60); pal.x = x; pal.y = groundAt(pal.x) ?? player.y; }   // (in from off the screen behind you)
+  SFX.meow(1.2); toast(WILD_CATS[w].name + " COMES RUNNING!", 3200); if (story) writeSave();
 }
 const otherHero = () => { const id = KIDS.includes(rig.id) ? otherKid(rig.id) : "camila"; return roster.find(r => r.id === id) || rig; };
 function swapHero(r) {                               // the diplomat's work: the other one takes over, right where you stand
@@ -14480,7 +14525,7 @@ function rumble(ms, k) {                          // a buzz in your hands: a con
     else if (window.BERRY_TOUCH && navigator.vibrate) navigator.vibrate(Math.round(ms));
   } catch (e) { }
 }
-function hitBaddy(b, dir, kind) {
+function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon's own: a bounce on a head does the plain 2, the user 2026-10-22)
   if (b.inv > 0 || b.dead || b.gone) return false;
   if (b.calm) surprise(b.calm.gid);                                    // (caught napping: the whole lot of them are up)
   if (b.sleep) { if (kind === "stomp") { startle(b); return true; } b.sleep = false; }   // hit it instead and it just wakes up (and fights)
@@ -14488,7 +14533,7 @@ function hitBaddy(b, dir, kind) {
     b.armor--; b.flash = .1; b.inv = .15; b.hurtT = .15; b.vx = dir * 140 / b.wt; SFX.block(); sparks(b.x - dir * b.hw * .5, b.y - b.h * .6, 8); hitFeel(b, dir, kind, false);
     if (!b.armor) armorOff(b); return true;
   }
-  b.hp -= 2 + (player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1;
+  b.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1;
   b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
   if (kind === "stomp") SFX.stomp(); else SFX.hit(HIT_W[kind] || 1, hitChain());
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
@@ -14642,7 +14687,7 @@ function syncBaddy(b, dt) {
 function hitEnemy(dir, kind) {
   const e = enemy;
   if (e.inv > 0 || e.dead) return false;
-  e.hp -= 2 + (player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
+  e.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
   if (kind === "stomp") SFX.stomp(); else SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain());
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
@@ -15073,7 +15118,7 @@ function update(dt) {
     player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideGuests(dt); updateHideout(dt);
     shake = Math.max(0, shake - dt * 40); return;
   }
-  updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt);
+  updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);

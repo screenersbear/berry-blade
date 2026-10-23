@@ -361,6 +361,8 @@ window.BerryScore = (() => {
     { MEL: MEL12, CH: CH12, VOICE: VOICE12, ROOT: ROOT12, DARK: {}, STYLES: STYLES12, bars: 16, bpm: 112, drone: 45, darkLead: {}, clipVar: null },   // 11: Master No's casino (original)
     { MEL: MEL13, CH: CH13, VOICE: VOICE13, ROOT: ROOT13, DARK: {}, STYLES: STYLES13, bars: 16, bpm: 104, drone: 34, darkLead: {}, clipVar: null },   // 12: King P's castle (original)
   ];
+  const HUB = 9;                                 // HUB (9): a world's hub, its own take on the tune (2026-10-22; out here, not by EASE: the PC score swaps the woods' part above out)
+  SONGS.forEach(S => { if (S.STYLES.length >= 9 && !S.STYLES[HUB]) S.STYLES[HUB] = { ...S.STYLES[3], hub: true, lead: "pluck", harp: true, arp: .022, verb: .22, gain: (S.STYLES[3].gain || .9) * .95, dark: false, drone: false, key: 0, orig: undefined, bpm: undefined }; });   // the hub's: the world's own drums and bass at golden hour, a mallet lead and the harp (the user, 2026-10-22: "another variation of the level's music for each hub")
   SONGS.forEach(S => { S.LOOP = S.bars * BAR; S.MELAT = {}; S.MEL.forEach(n => (S.MELAT[n[0]] = S.MELAT[n[0]] || []).push(n)); S.clip = { buf: null, busy: false, bar0: 0, intro: 0 }; });
   const DRUMS = {
     full: { kick: [[0, 1], [6, .8], [10, .9]], snare: [[4, 1], [12, 1]], hat: [0, 2, 4, 6, 8, 10, 12, 14].map(s => [s, s % 4 ? .9 : .5]) },
@@ -434,6 +436,10 @@ window.BerryScore = (() => {
         const vib = osc("sine", 6.2, t, end + .2), vg = ac.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(dur > .4 ? 12 : 0, t + Math.min(.4, dur)); vib.connect(vg);
         [["sawtooth", -9, .38], ["square", 9, .3], ["square", 1200, .07]].forEach(([type, det, a]) => { const o = osc(type, f, t, end + .2, det + tu), og = ac.createGain(); og.gain.value = a; vg.connect(o.detune); o.connect(og); og.connect(flt); });
         flt.connect(g); g.connect(d); return;
+      }
+      if (kind === "pluck") {                    // the hub's mallet: a marimba-ish bar, its fourth partial and a little tick, all quick to fade
+        [[1, 1, .42], [3.98, .28, .09], [9.2, .08, .03]].forEach(([r, a, dec]) => { const o = osc("sine", f * r, t, t + dec * 5 + .2), g = ac.createGain();
+          g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * .95, t + .004); g.gain.setTargetAtTime(0, t + .004, dec); o.connect(g); g.connect(d); }); return;
       }
       if (kind === "bell") {                     // music box: a pure tone with a couple of bright, quickly fading partials
         const wob = st.dark ? (() => { const l = osc("sine", .18 + Math.random() * .16, t, t + 7), lg = ac.createGain(); lg.gain.value = 11; l.connect(lg); return lg; })() : null;
@@ -534,7 +540,7 @@ window.BerryScore = (() => {
     setSong(i) { song = Math.max(0, Math.min(SONGS.length - 1, i | 0)); },   // 0: the woods (original) · 1: the waves (original) · 2: Volt Keep (original) · 3: Loof's sky (original) · 4: Sirocco's dunes (original) · 5: Evil June's (original) · 6: Kesh's garden (original) · 7: Vinella's candy works (original) · 8: Crux's city (original)
     setGloom(v) { gloom = !!v; },                // (the uprising at 75%: darker everywhere, a touch slower)
     setHour(k, tempo = 1) { const SG = SONGS[song]; want = Math.max(0, Math.min(SG.STYLES.length - 1, k)); wantBpm = (SG.STYLES[want].bpm || SG.bpm * tempo) * (gloom && !SG.STYLES[want].serene ? .92 : 1); if (SG.STYLES[want].orig && ac0) decodeClip(ac0, SG); },
-    EASE, SERENE, EJ: 5,
+    EASE, SERENE, EJ: 5, HUB,
     tick,
     get state() { const c = players[players.length - 1] || {}, clip = SONGS[song].clip; return { playing, song: c.song ?? song, hour: c.k ?? want, want, bpm: c.bpm ?? wantBpm, slot: c.slot ?? 0, bands: players.length, clip: clip.buf ? "ready" : clip.busy ? "decoding" : "none" }; },
     // test helper: render the score offline (seconds of audio at one hour) → AudioBuffer

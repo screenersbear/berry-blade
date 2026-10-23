@@ -1163,11 +1163,12 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   glow.forEach(m => inner.add(m));
   return { kind: "sword", group: outer, inner, chunks, teeth, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02] };
 }
+const GAUNT_UP = .1, GAUNT_CUFF = .62;              // (the user, 2026-10-22: "make camila's gauntlet a little shorter ... dont change the fist or the rings": the whole thing slid this far back up the forearm, the gold cuff this much of its old length)
 function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff runs back up the forearm (+y)
-  const g = group(parent), [cv, x] = cv2(64, 8);
+  const outer = group(parent), g = group(outer, 0, GAUNT_UP, 0), [cv, x] = cv2(64, 8);
   x.fillStyle = Q.main; x.fillRect(0, 0, 64, 8); x.fillStyle = Q.trim; for (let i = 0; i < 8; i++) x.fillRect(i * 8, 0, 3, 8);
   const tex = canvasTex(cv); tex.wrapS = THREE.RepeatWrapping;
-  const prof = [[.078, -.02], [.086, .08], [.12, .2], [.16, .3]].map(([a, b]) => new THREE.Vector2(a, b));
+  const prof = [[.078, -.02], [.086, .08], [.12, .2], [.16, .3]].map(([a, b]) => new THREE.Vector2(a, b < 0 ? b : b * GAUNT_CUFF));   // (the flare as it was, a shorter run up the arm)
   const mCuff = M("#ffffff", { map: tex, side: THREE.DoubleSide }); g.add(P(new THREE.LatheGeometry(prof, 28), mCuff));          // flared cuff
   const n = Math.round(Q.rings || 3), extra = n - 3;                                                    // a ring per heart: the usual three, and any more stacked on above them, up the cuff
   const rings = Array.from({ length: n }, (_, i) => { const col = i < extra ? Q.c4 : [Q.c1, Q.c2, Q.c3][i - extra], m = P(new THREE.TorusGeometry(.08, .022, 10, 28).rotateX(Math.PI / 2), M(col)); at(m, 0, -.035 - (i - extra) * .045, 0); m.userData.col0 = col; g.add(m); return m; });
@@ -1211,7 +1212,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     halo(new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x + .085, v.y)), 28), gc, .2), halo(new THREE.SphereGeometry(.2, 20, 14), gc, .5), halo(new THREE.SphereGeometry(.26, 20, 14), gc, .2)];
   glow[0].material.side = glow[1].material.side = THREE.DoubleSide; g.add(glow[0], glow[1]);
   glow[2].material.side = glow[3].material.side = THREE.BackSide; fist.add(at(glow[2], 0, -.13, 0), at(glow[3], 0, -.13, 0));   // (round the fist, not over it: the fingers stay clear)
-  return { kind: "gauntlet", group: g, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc };
+  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc };
 }
 
 function buildHuman(R) {
