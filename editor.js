@@ -185,8 +185,14 @@ function driveMove(p, dt) {
   p.prof = approach(p.prof || 0, 1, dt * 10); p.bodyYaw = lerp(.85, .3, p.prof); p.yaw = lerp(p.yaw, -p.bodyYaw, 1 - Math.exp(-dt * 16));
   KIT.updatePose(p, dt); p.x = 0;
 }
-// drag handles: grab a hand, foot, the hips, the middle of the back, the head or the sword tip and move it; the arms bend (and reach out sideways) to follow
-const HANDLE_NAMES = { handN: "hand · camera side", handF: "hand · far side", footN: "foot · camera side", footF: "foot · far side", hips: "hips · up and down", spine: "middle of the back · bend", head: "head · lean", tip: "sword tip" };
+// drag handles: grab a hand, an elbow, a foot, a knee, the hips, the middle of the back, the head or the sword tip and move it; the arms bend (and reach out
+// sideways) to follow. The dot you grabbed last gets a ring: turn it to bend the forearm or the shin or tilt the head, slide it to twist the hips or the upper body
+// (the user, 2026-10-23: "add points on characters elbows and knees to better pose them. and arrows around the points that allow rotation not just movement")
+const HANDLE_NAMES = { handN: "hand · camera side", handF: "hand · far side", elbowN: "elbow · camera side", elbowF: "elbow · far side", footN: "foot · camera side", footF: "foot · far side",
+  kneeN: "knee · camera side", kneeF: "knee · far side", hips: "hips · up and down", spine: "middle of the back · bend", head: "head · lean", tip: "sword tip" };
+const RING_SAYS = { elbowN: "ring: bend the forearm", elbowF: "ring: bend the forearm", kneeN: "ring: bend the shin", kneeF: "ring: bend the shin", head: "ring: tilt", hips: "ring: hip twist", spine: "ring: upper body twist" };
+const ringFor = id => { const k = KIT.RING_OF[id]; return k && !(k === "twist" && rig.kind === "cat") ? k : null; };
+let hdSel = null;                                                // the dot grabbed last: its ring and its thread through the move show
 const handleEls = {}, _ray = new THREE.Raycaster(), _inv = new THREE.Matrix4(), _pl = new THREE.Plane(), _hit = new THREE.Vector3(), _ndc = new THREE.Vector2(), _cd = new THREE.Vector3();
 let hdrag = null, hdTip = null;
 let poseMode = false;                                            // camera mode: dragging turns the camera. pose mode: dragging moves the character
@@ -212,18 +218,61 @@ $("tlPrev").title = "Back a frame (←, shift ← for six)"; $("tlNext").title =
 function syncHandles() {
   const box = $("handles"), show = posing() && renderer && $("gl").hidden && $("busy").hidden;
   box.hidden = !show; if (!show) return;
-  const hs = KIT.poseHandles(st, rig), w = stageEl.clientWidth, h = stageEl.clientHeight, v = new THREE.Vector3();
+  const hs = KIT.poseHandles(st, rig), w = stageEl.clientWidth, h = stageEl.clientHeight, v = new THREE.Vector3(), at = {};
   rig.root.updateMatrixWorld(true);
+  const scr = (p, world) => { v.copy(p); if (!world) rig.body.localToWorld(v); v.project(camera); return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h, v.z]; };
   hs.forEach(H => {
     let d = handleEls[H.id];
-    if (!d) { d = handleEls[H.id] = el("div", "hd"); d.dataset.id = H.id; d.setAttribute("aria-label", "Drag the " + HANDLE_NAMES[H.id]); box.append(d);
-      d.onpointerenter = () => { if (!hdTip) { hdTip = el("div", "hdtip"); box.append(hdTip); } hdTip.textContent = HANDLE_NAMES[H.id]; hdTip.hidden = false; hdTip.style.left = d.style.left; hdTip.style.top = d.style.top; };
+    if (!d) { d = handleEls[H.id] = el("div", "hd"); d.dataset.id = H.id; d.classList.toggle("joint", /^(elbow|knee)/.test(H.id)); d.setAttribute("aria-label", "Drag the " + HANDLE_NAMES[H.id]); box.append(d);
+      d.onpointerenter = () => { if (!hdTip) { hdTip = el("div", "hdtip"); box.append(hdTip); } hdTip.textContent = HANDLE_NAMES[H.id] + (ringFor(H.id) ? " · " + RING_SAYS[H.id] : ""); hdTip.hidden = false; hdTip.style.left = d.style.left; hdTip.style.top = d.style.top; };
       d.onpointerleave = () => { if (hdTip && !hdrag) hdTip.hidden = true; }; }
-    v.copy(H.pos); rig.body.localToWorld(v).project(camera);
-    d.style.left = ((v.x + 1) / 2 * w) + "px"; d.style.top = ((1 - v.y) / 2 * h) + "px"; d.hidden = v.z > 1;
+    const [x, y, z] = scr(H.pos); at[H.id] = [x, y];
+    d.style.left = x + "px"; d.style.top = y + "px"; d.hidden = z > 1; d.classList.toggle("sel", H.id === hdSel);
     if (hdTip && hdrag && hdrag.id === H.id) { hdTip.style.left = d.style.left; hdTip.style.top = d.style.top; }
   });
   for (const id in handleEls) if (!hs.some(H => H.id === id)) { handleEls[id].remove(); delete handleEls[id]; }
+  drawOverlay(scr, at);
+}
+// the faded dots (2026-10-23: "show faded points that show where the next and the last point in the animation were positioned so you can kind of move them
+// along the same thread"): hollow = where each dot was at your last key (or the move's start), solid = where it gets to at your next key (or the end);
+// the dotted line = the picked dot's whole path through the move
+let onion = null, onionOn = true;
+function handlesAt(times) {                                      // every dot's place (in the world) at other moments of the picked move; the pose is put back after
+  const keep = { atkT: st.atkT, pose: { ...st.pose }, pv: { ...st.pv }, out: { ...st.out } }, M = rig.body.matrixWorld;
+  const res = times.map(t => { st.atkT = t; KIT.updatePose(st, 0); rig.sync(st, rig, 0); rig.root.updateMatrixWorld(true); const o = {}; KIT.poseHandles(st, rig).forEach(H => { o[H.id] = H.pos.clone().applyMatrix4(M); }); return o; });
+  Object.assign(st, keep);
+  return res;
+}
+function updateOnion() {                                         // (paused on a move, in POSE mode: the path is made again only when the move changes; the two ghosts when the keys either side do)
+  if (!onionOn || !posing() || !isMove()) { onion = null; return; }
+  const kind = moveKind(), S = moveDef(kind), t = clamp(tl.t, 0, S.dur), ks = [...new Set(ownKeys(kind).map(k => +k.t.toFixed(3)))].sort((a, b) => a - b);
+  const pt = [...ks].reverse().find(k => k < t - .009) ?? (t > .009 ? 0 : null), nt = ks.find(k => k > t + .009) ?? (t < S.dur - .009 ? S.dur : null);
+  const busy = hdrag && onion && performance.now() - onion.at < 220;   // (while dragging: a few times a second)
+  if (!onion || onion.kind !== kind) onion = { kind, at: 0 };
+  if (onion.spec !== rig.spec && !busy) { const N = 30; onion.path = handlesAt(Array.from({ length: N + 1 }, (_, i) => S.dur * i / N)); onion.spec = rig.spec; onion.at = performance.now(); onion.gk = null; }
+  const gk = onion.spec + "|" + pt + "|" + nt;
+  if (onion.gk !== gk && onion.path) { const g = handlesAt([pt ?? 0, nt ?? 0]); onion.prev = pt != null ? g[0] : null; onion.next = nt != null ? g[1] : null; onion.gk = gk; onion.gspec = onion.spec; }
+}
+const SVGNS = "http://www.w3.org/2000/svg";
+function drawOverlay(scr, at) {
+  const g = $("ghosts"), O = onionOn && onion && isMove() && onion.kind === moveKind() && onion.path ? onion : null, id = (hdrag && hdrag.id) || hdSel, f = n => n.toFixed(1);
+  let s = "";
+  if (O) {
+    const ok = q => isFinite(q[0]) && isFinite(q[1]) && q[2] <= 1, P = id ? O.path.map(q => q[id]).filter(Boolean).map(p => scr(p, true)).filter(ok) : [];
+    if (P.length > 1) s += `<polyline class="thread" points="${P.map(q => f(q[0]) + "," + f(q[1])).join(" ")}"/>`;
+    [["gp", O.prev], ["gn", O.next]].forEach(([c, G]) => { if (G) for (const k in G) { if (!handleEls[k] || handleEls[k].hidden) continue; const q = scr(G[k], true), [x, y] = q; if (ok(q)) s += `<circle class="${c}${k === id ? " me" : ""}" cx="${f(x)}" cy="${f(y)}" r="${k === id ? 7 : 5}"/>`; } });
+  }
+  g.innerHTML = s;
+  const R = $("ring"), rg = hdSel && at[hdSel] && !handleEls[hdSel].hidden && (!hdrag || hdrag.ring) ? ringFor(hdSel) : null;
+  R.setAttribute("display", rg ? "inline" : "none"); if (!rg) return;
+  const [x, y] = at[hdSel], tw = rg === "twist", rx = tw ? 31 : 26, ry = tw ? 11 : 26, pt = a => [x + rx * Math.cos(a), y - ry * Math.sin(a)], D = Math.PI / 180;
+  const arc = (a0, a1) => { const [x0, y0] = pt(a0), [x1, y1] = pt(a1); return `M${f(x0)} ${f(y0)}A${rx} ${ry} 0 0 0 ${f(x1)} ${f(y1)}`; };
+  const head = a => { const [px, py] = pt(a), tx = -rx * Math.sin(a), ty = -ry * Math.cos(a), l = Math.hypot(tx, ty) || 1, ux = tx / l, uy = ty / l, nx = -uy, ny = ux;
+    return [[px + ux * 7, py + uy * 7], [px - ux * 3 + nx * 6, py - uy * 3 + ny * 6], [px - ux * 3 - nx * 6, py - uy * 3 - ny * 6]].map(q => f(q[0]) + "," + f(q[1])).join(" "); };
+  const A = tw ? [[200 * D, 340 * D], [20 * D, 160 * D]] : [[25 * D, 155 * D], [205 * D, 335 * D]];   // two arcs, an arrow on the end of each: turn it either way
+  R.querySelectorAll(".ro").forEach((e, i) => e.setAttribute("d", arc(...A[i]))); R.querySelectorAll(".ri").forEach((e, i) => e.setAttribute("d", arc(...A[i])));
+  R.querySelectorAll(".rh").forEach((e, i) => e.setAttribute("points", head(A[i][1])));
+  const hit = R.querySelector(".ringhit"); hit.setAttribute("cx", f(x)); hit.setAttribute("cy", f(y)); hit.setAttribute("rx", rx); hit.setAttribute("ry", ry); hit.classList.toggle("tw", tw);
 }
 function pointerToBody(e) {                                     // the point under the pointer, in the character's body space, at the part's depth
   const rc = canvas.getBoundingClientRect(); _ndc.set((e.clientX - rc.left) / rc.width * 2 - 1, -((e.clientY - rc.top) / rc.height) * 2 + 1);
@@ -232,7 +281,7 @@ function pointerToBody(e) {                                     // the point und
   _pl.setFromNormalAndCoplanarPoint(_cd, hdrag.anchor);            // a plane facing you through the part: drag across the screen in any direction
   return ray.intersectPlane(_pl, _hit) ? _hit.clone() : null;
 }
-function softSetCycle(track, u, x, r, R) {                     // like softSet, on a loop (0..1 is one stride; the ends meet)
+function softSetCycle(track, u, x, r, R) {                     // move the loop at u to x, nearby points following with a smooth falloff (0..1 is one stride; the ends meet)
   const at = tm => KIT.keyvS(track, ((tm % 1) + 1) % 1), out = track.map(k => [k[0], k[1]]), delta = x - at(u);
   const near = tm => out.some(k => Math.abs(k[0] - tm) < .01);
   (r > 0 ? [u - r, u - r / 2, u, u + r / 2, u + r] : [u]).forEach(tm => { tm = ((tm % 1) + 1) % 1; if (!near(tm)) out.push([+tm.toFixed(3), at(tm)]); });
@@ -243,17 +292,71 @@ function softSetCycle(track, u, x, r, R) {                     // like softSet, 
   out[out.length - 1][1] = out[0][1] = (out[0][1] + out[out.length - 1][1]) / 2;   // keep the loop seamless
   return out;
 }
-function applyDrag(T) {
-  const tgt = hdrag.target, vals = KIT.dragSolve(st, rig, hdrag.id, T), n = clone(cur.spec), m = n.move;
+// your keys (the user, 2026-10-23: "if I move one back, it goes back to the original position as the animation moves forward but then I move the further
+// position and it gets choppy"): a part's track is the move as it ships (or what that part rested at) plus the change you made at each of your keys.
+// Between two of your keys the change carries on, eased from one to the next; before your first and after your last it eases back out over the blend.
+// Your keys are marked [t, value, 1] (the game reads only [t, value]); move.rests keeps what a part the move doesn't key itself rested at.
+const mine = k => k[2] === 1;
+const restOf = (kind, sc) => { const R = (cur.spec.move.rests || {})[kind]; return R && typeof R[sc] === "number" ? R[sc] : null; };
+function baseFn(kind, sc, rest) { const b = (moveDef(kind).keys || {})[sc]; return b ? t => KIT.keyv(b, t) : () => rest ?? 0; }
+function keysOn(tr, base) {                                      // your keys on a track as [t, change]; a track made before keys were marked: its peaks
+  if (!tr) return [];
+  const ks = tr.filter(mine);
+  if (ks.length) return ks.map(([t, v]) => [t, v - base(t)]);
+  const d = tr.map(([t, v]) => [t, v - base(t)]);
+  return d.filter(([, x], i) => { const a = Math.abs(x), l = i ? Math.abs(d[i - 1][1]) : 0, r = i < d.length - 1 ? Math.abs(d[i + 1][1]) : 0; return a > .01 && a >= l && a > r; });
+}
+function buildTrack(kind, sc, keys, base, R) {                   // [[t, change]] → the track (null when none are left: back to the move as it ships)
+  if (!keys.length) return null;
+  const S = moveDef(kind), dur = S.dur, b = (S.keys || {})[sc], w = d => d >= 1 ? 0 : .5 + .5 * Math.cos(Math.PI * d);
+  keys = keys.slice().sort((p, q) => p[0] - q[0]);
+  const t0 = keys[0][0], tn = keys[keys.length - 1][0], kt = keys.map(k => k[0]), e = spread > 0 ? spread : 1 / 60, at = [0, dur, t0 - e, t0 - e / 2, tn + e / 2, tn + e];
+  if (b) densify(b).forEach(k => at.push(k[0]));                  // the shipped curve's own shape
+  keys.forEach(([t], i) => { if (i < keys.length - 1) { const t1 = keys[i + 1][0]; [.25, .5, .75].forEach(f => at.push(t + (t1 - t) * f)); } });
+  const off = t => t < t0 ? keys[0][1] * w((t0 - t) / e) : t > tn ? keys[keys.length - 1][1] * w((t - tn) / e) : keys.length > 1 ? KIT.keyvS(keys, t) : keys[0][1];
+  const ts = at.filter(t => t >= 0 && t <= dur && kt.every(k => Math.abs(k - t) > .006)).sort((p, q) => p - q).filter((t, i, A) => !i || t - A[i - 1] > .004);
+  let out = [...ts.map(t => [t, 0]), ...kt.map(t => [t, 1])].sort((p, q) => p[0] - q[0])
+    .map(([t, m]) => { const v = clamp(base(t) + off(t), R[0], R[1]), tt = +t.toFixed(4); return m ? [tt, v, 1] : [tt, v]; });
+  while (out.length > 160) { let n = 0; out = out.filter((k, i) => mine(k) || i === 0 || i === out.length - 1 || ++n % 2); if (!n) break; }   // (thinned: every other in-between point)
+  return out;
+}
+function putKey(A, kind, sc, t, v, start, rest) {                // your key for one part at t (start: its track when the drag began, so a drag never compounds)
+  const base = baseFn(kind, sc, rest), ks = keysOn(start, base).filter(k => Math.abs(k[0] - t) > .009);
+  ks.push([+t.toFixed(4), v - base(t)]);
+  const tr = buildTrack(kind, sc, ks, base, KIT.ANIM_CH[sc]); if (tr) A[sc] = tr; else delete A[sc];
+}
+function ownKeys(kind = moveKind()) {                            // [{ t, sc }]: every key of yours on a move
+  const own = (cur.spec.move.anims || {})[kind] || {}, out = [];
+  for (const sc in own) { const base = baseFn(kind, sc, restOf(kind, sc) ?? own[sc][0][1]); keysOn(own[sc], base).forEach(([t]) => out.push({ t, sc })); }
+  return out;
+}
+function dropKeys(kind, gone, say) {                             // gone(sc, t) → true: that key goes, and each part is laid again round the keys it has left
+  const n = clone(cur.spec), A = n.move.anims[kind]; if (!A) return;
+  let k0 = 0;
+  for (const sc of Object.keys(A)) {
+    const base = baseFn(kind, sc, restOf(kind, sc) ?? A[sc][0][1]), ks = keysOn(A[sc], base), keep = ks.filter(([t]) => !gone(sc, t));
+    if (keep.length === ks.length) continue; k0 += ks.length - keep.length;
+    const tr = buildTrack(kind, sc, keep, base, KIT.ANIM_CH[sc]);
+    if (tr) A[sc] = tr; else { delete A[sc]; if (n.move.rests[kind]) delete n.move.rests[kind][sc]; }
+  }
+  if (!k0) return;
+  if (!Object.keys(A).length) { delete n.move.anims[kind]; delete n.move.rests[kind]; }
+  stageSpec(n); renderKeys(); if (tab === "ANIMATE") renderControls(); tl.nudge = true; onion = null; toast(say + " · UNDO BRINGS IT BACK");
+}
+function applyVals(vals) {                                       // a dot or a ring has moved: { channel (as in st.out): value }
+  const tgt = hdrag.target, n = clone(cur.spec), m = n.move;
   if (tgt.type === "pose") {                                     // standing / block / jump / hurt: the character's own pose
     for (const ch in vals) { const sc = KIT.chanFor(st, ch), R = KIT.POSE_CH[sc]; if (!R) continue; m[tgt.key][sc] = clamp(vals[ch] - (ch === "lean" && tgt.key !== "hurt" ? cur.spec.move.lean : 0), R[0], R[1]); }
-  } else if (tgt.type === "keys") {                             // a keyframed move, at this moment
-    const { kind, S, t } = tgt, base = S.keys || {}, A = m.anims[kind] = m.anims[kind] || {};
+  } else if (tgt.type === "keys") {                             // a keyframed move, at this moment: your key there
+    const { kind, S, t } = tgt, base = S.keys || {}, A = m.anims[kind] = m.anims[kind] || {}, sw = KIT.leadFar(st);
     for (const ch in vals) {
       const sc = KIT.chanFor(st, ch), R = KIT.ANIM_CH[sc]; if (!R) continue;
-      if (!hdrag.starts[sc]) { const own0 = (cur.spec.move.anims[kind] || {})[sc], v0 = st.out[ch] ?? 0; hdrag.starts[sc] = own0 ? clone(own0) : base[sc] ? densify(base[sc]) : [[0, v0], [S.dur, v0]]; }
-      A[sc] = softSet(hdrag.starts[sc], t, vals[ch], spread, S.dur, R).slice(0, 160);
+      const sg = sw && KIT.TWISTS.has(sc) ? -1 : 1;              // (with the lead hand on the far side a move's twists turn the other way)
+      if (!(sc in hdrag.starts)) { const own0 = (cur.spec.move.anims[kind] || {})[sc]; hdrag.starts[sc] = own0 ? clone(own0) : null; hdrag.rest[sc] = base[sc] ? null : restOf(kind, sc) ?? (own0 ? own0[0][1] : (st.out[ch] ?? 0) * sg); }
+      if (!base[sc]) (m.rests[kind] = m.rests[kind] || {})[sc] = hdrag.rest[sc];
+      putKey(A, kind, sc, t, vals[ch] * sg, hdrag.starts[sc], hdrag.rest[sc]);
     }
+    if (!Object.keys(A).length) delete m.anims[kind];
   } else {                                                       // the run: an offset at this point in the stride
     const A = m.anims.run = m.anims.run || {}, rC = Math.min(.45, spread * 2);
     for (const ch in vals) {
@@ -267,16 +370,38 @@ function applyDrag(T) {
   stageSpec(n, false); tl.nudge = true;
 }
 $("handles").addEventListener("pointerdown", e => {
-  const d = e.target.closest(".hd"); if (!d) return;
-  e.preventDefault(); e.stopPropagation(); try { d.setPointerCapture(e.pointerId); } catch { } d.classList.add("on");
+  const rh = e.target.closest(".ringhit"), d = !rh && e.target.closest(".hd"); if (!rh && !d) return;
+  e.preventDefault(); e.stopPropagation(); try { (rh || d).setPointerCapture(e.pointerId); } catch { }
   setPaused(true, false);
   const target = editTarget(); if (!target) return;
-  beginDrag();
-  const H = KIT.poseHandles(st, rig).find(x => x.id === d.dataset.id);
-  hdrag = { id: d.dataset.id, el: d, anchor: H.pos.clone(), starts: {}, base: {}, target };
+  if (d) hdSel = d.dataset.id;
+  const id = hdSel, H = KIT.poseHandles(st, rig).find(x => x.id === id); if (!H) return;
+  beginDrag(); if (d) d.classList.add("on");
+  hdrag = { id, el: rh || d, anchor: H.pos.clone(), starts: {}, rest: {}, base: {}, target, px: e.clientX, py: e.clientY, moved: false };
+  if (rh) {                                                      // the ring: which way round counts as which (it depends where the camera is)
+    rig.root.updateMatrixWorld(true);
+    const M = rig.body.matrixWorld, Pw = H.pos.clone().applyMatrix4(M), bx = $("handles").getBoundingClientRect(), [cx, cy] = [parseFloat(handleEls[id].style.left) + bx.left, parseFloat(handleEls[id].style.top) + bx.top];
+    let sgn;
+    if (ringFor(id) === "twist") {                               // sliding: the ring's front (the side toward you) follows the pointer
+      const fr = rig.body.worldToLocal(camera.position.clone()).sub(H.pos); fr.y = 0; fr.setLength(.3); const a = H.pos.clone().add(fr), b = a.clone().add(new THREE.Vector3(fr.z, 0, -fr.x).multiplyScalar(.1));
+      sgn = b.applyMatrix4(M).project(camera).x >= a.applyMatrix4(M).project(camera).x ? 1 : -1;
+    } else sgn = new THREE.Vector3(0, 0, 1).transformDirection(M).dot(camera.position.clone().sub(Pw)) >= 0 ? 1 : -1;   // turning: anticlockwise on screen is a turn about the body's +z when that side faces you
+    const leg = /^knee/.test(id) ? rig.legs[(id === "kneeN") === (st.face > 0) ? 1 : 0] : null;
+    Object.assign(hdrag, { ring: ringFor(id), o0: { ...st.out }, L0: leg ? { K: leg.pts[2].clone(), A: leg.pts[3].clone() } : null, cx, cy, last: Math.atan2(-(e.clientY - cy), e.clientX - cx), acc: 0, x0: e.clientX, sgn });
+  }
 });
-$("handles").addEventListener("pointermove", e => { if (!hdrag) return; const T = pointerToBody(e); if (T) applyDrag(T); });
-const endHandle = () => { if (!hdrag) return; hdrag.el.classList.remove("on"); hdrag = null; if (hdTip) hdTip.hidden = true; endDrag(); renderKeys(); if (tab === "POSE" || tab === "ANIMATE") renderControls(); };
+$("handles").addEventListener("pointermove", e => {
+  if (!hdrag) return;
+  if (!hdrag.moved) { if (Math.hypot(e.clientX - hdrag.px, e.clientY - hdrag.py) < 3) return; hdrag.moved = true; }   // (a click just picks the dot: no key)
+  if (hdrag.ring) {
+    let th;
+    if (hdrag.ring === "twist") th = (e.clientX - hdrag.x0) / 70 * hdrag.sgn;
+    else { const a = Math.atan2(-(e.clientY - hdrag.cy), e.clientX - hdrag.cx); let dA = a - hdrag.last; dA -= TAU * Math.round(dA / TAU); hdrag.acc += dA; hdrag.last = a; th = hdrag.acc * hdrag.sgn; }
+    applyVals(KIT.turnSolve(st, rig, hdrag.id, th, hdrag.o0, hdrag.L0)); return;
+  }
+  const T = pointerToBody(e); if (T) applyVals(KIT.dragSolve(st, rig, hdrag.id, T));
+});
+const endHandle = () => { if (!hdrag) return; hdrag.el.classList.remove("on"); hdrag = null; onion = null; if (hdTip) hdTip.hidden = true; endDrag(); renderKeys(); if (tab === "POSE" || tab === "ANIMATE") renderControls(); };
 $("handles").addEventListener("pointerup", endHandle); $("handles").addEventListener("pointercancel", endHandle);
 function settle(p) {                                             // paused: let the pose settle on this moment without moving time on
   const g0 = p.gaitPh, t0 = KIT.time; p.keysFull = true; KIT.updatePose(p, 1 / 60); p.gaitPh = g0; KIT.time = t0;
@@ -341,7 +466,7 @@ function drive(p, dt) {
 // camera: drag to turn, wheel / pinch to zoom
 let camYaw = 0, camPitch = .1, camDist = 8.4, turn = false, camLift = 0;
 const ptrs = new Map(); let pinch0 = 0;
-canvas.addEventListener("pointerdown", e => { if (poseMode) return; canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
+canvas.addEventListener("pointerdown", e => { if (poseMode) { hdSel = null; return; } canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
 canvas.addEventListener("pointermove", e => {
   const q = ptrs.get(e.pointerId); if (!q) return;
   if (ptrs.size === 1) { camYaw -= (e.clientX - q.x) * .01; camPitch = clamp(camPitch + (e.clientY - q.y) * .005, -.12, .7); }
@@ -420,15 +545,46 @@ function updateTL() {
   if (showBand) { const S = moveDef(moveKind()), a = clamp(tl.t - spread, 0, S.dur) / S.dur, b = clamp(tl.t + spread, 0, S.dur) / S.dur; band.style.left = (a * 100) + "%"; band.style.width = ((b - a) * 100) + "%"; }
   $("tlPrev").disabled = !(isMove() || ["run", "dash", "idle", "block"].includes(anim));
 }
-function renderKeys() {                                         // diamonds where this character's keys sit on the picked move
-  const box = $("tlKeys"); box.innerHTML = ""; if (!isMove()) return;
-  const S = moveDef(moveKind()), own = (cur.spec.move.anims || {})[moveKind()] || {}, base = S.keys || {}, ts = new Set();
-  for (const ch in own) {                                       // a diamond at the heart of each change (where it differs most from the move as it ships)
-    const d = own[ch].map(([t, v]) => [t, v - (base[ch] ? KIT.keyv(base[ch], t) : own[ch][0][1])]);
-    d.forEach(([t, x], i) => { const a = Math.abs(x), l = i ? Math.abs(d[i - 1][1]) : 0, r = i < d.length - 1 ? Math.abs(d[i + 1][1]) : 0; if (a > .01 && a >= l && a > r) ts.add(+t.toFixed(2)); });
-  }
-  ts.forEach(t => { const k = el("i", "key"); k.style.left = (t / S.dur * 100) + "%"; box.append(k); });
+// the timeline's diamonds = your keys on the picked move. Click one for what to do with it (the user, 2026-10-23: "add a way to delete the dots you've made
+// by clicking on them on the timeline and having the options pop up")
+const PARTS = [["lead arm", ["armF", "spF", "elbF", "aS", "gF"]], ["rear arm", ["armB", "spB", "elbB", "bS", "gB"]], ["front leg", ["fNx", "fNy", "fNz", "hN"]], ["back leg", ["fFx", "fFy", "fFz", "hF"]],
+  ["body", ["lean", "arch", "bodyY", "twist", "spin", "flip"]], ["upper body twist", ["twistU"]], ["hip twist", ["twistH"]], ["head", ["headRot"]], ["toes", ["fP"]], ["sword", ["blade", "grip"]],
+  ["tail", ["tailBase", "tailCurl"]], ["hat", ["hatTilt", "hatLift"]]];
+const partOf = sc => { const p = (PARTS.find(([, cs]) => cs.includes(sc)) || ["other"])[0]; return cur.spec.base === "cat" ? p.replace(" arm", " paw") : p; };
+let keyMenuEl = null;
+function closeKeyMenu() { if (keyMenuEl) { keyMenuEl.remove(); keyMenuEl = null; } }
+function renderKeys() {
+  const box = $("tlKeys"); box.innerHTML = ""; closeKeyMenu(); if (!isMove()) return;
+  const S = moveDef(moveKind()), groups = [];
+  ownKeys().sort((a, b) => a.t - b.t).forEach(k => { const g = groups.find(q => Math.abs(q.t - k.t) < .009); if (g) g.ks.push(k); else groups.push({ t: k.t, ks: [k] }); });
+  groups.forEach(g => {
+    const d = el("button", "key"), parts = [...new Set(g.ks.map(k => partOf(k.sc)))];
+    d.type = "button"; d.style.left = (g.t / S.dur * 100) + "%"; d.title = `Your key at ${g.t.toFixed(2)}s (${parts.join(", ")}): click for options`;
+    d.setAttribute("aria-label", d.title);
+    d.addEventListener("pointerdown", e => e.stopPropagation());   // (not a scrub)
+    d.onclick = e => { e.stopPropagation(); keyMenu(g, d); };
+    box.append(d);
+  });
 }
+function keyMenu(g, d) {
+  closeKeyMenu();
+  const kind = moveKind(), S = moveDef(kind), t = g.t, near = q => Math.abs(q - t) < .009, parts = [...new Set(g.ks.map(k => partOf(k.sc)))], later = new Set(ownKeys(kind).filter(k => k.t > t + .009).map(k => k.t.toFixed(2))).size;
+  const m = keyMenuEl = el("div", "keymenu"); m.setAttribute("role", "menu");
+  const hd = el("header"), x = el("button", "x", "✕"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.onclick = closeKeyMenu;
+  hd.append(el("b", null, `KEY AT ${t.toFixed(2)}s`), x); m.append(hd, el("small", null, parts.join(" · ")));
+  const item = (label, fn, warn) => { const b = el("button", warn ? "warn" : null, label); b.type = "button"; b.setAttribute("role", "menuitem"); b.onclick = () => { closeKeyMenu(); fn(); }; m.append(b); };
+  item("GO TO THIS KEY", () => { scrubTo(t / S.dur); if (tab === "ANIMATE") renderControls(); });
+  item(parts.length > 1 ? "DELETE THIS KEY · EVERY PART" : "DELETE THIS KEY", () => dropKeys(kind, (sc, k) => near(k), "KEY DELETED"), true);
+  if (parts.length > 1) parts.forEach(p => item(`DELETE JUST THE ${p.toUpperCase()} HERE`, () => dropKeys(kind, (sc, k) => near(k) && partOf(sc) === p, p.toUpperCase() + " KEY DELETED"), true));
+  if (later) item(`DELETE EVERY KEY AFTER THIS (${later})`, () => dropKeys(kind, (sc, k) => k > t + .009, "LATER KEYS DELETED"), true);
+  parts.forEach(p => item(`DELETE EVERY ${p.toUpperCase()} KEY`, () => dropKeys(kind, sc => partOf(sc) === p, "EVERY " + p.toUpperCase() + " KEY DELETED"), true));
+  root.append(m);
+  const r = d.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = clamp(r.left + r.width / 2 - w / 2, 8, innerWidth - w - 8) + "px"; m.style.top = Math.max(8, r.top - h - 10) + "px";
+  m.querySelector("button:not(.x)").focus();
+}
+addEventListener("pointerdown", e => { if (keyMenuEl && !keyMenuEl.contains(e.target) && !e.target.closest("#tlKeys .key")) closeKeyMenu(); }, true);
+addEventListener("keydown", e => { if (keyMenuEl && e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); closeKeyMenu(); } }, true);
 
 let last = performance.now();
 const STEP = 1 / 120;
@@ -442,6 +598,8 @@ function frame(now) {
   const sdt = tl.paused ? 0 : dt * tl.speed;                  // slow motion / pause
   if (sdt > 0) { const n = Math.ceil(sdt / STEP - 1e-6); for (let i = 0; i < n; i++) drive(st, sdt / n); }
   else if (isMove()) driveMove(st, 0);                           // paused on a move: hold it at the timeline's moment
+  st.restNow = tl.paused;                                         // (paused: the neck and the hair settle straight onto the pose instead of trailing the last frame)
+  if (tl.paused && isMove()) updateOnion();
   if (tl.paused || tl.nudge) { settle(st); tl.nudge = false; }
   rig.sync(st, rig, sdt);
   updateTL(); syncHandles();
@@ -699,7 +857,7 @@ function villainFrame(dt) {                                    // the stage with
 // pose mode: the standing pose (and the block pose) are this character's own; sliders start from the move set's
 let poseWhich = "stance";
 const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["armF", "Lead arm raise"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["armB", "Rear arm raise"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"],
-  ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["twist", "Twist"], ["headRot", "Head tilt"]];
+  ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["headRot", "Head tilt"]];
 const C_POSE = [["lean", "Lean forward"], ["arch", "Arch the back"], ["bodyY", "Crouch (− lower)"], ["armF", "Front paw raise"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw raise"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["tailBase", "Tail up"], ["tailCurl", "Tail curl"], ["hatTilt", "Hat tilt"], ["headRot", "Head tilt"]];
 function poseBase(sp, which) {                                  // the pose before this character's own changes
@@ -731,7 +889,7 @@ function renderPose(box) {
 // undo / redo / reset, for whatever animation is on stage
 function resetInfo() {
   const S = KIT.MOVESETS[cur.spec.move.set] || KIT.MOVESETS.brawler, cat = cur.spec.base === "cat";
-  const moves = list => n => list.forEach(k => { delete n.move.anims[k]; });
+  const moves = list => n => list.forEach(k => { delete n.move.anims[k]; delete n.move.rests[k]; });
   if (isMove()) return { label: (MOVE_NAMES[moveKind()] || moveKind()).toUpperCase(), apply: moves([moveKind()]) };
   if (anim === "run" || anim === "dash") return { label: "RUN", apply: n => { delete n.move.anims.run; } };
   if (anim === "jump") return { label: "JUMP", apply: n => { n.move.rise = {}; n.move.top = {}; n.move.fall = {}; } };
@@ -757,16 +915,8 @@ function densify(tr) {                                       // copy a move's ow
   for (let i = 0; i < tr.length - 1; i++) { const [a, va] = tr[i], b = tr[i + 1][0]; out.push([a, va]); [.25, .5, .75].forEach(f => { const t = a + (b - a) * f; out.push([+t.toFixed(4), KIT.keyv(tr, t)]); }); }
   out.push([...tr[tr.length - 1]]); return out;
 }
-function softSet(track, t, x, r, dur, R) {                      // move the curve at t to x; nearby frames follow with a smooth falloff
-  const at = tm => KIT.keyvS(track, tm), out = track.map(k => [k[0], k[1]]), delta = x - at(t);
-  const near = tm => out.some(k => Math.abs(k[0] - tm) < .012);
-  (r > 0 ? [t - r, t - r / 2, t, t + r / 2, t + r] : [t]).forEach(tm => { tm = clamp(tm, 0, dur); if (!near(tm)) out.push([+tm.toFixed(3), at(tm)]); });   // anchors pin the edges
-  const w = d => d >= 1 ? 0 : .5 + .5 * Math.cos(Math.PI * d);
-  out.forEach(k => { const d = r > 0 ? Math.abs(k[0] - t) / r : (Math.abs(k[0] - t) < .012 ? 0 : 1); k[1] = clamp(k[1] + delta * w(d), R[0], R[1]); });
-  return out.sort((p, q) => p[0] - q[0]);
-}
 const H_ANIM = [["armF", "Lead arm"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["aS", "Lead arm stretch"], ["gF", "Lead fist size"], ["armB", "Rear arm"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["bS", "Rear arm stretch"], ["gB", "Rear fist size"],
-  ["lean", "Lean"], ["arch", "Arch"], ["twist", "Twist"], ["bodyY", "Crouch / rise"], ["fNx", "Front foot forward"], ["fNy", "Front foot lift"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot forward"], ["fFy", "Back foot lift"], ["fFz", "Back foot out to the side"],
+  ["lean", "Lean"], ["arch", "Arch"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["bodyY", "Crouch / rise"], ["fNx", "Front foot forward"], ["fNy", "Front foot lift"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot forward"], ["fFy", "Back foot lift"], ["fFz", "Back foot out to the side"],
   ["headRot", "Head tilt"], ["spin", "Spin"], ["flip", "Flip"]];
 const C_ANIM = [["armF", "Front paw"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"], ["lean", "Lean"], ["arch", "Arch"], ["bodyY", "Crouch / rise"],
   ["fNx", "Front foot forward"], ["fNy", "Front foot lift"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot forward"], ["fFy", "Back foot lift"], ["fFz", "Back foot out to the side"], ["fP", "Toe point"], ["tailBase", "Tail up"], ["tailCurl", "Tail curl"],
@@ -788,7 +938,7 @@ function renderAnimate(box) {
     return;
   }
   const sp = cur.spec, cat = sp.base === "cat", kind = moveKind(), S = moveDef(kind), base = S.keys || {}, own = (sp.move.anims || {})[kind] || {}, t = clamp(tl.t, 0, S.dur);
-  box.append(el("p", "note", `${(MOVE_NAMES[kind] || kind).toUpperCase()} · ${S.dur.toFixed(2)}s long · at ${t.toFixed(2)}s${tl.paused ? "" : " (pause to edit)"}. Drag the timeline to a moment, then drag the yellow dots on the character (or the sliders). The frames around it follow smoothly. Press ▶ to watch.`));
+  box.append(el("p", "note", `${(MOVE_NAMES[kind] || kind).toUpperCase()} · ${S.dur.toFixed(2)}s long · at ${t.toFixed(2)}s${tl.paused ? "" : " (pause to edit)"}. Drag the timeline to a moment, then drag the yellow dots on the character (or the sliders): that sets a key there (a diamond on the timeline; click one to delete it). Between two of your keys a change holds; past your last one it eases back over the blend. A dot you grab gets a ring: turn it to bend an elbow or a knee or tilt the head, slide it to twist the hips or the upper body. Press ▶ to watch.`));
   const sr = el("div", "row"), sl = el("label", null, "Blend into nearby frames"), so = el("output", null, spread > 0 ? `±${spread.toFixed(2)}s` : "THIS FRAME ONLY");
   const si = Object.assign(document.createElement("input"), { type: "range", min: 0, max: .3, step: .01, value: spread }); si.style.setProperty("--fill", (spread / .3 * 100) + "%");
   si.addEventListener("input", () => { spread = +si.value; so.textContent = spread > 0 ? `±${spread.toFixed(2)}s` : "THIS FRAME ONLY"; si.style.setProperty("--fill", (spread / .3 * 100) + "%"); });
@@ -800,24 +950,27 @@ function renderAnimate(box) {
     const row = el("div", "row"), l = el("label", null, lab), out = el("output", null, (v * 57.3).toFixed(0));
     const inp = Object.assign(document.createElement("input"), { type: "range", id, min: R[0], max: R[1], step: .01, value: v }); l.htmlFor = id;
     inp.style.setProperty("--fill", ((v - R[0]) / (R[1] - R[0]) * 100) + "%");
-    const differs = !!own[ch] && Math.abs(v - (base[ch] ? KIT.keyv(base[ch], t) : own[ch][0][1])) > .01;
-    row.classList.toggle("changed", !!own[ch]); row.classList.toggle("keyed", differs);
-    const grab = () => { if (!start) { const cur0 = (cur.spec.move.anims[kind] || {})[ch]; start = cur0 ? clone(cur0) : base[ch] ? densify(base[ch]) : [[0, v], [S.dur, v]]; } };
+    const keyHere = !!own[ch] && keysOn(own[ch], baseFn(kind, ch, restOf(kind, ch) ?? own[ch][0][1])).some(([k]) => Math.abs(k - t) < .009);
+    row.classList.toggle("changed", !!own[ch]); row.classList.toggle("keyed", keyHere);
+    let rest0 = null;
+    const grab = () => { if (!start) { const cur0 = (cur.spec.move.anims[kind] || {})[ch]; start = { tr: cur0 ? clone(cur0) : null }; rest0 = base[ch] ? null : restOf(kind, ch) ?? (cur0 ? cur0[0][1] : v); } };
     inp.addEventListener("pointerdown", () => { setPaused(true, false); beginDrag(); grab(); }); inp.addEventListener("focus", () => { beginDrag(); grab(); });
     inp.addEventListener("input", () => {
       grab();
       const x = +inp.value, T2 = clamp(tl.t, 0, S.dur), n = clone(cur.spec), A = n.move.anims[kind] = n.move.anims[kind] || {};
-      A[ch] = softSet(start, T2, x, spread, S.dur, R).slice(0, 160); stageSpec(n, false);
+      if (!base[ch]) (n.move.rests[kind] = n.move.rests[kind] || {})[ch] = rest0;
+      putKey(A, kind, ch, T2, x, start.tr, rest0); if (!Object.keys(A).length) delete n.move.anims[kind]; stageSpec(n, false);
       out.textContent = (x * 57.3).toFixed(0); inp.style.setProperty("--fill", ((x - R[0]) / (R[1] - R[0]) * 100) + "%"); tl.nudge = true;
     });
     inp.addEventListener("change", () => { start = null; endDrag(); renderKeys(); renderControls(); });
     row.append(l, out, inp); box.append(row);
   });
   const a = el("div", "addrow"), d = el("button", "chip", "DELETE KEYS HERE"), r = el("button", "chip", "RESET THIS MOVE"); a.append(d, r); box.append(a);
-  d.onclick = () => { const n = clone(cur.spec), A = n.move.anims[kind]; if (!A) return; const T2 = clamp(tl.t, 0, S.dur);
-    for (const ch in A) { A[ch] = A[ch].filter(k => Math.abs(k[0] - T2) >= .009); if (!A[ch].length) delete A[ch]; }
-    if (!Object.keys(A).length) delete n.move.anims[kind]; stageSpec(n); renderKeys(); renderControls(); tl.nudge = true; };
-  r.onclick = () => { const n = clone(cur.spec); delete n.move.anims[kind]; stageSpec(n); renderKeys(); renderControls(); tl.nudge = true; };
+  d.onclick = () => { const T2 = clamp(tl.t, 0, S.dur); dropKeys(kind, (sc, k) => Math.abs(k - T2) < .009, "KEYS HERE DELETED"); };
+  r.onclick = () => { const n = clone(cur.spec); delete n.move.anims[kind]; delete n.move.rests[kind]; stageSpec(n); renderKeys(); renderControls(); tl.nudge = true; onion = null; };
+  const gh = el("button", "chip" + (onionOn ? " on" : ""), onionOn ? "GHOSTS ON" : "GHOSTS OFF"); gh.type = "button"; gh.setAttribute("aria-pressed", onionOn);
+  gh.title = "In POSE mode: faded dots where each dot was at your last key (hollow) and gets to at your next one (solid), and the picked dot's path";
+  gh.onclick = () => { onionOn = !onionOn; onion = null; renderControls(); }; a.append(gh);
 }
 
 // outfit editor (heroes): shirt print layers, sleeve and leg bands, hands, boots, skirts, accessories
@@ -1494,7 +1647,17 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .tlbar {position: relative; flex: 1 1 100%; order: 9; height: 26px; background: var(--slate); cursor: ew-resize; touch-action: none; }
 #ed .tlbar .fill {position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 210, 3, .3); pointer-events: none; }
 #ed .tlbar .head {position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: var(--mango); pointer-events: none; }
-#ed .tlbar .key {position: absolute; top: 8px; width: 10px; height: 10px; margin-left: -5px; background: var(--paper); transform: rotate(45deg) scale(.75); pointer-events: none; }
+#ed .tlbar .key {position: absolute; top: 5px; width: 16px; height: 16px; margin-left: -8px; padding: 0; border: 3px solid var(--slate); background: var(--paper); transform: rotate(45deg) scale(.75); cursor: pointer; z-index: 2; }
+#ed .tlbar .key:hover, #ed .tlbar .key:focus-visible {background: var(--mango); transform: rotate(45deg) scale(.95); outline: none; }
+#ed .keymenu {position: fixed; z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 220px; max-width: 320px; padding: 10px; background: var(--paper); border: 3px solid var(--slate); box-shadow: 6px 6px 0 var(--slate); }
+#ed .keymenu header {display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+#ed .keymenu b {font: 600 12px var(--body); letter-spacing: .18em; color: var(--slate); }
+#ed .keymenu small {font: 600 10px var(--body); letter-spacing: .12em; text-transform: uppercase; color: var(--slate); opacity: .7; margin-bottom: 4px; }
+#ed .keymenu button {font: 600 11px var(--body); letter-spacing: .1em; text-align: left; padding: 7px 9px; background: var(--mango); color: var(--slate); border: 2px solid var(--slate); cursor: pointer; }
+#ed .keymenu button:hover, #ed .keymenu button:focus-visible {background: var(--slate); color: var(--mango); outline: none; }
+#ed .keymenu button.warn {background: var(--paper); }
+#ed .keymenu button.warn:hover, #ed .keymenu button.warn:focus-visible {background: var(--slate); color: var(--paper); }
+#ed .keymenu .x {padding: 2px 7px; background: none; border: 0; font-size: 14px; }
 #ed .tl output {font: 600 11px var(--body); letter-spacing: .08em; min-width: 92px; text-align: right; color: var(--slate); font-variant-numeric: tabular-nums; }
 #ed .tl .spd {display: flex; gap: 3px; }
 #ed .docktop {width: 100%; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
@@ -1510,6 +1673,19 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
   pointer-events: auto; cursor: grab; touch-action: none; transition: transform .1s; box-shadow: 0 0 0 2px rgba(255, 246, 207, .7); }
 #ed .hd:hover {transform: scale(1.3); }
 #ed .hd.on {transform: scale(1.4); background: #fff; cursor: grabbing; }
+#ed .hd.joint {width: 14px; height: 14px; margin: -7px 0 0 -7px; border-width: 2px; }
+#ed .hd.sel {box-shadow: 0 0 0 2px rgba(255, 246, 207, .7), 0 0 0 5px var(--slate); }
+#ed .onion {position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+#ed .onion .thread {fill: none; stroke: var(--slate); stroke-width: 2; stroke-dasharray: 2 5; stroke-linecap: round; opacity: .55; }
+#ed .onion .gp, #ed .onion .gn {stroke: var(--slate); stroke-width: 2; opacity: .45; }
+#ed .onion .gp {fill: none; }
+#ed .onion .gn {fill: var(--mango); }
+#ed .onion .me {opacity: .8; stroke-width: 2.5; }
+#ed .onion .ro {fill: none; stroke: var(--slate); stroke-width: 6; stroke-linecap: round; }
+#ed .onion .ri {fill: none; stroke: var(--mango); stroke-width: 3; stroke-linecap: round; }
+#ed .onion .rh {fill: var(--mango); stroke: var(--slate); stroke-width: 1.5; stroke-linejoin: round; }
+#ed .onion .ringhit {fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: grab; touch-action: none; }
+#ed .onion .ringhit.tw {cursor: ew-resize; }
 #ed .hdtip {position: absolute; transform: translate(14px, -28px); background: var(--slate); color: var(--mango); font: 600 10px var(--body); letter-spacing: .18em; text-transform: uppercase; padding: 4px 8px; pointer-events: none; white-space: nowrap; }
 #ed .tlbar .band {position: absolute; top: 0; bottom: 0; background: rgba(255, 246, 207, .2); border-left: 1px solid rgba(255, 246, 207, .4); border-right: 1px solid rgba(255, 246, 207, .4); pointer-events: none; }
 #ed #ref {position: absolute; right: 28px; top: 28px; margin: 0; background: var(--paper); padding: 6px 6px 0; box-shadow: 6px 6px 0 var(--slate); cursor: zoom-in; max-width: 34%; }
@@ -1646,7 +1822,7 @@ const ED_MARKUP = `<div class="app">
     <section class="stage" id="stage">
       <canvas id="view" aria-label="3D preview. Drag to turn, scroll to zoom."></canvas>
       <div class="vf"><i></i><i></i><i></i><i></i></div>
-      <div class="handles" id="handles" hidden></div>
+      <div class="handles" id="handles" hidden><svg class="onion" aria-hidden="true"><g id="ghosts"></g><g id="ring" display="none"><path class="ro"/><path class="ro"/><path class="ri"/><path class="ri"/><polygon class="rh"/><polygon class="rh"/><ellipse class="ringhit"/></g></svg></div>
       <div class="plate"><input id="name" maxlength="14" aria-label="Character name" spellcheck="false"><div class="bar" id="kindBar">HERO</div></div>
       <figure id="ref" hidden><img alt="Reference drawing"><figcaption>REFERENCE</figcaption></figure>
       <div class="dock">

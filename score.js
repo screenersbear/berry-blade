@@ -510,7 +510,7 @@ window.BerryScore = (() => {
     p.cancelScheduledValues(t); p.setValueAtTime(from, t);
     for (let i = 1; i <= 12; i++) { const x = i / 12, k = to > from ? Math.sin(x * Math.PI / 2) : 1 - Math.cos(x * Math.PI / 2); p.linearRampToValueAtTime(from + (to - from) * k, t + x * dur); }
   }
-  let ac0 = null, master = null, playing = false, timer = 0, stopAt = 0, want = 0, song = 0, wantBpm = SONGS[0].bpm, players = [];
+  let curVol = -1, ac0 = null, master = null, playing = false, timer = 0, stopAt = 0, want = 0, song = 0, wantBpm = SONGS[0].bpm, players = [];
   function tick() {
     if (!playing) return;
     const now = ac0.currentTime;
@@ -532,7 +532,8 @@ window.BerryScore = (() => {
     start(ac, vol) {
       if (!ac0) { ac0 = ac; master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
       if (SONGS[song].STYLES[want].orig) decodeClip(ac, SONGS[song]);
-      if (stopAt || !playing) fadeParam(master.gain, master.gain.value, vol * LEVEL, ac.currentTime, XF);   // fades in under the outgoing recording (equal-power, as it goes)
+      if (stopAt || !playing || Math.abs(vol - curVol) > 1e-4) fadeParam(master.gain, master.gain.value, vol * LEVEL, ac.currentTime, XF);   // fades in under the outgoing recording (equal-power, as it goes); or to a new level (the story's voice over it)
+      curVol = vol;
       stopAt = 0;
       if (playing) return;
       playing = true; tick(); timer = setInterval(tick, 40);

@@ -405,6 +405,18 @@
     padding: 5px 8px 2px; box-shadow: 3px 3px 0 var(--s); }
   #tale .cap.top { top: 8px; bottom: auto; }
   #tale .go { position: absolute; right: 18px; bottom: 12px; font: 600 12px "Jost", sans-serif; letter-spacing: .4em; color: var(--y); opacity: .75; pointer-events: none; }
+  /* a phone (2026-10-23, the user: "on the phone, all the comics and instructional get squished and you mostly see text and can't see the image ...
+     do one panel on the screen at a time"): every comic page a panel at a time, the whole picture, its caption under it, a tap for the next */
+  body.oneUp #comic .page, body.oneUp #tale .page { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; flex-direction: column; width: auto; height: auto;
+    aspect-ratio: auto; padding: 0; background: none; box-shadow: none; transform: none !important; opacity: 1 !important; }
+  body.oneUp #comic .cp, body.oneUp #tale .cp { display: none; }
+  body.oneUp #comic .cp.now, body.oneUp #tale .cp.now { display: block; width: min(92vw, calc((100vh - 150px) * 4 / 3)); aspect-ratio: 4 / 3; height: auto; margin-bottom: 110px; opacity: 1; transform: none; filter: none; }
+  body.oneUp #comic .cp.now .cap, body.oneUp #tale .cp.now .cap { top: calc(100% + 12px); bottom: auto; left: 0; right: 0; max-width: none; font-size: 15px; }
+  body.oneUp #comic .cp.now { overflow: visible; }
+  @media (orientation: landscape) {                   /* (a phone on its side: the caption beside the picture, so the picture can have the height) */
+    body.oneUp #comic .cp.now, body.oneUp #tale .cp.now { width: min(58vw, calc((100vh - 48px) * 4 / 3)); margin: 0 calc(min(34vw, 330px) + 18px) 0 0; }
+    body.oneUp #comic .cp.now .cap, body.oneUp #tale .cp.now .cap { top: 50%; bottom: auto; left: calc(100% + 18px); right: auto; width: min(34vw, 330px); transform: translateY(-50%); }
+  }
   #tale .skip { position: absolute; right: 18px; top: 14px; font: 600 12px "Jost", sans-serif; letter-spacing: .35em; color: var(--y); background: none; border: 2px solid var(--y); padding: 7px 10px 6px 14px; cursor: pointer; }
   #skipHint { position: fixed; right: 16px; bottom: 16px; z-index: 30; background: var(--s); color: var(--y); font: 600 11px "Jost", sans-serif; letter-spacing: .26em; padding: 7px 12px; display: none; }
   #skipHint.show { display: block; }
@@ -450,7 +462,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261023d"></script>
+<script src="charkit.js?v=20261023e"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -601,7 +613,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261020b"></script>
+<script src="editor.js?v=20261023e"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -3071,7 +3083,8 @@ const bgm = {
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
   const pcTale = !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
   const glosWait = !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
-  const S = window.BerryScore, h = pcTale ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && (!tale || pcTale) && !glosWait;   // (the story so far: the music out under the voice, but for the PC page's own)
+  const softTale = !!tale && !pcTale;                // (the phone and the zip: no borrowed song, so the score's own soft take under the voice, 2026-10-23: "the music wasnt playing during the cutscene")
+  const S = window.BerryScore, h = pcTale ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
   const R = pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
   const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) : 0;
@@ -3084,12 +3097,13 @@ function syncMusic(dt) {                         // every frame: the right music
   const ejM = ejFight() && mode === "play" && S.EJ !== undefined;   // Evil June's here: her quiet theme (the room's ambience carries on)
   if (S.setSong) S.setSong(ejM ? S.EJ : WORLDS[world].song ?? world);    // the woods' song, the waves' or Volt Keep's
   if (S.setGloom) S.setGloom(mode === "play" && !hideout && !inHub() && !ejM && world !== 9 && (level.ruin || 0) >= 3);   // (the room's own tier: it changes on the next screen, never while you're in one)   // (the uprising at 75%: every hour played darker)
-  if (ejM) S.setHour(0, 1);
+  if (softTale && S.SERENE) S.setHour(S.SERENE, .8);
+  else if (ejM) S.setHour(0, 1);
   else if (hideout && S.SERENE) S.setHour(S.SERENE, .76);
   else if (inHub() && S.HUB !== undefined && world !== 9) S.setHour(S.HUB, .94);   // (a hub: this world's tune, its hub take: the user, 2026-10-22)
   else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
-  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
+  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL * (softTale ? .55 : 1)); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
 }
 function startMusic() {
   audio();
@@ -3164,7 +3178,7 @@ function syncBugs() {
   if (!ac || ac.state !== "running") return;
   if (bugs.state === "idle") bugsInit();
   if (bugs.state !== "ready") return;
-  const on = sfxOn && (mode === "play" || mode === "opp"), lv = on ? SCREENS[hour].bugs : [0, 0], t = ac.currentTime;
+  const on = sfxOn && (mode === "play" || mode === "opp") && !tale, lv = on ? SCREENS[hour].bugs : [0, 0], t = ac.currentTime;
   lv.forEach((v, i) => { if (v !== bugs.lvl[i]) { bugs.layers[i].gain.setTargetAtTime(v * [.3, .45][i], t, 1.4); bugs.lvl[i] = v; } });   // the cicadas sit at −22 dB rms, the coquís at −25 (so 3 dB more here); this lands them under the music
 }
 // ── the coast: a surf loop under everything and sea birds calling now and then (shore.js: real recordings, none needing credit).
@@ -3182,7 +3196,7 @@ function syncShore(dt) {
   if (!ac || ac.state !== "running") return;
   if (shore.state === "idle") shoreInit();
   if (shore.state !== "ready") return;
-  const on = sfxOn && (world === 1 || world === 9 || (world === 2 && STAGES[stage] && STAGES[stage].outside)) && (mode === "play" || mode === "opp" || mode === "world"), L = on ? (SCREENS[hour].shore || [0, 0]) : [0, 0];
+  const on = sfxOn && !tale && (world === 1 || world === 9 || (world === 2 && STAGES[stage] && STAGES[stage].outside)) && (mode === "play" || mode === "opp" || mode === "world"), L = on ? (SCREENS[hour].shore || [0, 0]) : [0, 0];
   if (L[0] !== shore.lvl) { shore.surfG.gain.setTargetAtTime(L[0] * .42, ac.currentTime, 1.4); shore.lvl = L[0]; }
   if (L[1] > 0 && (shore.next -= dt) <= 0) {
     shore.next = rand(6, 14) / Math.sqrt(L[1]);
@@ -3203,7 +3217,7 @@ function dawnInit() {
 }
 function syncDawn(dt) {
   if (!ac || ac.state !== "running") return;
-  const L0 = sfxOn && world === 5 && (mode === "play" || mode === "opp" || mode === "world") && !hideout ? (SCREENS[hour].dawn || [0, 0]) : [0, 0];
+  const L0 = sfxOn && !tale && world === 5 && (mode === "play" || mode === "opp" || mode === "world") && !hideout ? (SCREENS[hour].dawn || [0, 0]) : [0, 0];
   if (dawnS.state === "idle") { if (L0[0] > 0 || L0[1] > 0) dawnInit(); return; }
   if (dawnS.state !== "ready") return;
   if (L0[0] !== dawnS.lvl) { dawnS.g.gain.setTargetAtTime(L0[0] * .5, ac.currentTime, 1.6); dawnS.lvl = L0[0]; }
@@ -3283,15 +3297,15 @@ const SFX = {
   cards() { [880, 1175, 1480].forEach((f, i) => tone(f, f, .09, { type: "triangle", vol: .07, delay: i * .045 })); },
   dash() { noise(.12, { vol: .26, f0: 500, f1: 1400, type: "bandpass" }); },
   whoosh() { noise(.28, { vol: .3, f0: 700, f1: 2600, type: "bandpass", q: 1.4 }); },
-  punch() { noise(.06, { vol: .3, f0: 1500, f1: 6500, type: "bandpass", q: 1.4 }); noise(.035, { vol: .22, f0: 7000, f1: 3800, type: "highpass", delay: .03 }); tone(320, 170, .06, { type: "sine", vol: .1, delay: .02 }); },   // a swish, a crisp snap, a light knock under it (2026-10-22: brighter, it was a dull thud)
-  kick() { noise(.09, { vol: .32, f0: 1000, f1: 5500, type: "bandpass", q: 1.4 }); noise(.04, { vol: .2, f0: 6000, f1: 3200, type: "highpass", delay: .045 }); tone(260, 140, .07, { type: "sine", vol: .11, delay: .04 }); },   // (brighter too)
+  punch() { noise(.06, { vol: .3, f0: 1500, f1: 6500, type: "bandpass", q: 1.4 }); noise(.075, { vol: .15, f0: 3200, f1: 1500, type: "bandpass", q: .9, delay: .03, a: .01 }); tone(320, 170, .06, { type: "sine", vol: .1, delay: .02 }); },   // a swish, a slap of air, a light knock under it (2026-10-22: brighter, it was a dull thud; 10-23: the snap was a click, the user: "why does it make a clicking sound when you attack ... it's not a good sound effect")
+  kick() { noise(.09, { vol: .32, f0: 1000, f1: 5500, type: "bandpass", q: 1.4 }); noise(.085, { vol: .14, f0: 2800, f1: 1300, type: "bandpass", q: .9, delay: .045, a: .01 }); tone(260, 140, .07, { type: "sine", vol: .11, delay: .04 }); },   // (brighter too; no click since 10-23)
   slash() { noise(.075, { vol: .15, f0: 1100, f1: 6200, type: "bandpass", q: 2.4 }); if (smpPlay("slash", .1, { delay: .03 })) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
-  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) { noise(.03, { vol: .11, f0: 6500, f1: 3500, type: "highpass" }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
+  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) { noise(.06, { vol: .07, f0: 3000, f1: 1500, type: "bandpass", q: .8, a: .008 }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
   impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
     noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
   bite(sword, w = 1) { const k = .8 + .2 * Math.min(w, 1.6);   // a blow of yours landing, with more bite (the user, 2026-10-23, after Odin Sphere: "a more aggressive sound effect"): a sharp crack on top, a short thump under it;
-    noise(.028, { vol: .19 * k, f0: 9000, f1: 4200, type: "highpass" }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack
+    noise(.07, { vol: .15 * k, f0: 3600, f1: 1500, type: "bandpass", q: .8, a: .008 }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack (a slap, not the 9 kHz crack: it clicked, 10-23)
     if (sword) { noise(.07, { vol: .14 * k, f0: 5400, f1: 2700, type: "bandpass", q: 3 }); tone(3150, 2550, .12, { type: "triangle", vol: .045 * k, delay: .004 }); tone(4700, 4300, .08, { type: "sine", vol: .025 * k, delay: .004 }); }
     else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); tone(420, 150, .05, { type: "square", vol: .045 * k, lp: 2200 }); } },
   body(h = 58, boss = false, w = 1) {   // the blow landing on THEM (the user, 2026-10-23: "sounds the enemies make when hit ... not grunt or anything ... just sounds of getting hit"):
@@ -3728,7 +3742,7 @@ function hideFoe(f) { f.rig.root.visible = f.rig.shadow.visible = false; if (f.r
 function showFoe(f) { f.rig.root.visible = f.rig.shadow.visible = true; if (f.rig.groundGlow) f.rig.groundGlow.visible = true; }
 FOES.forEach(hideFoe);
 function makeFoeState(def, x, z = 0) {
-  const hp = (def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + ENEMY_HP_UP;   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
+  const hp = (def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + (world === 9 ? 0 : ENEMY_HP_UP);   // (Noro and Doir on the beach: without the +4, 2026-10-23)   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
   return { def, x, z, y: GROUND, vx: 0, vy: 0, dir: -1, onGround: true, hp, maxHp: hp, inv: 0, flash: 0, sq: 0, sqv: 0, yaw: -Math.PI + .5,
     phase: 0, think: 1.4, windup: 0, jumpVx: 0, jumpVy: 0, plat: null, edge: null, hurtT: 0, dead: false, deathT: 0, gone: false, puffT: 1,
     atk: null, atkTm: 0, atkCd: 3, emitT: 0, emitN: 0, actT: 0, chains: {} };
@@ -4950,7 +4964,8 @@ function comicPose(st, x, face, startle) {         // a set pose on a set mark f
 function showComic() {
   if (!gift) return; const g = gift, b = g.b, kid = () => (ej && ej.kid ? ej.st : null);
   $("comic").innerHTML = COMIC_GIFT; $("comic").classList.remove("tri");   // (its own four panels: a lesson may have had the page)
-  $("comic").classList.add("show"); comicUp = true; $("holdTip").classList.remove("show"); $("comicGo").classList.remove("on"); [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.remove("on"));
+  $("comic").classList.add("show"); comicUp = true; $("holdTip").classList.remove("show"); $("comicGo").classList.remove("on"); [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.remove("on", "now"));
+  document.body.classList.toggle("oneUp", oneUp()); comicAt = -1;
   const ends = PLATFORMS.flatMap(q => [q.x, q.x + q.w]); let cx = WORLD - 720, best = -1;   // (the spot farthest from any platform's posts, so nothing stands in front of them)
   for (let x = WORLD - 380; x > 520; x -= 20) { if (groundAt(x - 160) === null || groundAt(x + 190) === null) continue;
     const d = Math.min(400, ...ends.map(e => e < x - 160 ? x - 160 - e : e > x + 190 ? e - x - 190 : 0)); if (d > best) { best = d; cx = x; } }
@@ -4973,11 +4988,18 @@ function showComic() {
   P.push(shot({ x: X(cx - 25), y: 2.2, z: 7.4, tx: X(cx - 25), ty: 1.55, tz: 0 }));
   [[player, back[0][1]], [kid(), back[1][1]]].forEach(([st, x]) => { if (st && x !== null && x !== undefined) comicPose(st, x, 1, false); });   // back where they were
   putBep(back[2][1], -Math.PI / 2);
-  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
+  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); }); if (document.body.classList.contains("oneUp")) { comicOne(0); $("comicGo").classList.add("on"); }   // (a phone: the first panel, a tap for each next)
   setTimeout(() => { $("comicGo").classList.add("on"); g.ready = true; }, 350 + 4 * 900);
+}
+const oneUp = () => !!window.BERRY_TOUCH || (innerHeight < 560 && innerWidth < 1000);   // a phone (or a small window): the comics a panel at a time
+let comicAt = -1;
+function comicOne(i) {                                // (a phone) the comic page's panel i on its own
+  const P = [...document.querySelectorAll("#comic .cp")]; comicAt = i; P.forEach((el, k) => { el.classList.toggle("now", k === i); if (k === i) el.classList.add("on"); });
+  if (i >= P.length - 1) { if (gift) gift.ready = true; if (tutor) tutor.ready = true; }   // (the last: the next tap closes the page)
 }
 function comicNext() {                               // a press: all the panels at once, or (all shown) close the page and on
   if (tale) return taleNext();
+  if (comicUp && document.body.classList.contains("oneUp") && comicAt < document.querySelectorAll("#comic .cp").length - 1) { comicOne(comicAt + 1); SFX.tick(); return; }   // (a phone: on to the next panel)
   if (tutor && comicUp) { if (!tutor.ready) { [...document.querySelectorAll("#comic .cp")].forEach(el => el.classList.add("on")); $("comicGo").classList.add("on"); tutor.ready = true; return; }
     comicUp = false; $("comic").classList.remove("show", "tri"); SFX.confirm(); tutor = null; jumpBuf = atkBuf = 0; return; }   // (a lesson: closed, and on you go)
   const g = gift; if (!comicUp) return;
@@ -5021,7 +5043,7 @@ function showTutor(id) {
   tutor = { id, ready: false }; comicUp = true; for (const k in keys) keys[k] = false;
   Object.assign(p, { vx: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, block: false, tackle: null });
   const C = $("comic"); C.innerHTML = `<div class="page">${T.panels.map(q => `<div class="cp"><span class="cap">${q.cap()}</span></div>`).join("")}<span class="go" id="comicGo">${window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON"}</span></div>`;
-  C.classList.add("show", "tri"); $("holdTip").classList.remove("show");
+  C.classList.add("show", "tri"); $("holdTip").classList.remove("show"); document.body.classList.toggle("oneUp", oneUp()); comicAt = -1;
   const keep = { x: p.x, y: p.y, face: p.face, yaw: p.yaw, hp: p.hp, power: p.power || 0, onGround: p.onGround, plat: p.plat };
   const hidden = []; baddies.forEach(b => { if (b.r.root.visible) { b.r.root.visible = false; hidden.push(b); } }); const kidX = kid ? kid.st.x : 0; if (kid) kid.st.x = -4000;   // (the other one: well out of the picture)
   const ends = PLATFORMS.flatMap(q => [q.x, q.x + q.w]); let cx = 900, best = -1;   // (a spot well clear of the platforms' posts)
@@ -5052,7 +5074,7 @@ function showTutor(id) {
   }
   extras.splice(0).forEach(disposeBaddy); hidden.forEach(b => { b.r.root.visible = true; }); if (kid) kid.st.x = kidX;
   comicPose(p, keep.x, keep.face, false); Object.assign(p, { y: keep.y, yaw: keep.yaw, hp: keep.hp, power: keep.power, chargeT: 0, chargeLv: 0 }); for (let i = 0; i < 20; i++) rig.sync(p, rig, 1 / 30);
-  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); });
+  [...document.querySelectorAll("#comic .cp")].forEach((el, i) => { el.style.backgroundImage = `url(${P[i]})`; setTimeout(() => { el.classList.add("on"); SFX.tick(); }, 350 + i * 900); }); if (document.body.classList.contains("oneUp")) { comicOne(0); $("comicGo").classList.add("on"); }   // (a phone: the first panel, a tap for each next)
   setTimeout(() => { if (tutor && tutor.id === id) { $("comicGo").classList.add("on"); tutor.ready = true; } }, 350 + T.panels.length * 900);
 }
 // ── the story so far (the user, 2026-10-23: "After the beach, create a cutscene that's those same panels appearing one at a time and graying
@@ -5060,7 +5082,9 @@ function showTutor(id) {
 // reading it in chunks with every slide"; "in that intro show clips of some of the villains"; "then, the page flips. more comic strips and
 // voice over"). Once a story, as you go off the beach into the woods (or from DEBUG in the pause menu). The pictures were shot with the
 // game's own models (.claude/berry-tools/tests/storyshots.js); the voice is two of Kokoro's (Apache-2.0) mixed, 20% af_bella to 80% af_nicole,
-// raised 3 semitones (the user's pick, 2026-10-23: "D nearly nicole"; ~/BerryBlade3DS-tools/narration-tools), in story/tale.js as AAC (base64, so it plays from a folder too). A press: on
+// raised 3 semitones (the user's pick, 2026-10-23: "D nearly nicole"; ~/BerryBlade3DS-tools/narration-tools), read a touch quicker with its rises and falls
+// widened 1.7x (expressive.py; "make the voice a little more animated though still in that more ominous, concerned tone"), in story/tale.js as AAC (base64,
+// so it plays from a folder too). A press: on
 // to the next panel; Start / Esc (or SKIP): the lot
 const TALE = [
   { img: "story/p1.jpg", top: true, text: "Berry Island, as you can imagine, was peaceful... until the baddies came." },
@@ -5072,7 +5096,7 @@ const TALE = [
   { img: "story/p7.jpg", text: "Please, help us now to bring our friends back on our side." },
   { img: "story/p8.jpg", text: "And fight for our home." },
 ];
-const TALE_P1 = 5, TALE_VOL = .62;                   // (the first page's panels; then it turns over)
+const TALE_P1 = 5, TALE_VOL = .9;                   // (louder since 2026-10-23, the user: "the voice which was kind of low, and then loud background sounds": the sea and the bugs go quiet under it now)                   // (the first page's panels; then it turns over)
 let tale = null; const taleVo = { state: "idle", bufs: [] };
 function taleLoad() {                                // the voice (decoded once) and the pictures, fetched ahead
   if (taleVo.state !== "idle") return; taleVo.state = "loading"; TALE.forEach(q => { new Image().src = q.img; });
@@ -5080,14 +5104,14 @@ function taleLoad() {                                // the voice (decoded once)
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(A.map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { taleVo.bufs[i] = buf; }).catch(() => { }))).then(() => { taleVo.state = "ready"; }); };
   if (window.BERRY_TALE) return go();
-  const el = document.createElement("script"); el.src = "story/tale.js"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/tale.js?v=20261023e"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
 }
 function startTale(then) {
   taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show");
   const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span></div>`;
   $("tale").innerHTML = `<div class="page p2">${TALE.slice(TALE_P1).map((q, i) => panel(q, i + TALE_P1)).join("")}</div><div class="page p1">${TALE.slice(0, TALE_P1).map(panel).join("")}</div>
     <button class="skip">SKIP ${padUse ? padName("st") : window.BERRY_TOUCH ? "" : "· ESC"}</button><span class="go">${window.BERRY_TOUCH ? "TAP FOR THE NEXT ONE" : "ANY BUTTON FOR THE NEXT ONE"}</span>`;
-  $("tale").classList.add("show");
+  $("tale").classList.add("show"); document.body.classList.toggle("oneUp", oneUp());
   tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now() };
 }
 function taleTick(dt) {                              // (every frame, paused or not: the game's paused under it)
@@ -5105,9 +5129,9 @@ function taleStep() {
   const T = tale, n = T.i + 1; taleHush();
   if (n >= TALE.length) return endTale();
   const cp = k => k < TALE_P1 ? $("tale").querySelector(".p1").children[k] : $("tale").querySelector(".p2").children[k - TALE_P1];
-  if (n === TALE_P1 && !T.turned) { T.turned = true; $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; }   // the page turns over
+  if (n === TALE_P1 && !T.turned) { T.turned = true; if (!document.body.classList.contains("oneUp")) { $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; } }   // the page turns over (a phone: a panel at a time, no turn)
   for (let k = 0; k < n; k++) cp(k).classList.add("past");
-  cp(n).classList.add("on"); SFX.tick(); T.i = n;
+  cp(n).classList.add("on"); SFX.tick(); T.i = n; $("tale").querySelectorAll(".cp").forEach(el => el.classList.toggle("now", el === cp(n)));   // (a phone shows only the one .now)
   const words = TALE[n].text.split(/\s+/).length; T.wait = 1.2 + words * .36; T.sayAt = .35;   // (no voice, or none yet: time to read it)
 }
 function taleNext() { const T = tale; if (!T || performance.now() - T.t0 < 600) return; if (T.turned && T.i < TALE_P1) return; T.sayAt = -1; T.wait = 0; }   // (not in the first moment: a button held from the stats screen; not mid-turn)
@@ -7890,6 +7914,7 @@ function buildFactoryFoes() {
 // ATK power: every baddy you pop is +1 (up to +3), every hit you take is −1. Damage counts in half-hearts: a hit does 2 + power,
 // so the boss (10) still takes 5 hits at +0 but only 2 at +3.
 const ENEMY_HP_UP = 4;                              // every enemy, baddy or boss, 4 more life than its size gives (the user, 2026-10-23: "so that they can survive some juggling")
+const BEACH_HP_UP = 1;                              // (the beach: 1 more, not 4; the user, 2026-10-23: "make enemies on the beach a little easier, less health")
 const BB_SIZE = { S: { h: 40, hw: 17, hp: 2, wt: .7 }, M: { h: 58, hw: 24, hp: 4, wt: 1 }, B: { h: 82, hw: 34, hp: 6, wt: 1.3 }, G: { h: 118, hw: 46, hp: 8, wt: 1.6 } };
 const BB_COL = { red: "#e8283c", yellow: "#ffd21f", blue: "#4466f2", black: "#2b2833", purple: "#9440f0", orange: "#ff8a1a", green: "#3fc24a", gray: "#a2a2ae",
   teal: "#13b5a3", aqua: "#3ccfe8", coral: "#ff6a55", pink: "#ff78b6", lilac: "#a98af0" };   // (the sea's berries)
@@ -13523,7 +13548,7 @@ function makeBaddy(type, colName, x, y) {
   if (r.segs) r.hist = Array.from({ length: 80 }, (_, i) => [X(x) + i * .05, Y(y)]);   // the caterpillar starts stretched out behind its head
   jointSprings(r, [[r.tilt, "rotation", "z", 110, .42], [r.tilt, "rotation", "x", 110, .42], [r.bob, "position", "y", 300, .6],
     ...r.arms.map(A => [A, "rotation", "z", 70, .35]), ...r.legs.map(L => [L, "rotation", "z", 260, .6]), ...r.sp]);
-  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Z.hp + ENEMY_HP_UP, h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
+  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Z.hp + (world === 9 ? BEACH_HP_UP : ENEMY_HP_UP), h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
     phase: rand(0, 6), yaw: -Math.PI / 2 - .62, atk: null, atkT: 0, atkCd: rand(1.2, 2.4), think: rand(.6, 2), hopT: rand(.2, .8), dead: false, deathT: 0, gone: false, plat: null };
 }
 function disposeBaddy(b) {

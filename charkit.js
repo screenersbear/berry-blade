@@ -141,6 +141,7 @@ function updateChains(r, p, dt) {
       if (flap) { wd.y += Math.sin(api.time * 13 + ci * 2.1 + i * .9) * flap * .45; wd.z += Math.cos(api.time * 8 + ci + i * 1.3) * flap * .2; }   // flutters when moving
       tgt.push(tgt[i - 1].clone().addScaledVector(wd.normalize(), seg * sc));
     }
+    if (!dt && p.restNow) st.w = null;               // (paused in the editor: the lock hangs at rest)
     simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm, (c.k1 || 60) / fm, c.damp || 8);
     st.w.forEach((w, i) => r.body.worldToLocal(c.tube.pts[i].copy(w)));
     const wa = c.wv ? c.wv() : 0;                   // wavy hair: each lock's points pushed side to side along it (none at the root)
@@ -238,7 +239,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -258,7 +259,7 @@ const TOCSIN = {
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
     patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326" },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {} },
   pet: { on: false, with: "" },
 };
 const PRESETS = [
@@ -474,7 +475,7 @@ function layer(L) {
   return o;
 }
 // pose channels a character can set for its standing / block pose and keyframe in its moves (ranges keep them sane)
-const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
+const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], twistU: [-1.2, 1.2], twistH: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
   spF: [-.7, 1.6], spB: [-.7, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],
   fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4] };
 const ANIM_CH = { ...POSE_CH, aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], fP: [-2, 1], grip: [0, 1] };
@@ -486,10 +487,19 @@ function fitAnims(v) {                           // { move: { channel: [[t, valu
     const tr = {};
     for (const ch in ANIM_CH) {
       const a = v[kind][ch]; if (!Array.isArray(a)) continue;
-      const keys = a.filter(k => Array.isArray(k) && isFinite(k[0]) && isFinite(k[1])).slice(0, 160).map(([t, x]) => [clamp(+t, 0, 3), clamp(+x, ...ANIM_CH[ch])]).sort((p, q) => p[0] - q[0]);
+      const keys = a.filter(k => Array.isArray(k) && isFinite(k[0]) && isFinite(k[1])).slice(0, 160).map(([t, x, m]) => m === 1 ? [clamp(+t, 0, 3), clamp(+x, ...ANIM_CH[ch]), 1] : [clamp(+t, 0, 3), clamp(+x, ...ANIM_CH[ch])]).sort((p, q) => p[0] - q[0]);
       if (keys.length) tr[ch] = keys;
     }
     if (Object.keys(tr).length) o[kind] = tr;
+  }
+  return o;
+}
+function fitRests(v) {                           // the editor's note of what a part rested at before your keys, for parts a move doesn't key itself: { move: { channel: value } } (the game never reads it)
+  const o = {}; if (!v || typeof v !== "object") return o;
+  for (const kind of Object.keys(v).slice(0, 40)) {
+    if (!/^[a-z0-9_]{1,24}$/i.test(kind) || !v[kind] || typeof v[kind] !== "object") continue;
+    const r = {}; for (const ch in ANIM_CH) if (typeof v[kind][ch] === "number" && isFinite(v[kind][ch])) r[ch] = clamp(v[kind][ch], ...ANIM_CH[ch]);
+    if (Object.keys(r).length) o[kind] = r;
   }
   return o;
 }
@@ -510,6 +520,7 @@ function fit(t, v, path) {                     // shape v like the template t, k
   }
   if (/^move\.(stance|guard|rise|top|fall|hurt)$/.test(path)) return fitPose(v);
   if (path === "move.anims") return fitAnims(v);
+  if (path === "move.rests") return fitRests(v);
   if (t && typeof t === "object") {
     const o = {}, vv = v && typeof v === "object" && !Array.isArray(v) ? v : {};
     for (const k in t) o[k] = fit(t[k], vv[k], path ? path + "." + k : k);
@@ -715,6 +726,22 @@ function spikyHeadGeo(spk, ears) {
   g.scale(.42, .4, .47); g.computeVertexNormals();
   return g;
 }
+// every dog's helmet (the user, 2026-10-23: "put this helmet that looks like it has a chess pawn piece on top on all the dogs", from their sticky-note
+// drawing): a rounded dome over the head, tipped back so the face stays clear; a short visor brim over the eyes; a chess pawn's knob on top (its base,
+// neck, collar and ball), leaning back; an oval patch on each side (the ear's place); and a thick padded collar round the jaw. Cream, the patches the ears' colour
+const DOG_HELMET = "#f2e8cf", DOG_HELMET_DARK = "#e2d3ad";
+function dogHelmet(head, M, P, c) {
+  const mH = M(DOG_HELMET), mD = M(DOG_HELMET_DARK), mE = M(c.ears || c.fur), hg = group(head, -.04, .02, 0); hg.rotation.z = .38;   // (tipped well back: its front edge above the eyes)
+  hg.add(P(new THREE.SphereGeometry(1, 30, 18, 0, Math.PI * 2, 0, 1.08).scale(.47, .47, .53), mH, 0, true));                       // the dome
+  const brim = P(new THREE.CylinderGeometry(.24, .24, .04, 20, 1, false, 0, Math.PI).scale(1.05, 1, 1.45), mD); at(brim, .27, .33, 0); brim.rotation.z = -.62; brim.rotation.y = Math.PI / 2; hg.add(brim);   // the visor, out over the eyes
+  const pawn = group(hg, -.04, .44, 0); pawn.rotation.z = .1;                                                                      // the pawn on top
+  pawn.add(at(P(new THREE.CylinderGeometry(.1, .13, .06, 16), mH), 0, .02, 0));
+  pawn.add(at(P(new THREE.CylinderGeometry(.045, .07, .14, 14), mH), 0, .12, 0));
+  pawn.add(at(P(new THREE.CylinderGeometry(.085, .085, .03, 16), mD), 0, .2, 0));
+  pawn.add(at(P(new THREE.SphereGeometry(.105, 16, 12), mH, 0, true), 0, .29, 0));
+  [-1, 1].forEach(sd => { const pt = P(new THREE.SphereGeometry(1, 16, 12).scale(.085, .11, .03), mE, 0, true); at(pt, -.12, .2, sd * .5); pt.rotation.x = sd * -.42; hg.add(pt); });   // the side patches
+  const col = P(new THREE.TorusGeometry(.32, .09, 12, 28).rotateX(Math.PI / 2).scale(1, 1, 1.2), mH, 0, true); at(col, .02, -.37, 0); head.add(col);   // the padded collar
+}
 function buildCat(R) {
   const S = R.spec, c = S.colors, mats = [], texs = [];
   const M = (col, extra) => { const m = toonT(col, extra); mats.push(m); return m; };
@@ -760,9 +787,12 @@ function buildCat(R) {
     const pv = group(head, -.04, .2, s * .43), e = P(new THREE.SphereGeometry(1, 18, 14).scale(.15, .29, .065), M(c.ears), 0, true); at(e, 0, -.22, s * .05); pv.add(e); pv.rotation.x = -s * .26; return pv; }) : null;   // (the head's about .42 across: ears from its top sides, down past its cheeks)
   const hatPivot = group(head, hp.x, hp.y, 0), hat = group(hatPivot);
   R.hatY = hp.y;
-  hat.add(P(new THREE.CylinderGeometry(.3, .3, .04, 16), mHat));
-  hat.add(at(P(new THREE.CylinderGeometry(.22, .19, .42, 14), mHat), 0, .23, 0));
-  hat.add(at(P(new THREE.CylinderGeometry(.199, .196, .1, 14), mBand), 0, .08, 0));
+  if (S.parts.dog) dogHelmet(head, M, P, c);          // a dog: its helmet instead of the top hat (the hat's pivot stays, empty, for the animation)
+  else {
+    hat.add(P(new THREE.CylinderGeometry(.3, .3, .04, 16), mHat));
+    hat.add(at(P(new THREE.CylinderGeometry(.22, .19, .42, 14), mHat), 0, .23, 0));
+    hat.add(at(P(new THREE.CylinderGeometry(.199, .196, .1, 14), mBand), 0, .08, 0));
+  }
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(.6, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
   return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB, dogEars });
@@ -867,13 +897,15 @@ function hairChains(st) {                         // the flowing locks for each 
   if (st === "sidetail") return [{ parent: "head", anchor: [-.2, -.05, .26], dir: [-.4, -1, .5], n: 10, seg: .11, w: [.17, .09], hang: .45, k0: 170, k1: 35, sway: .05 }];
   if (st === "lowtail") return [{ parent: "head", anchor: [-.3, -.14, 0], dir: [-.25, -1, 0], n: 8, seg: .1, w: [.1, .05], hang: .65, k0: 190, k1: 45, sway: .04, tie: true }];
   if (st === "hightail") return [{ parent: "head", anchor: [-.26, .22, 0], dir: [-.7, -.55, 0], n: 7, seg: .1, w: [.13, .055], hang: .7, k0: 190, k1: 45, sway: .05, tie: true }];   // gathered high at the back, a short tail
+  // (heavier since 2026-10-23, the user: "camila's hair is good that it has movement but it's too ragdoll like. can it have more weight and gravity and
+  // bounce a little less?": each lock hangs further toward the ground, its tip less floppy, and it's damped near critically, so it settles, not bounces)
   if (st === "wavy") return [                       // long and wavy, parted in the middle (Camila, from the user's Gabby reference): the long style's locks,
-    ...[-.13, 0, .13].map((z, i) => ({ parent: "head", anchor: [-.22, 0, z], dir: [-.3, -1, z * 1.2], n: 9, seg: .1, w: [.11, .045], hang: .55, k0: 200, k1: 35, sway: .05, ph: i * 1.9 })),   //   two more over each
-    ...[-1, 1].map((s, i) => ({ parent: "head", anchor: [.04, -.12, s * .29], dir: [.08, -1, s * .05], n: 4, seg: .08, w: [.06, .03], hang: .3, ph: (3 + i) * 1.9 })),                        //   shoulder and one more
+    ...[-.13, 0, .13].map((z, i) => ({ parent: "head", anchor: [-.22, 0, z], dir: [-.3, -1, z * 1.2], n: 9, seg: .1, w: [.11, .045], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: i * 1.9 })),   //   two more over each
+    ...[-1, 1].map((s, i) => ({ parent: "head", anchor: [.04, -.12, s * .29], dir: [.08, -1, s * .05], n: 4, seg: .08, w: [.06, .03], hang: .5, k0: 220, k1: 80, damp: 15, ph: (3 + i) * 1.9 })),                        //   shoulder and one more
     ...[-1, 1].flatMap((s, j) => [                                                                                                                                                          //   each side at the back,
-      { parent: "head", anchor: [.011, -.131, s * .327], dir: [.12, -1, s * .12], n: 8, seg: .1, w: [.1, .05], hang: .5, k0: 200, k1: 40, sway: .04, ph: (5 + j * 3) * 1.9 },             //   and two short ones
-      { parent: "head", anchor: [-.089, -.091, s * .337], dir: [-.1, -1, s * .2], n: 9, seg: .1, w: [.11, .05], hang: .55, k0: 200, k1: 35, sway: .05, ph: (6 + j * 3) * 1.9 },           //   sweeping off the
-      { parent: "head", anchor: [-.345, 0, s * .2], dir: [-.3, -1, s * .3], n: 9, seg: .1, w: [.11, .05], hang: .55, k0: 200, k1: 35, sway: .05, ph: (7 + j * 3) * 1.9 }]),               //   part (hair.wave
+      { parent: "head", anchor: [.011, -.131, s * .327], dir: [.12, -1, s * .12], n: 8, seg: .1, w: [.1, .05], hang: .68, k0: 200, k1: 62, damp: 15, sway: .02, ph: (5 + j * 3) * 1.9 },             //   and two short ones
+      { parent: "head", anchor: [-.089, -.091, s * .337], dir: [-.1, -1, s * .2], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: (6 + j * 3) * 1.9 },           //   sweeping off the
+      { parent: "head", anchor: [-.345, 0, s * .2], dir: [-.3, -1, s * .3], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: (7 + j * 3) * 1.9 }]),               //   part (hair.wave
     ...[-1, 1].map(s => ({ parent: "head", anchor: [.6, .78, s * .08], dir: [.4, -.3, s], curlX: s * .45, n: 5, seg: .075, w: [.09, .075], hang: .05, k0: 260, k1: 90, sway: .02, part: true }))];   //   ripples the rest)
   if (st === "pigtails") return [-1, 1].map(s => ({ parent: "head", anchor: [-.06, .1, s * .4], dir: [-.15, -.25, s * 1], n: 7, seg: .09, w: [.1, .045], hang: .5, k0: 190, k1: 45, sway: .04 }));
   return [];
@@ -1451,7 +1483,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, spin: 0, bS: 0, flip: 0, gF: 0, gB: 0, grip: 0, hN: 0, hF: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, gF: 0, gB: 0, grip: 0, hN: 0, hF: 0 };
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -1883,6 +1915,7 @@ const STRIKES = {
 };
 const PUNCH_S = { dur: .3, hits: [{ t0: .06, t1: .22 }] };   // (the air punch's timing, for its legs)
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
+const TWISTS = new Set(["twist", "twistU", "twistH"]);   // turns about the up axis: with the lead hand on the far side they turn the other way
 const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
 function leadFar(p) {                       // is the prop (lead) hand on the far side right now?
   const pr = p.rig.spec.outfit && p.rig.spec.outfit.prop; if (!pr || pr.kind === "none" || pr.side === "near") return false;
@@ -1946,7 +1979,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
   for (const k in L) T[sw ? SWAP[k] || k : k] = L[k];   // (the lead leg forward, as the move's own keys have it: Camila's gauntlet hand, facing right, is the far one; unswapped her legs crossed, 2026-10-22)
   return true;
 }
-const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
+const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
   const k = 1 - Math.exp(-dt * 16);
   for (const key in T) {
@@ -1990,7 +2023,7 @@ function updatePoseHuman(p, dt) {
     else if (a < .32) Object.assign(T, { lean: -.42, armF: -.75, elbF: .6, armB: 1.35, elbB: .5, fNx: .62, fNy: .46, fP: .5, fFx: -.14 }); // snap kick
     else Object.assign(T, { lean: -.05, armF: .4, elbF: 1, armB: .2, elbB: .9, fNx: .25, fNy: .1, fFx: -.1 });
   } else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
-    for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && k === "twist" ? -1 : 1); } }
+    for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && TWISTS.has(k) ? -1 : 1); } }
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
   else if (!p.onGround) {
     // (the legs a stride apart, 2026-10-23: they hung close together front to back, one boot stacked over the other: "twisted and distorted ... in the air")
@@ -2075,7 +2108,7 @@ function updatePoseHuman(p, dt) {
   const SK = a >= 0 && STRIKES[p.atkKind];
   if (SK && SK.keys) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
     for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
-      let v = kv(p, KK, k, a) * (sw && k === "twist" ? -1 : 1);
+      let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
       if (k === "spin" || k === "flip") v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round
       o[kk] = lerp(o[kk] ?? 0, v, w); }
     if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
@@ -2203,7 +2236,7 @@ function armOut(a, sp, s) {                        // the turn that swings an ar
   _a0.set(Math.sin(a), -Math.cos(a), 0); _a1.set(Math.sin(a) * Math.cos(sp), -Math.cos(a) * Math.cos(sp), s * Math.sin(sp));
   return _aq.setFromUnitVectors(_a0, _a1);
 }
-const _gp = new THREE.Vector3(), _gt = new THREE.Vector3(), _gS = new THREE.Vector3(), _zAx = new THREE.Vector3(0, 0, 1), _qi = new THREE.Quaternion();
+const _gp = new THREE.Vector3(), _gt = new THREE.Vector3(), _gS = new THREE.Vector3(), _zAx = new THREE.Vector3(0, 0, 1), _qi = new THREE.Quaternion(), _tq = new THREE.Quaternion();
 const GAUNT = { inward: .42, flex: .5, turn: 1.2 };   // the gauntlet arm, bent (the user, 2026-10-17: not straight up "like a trophy"): turned in at the shoulder, the wrist curled, the fingers toward you
 function gripIK(S, T, UA, FA, s) {                  // the arm angles (a, e, sp) that put the hand exactly on T: the bend sets the reach, sp tilts the arm's plane out (or in, across the chest)
   const dx = T.x - S.x, dy = T.y - S.y, dz = (T.z - S.z) * s, L = clamp(Math.hypot(dx, dy, dz), Math.abs(UA - FA) * 1.02 + .01, (UA + FA) * .998);
@@ -2214,7 +2247,8 @@ function gripIK(S, T, UA, FA, s) {                  // the arm angles (a, e, sp)
 // posing by hand (the editor's drag handles): where each part is now, and the channels that move it to a spot (body space)
 function poseHandles(p, r) {
   const near = p.face > 0 ? 1 : -1, cat = r.kind === "cat", A = cat ? r.gloves : r.hands, F = cat ? r.shoes : r.feet, out = [];
-  [-1, 1].forEach((s, i) => { const n = s === near; out.push({ id: n ? "handN" : "handF", pos: A[i].position }, { id: n ? "footN" : "footF", pos: F[i].position }); });
+  [-1, 1].forEach((s, i) => { const n = s === near; out.push({ id: n ? "handN" : "handF", pos: A[i].position }, { id: n ? "footN" : "footF", pos: F[i].position },
+    { id: n ? "elbowN" : "elbowF", pos: r.arms[i].pts[2] }, { id: n ? "kneeN" : "kneeF", pos: r.legs[i].pts[2] }); });   // (the elbows and knees, 2026-10-23: "add points on characters elbows and knees")
   out.push({ id: "hips", pos: cat ? r.torso.pts[1] : r.hips.position }, { id: "spine", pos: r.torso.pts[2] }, { id: "head", pos: r.head.position });
   if (r.prop && r.prop.kind === "sword") { r.root.updateMatrixWorld(true); out.push({ id: "tip", pos: r.body.worldToLocal(r.prop.inner.localToWorld(new THREE.Vector3(1.0, 0, 0))) }); }
   return out;
@@ -2240,6 +2274,33 @@ function dragSolve(p, r, id, T) {                   // → { channel (as in p.ou
   }
   else if (id === "head") { const h = cat ? r.torso.pts[1] : r.hips.position; res.lean = Math.atan2(T.x - h.x, T.y - h.y) / (cat ? .85 : .8); }
   else if (id === "tip" && r.prop) { const W = r.prop.group.position; res.blade = Math.atan2(T.y - W.y, T.x - W.x); }
+  else if (id === "elbowN" || id === "elbowF") {    // the elbow: the upper arm swings round to it, the forearm keeps its bend (the hand rides along)
+    const isNear = id === "elbowN", s = isNear ? near : -near, S0 = r.arms[s > 0 ? 1 : 0].pts[1], ca = isNear ? "armF" : "armB";
+    _ku.subVectors(T, S0); let a = Math.atan2(_ku.x, -_ku.y); a += TAU * Math.round(((o[ca] || 0) - a) / TAU);   // (over the top, it carries on round rather than flipping back)
+    res[ca] = a; res[isNear ? "spF" : "spB"] = clamp(Math.atan2(_ku.z * s - (cat ? .05 : .03), Math.hypot(_ku.x, _ku.y)), -.7, 1.6);
+  } else if (id === "kneeN" || id === "kneeF") {     // the knee: the thigh swings round to it, the shin keeps its line (the foot rides along)
+    const isNear = id === "kneeN", t = r.legs[(isNear ? near : -near) > 0 ? 1 : 0], H = t.pts[1], K = t.pts[2];
+    _kd.subVectors(T, H).setLength(H.distanceTo(K)).add(H).sub(K); legShift(o, r, near, isNear, _kd, res);
+  }
+  return res;
+}
+const _kd = new THREE.Vector3();
+function legShift(o, r, near, isNear, d, res) {      // the foot (so the whole shin) moved by d in body space, as the foot's channels
+  const cat = r.kind === "cat", Bd = r.spec.body, s = isNear ? near : -near, ds = cat ? 1 : r.D.step, f = isNear ? ["fNx", "fNy", "fNz"] : ["fFx", "fFy", "fFz"];
+  res[f[0]] = (o[f[0]] || 0) + d.x / ds; res[f[1]] = Math.max(0, Math.max(0, o[f[1]] || 0) + d.y / ds);
+  res[f[2]] = clamp((o[f[2]] || 0) + d.z * s / ((cat ? .3 : .5) * Bd.legs), -.3, 1.2);
+}
+// a dot's ring (2026-10-23: "arrows around the points that allow rotation not just movement"): th = how far it's been turned since the grab, about the
+// body's +z (side on: anticlockwise as you look at the camera side) or, for the twists, about up; o0 / L0 = the channels and that leg's knee + ankle at the grab
+const RING_OF = { elbowN: "bend", elbowF: "bend", kneeN: "bend", kneeF: "bend", head: "tilt", hips: "twist", spine: "twist" };
+function turnSolve(p, r, id, th, o0, L0) {
+  const res = {}, near = p.face > 0 ? 1 : -1, fs = near, cat = r.kind === "cat";
+  if (id === "elbowN" || id === "elbowF") { const c = id === "elbowN" ? "elbF" : "elbB"; res[c] = (o0[c] || 0) + th; }   // the forearm swings about the elbow
+  else if ((id === "kneeN" || id === "kneeF") && L0) {   // the shin swings about the knee
+    _kd.subVectors(L0.A, L0.K).applyAxisAngle(_zAx, th).add(L0.K).sub(L0.A); legShift(o0, r, near, id === "kneeN", _kd, res);
+  } else if (id === "head") res.headRot = (o0.headRot || 0) - th;   // (headRot tips the head forward: a turn the other way about +z)
+  else if (id === "hips" && !cat) res.twistH = (o0.twistH || 0) + th * fs;
+  else if (id === "spine" && !cat) res.twistU = (o0.twistU || 0) + th * fs;
   return res;
 }
 const chanFor = (p, ch) => leadFar(p) ? SWAP[ch] || ch : ch;     // p.out channel → the spec's (lead / rear) name
@@ -2274,7 +2335,7 @@ function syncCat(p, r, dt = 0) {
     p.neck.addScaledVector(p.neckV, dt);
     if (p.neck.distanceTo(_P[4]) > .25) p.neck.copy(_P[4]);
     keepNeck(p);
-  }
+  } else if (p.restNow) { p.neck.copy(_P[4]); p.neckV.set(0, 0, 0); }
   for (let i = 0; i < 4; i++) r.torso.pts[i].copy(_P[i]);
   r.torso.pts[4].copy(p.neck);
   r.torso.update(FWD);
@@ -2338,7 +2399,8 @@ function syncCat(p, r, dt = 0) {
     const z = Math.sin(api.time * 1.7 - i * .45) * o.tailSwish * (i / TAIL_N) * .22;
     tgt.push(r.body.localToWorld(new THREE.Vector3(x, y, z)));
   }
-  simChain(p.chains.tail || (p.chains.tail = {}), tgt, dt, TAIL_L * sc, 260, 70, 9)
+  const tS = p.chains.tail || (p.chains.tail = {}); if (!dt && p.restNow) tS.w = null;
+  simChain(tS, tgt, dt, TAIL_L * sc, 260, 70, 9)
     .forEach((w, i) => r.body.worldToLocal(r.tail.pts[i].copy(w)));
   r.tail.update(UPV);
 }
@@ -2368,15 +2430,19 @@ function syncHuman(p, r, dt = 0) {
     p.neck.addScaledVector(p.neckV, dt);
     if (p.neck.distanceTo(_P[4]) > .2) p.neck.copy(_P[4]);
     keepNeck(p);
-  }
+  } else if (p.restNow) { p.neck.copy(_P[4]); p.neckV.set(0, 0, 0); }   // (paused in the editor: nothing trails, so a still frame shows the pose as it plays)
   for (let i = 0; i < 4; i++) r.torso.pts[i].copy(_P[i]);
   r.torso.pts[4].copy(p.neck); r.torso.update(FWD);
   _SB.lerpVectors(_P[3], _P[4], D.shoulderAt);                       // shoulder line: at the chest point (chibi) or up toward the neck (tall)
   r.hips.scale.setScalar(D.hips * gw); r.chest.scale.setScalar(D.chest * gw); r.head.scale.setScalar(D.head * Bd.head);
-  r.hips.position.copy(_P[1]); r.hips.rotation.z = -ang[0] * .6;
-  r.chest.position.copy(_SB); r.chest.rotation.z = -ang[1];
+  // the localized twists (the user, 2026-10-23: "twist should be localized. like upper body twist and hip twist"): twistU turns the chest, shoulders,
+  // arms and what the hands hold about the upright through the chest; twistH turns the hips and both legs about the upright through the hips
+  // (twist itself still turns the whole body); 0 in every move as it ships
+  const tU = (o.twistU || 0) * fs, tH = (o.twistH || 0) * fs;
+  r.hips.position.copy(_P[1]); r.hips.rotation.z = -ang[0] * .6; r.hips.rotation.y = tH;
+  r.chest.position.copy(_SB); r.chest.rotation.z = -ang[1]; r.chest.rotation.y = tU;
   r.head.position.set(p.neck.x + Math.sin(ang[2]) * D.headOff * Bd.head, p.neck.y + Math.cos(ang[2]) * D.headOff * Bd.head, 0);
-  r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)), -(ang[2] * .7 + o.headRot));
+  r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)
   if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1; });   // (carved eyes: shut with the face)
   if (!r.sculpt) { r.cap.scale.set(Hr.depth, Hr.height, Hr.width); r.cap.rotation.z = Hr.tilt; }
@@ -2428,6 +2494,12 @@ function syncHuman(p, r, dt = 0) {
       if (pr.inner) { pr.inner.rotation.z = (o.wrist ?? -.6) + wristFix; pr.inner.rotation.x = o.roll || 0; }
     }
   });
+  if (Math.abs(tU) > 1e-4) {                                          // the upper body's twist: everything the shoulders carry turns with them
+    _tq.setFromAxisAngle(UPV, tU); const turn = v => v.sub(_SB).applyQuaternion(_tq).add(_SB);
+    r.arms.forEach(t => { t.pts.forEach(turn); t.update(FWD); });
+    r.hands.forEach(h => { turn(h.position); h.quaternion.premultiply(_tq); });
+    if (pr) { turn(pr.group.position); pr.group.quaternion.premultiply(_tq); }
+  }
   if (pr && pr.chunks) pr.chunks.forEach((m, i) => { m.material = i < hp ? pr.mFull : pr.mEmpty; });   // sword fill = health
   const shine = hp > 0 && !p.dead ? (api.time + (r.shinePh ?? (r.shinePh = Math.random() * 3))) % 2.8 / .55 : 9;   // every 2.8 s a shine runs along whatever health is left (0..1 while it runs)
   if (pr && pr.glint) {
@@ -2470,9 +2542,10 @@ function syncHuman(p, r, dt = 0) {
     }
     const t = r.legs[i];
     t.pts[0].set(_H.x, _H.y + .1, _H.z); t.pts[1].copy(_H); t.pts[2].copy(_K); t.pts[3].copy(_Hk); t.pts[4].set(_Hk.x + .01, _Hk.y - .06, _Hk.z);
-    t.update(FWD);
-    r.feet[i].position.copy(_F); r.feet[i].rotation.z = pitch; r.feet[i].scale.setScalar(D.foot * Bd.feet);
+    r.feet[i].position.copy(_F); r.feet[i].rotation.z = pitch; r.feet[i].rotation.y = tH; r.feet[i].scale.setScalar(D.foot * Bd.feet);
     const shaft = r.feet[i].userData.shaft; if (shaft) shaft.rotation.z = Math.atan2(-(_K.x - _Hk.x), _K.y - _Hk.y) - pitch;
+    if (Math.abs(tH) > 1e-4) { _tq.setFromAxisAngle(UPV, tH); t.pts.forEach(v => v.sub(_P[1]).applyQuaternion(_tq).add(_P[1])); r.feet[i].position.sub(_P[1]).applyQuaternion(_tq).add(_P[1]); }   // the hip twist: the whole leg, boot and all
+    t.update(FWD);
   });
   if (r.tail) {                                                       // the cat tail: out from the small of the back, curling up behind; it swishes, and streams back on the run
     const tl = r.tail, n = tl.pts.length, L = .66 * r.spec.outfit.tail.len, run = clamp(Math.abs(p.vx) / 320, 0, 1), up = p.onGround ? 0 : clamp(-p.vy / 600, -.5, 1);
@@ -2603,7 +2676,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, chanFor, runLayer,
+  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
