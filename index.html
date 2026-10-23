@@ -394,7 +394,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261022o"></script>
+<script src="charkit.js?v=20261023a"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -1384,7 +1384,25 @@ const cards = KIT.buildCards(actors);
 KIT.paintCards(cards, KIT.presets()[0]);
 
 // ───────────────────────────── level ─────────────────────────────
+// what holds a ledge up, set back behind the walking line (the user, 2026-10-23: "make the characters stick to an actual floor": a stack under a
+// ledge came out past your feet, so you looked to be standing on it). Under a ledge, inside its width, below its top (the top you stand on
+// stays put) and across the line you walk on (z 0): slid back till its front is LANE_BACK behind it. Every world's builder ends in bakeStatic
+const LANE_BACK = -.5, _sbBox = new THREE.Box3(), _sbA = new THREE.Vector3(), _sbB = new THREE.Vector3(), _sbM = new THREE.Matrix4();
+function setBackSupports(objs) {
+  if (!PLATFORMS.length) return 0;
+  const P = PLATFORMS.map(p => ({ x0: X(p.x), x1: X(p.x + p.w), top: Y(p.y) })); let n = 0;
+  objs.forEach(o => o.updateMatrixWorld(true));
+  const meshes = []; objs.forEach(o => o.traverse(m => { if (m.isMesh && !m.isInstancedMesh) meshes.push(m); }));
+  for (const m of meshes) {
+    _sbBox.setFromObject(m); if (_sbBox.isEmpty() || _sbBox.min.z > .15 || _sbBox.max.z <= LANE_BACK) continue;   // (all in front of the lane, or behind it already)
+    if (!P.some(q => _sbBox.min.x >= q.x0 - .35 && _sbBox.max.x <= q.x1 + .35 && _sbBox.max.y < q.top - .12 && _sbBox.min.y < q.top - .4)) continue;
+    const dz = _sbBox.max.z - LANE_BACK; _sbM.copy(m.parent.matrixWorld).invert();   // (that far back in the world, put in the parent's own terms)
+    _sbA.set(0, 0, 0).applyMatrix4(_sbM); _sbB.set(0, 0, -dz).applyMatrix4(_sbM); m.position.add(_sbB.sub(_sbA)); m.updateMatrixWorld(true); n++;
+  }
+  return n;
+}
 function bakeStatic(objs, keep) {
+  setBackSupports(objs);
   const buckets = new Map(), dead = [];
   objs.forEach(o => o.updateMatrixWorld(true));
   objs.forEach(o => o.traverse(m => {
@@ -3549,7 +3567,7 @@ function hideFoe(f) { f.rig.root.visible = f.rig.shadow.visible = false; if (f.r
 function showFoe(f) { f.rig.root.visible = f.rig.shadow.visible = true; if (f.rig.groundGlow) f.rig.groundGlow.visible = true; }
 FOES.forEach(hideFoe);
 function makeFoeState(def, x, z = 0) {
-  const hp = (def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5;   // (+5 for every boss: the user, 2026-10-16)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
+  const hp = (def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + ENEMY_HP_UP;   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
   return { def, x, z, y: GROUND, vx: 0, vy: 0, dir: -1, onGround: true, hp, maxHp: hp, inv: 0, flash: 0, sq: 0, sqv: 0, yaw: -Math.PI + .5,
     phase: 0, think: 1.4, windup: 0, jumpVx: 0, jumpVy: 0, plat: null, edge: null, hurtT: 0, dead: false, deathT: 0, gone: false, puffT: 1,
     atk: null, atkTm: 0, atkCd: 3, emitT: 0, emitN: 0, actT: 0, chains: {} };
@@ -5576,6 +5594,8 @@ function updatePlayer(dt) {
   if (p.vy < 0 && !held.jump && p.bounceT < 0 && !p.fullJump) g *= 2.1;
   if (p.vy > 0) g *= 1.4;                // coming down faster than going up
   if (MV && !p.onGround) g *= MV.grav ?? .55;
+  if (p.onGround) p.hangLeft = HANG_AIR; else if (p.hangT > 0 && p.atkT >= 0 && (p.hangLeft ?? HANG_AIR) > 0) { g *= .08; p.hangLeft = (p.hangLeft ?? HANG_AIR) - dt; p.vy = Math.min(p.vy, 120); }   // (an air combo's blow: nearly frozen there, up to HANG_AIR a jump)
+  p.hangT = Math.max(0, (p.hangT || 0) - dt);
   p.vy = Math.min(p.vy + g * dt, MV && MV.dive ? 1300 : 1150);
   p.floatB = !!p.bubble && (p.bigJ || 0) > .2 && p.vy > 0 && !p.onGround && p.atkT < 0 && !p.climb;   // a big jump in the bubble: it drifts you down gently (the user: so you notice you've got it)
   if (p.floatB) p.vy = Math.min(p.vy, 280);
@@ -5673,6 +5693,7 @@ function syncBubble(dt) {
   B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const big = 1 + ((B.k || 1) - 1) * GUM_GROW, r = H * .64 * pop * big, w = Math.sin(time * 5.5) * .035;   // (the bubblegum's: a bit bigger than the plain one, not three times: the user 2026-10-22)
   B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;   // (sits on the ground like the plain one, not sunk into it. This line's scale had slipped into the comment, 10-22: both bubbles stuck small)
 }
+const HANG_AIR = 1.6;                                // how long an air combo can hold you up there, a jump (then you come down as ever)
 function startStrike(p, kind, idx = 0) {
   const S = KIT.STRIKES[kind];
   p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.atkHits = []; p.queued = false; p.bounceT = -1; p.solo = false; if (!idx) p.chainHit = false;
@@ -5681,8 +5702,9 @@ function startStrike(p, kind, idx = 0) {
   const ch = p.chain && !p.combo ? p.chain.kind : null;
   if (p === player && !p.combo && p.chain) voice("attack", idx === p.chain.list.length - 1 ? .9 : idx === 0 ? .45 : .15);   // (the finisher nearly always; now and then otherwise)
   if (ch === "up" && idx === 1 && !p.onGround) p.vy = -800;                                          // (the launch's second hit: a full jump up after them)
-  if (!p.onGround && ch === "air1") { p.vx *= .3; p.vy = Math.min(p.vy, -150); }                  // air combo 1: hanging there, mostly in place
-  else if (!p.onGround && (ch === "air2" || (ch === "up" && idx >= 2))) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // air combo 2, and the launch's last hit: on forward with them
+  const hang = !p.onGround && (ch === "air1" || ch === "air2") && !S.dive && !S.slamLand && (p.hangLeft ?? HANG_AIR) > 0;   // an air combo: held there in the air, nearly still, each blow (the user, 2026-10-23, after Odin Sphere)
+  if (hang) { p.hangT = S.dur || .4; p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, with a little lift each blow; the second combo drifts on forward)
+  else if (!p.onGround && ch === "up" && idx >= 2) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // the launch's last hit: on forward with them
   if (p.onGround) { p.vx = p.face * S.step; if (S.hop) { p.vy = p.chain && p.chain.kind === "up" && idx === 1 && !p.combo ? -800 : S.hop; p.onGround = false; } }   // small step, no skating (the launch's second hit: a full jump up after them)
   else if (p.combo) { p.vx = p.face * (S.lunge || S.step * .8); if (S.hop) p.vy = Math.min(p.vy, S.hop * .75); }   // combo parts keep going in the air
   else if (S.lunge) p.vx = p.face * S.lunge;                                                       // flying kicks carry him forward
@@ -7184,6 +7206,7 @@ function buildFactoryFoes() {
 // They patrol, hop between platforms and come at you when you get close; pop all three and the boss drops in at the far end.
 // ATK power: every baddy you pop is +1 (up to +3), every hit you take is −1. Damage counts in half-hearts: a hit does 2 + power,
 // so the boss (10) still takes 5 hits at +0 but only 2 at +3.
+const ENEMY_HP_UP = 4;                              // every enemy, baddy or boss, 4 more life than its size gives (the user, 2026-10-23: "so that they can survive some juggling")
 const BB_SIZE = { S: { h: 40, hw: 17, hp: 2, wt: .7 }, M: { h: 58, hw: 24, hp: 4, wt: 1 }, B: { h: 82, hw: 34, hp: 6, wt: 1.3 }, G: { h: 118, hw: 46, hp: 8, wt: 1.6 } };
 const BB_COL = { red: "#e8283c", yellow: "#ffd21f", blue: "#4466f2", black: "#2b2833", purple: "#9440f0", orange: "#ff8a1a", green: "#3fc24a", gray: "#a2a2ae",
   teal: "#13b5a3", aqua: "#3ccfe8", coral: "#ff6a55", pink: "#ff78b6", lilac: "#a98af0" };   // (the sea's berries)
@@ -12752,7 +12775,7 @@ function makeBaddy(type, colName, x, y) {
   if (r.segs) r.hist = Array.from({ length: 80 }, (_, i) => [X(x) + i * .05, Y(y)]);   // the caterpillar starts stretched out behind its head
   jointSprings(r, [[r.tilt, "rotation", "z", 110, .42], [r.tilt, "rotation", "x", 110, .42], [r.bob, "position", "y", 300, .6],
     ...r.arms.map(A => [A, "rotation", "z", 70, .35]), ...r.legs.map(L => [L, "rotation", "z", 260, .6]), ...r.sp]);
-  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Z.hp, h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
+  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Z.hp + ENEMY_HP_UP, h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
     phase: rand(0, 6), yaw: -Math.PI / 2 - .62, atk: null, atkT: 0, atkCd: rand(1.2, 2.4), think: rand(.6, 2), hopT: rand(.2, .8), dead: false, deathT: 0, gone: false, plat: null };
 }
 function disposeBaddy(b) {
@@ -14483,7 +14506,7 @@ function updateBaddy(b, dt) {
   if (fly && !b.dead && b.atk !== "go") {         // floaters hold their height (bobbing), above the water too
     const hy = (b.homeY ?? (b.homeY = b.y)) - T.hover + Math.sin(time * 1.7 + b.phase) * 9;
     b.vy = approach(b.vy, clamp((hy - b.y) * 3.2, -240, 240), 1100 * dt);
-  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (b.juggleT > 0 ? .42 : 1), 1000); }   // (juggled: lighter a moment)
+  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (b.juggleT > 0 ? .28 : 1), 1000); }   // (juggled: lighter a moment, floating there for the follow-up: .42 till 2026-10-23)
   moveBody(b, dt, b.hw);
   if (p !== player && b.atk === "go" && !b.dead && Math.abs(p.x - b.x) < p.hw + b.hw && p.y - p.h < b.y && b.y - b.h < p.y) bepHurt(p, Math.sign(p.x - b.x) || b.dir);   // (rammed: a lunge, a roll, a leap)
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
@@ -14501,7 +14524,7 @@ const HIT_W = { sweep: 1.1, cut: .85, cleave: 1.4, jab: .8, haymaker: 1.4, punch
 let camKick = 0, camKickV = 0, camPush = 0, slowMo = 0, chainN = 0, chainT = -9;
 function hitFeel(e, dir, kind, boss) {
   const w = HIT_W[kind] || 1;
-  hitstop = Math.max(hitstop, (boss ? .05 : .033) + .036 * w); shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);
+  hitstop = Math.max(hitstop, (boss ? .056 : .045) + .04 * w);   // (a touch longer since 2026-10-23, the Odin Sphere feel: each blow lands, and everything stops on it) shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);
   e.jolt = .05 + .045 * w; e.joltAt = time;                                           // (it shudders while the picture's held: see syncBaddy / syncFoe)
   camKick += dir * (.07 + .07 * w);                                                   // the camera knocked the way the blow went (it springs back in update)
   if (player && kind !== "stomp") { player.sq = Math.min(player.sq || 0, -.05 - .06 * w); player.sqv = 0; }   // your body into it
@@ -14537,7 +14560,7 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
   if (kind === "stomp") SFX.stomp(); else SFX.hit(HIT_W[kind] || 1, hitChain());
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
-  if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .7; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
+  if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .85; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
   else { b.vx = dir * KB[0] * 1.2 / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
     if (kind === "upper" || kind === "launch") { b.vy = -440 / Math.sqrt(b.wt); b.juggleT = .9; } }   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
   b.onGround = false;

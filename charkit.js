@@ -1888,7 +1888,18 @@ function keyvS(tr, t) {                          // monotone cubic through the k
   const [x0, y0] = tr[i - 1], [x1, y1] = tr[i], h = (x1 - x0) || 1e-6, m0 = slope(i - 1), m1 = slope(i), u = (t - x0) / h, u2 = u * u, u3 = u2 * u;
   return (2 * u3 - 3 * u2 + 1) * y0 + (u3 - 2 * u2 + u) * h * m0 + (3 * u2 - 2 * u3) * y1 + (u3 - u2) * h * m1;
 }
-const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind]; return keyvS(own && own[k] ? own[k] : K[k], a); };
+// a strike's keys, snapped (the user, 2026-10-23, after Odin Sphere: "they kind of hit very quickly and sort of stop and then the next hit in the combo
+// goes super fast and then stops"): each pose is held (drifting a touch on toward the next, never dead still), then snapped into the next in the
+// last SNAP of the gap, fast out and easing into it, so every key lands on its own time
+const SNAP = .05, SNAP_DRIFT = .12;
+function keySnap(tr, t) {
+  const n = tr.length; if (!n) return 0; if (t <= tr[0][0]) return tr[0][1]; if (t >= tr[n - 1][0]) return tr[n - 1][1];
+  let i = 1; while (i < n - 1 && t > tr[i][0]) i++;
+  const [x0, y0] = tr[i - 1], [x1, y1] = tr[i], L = x1 - x0, sn = Math.min(SNAP, L * .6), h0 = L - sn, d = t - x0;
+  if (d < h0) { const v = d / h0; return y0 + (y1 - y0) * SNAP_DRIFT * v * v; }
+  const u = (d - h0) / sn, e = 1 - (1 - u) * (1 - u) * (1 - u); return y0 + (y1 - y0) * (SNAP_DRIFT + (1 - SNAP_DRIFT) * e);
+}
+const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind]; return keySnap(own && own[k] ? own[k] : K[k], a); };
 function layPose(T, P, p) {                       // a character's own pose over a built-in one (lead / rear named, like the stance)
   if (!P) return; const sw = leadFar(p); for (const k in P) { const kk = sw ? SWAP[k] || k : k; if (kk in T) T[kk] = P[k]; }
 }
