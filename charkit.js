@@ -253,7 +253,7 @@ const TOCSIN = {
   head: { ...HEAD_DEF },
   face: { eyeSize: 1, eyeGap: 1, eyeY: 0, ...EYE_DEF, mouth: 1, spikes: 1, ears: 1 },
   parts: { cheeks: true, forehead: true, brow: true, emblem: true, bow: true, button: true, trim: true, tailBands: true, claws: true,
-    calico: false, tabby: false, belly: false, collar: false, kitty: false, points: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
+    calico: false, tabby: false, belly: false, collar: false, kitty: false, points: false, dog: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
   colors: { fur: "#ffd21a", marks: "#ff3214", ears: "#ff3214", mouth: "#a50a06", eyeRing: "#2a9fb2", pupil: "#9a0a0a", nose: "#e040c8",
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
@@ -621,7 +621,11 @@ function catFaceArt(S, blink) {
     if (f.lids > .01) { const hw = Math.sqrt(Math.max(0, 42 * 42 - ly * ly)); g.beginPath(); g.moveTo(-hw, ly); g.lineTo(hw, ly); g.stroke(); }
     g.restore();
   });
-  if (P.kitty) {                                   // a pink cat nose and the little ω mouth under it
+  if (P.dog) {                                     // a dog's: a big black nose with a shine, a little smile under it and the tip of a tongue (the user, 2026-10-23: dogs, "shaped just like the cat")
+    const ny = 266 + f.noseY; g.fillStyle = "#1c1a1e"; g.beginPath(); g.ellipse(256, ny, 26, 18, 0, 0, TAU); g.fill(); circ(g, 247, ny - 7, 6, "#ffffff");
+    g.strokeStyle = "#1c1a1e"; g.lineWidth = 5; g.lineCap = "round"; g.beginPath(); g.moveTo(256, ny + 16); g.lineTo(256, ny + 28); g.quadraticCurveTo(242, ny + 42, 228, ny + 32);
+    g.moveTo(256, ny + 28); g.quadraticCurveTo(270, ny + 42, 284, ny + 32); g.stroke(); g.fillStyle = "#f27a92"; g.beginPath(); g.ellipse(256, ny + 42, 11, 12, 0, 0, TAU); g.fill();
+  } else if (P.kitty) {                            // a pink cat nose and the little ω mouth under it
     g.fillStyle = c.nose; g.beginPath(); g.moveTo(240, 262 + f.noseY); g.lineTo(272, 262 + f.noseY); g.lineTo(256, 280 + f.noseY); g.closePath(); g.fill();
     g.strokeStyle = c.marks; g.lineWidth = 5; g.lineCap = "round"; g.beginPath(); g.moveTo(256, 280 + f.noseY); g.lineTo(256, 292 + f.noseY);
     g.quadraticCurveTo(244, 304 + f.noseY, 232, 294 + f.noseY); g.moveTo(256, 292 + f.noseY); g.quadraticCurveTo(268, 304 + f.noseY, 280, 294 + f.noseY); g.stroke();
@@ -752,6 +756,8 @@ function buildCat(R) {
   const plain = isPlainHead(S.head), shape = headShaper(S.head), hp = plain ? new THREE.Vector3(-.02, .44, 0) : shape(new THREE.Vector3(-.02, .44, 0));
   const hg = spikyHeadGeo(S.face.spikes, S.face.ears); if (!plain) shapeGeo(hg, shape);
   head.add(at(P(hg, mFace, 0, true), 0, -.03, 0));
+  const dogEars = S.parts.dog ? [-1, 1].map(s => {   // a dog's ears: soft, floppy, hanging down the sides of its head (no cat's points on top)
+    const pv = group(head, -.04, .2, s * .43), e = P(new THREE.SphereGeometry(1, 18, 14).scale(.15, .29, .065), M(c.ears), 0, true); at(e, 0, -.22, s * .05); pv.add(e); pv.rotation.x = -s * .26; return pv; }) : null;   // (the head's about .42 across: ears from its top sides, down past its cheeks)
   const hatPivot = group(head, hp.x, hp.y, 0), hat = group(hatPivot);
   R.hatY = hp.y;
   hat.add(P(new THREE.CylinderGeometry(.3, .3, .04, 16), mHat));
@@ -759,7 +765,7 @@ function buildCat(R) {
   hat.add(at(P(new THREE.CylinderGeometry(.199, .196, .1, 14), mBand), 0, .08, 0));
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(.6, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
-  return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB });
+  return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB, dogEars });
 }
 
 // ───────────────────────────── chibi human body ─────────────────────────────
@@ -2247,6 +2253,8 @@ function syncCat(p, r, dt = 0) {
   r.spin.rotation.z = -(p.rot + (o.flip || 0));
   r.root.updateMatrixWorld(true);
   const near = p.face > 0 ? 1 : -1;      // +z faces the camera when facing right
+  if (r.dogEars) { const lift = clamp((p.vy || 0) * .0007, -.12, .6), run = Math.min(1, Math.abs(p.vx || 0) / 300);   // (a dog's ears flop: out and up as it drops, streaming back as it runs)
+    r.dogEars.forEach((e, i) => { const s = i ? 1 : -1; e.rotation.x = -s * (.26 + lift); e.rotation.z = -(.06 + run * .5) + Math.sin(api.time * 11 + i) * .07 * run; }); }
 
   // spine: pelvis → chest → neck, bending with lean (hunch) and arch (round back / stretch)
   const y0 = HIPY + o.bodyY, ang = [o.lean * .35 + o.arch * .5, o.lean * .9, o.lean * 1.3 - o.arch * .5].map(a => Math.min(a, 1.62));   // never past horizontal
