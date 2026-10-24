@@ -779,7 +779,8 @@ function setPlatforms(s) {
   LADDERS.length = 0; (S.ladders || []).forEach(([face, wall]) => LADDERS.push({ face, wall, x: face - wall * 15, top: groundAt(face + wall * 20) ?? GROUND, bot: groundAt(face - wall * 30) ?? GROUND }));   // ladders: [the cliff face's x, its side]
   (S.poles || []).forEach(([x, top]) => LADDERS.push({ face: x, wall: 0, x, top, bot: groundAt(x) ?? GROUND, pole: true }));   // ladders up to a platform: [x, the platform's top] (the forest's bridge)
   if (S.upX !== undefined) { const g = groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - 360, bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
-  if (S.downX !== undefined) { const w = S.downWall || -1, g = groundAt(S.downX + w * 20) ?? GROUND; LADDERS.push({ rope: "down", to: S.down, face: S.downX, wall: w, x: S.downX - w * 15, top: g, bot: g + 360 }); }
+  if (S.downX !== undefined && S.downCam) { const g = groundAt(S.downX) ?? GROUND; LADDERS.push({ rope: "down", rock: true, camila: true, to: S.down, face: S.downX, wall: 0, x: S.downX, top: g, bot: g + 220 }); }   // (Camila's way down a rock face, from a patch of it in the floor: the forest, 2026-10-24)
+  else if (S.downX !== undefined) { const w = S.downWall || -1, g = groundAt(S.downX + w * 20) ?? GROUND; LADDERS.push({ rope: "down", to: S.down, face: S.downX, wall: w, x: S.downX - w * 15, top: g, bot: g + 360 }); }
   if (S.climbWall && S.climbUp) { const cu = S.climbUp, g = groundAt(cu.x) ?? GROUND; LADDERS.push({ wallClimb: "back", camila: true, to: cu.to, face: cu.x, wall: 0, x: cu.x, top: g - 440, bot: g }); }
   if (S.cell && !stronghold) { const m = /^([A-D])(\d+)$/.exec(S.cell), upCell = m && "ABCD"["ABCD".indexOf(m[1]) - 1], above = upCell ? STAGES.findIndex(q => !q.arena && q.cell === upCell + m[2]) : -1;
     if (above >= 0) [["wallL", -1], ["wallR", 1]].forEach(([k, sd]) => { if (!S[k]) return; const x = sd < 0 ? 30 : WORLD - 30, g = groundAt(x) ?? GROUND;   // (the end of the room walled off: up it into the room over it)
@@ -895,10 +896,10 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     void main() {
       vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
@@ -908,6 +909,7 @@ const gradeMat = new THREE.ShaderMaterial({
       c = mix(c, c * tintC, tintAmt);                  // the hour's colour: golden, orange, blue, night
       c = pow(c, vec3(.95));                           // slightly brighter midtones
       c = (c - .5) * 1.07 + .5;                        // a little contrast back, so it doesn't read as haze
+      if (dim > 0.0) { vec2 d0 = vUv - .5; c *= mix(vec3(1.0), vec3(.56, .64, .6), dim); c *= 1.0 - dim * .5 * smoothstep(.18, .8, dot(d0, d0) * 2.4); }   // under the forest's canopy: darker, greener, dark at the edges
       if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin;   // the land at war: washed out, sooty, darker
         vec2 d = vUv - .5; c *= 1.0 - ruin * .55 * smoothstep(.25, .75, dot(d, d) * 2.2); }                                                           // ... and dark at the edges
       if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l3), c, 1.0 + .3 * bloom); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter
@@ -2781,11 +2783,15 @@ function setLook(k) {                                // light the clearing for i
   level.shafts.forEach(m => m.material.color.set(look.shaft));
   level.motes.material.color.set(look.mote); level.motes.material.size = look.moteSize;
   gradeMat.uniforms.tintC.value.set(look.grade[0], look.grade[1], look.grade[2]); gradeMat.uniforms.tintAmt.value = look.grade[3]; gradeMat.uniforms.warm.value = look.warm;
+  const dk = !!(STAGES[level.s] || {}).dark && level.w === world;   // (the forest's rooms under the canopy, "like you're underground": the user, 2026-10-24)
+  if (dk) { FOG.multiplyScalar(.3); scene.fog.color.copy(FOG); scene.fog.near *= .45; scene.fog.far *= .5; sun.intensity *= .4; sun2.intensity *= .4; hemi.intensity *= .5; hemi2.intensity *= .5; }
+  if (level.sky && level.sky.material.color) level.sky.material.color.setScalar(dk ? .28 : 1);
+  gradeMat.uniforms.dim.value = dk ? 1 : 0;
 }
 function buildLadders() {                          // wooden ladders up the cliff faces, facing us, hooked over the top of the rock
   const mW = toon("#8a5a34"), mR = toon("#6b4126"), z = -.4;
   return LADDERS.map(L => {
-    const g = group(scene), x = X(L.x), y0 = Y(L.bot) - .05, y1 = Y(L.top) + .45, h = y1 - y0;
+    const g = group(scene), x = X(L.x), y0 = Y(L.bot) - .05, y1 = Y(L.top) + .45, h = y1 - y0; if (L.rock || (L.camila && (STAGES[level.s] || {}).authored)) return g;   // (Camila's rock: no ladder on it; in the hand-made forest, her pattern on the rock's the sign)
     [-1, 1].forEach(sx => { g.add(at(mk(new THREE.BoxGeometry(.1, h, .1), null, { mat: mW }), x + sx * .3, y0 + h / 2, z));
       g.add(at(mk(new THREE.BoxGeometry(.1, .1, .5), null, { mat: mW }), x + sx * .3, y1 - .05, z - .2)); });   // the hooks over the lip
     for (let y = y0 + .32; y < y1 - .2; y += .36) g.add(at(mk(new THREE.BoxGeometry(.62, .07, .08), null, { mat: mR }), x, y, z));
@@ -2810,7 +2816,7 @@ function buildDeepBits(s) {
   const S0 = STAGES[s], g = new THREE.Group(); scene.add(g); const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], mW = toon(c0), mT = toon(c1), R = rngF(4242 + s * 7 + world * 131);
   const lump = (x, y, z, r) => g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mW, ol: .03 }), x, y, z));
   if (world === 1 && dropRoom(s)) GAPS.forEach(([a, b]) => { if (b <= -800 || a >= WORLD + 800) return; dropShaft(g, a, b, Y(groundAt(a - 1) ?? GROUND) - .3, -3.56, 3.56, Y(WATER) + .75, "#3a3346"); });   // (a way down: not the sea)
-  if (world !== 3 && world !== 7) LADDERS.filter(L => L.rope).forEach(L => {
+  if (world !== 3 && world !== 7) LADDERS.filter(L => L.rope && !L.rock).forEach(L => {
     const x = X(L.x);
     if (L.rope === "up") {                          // a cliff (a wall) rising up out of sight, the ladder fixed to its face
       const y0 = Y(L.bot) - .3, h = 18; g.add(at(mk(new THREE.BoxGeometry(2.2, h, 1.3), null, { mat: mW, ol: .04 }), x, y0 + h / 2, -1.15));
@@ -2824,7 +2830,7 @@ function buildDeepBits(s) {
       const lid = mk(new THREE.BoxGeometry(1.1, .06, 1.1), null, { mat: mW, ol: .02 }); lid.rotation.x = -1.2; at(lid, x, y + .5, -1.05); g.add(lid);
     }
   });
-  const cu = S0.climbUp;
+  const cu = S0.noClimbFace ? null : S0.climbUp;    // (noClimbFace: the room draws its own, e.g. ledges on the forest's giant tree)
   if (cu) {                                         // a climb: the cliff face (the wall, indoors) going up out of sight, the ledges standing out from it
     const x = X(cu.x), y0 = Y(groundAt(cu.x) ?? GROUND) - .2, indoor = world === 2 || world === 6;
     g.add(at(mk(new THREE.BoxGeometry(9.5, 25, 2), null, { mat: mW, ol: .05 }), x, y0 + 9.5, -2.2));   // (down below the floor too: on a stepped floor it still meets the ground)
@@ -3058,11 +3064,60 @@ function buildSet(s) {
         for (let i = 0; i < len / 3; i++) tropLiana(g, M, x0 + R(0, len), top - .2, R(-.8, .8), R(.6, 2.2), rng);   // (vines hanging from it)
       }
     }
-    if (P.k === "ceiba") { const c = tropCeiba(g, M, X(P.x), Y(P.base), P.z ?? -3, rng, { h: P.h ?? 14, ol: .05 }); c.scale.setScalar(P.scale ?? 1.6); }
+    if (P.k === "ceiba") { const c = tropCeiba(g, M, X(P.x), Y(P.base ?? GROUND), P.z ?? -3, rng, { h: P.h ?? 14, ol: .05, crown: P.crown !== false, back: !!P.back }); c.scale.setScalar(P.scale ?? 1.6); }   // (crown false: its trunk, the room above has the crown)
     if (P.k === "willow") { const gy = groundAt(P.x) ?? GROUND; tropWillow(g, X(P.x), Y(gy), P.z ?? -2.6, rng, { h: P.h ?? 9, spread: P.spread ?? 7.5 });
       const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d1a10", transparent: true, opacity: .32, depthWrite: false }));   // its shade, over the camp
       sh.scale.set(P.spread ?? 7.5, 1, 4.2); at(sh, X(P.x), Y(gy) + .04, .2); g.add(sh); }
     if (P.k === "giant") giantTree(g, P.part || "trunk", X(P.x), Y(groundAt(P.x) ?? GROUND), P.z ?? 4.4, rng);
+    if (P.k === "earth") {                          // solid ground where the map has no room (the forest's B1, B4): a wall of earth at that end, strata and roots in it
+      const sd = P.side, ex = sd < 0 ? 0 : X(WORLD), gy = Y(GROUND), mE = toon(P.col || "#7a5236"), mE2 = toon(P.col2 || "#5e3f29"), barkM = toon("#4a3426");
+      g.add(at(mk(new THREE.BoxGeometry(8, 34, 15), null, { mat: mE, ol: .05 }), ex + sd * 3.9, gy + 9, -3.9));
+      for (let y = gy - 3; y < gy + 25; y += R(.8, 1.6)) g.add(at(mk(new THREE.BoxGeometry(.6, R(.08, .16), 15.2), null, { mat: mE2, ol: 0 }), ex + sd * .2, y, -3.9));   // (its strata)
+      for (let i = 0; i < 40; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.2, .55), 0), null, { mat: rng() < .5 ? mE2 : mE, ol: .03 }), ex + sd * R(-.1, .25), gy + R(-1, 24), R(-10, 3.4)));
+      for (let i = 0; i < 26; i++) { const hl = R(.6, 2.2), v = mk(new THREE.CylinderGeometry(.04, .02, hl, 4), null, { mat: barkM, ol: .012 }); v.rotation.z = sd * R(.4, 1.2); at(v, ex - sd * hl * .3, gy + R(0, 22), R(-9, 3.2)); g.add(v); } }
+    if (P.k === "ceil") {                           // the ground of the room above, low over this one: earth, rocks in it, roots hanging down
+      const yb = Y(P.y), mE = toon(P.col || "#5a4030"), mE2 = toon(P.col2 || "#3e2c20"), barkM = toon("#4a3426"), mMoss = toon("#4f7a34"), W0 = X(WORLD);
+      g.add(at(mk(new THREE.BoxGeometry(W0 + 44, 16, 16), null, { mat: mE, ol: .04 }), W0 / 2, yb + 8, -4.2));
+      for (let i = 0; i < 80; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.35, .9), 0), null, { mat: rng() < .5 ? mE : mE2, ol: .03 }), R(-12, W0 + 12), yb + R(-.15, .25), R(-11, 3.6)));
+      for (let i = 0; i < 120; i++) { const hl = R(.5, P.roots ? 3.4 : 1.7), v = mk(new THREE.CylinderGeometry(.05, .015, hl, 4), null, { mat: rng() < .3 ? mMoss : barkM, ol: .012 }); v.rotation.z = R(-.25, .25); at(v, R(-12, W0 + 12), yb - hl / 2 + .1, R(-10, 3.2)); g.add(v); } }
+    if (P.k === "canopy") {                         // under the forest's roof: the canopy shut overhead, dark trunks close behind, lianas down from it
+      const W0 = X(WORLD), gy = Y(GROUND), dk = ["#1f3a22", "#18301c", "#26442a"].map(c => toon(c)), tr = toon("#2e2620");
+      for (let i = 0; i < 60; i++) g.add(at(mk(new THREE.IcosahedronGeometry(R(2.2, 4.2), 0).scale(1.4, .55, 1), null, { mat: dk[i % 3], ol: 0 }), R(-14, W0 + 14), gy + R(11, 15), R(-22, 2)));
+      for (let i = 0; i < 26; i++) { const h = 22, r = R(.5, 1.3), c = mk(new THREE.CylinderGeometry(r * .8, r, h, 8), null, { mat: tr, ol: .02 }); at(c, R(-10, W0 + 10), gy + h / 2 - 1, -R(7, 26)); g.add(c); }
+      for (let i = 0; i < 22; i++) tropLiana(g, M, R(0, W0), gy + 11, R(-6, -1), R(3, 8), rng); }
+    if (P.k === "camRock") {                        // Camila's rock (the climb up into the room above): her own pattern up it, the zigzag of grips, vines down it
+      const x = X(P.x), gy = Y(groundAt(P.x) ?? GROUND), mA = toon("#d9d0bd"), mB = toon("#4c443a");
+      for (let i = 0; i < 15; i++) { const y = gy + .45 + i * .76, dx = i % 2 ? .5 : -.5;
+        g.add(at(mk(new THREE.BoxGeometry(1.15, .46, .3), null, { mat: mB, ol: .03 }), x + dx, y, -1.02)); g.add(at(mk(new THREE.BoxGeometry(.42, .82, .26), null, { mat: mA, ol: .02 }), x, y + .38, -1.06)); }
+      for (let i = 0; i < 7; i++) tropLiana(g, M, x + R(-3.4, 3.4), gy + 12, -.95, R(3, 8), rng); }
+    if (P.k === "camPatch") {                       // the top of her rock, in this room's floor: the same pattern, only where she can climb down it
+      const x = X(P.x), gy = Y(groundAt(P.x) ?? GROUND), mA = toon("#d9d0bd"), mB = toon("#4c443a");
+      g.add(at(mk(new THREE.BoxGeometry(1.9, .1, 2.8), null, { mat: mA, ol: .03 }), x, gy + .02, -.3));
+      for (let i = 0; i < 4; i++) g.add(at(mk(new THREE.BoxGeometry(.9, .06, .32), null, { mat: mB, ol: 0 }), x + (i % 2 ? .35 : -.35), gy + .08, -1.3 + i * .66));
+      for (let i = 0; i < 6; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.18, .32), 0), null, { mat: mB, ol: .02 }), x + R(-1.1, 1.1), gy + .1, R(-1.6, 1))); }
+    if (P.k === "shelves") {                        // the ledges out of the giant tree's trunk (its climb up into the room above): bracket fungus, mossy on top
+      const mF = toon("#c98a4a"), mF2 = toon("#8a5a2c"), mMoss = toon("#5f9c3e");
+      for (const q of climbLedges(st.climbUp)) { const cx = X(q.x + q.w / 2), top = Y(q.y), w = q.w * S, sg = new THREE.CylinderGeometry(1, 1.08, .4, 20, 1, false, -Math.PI / 2, Math.PI);
+        const sh = mk(sg, null, { mat: mF, ol: .05 }); sh.scale.set(w / 2 + .2, 1, 1.9); at(sh, cx, top - .2, -.7); g.add(sh);
+        const rim = mk(sg.clone(), null, { mat: mF2, ol: 0 }); rim.scale.set(w / 2 + .26, .45, 2); at(rim, cx, top - .42, -.7); g.add(rim);
+        const ms = mk(sg.clone(), null, { mat: mMoss, ol: 0 }); ms.scale.set(w / 2, .2, 1.7); at(ms, cx, top + .02, -.75); g.add(ms); } }
+    if (P.k === "pillars") {                        // pale green pillars hanging from the room above (the forest's D5)
+      const gy = Y(GROUND), mP = toon("#b8d8a4"), mP2 = toon("#93bd80");
+      for (const px of P.xs) { const x = X(px); g.add(at(mk(new THREE.CylinderGeometry(.75, .55, 10, 9), null, { mat: mP, ol: .04 }), x, gy + 10, -1.6));
+        for (let i = 0; i < 9; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.25, .45), 0), null, { mat: mP2, ol: .03 }), x + R(-.6, .6), gy + R(5.4, 14), -1.6 + R(-.4, .5)));
+        g.add(at(mk(new THREE.ConeGeometry(.55, 1.2, 9).rotateX(Math.PI), null, { mat: mP, ol: .04 }), x, gy + 4.4, -1.6)); } }
+    if (P.k === "undergrowth") {                    // thick undergrowth (the forest's D2): ferns, malanga, heliconia crowding the banks and the back
+      const W0 = X(WORLD), gy = Y(GROUND);
+      for (let i = 0; i < 70; i++) { const x = R(-4, W0 + 4), z = -R(1.6, 7), r = rng(); if (groundAt(x / S) === null && z > -3) continue;
+        if (r < .4) tropMalanga(g, M, x, gy, z, rng, R(1, 1.6)); else if (r < .7) tropGroundFern(g, M, x, gy, z, rng, R(.9, 1.5)); else if (r < .85) tropHeliconia(g, M, x, gy, z, rng, R(1, 1.4)); else tropTreeFern(g, M, x, gy, z - 2, rng, { h: R(4, 6) }); }
+      for (let i = 0; i < 18; i++) { const x = R(-2, W0 + 2); if (groundAt(x / S) === null) continue; tropGroundFern(g, M, x, gy, R(2.2, 3.6), rng, R(.7, 1.1)); } }
+    if (P.k === "pond") {                           // water in the room's gaps (the forest's D2: the user drew it blue): its surface down in the pit, lily pads, reeds at its banks
+      const wy = Y(WATER) + .1, mW = new THREE.MeshBasicMaterial({ color: "#3f9fb0", transparent: true, opacity: .9 }), mL = toon("#5c9a3c"), mR = toon("#6f8f3a");
+      for (const [a, b] of GAPS) { const xa = X(Math.max(a, -400)), xb = X(Math.min(b, WORLD + 400)), w = xb - xa;
+        g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(w + .1, 7.2).rotateX(-Math.PI / 2), mW), (xa + xb) / 2, wy, .1));
+        g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(w + .1, .12).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#d8f4f0" })), (xa + xb) / 2, wy + .01, 3.62));
+        for (let i = 0; i < w * .6; i++) { const pad = mk(new THREE.CircleGeometry(R(.25, .5), 9, .3, TAU - .6).rotateX(-Math.PI / 2), null, { mat: mL, ol: .01 }); pad.rotation.y = R(0, TAU); at(pad, R(xa + .3, xb - .3), wy + .02, R(-3, 3.2)); g.add(pad); }
+        [xa, xb].forEach(ex => { for (let i = 0; i < 9; i++) { const h = R(.8, 1.8), r = mk(new THREE.CylinderGeometry(.03, .04, h, 4), null, { mat: mR, ol: .01 }); r.rotation.z = R(-.15, .15); at(r, ex + R(-.35, .35), wy + h / 2, R(-3, 3.4)); g.add(r); } }); } }
     if (P.k === "pool") {                           // the cove's water, to the left: the surface over the sand, and its front just in front of you (in it to your waist)
       const G = st.ground, xs = X(G[1][0]), xe = X(G[2][0]), bed = Y(GROUND + G[1][1]), sy = Y(P.y), xr = xe - (xe - xs) * (sy / bed), x0 = X(P.x0), w = xr - x0, cx = (x0 + xr) / 2;   // (xr: where the bank meets it)
       g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(w, 15).rotateX(-Math.PI / 2), toon("#2aa7b8")), cx, sy + .02, -2.4));
@@ -3080,29 +3135,30 @@ function buildSet(s) {
   }
   return { objs, fg };
 }
-// the forest's rooms as the user drew them (row A, 2026-10-24; the rest of the woods is still grown). Each authored room's own ground,
-// platforms, ways in and out, baddies (where they stand), items and set pieces replace what grew there
-const FOREST_BRIDGE_Y = 190;
+// the forest's rooms as the user drew them (columns 1-6, rows A-D, 2026-10-24; columns 7-12 are still grown). Each authored room's own ground,
+// platforms, ways in and out, baddies (where they stand), items and set pieces replace what grew there. Rooms keep their size ("do all this to
+// scale"): one box of the user's map is one room
+const FOREST_BRIDGE_Y = 190, FOREST_TREE_X = 1380;   // (the rope bridge's height; the giant tree's trunk, down column 6 through all four rows)
 function authorForest() {
-  const W = WORLDS[0], S0 = W.stages, R0 = W.roster, at = c => S0.findIndex(q => q.cell === c && !q.arena && !q.cut), BY = FOREST_BRIDGE_Y;
-  const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "B2", "B3", "B4", "B5", "D1"].forEach(c => { C[c] = at(c); });
-  if (Object.values(C).some(i => i < 0)) { console.warn("forest: a room's missing", C); return; }
-  const KEYS = ["plats", "plats2", "ground", "gaps", "ceils", "ladders", "poles", "below", "up", "upX", "down", "downX", "downWall", "climbUp", "climbWall", "arriveX", "arriveF", "wallL", "wallR",
-    "noLeft", "noRight", "secret", "bep", "rest", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext"];
-  const room = (c, o, roster) => { const q = S0[C[c]]; KEYS.forEach(k => delete q[k]); Object.assign(q, { authored: true }, o); if (roster) R0[C[c]] = roster; return q; };
+  const W = WORLDS[0], S0 = W.stages, R0 = W.roster, at = c => S0.findIndex(q => q.cell === c && !q.arena && !q.cut), BY = FOREST_BRIDGE_Y, TX = FOREST_TREE_X;
+  const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "B2", "B3", "B4", "B5", "B6", "B7", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "D1", "D2", "D3", "D4", "D5", "D6", "D7"].forEach(c => { C[c] = at(c); });
+  if (Object.values(C).some(i => i < 0) || S0[0].cell !== "B1") { console.warn("forest: a room's missing", C, S0[0].cell); return; }
+  const KEYS = ["plats", "plats2", "ground", "gaps", "ceils", "ladders", "poles", "below", "up", "upX", "down", "downX", "downWall", "downCam", "climbUp", "climbWall", "climbTip", "noClimbFace", "arriveX", "arriveF",
+    "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "prev", "next"];
+  const room = (c, o, roster) => { const q = S0[C[c]]; KEYS.forEach(k => delete q[k]); Object.assign(q, { authored: true, plats: [] }, o);   // (only the platforms listed: none of the hour's own)
+  if (roster) R0[C[c]] = roster; return q; };
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
-  // the boss and the world's west way out: from A1 down to D1, where the user put GLOS
-  Object.assign(S0[C.D1], { boss: true, toWorld: S0[C.A1].toWorld ?? 1, exitLeft: true }); delete S0[C.D1].wallL; delete S0[C.D1].noLeft; R0[C.D1] = [];
-  // the hub: off A5 / A6 (a rest stop, the giant tree now), onto two rooms side by side further on, as placeHub would
-  S0.forEach((q, i) => { if (q.hub) { delete q.hub; if (!q.rest) delete q.peace; } });
-  const col = q => +String(q.cell || "").slice(1) || 0, free = i => { const q = S0[i]; return !!q && !!q.cell && col(q) >= 7 && !q.boss && !q.rest && !q.bep && !q.secret && !q.climbUp && !q.climbWall
-    && q.below === undefined && q.toWorld === undefined && q.up === undefined && q.down === undefined && !q.arena && !q.duo && !q.gift && !(R0[i] || []).some(e => e && e[3] === "mini"); };
-  let hub = -1; for (const r of "ABCD") for (let c = 7; c <= 11 && hub < 0; c++) { const i = at(r + c), j = at(r + (c + 1)); if (i >= 0 && j >= 0 && S0[i].next === j && free(i) && free(j)) hub = i; }
-  if (hub >= 0) [[hub, 1], [S0[hub].next, 2]].forEach(([i, n]) => { Object.assign(S0[i], { hub: n, peace: true }); nm(S0[i], "HUB"); R0[i] = []; });
-  // the hidden cove (behind Camila's rocks in A1): one screen on the shore, water to the left to swim in, a mango, and Burr, who lives there
+  const TAN = "#c9a46a", TAN2 = "#a8844e", EARTH = "#7a5236", westTo = S0[C.A1].toWorld ?? S0[C.D1].toWorld ?? 1, bep = S0[C.B3].bep;
+  const cutRoom = i => { S0[i].cut = true; delete S0[i].cell; R0[i] = []; };
+  // the way in from the beach is C1 now (the world's first room, stage 0, was B1: B1 is solid earth); B4 is solid dirt (the tan block)
+  const oC1 = C.C1; S0[0].cell = "C1"; S0[0].elev = S0[oC1].elev; cutRoom(oC1); C.C1 = 0; cutRoom(C.B4);
+  S0.forEach(q => { if (q.hub) { delete q.hub; if (!q.rest) delete q.peace; } });   // (the hub's D5 now)
+  // the hidden cove (behind Camila's rocks in A1): one room on the shore, water to the left to swim in, a mango, and Burr, who lives there
   const COVE = S0.length; S0.push({ h: S0[C.A1].h, col: 999, name: "THE HIDDEN COVE", elev: 0, foe: 0, authored: true, cove: true, ground: [[0, 110], [640, 110], [790, 0]], swim: [-200, 720, GROUND + 6],
     plats: [], next: C.A1, noLeft: true, peace: true, items: [["fruit", 1650]], set: [{ k: "pool", x0: -300, x1: 760, y: GROUND + 6 }, { k: "coveRocks", x: 2560 }] });
   R0[COVE] = []; W.fixedBuddies = { ...(W.fixedBuddies || {}), burr: COVE };
+
+  // ── row A
   // A1: Camila's rocks at the left (the cove behind them); the bridge's ladder at the right, the bridge on from there; the edge where her climb
   // up from B2 comes out, off it and down into B2
   room("A1", { ground: [[0, 0], [2575, 0], [2576, 900]], plats: [[2150, BY, 420, "bridge"]], poles: [[2190, BY]], secret: { who: "camila", x: 150, side: -1, door: true },
@@ -3111,22 +3167,79 @@ function authorForest() {
   room("A2", { open: true, gaps: [[-200, 2760]], below: C.B2, plats: [[-10, BY, 2580, "bridge"]], prev: C.A1, next: C.A3, items: [["gum", 2300, BY]],
     set: [{ k: "bridge" }, { k: "ceiba", x: 1350, base: GROUND + 560, h: 14 }] }, [["acorn", "rust", { plat: 0, x: 700 }]]);
   room("A3", { open: true, gaps: [[-200, 2760]], below: C.B3, plats: [[-10, BY, 2580, "bridge"]], prev: C.A2, next: C.A4,
-    set: [{ k: "bridge" }, { k: "ceiba", x: 1150, base: GROUND + 560, h: 15 }] }, [["leafy", "rust", { plat: 0, x: 1900 }]]);
+    set: [{ k: "bridge" }, { k: "ceiba", x: 820, base: GROUND + 560, h: 15 }] }, [["leafy", "rust", { plat: 0, x: 1900 }]]);
   [C.A2, C.A3].forEach(i => nm(S0[i], "CANOPY"));
-  // A4: the bridge comes in at the left and ends at its ladder; the land again (a cliff up out of the canopy at the edge); B4's climb comes up here
-  room("A4", { ground: [[-1, 900], [0, 0]], gaps: [[880, 1030]], below: C.B4, arriveX: 820, plats: [[-10, BY, 610, "bridge"]], poles: [[560, BY]], prev: C.A3, next: C.A5, set: [{ k: "bridge" }] },
+  // A4: the bridge comes in at the left and ends at its ladder; the land again (a cliff up out of the canopy at the edge); Camila's climb up
+  // from B3's far end comes out at the left
+  room("A4", { ground: [[-1, 900], [0, 0]], arriveX: 140, arriveF: 1, plats: [[-10, BY, 610, "bridge"]], poles: [[560, BY]], prev: C.A3, next: C.A5, set: [{ k: "bridge" }] },
     [["pinecone", "rust", { plat: 0, x: 300 }], ["leafy", "orange", 1300], ["logger", "bark", 1650], ["stumpy", "olive", 2150]]);
   // A5: the rest stop, under a great weeping willow
   const a5 = room("A5", { ground: [[0, 0], [600, -30], [1100, 0], [1700, 0], [2100, -40], [2560, -20]], plats: [[2150, 330, 170, "shroom"]], rest: true, peace: true, prev: C.A4, next: C.A6,
     set: [{ k: "willow", x: 1480, spread: 8 }] }, []); nm(a5, "REST STOP");
-  // A6: the top of the giant tree, in front of you; a mini boss
-  const a6 = room("A6", { ground: [[0, 0]], plats: [[520, 330, 180, "shroom"], [2050, 320, 200, "slab"]], prev: C.A5, next: C.A7, set: [{ k: "giant", part: "top", x: 1380, fg: true }] },
-    [["leafy", "leaf", 650], ["thornball", "purple", 950], ["mossback", "moss", 1950, "mini"], ["twiggy", "olive", 2380]]); nm(a6, "GIANT TREE");   // (the mini boss out in the open, not behind the trunk)
-  S0[C.A7].prev = C.A6;
-  // row B's links to it (row B's own rooms are next): B4 on to B5, and back; B2: Camila's climb up its left end into A1
-  S0[C.B4].next = C.B5; S0[C.B5].prev = C.B4;
-  Object.assign(S0[C.B2], { climbUp: { x: 260, to: C.A1 }, climbWall: true });
-  W.rosterThin = null;
+  // A6: the top of the giant tree, in front of you; a mini boss (out in the open, not behind the trunk)
+  const a6 = room("A6", { ground: [[0, 0]], plats: [[520, 330, 180, "shroom"], [2050, 320, 200, "slab"]], prev: C.A5, next: C.A7, set: [{ k: "giant", part: "top", x: TX, fg: true }] },
+    [["leafy", "leaf", 650], ["thornball", "purple", 950], ["mossback", "moss", 1950, "mini"], ["twiggy", "olive", 2380]]); nm(a6, "GIANT TREE");
+
+  // ── row B
+  // B2: B1's solid earth at the left, Camila's rock up it into A1; the first huge tree's trunk; a mini boss on the floor
+  room("B2", { ground: [[0, 0]], noLeft: true, climbUp: { x: 260, to: C.A1 }, climbWall: true, next: C.B3,
+    set: [{ k: "earth", side: -1, col: EARTH }, { k: "ceiba", x: 1350, crown: false, back: true, h: 40, scale: 1.3 }, { k: "camRock", x: 260 }] }, [["logger", "bark", 1250, "mini"]]);
+  // B3: the second trunk, two baddies; in the middle the top of Camila's rock (down it into C3); at the far end B4's dirt, her rock up it into A4
+  room("B3", { ground: [[0, 0]], noRight: true, prev: C.B2, down: C.C3, downX: 1180, downCam: true, climbUp: { x: 2380, to: C.A4 }, climbWall: true, arriveX: 1180, arriveF: 1,
+    set: [{ k: "ceiba", x: 820, crown: false, back: true, h: 40, scale: 1.3 }, { k: "earth", side: 1, col: TAN, col2: TAN2 }, { k: "camPatch", x: 1180 }, { k: "camRock", x: 2380 }] },
+    [["leafy", "leaf", 430], ["pinecone", "rust", 1950]]);
+  // B5: under the ground of A5 (dark, low); land at the left (a mango, two baddies), a hole down into C5, a patch of land past it on to B6
+  room("B5", { dark: true, ground: [[0, 0]], gaps: [[1680, 1980]], below: C.C5, noLeft: true, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 260]],
+    set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "ceil", y: 130, col: "#4a3526" }, { k: "canopy" }] }, [["acorn", "rust", 650], ["leafy", "leaf", 1250]]);
+  // B6: the giant tree's trunk in front of you, dark under the canopy
+  room("B6", { dark: true, ground: [[0, 0]], prev: C.B5, next: C.B7, set: [{ k: "giant", part: "trunk", x: TX, fg: true }, { k: "canopy" }] }, []);
+  S0[C.B7].prev = C.B6;
+
+  // ── row C
+  // C1: the way in from the beach; a tall post with an item on it only Rose can reach (her big jump, her double jump, her rising blow); 3 baddies
+  room("C1", { ground: [[0, 0]], plats: [[1900, -5, 260, "slab"]], items: [["gum", 2030, -5]], next: C.C2 }, [["leafy", "leaf", 900], ["acorn", "rust", 1450], ["twiggy", "olive", 2350]]);
+  // C2: two posts stepping up, and a rock at the far end to get over into C3
+  room("C2", { ground: [[0, 0], [2330, 0], [2330, -170], [2560, -170]], plats: [[1170, 320, 300, "slab"], [1730, 190, 300, "slab"]], prev: C.C1, next: C.C3 },
+    [["stumpy", "olive", 700], ["leafy", "leaf", { plat: 1 }]]);
+  // C3: down off the rock; Camila's rock path up into B3 (vines on it; if you're Camila, a tip that she can climb it); 3 baddies
+  room("C3", { ground: [[0, -170], [160, -170], [160, 0]], climbUp: { x: 1180, to: C.B3 }, climbWall: true, climbTip: true, prev: C.C2, next: C.C4, set: [{ k: "camRock", x: 1180 }] },
+    [["pinecone", "rust", 560], ["leafy", "leaf", 1700], ["stumpy", "olive", 2100]]);
+  // C4: the beps' hideout (where they walk you to); a hole in the middle down to D4; roots from B4's dirt overhead; Rose's tall grass at the
+  // far end, a baddie in front of it
+  room("C4", { ground: [[0, 0]], gaps: [[1020, 1170]], below: C.D4, prev: C.C3, next: C.C5, bep, secret: { who: "rose", x: 2400, door: true, tall: true, key: "grass:C4C5" },
+    ceils: [[-600, 3200, 100]], set: [{ k: "ceil", y: 100, col: TAN, col2: TAN2, roots: true }] }, [["thornball", "purple", 2100]]);
+  // C5: the other side of the grass (the same grass: cut once, cut for good, from either side); stairs up to the hole from B5 (jump up it: on
+  // to B6 that way); 3 baddies; the wall at the far end (C6 is beyond it)
+  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopUp: 190,
+    secret: { who: "rose", x: 20, side: -1, door: true, tall: true, key: "grass:C4C5" }, set: [{ k: "earth", side: 1, col: EARTH }] },
+    [["leafy", "leaf", 700], ["acorn", "rust", 1150], ["twiggy", "olive", 1650]]); nm(c5, "STAIRS");
+  // C6: in front of the giant tree; a ledge with a baddie, a mango up on a small platform, two baddies; the hole the tree's ledges climb up
+  // from D6; on to C7
+  room("C6", { ground: [[0, 0]], gaps: [[1330, 1530]], below: C.D6, noLeft: true, next: C.C7, arriveX: 1590, arriveF: 1, plats: [[150, 300, 520, "slab"], [960, 170, 300, "slab"]],
+    items: [["fruit", 1110, 170]], set: [{ k: "giant", part: "trunk", x: TX, z: -3.4 }, { k: "earth", side: -1, col: EARTH }] },
+    [["leafy", "leaf", { plat: 0 }], ["stumpy", "olive", 1900], ["pinecone", "rust", 2250]]);
+  S0[C.C7].prev = C.C6;
+
+  // ── row D
+  // D1: GLOS, at the world's surprise quick way out (to Cuss' Waves, the easiest of its three); three platforms
+  room("D1", { ground: [[0, 0]], plats: [[160, 140, 480, "slab"], [960, 230, 600, "slab"], [1780, 330, 460, "slab"]], boss: true, bossX: 1900, toWorld: westTo, exitLeft: true, next: C.D2 }, []);
+  // D2: thick undergrowth round a pool; malanga leaves to cross it on, the attack power-up on the high one
+  room("D2", { ground: [[0, 0]], gaps: [[300, 2160]], plats: [[420, 380, 280, "shroom"], [880, 300, 240, "shroom"], [1300, 200, 260, "shroom"], [1720, 320, 260, "shroom"]],
+    items: [["power", 1430, 200]], prev: C.D1, next: C.D3, set: [{ k: "pond" }, { k: "undergrowth" }] }, []);
+  // D3: a mini boss, a high platform
+  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], prev: C.D2, next: C.D4 }, [["bramble", "purple", 900, "mini"]]);
+  // D4: 3 baddies; two platforms up to the hole in C4 (jump up it)
+  room("D4", { ground: [[0, 0]], plats: [[1300, 330, 300, "slab"], [880, 190, 300, "slab"]], prev: C.D3, next: C.D5 }, [["leafy", "leaf", 330], ["twiggy", "olive", 1750], ["acorn", "rust", 2200]]);
+  // D5: the hub (a checkpoint too); C5's pale green pillars hanging down into it
+  const d5 = room("D5", { ground: [[0, 0]], hub: 1, peace: true, prev: C.D4, next: C.D6, set: [{ k: "pillars", xs: [110, 2450] }] }, []); nm(d5, "HUB");
+  // D6: the giant tree's roots (you walk in front of it, as in C6); ledges out of its trunk up into C6; on to D7 along the bottom
+  room("D6", { ground: [[0, 0]], climbUp: { x: TX, to: C.C6 }, noClimbFace: true, prev: C.D5, next: C.D7, set: [{ k: "giant", part: "roots", x: TX, z: -3.4 }, { k: "shelves" }] }, []);
+  S0[C.D7].prev = C.D6;
+
+  // nothing left leading into a room that's gone
+  S0.forEach((q, i) => { if (q.cut) return; ["next", "prev", "below", "up", "down", "nextHi"].forEach(k => { if (q[k] !== undefined && S0[q[k]] && S0[q[k]].cut) { console.warn("forest: a way into a cut room", i, q.cell, k); delete q[k]; } });
+    if (q.climbUp && S0[q.climbUp.to] && S0[q.climbUp.to].cut) { console.warn("forest: a climb into a cut room", i, q.cell); delete q.climbUp; delete q.climbWall; } });
+  W.rosterThin = null; mapGridC.delete(0);
 }
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
@@ -4807,7 +4920,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-const LAYOUT = 12;                                  // the worlds' layout a save was made on (12 columns since 2026-10-23): an older one's rooms aren't where they were
+const LAYOUT = 13;                                  // the worlds' layout a save was made on (12 columns since 2026-10-23; the forest hand-made from 2026-10-24): an older one's rooms aren't where they were
 function storyLoad(slot, q) { if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
   tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) && q.cat2 === q.w ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
@@ -5622,12 +5735,12 @@ function goRoom(ns, back) {                          // on into the next clearin
 }
 function goRoomV(ns, up) {                        // up (or down) a rope ladder into the room above (or below): on, or back the way you came
   cine = null; swapSlide(up ? "up" : "down", () => {
-    const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
+    const esc = bepRun.escort, from = stage; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
     if (back) trail.pop(); else trail.push(ns);
     entrySide = up ? "bottom" : "top"; entryHi = false; clockEnter(ns); setScreen(ns);
     const foot = !up && STAGES[ns].climbUp ? STAGES[ns].climbUp.x + 230 : 130;   // (down a hatch with stairs back up, no ladder below: at the stairs' foot)
-    const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")), x = R0 ? R0.x : foot;     // you come in on this room's rope, still climbing
+    const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")) || (!up && LADDERS.find(q => q.wallClimb === "back" && q.to === from)) || undefined, x = R0 ? R0.x : foot;     // you come in on this room's rope (or Camila's rock face), still climbing
     const sx = R0 ? R0.face + (R0.wall || 0) * 40 : foot, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(foot) ?? GROUND;
     Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
       carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x: sx, y: sy, plat: null } });
@@ -5692,7 +5805,8 @@ function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out
     if (holeX !== undefined) { const G0 = GAPS.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => Math.abs((p[0] + p[1]) / 2 - holeX) - Math.abs((q[0] + q[1]) / 2 - holeX))[0];   // (the hole: out onto its nearer lip)
       if (G0) { const [a, b] = G0; af = holeX < (a + b) / 2 ? -1 : 1; if (af < 0 && a - 40 < 60) af = 1; if (af > 0 && b + 40 > WORLD - 60) af = -1; ax = af < 0 ? a - 40 : b + 40; } }
     const S1 = STAGES[ns], x = ax, f = af, gy = groundAt(x) ?? GROUND, rx = clamp(x - f * 46, 40, WORLD - 40);   // (still on the jump: up from below, hugging the pit's edge, and down on the ground at its lip)
-    Object.assign(player, { x: rx, y: gy + 180, vx: f * 120, vy: -1200, fullJump: true, jumpT: time, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+    const hole = holeX !== undefined;                // (up a hole: up at its lip, not inside the pit, or the pit's wall stops you and you drop back in. 2026-10-24)
+    Object.assign(player, { x: hole ? clamp(x - f * 30, 40, WORLD - 40) : rx, y: gy + (hole ? 50 : 180), vx: f * (hole ? 220 : 120), vy: -1200, fullJump: true, jumpT: time, face: f, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
       safeT: 1, safe: { x, y: gy, plat: null } });   // (in a new room: a moment's protection, not shown: no blink, the user 2026-10-22)
     palsPut({ x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
@@ -6037,23 +6151,34 @@ const SECRET_M = { rock: toon("#8d8478"), rock2: toon("#6f675d"), crack: new THR
 function clearSecret() { if (!secret) return; [secret.g, secret.chest && secret.chest.g].forEach(g => { if (g) { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }); secret = null; }
 function spawnSecret() {
   clearSecret(); const q = STAGES[stage].secret; if (!q || stronghold || hideout || arena) return;
-  const k = world + ":" + stage + ":", gy = groundAt(q.x + 60) ?? GROUND; secret = { who: q.who, x: q.x, hp: itemGot(k + "wall") ? 0 : 3, g: null, chest: null, wob: 0, said: false, side: q.side || 1 };
-  if (secret.hp > 0) { const g = secretWallRig(q.who); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g; }
+  const k = world + ":" + (q.key || stage) + ":", gy = groundAt(q.x + 60) ?? GROUND; secret = { who: q.who, x: q.x, hp: itemGot(k + "wall") ? 0 : 3, g: null, chest: null, wob: 0, said: false, side: q.side || 1, k, tall: !!q.tall, gy };   // (key: a wall two rooms share, cut from either side)
+  if (secret.hp > 0 || q.tall) { const g = secret.hp > 0 ? secretWallRig(q.who, q.tall) : secretCutRig(); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g; }   // (tall: cut, it stays as a doorway through it)
   if (!q.door && !itemGot(k + "chest")) { const cx = q.x + 460, cy = groundAt(cx) ?? GROUND, C = secretChestRig(); C.g.position.set(X(cx), Y(cy), -.2);   // the chest behind it
     secret.chest = { g: C.g, lid: C.lid, x: cx, y: cy, open: false }; }
 }
-function secretWallRig(who) {                       // (built here and exported for the 3DS: pickups.js)
+function secretWallRig(who, tall) {                 // (built here and exported for the 3DS: pickups.js) · tall: the forest's, wall high
   const g = group(actors);
   if (who === "camila") {                            // a heap of big cracked rocks, piled up out of reach
     for (let i = 0; i < 18; i++) { const r = .75 + (i % 3) * .18, m = mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: i % 2 ? SECRET_M.rock2 : SECRET_M.rock, ol: .04 });
       at(m, (i % 3 - 1) * .5 + (Math.floor(i / 3) % 2) * .25, .7 + Math.floor(i / 3) * 1.35, (i % 2 ? -.35 : .3)); m.rotation.set(i * .7, i * 1.3, i * .4); g.add(m); }
     for (let i = 0; i < 12; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.05, .55 + (i % 3) * .2, .05), SECRET_M.crack); c.position.set(-.55 + (i % 3) * .1, .8 + i * .6, .9); c.rotation.z = (i % 2 ? .5 : -.4); g.add(c); }   // the cracks: it'll give
   } else {                                           // a thicket of tall grass and brambles, tied to stakes
-    for (let i = 0; i < 40; i++) { const h = 2.2 + (i % 5) * .45, m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });
+    for (let i = 0; i < (tall ? 66 : 40); i++) { const h = 2.2 + (i % 5) * .45, m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });
       at(m, (i % 6 - 2.5) * .32, h / 2 + Math.floor(i / 6) * 1.1, (i % 4 - 1.5) * .3); m.rotation.z = ((i * 37) % 9 - 4) * .05; g.add(m); }
-    [-.7, .7].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, 9, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, 4.5, .45); g.add(st); });
-    [1.4, 3.2, 5, 6.8].forEach(y => { const b = mk(new THREE.BoxGeometry(1.7, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
+    [-.7, .7].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, tall ? 13 : 9, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, tall ? 6.5 : 4.5, .45); g.add(st); });
+    (tall ? [1.4, 3.2, 5, 6.8, 8.6, 10.4] : [1.4, 3.2, 5, 6.8]).forEach(y => { const b = mk(new THREE.BoxGeometry(1.7, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
   }
+  return g;
+}
+function secretCutRig() {                          // Rose's tall grass, cut: the doorway she made through it, the grass still up to the ceiling over it and either side
+  const g = group(actors), D = 4.3;                  // (the doorway's height)
+  for (let i = 0; i < 66; i++) { const h = 2.2 + (i % 5) * .45, x = (i % 6 - 2.5) * .32, y0 = Math.floor(i / 6) * 1.1; if (y0 < D) continue;   // over the doorway: hanging down to its top
+    const m = mk(new THREE.ConeGeometry(.22, h, 5), null, { mat: i % 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 }); at(m, x, y0 + h / 2 - .4, (i % 4 - 1.5) * .3); m.rotation.z = ((i * 37) % 9 - 4) * .05; g.add(m); }
+  for (let i = 0; i < 16; i++) { const sd = i % 2 ? 1 : -1, h = 2.4 + (i % 3) * .5, m = mk(new THREE.ConeGeometry(.24, h, 5), null, { mat: i % 4 < 2 ? SECRET_M.grass2 : SECRET_M.grass, ol: .02 });   // either side of it, still standing
+    at(m, sd * (1.05 + (i % 3) * .14), h / 2 + Math.floor(i / 4) * 1.05, ((i % 4) - 1.5) * .3); m.rotation.z = -sd * .06; g.add(m); }
+  for (let i = 0; i < 12; i++) { const m = mk(new THREE.ConeGeometry(.16, .32, 5), null, { mat: SECRET_M.grass2, ol: .015 }); at(m, (i % 6 - 2.5) * .3, .16, (Math.floor(i / 6) - .5) * .5); g.add(m); }   // (the stubble she left)
+  [D + .3, 6.8, 8.6, 10.4].forEach(y => { const b = mk(new THREE.BoxGeometry(2.4, .1, .08), null, { mat: SECRET_M.stake, ol: .015 }); at(b, 0, y, .5); g.add(b); });
+  [-1.2, 1.2].forEach(x => { const st = mk(new THREE.CylinderGeometry(.09, .11, 13, 6), null, { mat: SECRET_M.stake, ol: .02 }); at(st, x, 6.5, .45); g.add(st); });
   return g;
 }
 function secretChestRig() {
@@ -6071,13 +6196,19 @@ function secretHit(d, kind) {                        // a blow on the wall: only
   B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX[B.who === "camila" ? "crack" : "slash"](); puffs(B.x + 20, p.y - 70, 4, 30, 160);
   for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.14, .12, .12), B.who === "camila" ? SECRET_M.rock2 : SECRET_M.grass); m.position.set(X(B.x + 40), Y(p.y - 60) + rand(-.6, .6), .3); actors.add(m);
     parts.push({ m, v: V(rand(-4, 2), rand(3, 8), rand(-2, 2)), life: rand(.5, .9), t: 0, size: rand(.7, 1.2), g: 24, spin: 10, drag: .3, kind: "drop" }); }
-  if (B.hp <= 0) { markGot(world + ":" + stage + ":wall"); actors.remove(B.g); B.g = null; SFX.slam(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .12);
+  if (B.hp <= 0) { markGot(B.k + "wall"); actors.remove(B.g); B.g = null; if (B.tall) { B.g = secretCutRig(); B.g.position.set(X(B.x + 60), Y(B.gy), 0); } SFX.slam(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .12);
     for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, .18), B.who === "camila" ? (i % 2 ? SECRET_M.rock : SECRET_M.rock2) : (i % 2 ? SECRET_M.grass : SECRET_M.grass2)); m.position.set(X(B.x + 60) + rand(-.6, .6), Y(GROUND) + rand(.3, 7), rand(-.4, .4)); actors.add(m);
       parts.push({ m, v: V(rand(-3, 8), rand(2, 9), rand(-3, 3)), life: rand(.7, 1.3), t: 0, size: rand(.8, 1.5), g: 22, spin: 9, drag: .25, kind: "drop" }); }
     toast(B.who === "camila" ? "THE ROCKS GIVE WAY!" : "THE THICKET'S CUT THROUGH!", 2600); if (story) writeSave(); }
   return true;
 }
+function climbTip() {                               // "tutorial pops up if you're Camila + says you can climb" (the user, 2026-10-24)
+  const p = player; if (!p || p.dead || !STAGES[stage].climbTip || p.rig.id !== "camila" || itemGot(world + ":tip:climb")) return;
+  const L = LADDERS.find(q => q.camila && !q.rock); if (!L || Math.abs(p.x - L.x) > 520) return;
+  markGot(world + ":tip:climb"); toast("CAMILA CAN CLIMB THIS ROCK · HOLD ↑ AT ITS FOOT", 4600); SFX.tick();
+}
 function updateSecret(dt) {
+  climbTip();
   const B = secret; if (!B) return; B.wob = Math.max(0, B.wob - dt * 3); if (B.g) B.g.rotation.z = Math.sin(B.wob * 30) * .03 * B.wob;
   const C = B.chest, p = player; if (!C || C.open || !p || p.dead) return;
   if (Math.abs(p.x - C.x) < 50 && Math.abs(p.y - C.y) < 60) { C.open = true; C.lid.rotation.x = -1.1; markGot(world + ":" + stage + ":chest"); SFX.gift(); sparks(C.x, C.y - 30, 14);   // walk up to it: open, and what's in it
@@ -6432,7 +6563,7 @@ function updatePlayer(dt) {
   const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && !patrolLock && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(SINK - 6, FLOOR_LOW + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
-  const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (groundAt(p.x) ?? GROUND) - 400 ? holeAbove(p.x) : null;   // (fallen in by a hole, no way back up: jumped high enough near under it)
+  const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (groundAt(p.x) ?? GROUND) - (STAGES[stage].hopUp ?? 400) ? holeAbove(p.x) : null;   // (fallen in by a hole, no way back up: jumped high enough near under it)
   if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
   else if (hu && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - hu.x) < 640) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
@@ -16260,6 +16391,7 @@ function render(dt) {
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
   gradeMat.uniforms.bloom.value = mode === "play" && !hideout && world !== 9 && freedNow() ? 1 : 0;
+  gradeMat.uniforms.dim.value = !bepSel && !hideout && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : 0;   // (the forest's underground rooms)
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
@@ -16290,7 +16422,7 @@ function adaptQuality(dt) {
 let fadeT = 0; const fadeEl = document.getElementById("fade");
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
   requestAnimationFrame(frame);
-  const dt = Math.min(.05, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
   try {
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
