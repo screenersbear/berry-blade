@@ -71,6 +71,11 @@
   #toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--s); color: var(--y); z-index: 60;
     font: 600 12px "Jost", sans-serif; letter-spacing: .24em; padding: 9px 18px; opacity: 0; transition: opacity .4s; pointer-events: none; white-space: nowrap; }
   #toast.show { opacity: 1; }
+  #voCap { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 8px); width: max-content; max-width: min(84vw, 760px); z-index: 58; pointer-events: none;
+    background: var(--y); color: var(--s); border: 3px solid var(--s); box-shadow: 5px 5px 0 var(--s); font: 15px/1.3 "Bungee", sans-serif; text-transform: uppercase;
+    text-align: center; padding: 8px 14px 6px; opacity: 0; transition: opacity .3s, transform .3s; }
+  #voCap.show { opacity: 1; transform: translate(-50%, 0); }
+  @media (pointer: coarse), (max-height: 560px) { #voCap { max-width: min(54vw, 560px); font-size: 12px; bottom: 14px; } }   /* (a phone: between the touch pads) */
 
   /* loading + title */
   #loading, #title { position: fixed; inset: 0; background: var(--y); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; }
@@ -462,7 +467,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261023e"></script>
+<script src="charkit.js?v=20261023f"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261022h"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -471,7 +476,7 @@
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
 <script src="sfx.js?v=20261020a" defer></script>
-<script src="voices.js?v=20261022a" defer></script>
+<script src="voices.js?v=20261023f" defer></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -572,6 +577,7 @@
 <div id="npcTip" class="hidden"></div>
 <audio id="bgm" loop preload="none"></audio>
 <div id="toast"></div>
+<div id="voCap" aria-live="polite"></div>
 <div id="pop">PARRY!</div>
 <div id="select" class="hidden"><div class="lockup big"><div class="blk" id="stitle">CHOOSE</div><div class="bar" id="ssub">YOUR CHARACTER</div></div>
   <div class="foot"><div id="blurb"></div><div id="roster"></div><div id="tools"><button id="bEdit">EDIT CHARACTERS</button> <button id="bAch">ACHIEVEMENTS</button> <button id="bLvl">LEVEL SELECT</button></div><small id="shint"></small></div></div>
@@ -3086,8 +3092,9 @@ function syncMusic(dt) {                         // every frame: the right music
   const softTale = !!tale && !pcTale;                // (the phone and the zip: no borrowed song, so the score's own soft take under the voice, 2026-10-23: "the music wasnt playing during the cutscene")
   const S = window.BerryScore, h = pcTale ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
   const R = pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
+  voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
-  const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) : 0;
+  const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) * voDuck : 0;
   const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
   if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / fadeT);   // equal-power (2026-10-23: "make sure there's a fadeout cross over always"): the recording along a
   orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);               // sine as the score goes along a cosine, so the handover holds its loudness   // a crossfade with the score (shorter into the in-between, which restarts the same song)
@@ -3103,7 +3110,7 @@ function syncMusic(dt) {                         // every frame: the right music
   else if (inHub() && S.HUB !== undefined && world !== 9) S.setHour(S.HUB, .94);   // (a hub: this world's tune, its hub take: the user, 2026-10-22)
   else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
-  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL * (softTale ? .55 : 1)); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
+  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL * (softTale ? .55 : 1) * voDuck); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
 }
 function startMusic() {
   audio();
@@ -3178,7 +3185,7 @@ function syncBugs() {
   if (!ac || ac.state !== "running") return;
   if (bugs.state === "idle") bugsInit();
   if (bugs.state !== "ready") return;
-  const on = sfxOn && (mode === "play" || mode === "opp") && !tale, lv = on ? SCREENS[hour].bugs : [0, 0], t = ac.currentTime;
+  const on = sfxOn && (mode === "play" || mode === "opp") && !tale, lv = on ? SCREENS[hour].bugs.map(v => v * (vo && vo.src ? .5 : 1)) : [0, 0], t = ac.currentTime;
   lv.forEach((v, i) => { if (v !== bugs.lvl[i]) { bugs.layers[i].gain.setTargetAtTime(v * [.3, .45][i], t, 1.4); bugs.lvl[i] = v; } });   // the cicadas sit at −22 dB rms, the coquís at −25 (so 3 dB more here); this lands them under the music
 }
 // ── the coast: a surf loop under everything and sea birds calling now and then (shore.js: real recordings, none needing credit).
@@ -4392,7 +4399,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -4658,7 +4665,7 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale }; storyRun(q.w, fixRests(q.w, q.s), false); }
+function storyLoad(slot, q) { mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null; alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -4670,6 +4677,7 @@ function fixRests(w0, s0) {                        // rest stops saved before th
 const restOK = w => !!story && ((story.rests || {})[w] || []).some(r => ((WORLDS[w] && WORLDS[w].stages[r]) || {}).rest);   // (a rest stop you can start from there)
 function storyBegin(slot) { tamed = null; alliesOff(); mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
+  if (vo) voEnd();                                   // (a voice-over from the last run stops)
   const id = story.char || "camila", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
   if (transit) return; if (paused) closePause(); sel = i; rig = w === 9 && !story.armed ? bareRig(id) : roster[i];   // (on the beach, till the bep's given them their weapons: bare fists)
   swapUnderFade(() => {
@@ -5142,6 +5150,44 @@ function endTale() {
   setTimeout(() => { comicUp = false; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (T.then) T.then(); }, 380);
   setTimeout(() => { if (!tale) $("tale").classList.remove("show"); }, T.then ? 380 + 520 : 380);   // (under the fade to the woods by then)
 }
+// ── voice-overs (the user, 2026-10-23: "we will have some instances with voice overs. let's do the first one. when you first enter the island and the
+// one character waves and goes away, it triggers this voiceover that plays over the player's regular actions"): Camila speaking (her voice = the
+// story's narration voice: story/vo.js, made by .claude/berry-tools/make_vo_audio.py), a line at a time with its words along the foot of the screen;
+// you play on under it, the music and the bugs dipped. Each one once a story (story.vo); paused, the line stops, and starts again once you're back
+const VO = { woods: ["And so, Rose and I decided to fight for our people.",
+  "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes.",
+  "Good luck, Rose. I'll see you around."] };
+const VO_VOL = .9, VO_DUCK = .4;                    // (the music at 40% under it)
+let vo = null, voDuck = 1; const voBank = { state: "idle", bufs: {} };
+function voLoad() {                                  // the lines, decoded once
+  if (voBank.state !== "idle") return; voBank.state = "loading";
+  const go = () => { const A = window.BERRY_VO, c = audio(); if (!A || !c) { voBank.state = "failed"; return; }
+    const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
+    Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
+  if (window.BERRY_VO) return go();
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261023f"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+}
+function startVO(id) {
+  if (!story || !VO[id] || (story.vo || []).includes(id)) return;
+  story.vo = [...(story.vo || []), id]; writeSave(); voLoad();
+  vo = { id, i: -1, wait: .3, hold: 3, src: null };
+}
+function voHush() { if (vo && vo.src) { try { vo.src.stop(); } catch (e) { } vo.src = null; } }
+function voEnd() { voHush(); vo = null; $("voCap").classList.remove("show"); }
+function voTick(dt) {                                // (every frame, paused or not)
+  const V = vo; if (!story || mode !== "play") return voEnd();   // (off to the title or the map: it's dropped)
+  if (paused || comicUp) { if (V.src) { voHush(); V.i--; V.wait = .5; } $("voCap").classList.remove("show"); return; }   // (paused: that line again once you're back)
+  const hb = $("hint").classList.contains("hidden") ? null : $("hint").getBoundingClientRect();   // (over the controls strip when it's up)
+  $("voCap").style.bottom = hb && hb.height ? (innerHeight - hb.top + 12) + "px" : "";
+  if (V.i < 0 && voBank.state === "loading" && (V.hold -= dt) > 0) return;   // (a moment for the voice to come in)
+  if ((V.wait -= dt) > 0) return;
+  const n = V.i + 1, L = VO[V.id]; if (n >= L.length) return voEnd();
+  V.i = n; $("voCap").textContent = L[n]; $("voCap").classList.add("show");
+  const b = (voBank.bufs[V.id] || [])[n];
+  if (b && live() && sfxOn) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = VO_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime);
+    V.src = src; src.onended = () => { if (V.src === src) V.src = null; }; V.wait = b.duration + .45; }
+  else V.wait = 1.4 + L[n].split(" ").length * .32;  // (no voice: time to read it)
+}
 Object.assign(SFX, { page() { if (!live()) return; const t = ac.currentTime, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();   // a page turning: a soft swish of paper
   s.buffer = noiseBuf; f.type = "bandpass"; f.Q.value = .8; f.frequency.setValueAtTime(700, t); f.frequency.exponentialRampToValueAtTime(2600, t + .32); env(g, t, .09, .42, .16);
   s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + .6); } });
@@ -5530,7 +5576,7 @@ function updateIntro(dt) {
     if (c.phase === "fall") { s.vy = Math.min(s.vy + GRAV * 1.15 * dt, 1100); s.y += s.vy * dt;
       if (s.y >= GROUND) { s.y = GROUND; s.vy = 0; s.onGround = true; s.sq = -.38; s.sqv = 0; dust(s.x, s.y, 8); SFX.land(); c.phase = "land"; c.t = 0; } }
     else if (c.phase === "land" && c.t > .6) { c.phase = "wave"; c.t = 0; s.wave = 1; SFX.tick(); }
-    else if (c.phase === "wave" && c.t > 1.25) { c.phase = "run"; c.t = 0; s.wave = 0; s.face = 1; }
+    else if (c.phase === "wave" && c.t > 1.25) { c.phase = "run"; c.t = 0; s.wave = 0; s.face = 1; startVO("woods"); }   // (Camila's voice-over as they go: once a story)
     else if (c.phase === "run") { s.vx = approach(s.vx, 560, 2400 * dt); s.x += s.vx * dt; s.sprint = true;
       if (s.x > WORLD + 140) { c.phase = "gone"; c.r.root.visible = c.r.shadow.visible = false; } }
     const yT = c.phase === "wave" ? -Math.PI / 2 : s.face > 0 ? -.85 : -Math.PI + .85;
@@ -16005,7 +16051,7 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); syncMusic(dt); if (tale) taleTick(dt); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); syncMusic(dt); if (tale) taleTick(dt); if (vo) voTick(dt); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (window.__pause || paused || itemsUp || npcUp) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation

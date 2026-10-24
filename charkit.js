@@ -727,20 +727,34 @@ function spikyHeadGeo(spk, ears) {
   return g;
 }
 // every dog's helmet (the user, 2026-10-23: "put this helmet that looks like it has a chess pawn piece on top on all the dogs", from their sticky-note
-// drawing): a rounded dome over the head, tipped back so the face stays clear; a short visor brim over the eyes; a chess pawn's knob on top (its base,
-// neck, collar and ball), leaning back; an oval patch on each side (the ear's place); and a thick padded collar round the jaw. Cream, the patches the ears' colour
+// drawing; then: "too tight on their head. it should be almost big on them and have a real shape not just like a texture on their head"): a real shell
+// a size too big, sitting up off the head and tipped back so the face stays clear (a lathed dome with its inside and a rolled lip round the edge);
+// a visor out over the eyes; a chess pawn on top (its foot, skirt, neck, collar and ball); a round ear guard each side (the ears' colour, the floppy
+// ears hanging out under the rim); and a fat padded collar round the jaw. Cream, the guards the ears' colour
 const DOG_HELMET = "#f2e8cf", DOG_HELMET_DARK = "#e2d3ad";
 function dogHelmet(head, M, P, c) {
-  const mH = M(DOG_HELMET), mD = M(DOG_HELMET_DARK), mE = M(c.ears || c.fur), hg = group(head, -.04, .02, 0); hg.rotation.z = .38;   // (tipped well back: its front edge above the eyes)
-  hg.add(P(new THREE.SphereGeometry(1, 30, 18, 0, Math.PI * 2, 0, 1.08).scale(.47, .47, .53), mH, 0, true));                       // the dome
-  const brim = P(new THREE.CylinderGeometry(.24, .24, .04, 20, 1, false, 0, Math.PI).scale(1.05, 1, 1.45), mD); at(brim, .27, .33, 0); brim.rotation.z = -.62; brim.rotation.y = Math.PI / 2; hg.add(brim);   // the visor, out over the eyes
-  const pawn = group(hg, -.04, .44, 0); pawn.rotation.z = .1;                                                                      // the pawn on top
-  pawn.add(at(P(new THREE.CylinderGeometry(.1, .13, .06, 16), mH), 0, .02, 0));
-  pawn.add(at(P(new THREE.CylinderGeometry(.045, .07, .14, 14), mH), 0, .12, 0));
-  pawn.add(at(P(new THREE.CylinderGeometry(.085, .085, .03, 16), mD), 0, .2, 0));
-  pawn.add(at(P(new THREE.SphereGeometry(.105, 16, 12), mH, 0, true), 0, .29, 0));
-  [-1, 1].forEach(sd => { const pt = P(new THREE.SphereGeometry(1, 16, 12).scale(.085, .11, .03), mE, 0, true); at(pt, -.12, .2, sd * .5); pt.rotation.x = sd * -.42; hg.add(pt); });   // the side patches
-  const col = P(new THREE.TorusGeometry(.32, .09, 12, 28).rotateX(Math.PI / 2).scale(1, 1, 1.2), mH, 0, true); at(col, .02, -.37, 0); head.add(col);   // the padded collar
+  const mH = M(DOG_HELMET), mD = M(DOG_HELMET_DARK), mE = M(c.ears || c.fur), hg = group(head, -.07, .1, 0); hg.rotation.z = .42;   // (tipped back: its front edge above the eyes, the back down to the neck)
+  const R = .6, T = .055, A = 1.5, prof = [];                                         // the shell: radius R, T thick, down A from the top
+  for (let k = 0; k <= 14; k++) { const a = Math.max(.001, A * k / 14); prof.push(new THREE.Vector2(R * Math.sin(a), R * Math.cos(a))); }
+  const cx = (R - T / 2) * Math.sin(A), cy = (R - T / 2) * Math.cos(A);              // the rolled lip: a half circle from the outside round to the inside
+  for (let k = 1; k < 6; k++) { const b = Math.PI * k / 6, u = T / 2 * Math.cos(b), v = T / 2 * Math.sin(b); prof.push(new THREE.Vector2(cx + u * Math.sin(A) + v * Math.cos(A), cy + u * Math.cos(A) - v * Math.sin(A))); }
+  for (let k = 14; k >= 0; k--) { const a = Math.max(.001, A * k / 14); prof.push(new THREE.Vector2((R - T) * Math.sin(a), (R - T) * Math.cos(a))); }   // the inside
+  hg.add(P(new THREE.LatheGeometry(prof, 36).scale(1, .94, 1.08), mH, 0, true));
+  const lipY = R * Math.cos(A) * .94, lipX = R * Math.sin(A), lipZ = lipX * 1.08;
+  hg.add(at(P(new THREE.TorusGeometry(1, .045, 10, 44).rotateX(Math.PI / 2).scale(lipX, .9, lipZ), mD, 0, true), 0, lipY, 0));   // a band round the edge, so it reads as a rim
+  const vis = P(new THREE.CylinderGeometry(.26, .28, .05, 24, 1, false, -Math.PI / 2, Math.PI).scale(1, 1, 1.5), mD, 0, true);   // the visor, out over the eyes
+  at(vis, lipX * .86, lipY + .04, 0); vis.rotation.z = -.62; hg.add(vis);
+  const top = R * .94, pawn = group(hg, -.02, top - .03, 0); pawn.rotation.z = .08;     // the pawn on top
+  pawn.add(at(P(new THREE.CylinderGeometry(.15, .18, .07, 20), mD, 0, true), 0, .035, 0));
+  pawn.add(at(P(new THREE.CylinderGeometry(.1, .15, .07, 20), mH, 0, true), 0, .1, 0));
+  pawn.add(at(P(new THREE.CylinderGeometry(.06, .095, .16, 18), mH, 0, true), 0, .21, 0));
+  pawn.add(at(P(new THREE.CylinderGeometry(.12, .12, .04, 20), mD, 0, true), 0, .3, 0));
+  pawn.add(at(P(new THREE.SphereGeometry(.14, 20, 14), mH, 0, true), 0, .43, 0));
+  [-1, 1].forEach(sd => {                                                              // the ear guards, standing out from the shell's sides
+    const y = .12, g = group(hg, -.03, y, sd * (R * 1.08 * Math.sqrt(1 - (y / (R * .94)) ** 2) + .015)); g.rotation.x = sd * Math.PI / 2;
+    g.add(P(new THREE.CylinderGeometry(.15, .17, .07, 22), mE, 0, true)); g.add(at(P(new THREE.CylinderGeometry(.07, .07, .03, 16), mD, 0, true), 0, .045, 0)); });
+  const col = P(new THREE.TorusGeometry(.36, .12, 14, 32).rotateX(Math.PI / 2).scale(1, 1.05, 1.18), mH, 0, true); at(col, .02, -.38, 0); head.add(col);   // the padded collar
+  head.add(at(P(new THREE.TorusGeometry(.43, .035, 8, 32).rotateX(Math.PI / 2).scale(1, 1, 1.18), mD, 0, true), .02, -.32, 0));   // (its seam)
 }
 function buildCat(R) {
   const S = R.spec, c = S.colors, mats = [], texs = [];
