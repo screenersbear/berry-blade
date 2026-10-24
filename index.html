@@ -1631,7 +1631,7 @@ function tropBromeliad(par, M, x, y, z, rng, s = 1) {   // a bromeliad (piña de
   g.add(at(mk(new THREE.ConeGeometry(.08, .42, 5), null, { mat: M.bromRed, ol: 0 }), 0, .26, 0));
   return g;
 }
-function tropCeiba(par, M, x, y, z, rng, { h = 13, ol = 0, crown = true, back = false } = {}) {   // a ceiba: a great grey trunk on buttress roots, limbs reaching out level, a wide flat crown; bromeliads up on the limbs, lianas hanging (back: the roots only spread behind it and to the sides)
+function tropCeiba(par, M, x, y, z, rng, { h = 13, ol = 0, crown = true, back = false, crownK = 1, crownBack = false, bloom = null } = {}) {   // a ceiba: a great grey trunk on buttress roots, limbs reaching out level, a wide flat crown; bromeliads up on the limbs, lianas hanging (back: the roots only spread behind it and to the sides)
   const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z);
   g.add(at(mk(new THREE.CylinderGeometry(.85, 1.25, h + 1, 9), null, { mat: M.ceiba, ol }), 0, (h - 1) / 2, 0));
   for (let i = 0; i < 6; i++) { const f = mk(finGeo(), null, { mat: M.ceiba, ol }); f.rotation.y = back ? i / 5 * Math.PI : i / 6 * TAU + R(-.2, .2); f.scale.set(R(.8, 1.2), R(.75, 1.1), 1); g.add(f); }
@@ -1640,7 +1640,8 @@ function tropCeiba(par, M, x, y, z, rng, { h = 13, ol = 0, crown = true, back = 
     const lb = mk(new THREE.CylinderGeometry(.2, .42, len, 6), null, { mat: M.ceiba, ol }); pointAlong(lb, d); lb.position.copy(base).addScaledVector(d, len / 2); g.add(lb);
     const tip = base.clone().addScaledVector(d, len * .7); tropBromeliad(g, M, tip.x, tip.y + .15, tip.z, rng, .7);
     if (rng() < .7) tropLiana(g, M, tip.x, tip.y, tip.z + .2, R(3, 6), rng); }
-  for (let i = 0; i < 10; i++) { const a = R(0, TAU), dd = R(0, 6.8); g.add(at(mk(new THREE.IcosahedronGeometry(R(2.1, 3.3), 0).scale(1.45, .42, 1), null, { mat: M.canopy[i % 4], ol: 0 }), Math.cos(a) * dd, h + R(1.4, 2.6), Math.sin(a) * dd * .6)); }
+  for (let i = 0; i < Math.round(10 * crownK); i++) { const a = R(0, TAU), dd = R(0, 6.8 * crownK), sz = Math.sin(a) * dd * .6; g.add(at(mk(new THREE.IcosahedronGeometry(R(2.1, 3.3) * Math.sqrt(crownK), 0).scale(1.45, .42, 1), null, { mat: M.canopy[i % 4], ol: 0 }), Math.cos(a) * dd, h + R(1.4, 2.6) * crownK, crownBack ? -Math.abs(sz) : sz)); }   // (crownBack: all of it behind the trunk, none out over the path)
+  if (bloom) { const mB = toon(bloom); for (let i = 0; i < Math.round(60 * crownK); i++) { const a = R(0, TAU), dd = R(0, 6.4 * crownK), sz = Math.sin(a) * dd * .6; g.add(at(mk(new THREE.IcosahedronGeometry(R(.09, .16), 0), null, { mat: mB, ol: 0 }), Math.cos(a) * dd, h + R(1.6, 2.5) * crownK, (crownBack ? -Math.abs(sz) : sz) - .4)); } }   // (a crown in flower: the forest's two great trees, up top)
   return g;
 }
 function tropFlamboyan(par, M, x, y, z, rng, { h = 6, ol = 0 } = {}) {   // a flamboyán in flower: a short dark trunk splitting into spreading limbs, a wide umbrella crown of flame red
@@ -2803,6 +2804,75 @@ function setLook(k) {                                // light the clearing for i
   if (dk) { FOG.multiplyScalar(.3); scene.fog.color.copy(FOG); scene.fog.near *= .45; scene.fog.far *= .5; sun.intensity *= .4; sun2.intensity *= .4; hemi.intensity *= .5; hemi2.intensity *= .5; }
   if (level.sky && level.sky.material.color) level.sky.material.color.setScalar(dk ? .28 : 1);
   gradeMat.uniforms.dim.value = dk ? 1 : 0;
+  const tn = dk ? null : rowTone(level.s, level.w);  // the map's rows told apart (the user, 2026-10-24): up top more sky and sun, the lower rows denser and darker
+  if (tn) { const night = !!(look.sky && look.sky.night);
+    if (tn.air && !night) FOG.lerp(AIR_C, tn.air); FOG.multiplyScalar(tn.fog ?? 1); scene.fog.color.copy(FOG); scene.fog.near *= tn.fogN ?? 1; scene.fog.far *= tn.fogF ?? 1;
+    sun.intensity *= tn.sun ?? 1; sun2.intensity *= tn.sun ?? 1; hemi.intensity *= tn.hemi ?? 1; hemi2.intensity *= tn.hemi ?? 1;
+    if (tn.sky && level.sky && level.sky.material.color) level.sky.material.color.setScalar(tn.sky); gradeMat.uniforms.dim.value = tn.dim || 0; }
+}
+// ── each map's rows told apart (the user, 2026-10-24: "for each map, I think they need more visually distinct things based on which part of the
+// map you're on so the player can orient themselves better"; the forest's rules: row D "more of that undergrowth vibe and ... generally darker",
+// C "the main road ... forested but still sunny", B "the same vibe as c", A "closer to the sky ... much more sky and sunny"; then "divide up the
+// rows of the other levels like this where there's a noticeable difference when you're in the top level to the lower ones"). By row, on top of
+// the hour's light; a room can have its own (tone: "dim", the forest's C4, its sky covered), and dark rooms keep theirs
+const AIR_C = new THREE.Color("#cfe9f6");
+const ROW_TONE = {
+  A: { sun: 1.16, hemi: 1.08, fogN: 1.25, fogF: 1.6, air: .32 },                       // up top: more sun, a clearer, bluer, farther distance
+  C: { sun: .95, hemi: .97, fogF: .95 },
+  D: { sun: .54, hemi: .66, fog: .5, fogN: .66, fogF: .74, sky: .48, dim: .58 },        // the bottom: denser, darker, closer in
+  dim: { sun: .48, hemi: .6, fog: .42, fogN: .66, fogF: .76, sky: .34, dim: .7 } };
+const ROW_TONE_W = { 5: { A: { sun: 1.25, hemi: 1.18, fogN: 1.2, fogF: 1.4 }, D: { sun: .8, hemi: .86, fog: .78, fogN: .82, fogF: .86, sky: .72, dim: .26 } } };   // (Kesh's garden: a night garden already; its top row moonlit, its bottom only a little darker)
+function rowTone(s, w) {
+  if (w !== world || s === undefined || s < 0 || hideout || stronghold || arena) return null; const q = STAGES[s]; if (!q || !q.cell) return null;
+  const r = String(q.cell)[0]; return q.tone ? ROW_TONE[q.tone] || null : (ROW_TONE_W[w] || {})[r] || ROW_TONE[r] || null;
+}
+const ROW_SKY = [];
+function rowSkyTex(k) {                             // the woods up top (row A): the hour's sky bluer and clearer, fair-weather clouds drifting in it
+  if (ROW_SKY[k]) return ROW_SKY[k]; const Q = SCREENS[k] && SCREENS[k].sky; if (!Q || Q.night) return skyTex(k);
+  const c = document.createElement("canvas"); c.width = 1024; c.height = 512; const g = c.getContext("2d"), r2 = rngF(31 + k), blue = new THREE.Color("#78bfea");
+  const tint = (col, kk) => "#" + new THREE.Color(col).lerp(blue, kk).getHexString();
+  g.fillStyle = tint(Q.base, .62); g.fillRect(0, 0, 1024, 512);
+  [560, 440, 330, 230, 140, 70].forEach((r, n) => {
+    g.beginPath(); for (let i = 0; i < 22; i++) { const a = i / 22 * TAU, rr = r * (.88 + r2() * .18); g.lineTo(Q.cx + Math.cos(a) * rr, Q.cy + Math.sin(a) * rr * .8); }
+    g.closePath(); g.fillStyle = tint(Q.bands[n], .55 - n * .08); g.fill(); });
+  if (Q.sun) { g.beginPath(); g.arc(Q.cx, Q.cy + 10, 34, 0, TAU); g.fillStyle = Q.sun; g.fill(); }
+  for (let i = 0; i < 9; i++) { const cx = r2() * 1024, cy = 60 + r2() * 220, w = 60 + r2() * 90; g.globalAlpha = .82; g.fillStyle = "#ffffff";   // a cloud: a few round puffs on a flat bottom
+    for (let j = 0; j < 5; j++) { g.beginPath(); g.arc(cx + (j - 2) * w * .28, cy - Math.sin(j / 4 * Math.PI) * w * .22, w * (.2 + r2() * .1), 0, TAU); g.fill(); }
+    g.fillRect(cx - w * .62, cy - 2, w * 1.24, w * .16); }
+  g.globalAlpha = 1;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (ROW_SKY[k] = t);
+}
+let rowFx = null;                                    // the rows' moving bits: drips falling in the forest's undergrowth (row D), rings spreading where they land
+function buildRowBits(s) {
+  const S0 = STAGES[s], g = new THREE.Group(); scene.add(g); rowFx = null;
+  if (world !== 0 || String(S0.cell || "")[0] !== "D" || S0.cove) return g;   // (the forest's undergrowth: row D)
+  const R = rngF(9191 + s * 13), RR = (a, b) => a + R() * (b - a), M = tropMats();
+  const mPud = new THREE.MeshBasicMaterial({ color: "#5f8e9c", transparent: true, opacity: .78, depthWrite: false }), mPud2 = new THREE.MeshBasicMaterial({ color: "#86b4bf", transparent: true, opacity: .55, depthWrite: false });
+  const puddles = [];
+  for (let i = 0; i < 9 && puddles.length < 6; i++) { const x = RR(160, WORLD - 160); if (!solidAt(x) || PLATFORMS.some(p => p.kind === "climb" && x > p.x - 60 && x < p.x + p.w + 60)) continue;   // puddles on the floor
+    const y = Y(groundAt(x)) + .03, w = RR(.9, 2.1), z = RR(-1.6, 2.8), m = new THREE.Mesh(new THREE.CircleGeometry(1, 22).rotateX(-Math.PI / 2), mPud); m.scale.set(w, 1, w * .42); at(m, X(x), y, z); g.add(m);
+    const hl = new THREE.Mesh(new THREE.CircleGeometry(1, 16).rotateX(-Math.PI / 2), mPud2); hl.scale.set(w * .45, 1, w * .14); at(hl, X(x) - w * .2, y + .005, z - w * .1); g.add(hl); puddles.push({ x: X(x), y, z, w }); }
+  for (let i = 0; i < 16; i++) { const x = RR(-200, WORLD + 200); if (groundAt(x) === null) continue; tropGroundFern(g, M, X(x), Y(groundAt(x)), RR(-3.6, -1.6), R, RR(.8, 1.4)); }   // the undergrowth: ferns and malanga thick along the back of the path
+  for (let i = 0; i < 6; i++) { const x = RR(-200, WORLD + 200); if (groundAt(x) === null) continue; tropMalanga(g, M, X(x), Y(groundAt(x)), RR(-4, -2.4), R, RR(1, 1.5)); }
+  for (let i = 0; i < 10; i++) tropLiana(g, M, X(RR(0, WORLD)), Y(GROUND - 720), RR(-4, 1), RR(4, 8), R);   // roots and lianas hanging down out of the dark overhead
+  const mDrop = new THREE.MeshBasicMaterial({ color: "#d6f0ff" }), drops = [], rings = [];
+  for (let i = 0; i < 7; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(.07, 6, 4).scale(.75, 1.7, .75), mDrop); d.visible = false; g.add(d); drops.push({ m: d, t: -RR(0, 2), vy: 0, gy: 0 }); }
+  for (let i = 0; i < 7; i++) { const r = new THREE.Mesh(new THREE.RingGeometry(.72, 1, 22).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#e6f6ff", transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false })); r.visible = false; g.add(r); rings.push({ m: r, t: 9 }); }
+  rowFx = { drops, rings, puddles, R };
+  return g;
+}
+function syncRow(dt) {                               // a drip falls out of the dark onto the floor (as often as not into a puddle), and a ring spreads where it lands
+  const F = rowFx; if (!F || !level || mode !== "play" || hideout || stronghold || level.s < 0) return; dt = Math.min(dt, .05); const R = F.R;
+  for (const d of F.drops) {
+    if (d.t < 0) { if ((d.t += dt) < 0) continue;
+      const P = F.puddles.length && R() < .55 ? F.puddles[Math.floor(R() * F.puddles.length)] : null, x = P ? P.x + (R() - .5) * P.w : camX + (R() - .5) * 22, gx = groundAt(x / S);
+      if (gx === null || Math.abs(x - camX) > 14) { d.t = -.2; continue; }
+      d.gy = P ? P.y : Y(gx) + .02; d.m.position.set(x, camBase + 13, P ? P.z : (R() - .5) * 5); d.vy = 0; d.m.visible = true; }
+    d.vy += 22 * dt; d.m.position.y -= d.vy * dt;
+    if (d.m.position.y <= d.gy) { d.m.visible = false; d.t = -(.25 + R() * 1.3);
+      const r = F.rings.find(q => q.t > .6); if (r) { r.t = 0; r.m.position.set(d.m.position.x, d.gy + .01, d.m.position.z); r.m.visible = true; } }
+  }
+  for (const r of F.rings) { if (r.t > .6) continue; r.t += dt; const k = .12 + r.t * 1.1; r.m.scale.set(k, 1, k * .55); r.m.material.opacity = Math.max(0, .85 * (1 - r.t / .6)); if (r.t > .6) r.m.visible = false; }
 }
 function buildLadders() {                          // wooden ladders up the cliff faces, facing us, hooked over the top of the rock
   const mW = toon("#8a5a34"), mR = toon("#6b4126"), z = -.4;
@@ -3026,21 +3096,21 @@ function restArrive() {                           // in the story, a rest stop y
 // (one of the two huge trees: x, base y px, h), "willow" (the big weeping willow over a rest stop, its shade), "giant" (the giant tree, in
 // the foreground: the player walks behind it), "pool" (the cove's water: its surface, its front drawn over you as you swim), "coveRocks"
 // (the rocks Camila broke through, at the cove's edge). fg: drawn after the characters (render's last pass, layer 1)
-function tropWillow(par, x, y, z, rng, { h = 9, spread = 7.5 } = {}) {
+function tropWillow(par, x, y, z, rng, { h = 9, spread = 7.5, trunkK = 1, thick = 1 } = {}) {   // (trunkK: the trunk's girth; thick: how full the crown is)
   const z0 = -z;                                     // (local z of the path's front edge: the strands stay behind it)   // a weeping willow: a thick gnarled trunk, great limbs, and a dome of long hanging strands nearly to the ground
   const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z), bark = toon("#5d4a3a"), barkD = toon("#463628"), D = { side: THREE.DoubleSide };
   const leaf = ["#6f9e3c", "#5d8f34", "#80ad46", "#4f8130"].map(c => toon(c, D)), dome = ["#5a8d36", "#4a7d30", "#6a9d40"].map(c => toon(c));
   let pp = new THREE.Vector3(0, -.4, 0); const segs = [[.12, 1, 1.15, .95], [-.18, 1, .95, .8], [.1, 1, .8, .7]];
-  segs.forEach(([dx, dy, r0, r1], i) => { const d = new THREE.Vector3(dx, dy, 0).normalize(), L = h / 3 + .3, c = mk(new THREE.CylinderGeometry(r1, r0, L, 9), null, { mat: bark, ol: .05 });
+  segs.forEach(([dx, dy, r0, r1], i) => { r0 *= trunkK; r1 *= trunkK; const d = new THREE.Vector3(dx, dy, 0).normalize(), L = h / 3 + .3, c = mk(new THREE.CylinderGeometry(r1, r0, L, 9), null, { mat: bark, ol: .05 });
     pointAlong(c, d); c.position.copy(pp).addScaledVector(d, L / 2); g.add(c); pp.addScaledVector(d, L);
     if (i < 2) g.add(at(mk(new THREE.SphereGeometry(r1 * 1.05, 9, 7), null, { mat: bark, ol: 0 }), pp.x, pp.y, pp.z)); });
   for (let i = 0; i < 6; i++) { const s = mk(new THREE.BoxGeometry(.09, R(1.2, 2.6), .1), null, { mat: barkD, ol: 0 }); at(s, R(-.6, .6), R(.6, h * .7), .9 + R(0, .2)); s.rotation.z = R(-.2, .2); g.add(s); }   // (the bark's furrows)
-  [[-1, 1.0], [1, .9], [-1, .7], [1, .55]].forEach(([sd, k]) => { const d = new THREE.Vector3(sd * R(.8, 1.2), R(.35, .6), R(-.3, .3)).normalize(), L = spread * k * .7, b = mk(new THREE.CylinderGeometry(.25, .55, L, 7), null, { mat: bark, ol: .04 });
+  [[-1, 1.0], [1, .9], [-1, .7], [1, .55]].forEach(([sd, k]) => { const d = new THREE.Vector3(sd * R(.8, 1.2), R(.35, .6), R(-.3, .3)).normalize(), L = spread * k * .7, b = mk(new THREE.CylinderGeometry(.25 * Math.min(1, trunkK * 1.2), .55 * Math.min(1, trunkK * 1.2), L, 7), null, { mat: bark, ol: .04 });
     pointAlong(b, d); b.position.copy(pp).addScaledVector(d, L / 2); g.add(b); });
   const top = pp.y + 1.2;
-  for (let i = 0; i < 16; i++) { const a = R(0, TAU), dd = R(0, spread * .85); g.add(at(mk(new THREE.IcosahedronGeometry(R(2.2, 3.4), 0).scale(1.3, .6, .9), null, { mat: dome[i % 3], ol: 0 }), Math.cos(a) * dd, top + R(-.6, 1.4) - dd * .12, Math.sin(a) * dd * .45)); }
+  for (let i = 0; i < Math.round(16 * thick); i++) { const a = R(0, TAU), dd = R(0, spread * .85); g.add(at(mk(new THREE.IcosahedronGeometry(R(2.2, 3.4) * (thick > 1 ? 1.15 : 1), 0).scale(1.3, .6 + (thick > 1 ? .2 : 0), .9), null, { mat: dome[i % 3], ol: 0 }), Math.cos(a) * dd, top + R(-.6, 1.4) - dd * .12, Math.min(Math.sin(a) * dd * .45, z0 - 1.6))); }
   const strand = new THREE.PlaneGeometry(.1, 1).translate(0, -.5, 0);   // (a strand of leaves, hung from its top)
-  for (let i = 0; i < 300; i++) { const a = R(0, TAU), dd = Math.sqrt(rng()) * spread, sx = Math.cos(a) * dd, sz = Math.min(Math.sin(a) * dd * .45, z0 - .9), sy = top - .8 - dd * .18 + R(-.4, .4), len = Math.max(1.2, sy - R(.6, 2.4));   // (none in front of the path)
+  for (let i = 0; i < Math.round(300 * thick); i++) { const a = R(0, TAU), dd = Math.sqrt(rng()) * spread, sx = Math.cos(a) * dd, sz = Math.min(Math.sin(a) * dd * .45, z0 - .9), sy = top - .8 - dd * .18 + R(-.4, .4), len = Math.max(1.2, sy - R(.6, 2.4));   // (none in front of the path)
     const m = new THREE.Mesh(strand, leaf[i % 4]); m.scale.set(R(.8, 1.4), len, 1); m.position.set(sx, sy, sz); m.rotation.set(R(-.12, .12), R(0, TAU), R(-.08, .08)); g.add(m); }
   return g;
 }
@@ -3091,8 +3161,8 @@ function buildSet(s) {
         for (let i = 0; i < len / 3; i++) tropLiana(g, M, x0 + R(0, len), top - .2, R(-.8, .8), R(.6, 2.2), rng);   // (vines hanging from it)
       }
     }
-    if (P.k === "ceiba") { const c = tropCeiba(g, M, X(P.x), Y(P.base ?? GROUND), P.z ?? -3, rng, { h: P.h ?? 14, ol: .05, crown: P.crown !== false, back: !!P.back }); c.scale.setScalar(P.scale ?? 1.6); }   // (crown false: its trunk, the room above has the crown)
-    if (P.k === "willow") { const gy = groundAt(P.x) ?? GROUND; tropWillow(g, X(P.x), Y(gy), P.z ?? -2.6, rng, { h: P.h ?? 9, spread: P.spread ?? 7.5 });
+    if (P.k === "ceiba") { const c = tropCeiba(g, M, X(P.x), Y(P.base ?? GROUND), P.z ?? -3, rng, { h: P.h ?? 14, ol: .05, crown: P.crown !== false, back: !!P.back, crownK: P.crownK ?? 1, crownBack: !!P.crownBack, bloom: P.bloom || null }); c.scale.setScalar(P.scale ?? 1.6); }   // (crown false: its trunk, the room above has the crown)
+    if (P.k === "willow") { const gy = groundAt(P.x) ?? GROUND; tropWillow(g, X(P.x), Y(gy), P.z ?? -2.6, rng, { h: P.h ?? 9, spread: P.spread ?? 7.5, trunkK: P.trunkK ?? 1, thick: P.thick ?? 1 });
       const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d1a10", transparent: true, opacity: .32, depthWrite: false }));   // its shade, over the camp
       sh.scale.set(P.spread ?? 7.5, 1, 4.2); at(sh, X(P.x), Y(gy) + .04, .2); g.add(sh); }
     if (P.k === "giant") giantTree(g, P.part || "trunk", X(P.x), Y(groundAt(P.x) ?? GROUND), P.z ?? 4.4, rng);
@@ -3194,9 +3264,9 @@ function authorForest() {
     prev: COVE, next: C.A2, arriveX: 2440, arriveF: -1, set: [{ k: "bridge" }] }, []);
   // A2, A3: the canopy, no floor: the bridge right across, the two huge trees' crowns (their trunks in B2 and B3); off it and down into B2 / B3
   room("A2", { open: true, gaps: [[-200, 2760]], below: C.B2, plats: [[-10, BY, 2580, "bridge"]], prev: C.A1, next: C.A3, items: [["gum", 2300, BY]],
-    set: [{ k: "bridge" }, { k: "ceiba", x: 1350, base: GROUND + 560, h: 14 }] }, [["acorn", "rust", { plat: 0, x: 700 }]]);
+    set: [{ k: "bridge" }, { k: "ceiba", x: 1350, base: GROUND + 840, h: 14, z: -7, crownK: 1.45, crownBack: true, bloom: "#ff8fb1" }] }, [["acorn", "rust", { plat: 0, x: 700 }]]);   // (the great trees' crowns up level with the bridge, in flower: the user, 2026-10-24, "the tops of the two big trees ... stand out more")
   room("A3", { open: true, gaps: [[-200, 2760]], below: C.B3, plats: [[-10, BY, 2580, "bridge"]], prev: C.A2, next: C.A4,
-    set: [{ k: "bridge" }, { k: "ceiba", x: 820, base: GROUND + 560, h: 15 }] }, [["leafy", "rust", { plat: 0, x: 1900 }]]);
+    set: [{ k: "bridge" }, { k: "ceiba", x: 820, base: GROUND + 880, h: 15, z: -7, crownK: 1.45, crownBack: true, bloom: "#ffb347" }] }, [["leafy", "rust", { plat: 0, x: 1900 }]]);
   [C.A2, C.A3].forEach(i => nm(S0[i], "CANOPY"));
   // A4: the bridge comes in at the left and ends at its ladder; the land again (a cliff up out of the canopy at the edge); Camila's climb up
   // from B3's far end comes out at the left
@@ -3204,7 +3274,7 @@ function authorForest() {
     [["pinecone", "rust", { plat: 0, x: 300 }], ["leafy", "orange", 1300], ["logger", "bark", 1650], ["stumpy", "olive", 2150]]);
   // A5: the rest stop, under a great weeping willow
   const a5 = room("A5", { ground: [[0, 0], [600, -30], [1100, 0], [1700, 0], [2100, -40], [2560, -20]], plats: [[2150, 330, 170, "shroom"]], rest: true, peace: true, prev: C.A4, next: C.A6,
-    set: [{ k: "willow", x: 1480, spread: 8 }] }, []); nm(a5, "REST STOP");
+    set: [{ k: "willow", x: 1480, h: 7.4, spread: 12.5, trunkK: .62, thick: 1.9 }] }, []); nm(a5, "REST STOP");   // (huge, the user, 2026-10-24: "a regular sized trunk but ... the leaves should be thick and cover the majority of the width of the screen")
   // A6: the top of the giant tree, in front of you; a mini boss (out in the open, not behind the trunk)
   const a6 = room("A6", { ground: [[0, 0]], plats: [[520, 330, 180, "shroom"], [2050, 320, 200, "slab"]], prev: C.A5, next: C.A7, set: [{ k: "giant", part: "top", x: TX, fg: true }] },
     [["leafy", "leaf", 650], ["thornball", "purple", 950], ["mossback", "moss", 1950, "mini"], ["twiggy", "olive", 2380]]); nm(a6, "GIANT TREE");
@@ -3235,7 +3305,7 @@ function authorForest() {
     [["pinecone", "rust", 560], ["leafy", "leaf", 1700], ["stumpy", "olive", 2100]]);
   // C4: the beps' hideout (where they walk you to); a hole in the middle down to D4; roots from B4's dirt overhead; Rose's tall grass at the
   // far end, a baddie in front of it
-  room("C4", { ground: [[0, 0]], gaps: [[1020, 1170]], below: C.D4, prev: C.C3, next: C.C5, bep, cutTip: true, secret: { who: "rose", x: 2440, door: true, tall: true, key: "grass:C4C5" },
+  room("C4", { tone: "dim", ground: [[0, 0]], gaps: [[1020, 1170]], below: C.D4, prev: C.C3, next: C.C5, bep, cutTip: true, secret: { who: "rose", x: 2440, door: true, tall: true, key: "grass:C4C5" },
     ceils: [[-600, 3200, 100]] }, [["thornball", "purple", 2100]]);   // (the ceiling: the woods' own, drawn for its ceils; a second one on top of it flickered, 2026-10-24)
   // C5: the other side of the grass (the same grass: cut once, cut for good, from either side); stairs up to the hole from B5 (jump up it: on
   // to B6 that way); 3 baddies; the wall at the far end (C6 is beyond it)
@@ -3244,7 +3314,7 @@ function authorForest() {
     [["leafy", "leaf", 700], ["acorn", "rust", 1150], ["twiggy", "olive", 1650]]); nm(c5, "STAIRS");
   // C6: in front of the giant tree; a ledge with a baddie, a mango up on a small platform, two baddies; the hole the tree's ledges climb up
   // from D6; on to C7
-  room("C6", { ground: [[0, 0]], gaps: [[1330, 1530]], below: C.D6, noLeft: true, next: C.C7, arriveX: 1590, arriveF: 1, plats: [[150, 300, 520, "slab"], [960, 170, 300, "slab"]],
+  room("C6", { dark: true, ground: [[0, 0]], gaps: [[1330, 1530]], below: C.D6, noLeft: true, next: C.C7, arriveX: 1590, arriveF: 1, plats: [[150, 300, 520, "slab"], [960, 170, 300, "slab"]],
     items: [["fruit", 1110, 170]], set: [{ k: "giant", part: "trunk", x: TX, z: -3.4 }, { k: "earth", side: -1, col: EARTH }] },
     [["leafy", "leaf", { plat: 0 }], ["stumpy", "olive", 1900], ["pinecone", "rust", 2250]]);
   S0[C.C7].prev = C.C6;
@@ -3262,7 +3332,7 @@ function authorForest() {
   // D5: the hub (a checkpoint too); C5's pale green pillars hanging down into it
   const d5 = room("D5", { ground: [[0, 0]], hub: 1, peace: true, prev: C.D4, next: C.D6, set: [{ k: "pillars", xs: [110, 2450] }] }, []); nm(d5, "HUB");
   // D6: the giant tree's roots (you walk in front of it, as in C6); ledges out of its trunk up into C6; on to D7 along the bottom
-  room("D6", { ground: [[0, 0]], climbUp: { x: TX, to: C.C6 }, noClimbFace: true, prev: C.D5, next: C.D7, set: [{ k: "giant", part: "roots", x: TX, z: -3.4 }, { k: "shelves" }] }, []);
+  room("D6", { dark: true, ground: [[0, 0]], climbUp: { x: TX, to: C.C6 }, noClimbFace: true, prev: C.D5, next: C.D7, set: [{ k: "giant", part: "roots", x: TX, z: -3.4 }, { k: "shelves" }] }, []);
   S0[C.D7].prev = C.D6;
 
   // nothing left leading into a room that's gone
@@ -3283,6 +3353,7 @@ function setScreen(s) {                              // build stage s (its platf
     if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
     if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
+    level.objs.push(buildRowBits(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
     level.fg = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
     restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
     if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
@@ -16938,7 +17009,7 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
-  syncCards(); syncHazards(); syncBubble(dt); syncSwingTrail(); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom();
+  syncCards(); syncHazards(); syncBubble(dt); syncSwingTrail(); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
