@@ -1205,9 +1205,11 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   // then red by the hilt); none at all to start with or after a knock-out (the user, 2026-10-23: "there shouldnt be extra spikes on it. only the
   // three main ones ... THOSE are the ones that appear as you kill enemies"; the shark teeth that grew along the back edge are gone)
   const notches = [Q.c1, Q.c2, Q.c3].map((col, i) => {
-    const x = (.34 + i * .25) * LK, tri = new THREE.Shape(); tri.moveTo(-.045, 0); tri.lineTo(.045, 0); tri.lineTo(0, -.075); tri.closePath();
-    const g = group(inner, x, -W / 2 + .012, 0); g.add(P(slab(tri, .028, .006), M(col)));                    // (its pivot on the blade's edge: it grows out of it)
-    [-1, 1].forEach(z => g.add(at(P(new THREE.SphereGeometry(.014, 8, 6), M("#ffffff")), 0, -.03, z * .02)));
+    // (bigger since 2026-10-23, with a dark rim round each: "Make the teeth on rose's sword bigger and more noticeable")
+    const x = (.34 + i * .25) * LK, tri = (h, d) => { const t = new THREE.Shape(); t.moveTo(-h, 0); t.lineTo(h, 0); t.lineTo(0, -d); t.closePath(); return t; };
+    const g = group(inner, x, -W / 2 + .012, 0); g.add(P(slab(tri(.072, .13), .04, .006), M(col)));        // (its pivot on the blade's edge: it grows out of it)
+    g.add(at(P(slab(tri(.088, .158), .03, .004), M("#2f3b43")), 0, .006, 0));                                 // the rim
+    [-1, 1].forEach(z => g.add(at(P(new THREE.SphereGeometry(.02, 10, 8), M("#ffffff")), 0, -.05, z * .028)));
     g.scale.setScalar(0); g.visible = false; return g;
   });
   const teeth = [notches[2], notches[1], notches[0]];      // (the order they come in: the tip's first)
@@ -1254,7 +1256,8 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
   const SR = [.056, .062, .062], SZ = [.102, .034, -.034], ka = Math.PI * 1.22, sa = Math.PI * 1.12, spikeAim = [];
   const teeth = SR.map((R, i) => {
     const sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), SZ[i]), aim = group(sp);
-    aim.add(at(P(new THREE.ConeGeometry(.032, .16, 10), M([Q.c3, Q.c4 || Q.c2, Q.c1][i])), 0, .072, 0));   // (the middle one the sleeve's purple, not red: the user 2026-10-22)
+    aim.add(at(P(new THREE.ConeGeometry(.048, .25, 12), M([Q.c3, Q.c4 || Q.c2, Q.c1][i])), 0, .115, 0));   // (the middle one the sleeve's purple, not red: the user 2026-10-22; bigger since 10-23e)
+    aim.add(at(P(new THREE.CylinderGeometry(.056, .06, .03, 14), M("#2f3b43")), 0, .005, 0));               // (a dark collar at its foot: it stands out of the knuckle)
     const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * SZ[i] * 2.2).normalize()));
     aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: SZ[i], q }); sp.scale.setScalar(0); sp.visible = false; return sp;
   });
