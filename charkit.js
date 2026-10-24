@@ -1664,9 +1664,9 @@ function climbPose(p, cat) {
 }
 function wallPose(p) {                             // up a bare wall (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
   const ph = p.climbPh || 0, s = Math.sin(ph), a = Math.max(0, s), b = Math.max(0, -s), hit = Math.pow(Math.abs(Math.cos(ph)), 6);   // wall with her gauntlet ... to cling, and then climb up with the other": elbows out,
-  return { lean: .3, arch: .12, bodyY: -.16 + .03 * hit, headRot: -.1,                                            // a hunched crouch against it, one arm driving straight up into the rock as the other hauls
+  return { lean: .2, arch: .08, bodyY: -.04 + .02 * hit, headRot: -.1,                                           // close in against it, one arm driving straight up into the rock as the other hauls
     armF: 2.35 + .55 * a, elbF: 1.25 - 1.0 * a, armB: 2.35 + .55 * b, elbB: 1.25 - 1.0 * b, spF: .3, spB: .3,
-    fNx: .22, fNy: .3 + .25 * b, fFx: .16, fFy: .3 + .25 * a, fP: -.35 };
+    fNx: .14, fNy: .03 + .2 * b, fFx: .1, fFy: .03 + .2 * a, fP: -.22 };   // (the legs hanging under her, a knee coming up in turn: they were folded up into her chest, the user 2026-10-24)
 }
 const TPOSE = { lean: 0, arch: 0, bodyY: 0, headRot: -.08, armF: 0, elbF: .04, armB: 0, elbB: .04, spF: 1.52, spB: 1.52, fNx: .1, fFx: -.1, fNy: 0, fFy: 0 };
 const TIRED_H = { lean: .62, arch: .2, bodyY: -.14, headRot: .32, armF: .78, elbF: .18, armB: .68, elbB: .18, spF: .05, spB: .05, fNx: .18, fFx: -.16 };   // bent over, hands on knees
