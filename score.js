@@ -346,6 +346,29 @@ window.BerryScore = (() => {
     { lead: "bright", pad: .013, bass: "groove", drums: "march", arp: .018, verb: .22, gain: .93 },
     { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .66 },   // SERENE (8): the beps' pineapple hut
   ];
+  // the deep's song (world 13, ORIGINAL, 2026-10-24): a slow swimming tune in E Dorian, 73 bpm, 16 bars. Long notes that rise like bubbles
+  // from B up to G and float there, the Dorian C-sharp lifting the second bar; a B section that climbs through C major and D to a high C over
+  // the A-major turn, then settles back on E. Played on bells, keys and a harp under a lot of water (reverb), the beat only a soft brush
+  const MEL14 = [[0,4,71],[4,2,74],[6,2,76],[8,8,79],[16,4,78],[20,4,76],[24,6,73],[30,2,71],[32,6,72],[38,2,74],[40,8,76],
+    [48,4,78],[52,4,75],[56,8,71],[64,4,71],[68,2,76],[70,2,78],[72,8,83],[80,4,81],[84,4,78],[88,8,76],[96,6,78],[102,2,76],[104,4,73],[108,4,69],
+    [112,4,71],[116,4,75],[120,8,71],[128,6,79],[134,2,78],[136,8,76],[144,4,74],[148,4,78],[152,8,81],[160,6,78],[166,2,76],[168,8,74],
+    [176,4,71],[180,4,74],[184,8,76],[192,4,79],[196,4,83],[200,8,84],[208,4,83],[212,4,81],[216,8,76],[224,6,78],[230,2,76],[232,4,75],[236,4,71],
+    [240,12,76],[252,2,71],[254,2,74]];
+  const CH14 = ["Em9","Em9","A","A","Cmaj7","Cmaj7","B7sus","B7","Em9","Em9","A","A","F#m7","F#m7","B7","B7",
+    "Cmaj7","Cmaj7","D","D","Bm7","Bm7","Em","Em","Cmaj7","Cmaj7","A","A","B7sus","B7","Em","Em"];
+  const VOICE14 = { Em9: [52, 55, 59, 66], Em: [52, 55, 59, 64], A: [52, 57, 61, 64], Cmaj7: [48, 52, 55, 59], B7: [51, 54, 57, 59], B7sus: [52, 54, 57, 59], "F#m7": [52, 54, 57, 61], D: [50, 54, 57, 62], Bm7: [50, 54, 57, 59] };
+  const ROOT14 = { Em9: 40, Em: 40, A: 45, Cmaj7: 36, B7: 35, B7sus: 35, "F#m7": 42, D: 38, Bm7: 35 };
+  const STYLES14 = [
+    { lead: "keys", pad: .016, bass: "long", drums: "brush", arp: .016, harp: true, verb: .42, gain: .82 },        // midday (the PC build: the recording)
+    { lead: "keys", pad: .016, bass: "long", drums: "brush", arp: .016, harp: true, verb: .44, gain: .8 },
+    { lead: "warm", pad: .017, bass: "walk", drums: "boomSoft", arp: .014, verb: .44, gain: .8 },
+    { lead: "warm", pad: .017, bass: "walk", drums: "rim", arp: .012, verb: .46, gain: .78 },
+    { lead: "bell", pad: .018, bass: "long", drums: "rim", arp: .01, harp: true, verb: .5, gain: .74 },
+    { lead: "bell", pad: .019, bass: "long", drums: null, arp: .008, verb: .54, gain: .7 },
+    { lead: "bell", pad: .02, bass: "long", drums: "heart", arp: 0, verb: .58, gain: .62, dark: true, drone: true },   // night: down in the dark water
+    { lead: "keys", pad: .016, bass: "long", drums: "brush", arp: .016, verb: .42, gain: .82 },                          // EASE (7)
+    { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .55, gain: .64 },   // SERENE (8): the beps' grotto
+  ];
   const SONGS = [
     { MEL, CH, VOICE, ROOT, DARK, STYLES, bars: 16, bpm: 100, drone: 43, darkLead: { 11: -1, 4: -1, 1: -1 }, clipVar: null },
     { MEL: MEL2, CH: CH2, VOICE: VOICE2, ROOT: ROOT2, DARK: { G: "Gm", Em: "Edim", E: "E7b5" }, STYLES: STYLES2, bars: 16, bpm: 84, drone: 45, darkLead: { 11: -1, 6: -1 }, clipVar: null },
@@ -360,6 +383,7 @@ window.BerryScore = (() => {
     { MEL: MEL11, CH: CH11, VOICE: VOICE11, ROOT: ROOT11, DARK: {}, STYLES: STYLES11, bars: 16, bpm: 120, drone: 38, darkLead: {}, clipVar: null },   // 10: Trumpeto's bazaar (original)
     { MEL: MEL12, CH: CH12, VOICE: VOICE12, ROOT: ROOT12, DARK: {}, STYLES: STYLES12, bars: 16, bpm: 112, drone: 45, darkLead: {}, clipVar: null },   // 11: Master No's casino (original)
     { MEL: MEL13, CH: CH13, VOICE: VOICE13, ROOT: ROOT13, DARK: {}, STYLES: STYLES13, bars: 16, bpm: 104, drone: 34, darkLead: {}, clipVar: null },   // 12: King P's castle (original)
+    { MEL: MEL14, CH: CH14, VOICE: VOICE14, ROOT: ROOT14, DARK: {}, STYLES: STYLES14, bars: 16, bpm: 73, drone: 40, darkLead: {}, clipVar: null },   // 13: the deep (original)
   ];
   const HUB = 9;                                 // HUB (9): a world's hub, its own take on the tune (2026-10-22; out here, not by EASE: the PC score swaps the woods' part above out)
   SONGS.forEach(S => { if (S.STYLES.length >= 9 && !S.STYLES[HUB]) S.STYLES[HUB] = { ...S.STYLES[3], hub: true, lead: "pluck", harp: true, arp: .022, verb: .22, gain: (S.STYLES[3].gain || .9) * .95, dark: false, drone: false, key: 0, orig: undefined, bpm: undefined }; });   // the hub's: the world's own drums and bass at golden hour, a mallet lead and the harp (the user, 2026-10-22: "another variation of the level's music for each hub")

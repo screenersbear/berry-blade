@@ -254,11 +254,11 @@ const TOCSIN = {
   head: { ...HEAD_DEF },
   face: { eyeSize: 1, eyeGap: 1, eyeY: 0, ...EYE_DEF, mouth: 1, spikes: 1, ears: 1 },
   parts: { cheeks: true, forehead: true, brow: true, emblem: true, bow: true, button: true, trim: true, tailBands: true, claws: true,
-    calico: false, tabby: false, belly: false, collar: false, kitty: false, points: false, dog: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
+    calico: false, tabby: false, belly: false, collar: false, kitty: false, points: false, dog: false, axo: false },    // a real cat's coat: calico patches, tabby stripes + the M, white muzzle/chest/paws, collar and bell, a little cat mouth
   colors: { fur: "#ffd21a", marks: "#ff3214", ears: "#ff3214", mouth: "#a50a06", eyeRing: "#2a9fb2", pupil: "#9a0a0a", nose: "#e040c8",
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
-    patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326" },
+    patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326", blush: "#ff86a8" },
   move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {} },
   pet: { on: false, with: "" },
 };
@@ -637,6 +637,11 @@ function catFaceArt(S, blink) {
     const ny = 266 + f.noseY; g.fillStyle = "#1c1a1e"; g.beginPath(); g.ellipse(256, ny, 26, 18, 0, 0, TAU); g.fill(); circ(g, 247, ny - 7, 6, "#ffffff");
     g.strokeStyle = "#1c1a1e"; g.lineWidth = 5; g.lineCap = "round"; g.beginPath(); g.moveTo(256, ny + 16); g.lineTo(256, ny + 28); g.quadraticCurveTo(242, ny + 42, 228, ny + 32);
     g.moveTo(256, ny + 28); g.quadraticCurveTo(270, ny + 42, 284, ny + 32); g.stroke(); g.fillStyle = "#f27a92"; g.beginPath(); g.ellipse(256, ny + 42, 11, 12, 0, 0, TAU); g.fill();
+  } else if (P.axo) {                              // an axolotl's: no nose, a little w of a mouth, pink cheeks and a shine in each eye
+    [256 - 80 * f.eyeGap, 256 + 80 * f.eyeGap].forEach(x => { if (!blink) { circ(g, x - 13 * sx, ey - 13 * sy, 11 * sx, "#ffffff"); circ(g, x + 13 * sx, ey + 15 * sy, 5 * sx, "#ffffff"); }
+      g.save(); g.globalAlpha = .55; g.fillStyle = c.blush || "#ff86a8"; g.beginPath(); g.ellipse(x + (x < 256 ? -22 : 22), ey + 64 * sy, 30, 15, 0, 0, TAU); g.fill(); g.restore(); });
+    const my = 292 + f.noseY; g.strokeStyle = c.eyeRing; g.lineWidth = 6; g.lineCap = "round"; g.lineJoin = "round";
+    g.beginPath(); g.moveTo(230, my); g.quadraticCurveTo(243, my + 15, 256, my + 2); g.quadraticCurveTo(269, my + 15, 282, my); g.stroke();
   } else if (P.kitty) {                            // a pink cat nose and the little ω mouth under it
     g.fillStyle = c.nose; g.beginPath(); g.moveTo(240, 262 + f.noseY); g.lineTo(272, 262 + f.noseY); g.lineTo(256, 280 + f.noseY); g.closePath(); g.fill();
     g.strokeStyle = c.marks; g.lineWidth = 5; g.lineCap = "round"; g.beginPath(); g.moveTo(256, 280 + f.noseY); g.lineTo(256, 292 + f.noseY);
@@ -691,7 +696,9 @@ function gloveArt(S) {                                  // crescent + star emble
 function catBodyArt(S) {
   const c = S.colors, P = S.parts, [cv, g] = cv2(512, 512);
   g.fillStyle = c.outfit; g.fillRect(0, 0, 512, 512);
-  g.fillStyle = c.fur; g.fillRect(0, 0, 512, 70);                        // fur at the neck
+  if (P.axo) { g.strokeStyle = c.trim; g.lineWidth = 5; for (let x = 6; x < 512; x += 22) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 512); g.stroke(); }   // an axolotl's sweater: ribbed all over,
+    g.fillStyle = c.trim; g.fillRect(0, 92, 512, 12); g.fillRect(0, 474, 512, 38); }   // the turtleneck's fold, and the hem
+  else { g.fillStyle = c.fur; g.fillRect(0, 0, 512, 70); }                // fur at the neck
   [0, 512].forEach(o => {                                                // the front wraps across u=0/1
     if (P.trim) fillPoly(g, [o - 6, 210, o + 20, 210, o + 20, 290, o + 2, 290, o + 2, 380, o - 28, 380, o - 28, 352, o - 14, 352, o - 14, 262, o - 6, 262], c.trim);
     if (P.bow) fillPoly(g, [o - 34, 72, o, 92, o + 34, 72, o + 34, 116, o, 96, o - 34, 116], c.bow);
@@ -770,9 +777,10 @@ function buildCat(R) {
   const root = group(PARENT), yaw = group(root), spin = group(yaw, 0, 1, 0), body = group(spin, 0, -1, 0);
   const B = () => R.spec.body;
   const torso = new Tube(body, 5, 26, 14, t => rounded(ramp([[0, .16], [.14, .2], [.42, .18], [.72, .15], [.9, .11], [1, .095]], t), t, .14, .05) * B().girth, mBody);
-  const arms = [-1, 1].map(() => new Tube(body, 5, 20, 10, t => rounded(lerp(.064, .05, t), t, .14, .1) * B().limbs, mY));
+  const arms = [-1, 1].map(() => new Tube(body, 5, 20, 10, t => rounded(lerp(.064, .05, t), t, .14, .1) * B().limbs, S.parts.axo ? M(c.outfit) : mY));   // (an axolotl's: its sweater's sleeves)
   const legs = [-1, 1].map(() => new Tube(body, 5, 22, 10, t => rounded(ramp([[0, .1], [.28, .095], [.38, .05], [1, .043]], t), t, .1, .08) * B().limbs, mLeg));
-  const tail = new Tube(body, 9, 34, 10, t => rounded(.045 + .115 * THREE.MathUtils.smoothstep(t, .28, .9), t, .04, .15) * B().tailThick, mTail);
+  const tail = S.parts.axo ? new Tube(body, 9, 34, 10, t => rounded(ramp([[0, .085], [.3, .2], [.7, .19], [1, .05]], t), t, .03, .3) * B().tailThick, mTail, 0, .28)   // (an axolotl's: a tall, thin finned paddle)
+    : new Tube(body, 9, 34, 10, t => rounded(.045 + .115 * THREE.MathUtils.smoothstep(t, .28, .9), t, .04, .15) * B().tailThick, mTail);
   // boxing-glove paws
   const gloves = [-1, 1].map(() => {
     const g = group(body);
@@ -797,12 +805,19 @@ function buildCat(R) {
   const head = group(body);
   const plain = isPlainHead(S.head), shape = headShaper(S.head), hp = plain ? new THREE.Vector3(-.02, .44, 0) : shape(new THREE.Vector3(-.02, .44, 0));
   const hg = spikyHeadGeo(S.face.spikes, S.face.ears); if (!plain) shapeGeo(hg, shape);
-  head.add(at(P(hg, mFace, 0, true), 0, -.03, 0));
+  const headM = at(P(hg, mFace, 0, true), 0, -.03, 0); head.add(headM); if (S.parts.axo) headM.scale.set(1.16, .9, 1.16);   // (an axolotl's head: broad and flat)
   const dogEars = S.parts.dog ? [-1, 1].map(s => {   // a dog's ears: soft, floppy, hanging down the sides of its head (no cat's points on top)
     const pv = group(head, -.04, .2, s * .43), e = P(new THREE.SphereGeometry(1, 18, 14).scale(.15, .29, .065), M(c.ears), 0, true); at(e, 0, -.22, s * .05); pv.add(e); pv.rotation.x = -s * .26; return pv; }) : null;   // (the head's about .42 across: ears from its top sides, down past its cheeks)
   const hatPivot = group(head, hp.x, hp.y, 0), hat = group(hatPivot);
   R.hatY = hp.y;
+  const gills = S.parts.axo ? [] : null;              // an axolotl's gills: three feathery fronds out of each side at the back of its head (the user's fan art, 2026-10-24)
+  if (gills) { const mGl = M(c.ears), mGl2 = M(c.marks); [-1, 1].forEach(s => [0, 1, 2].forEach(k => {
+    const pv = group(head, -.1, .2 - k * .12, s * .4); pv.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(-.3, .8 - k * .6, s * .85).normalize());
+    const sw = group(pv), L = .34 - Math.abs(k - 1) * .06; sw.add(at(P(new THREE.CapsuleGeometry(.042, L, 3, 8), mGl, 0, true), 0, L / 2 + .03, 0));
+    for (let j = 0; j < 5; j++) for (const f of [-1, 1]) { const b = P(new THREE.ConeGeometry(.032, .15 - j * .015, 6), mGl2); b.position.set(f * .05, .08 + j * L * .2, 0); b.rotation.z = -f * 1.05; sw.add(b); }   // (feathery filaments down both sides of it)
+    gills.push({ sw, s, k }); })); }
   if (S.parts.dog) dogHelmet(head, M, P, c);          // a dog: its helmet instead of the top hat (the hat's pivot stays, empty, for the animation)
+  else if (gills) { }                                 // (an axolotl: no hat)
   else {
     hat.add(P(new THREE.CylinderGeometry(.3, .3, .04, 16), mHat));
     hat.add(at(P(new THREE.CylinderGeometry(.22, .19, .42, 14), mHat), 0, .23, 0));
@@ -810,7 +825,7 @@ function buildCat(R) {
   }
   const shadow = new THREE.Mesh(new THREE.CircleGeometry(.6, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
-  return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB, dogEars });
+  return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB, dogEars, gills });
 }
 
 // ───────────────────────────── chibi human body ─────────────────────────────
@@ -1662,6 +1677,11 @@ function climbPose(p, cat) {
   if (cat) Object.assign(T, { tailBase: 1.1, tailCurl: .12, tailSwish: .25 * s, hatTilt: -.1 });
   return T;
 }
+function swimPose(p, t) {                          // swimming (the deep, 2026-10-24): arms pulling in turn (up over the head as you go faster), legs kicking; treading water when still
+  const sp = clamp((Math.abs(p.vx) + Math.abs(p.vy)) / 220, 0, 1), s = Math.sin(t * (4 + 5 * sp)), s2 = Math.sin(t * 2.6), c2 = Math.cos(t * 2.6);
+  return { lean: .05, arch: .1 * sp, bodyY: 0, headRot: -.35 * sp, armF: 1.1 + 1.6 * sp + .7 * s2, elbF: .35 + .3 * c2, armB: 1.1 + 1.6 * sp - .7 * s2, elbB: .35 - .3 * c2,
+    spF: .3, spB: .3, fNx: -.04, fNy: .12 + .1 * s, fFx: -.1, fFy: .12 - .1 * s, fP: -.6 };
+}
 function wallPose(p) {                             // up a bare wall (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
   const ph = p.climbPh || 0, s = Math.sin(ph), a = Math.max(0, s), b = Math.max(0, -s), hit = Math.pow(Math.abs(Math.cos(ph)), 6);   // wall with her gauntlet ... to cling, and then climb up with the other": elbows out,
   return { lean: .2, arch: .08, bodyY: -.04 + .02 * hit, headRot: -.1,                                           // close in against it, one arm driving straight up into the rock as the other hauls
@@ -2030,6 +2050,7 @@ function updatePoseHuman(p, dt) {
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
+  else if (p.dive && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
   else if (a >= 0 && p.atkKind === "punch") {
     if (a < .06) Object.assign(T, { lean: .04, armF: -.45, elbF: 1.9, armB: .6, elbB: 1.8, fNx: .2, fFx: -.18 });                 // cock the fist
@@ -2175,6 +2196,9 @@ function catStance(p, L) {                            // when each paw is down i
   out.rate = rs.length ? rs.reduce((a, b) => a + b) / rs.length : 0;
   return (r._stance = out);
 }
+function catSwimPose(p, t) { const sp = clamp((Math.abs(p.vx) + Math.abs(p.vy)) / 220, 0, 1), s = Math.sin(t * (4.5 + 5 * sp)), w = Math.sin(t * (5 + 6 * sp));
+  return { lean: .55 + .85 * sp, arch: -.08, bodyY: 0, headRot: -.25 * sp, armF: 1.2 + .7 * s, elbF: .5, armB: 1.2 - .7 * s, elbB: .5,
+    fNx: -.22 - .12 * sp, fNy: .26 + .07 * s, fFx: -.28 - .12 * sp, fFy: .26 - .07 * s, fP: -1, tailBase: 1.5 + .12 * w, tailCurl: .12 * w, tailSwish: .3 + .3 * sp, hatTilt: 0 }; }
 function updatePoseCat(p, dt) {
   const T = { ...POSE0 }, t = api.time, sp = Math.abs(p.vx), m = p.rig.spec.move, Bd = p.rig.spec.body;
   if (p.sit) Object.assign(T, { lean: .05, arch: .1, bodyY: -.36, armF: .55, elbF: 1.0, armB: .45, elbB: 1.0, fNx: .3, fFx: .24, fP: .35, tailBase: .5, tailCurl: .35, tailSwish: .25, headRot: .08 });
@@ -2190,6 +2214,7 @@ function updatePoseCat(p, dt) {
     else Object.assign(T, { lean: .05, arch: 0, armF: 2.9, elbF: .3, armB: -.4, hatLift: .06, hatTilt: .15, tailBase: 1.1, tailCurl: -.25 });
   } else if (p.bounceT >= 0)    // flip: curl up into a ball like a cat
     Object.assign(T, { lean: .7, arch: .6, armF: 1.3, elbF: 1.5, armB: 1.0, elbB: 1.4, fNx: .14, fNy: .34, fFx: .04, fFy: .3, fP: -.4, tailBase: 2.3, tailCurl: .22, hatLift: .2 });
+  else if (p.dive && !p.onGround) Object.assign(T, catSwimPose(p, t));   // swimming (the deep): paddling, the tail waving it along
   else if (!p.onGround) {
     if (p.vy < -160) Object.assign(T, { lean: .05, arch: -.3, armF: 2.5, elbF: .2, armB: -.7, fNx: -.02, fNy: .1, fFx: -.2, fFy: .04, fP: -.5, tailBase: 1.9, tailCurl: .03, hatTilt: -.12 }), layPose(T, m.rise, p);
     else if (p.vy < 160) Object.assign(T, { lean: .25, arch: .3, armF: 1.5, elbF: .7, armB: 1.0, elbB: .6, fNx: .14, fNy: .28, fFx: .02, fFy: .22, fP: -.2, tailBase: 1.3, tailCurl: -.12, hatLift: .06 }), layPose(T, m.top, p);
@@ -2207,6 +2232,7 @@ function updatePoseCat(p, dt) {
   if ((p.block || p.tpose > 0) && p.atkT < 0 && p.hurtT <= 0) { const B = { ...CAT_BLOCK, ...(m.guard || {}) }; for (const k in B) if (p.onGround || !LEG_CH.has(k)) T[k] = B[k]; }   // (in the air: arms and body only)
   if (p.atkT < 0 && p.hurtT <= 0 && !p.climb) extraPoses(p, T, true);
   if (p.hurtT <= 0 && p.atkT < 0) T.lean += m.lean;
+  if (p.rig.spec.parts.axo && !p.sit) { T.tailBase = Math.max(T.tailBase, 1.6); T.tailCurl *= .4; }   // (an axolotl's tail trails low behind it, never up over its back)
   smoothPose(p, T, dt);
   // gait, keyframed from the run GIF: push off → legs stretch straight out behind in a flat leap with the paws reaching ahead →
   // paws pull back under the chest as the back legs swing all the way forward → push off again. One bound per 140px travelled.
@@ -2342,6 +2368,8 @@ function syncCat(p, r, dt = 0) {
   const near = p.face > 0 ? 1 : -1;      // +z faces the camera when facing right
   if (r.dogEars) { const lift = clamp((p.vy || 0) * .0007, -.12, .6), run = Math.min(1, Math.abs(p.vx || 0) / 300);   // (a dog's ears flop: out and up as it drops, streaming back as it runs)
     r.dogEars.forEach((e, i) => { const s = i ? 1 : -1; e.rotation.x = -s * (.26 + lift); e.rotation.z = -(.06 + run * .5) + Math.sin(api.time * 11 + i) * .07 * run; }); }
+  if (r.gills) { const run = Math.min(1, (Math.abs(p.vx || 0) + Math.abs(p.vy || 0)) / 320);   // (an axolotl's gills: waving softly, streaming back as it swims)
+    r.gills.forEach(({ sw, s, k }) => { const ph = api.time * (2.2 + run * 3.5) + k * .9 + (s > 0 ? 0 : 1.7); sw.rotation.x = s * Math.sin(ph) * (.14 + .08 * run); sw.rotation.z = .45 * run + Math.cos(ph * .8) * .09; }); }
 
   // spine: pelvis → chest → neck, bending with lean (hunch) and arch (round back / stretch)
   const y0 = HIPY + o.bodyY, ang = [o.lean * .35 + o.arch * .5, o.lean * .9, o.lean * 1.3 - o.arch * .5].map(a => Math.min(a, 1.62));   // never past horizontal
