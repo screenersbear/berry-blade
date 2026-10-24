@@ -239,7 +239,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -259,7 +259,7 @@ const TOCSIN = {
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
     patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326" },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {} },
   pet: { on: false, with: "" },
 };
 const PRESETS = [
@@ -521,6 +521,7 @@ function fit(t, v, path) {                     // shape v like the template t, k
   if (/^move\.(stance|guard|rise|top|fall|hurt)$/.test(path)) return fitPose(v);
   if (path === "move.anims") return fitAnims(v);
   if (path === "move.rests") return fitRests(v);
+  if (path === "move.clear") return fitRests(v);   // (the editor's parts whose original animation you cleared, and the pose each holds: { move: { channel: value } })
   if (t && typeof t === "object") {
     const o = {}, vv = v && typeof v === "object" && !Array.isArray(v) ? v : {};
     for (const k in t) o[k] = fit(t[k], vv[k], path ? path + "." + k : k);

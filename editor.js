@@ -298,7 +298,11 @@ function softSetCycle(track, u, x, r, R) {                     // move the loop 
 // Your keys are marked [t, value, 1] (the game reads only [t, value]); move.rests keeps what a part the move doesn't key itself rested at.
 const mine = k => k[2] === 1;
 const restOf = (kind, sc) => { const R = (cur.spec.move.rests || {})[kind]; return R && typeof R[sc] === "number" ? R[sc] : null; };
-function baseFn(kind, sc, rest) { const b = (moveDef(kind).keys || {})[sc]; return b ? t => KIT.keyv(b, t) : () => rest ?? 0; }
+// cleared (the user, 2026-10-23: "we need the ability to reset a pose entirely ... I cant delete the original animation ... it always reset to whatever
+// the aniamtion was set to"): a part whose original animation you've cleared holds one pose the whole move (move.clear[kind][channel]), so your keys
+// are all that moves it; deleting every key of yours leaves it holding still there, not back to the original
+const clearOf = (kind, sc) => { const C = (cur.spec.move.clear || {})[kind]; return C && typeof C[sc] === "number" ? C[sc] : null; };
+function baseFn(kind, sc, rest) { const c = clearOf(kind, sc); if (c !== null) return () => c; const b = (moveDef(kind).keys || {})[sc]; return b ? t => KIT.keyv(b, t) : () => rest ?? 0; }
 function keysOn(tr, base) {                                      // your keys on a track as [t, change]; a track made before keys were marked: its peaks
   if (!tr) return [];
   const ks = tr.filter(mine);
@@ -307,8 +311,9 @@ function keysOn(tr, base) {                                      // your keys on
   return d.filter(([, x], i) => { const a = Math.abs(x), l = i ? Math.abs(d[i - 1][1]) : 0, r = i < d.length - 1 ? Math.abs(d[i + 1][1]) : 0; return a > .01 && a >= l && a > r; });
 }
 function buildTrack(kind, sc, keys, base, R) {                   // [[t, change]] → the track (null when none are left: back to the move as it ships)
-  if (!keys.length) return null;
-  const S = moveDef(kind), dur = S.dur, b = (S.keys || {})[sc], w = d => d >= 1 ? 0 : .5 + .5 * Math.cos(Math.PI * d);
+  const S = moveDef(kind), dur = S.dur, cl = clearOf(kind, sc);
+  if (!keys.length) return cl !== null ? [[0, cl], [+dur.toFixed(4), cl]] : null;   // (a cleared part: held still)
+  const b = cl !== null ? null : (S.keys || {})[sc], w = d => d >= 1 ? 0 : .5 + .5 * Math.cos(Math.PI * d);
   keys = keys.slice().sort((p, q) => p[0] - q[0]);
   const t0 = keys[0][0], tn = keys[keys.length - 1][0], kt = keys.map(k => k[0]), e = spread > 0 ? spread : 1 / 60, at = [0, dur, t0 - e, t0 - e / 2, tn + e / 2, tn + e];
   if (b) densify(b).forEach(k => at.push(k[0]));                  // the shipped curve's own shape
@@ -342,6 +347,35 @@ function dropKeys(kind, gone, say) {                             // gone(sc, t) 
   if (!k0) return;
   if (!Object.keys(A).length) { delete n.move.anims[kind]; delete n.move.rests[kind]; }
   stageSpec(n); renderKeys(); if (tab === "ANIMATE") renderControls(); tl.nudge = true; onion = null; toast(say + " · UNDO BRINGS IT BACK");
+}
+// the channels a move animates: what it ships keyed, what you've keyed, and what you've cleared (the parts it doesn't key follow her stance)
+function animChans(kind) {
+  const S = moveDef(kind), own = (cur.spec.move.anims || {})[kind] || {}, cl = (cur.spec.move.clear || {})[kind] || {};
+  return [...new Set([...Object.keys(S.keys || {}), ...Object.keys(own), ...Object.keys(cl)])].filter(c => KIT.ANIM_CH[c]);
+}
+function clearOriginal(kind, chans, say) {                       // these parts: their original animation (and your keys on them) gone; each holds the pose it starts the move in
+  const S = moveDef(kind), n = clone(cur.spec), m = n.move, A = m.anims[kind] = m.anims[kind] || {}, C = (m.clear = m.clear || {})[kind] = (m.clear[kind] || {}), dur = +S.dur.toFixed(4);
+  let k = 0;
+  for (const sc of chans) {
+    const R = KIT.ANIM_CH[sc], b = (S.keys || {})[sc], own = A[sc]; if (!R || (!b && !own)) continue;
+    const v = clamp(clearOf(kind, sc) ?? (b ? KIT.keyv(b, 0) : own[0][1]), R[0], R[1]);
+    C[sc] = v; A[sc] = [[0, v], [dur, v]]; if (m.rests[kind]) delete m.rests[kind][sc]; k++;
+  }
+  if (!k) { toast("NOTHING TO CLEAR THERE: THE MOVE DOESN'T ANIMATE IT"); return; }
+  stageSpec(n); renderKeys(); if (tab === "ANIMATE") renderControls(); tl.nudge = true; onion = null; toast(say + " · UNDO BRINGS IT BACK", 3600);
+}
+function partMenu(kind, anchor) {                                // CLEAR ONE PART…: which part's original goes
+  closeKeyMenu();
+  const chans = animChans(kind), parts = [...new Set(chans.map(partOf))].filter(p => p !== "other");
+  const m = keyMenuEl = el("div", "keymenu"); m.setAttribute("role", "menu");
+  const hd = el("header"), x = el("button", "x", "✕"); x.type = "button"; x.setAttribute("aria-label", "Close"); x.onclick = closeKeyMenu;
+  hd.append(el("b", null, "CLEAR ONE PART'S ORIGINAL"), x); m.append(hd, el("small", null, "it holds its starting pose; only your keys move it"));
+  parts.forEach(p => { const b = el("button", null, p.toUpperCase()); b.type = "button"; b.setAttribute("role", "menuitem");
+    b.onclick = () => { closeKeyMenu(); clearOriginal(kind, chans.filter(c => partOf(c) === p), p.toUpperCase() + "'S ORIGINAL CLEARED"); }; m.append(b); });
+  root.append(m);
+  const r = anchor.getBoundingClientRect(), w = m.offsetWidth, h = m.offsetHeight;
+  m.style.left = clamp(r.left + r.width / 2 - w / 2, 8, innerWidth - w - 8) + "px"; m.style.top = clamp(r.top - h - 10, 8, innerHeight - h - 8) + "px";
+  m.querySelector("button:not(.x)").focus();
 }
 function applyVals(vals) {                                       // a dot or a ring has moved: { channel (as in st.out): value }
   const tgt = hdrag.target, n = clone(cur.spec), m = n.move;
@@ -594,6 +628,7 @@ function frame(now) {
   if (pending && now - lastApply > applyCost * 1.6) {            // rebuilds pace themselves while a slider is dragged
     const s = pending; pending = null; const t0 = performance.now();
     applySpec(s); applyCost = performance.now() - t0; lastApply = performance.now();
+    if (tl.paused && isMove() && !hdrag) { driveMove(st, 0); for (let i = 0; i < 12; i++) settle(st); }   // (paused: a change shows at once, not eased in over the next frames; a deleted key's pose goes straight away)
   }
   const sdt = tl.paused ? 0 : dt * tl.speed;                  // slow motion / pause
   if (sdt > 0) { const n = Math.ceil(sdt / STEP - 1e-6); for (let i = 0; i < n; i++) drive(st, sdt / n); }
@@ -965,9 +1000,16 @@ function renderAnimate(box) {
     inp.addEventListener("change", () => { start = null; endDrag(); renderKeys(); renderControls(); });
     row.append(l, out, inp); box.append(row);
   });
-  const a = el("div", "addrow"), d = el("button", "chip", "DELETE KEYS HERE"), r = el("button", "chip", "RESET THIS MOVE"); a.append(d, r); box.append(a);
+  const nClear = Object.keys((sp.move.clear || {})[kind] || {}).length;
+  if (nClear) box.append(el("p", "note", `${nClear === animChans(kind).length ? "The whole move's original animation is cleared" : "Cleared: " + [...new Set(Object.keys(sp.move.clear[kind]).map(partOf))].join(", ")}: those parts hold still except where you key them. BACK TO THE ORIGINAL undoes it.`));
+  const a = el("div", "addrow"), d = el("button", "chip", "DELETE KEYS HERE"), c = el("button", "chip", "CLEAR THE ORIGINAL"), cp = el("button", "chip", "CLEAR ONE PART…"), r = el("button", "chip", "BACK TO THE ORIGINAL"); a.append(d, c, cp, r); box.append(a);
+  c.title = "Wipe this move's original animation (and your keys): she holds her starting pose the whole move, and only the keys you set move her";
+  cp.title = "Wipe the original animation of one part only (an arm, a leg, the body...): it holds its starting pose, and only your keys move it";
+  r.title = "Your keys and anything you cleared go: the move as it ships";
   d.onclick = () => { const T2 = clamp(tl.t, 0, S.dur); dropKeys(kind, (sc, k) => Math.abs(k - T2) < .009, "KEYS HERE DELETED"); };
-  r.onclick = () => { const n = clone(cur.spec); delete n.move.anims[kind]; delete n.move.rests[kind]; stageSpec(n); renderKeys(); renderControls(); tl.nudge = true; onion = null; };
+  c.onclick = () => clearOriginal(kind, animChans(kind), "ORIGINAL CLEARED · SHE HOLDS HER STARTING POSE · KEY IT FROM HERE");
+  cp.onclick = e => { e.stopPropagation(); partMenu(kind, cp); };
+  r.onclick = () => { const n = clone(cur.spec); delete n.move.anims[kind]; delete n.move.rests[kind]; if (n.move.clear) delete n.move.clear[kind]; stageSpec(n); renderKeys(); renderControls(); tl.nudge = true; onion = null; toast("BACK TO THE ORIGINAL · UNDO BRINGS YOUR KEYS BACK"); };
   const gh = el("button", "chip" + (onionOn ? " on" : ""), onionOn ? "GHOSTS ON" : "GHOSTS OFF"); gh.type = "button"; gh.setAttribute("aria-pressed", onionOn);
   gh.title = "In POSE mode: faded dots where each dot was at your last key (hollow) and gets to at your next one (solid), and the picked dot's path";
   gh.onclick = () => { onionOn = !onionOn; onion = null; renderControls(); }; a.append(gh);
