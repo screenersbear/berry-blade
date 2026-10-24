@@ -554,6 +554,7 @@ window.BerryScore = (() => {
   }
   return {
     start(ac, vol) {
+      if (ac0 && ac0 !== ac) { clearInterval(timer); players.forEach(p => { try { p.g.disconnect(); } catch (e) { } }); players = []; playing = false; stopAt = 0; ac0 = null; curVol = -1; }   // (a new audio context: the game made one anew after a phone cut the last one off. Start again on it)
       if (!ac0) { ac0 = ac; master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
       if (SONGS[song].STYLES[want].orig) decodeClip(ac, SONGS[song]);
       if (stopAt || !playing || Math.abs(vol - curVol) > 1e-4) fadeParam(master.gain, master.gain.value, vol * LEVEL, ac.currentTime, XF);   // fades in under the outgoing recording (equal-power, as it goes); or to a new level (the story's voice over it)

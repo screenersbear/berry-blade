@@ -61,6 +61,7 @@ gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMat
 const sun = new THREE.DirectionalLight("#fff3d6", 2.6); sun.position.set(-7, 14, 11); scene.add(sun, sun.target);
 scene.add(new THREE.HemisphereLight("#f3f1d6", "#3f6544", 1.25));
 const KIT = StarkyCharKit(THREE, { parent: scene, shadowParent: scene });
+if (G.KIT) for (const k in G.KIT.STRIKES) if (!KIT.STRIKES[k]) KIT.STRIKES[k] = G.KIT.STRIKES[k];   // (the game's own moves too: Camila's and Rose's combos live in the game, not the kit)
 const { toonT } = KIT.util;
 const floor = new THREE.Mesh(new THREE.CircleGeometry(30, 72), toonT("#e5eae4")); floor.rotation.x = -Math.PI / 2; scene.add(floor);
 const sweep = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 24, 72, 1, true, Math.PI * .5, Math.PI), toonT("#d3dcd8", { side: THREE.BackSide }));
@@ -169,10 +170,12 @@ const moveDef = (kind, sp = cur.spec) => (sp.base === "cat" ? KIT.CAT_MOVES : KI
 const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "chop", onetwo: "one-two", haymaker: "haymaker", hammer: "hammer", dive2: "dive",
   palm: "palm strike", spinkick: "spin kick", flykick: "flying kick", flipaxe: "flip axe kick", chop2: "double chop", sweep: "sweep", tornado: "tornado kick",
   sw_c1: "thrust", sw_c2: "whirlwind", sw_c3: "crash", bx_c1: "rush", bx_c2: "backfist", bx_c3: "rocket uppercut", nj_c1: "dash palm", nj_c2: "hurricane kick", nj_c3: "rising knee",
-  kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm" };
+  kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
+  clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave" };   // (the heroes' own: Camila's from the Move Maker)
+const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every keyframed move this character has, in play order
   if (sp.base === "cat") return [...KIT.CAT_GROUND.map((k, i) => [k, `Ground ${i + 1}`]), ...KIT.CAT_AIR.map((k, i) => [k, `Air ${i + 1}`]), ...KIT.CAT_CHARGE.map((k, i) => [k, `Charge ${i + 1}`])];
-  const S = KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler, out = [];
+  const S = setFor(sp), out = [];
   S.ground.forEach((k, i) => out.push([k, `Ground ${i + 1}`])); S.air.forEach((k, i) => out.push([k, `Air ${i + 1}`])); (S.charge || []).forEach((k, i) => out.push([k, `Charge ${i + 1}`]));
   return out.filter(([k]) => KIT.STRIKES[k] && KIT.STRIKES[k].keys);
 }
@@ -459,7 +462,7 @@ function drive(p, dt) {
   } else p.hp = 3;
   p.hurtT = Math.max(0, p.hurtT - dt);
   if (anim === "attack" || anim === "air") {        // the character's own moves: first strike, then the follow-up (Tocsin: card swim, then card swirl)
-    const SET = cat ? { ground: KIT.CAT_GROUND, air: KIT.CAT_AIR } : KIT.MOVESETS[mv.set] || KIT.MOVESETS.brawler, air = anim === "air";
+    const SET = cat ? { ground: KIT.CAT_GROUND, air: KIT.CAT_AIR } : setFor(cur.spec), air = anim === "air";
     const go = (kind, idx) => { const S = moveDef(kind); p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.sq = S.sq ?? -.1; p.sqv = 0;
       if (p.onGround) { p.vx = S.step || 0; if (S.hop) { p.vy = S.hop; p.onGround = false; } } };
     if (air && p.onGround && p.atkT < 0 && animT > .9) { animT = 0; p.vy = -830 * Math.sqrt(mv.jump); p.onGround = false; p.sq = .3; p.sqv = 0; p.airDone = false; }
@@ -896,7 +899,7 @@ const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["arm
 const C_POSE = [["lean", "Lean forward"], ["arch", "Arch the back"], ["bodyY", "Crouch (− lower)"], ["armF", "Front paw raise"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw raise"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["tailBase", "Tail up"], ["tailCurl", "Tail curl"], ["hatTilt", "Hat tilt"], ["headRot", "Head tilt"]];
 function poseBase(sp, which) {                                  // the pose before this character's own changes
-  const cat = sp.base === "cat", S = KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;
+  const cat = sp.base === "cat", S = setFor(sp);
   if (cat) return which === "guard" ? { ...KIT.POSE0, arch: .25, ...KIT.CAT_BLOCK } : { ...KIT.POSE0, arch: .25, armF: .22, armB: .05 };
   return { ...KIT.POSE_H0, ...(which === "guard" ? S.block || KIT.BLOCK_DEF : S.stance || {}) };
 }
@@ -923,7 +926,7 @@ function renderPose(box) {
 }
 // undo / redo / reset, for whatever animation is on stage
 function resetInfo() {
-  const S = KIT.MOVESETS[cur.spec.move.set] || KIT.MOVESETS.brawler, cat = cur.spec.base === "cat";
+  const S = setFor(cur.spec), cat = cur.spec.base === "cat";
   const moves = list => n => list.forEach(k => { delete n.move.anims[k]; delete n.move.rests[k]; });
   if (isMove()) return { label: (MOVE_NAMES[moveKind()] || moveKind()).toUpperCase(), apply: moves([moveKind()]) };
   if (anim === "run" || anim === "dash") return { label: "RUN", apply: n => { delete n.move.anims.run; } };
