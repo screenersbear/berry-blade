@@ -5744,7 +5744,6 @@ const CARDS = {
   uprise: { title: "THE UPRISING", sub: "WINNING OUR ISLAND BACK, ONE BERRY AT A TIME", demo: true, lines: () => [
     "EVERY BADDY YOU BEAT IS A BERRY WON BACK: CAUGHT IN YOUR WEAPON, AND BACK ON OUR SIDE.",
     "EACH PART OF THE ISLAND HAS ITS OWN UPRISING. WIN BACK ITS BERRIES AND IT GROWS: THE VILLAINS' HOLD ON THE LAND STARTS TO CRACK, AND THEIR BADDIES FIGHT HARDER TO KEEP IT.",
-    "PAST 50%, THE BERRIES THERE START FIGHTING BACK ON THEIR OWN.",
     "AT 100%, THE UPRISING IS READY: TAKE ON THE VILLAIN WHO TOOK THAT PART OF THE ISLAND IN A FINAL SHOWDOWN, AND SET IT FREE.",
     "YOU'LL SEE EACH ONE GROW AS YOU LEAVE A PART OF THE ISLAND, AND ON THE ISLAND MAP."] },
   cheer: { title: "SAD BERRIES", sub: "NOT EVERY BADDY WANTS TO FIGHT", lines: () => [
@@ -5756,7 +5755,7 @@ function cardWant(id) { if (story && !(story.cards || []).includes(id) && !cardQ
 function maybeCard() {
   if (!story) { cardQ = []; return; }
   const said = id => (story.vo || []).includes(id) && !(vo && vo.id === id);   // (a save from before the cards: what it's already been told, explained once)
-  if (said("woods")) cardWant("uprise"); if (said("sad")) cardWant("cheer");
+  if (said("woods")) cardWant("uprise");
   if (!cardQ.length || tutor || comicUp || gift || opening || cine || intro || transit || tale || mode !== "play" || !player || player.dead || paused || modalOpen || menuUp || statsUp || world === 9) return;
   showCard(cardQ.shift());
 }
@@ -5764,7 +5763,7 @@ function showCard(id) {
   const K = CARDS[id]; if (!K) return; story.cards = [...(story.cards || []), id]; writeSave();
   tutor = { id: "card:" + id, ready: false }; comicUp = true; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("holdTip").classList.remove("show");
   const C = $("comic"); C.classList.remove("tri"); C.classList.add("cardUp");
-  C.innerHTML = `<div class="page card"><div class="lockup"><div class="blk"></div><div class="bar"></div></div><ol></ol>${K.demo ? `<div class="upDemo"><i></i><span style="left:25%">25%</span><span style="left:50%">50%: THEY FIGHT BACK</span><span style="left:100%">100%: SHOWDOWN</span></div>` : ""}<span class="go" id="comicGo">${window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON"}</span></div>`;
+  C.innerHTML = `<div class="page card"><div class="lockup"><div class="blk"></div><div class="bar"></div></div><ol></ol>${K.demo ? `<div class="upDemo"><i></i><span style="left:25%">25%</span><span style="left:50%">50%</span><span style="left:75%">75%</span><span style="left:100%">100%: SHOWDOWN</span></div>` : ""}<span class="go" id="comicGo">${window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON"}</span></div>`;
   C.querySelector(".blk").textContent = K.title; C.querySelector(".bar").textContent = K.sub; C.querySelector("ol").innerHTML = K.lines().map(t => `<li>${t}</li>`).join("");
   C.classList.add("show"); SFX.reveal && SFX.reveal();
   setTimeout(() => { if (tutor && tutor.id === "card:" + id) { $("comicGo").classList.add("on"); tutor.ready = true; } }, 1400);
@@ -5776,6 +5775,7 @@ function maybeMeetVO() {
   if (!heard("buddy") && allyHere && near(allyHere.st.x)) startVO("buddy");
   if (!heard("pet") && wild && wild.st && near(wild.st.x)) startVO("pet");
   if (!heard("sad") && baddies.some(b => b.sad && !b.dead && !b.gone && near(b.x))) startVO("sad");
+  if (!heard("toll") && ruinFx && ruinFx.g && ruinFx.g.parent && ruinFx.plumes && ruinFx.plumes.length) startVO("toll");   // (smoke in the room: the uprising's at 25% or more)
 }
 function tutorShot(cam, warm = 0) {                  // shot(), with a few frames of the effects run on first (an aura, the spikes growing out)
   comicCam = cam; for (let i = 0; i < warm; i++) render(1 / 30); const u = shot(cam); comicCam = null; return u;
@@ -5901,7 +5901,9 @@ const VO = { woods: ["And so, Rose and I decided to fight for our people.",
     "It's some of these brave berry buddies who joined us on our quest.", "But we started it!", "It doesn't matter who started it\u2014you know that. We did it together."],
   pet: ["The island was inhabited by all sorts of life, and these little guys were always around, bringing smiles to our faces.", "They, too, wanted to support us in any way they could."],
   sad: ["Oh, there were some sad berry baddies too.", "Yes, of course. Not all of us have the option to resist, and we have to protect our families, too.",
-    "But there was something we did to help these sad ones, right?", "Yes, to cheer them up..."] };
+    "But there was something we did to help these sad ones, right?", "Yes, to cheer them up..."],
+  toll: ["As we fought back, of course, the land took a toll.", "Our forests and buildings burned; there was destruction, as the villains and their berry baddies would not give up easily.",
+    "But we kept our real purpose in mind."] };   // (the user, 2026-10-24: the first room you come into with smoke in it)
 const VO_WHO = { woods: ["camila", "camila", "camila", "rose"], buddy: ["camila", "camila", "rose", "camila"], sad: ["rose", "camila", "rose", "camila"] };   // who says each line (the rest: Camila)
 const voWho = (k, i) => (VO_WHO[k] || [])[i] || "camila", whoName = w => w === "rose" ? "ROSE" : "CAMILA";
 function capWho(el, who, text) { el.textContent = text; }   // (a caption: just the words, never who's saying them: the user, 2026-10-24 "dont say who is talking")
@@ -5913,7 +5915,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261024d"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261024e"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -5925,7 +5927,7 @@ const vlogLine = id => { const [k, n] = String(id).split(":"), i = +n; if (k ===
 // summary of it for the title and then the player opens it and sees all that was show. call the section 'narration'"): what's been told so far,
 // a section for each telling, in the order you heard them, each under a title that sums it up; open one and its words are there to read
 const VLOG_TITLE = { gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
-  buddy: "THE BERRIES WHO JOINED US", pet: "THE ISLAND'S LITTLE ONES", sad: "THE SAD BERRIES" };
+  buddy: "THE BERRIES WHO JOINED US", pet: "THE ISLAND'S LITTLE ONES", sad: "THE SAD BERRIES", toll: "THE LAND TOOK A TOLL" };
 const vlogSections = () => { const S = []; vlogHeard().map(vlogLine).filter(Boolean).forEach(q => { let x = S.find(z => z.k === q.k); if (!x) S.push(x = { k: q.k, title: VLOG_TITLE[q.k] || "WHAT WE WERE TOLD", lines: [] }); x.lines[q.i] = q.text; });
   return S.map(x => ({ ...x, lines: x.lines.filter(Boolean) })); };
 let vlogSel = 0, vlogFrom = null, vlogSrc = null, vlogOpen = null;   // (vlogOpen: the section being read)
@@ -5946,7 +5948,7 @@ function vlogBack() { if (vlogOpen !== null) { const i = vlogSections().findInde
 function vlogHush() { if (vlogSrc) { try { vlogSrc.stop(); } catch { } vlogSrc = null; } }
 function closeVlog() { vlogHush(); $("vlog").classList.remove("show"); menuUp = null; SFX.tick(); if (vlogFrom === "pause") $("pause").style.visibility = ""; else showMainMenu(); }
 let voQ = [];                                        // (the ones waiting their turn: one voice-over at a time)
-const VO_AFTER = { woods: () => cardWant("uprise"), sad: () => cardWant("cheer") };   // (once it's been said: the card that explains it)
+const VO_AFTER = { woods: () => cardWant("uprise") };   // (once it's been said: the card that explains it. Not the sad berries': "we want the voiceover to be a hint and for the player to figure it out", the user 2026-10-24)
 function startVO(id) {
   if (!story || !VO[id] || (story.vo || []).includes(id)) return;
   if (vo) { if (vo.id !== id && !voQ.includes(id)) voQ.push(id); return; }
@@ -7089,7 +7091,7 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
-  if (p.onGround || p.dive) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; }   // back on your feet: the rising hit and the bubble's drift reset
+  if (p.onGround || p.dive) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; p.stomped = null; }   // back on your feet: the rising hit and the bubble's drift reset
   const span = p.combo ? p.comboSpan : p.tackle ? p.tackle.span : null;   // (charging an attack or the tackle, you can walk off a ledge: only a combo under way, the charged tackle's included, holds you to your footing; the user, 2026-10-17)
   if (span) { const [a, b] = span; if (p.x < a || p.x > b) { p.x = clamp(p.x, a, b); p.vx = 0; } }   // a combo (or a tackle) stops at the edge: it never carries you off a ledge
   if (p.onGround && !p.dead) {                       // remember solid footing (a little back from the water's edge) to come back to after a fall
@@ -17034,9 +17036,11 @@ function combat() {
   if (p.tackle && p.tackle.t >= TKL.wind * .5 && p.tackle.t < TKL.wind + TKL.lunge + .05) { const f = p.face, H = p.rig.heightPx || 92;   // the tackle: whatever's in front, each once
     strike(p.tackle.hits, { x1: Math.min(p.x - f * 6, p.x + f * 44), x2: Math.max(p.x - f * 6, p.x + f * 44), y1: p.y - H * .9, y2: p.y }, "tackle", () => f); }
   for (const T of L) {                                               // land on one from above: stomp it and bounce off
-    if (!overlap(pb, T.box) || !(p.vy > 60 && p.prevY <= T.top + 22)) continue;
-    T.hit(Math.sign(T.e.x - p.x) || 1, "stomp");
+    if (!overlap(pb, T.box) || !(p.vy > 60 && p.prevY <= T.top + 22) || (p.stomped || []).includes(T.e)) continue;   // (once a creature till you're down again: the user, 2026-10-24 "allow a player to only bounce once a creature and then move them away so it's hard to land back on them")
+    T.hit(Math.sign(T.e.x - p.x) || 1, "stomp"); (p.stomped || (p.stomped = [])).push(T.e);
     p.carryDir = Math.sign(p.vx) || p.face; p.carry = .55; p.vx = p.carryDir * Math.max(Math.abs(p.vx), 330);   // momentum carries them on past the enemy
+    if (T.e.hw !== undefined && !T.e.dead && !T.e.gone) { T.e.vx = -p.carryDir * 620 / Math.pow(T.e.wt || 1, .6); T.e.recoil = Math.max(T.e.recoil || 0, .6); if (T.e.onGround) { T.e.vy = -320; T.e.onGround = false; T.e.plat = null; } }   // (and it's knocked the other way, out from under where you'll come down)
+    else if (T.e === enemy && !enemy.dead) enemy.vx = -p.carryDir * 260;
     p.vy = (held.jump ? -900 : -720) * JUMPK; p.y = T.top - 1; p.onGround = false; p.coyote = 0;
     p.bounceT = 0; p.atkT = -1; p.combo = null; p.sq = -.3; p.sqv = 6; p.stompGrace = .2; p.airJumps = 1;   // the bounce ends any charged combo too
     return;
