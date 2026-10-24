@@ -80,6 +80,8 @@
   #vlList { width: min(84vw, 640px); max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
   #vlList .vl { display: flex; align-items: flex-start; gap: 8px; text-align: left; font: 13px/1.3 "Bungee", sans-serif; text-transform: uppercase; padding: 8px 10px 6px; }
   #vlList .vl span { flex: 1; } #vlList .vl i { font-style: normal; } #vlList .vl b.who { flex: none; }
+  #vlList .vl.sec { justify-content: space-between; align-items: center; } #vlList .vl.sec i { opacity: .7; }
+  #vlList .txt { font: 500 15px/1.5 "Jost", sans-serif; color: var(--s); text-align: left; margin: 0 4px; }   /* (a section opened: its words, as they were told) */
   #vlList .none { font: 600 12px "Jost", sans-serif; letter-spacing: .2em; color: var(--y); text-align: center; margin: 18px 0; }
   @media (pointer: coarse), (max-height: 560px) { #voCap { max-width: min(54vw, 560px); font-size: 12px; bottom: 14px; } }   /* (a phone: between the touch pads) */
 
@@ -523,15 +525,15 @@
 <div id="title" class="hidden"><div class="lockup big"><div class="blk">BERRY BLADE</div><div class="bar">PROTOTYPE</div></div><div class="press">TAP TO START</div></div>
 <div id="menu" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">BERRY BLADE</div><div class="bar">MAIN MENU</div></div>
-  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button><button data-m="voices">VOICES</button><button data-m="set">GAME SETTINGS</button></div>
+  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button><button data-m="voices">NARRATION</button><button data-m="set">GAME SETTINGS</button></div>
   <small data-pad="↑ ↓ to choose &middot; {j} to pick">↑ ↓ to choose &middot; Enter to pick</small>
 </div></div>
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
 <div id="vlog" class="mnu"><div class="panel">
-  <div class="lockup"><div class="blk">VOICES</div><div class="bar">ALL CAMILA AND ROSE HAVE TOLD YOU</div></div>
+  <div class="lockup"><div class="blk">NARRATION</div><div class="bar" id="vlBar">THE STORY SO FAR, AS IT'S BEEN TOLD</div></div>
   <div id="vlList"></div>
   <div class="btns"><button id="vlBack" data-v="back">BACK</button></div>
-  <small data-pad="↑ ↓ to choose &middot; {j} to hear it again &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to hear it again &middot; Esc to go back</small>
+  <small data-pad="↑ ↓ to choose &middot; {j} to open &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to open &middot; Esc to go back</small>
 </div></div>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
@@ -3060,6 +3062,17 @@ function giantTree(par, part, x, y, z, rng) {        // the giant tree (columns 
   else { limb(V3(0, 1.5), V3(0, 22), 2.9, 2.5); [-1, 1, -.6, .7].forEach((sd, i) => limb(V3(sd * 1.6, 2), V3(sd * R(3.5, 5.5), -.4), 1.1 - i * .12, .45)); }   // roots: spreading over the ground
   return g;
 }
+function mergeLocal(g) {                            // a group's meshes as one per material, in its own space (the forest's foreground: drawn in a pass of its own, on the
+  g.updateMatrixWorld(true); const inv = g.matrixWorld.clone().invert(), buckets = new Map(), dead = [];   //  3DS node by node: so few of them)
+  g.traverse(m => { if (!m.isMesh || m.isInstancedMesh || Array.isArray(m.material)) return;
+    const geo = m.geometry.index ? m.geometry.toNonIndexed() : m.geometry.clone();
+    for (const k of Object.keys(geo.attributes)) if (!["position", "normal", "uv"].includes(k)) geo.deleteAttribute(k);
+    if (!geo.attributes.uv || !geo.attributes.normal) return;
+    geo.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld));
+    if (!buckets.has(m.material)) buckets.set(m.material, []); buckets.get(m.material).push(geo); dead.push(m); });
+  dead.forEach(m => m.parent.remove(m));
+  buckets.forEach((geos, mat) => { const merged = mergeGeometries(geos, false); if (merged) g.add(new THREE.Mesh(merged, mat)); });
+}
 function buildSet(s) {
   const st = STAGES[s], objs = [], fg = [], rng = rngF(9001 + s * 13), R = (a, b) => a + rng() * (b - a), M = tropMats();
   scene.traverse(o => { if (o.isLight) o.layers.enable(1); });   // (the foreground's in the same sun)
@@ -3140,12 +3153,12 @@ function buildSet(s) {
       sh.moveTo(x0, sy); sh.lineTo(xr, sy); sh.lineTo(xs, bed); sh.lineTo(x0, bed);   // (down to the bed, along the bank's slope)
       F.add(at(new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: "#1f8fa6", transparent: true, opacity: .66, depthWrite: false })), 0, 0, fz));
       F.add(at(new THREE.Mesh(new THREE.PlaneGeometry(w, .07), new THREE.MeshBasicMaterial({ color: "#d9f6ff", transparent: true, opacity: .6, depthWrite: false })), cx, sy - .03, fz + .02));
-      F.traverse(o => o.layers.set(1)); }
+      mergeLocal(F); F.traverse(o => o.layers.set(1)); }
     if (P.k === "coveRocks") { const mR = toon("#8d8478"), mR2 = toon("#6f675d"), gx = X(P.x), gy = Y(GROUND);   // the way back through to the forest: the rocks Camila broke, piled up either side of the path
       [[-4.6, -1.7, 7], [2.3, 4.4, 2]].forEach(([z0, z1, rows]) => { for (let lv = 0; lv < rows; lv++) for (let k = 0; k < 4 - Math.floor(lv / 3); k++) {   // (stacked from the ground, a little narrower going up)
         const r = R(.7, 1.3) - lv * .04; g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: rng() < .5 ? mR : mR2, ol: .04 }), gx + R(-2.4, .4) + lv * .15, gy + r * .7 + lv * 1.25, R(z0, z1))); } });
       for (let i = 0; i < 7; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.25, .5), 0), null, { mat: mR2, ol: .03 }), gx - R(2.6, 5.5), gy + .15, R(-1.4, 1.8))); }   // (and bits of it, scattered)
-    if (P.fg) g.traverse(o => o.layers.set(1));
+    if (P.fg) { mergeLocal(g); g.traverse(o => o.layers.set(1)); }
   }
   return { objs, fg };
 }
@@ -3243,9 +3256,9 @@ function authorForest() {
   room("D2", { ground: [[0, 0]], gaps: [[300, 2160]], plats: [[420, 380, 280, "shroom"], [880, 300, 240, "shroom"], [1300, 200, 260, "shroom"], [1720, 320, 260, "shroom"]],
     items: [["power", 1430, 200]], prev: C.D1, next: C.D3, set: [{ k: "pond" }, { k: "undergrowth" }] }, []);
   // D3: a mini boss, a high platform
-  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], prev: C.D2, next: C.D4 }, [["bramble", "purple", 900, "mini"]]);
+  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], items: [["fruit", 1880, 170]], prev: C.D2, next: C.D4 }, [["bramble", "purple", 900, "mini"], ["acorn", "rust", { plat: 0, x: 1640 }]]);   // (a baddie and a mango up on the platform: the user, 2026-10-24)
   // D4: 3 baddies; two platforms up to the hole in C4 (jump up it)
-  room("D4", { ground: [[0, 0]], plats: [[1300, 330, 300, "slab"], [880, 190, 300, "slab"]], prev: C.D3, next: C.D5 }, [["leafy", "leaf", 330], ["twiggy", "olive", 1750], ["acorn", "rust", 2200]]);
+  room("D4", { ground: [[0, 0]], plats: [[1300, 330, 300, "slab"], [880, 190, 300, "slab"]], prev: C.D3, next: C.D5 }, [["leafy", "leaf", 330], ["twiggy", "olive", 1750], ["acorn", "rust", 2200], ["pinecone", "rust", { plat: 1, x: 1030 }]]);   // (one up on the high platform too: the user, 2026-10-24)
   // D5: the hub (a checkpoint too); C5's pale green pillars hanging down into it
   const d5 = room("D5", { ground: [[0, 0]], hub: 1, peace: true, prev: C.D4, next: C.D6, set: [{ k: "pillars", xs: [110, 2450] }] }, []); nm(d5, "HUB");
   // D6: the giant tree's roots (you walk in front of it, as in C6); ledges out of its trunk up into C6; on to D7 along the bottom
@@ -3339,7 +3352,8 @@ orig.addEventListener("error", () => { musicErr = "file"; });
 // Never published (build_phone.py empties this)
 const PC_REC = {};   // (the phone build: no recordings, the all-original score everywhere)
 const inHub = () => mode === "play" && !hideout && !stronghold && !arena && !!(STAGES[stage] && STAGES[stage].hub);   // (a world's hub: its own take on the tune, the score's HUB, never a recording)
-const scoreHour = () => { if ((hideout || ejFight() || inHub()) && mode === "play") return 0; const h = mode === "play" || mode === "opp" ? hour : 0; const R = PC_REC[world]; return !R || !R.hours.includes(h) || orig.error || !window.BERRY_PC ? h : -1; };   // −1: the recording itself (midday in the woods, and the menus), on the PC build only (its own score sets BERRY_PC); everywhere else the game's own score
+let recFirst = null, recSeenW = -1;                  // (the recording first in each world: the hour you came in at, and the world last heard; the user, 2026-10-24: "the actual file I gave you should play first and then it transitions into your versions as the day goes on")
+const scoreHour = () => { if ((hideout || ejFight() || inHub()) && mode === "play") return 0; const h = mode === "play" || mode === "opp" ? hour : 0; const R = PC_REC[world]; return !R || !(R.hours.includes(h) || (recFirst && recFirst.w === world && recFirst.h === h)) || orig.error || !window.BERRY_PC ? h : -1; };   // −1: the recording itself (midday in the woods, and the menus), on the PC build only (its own score sets BERRY_PC); everywhere else the game's own score
 const easing = () => mode === "play" ? hour === 1 : mode === "opp" ? STAGES[foeStart(oppSel)] === STAGES.find(q => q.h === 1) : false;   // the afternoon's first clearing: the in-between version
 const bgm = {
   dataset: {},
@@ -3357,6 +3371,8 @@ function syncMusic(dt) {                         // every frame: the right music
   const pcTale = !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
   const glosWait = !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
   const softTale = !!tale && !pcTale;                // (the phone and the zip: no borrowed song, so the score's own soft take under the voice, 2026-10-23: "the music wasnt playing during the cutscene")
+  if (mode !== "play") recSeenW = -1; else if (!transit && world !== recSeenW) { recSeenW = world; recFirst = { w: world, h: hour }; }   // (into a world, a new game or a loaded one: its recording first, whatever the hour)
+  if (recFirst && (recFirst.w !== world || recFirst.h !== hour)) recFirst = null;   // (then, the hour on: the day's own versions)
   const S = window.BerryScore, h = pcTale ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
   const R = pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
   voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
@@ -3581,7 +3597,7 @@ const SFX = {
   bite(sword, w = 1) { const k = .8 + .2 * Math.min(w, 1.6);   // a blow of yours landing, with more bite (the user, 2026-10-23, after Odin Sphere: "a more aggressive sound effect"): a sharp crack on top, a short thump under it;
     noise(.07, { vol: .15 * k, f0: 3600, f1: 1500, type: "bandpass", q: .8, a: .008 }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack (a slap, not the 9 kHz crack: it clicked, 10-23)
     if (sword) { noise(.07, { vol: .14 * k, f0: 5400, f1: 2700, type: "bandpass", q: 3 }); tone(3150, 2550, .12, { type: "triangle", vol: .045 * k, delay: .004 }); tone(4700, 4300, .08, { type: "sine", vol: .025 * k, delay: .004 }); }
-    else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); tone(420, 150, .05, { type: "square", vol: .045 * k, lp: 2200 }); } },
+    else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); } },   // (no square blip under it: a toy's click, 2026-10-24)
   body(h = 58, boss = false, w = 1) {   // the blow landing on THEM (the user, 2026-10-23: "sounds the enemies make when hit ... not grunt or anything ... just sounds of getting hit"):
     // a fruit body taking it: a wet splat, a hollow thump under it, a crunch of skin on top; deeper and heavier the bigger it is, heaviest on a boss
     const s = clamp(58 / Math.max(30, h), .6, 1.4), k = (boss ? 1.25 : 1) * (.85 + .15 * Math.min(w, 1.6));
@@ -4217,7 +4233,7 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "VOICES" };
+const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "NARRATION" };
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "ach", "vlog", "quit"] : ["resume", "ach", "vlog", "lvl", "home"];   // (VOICES: the heroines' lines, again)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
@@ -4271,7 +4287,7 @@ function pauseChoose(what) {
 }
 $("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) pauseChoose(b.dataset.p); });
-$("vlog").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b || menuUp !== "vlog") return; if (b.dataset.v === "back") closeVlog(); else { vlogSel = +b.dataset.v; markMenu(); vlogPlay(vlogSel); } });
+$("vlog").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b || menuUp !== "vlog") return; if (b.dataset.v === "back") vlogBack(); else { vlogSel = +b.dataset.v; markMenu(); vlogPick(vlogSel); } });
 $("pbtns").addEventListener("pointermove", e => { const b = e.target.closest("[data-p]"); if (b) { const i = PAUSE_OPTS.indexOf(b.dataset.p); if (i !== pauseSel) setPauseSel(i); } });
 // achievements: each one a ??? in the list until you get it; getting one pops up a card at the top for a few seconds (the game carries on)
 const ACH = [
@@ -4917,7 +4933,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   if (M === "main") { const B = [...$("mbtns").children];
     if (d) { do mainSel = step(mainSel, B.length); while (B[mainSel].classList.contains("off")); SFX.tick(); markMenu(); }
     if (ok) mainChoose(B[mainSel].dataset.m); }
-  else if (M === "vlog") { const n = $("vlList").querySelectorAll("button").length + 1; if (d) { vlogSel = step(vlogSel, n); SFX.tick(); markMenu(); } if (ok) { if (vlogSel === n - 1) closeVlog(); else vlogPlay(vlogSel); } if (back) closeVlog(); }
+  else if (M === "vlog") { const n = $("vlList").querySelectorAll("button").length + 1; if (d) { vlogSel = step(vlogSel, n); SFX.tick(); markMenu(); } if (ok) { if (vlogSel === n - 1) vlogBack(); else vlogPick(vlogSel); } if (back) vlogBack(); }
   else if (M === "dev") { const B = [...$("dbtns").children]; if (d) { devSel = step(devSel, B.length); SFX.tick(); markMenu(); } if (ok) devChoose(B[devSel].dataset.d); if (back) showSettings(); }
   else if (M === "settings") { const B = [...$("setBtns").children]; if (d) { setgSel = step(setgSel, B.length); SFX.tick(); markMenu(); } if (ok) settingsChoose(B[setgSel].dataset.g); if (back) settingsChoose("back"); }
   else if (M === "slots") {
@@ -5356,7 +5372,7 @@ function maybeHeroLesson() {
   const S = STAGES[stage] || {};
   for (const id in HERO_LESSON) { const L = HERO_LESSON[id]; if (!S[L.flag] || rig.id !== L.who || itemGot(world + ":tip:" + id)) continue;
     const W = LADDERS.find(q => q.camila && !q.rock), tx = id === "climb" ? W && W.x : secret && secret.who === "rose" && secret.hp > 0 ? secret.x : undefined;
-    if (tx === undefined || Math.abs(player.x - tx) > 760) continue;
+    if (tx === undefined || !player.onGround || (id === "climb" ? Math.abs(player.x - tx) > 150 : player.x < tx - 260 || player.x > tx + 140)) continue;   // (right in front of it: the user, 2026-10-24 "only pops up when she's in front of the wall not when she enters that room")
     markGot(world + ":tip:" + id); if (story) writeSave(); showHeroLesson(id, tx); return; }
 }
 function showHeroLesson(id, tx) {
@@ -5428,15 +5444,15 @@ function showTutor(id) {
 // widened 1.7x (expressive.py; "make the voice a little more animated though still in that more ominous, concerned tone"), in story/tale.js as AAC (base64,
 // so it plays from a folder too). A press: on
 // to the next panel; Start / Esc (or SKIP): the lot
-const TALE = [                                       // (told by Camila and Rose, grown up, a line each in turn: the user, 2026-10-24)
+const TALE = [                                       // (told by Camila, grown up: the user, 2026-10-24 "the opening cutscene should only be told by camila. I meant that we'll insert rose in different places")
   { img: "story/p1.jpg", who: "camila", top: true, text: "Berry Island, as you can imagine, was peaceful... until the baddies came." },
-  { img: "story/p2.jpg?v=20261024", who: "rose", text: "They convinced the berries to let them build upon their land." },   // (Trumpeto talking them round: King P only on the fourth, the user 2026-10-24)
+  { img: "story/p2.jpg?v=20261024", who: "camila", text: "They convinced the berries to let them build upon their land." },   // (Trumpeto talking them round: King P only on the fourth, the user 2026-10-24)
   { img: "story/p3.jpg", who: "camila", text: "Soon, factories, casinos, and military bases appeared all over the island." },
-  { img: "story/p4.jpg", who: "rose", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
+  { img: "story/p4.jpg", who: "camila", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
   { img: "story/p5.jpg", who: "camila", text: "But now, our lives are not our own. And we've been without peace for too long..." },
-  { img: "story/p6.jpg", who: "rose", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
+  { img: "story/p6.jpg", who: "camila", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
   { img: "story/p7.jpg", who: "camila", text: "Please, help us now to bring our friends back on our side." },
-  { img: "story/p8.jpg", who: "rose", text: "And fight for our home." },
+  { img: "story/p8.jpg", who: "camila", text: "And fight for our home." },
 ];
 const TALE_P1 = 5, TALE_VOL = .9;                   // (louder since 2026-10-23, the user: "the voice which was kind of low, and then loud background sounds": the sea and the bugs go quiet under it now)                   // (the first page's panels; then it turns over)
 let tale = null; const taleVo = { state: "idle", bufs: [] };
@@ -5446,11 +5462,11 @@ function taleLoad() {                                // the voice (decoded once)
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(A.map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { taleVo.bufs[i] = buf; }).catch(() => { }))).then(() => { taleVo.state = "ready"; }); };
   if (window.BERRY_TALE) return go();
-  const el = document.createElement("script"); el.src = "story/tale.js?v=20261024a"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/tale.js?v=20261024b"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
 }
 function startTale(then) {
   taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show");
-  const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}"><b class="who ${q.who}">${whoName(q.who)}</b> ${q.text.toUpperCase()}</span></div>`;
+  const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span></div>`;
   $("tale").innerHTML = `<div class="page p2">${TALE.slice(TALE_P1).map((q, i) => panel(q, i + TALE_P1)).join("")}</div><div class="page p1">${TALE.slice(0, TALE_P1).map(panel).join("")}</div>
     <button class="skip">SKIP ${padUse ? padName("st") : window.BERRY_TOUCH ? "" : "· ESC"}</button><span class="go">${window.BERRY_TOUCH ? "TAP FOR THE NEXT ONE" : "ANY BUTTON FOR THE NEXT ONE"}</span>`;
   $("tale").classList.add("show"); document.body.classList.toggle("oneUp", oneUp());
@@ -5490,14 +5506,14 @@ function endTale() {
 // you play on under it, the music and the bugs dipped. Each one once a story (story.vo); paused, the line stops, and starts again once you're back
 const VO = { woods: ["And so, Rose and I decided to fight for our people.",
   "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes.",
-  "Good luck, Rose. I'll see you around.", "Good luck... to YOU!"],   // (told by the two of them grown up, the user 2026-10-24: Camila, then Rose back at her "with emphasis")
+  "Good luck, Rose. I'll see you around.", "Good luck TO YOU!"],   // (told by the two of them grown up, the user 2026-10-24: Camila, then Rose back at her "with emphasis")
   duo: ["This is who the bep was talking about. The island has had more than its fair share of \u201cvisitors\u201d lately."],   // (Noro and Doir turn up)
-  gift: ["Oh, it's a bep! They've been in hiding lately.", "What's this? A Berry Blade and a Gauntlet? What are these for?",   // (the bep's comic, a line a panel: no words on it)
+  gift: ["Oh, it's a bep! They had been in hiding around then.", "What's this? A Berry Blade and a Gauntlet? What are these for?",   // (the bep's comic, a line a panel: no words on it)
     "He tells us he doesn't have much time, that someone is after him, but to use them to defend ourselves.", "Glos and her cronies are coming, he says!"],
   weapon: ["Your weapon is your health: every hit you take costs a piece of it.", "Beat baddies and its spikes come out: more power in every blow.", "Hold attack to charge it up, then let go for a big combo."] };
 const VO_WHO = { woods: ["camila", "camila", "camila", "rose"] };   // who says each line (the rest: Camila)
 const voWho = (k, i) => (VO_WHO[k] || [])[i] || "camila", whoName = w => w === "rose" ? "ROSE" : "CAMILA";
-function capWho(el, who, text) { el.textContent = ""; const b = document.createElement("b"); b.className = "who " + who; b.textContent = whoName(who); el.append(b, " " + text); }   // (a caption, with the one telling it)
+function capWho(el, who, text) { el.textContent = text; }   // (a caption: just the words, never who's saying them: the user, 2026-10-24 "dont say who is talking")
 const VO_VOL = 1, VO_DUCK = .55;                    // (louder since 10-23e, its lines compressed too: "it sounds a little too low ... it's still jarring to go back and forth"; the music at 55% under it)
 let vo = null, voDuck = 1; const voBank = { state: "idle", bufs: {} };
 function voLoad() {                                  // the lines, decoded once
@@ -5506,7 +5522,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261024a"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261024b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -5514,23 +5530,27 @@ const VLOG_KEY = "berry.vo.heard.v1";
 const vlogHeard = () => { try { return JSON.parse(localStorage.getItem(VLOG_KEY) || "[]") || []; } catch { return []; } };
 function vlogMark(id) { try { const L = vlogHeard(); if (!L.includes(id)) { L.push(id); localStorage.setItem(VLOG_KEY, JSON.stringify(L)); } } catch { } }
 const vlogLine = id => { const [k, n] = String(id).split(":"), i = +n; if (k === "tale") return TALE[i] ? { who: TALE[i].who, text: TALE[i].text, k, i } : null; const L = VO[k]; return L && L[i] ? { who: voWho(k, i), text: L[i], k, i } : null; };
-const vlogList = () => vlogHeard().map(vlogLine).filter(Boolean);
-let vlogSel = 0, vlogFrom = null, vlogSrc = null;
+// the narration (the user, 2026-10-24: "don't show each individaul line as playable, none should be playable. just show them in sections. find a
+// summary of it for the title and then the player opens it and sees all that was show. call the section 'narration'"): what's been told so far,
+// a section for each telling, in the order you heard them, each under a title that sums it up; open one and its words are there to read
+const VLOG_TITLE = { gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT" };
+const vlogSections = () => { const S = []; vlogHeard().map(vlogLine).filter(Boolean).forEach(q => { let x = S.find(z => z.k === q.k); if (!x) S.push(x = { k: q.k, title: VLOG_TITLE[q.k] || "WHAT WE WERE TOLD", lines: [] }); x.lines[q.i] = q.text; });
+  return S.map(x => ({ ...x, lines: x.lines.filter(Boolean) })); };
+let vlogSel = 0, vlogFrom = null, vlogSrc = null, vlogOpen = null;   // (vlogOpen: the section being read)
 function showVlog(from) {
   vlogFrom = from; if (from === "pause") $("pause").style.visibility = "hidden"; else closeMenus();
-  menuUp = "vlog"; vlogSel = 0; voLoad(); taleLoad(); drawVlog(); $("vlog").classList.add("show");
+  menuUp = "vlog"; vlogSel = 0; vlogOpen = null; drawVlog(); $("vlog").classList.add("show");
 }
 function drawVlog() {
-  const L = vlogList();
-  $("vlList").innerHTML = L.length ? L.map((q, i) => `<button data-v="${i}" class="vl"><b class="who ${q.who}">${whoName(q.who)}</b><span></span><i>▶</i></button>`).join("") : `<p class="none">NOTHING YET · PLAY ON, AND THEY'LL TELL YOU THE STORY</p>`;
-  [...$("vlList").querySelectorAll(".vl span")].forEach((s, i) => { s.textContent = L[i].text; });
-  vlogSel = Math.min(vlogSel, L.length); markMenu();
+  const S = vlogSections(), O = vlogOpen !== null ? S.find(x => x.k === vlogOpen) : null;
+  $("vlBar").textContent = O ? O.title : "THE STORY SO FAR, AS IT'S BEEN TOLD";
+  if (O) { $("vlList").innerHTML = O.lines.map(() => `<p class="txt"></p>`).join(""); [...$("vlList").querySelectorAll(".txt")].forEach((el, i) => { el.textContent = O.lines[i]; }); vlogSel = 0; markMenu(); return; }
+  $("vlList").innerHTML = S.length ? S.map((x, i) => `<button data-v="${i}" class="vl sec"><span></span><i>›</i></button>`).join("") : `<p class="none">NOTHING YET · PLAY ON, AND THE STORY WILL BE TOLD</p>`;
+  [...$("vlList").querySelectorAll(".vl span")].forEach((el, i) => { el.textContent = S[i].title; });
+  vlogSel = Math.min(vlogSel, S.length); markMenu();
 }
-function vlogPlay(i) {
-  const q = vlogList()[i]; if (!q) return; vlogHush(); SFX.tick();
-  const b = q.k === "tale" ? taleVo.bufs[q.i] : (voBank.bufs[q.k] || [])[q.i]; if (!b || !live()) return toast("A MOMENT · THE VOICES ARE STILL LOADING", 1800);
-  const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = VO_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime); vlogSrc = src;
-}
+function vlogPick(i) { const x = vlogSections()[i]; if (!x) return; SFX.tick(); vlogOpen = x.k; drawVlog(); $("vlList").scrollTop = 0; }   // (open a section)
+function vlogBack() { if (vlogOpen !== null) { const i = vlogSections().findIndex(x => x.k === vlogOpen); vlogOpen = null; SFX.tick(); drawVlog(); vlogSel = Math.max(0, i); markMenu(); } else closeVlog(); }   // (out of a section, or out of the narration)
 function vlogHush() { if (vlogSrc) { try { vlogSrc.stop(); } catch { } vlogSrc = null; } }
 function closeVlog() { vlogHush(); $("vlog").classList.remove("show"); menuUp = null; SFX.tick(); if (vlogFrom === "pause") $("pause").style.visibility = ""; else showMainMenu(); }
 function startVO(id) {
@@ -5640,7 +5660,12 @@ function upRunPts(w) {                            // what one run through world 
   };
   walk(0, new Set(), 0); return ends.length ? ends.reduce((a, v) => a + v, 0) / ends.length : 0;
 }
-const upGoal = w => upGoals[w] ?? (upGoals[w] = Math.max(1, Math.round(upRunPts(w) * UP_RUNS)));
+const UP_WORLD = 1.25;                               // (the uprising at 100%: the whole map's berries won back about 1¼ times over. The user, 2026-10-24: "the way im desingin the map and with them
+function upAllPts(w) {                              // being shorter, the uprising percentages should reflect that. make each berry count for more": it was five runs along the old ways through,
+  const W = WORLDS[w], R0 = W.roster ? thinRoster(W) : [];   // up to four times the forest's whole map now) (what actually spawns: the thinned roster, made here if it isn't yet)
+  return R0.reduce((a, row) => a + (row || []).reduce((b, q) => b + (UP_PTS[(BB_TYPES[q[0]] || {}).size] || 0) * (q[3] === "mini" ? 3 : 1), 0), 0);
+}
+const upGoal = w => upGoals[w] ?? (upGoals[w] = Math.max(1, Math.round(upAllPts(w) * UP_WORLD)));
 const upOn = w => w !== 9 && !!WORLDS[w] && !!WORLDS[w].roster;          // (not the beach: it has no uprising of its own)
 const upFree = (() => { try { return JSON.parse(localStorage.getItem(UPRISE_KEY)) || {}; } catch { return {}; } })();
 const upStore = () => story ? (story.uprise || (story.uprise = {})) : upFree;
@@ -6566,7 +6591,7 @@ function updatePlayer(dt) {
   }
   if (p.atkT >= 0 && p.atkKind) {          // keyed moves: the humans' strikes and Tocsin's card moves
     const S = cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind], pa = p.atkT; p.atkT += dt;
-    if (S.sfx2 && pa < S.sfx2[0] && p.atkT >= S.sfx2[0]) SFX[S.sfx2[1]]();
+    if (S.sfx2 && pa < S.sfx2[0] && p.atkT >= S.sfx2[0] && !SWING_SILENT.has(S.sfx2[1])) SFX[S.sfx2[1]]();   // (its second sound too: the clicks the user still heard, 2026-10-24 "clicking/ switch hitting sound ... almost like you're playing with toys")
     if (S.stepIn && pa < S.stepIn[0] && p.atkT >= S.stepIn[0] && p.onGround) { p.vx = p.face * S.stepIn[1]; dust(p.x, p.y, 3, -p.face); }   // (a step in partway through: the jab loads up first)
     if (S.dive && pa < S.dive[0] && p.atkT >= S.dive[0] && !p.onGround) { p.vy = Math.max(p.vy, S.dive[1]); if (S.diveStill) p.vx = 0; }   // dives drop onto the enemy (the charged tackle's: straight down)
     if (S.dash && pa < S.dash[0] && p.atkT >= S.dash[0]) { SFX.dash(); p.vx = p.face * S.dash[1]; p.vy = Math.min(p.vy, S.dash[2]); p.onGround = false; p.sq = -.16; p.sqv = 0; dust(p.x, p.y, 4, -p.face); }   // Tocsin's card dash lunges forward
@@ -14158,7 +14183,7 @@ function armorOff(b) {                            // knocked clean off: the piec
 }
 function makeMini(b) {                            // a mini boss: one of the world's big berries, grown, heavier and much tougher (no health bar: the user, 2026-10-17)
   b.mini = true; b.miniCue = true; b.h *= MINI_K; b.hw *= MINI_K; b.r.sz.scale.multiplyScalar(MINI_K); b.r.shadowR *= MINI_K;
-  b.hp = Math.round(b.hp * 2.5); b.wt *= 1.6; b.T = { ...b.T, speed: b.T.speed * .9, range: (b.T.range || 100) * 1.15 };
+  b.hp = Math.round(b.hp * 2.5); b.wt *= 1.6; b.T = { ...b.T, speed: b.T.speed * 1.05, range: (b.T.range || 100) * 1.15 };   // (a touch quicker than its kind, not slower: it comes after you, 2026-10-24)
 }
 function makeSpawn(type, col, at) {             // one roster entry: on the ground, on a platform, or lurking in open water
   if (at && at.gap !== undefined) { const g = GAPS[at.gap], b = makeBaddy(type, col, (g[0] + g[1]) / 2, WATER + 30); b.gap = g; b.under = true; b.atkCd = rand(.8, 2); return b; }
@@ -15760,7 +15785,7 @@ function updateBaddy(b, dt) {
     else { b.vx = approach(b.vx, 0, 1400 * dt); if (b.atkT >= A.rest) { b.atk = null; b.crossUp = false; b.atkCd = b.angry ? rand(.7, 1.3) : BB_MELEE.has(T.atk) ? rand(1, 1.8) : rand(1.5, 2.7); } }   // (a mad one's back at you sooner; so is a brawler)
   } else if ((b.onGround || fly) && b.hurtT <= 0) {
     // each baddy keeps to its own patch of the clearing: it only comes for you once you're in it, never leaves it, and wanders home after
-    const melee = BB_MELEE.has(T.atk), home = b.home ?? (b.home = b.x), dx = p.x - b.x, dy = p.y - b.y, near = !p.dead && !(p.calmT > 0 || cheerHold) && !(p === player && climbSafe()) && (b.angry ? Math.abs(dx) < 900 && Math.abs(dy) < 260 : Math.abs(p.x - home) < ZONE + (melee ? 40 : 0) && Math.abs(dx) < (melee ? 360 : 320) && Math.abs(dy) < (T.move === "float" ? (T.hover || 0) + 110 : 100));   // (a mad one comes for you wherever you are; the rest only once you're in their patch, at their level: the user, 2026-10-20)
+    const melee = BB_MELEE.has(T.atk), home = b.home ?? (b.home = b.x), dx = p.x - b.x, dy = p.y - b.y, near = !p.dead && !(p.calmT > 0 || cheerHold) && !(p === player && climbSafe()) && (b.angry || b.mini ? Math.abs(dx) < 900 && Math.abs(dy) < 260 : Math.abs(p.x - home) < ZONE + (melee ? 40 : 0) && Math.abs(dx) < (melee ? 360 : 320) && Math.abs(dy) < (T.move === "float" ? (T.hover || 0) + 110 : 100));   // (a mad one comes for you wherever you are; the rest only once you're in their patch, at their level: the user, 2026-10-20)
     if (b.angry && Math.random() < dt * .8) puffs(b.x, b.y - b.h - 4, 1, 6, 50);                         // steaming
     if (b.angry && b.z) b.z = approach(b.z, 0, dt * 3);                                                 // (up off the bunk / out from behind the table, into the fray)
     if (near) b.dir = Math.sign(dx) || b.dir;
@@ -15768,7 +15793,7 @@ function updateBaddy(b, dt) {
     else if (b.hitWall) b.dir = -b.hitWall;
     let stop = near && Math.abs(dx) < (T.keep || 26);
     const patch = ZONE + (melee && near ? 120 : 0);   // (a brawler follows you a little further out of its patch)
-    if (!b.angry && ((b.dir > 0 && b.x > home + patch) || (b.dir < 0 && b.x < home - patch))) { if (near) stop = true; else b.dir *= -1; }   // the edge of its patch
+    if (!b.angry && !(b.mini && near) && ((b.dir > 0 && b.x > home + patch) || (b.dir < 0 && b.x < home - patch))) { if (near) stop = true; else b.dir *= -1; }   // the edge of its patch (a mini boss that's seen you: none, it hunts you down, the user 2026-10-24 "make the mini boss go after you more")
     if (b.plat) {                                 // at a platform's edge: turn back, or wait there for you, or hop down after you
       const atEdge = (b.dir < 0 && b.x < b.plat.x + 16) || (b.dir > 0 && b.x > b.plat.x + b.plat.w - 16);
       if (atEdge && !(near && dy > 40)) { if (near) stop = true; else b.dir *= -1; }

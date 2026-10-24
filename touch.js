@@ -32,6 +32,7 @@
   #tBtns .b svg { width: 25px; height: 25px; display: block; overflow: visible; }   /* (the PlayStation shapes, like the Backbone's buttons) */
   #tBtns .b svg * { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   #touch.gp #tPad, #touch.gp #tBtns, #touch.gp #tLT { display: none; }
+  #touch.kb #tPad, #touch.kb #tBtns, #touch.kb #tLT, #touch.kb #tCorner { display: none; }   /* (a keyboard: none of it, 2026-10-24) */
   #tLT { left: calc(66px + env(safe-area-inset-left)); bottom: calc(184px + env(safe-area-inset-bottom)); width: 60px; height: 34px; border-radius: 17px; border: 2.5px solid #fff;
     background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center; font: 13px/1 "Bungee", sans-serif; box-sizing: border-box; padding-top: 2px; }
   #tLT.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }   /* (a controller in use: no on-screen pad) */
@@ -52,10 +53,15 @@
   canvas { touch-action: none; }
   html { touch-action: manipulation; }
   body { overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }`;
-  const st = document.createElement("style"); st.textContent = css + "\n  .mnu small { display: none; }   /* (the story menus: no keyboard hints on a phone, you tap) */"; document.head.appendChild(st);
-  window.BERRY_TOUCH = true;                        // (the game words its prompts for a touch screen: "TAP" not "PRESS ANY BUTTON")
+  const st = document.createElement("style"); st.textContent = css + "\n  html.touchUI .mnu small { display: none; }   /* (the story menus: no keyboard hints on a phone, you tap) */"; document.head.appendChild(st);
+  // a touch screen or not (the user, 2026-10-24: "the phone buttons are showing up on the desktop link. they shouldnt show up if you're using a
+  // keyboard or any controller"): on a computer with no touch screen they're never shown; a real key pressed hides them (as a controller's
+  // button does), a finger on the screen brings them back. The prompts follow ("TAP" with a finger, "PRESS ANY BUTTON" with keys or a pad)
+  const touchy = navigator.maxTouchPoints > 0 || matchMedia("(pointer: coarse)").matches;
+  const uiTouch = on => { window.BERRY_TOUCH = on; document.documentElement.classList.toggle("touchUI", on); };
+  uiTouch(touchy);                                  // (the game words its prompts for a touch screen: "TAP" not "PRESS ANY BUTTON")
 
-  const T = document.createElement("div"); T.id = "touch"; T.className = "off";
+  const T = document.createElement("div"); T.id = "touch"; T.className = touchy ? "off" : "off kb";
   const arm = (d, rot) => `<g transform="rotate(${rot} 78 78)"><path class="arm" data-d="${d}" d="M58 6 Q58 2 62 2 L94 2 Q98 2 98 6 L98 58 L78 78 L58 58 Z"/><path class="tri" d="M78 16 L88 30 L68 30 Z"/></g>`;
   T.innerHTML = `<div id="tSit"></div><div id="tPad"><svg viewBox="0 0 156 156">${arm("u", 0)}${arm("r", 90)}${arm("d", 180)}${arm("l", 270)}<circle cx="78" cy="78" r="9" fill="rgba(255,255,255,.3)"/></svg></div>
     <div id="tBtns"><div class="b bY" data-b="y"><svg viewBox="0 0 24 24"><path d="M12 3.5 L21.5 19.5 L2.5 19.5 Z"/></svg><i>TACKLE</i></div><div class="b bX" data-b="x"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg><i>BLOCK</i></div><div class="b bB" data-b="b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg><i>ATTACK</i></div><div class="b bA" data-b="a"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg><i>JUMP</i></div></div>
@@ -110,11 +116,14 @@
   // ── a controller (the Backbone): press any of its buttons and the on-screen pad and buttons hide, till it's unplugged. (A phone only
   // tells a page about a controller once one of its buttons is pressed.) The game reads the controller itself: ✕ jump, ○ attack, □ block, △ tackle
   const pads = () => [...(navigator.getGamepads ? navigator.getGamepads() : [])].filter(Boolean);
-  const gpOn = () => { if (T.classList.contains("gp")) return; T.classList.add("gp"); padPtr.clear(); btnPtr.clear(); sync();
+  const gpOn = () => { if (T.classList.contains("gp")) return; T.classList.add("gp"); uiTouch(false); padPtr.clear(); btnPtr.clear(); sync();
     const t = document.getElementById("toast"); if (t) { t.textContent = "CONTROLLER ON · THE TOUCH BUTTONS ARE HIDDEN"; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2600); } };
   addEventListener("gamepadconnected", gpOn);
-  addEventListener("gamepaddisconnected", () => { if (!pads().length) T.classList.remove("gp"); });
-  setInterval(() => { const P = pads(); if (!P.length) T.classList.remove("gp"); else if (P.some(g => g.buttons.some(b => b.pressed))) gpOn(); }, 250);
+  const gpOff = () => { if (!T.classList.contains("gp")) return; T.classList.remove("gp"); if (!T.classList.contains("kb")) uiTouch(true); };
+  addEventListener("gamepaddisconnected", () => { if (!pads().length) gpOff(); });
+  setInterval(() => { const P = pads(); if (!P.length) gpOff(); else if (P.some(g => g.buttons.some(b => b.pressed))) gpOn(); }, 250);
+  addEventListener("keydown", e => { if (!e.isTrusted || T.classList.contains("kb")) return; T.classList.add("kb"); uiTouch(false); padPtr.clear(); btnPtr.clear(); sync(); }, true);   // (a real key: the pad's own presses aren't "trusted")
+  addEventListener("pointerdown", e => { if (e.pointerType !== "touch" || !T.classList.contains("kb")) return; T.classList.remove("kb"); if (!T.classList.contains("gp")) uiTouch(true); }, true);   // (a finger on the screen: back they come)
 
   // ── full screen, so the browser's bars don't cover the game (the user, 2026-10-20: "make sure that touching the screen hides safari or
   // chrome's toolbars so the player can see the game"). Where a page can go full screen (Android; an iPad), any tap while it isn't asks
