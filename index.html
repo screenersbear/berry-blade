@@ -1358,7 +1358,7 @@ function buildKesh() {                       // yellow block robot with piano-ke
   });
   addChains(r, [-1, 1].map(s => ({ parent: "chest", anchor: [-.2, .45, s * .7], dir: [-.6, -1, s * .5], n: 8, seg: .26, prof: t => lerp(.16, .24, t),
     mat: "#e012c8", flat: .22, hang: .6, k0: 120, k1: 30, damp: 6, sway: .08, ref: UPV })));
-  Object.assign(r, { bobAmt: .07, stride: .3, swing: .08, style: { hunch: .05, walkLean: .08, roll: .05, splay: .03, arm: [100, .45], head: [120, .4] } });
+  r.noElbows = true; Object.assign(r, { bobAmt: .07, stride: .3, swing: .08, style: { hunch: .05, walkLean: .08, roll: .05, splay: .03, arm: [100, .45], head: [120, .4] } });
   r.animate = e => {
     if (e.atk === "charge") r.arms.forEach(A => { A.rotation.z = -.9; A.position.y = 3.3; });
     else if (e.atk === "act") r.arms.forEach(A => { A.rotation.z = lerp(.5, 0, clamp(e.actT / .25, 0, 1)); A.position.y = 3.0; });
@@ -1466,8 +1466,106 @@ function settleJoints(r, e, dt) {
   }
 }
 const FOE_STYLE = { hunch: .07, walkLean: .1, roll: .06, lift: .1, stance: .12, splay: .04, flare: .07, wind: 1, bounce: 0, beat: 5, arm: [80, .45], head: [110, .45] };
+// the bosses alive between their moves (the user, 2026-10-25: "make their animations less robotic, less lego, give them a real standing idle
+// animation that shows personalinty and movement, and allow them to be agile as they move around, like souls game bossess"): each one's idle
+// (breathing at its own pace, the weight shifting foot to foot, knees soft, a fighter's guard) and the gestures it makes when it's waiting on
+// you; agile: how often it leaps in from far off, and whether its hop away is a back flip. guard: [near arm forward, its elbow, far arm, elbow]
+const BOSS_IDLE = {
+  _: { tempo: 3.2, breath: .025, sway: .7, knee: .14, low: .02, guard: [.25, .45, .15, .4], gest: ["beckon", "shrug", "crack"], every: [3.5, 6.5], agile: .6 },
+  glos: { tempo: 3.4, breath: .022, sway: .9, knee: .1, low: 0, guard: [.18, .35, .1, .3], gest: ["wag", "preen", "hip", "beckon"], every: [3, 6], agile: 1 },   // thin, sly, mocking
+  duck: { tempo: 2.6, breath: .035, sway: .6, knee: .2, low: .03, guard: [.3, .5, .3, .5], gest: ["flap", "laugh", "shrug"], every: [3, 5.5], agile: .9 },   // puffed up, full of himself
+  turtle: { tempo: 3.8, breath: .03, sway: .5, knee: .22, low: .03, guard: [.2, .5, .2, .5], gest: ["shrug", "tap", "neckroll"], every: [4, 7], agile: .3 },   // grumpy, impatient
+  vanvan: { tempo: 3, breath: .02, sway: .6, knee: .12, low: .01, guard: [.35, .9, .3, .8], gest: ["rub", "point", "tilt", "laugh"], every: [3, 6], agile: .6 },   // the scheming scientist
+  loof: { tempo: 2.4, breath: .03, sway: .8, knee: .3, low: .05, guard: [.3, .3, .3, .3], gest: ["ruffle", "screech", "beckon"], every: [3, 5.5], agile: 1 },   // a bird of prey, crouched to spring
+  sirocco: { tempo: 4.4, breath: .045, sway: .5, knee: .2, low: .03, guard: [.45, .7, .4, .7], gest: ["pound", "flex", "stomp"], every: [3.5, 6.5], agile: .3 },   // a furnace bruiser, heaving
+  kesh: { tempo: 3.6, breath: .025, sway: .5, knee: .15, low: .02, guard: [.5, .6, .45, .6], gest: ["keys", "tilt", "bow"], every: [3.5, 6.5], agile: .5 },   // the gentleman robot at his keys
+  vinella: { tempo: 3.2, breath: .022, sway: 1, knee: .12, low: 0, guard: [.15, .5, .1, .4], gest: ["hairflick", "hip", "beckon", "laugh"], every: [3, 6], agile: 1 },   // vain, theatrical
+  crux: { tempo: 4, breath: .035, sway: .5, knee: .2, low: .03, guard: [.4, .8, .35, .8], gest: ["crack", "neckroll", "shrug", "point"], every: [3.5, 7], agile: .4 },   // the heavy
+  trumpeto: { tempo: 3, breath: .03, sway: .7, knee: .15, low: .02, guard: [.25, .5, .2, .5], gest: ["laugh", "flex", "beckon", "tap"], every: [3, 6], agile: .7 },   // the showman
+  masterno: { tempo: 2.4, breath: .03, sway: .4, knee: .25, low: .04, guard: [.95, 1.7, .85, 1.6], gest: ["jabs", "flex", "beckon", "neckroll"], every: [2.5, 5], agile: .9 },   // the champ, guard up
+  kingp: { tempo: 3.8, breath: .03, sway: .5, knee: .1, low: .01, guard: [.2, .5, .15, .4], gest: ["wave", "point", "laugh"], every: [4, 7], agile: .5 },   // royal, unhurried
+  morel: { tempo: 3.4, breath: .03, sway: .9, knee: .15, low: .02, guard: [0, 0, 0, 0], gest: ["sway", "tilt", "bow"], every: [3, 6], agile: .6 } };
+// a gesture: T seconds; f fills o with offsets over u (0 to 1, t its seconds): az / ax / el the arms' swing forward, out, the elbow (N the arm
+// nearer you, F the other), hz / hx / hy the head's nod up, tilt, turn, lean / roll / by the body, kn / lz a knee and a leg. Faded in and out
+const ezG = u => u * u * (3 - 2 * u), bumpG = (u, a, b) => Math.max(0, Math.sin(Math.PI * clamp((u - a) / (b - a), 0, 1)));
+const GEST = {
+  beckon: { T: 1.5, f: (o, u, t, N) => { o.az[N] = 1.05; o.ax[N] = .12; o.el[N] = .7 + .5 * Math.max(0, Math.sin(t * 9)); o.hz = .07; o.lean = -.03; } },   // come on, then
+  point: { T: 1.4, f: (o, u, t, N) => { o.az[N] = 1.5; o.el[N] = -.05; o.lean = .05; o.hz = .05; } },
+  shrug: { T: 1.1, f: (o, u) => { const k = Math.sin(Math.PI * u); o.ax[0] = o.ax[1] = .35 * k; o.el[0] = o.el[1] = 1 * k; o.az[0] = o.az[1] = .35 * k; o.hx = .16 * k; o.by = .02 * k; } },
+  crack: { T: 1.5, f: (o, u, t) => { o.az[0] = o.az[1] = .75; o.el[0] = o.el[1] = 1.35 + (u > .5 ? .12 * Math.sin(t * 28) : 0); o.ax[0] = o.ax[1] = -.18; o.hz = -.08; o.lean = .05; } },   // the knuckles
+  flex: { T: 1.5, f: (o, u) => { const k = Math.sin(Math.PI * Math.min(1, u * 1.3)); o.ax[0] = o.ax[1] = 1 * k; o.az[0] = o.az[1] = .2 * k; o.el[0] = o.el[1] = 1.9 * k; o.lean = -.1 * k; o.hz = .12 * k; o.by = .03 * k; } },
+  wag: { T: 1.3, f: (o, u, t, N) => { o.az[N] = 1.85; o.el[N] = .35 + .3 * Math.sin(t * 15); o.hy = .14 * Math.sin(t * 7.5); o.hz = .05; } },   // tsk, tsk
+  preen: { T: 1.6, f: (o, u, t, N, F) => { o.az[F] = 2.5; o.el[F] = 1.6 + .2 * Math.sin(t * 4); o.ax[F] = .2; o.hx = .12; o.roll = .04; } },
+  hip: { T: 2.2, f: (o, u, t, N) => { o.ax[N] = .6; o.az[N] = -.25; o.el[N] = 1.7; o.roll = .07; o.by = -.02; o.hx = -.1; o.kn[1 - N] = .25; } },   // a hand on the hip, the weight on one leg
+  flap: { T: 1, f: (o, u, t) => { const k = .55 + .5 * Math.sin(t * 22); o.ax[0] = o.ax[1] = k; o.el[0] = o.el[1] = .3; o.by = .025 * Math.abs(Math.sin(t * 11)); o.hz = .1; } },
+  laugh: { T: 1.3, f: (o, u, t) => { o.by = .03 * Math.sin(t * 15); o.hz = .28; o.lean = -.08; o.az[0] = o.az[1] = .35; o.el[0] = o.el[1] = 1.3; o.ax[0] = o.ax[1] = -.1; } },
+  rub: { T: 1.5, f: (o, u, t) => { o.az[0] = o.az[1] = .65; o.el[0] = 1.45 + .14 * Math.sin(t * 18); o.el[1] = 1.45 - .14 * Math.sin(t * 18); o.ax[0] = o.ax[1] = -.22; o.hz = -.07; o.lean = .07; } },   // hands rubbing, scheming
+  ruffle: { T: .9, f: (o, u, t) => { const k = Math.sin(Math.PI * u); o.ax[0] = o.ax[1] = .8 * k + .1 * Math.sin(t * 40) * k; o.roll = .05 * Math.sin(t * 34) * k; o.by = .02 * k; } },
+  screech: { T: 1.3, f: (o, u) => { const k = Math.sin(Math.PI * Math.min(1, u * 1.2)); o.hz = .4 * k; o.ax[0] = o.ax[1] = 1 * k; o.el[0] = o.el[1] = .25; o.lean = -.12 * k; } },
+  pound: { T: 1.4, f: (o, u, t) => { o.az[0] = o.az[1] = .6 + .35 * Math.max(0, Math.sin(t * 10)); o.el[0] = o.el[1] = 1.1; o.ax[0] = o.ax[1] = -.2; o.by = -.03 * Math.max(0, -Math.sin(t * 10)); o.lean = .06; } },   // fist into palm
+  stomp: { T: 1.1, f: (o, u, t, N) => { const up = u < .45 ? ezG(u / .45) : u < .55 ? 1 - ezG((u - .45) / .1) : 0; o.lz[N] = .5 * up; o.kn[N] = .9 * up; o.lean = .05 * up; o.by = u > .5 && u < .65 ? -.05 : 0; } },
+  keys: { T: 1.7, f: (o, u, t) => { o.az[0] = o.az[1] = .85; o.el[0] = .7 + .16 * Math.max(0, Math.sin(t * 16)); o.el[1] = .7 + .16 * Math.max(0, Math.sin(t * 16 + 2)); o.hx = .1 * Math.sin(t * 3); o.lean = .04; } },   // playing on the air
+  tilt: { T: 1.3, f: (o, u) => { const k = Math.sin(Math.PI * u); o.hx = .32 * k; o.hz = .06 * k; o.roll = -.03 * k; } },
+  bow: { T: 1.8, f: (o, u, t, N, F) => { const k = Math.sin(Math.PI * u); o.lean = .45 * k; o.az[F] = .7 * k; o.el[F] = 1.5 * k; o.ax[F] = -.3 * k; o.hz = -.15 * k; } },
+  hairflick: { T: 1.1, f: (o, u, t, N) => { const k = u < .6 ? ezG(u / .6) : 1 - ezG((u - .6) / .4); o.az[N] = 2.4 * k; o.el[N] = 1.8 * k - .9 * bumpG(u, .5, .8); o.hz = .22 * bumpG(u, .45, .85); o.hy = -.12 * k; } },
+  neckroll: { T: 1.6, f: (o, u) => { const a = u * Math.PI * 2; o.hz = .16 * Math.sin(a); o.hx = .16 * Math.sin(a + Math.PI / 2) * Math.sin(Math.PI * u); } },
+  tap: { T: 1.8, f: (o, u, t, N) => { o.az[0] = o.az[1] = .45; o.el[0] = o.el[1] = 1.65; o.ax[0] = o.ax[1] = -.35; o.lz[N] = .12; o.kn[N] = .25 + .2 * Math.max(0, Math.sin(t * 12)); o.hx = .06; } },   // arms folded, a foot tapping
+  wave: { T: 1.7, f: (o, u, t, N, F) => { const k = Math.sin(Math.PI * Math.min(1, u * 1.15)); o.az[F] = 2.6 * k; o.el[F] = .7 * k + .45 * Math.sin(t * 9) * k; o.hx = .08 * k; } },
+  jabs: { T: 1.1, f: (o, u, t, N, F) => { o.az[N] = 1 + .5 * bumpG(u, .05, .3); o.el[N] = 1.6 - 1.4 * bumpG(u, .05, .3); o.az[F] = 1 + .5 * bumpG(u, .4, .65); o.el[F] = 1.6 - 1.4 * bumpG(u, .4, .65); o.lean = .06; o.by = -.02; } },   // shadow-boxing
+  sway: { T: 2.2, f: (o, u) => { o.roll = .09 * Math.sin(u * Math.PI * 2); o.hx = -.06 * Math.sin(u * Math.PI * 2); } } };
+const nearArm = (r, e) => r.arms.length > 1 ? ((r.arms[1].position.z || 0) * Math.cos(e.yaw || 0) >= 0 ? 1 : 0) : 0;   // (the arm on your side of it: its gestures are made with that one)
+function gestureNow(e, r, prof, still, dt) {         // the gesture it's making (or none): its offsets this frame, faded in and out
+  const o = { lean: 0, roll: 0, by: 0, az: [0, 0], ax: [0, 0], el: [0, 0], hz: 0, hx: 0, hy: 0, kn: [0, 0], lz: [0, 0] };
+  if (dt > 0) { r.gStill = still ? (r.gStill || 0) + dt : 0; r.gCd = (r.gCd ?? rand(...prof.every)) - dt;
+    if (!r.gest && still && r.gStill > 1 && r.gCd <= 0 && prof.gest.length) { const L = prof.gest.filter(g => g !== r.gLast); r.gest = { n: L[Math.floor(Math.random() * L.length)] || prof.gest[0], t: 0, rel: -1 }; r.gLast = r.gest.n; }
+    if (r.gest) { const g = r.gest; g.t += dt; if (!still && g.rel < 0) g.rel = g.t; if (g.t >= GEST[g.n].T || (g.rel >= 0 && g.t - g.rel > .2)) { r.gest = null; r.gCd = rand(...prof.every); } } }
+  const g = r.gest; if (!g) return o; const D = GEST[g.n], u = clamp(g.t / D.T, 0, 1);
+  const env = ezG(clamp(g.t / .22, 0, 1)) * ezG(clamp((D.T - g.t) / .28, 0, 1)) * (g.rel >= 0 ? 1 - clamp((g.t - g.rel) / .2, 0, 1) : 1);
+  const N = nearArm(r, e); D.f(o, u, g.t, N, 1 - N);
+  for (const k of ["lean", "roll", "by", "hz", "hx", "hy"]) o[k] *= env; for (const k of ["az", "ax", "el", "kn", "lz"]) { o[k][0] *= env; o[k][1] *= env; }
+  return o;
+}
+// elbows and knees (the same ask: "less lego"): each arm and leg cut at its middle into an upper part and a lower one, r.fores / r.shins the groups
+// the elbow and the knee turn. What's below the joint goes onto the lower part (a cylinder or capsule across it cut in two there, a ball in
+// the joint); a limb made as one curved tube (Sirocco's) or a single turned piece stays as it was (its entry null)
+function jointify(r) {
+  if (r.jointed) return; r.jointed = true; const inv = new THREE.Matrix4(), bx = new THREE.Box3(), tmp = new THREE.Box3();
+  const boxIn = (G, c) => { bx.makeEmpty(); c.updateMatrixWorld(true); c.traverse(o => { if (!o.isMesh || !o.geometry) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    tmp.copy(o.geometry.boundingBox).applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld)); bx.union(tmp); }); return bx.clone(); };
+  const remesh = (geo, src) => { const m = new THREE.Mesh(geo, src.material); const ol = src.children.find(o => o.isMesh && o.material && o.material.side === THREE.BackSide);
+    if (ol) { let og = geo.clone(); for (const k of Object.keys(og.attributes)) if (k !== "position") og.deleteAttribute(k); og = mergeVertices(og, 1e-3); og.computeVertexNormals(); m.add(new THREE.Mesh(og, ol.material)); }
+    return m; };
+  const cut = (c, jy, J) => {                        // a straight cylinder or capsule across the joint: two of it, meeting there
+    const g = c.geometry, P = g.parameters || {}, sy = c.scale.y, cy = c.position.y, G = c.parent;
+    if (g.type === "CylinderGeometry") { const yT = cy + P.height / 2 * sy, yB = cy - P.height / 2 * sy, rJ = lerp(P.radiusBottom, P.radiusTop, (jy - yB) / (yT - yB)), n = P.radialSegments || 12;
+      const up = remesh(new THREE.CylinderGeometry(P.radiusTop, rJ, (yT - jy) / sy, n), c), dn = remesh(new THREE.CylinderGeometry(rJ, P.radiusBottom, (jy - yB) / sy, n), c);
+      [up, dn].forEach(m => { m.scale.copy(c.scale); m.position.x = c.position.x; m.position.z = c.position.z; }); up.position.y = (yT + jy) / 2; dn.position.y = (jy + yB) / 2 - jy;
+      const ball = remesh(new THREE.SphereGeometry(rJ * 1.02, n, Math.max(6, n >> 1)), c); ball.scale.set(c.scale.x, c.scale.x, c.scale.z); ball.position.set(c.position.x, 0, c.position.z);
+      G.remove(c); G.add(up); J.add(dn); J.add(ball); return true; }
+    if (g.type === "CapsuleGeometry") { const rr = P.radius, half = P.length / 2 * sy + rr, yT = cy + half, yB = cy - half, n = P.radialSegments || 10;
+      const lu = Math.max(.01, (yT - (jy - rr)) / sy - 2 * rr / sy), ld = Math.max(.01, ((jy + rr) - yB) / sy - 2 * rr / sy);
+      const up = remesh(new THREE.CapsuleGeometry(rr, lu, P.capSegments || 4, n), c), dn = remesh(new THREE.CapsuleGeometry(rr, ld, P.capSegments || 4, n), c);
+      [up, dn].forEach(m => { m.scale.copy(c.scale); m.position.x = c.position.x; m.position.z = c.position.z; }); up.position.y = (yT + jy - rr) / 2; dn.position.y = (jy + rr + yB) / 2 - jy;
+      G.remove(c); G.add(up); J.add(dn); return true; }
+    return false; };
+  const split = G => {
+    if (!G || !G.isObject3D || !G.children.length) return null;
+    if (G.children.some(c => c.isMesh && /Tube|Extrude/.test(c.geometry.type)) || G.children.length < 2 && !G.children.some(c => c.isMesh && /Cylinder|Capsule/.test(c.geometry.type))) return null;
+    G.updateMatrixWorld(true); inv.copy(G.matrixWorld).invert();
+    const kids = G.children.slice(), boxes = kids.map(c => boxIn(G, c)), lo = Math.min(...boxes.map(b => b.min.y)); if (!(lo < -.3)) return null;
+    const jy = lo * .5, J = new THREE.Group(); J.position.set(0, jy, 0); J.name = "joint"; G.add(J);
+    kids.forEach((c, i) => { const b = boxes[i], straight = Math.abs(c.rotation.x) + Math.abs(c.rotation.z) < .02;
+      if (b.max.y <= jy + .03) { c.position.y -= jy; J.add(c); }
+      else if (b.min.y >= jy - .03) { }
+      else if (!(c.isMesh && straight && cut(c, jy, J)) && (b.min.y + b.max.y) / 2 < jy) { c.position.y -= jy; J.add(c); } });
+    return J.children.length ? J : (G.remove(J), null); };
+  r.fores = r.noElbows ? r.arms.map(() => null) : r.arms.map(split); r.shins = r.legs.map(split);   // (noElbows: Kesh's keyboard arms stay straight)
+}
 function foeJoints(r) {
+  jointify(r);
   const sty = r.style = { ...FOE_STYLE, ...r.style }, [ka, za] = sty.arm, [kh, zh] = sty.head, ch = [];
+  (r.fores || []).forEach(F => F && ch.push([F, "rotation", "z", ka * .8, za]));   // (the forearms trail the arms a touch, the shins the thighs)
+  (r.shins || []).forEach(K => K && ch.push([K, "rotation", "z", 480, .8]));
   ch.push([r.tilt, "rotation", "z", 130, .6], [r.tilt, "rotation", "x", 110, .55], [r.bob, "position", "y", 380, .75]);
   r.legs.forEach(L => { L.userData.y0 = L.position.y; ch.push([L, "rotation", "z", 520, .8], [L, "rotation", "x", 520, .8], [L, "position", "y", 520, .8]); });
   r.arms.forEach(A => { A.userData.y0 = A.position.y; ["x", "y", "z"].forEach(a => ch.push([A, "rotation", a, ka, za])); ch.push([A, "position", "y", 260, .6]); });
@@ -1501,8 +1599,16 @@ function syncFoe(e, r, dt = 0) {
   const lk = e.onGround && (e.landT ?? 9) < .32 ? (e.landK || .5) * (1 - e.landT / .32) ** 2 : 0;
   const A0 = charge ? ATTACKS[e.move] : null, kc = A0 ? ez(clamp(1 - e.atkTm / A0.charge, 0, 1)) : 0;
   const ka = act ? (e.actT < .07 ? ez(e.actT / .07) : 1 - .55 * ez(clamp((e.actT - .07) / .45, 0, 1))) : 0;
-  // torso: a fighter's stoop, leaning into the walk (right into a sprint) and rolling over whichever foot is planted; just breathing when it stands still
-  let lean = sty.hunch + (walking ? sty.walkLean * w * fw * (1 + 2.2 * run) + Math.sin(ph * 2) * .025 * (1 + run) : Math.sin(ck * 1.8) * .014);
+  // standing: its own idle (BOSS_IDLE: breathing in slow and out quicker, the weight from foot to foot, knees soft, the guard up) and its gestures
+  const prof = BOSS_IDLE[e.def && e.def.id] || BOSS_IDLE._, dash = (e.dashT || 0) > 0, still = e.onGround && !walking && !e.atk && !hurt && !crouch && !dash && !(e.chide && e.chide.t > 0);
+  if (dt > 0) r.idleK = approach(r.idleK || 0, still ? 1 : 0, dt * 3.5); const ik = ez(r.idleK || 0);
+  const bph = (ck / prof.tempo) % 1, breath = (bph < .58 ? ez(bph / .58) : 1 - ez((bph - .58) / .42)) * prof.breath;
+  if (dt > 0) { r.wsT = (r.wsT ?? rand(1, 3)) - dt; if (r.wsT <= 0) { r.wsT = rand(2.2, 4.8); r.wsTo = (r.wsTo || 1) > 0 ? -1 : 1; } r.ws = approach(r.ws || 0, (r.wsTo || 0) * prof.sway, dt * .9); }
+  const ws = (r.ws || 0) * ik, G = gestureNow(e, r, prof, still, dt), NA = nearArm(r, e);
+  if (e.onGround) r.flip = 0; else if (e.dodgeHop && prof.agile >= .9 && dt > 0) r.flip = Math.min(1, (r.flip || 0) + dt / .5);   // (an agile one's hop away: a back flip)
+  // torso: a fighter's stoop, leaning into the walk (right into a sprint) and rolling over whichever foot is planted; breathing when it stands still
+  let lean = sty.hunch + (walking ? sty.walkLean * w * fw * (1 + 2.2 * run) + Math.sin(ph * 2) * .025 * (1 + run) : Math.sin(ck * 1.8) * .014 * (1 - ik) - breath * .5 * ik + prof.low * 1.4 * ik) + G.lean;
+  if (dash) lean += md > 0 ? .3 : -.2;                                    // a dash: low into a lunge, or thrown back on a backstep
   if (!e.atk && !hurt) lean += (e.accLean || 0) * .85;                  // into a burst of speed, rocking back on the brakes
   lean -= sk * md * .2;                                                  // a skid: thrown back over its heels
   if (crouch) lean += .1 + .16 * wu;                                     // gathering for a jump...
@@ -1511,21 +1617,31 @@ function syncFoe(e, r, dt = 0) {
   if (charge) lean -= .22 * sty.wind * (.4 + .8 * kc);                    // rear back, more and more...
   if (act) lean += .3 * sty.wind * ka;                                   // ...throw the weight into it, and settle
   if (hurt) lean -= e.dead ? .38 : .3;
-  const roll = walking ? cw * sty.roll * w * (1 + .5 * run) : Math.sin(ck * 1.1) * .02;
+  const roll = (walking ? cw * sty.roll * w * (1 + .5 * run) : Math.sin(ck * 1.1) * .02 * (1 - ik) + ws * .06) + G.roll;
   r.tilt.rotation.z = -lean; r.tilt.rotation.x = roll;
   // the body rides highest as the legs pass under it and dips as each foot lands (stiff legs, so the planted foot stays on the floor); at a run
   // it's the other way: lowest over the planted foot, up in the stride
   const hip = r.legs.length ? r.legs[0].userData.y0 : 1;
+  // the knees (the shins: r.shins): soft standing, the weight's leg straighter; the stepping leg's bends as it swings through, more at a run;
+  // tucked in the air, deep in a jump's wind-up and a landing, the rear one loaded for a strike, the front one on a lunge
+  const knee = r.legs.map((L, i) => { const s = i ? -1 : 1;
+    let k = walking ? .1 + Math.max(0, s * cw) * .8 * w * (1 + .5 * run) + .25 * run : air ? (rising ? .75 : .3) : hurt ? .35 : .14 + ik * (prof.knee + Math.max(0, -s * ws) * .25);
+    k += .7 * wu + .6 * lk + (charge ? (s > 0 ? .05 : .4) * kc : 0) + (act ? (s > 0 ? .35 : .1) * ka : 0) + G.kn[i];
+    if (dash) k += md > 0 ? (s > 0 ? .55 : .05) : .45; return Math.max(0, k); });
+  const kneeDrop = r.shins && r.shins.some(Boolean) ? hip * knee.reduce((a, k) => a + (1 - (Math.cos(k * .45) + Math.cos(k * .55)) / 2), 0) / Math.max(1, knee.length) : 0;   // (bent knees: the body that much lower, feet on the floor)
   let by = walking ? hip * (Math.cos(stride * sw) - Math.cos(stride)) * (1 - .7 * run) + r.bobAmt * .6 * (.5 + .5 * Math.cos(2 * ph)) * w * (1 - .5 * run) + run * r.bobAmt * 1.3 * (Math.abs(sw) - .45)
-    : sty.bounce ? Math.abs(Math.sin(ck * sty.beat)) * sty.bounce : Math.sin(ck * 2.2) * .02;
-  if (crouch) by -= .1 + .22 * wu; if (charge) by -= .06 + .1 * kc; if (act) by -= .06 * ka; by -= .28 * lk;
-  r.bob.position.y = by;
+    : sty.bounce ? Math.abs(Math.sin(ck * sty.beat)) * sty.bounce : Math.sin(ck * 2.2) * .02 * (1 - ik) + breath * .7 * ik - Math.abs(ws) * .02 - prof.low * ik;
+  if (crouch) by -= .1 + .22 * wu; if (charge) by -= .06 + .1 * kc; if (act) by -= .06 * ka; by -= .28 * lk; if (dash) by -= .08;
+  r.bob.position.y = by - (air ? 0 : kneeDrop) + G.by;
   r.legs.forEach((L, i) => {
     const s = i ? -1 : 1;
     let a = walking ? s * sw * stride
       : air ? (rising ? s * .32 + .06 : s * .1 + .08) : hurt ? .22 + s * .08
       : s * (sty.stance + .1 * wu + .08 * lk) + (charge ? (s > 0 ? .08 : -.18) * (.4 + .6 * kc) : 0) + (act ? (s > 0 ? .28 : -.14) * ka : 0);   // (a strike: weight back on the rear foot, then a step into it)
     if (sk) a = lerp(a, md * (s > 0 ? .45 : .15), sk);                    // a skid: both feet braced ahead of it
+    if (dash) a += md > 0 ? (s > 0 ? .5 : -.35) : (s > 0 ? -.1 : .25);    // (a lunge: the front leg out ahead, the back one pushing · a backstep: braced)
+    a += G.lz[i] + s * ws * .04;
+    const K = r.shins && r.shins[i]; if (K) { K.rotation.z = -knee[i]; a += knee[i] * .45; }   // (the thigh comes forward as the knee bends: the foot stays under it)
     L.rotation.z = a + lean;                          // legs stay under the body while the torso leans
     L.rotation.x = s * (sty.splay + (charge || act || crouch ? .05 : 0) + .06 * wu + .05 * lk) - roll;
     L.position.y = L.userData.y0 + (walking ? Math.max(0, s * cw) * sty.lift * w * (1 + 1.2 * run) * (1 - sk) : air && rising ? (i ? .08 : 0) : 0);   // the stepping foot lifts clear (high, at a sprint)
@@ -1534,22 +1650,31 @@ function syncFoe(e, r, dt = 0) {
   const raise = air ? (rising ? .9 : .5) : hurt ? 1.1 : crouch ? .2 : 0;
   r.arms.forEach((A, i) => {
     const s = i ? -1 : 1;
-    let z = walking ? -s * sw * r.swing * 1.3 * (1 + .8 * run) : .08 + Math.sin(ck * 1.6 + i * 1.3) * .045;
-    z += lean * .6;
+    const gN = i === NA ? 0 : 2;                      // (its guard: the arm on your side, the other)
+    let z = walking ? -s * sw * r.swing * 1.3 * (1 + .8 * run) : lerp(.08 + Math.sin(ck * 1.6 + i * 1.3) * .045, prof.guard[gN] + Math.sin(ck * 1.3 + i * 1.7) * .03, ik);
+    z += lean * .6 + G.az[i];
+    if (dash) z += md > 0 ? -.45 : .55;                // (a lunge: the arms back · a backstep: thrown forward for balance)
     if (crouch) z -= .25 + .45 * wu; if (rising) z += .35; if (charge) z -= .3 * sty.wind * (.4 + .8 * kc); if (act) z += .4 * sty.wind * ka; if (hurt) z += .35;
     z -= .35 * lk; z += md * .6 * sk;                                    // (a landing: the arms swing down with the weight · a skid: thrown out ahead for balance)
-    A.rotation.z = z; A.rotation.x = s * (sty.flare + raise * .5 + (walking ? .03 + .05 * run : 0)); A.rotation.y = 0;
+    A.rotation.z = z; A.rotation.x = s * (sty.flare + raise * .5 + (walking ? .03 + .05 * run : 0) + breath * .6 * ik) - (A.position.z >= 0 ? 1 : -1) * G.ax[i]; A.rotation.y = 0;
     A.position.y = A.userData.y0;
+    const F = r.fores && r.fores[i]; if (F) {          // the elbow: bent a little hanging, pumped at a run, the guard's when it stands; its own strikes kept as drawn
+      let el = walking ? .25 + Math.max(0, -s * sw) * .35 * w + .9 * run : air ? .5 : hurt ? .4 : .2;
+      el = lerp(el, prof.guard[gN + 1], ik); if (crouch) el += .3 * wu; if (dash) el += .35; if (charge || act) el *= .35;
+      F.rotation.z = el + G.el[i]; }
   });
   if (r.head) {   // keeps its eyes on you: counters part of the lean, nods a beat after each step, glances around when still
     const H = r.head;
-    H.rotation.z = lean * .45 + (walking ? Math.sin(2 * ph - .9) * .04 * w : Math.sin(ck * .9) * .025) + (hurt ? .3 : 0) + (charge ? -.07 - .05 * kc : 0) + (act ? .05 * ka : 0);
-    H.rotation.x = -roll * .5 + Math.sin(ck * .7) * .03;
-    H.rotation.y = walking ? 0 : Math.sin(ck * .45) * .12;
+    const pl = player, look = pl && !e.dead ? clamp(Math.atan2((e.y - (e.def.h || 150) * .8) - (pl.y - 60), Math.abs(pl.x - e.x) + 90), -.4, .4) : 0;   // (eyes on you: up at you on a ledge, down at you below)
+    if (dt > 0) { r.glT = (r.glT ?? rand(2, 5)) - dt; if (r.glT <= 0) { r.glT = rand(2.5, 6); r.glTo = rand(-.35, .35); } r.gl = approach(r.gl || 0, r.glT < .45 ? r.glTo || 0 : 0, dt * 5); }   // (now and then a quick glance away, and back)
+    H.rotation.z = lean * .45 + (walking ? Math.sin(2 * ph - .9) * .04 * w : Math.sin(ck * .9) * .025) + (hurt ? .3 : 0) + (charge ? -.07 - .05 * kc : 0) + (act ? .05 * ka : 0) + look * (.4 + .4 * ik) + breath * 1.2 * ik + G.hz;
+    H.rotation.x = -roll * .5 + Math.sin(ck * .7) * .03 + G.hx;
+    H.rotation.y = (walking ? 0 : Math.sin(ck * .45) * .12 * (1 - .5 * ik) + (r.gl || 0) * ik) + G.hy;
   }
   if (r.animate) r.animate(e, r, { walking, w, ph, ck });
   if (e.chide && e.chide.t > 0) chidePose(e, r);
   settleJoints(r, e, dt);
+  if (r.flip) r.tilt.rotation.z += ez(r.flip) * TAU;   // (the back flip over the spring's pose: a whole turn, so landing out of it is seamless)
   if (r.chains.length) { r.root.updateMatrixWorld(true); updateChains(r, e, dt); }
   FLASHSET(r.mats, e.flash > 0 || (e.dead && Math.floor(e.deathT * 16) % 2 === 0) ? .95 : 0);
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
@@ -8408,7 +8533,7 @@ const ATTACKS = {
 // like you do: speeding up and braking, never one flat walking speed, skidding round when it turns.
 // (2026-10-22, the user: "more agile and their movements more realistic and weighted the same way we've done for the heroines": quicker to
 // react, harder off the mark and on the brakes, backsteps out of your swing and after its own, a feint in now and then; bossFeel below)
-const BRAIN = { think: [.12, .24], accel: 2100, brake: 3000, airAccel: 850, walk: 1.5, sprint: 2.7, dodge: .4, dodgeCd: 1.7, cd: .85, dash: 560, feint: .3, feintCd: [1.6, 3] };
+const BRAIN = { think: [.12, .24], accel: 2500, brake: 3600, airAccel: 950, walk: 1.5, sprint: 2.7, dodge: .4, dodgeCd: 1.7, cd: .85, dash: 560, feint: .3, feintCd: [1.6, 3] };
 const BOSS_RUN = .45;                                // a sprint's stride: this much longer than the walk's (bossStep's phase slows to match)
 const bossStrideK = e => (1 + BOSS_RUN * (e.runK || 0)) * (Math.sign(e.vx) * e.dir < 0 ? .8 : 1);   // (backing off: shorter steps)
 function bossDash(e, d, k = 1, T = .2) {             // a quick burst along the ground (a backstep, a feint): its own momentum, then braking
@@ -8459,7 +8584,14 @@ function bossMove(e, p, D, dt) {
   if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 190 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
     e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < (arena ? arena.l : 0) + 200 && dx > 0) || (e.x > (arena ? arena.r : WORLD) - 200 && dx < 0);
     if (!wall && !e.plat && groundAt(e.x - Math.sign(dx) * 130) !== null && Math.random() < .5) { bossDash(e, -Math.sign(dx) || -e.dir, 1.15, .24); return; }   // a backstep along the ground, out of reach
-    e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; return;
+    e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; e.dodgeHop = !wall; return;   // (dodgeHop: syncFoe's back flip, an agile one's)
+  }
+  if (e.onGround && !(e.windup > 0)) e.dodgeHop = false;   // (down again: the flip's done)
+  e.pounceCd = Math.max(0, (e.pounceCd ?? 2) - dt);
+  if (I.kind === "close" && !D.chase && e.onGround && !e.plat && e.pounceCd <= 0 && adx > 520 && adx < 950 && Math.abs(p.y - e.y) < 60) {   // far off: sometimes a leap in, landing in front of you (as a Souls boss closes)
+    const ag = (BOSS_IDLE[D.id] || BOSS_IDLE._).agile, tx = p.x - Math.sign(dx) * 210;
+    if (Math.random() < dt * 1.6 * ag && groundAt(tx) !== null && !GAPS.some(([a, b]) => b > Math.min(e.x, tx) && a < Math.max(e.x, tx))) {   // (a high arc, .83 s up and down: room to cover the ground)
+      e.jumpVy = -825; e.jumpVx = clamp((tx - e.x) / .83, -900, 900); e.windup = .18; e.sq = -.25; e.sqv = 0; e.steer = false; e.pounceCd = rand(4, 7); e.brainT = .6; return; }
   }
   let tv = 0;
   if (I.kind === "climb") { const q = I.q, d = I.tx - e.x;
