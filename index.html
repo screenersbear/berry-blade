@@ -280,6 +280,15 @@
 
   /* round banner */
   #banner { position: fixed; top: 32%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; opacity: 0; }
+  /* the beach's "who are you?" on a phone: the words over the beach and an arrow over each of them, not a menu (the user, 2026-10-25) */
+  #beachPick { position: fixed; inset: 0; z-index: 40; display: none; pointer-events: none; }
+  #beachPick.show { display: block; }
+  #beachPick .lockup { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap; }
+  #bpHint { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); font: 600 12px "Jost", sans-serif; letter-spacing: .3em; color: var(--y); background: var(--s); padding: 6px 14px; white-space: nowrap; }
+  .bpArr { position: absolute; width: 40px; height: 36px; transform: translate(-50%, -100%); opacity: .4; transition: opacity .2s; }
+  .bpArr svg { width: 100%; height: 100%; overflow: visible; } .bpArr path { fill: var(--y); stroke: var(--s); stroke-width: 4; stroke-linejoin: round; }
+  .bpArr.on { opacity: 1; animation: bpBob .55s ease-in-out infinite alternate; }
+  @keyframes bpBob { from { margin-top: -8px; } to { margin-top: 2px; } }
   #banner .blk { font-size: 52px; padding: 12px 20px 4px; }
   #banner .bar { font-size: 15px; margin-left: 60px; letter-spacing: .34em; }
   #banner.show { animation: banner 2.2s ease-out forwards; }
@@ -606,6 +615,8 @@
 <div id="comic"><div class="page"><div class="cp"><span class="fx" style="right: 10%; top: 30%">!</span></div><div class="cp"><span class="fx" style="left: 8%; bottom: 10%">✦</span></div><div class="cp"></div><div class="cp"><span class="arrow"></span></div><span class="go" id="comicGo">PRESS ANY BUTTON</span></div></div>
 <div id="skipHint">ENTER: SKIP</div>
 <div id="banner" class="lockup"></div>
+<div id="beachPick"><div class="lockup"><div class="blk" id="bpBlk">WHO ARE YOU?</div><div class="bar" id="bpBar">CAMILA OR ROSE?</div></div><small id="bpHint"></small>
+  <i class="bpArr" data-h="rose"><svg viewBox="0 0 40 36"><path d="M4 4h32L20 31z"/></svg></i><i class="bpArr" data-h="camila"><svg viewBox="0 0 40 36"><path d="M4 4h32L20 31z"/></svg></i></div>
 <div id="exitCue" class="lockup hidden"><div class="blk">NEXT →</div><div class="bar" id="exitName">AFTERNOON</div></div>
 <div id="wstats"><div class="wsIn"><div class="lockup big"><div class="blk" id="wsName">&nbsp;</div><div class="bar">CLEARED</div></div><div id="wsList"></div>
   <div id="wsUp" class="hidden"><div class="upHead"><span>THE UPRISING</span><b id="wsUpPct">0%</b></div><div class="upBar"><i id="wsUpFill"></i></div><div class="upSub" id="wsUpSub"></div>
@@ -5361,6 +5372,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
     else if (d) { slotSel = slotSel < 3 ? step(slotSel, 3) : delOn ? (slotSel === 3 ? 4 : 3) : 3; SFX.tick(); markMenu(); }
     if (ok) { if (slotSel === 3) slotBack(); else if (slotSel === 4) { SFX.confirm(); showSlots("del"); } else slotPick(slotSel); }
     if (back) slotBack(); }
+  else if (M === "bpick") { if (bPick) beachPickNav(d, ok, back); }
   else if (M === "hero") {
     if (heroAsk) { if (d) { heroAskSel = 1 - heroAskSel; SFX.tick(); markMenu(); } if (ok) heroAnswer(!heroAskSel); if (back) heroAnswer(false); return; }
     if (d) { heroSel = step(heroSel, 2); SFX.tick(); markMenu(); } if (ok) heroPick(["camila", "rose"][heroSel]); if (back && !opening) { SFX.tick(); showSlots(slotKind); } }
@@ -5636,8 +5648,37 @@ function updateOpening(dt) {
   if ((o.endT || 0) > 3 || t > 22) openingAsk();
 }
 function openingAsk() {                              // everything gone off to the right: who are you?
-  const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); showHero(story.slot, true);
+  const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); if (oneUp()) beachPick(); else showHero(story.slot, true);
 }
+// on a phone (oneUp: a small screen), "who are you?" is asked on the beach itself (the user, 2026-10-25: "on the 3ds and maybe mobile, when it
+// gives you the choice of selecitng a character, don't make it a menu popup. instead show the text on the screen and have an arrow over each
+// character and the player picks that way"): the words at the top, an arrow over each of them, the one you're on bobbing; ← → (or a tap on
+// one) to choose, pick it again (or ✕ / A) to ask "PLAY AS ...?", once more to be them
+let bPick = null; const _bpV = new THREE.Vector3();
+function beachPick() { bPick = { id: "camila", ask: false }; menuUp = "bpick"; $("beachPick").classList.add("show"); drawBeachPick(); }
+function drawBeachPick() {
+  if (!bPick) return; const nm = bPick.id === "rose" ? "ROSE" : "CAMILA", T = !!window.BERRY_TOUCH;
+  $("bpBlk").textContent = bPick.ask ? `PLAY AS ${nm}?` : "WHO ARE YOU?"; $("bpBar").textContent = bPick.ask ? (T ? `TAP ${nm} AGAIN TO GO` : "YES OR NO?") : "CAMILA OR ROSE?";
+  $("bpHint").textContent = T ? (bPick.ask ? "OR TAP THE OTHER ONE" : "TAP CAMILA OR ROSE") : padUse ? padText(bPick.ask ? "{j} YES · {sq} NO" : "← → TO CHOOSE · {j} TO PICK") : bPick.ask ? "ENTER YES · ESC NO" : "← → TO CHOOSE · ENTER TO PICK";
+  document.querySelectorAll(".bpArr").forEach(a => a.classList.toggle("on", a.dataset.h === bPick.id));
+}
+function beachPickTick() {                           // (every frame: each arrow over its head)
+  if (!bPick || !opening) return;
+  opening.kids.forEach(k => { const a = document.querySelector(`.bpArr[data-h="${k.id}"]`); if (!a) return; _bpV.set(X(k.st.x), Y(k.st.y - (k.r.heightPx || 105) + 2), 0).project(camera);
+    a.style.left = ((_bpV.x + 1) / 2 * innerWidth).toFixed(1) + "px"; a.style.top = ((1 - _bpV.y) / 2 * innerHeight).toFixed(1) + "px"; });
+}
+function beachPickGo(id) {                           // (a hero chosen: the arrow moves to them; chosen again: asked; again: you're them)
+  if (!bPick) return; if (bPick.id !== id) { bPick.id = id; bPick.ask = false; SFX.tick(); return drawBeachPick(); }
+  if (!bPick.ask) { bPick.ask = true; SFX.confirm(); return drawBeachPick(); }
+  bPick = null; menuUp = null; $("beachPick").classList.remove("show"); SFX.confirm(); openingPicked(id);
+}
+function beachPickNav(d, ok, back) {
+  if (d && opening) { const K = opening.kids.slice().sort((a, b) => a.st.x - b.st.x), i = K.findIndex(k => k.id === bPick.id), j = clamp(i + d, 0, K.length - 1); if (j !== i) beachPickGo(K[j].id); }   // (← the one on the left, → the one on the right)
+  else if (ok) beachPickGo(bPick.id); else if (back && bPick.ask) { bPick.ask = false; SFX.tick(); drawBeachPick(); }
+}
+addEventListener("pointerdown", e => { if (!bPick || !opening || e.target.closest("button, #touch, .tpad")) return;   // (a tap: the hero nearest it, on the screen)
+  let best = null, bd = 1e9; opening.kids.forEach(k => { _bpV.set(X(k.st.x), Y(k.st.y - (k.r.heightPx || 105) * .5), 0).project(camera); const d = Math.abs((_bpV.x + 1) / 2 * innerWidth - e.clientX); if (d < bd) { bd = d; best = k; } });
+  if (best && bd < innerWidth * .3) { e.preventDefault(); beachPickGo(best.id); } }, true);
 function finishOpening() {                           // (skipped, or played out): the palms flat, Glos and his lot gone into the forest
   const o = opening; if (!o) return;
   (level.knock || []).forEach(kk => { kk.t = 9; kk.down = true; kk.g.rotation.z = -kk.dir * 1.48; });
@@ -17530,7 +17571,7 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (vo) voTick(dt); if (cvo) comicVoTick(dt); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (vo) voTick(dt); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (window.__pause || paused || itemsUp || npcUp || teamAsk) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
