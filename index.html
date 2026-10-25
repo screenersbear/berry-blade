@@ -3067,11 +3067,19 @@ const ROW_DRESS = {
   12: { D: { kind: "dungeon", c1: "#6e604a", c2: "#857559", c3: "#4e4434", torch: "#ffb030", chain: "#4a4a4a" }, A: { birds: "#2a2a2e", flags: ["#c8102e", "#ffd84a"], crenel: "#cdb98a" } },
 };
 const rowOf = q => String((q && q.cell) || "")[0];
+function holeHidden(S0, gaps) {                    // is the way up through the room above's hole(s) one you'd not see? Not when platforms stack up toward it
+  const P = (S0.plats || []).filter(p => p[3] !== "jut" && p[3] !== "upper"), cs = gaps.map(([a, b]) => (a + b) / 2);   // (three or more near it, two heights at least, the highest 170 px up), nor
+  const near = P.filter(p => cs.some(c => Math.abs(p[0] + p[2] / 2 - c) < 650)), hs = new Set(near.map(p => Math.round((GROUND - p[1]) / 20)));   // when a wall of ledges climbs up beside it
+  if (near.length >= 3 && hs.size >= 2 && Math.max(...near.map(p => GROUND - p[1])) >= 170) return false;
+  if (S0.climbUp && !S0.climbWall && cs.some(c => Math.abs(S0.climbUp.x - c) < 700)) return false;
+  return true;                                        // (a hole that drops you in, a ledge or two at most: a ceiling over the room, broken at the hole)
+}
 function buildHoleCeil(s) {                       // where a hole in the room above lets you jump up into it: that room's floor seen from below, along the top of the
   const g = new THREE.Group(); scene.add(g); const S0 = STAGES[s];   // screen, broken at the hole (the user, 2026-10-25: "a strip of ceiling that ran above it and broke a certain point where the gap was")
   if (!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy")) return g;   // (a ceiling of its own already)
   const up = STAGES.findIndex(q => q && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)); if (up < 0) return g;
   const gaps = STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]), spans = []; let x = -600;
+  if (!holeHidden(S0, gaps)) return g;                // (a way up you can see already: no ceiling. The user, 2026-10-25: "make sure the ceiling fix applies ... where ... it isn't a situation where there's an obvious path")
   for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]);
   const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], wd = world === 0, R = rngF(777 + s * 31 + world * 101), RR = (a, b) => a + R() * (b - a), yb = Y(120), H = 6;
   const mE = toon(wd ? "#5a4030" : c0), mE2 = toon(wd ? "#3e2c20" : new THREE.Color(c0).multiplyScalar(.72).getStyle()), mR = toon(wd ? "#4a3426" : c1), mMoss = toon("#4f7a34");
@@ -4529,7 +4537,32 @@ Object.assign(KIT.STRIKES, {
         armB: [[0, 1.2], [.1, 2.4], [.18, 2.5], [.27, 1.0], [.36, -.3], [.56, .4]], elbB: [[0, .6], [.56, .5]],
         lean: [[0, .2], [.1, -.25], [.18, -.25], [.27, .65], [.4, .55], [.56, .25]], spF: [[0, .2], [.1, .8], [.2, .6], [.27, 0]],
         bodyY: [[0, -.08], [.1, -.04], [.27, -.28], [.42, -.26], [.56, -.08]], fNx: [[0, .26], [.1, .26], [.27, .16], [.44, .16], [.56, .26]], fFx: [[0, -.24], [.27, -.56], [.44, -.54], [.56, -.24]] } } }); }
-const OWN_SETS = { camila: { ground: ["clunge", "chayhook", "chay"] }, rose: { ground: ["rslash", "rrise", "rcleave"] } };   // their own combos on the ground: Camila jab, hook, haymaker (2026-10-24: her Move Maker keeps, the lunge hook one-two and the haymaker-and-hook, in place of the jab and hook); Rose slash, rising cut, cleave (the user, 2026-10-20)
+// Camila's ground combo made again from scratch (the user, 2026-10-25: "it's not clear when she hits and some animations continue past the point the
+// hit has been made"): three blows, one each, the arm at its full reach exactly while its hit window's open, back to her guard straight after it
+Object.assign(KIT.STRIKES, {
+  cpunch: { dur: .36, chain: .22, step: 190, sq: -.08, sfx: "punch", hits: [{ t0: .09, t1: .17, reach: 115, back: -8, y0: 125, y1: 50, kind: "jab" }],   // a step-in jab: the gauntlet drawn a hair back, then straight out with her weight
+    keys: { armF: [[0, .55], [.05, .35], [.09, 1.55], [.17, 1.52], [.26, .7], [.36, .55]], elbF: [[0, 1.35], [.05, 1.9], [.09, 0], [.17, .05], [.26, 1.4], [.36, 1.35]],
+      aS: [[0, 0], [.06, -.05], [.09, .42], [.17, .38], [.24, 0]], gF: [[0, 0], [.06, -.08], [.09, .4], [.16, .34], [.22, -.04], [.28, 0]],
+      armB: [[0, .75], [.09, .85], [.36, .75]], elbB: [[0, 1.3], [.09, 1.6], [.36, 1.3]],   // (the other hand up by her chin)
+      twist: [[0, 0], [.05, .18], [.09, -.32], [.17, -.28], [.36, 0]], lean: [[0, .22], [.05, .12], [.09, LUNGE.lean], [.2, LUNGE.lean], [.36, .24]],
+      bodyY: [[0, -.12], [.05, -.2], [.09, LUNGE.bodyY], [.2, LUNGE.bodyY], [.36, -.14]], fNx: [[0, .37], [.09, LUNGE.fNx], [.22, LUNGE.fNx], [.36, .34]], fFx: [[0, -.4], [.09, LUNGE.fFx], [.22, LUNGE.fFx], [.36, -.44]],
+      hF: [[0, .5], [.09, .85], [.3, .6], [.36, .5]] } },
+  ccross: { dur: .4, chain: .26, step: 230, sq: -.06, sfx: "punch", hits: [{ t0: .13, t1: .21, reach: 100, back: -8, y0: 130, y1: 55, kind: "hook" }],   // a cross-hook: the other hand swung round from the side, the hips turning through it
+    keys: { armB: [[0, .75], [.06, .8], [.11, 1.45], [.19, 1.4], [.28, .8], [.4, .75]], elbB: [[0, 1.3], [.06, 1.6], [.11, .25], [.19, .3], [.28, 1.3], [.4, 1.3]],
+      bS: [[0, 0], [.08, .05], [.11, .4], [.19, .34], [.26, 0]], spB: [[0, .1], [.06, .9], [.11, .05], [.19, -.3], [.28, 0], [.4, .1]],
+      armF: [[0, .55], [.11, .7], [.4, .55]], elbF: [[0, 1.35], [.11, 1.8], [.4, 1.35]],   // (the gauntlet back up in guard)
+      twist: [[0, -.25], [.06, -.4], [.11, .32], [.19, .26], [.4, 0]], lean: [[0, LUNGE.lean], [.06, .3], [.11, .5], [.22, .45], [.4, .26]],
+      bodyY: [[0, LUNGE.bodyY], [.3, LUNGE.bodyY], [.4, -.16]], fNx: [[0, LUNGE.fNx], [.3, LUNGE.fNx], [.4, .28]], fFx: [[0, LUNGE.fFx], [.3, LUNGE.fFx], [.4, -.48]],
+      hF: [[0, .8], [.4, .65]] } },
+  csmash: { dur: .6, step: 300, sq: -.1, sfx: "huff", sfx2: [.22, "kick"], hits: [{ t0: .22, t1: .32, reach: 120, back: -8, y0: 160, y1: 40, kind: "haymaker" }],   // the finisher: the gauntlet raised high over her head, then slammed down and through, all her weight on it
+    keys: { armF: [[0, .55], [.08, 1.8], [.16, 2.95], [.22, 1.35], [.3, 1.25], [.4, .7], [.6, .55]], elbF: [[0, 1.35], [.08, 1.6], [.16, 1.0], [.22, .05], [.3, .15], [.4, 1.4], [.6, 1.35]],
+      aS: [[0, 0], [.18, 0], [.22, .45], [.3, .38], [.37, 0]], gF: [[0, 0], [.1, .1], [.18, .2], [.22, .7], [.3, .6], [.38, -.05], [.46, 0]],
+      armB: [[0, .75], [.16, .5], [.22, .95], [.6, .75]], elbB: [[0, 1.3], [.16, 1.0], [.22, 1.6], [.6, 1.3]],   // (the other arm thrown back against it)
+      twist: [[0, 0], [.16, -.45], [.22, .3], [.34, .2], [.6, 0]], lean: [[0, .28], [.16, -.12], [.22, .7], [.34, .62], [.48, .32], [.6, .22]], arch: [[0, 0], [.16, .3], [.22, -.15], [.34, -.1], [.6, 0]],
+      bodyY: [[0, -.2], [.16, -.12], [.22, -.36], [.36, -.33], [.6, -.1]], fNx: [[0, .2], [.16, .2], [.22, .12], [.44, .12], [.6, .37]], fFx: [[0, -.54], [.16, -.54], [.22, -.66], [.44, -.62], [.6, -.4]],
+      hF: [[0, .6], [.2, .9], [.46, .7], [.6, .5]] } },
+});
+const OWN_SETS = { camila: { ground: ["cpunch", "ccross", "csmash"] }, rose: { ground: ["rslash", "rrise", "rcleave"] } };   // their own combos on the ground: Camila jab, hook, haymaker (2026-10-24: her Move Maker keeps, the lunge hook one-two and the haymaker-and-hook, in place of the jab and hook); Rose slash, rising cut, cleave (the user, 2026-10-20)
 Object.assign(KIT.STRIKES, {
   slide: { dur: .52, step: 600, slide: .3, sq: -.12, sfx: "whoosh", hits: [{ t0: .03, t1: .34, reach: 72, back: -10, y0: 62, y1: -10, kind: "sweep", wide: true }],   // ↓ then attack: a slide, feet first, low under them
     keys: { bodyY: [[0, -.15], [.05, -.42], [.34, -.42], [.52, -.12]], lean: [[0, .3], [.05, -.3], [.34, -.3], [.52, .2]],
@@ -6092,11 +6125,12 @@ function showCard(id) {
   setTimeout(() => { if (tutor && tutor.id === "card:" + id) { $("comicGo").classList.add("on"); tutor.ready = true; } }, 1400);
 }
 // the voice-overs as you meet them (the user, 2026-10-24): your first berry buddy, your first pet, your first sad berry, once each in sight
+const _ivV = new THREE.Vector3(), inView = (x, y, m = .88) => { _ivV.set(X(x), Y(y - 30), 0).project(camera); return Math.abs(_ivV.x) < m && _ivV.y > -.95 && _ivV.y < .95; };   // (on the screen: its middle well inside the edges)
 function maybeMeetVO() {
   if (!story || mode !== "play" || !player || player.dead || transit || opening || cine || intro || tale || hideout || stronghold || arena || world === 9) return;
   const near = x => Math.abs(x - player.x) < 640, heard = id => (story.vo || []).includes(id) || (vo && vo.id === id) || voQ.includes(id);
   if (!heard("buddy") && allyHere && near(allyHere.st.x)) startVO("buddy");
-  if (!heard("pet") && wild && wild.st && near(wild.st.x)) startVO("pet");
+  if (!heard("pet") && wild && wild.st && wild.r && wild.r.root.visible && inView(wild.st.x, wild.st.y)) startVO("pet");   // (only once it's on the screen: the user, 2026-10-25 "not as soon as you open the room")
   if (!heard("sad") && baddies.some(b => b.sad && !b.dead && !b.gone && near(b.x))) startVO("sad");
   if (!heard("toll") && ruinFx && ruinFx.g && ruinFx.g.parent && ruinFx.plumes && ruinFx.plumes.length) startVO("toll");   // (smoke in the room: the uprising's at 25% or more)
 }
@@ -6216,6 +6250,7 @@ const VO = { woods: ["And so, Rose and I decided to fight for our people.",
   "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes.",
   "Good luck, Rose. I'll see you around.", "Good luck TO YOU!"],   // (told by the two of them grown up, the user 2026-10-24: Camila, then Rose back at her "with emphasis")
   glos: ["That was the day Glos came down onto our beach, with her berry baddies right behind her."],   // (the opening, as she floats down: the user 2026-10-25 "need a voiceover right after glos appears"; my words)
+  rival: ["Not everyone who was on the baddies' side felt good about it. Some tried to walk away and came with us, but it was always short lived...", "That's right. It was unfortunate."],   // (the first time the rival turns up, Noro or Doir: the user's words, 2026-10-25)
   duo: ["This is who the bep was talking about. The island has had more than its fair share of \u201cvisitors\u201d lately."],   // (Noro and Doir turn up)
   gift: ["Oh, it's a bep! They had been in hiding around then.", "What's this? A Berry Blade and a Gauntlet? What are these for?",   // (the bep's comic, a line a panel: no words on it)
     "He tells us he doesn't have much time, that someone is after him, but to use them to defend ourselves.", "Glos and her cronies are coming, he says!"],
@@ -6228,7 +6263,7 @@ const VO = { woods: ["And so, Rose and I decided to fight for our people.",
     "But there was something we did to help these sad ones, right?", "Yes, to cheer them up..."],
   toll: ["As we fought back, of course, the land took a toll.", "Our forests and buildings burned; there was destruction, as the villains and their berry baddies would not give up easily.",
     "But we kept our real purpose in mind."] };   // (the user, 2026-10-24: the first room you come into with smoke in it)
-const VO_WHO = { woods: ["camila", "camila", "camila", "rose"], buddy: ["camila", "camila", "rose", "camila"], sad: ["rose", "camila", "rose", "camila"] };   // who says each line (the rest: Camila)
+const VO_WHO = { rival: ["rose", "camila"], woods: ["camila", "camila", "camila", "rose"], buddy: ["camila", "camila", "rose", "camila"], sad: ["rose", "camila", "rose", "camila"] };   // who says each line (the rest: Camila)
 const voWho = (k, i) => (VO_WHO[k] || [])[i] || "camila", whoName = w => w === "rose" ? "ROSE" : "CAMILA";
 function capWho(el, who, text) { el.textContent = text; }   // (a caption: just the words, never who's saying them: the user, 2026-10-24 "dont say who is talking")
 const VO_VOL = 1, VO_DUCK = .55;                    // (louder since 10-23e, its lines compressed too: "it sounds a little too low ... it's still jarring to go back and forth"; the music at 55% under it)
@@ -6239,7 +6274,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261025a"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261025b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -6250,7 +6285,7 @@ const vlogLine = id => { const [k, n] = String(id).split(":"), i = +n; if (k ===
 // the narration (the user, 2026-10-24: "don't show each individaul line as playable, none should be playable. just show them in sections. find a
 // summary of it for the title and then the player opens it and sees all that was show. call the section 'narration'"): what's been told so far,
 // a section for each telling, in the order you heard them, each under a title that sums it up; open one and its words are there to read
-const VLOG_TITLE = { glos: "GLOS COMES TO OUR BEACH", gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
+const VLOG_TITLE = { rival: "THE ONES WHO TRIED TO WALK AWAY", glos: "GLOS COMES TO OUR BEACH", gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
   buddy: "THE BERRIES WHO JOINED US", pet: "THE ISLAND'S LITTLE ONES", sad: "THE SAD BERRIES", toll: "THE LAND TOOK A TOLL" };
 const vlogSections = () => { const S = []; vlogHeard().map(vlogLine).filter(Boolean).forEach(q => { let x = S.find(z => z.k === q.k); if (!x) S.push(x = { k: q.k, title: VLOG_TITLE[q.k] || "WHAT WE WERE TOLD", lines: [] }); x.lines[q.i] = q.text; });
   return S.map(x => ({ ...x, lines: x.lines.filter(Boolean) })); };
@@ -6783,14 +6818,16 @@ function endIntro() { if (!intro) return; intro.cast.forEach(c => { c.r.root.vis
 const EJ_P = 1 / 100, EJ_BACK = 1 / 40, EJ_PITY = 120, EJ_GAP = 40;   // (rarer since 2026-10-21, the user: "make it rarer for him to appear": never within 40 rooms of the last time)
 let ejDry = (() => { try { return +localStorage.getItem("berry.ejDry") || 0; } catch { return 0; } })();
 const ejSaveDry = () => { try { localStorage.setItem("berry.ejDry", String(ejDry)); } catch { } };
-let ej = null, EJ_DEF = null;                        // ej.phase: "fight" (in the boss slot) · "partner" · "chided" (startled, blushing, off)
+let ej = null, EJ_DEF = null, ejWho = "noro"; const EJ_DEFS = {};   // (the rival: Noro or Doir, whichever turned up this time. The user, 2026-10-25: "it can be noro OR doir who appears")                        // ej.phase: "fight" (in the boss slot) · "partner" · "chided" (startled, blushing, off)
 const ejFight = () => !!ej && ej.phase === "fight", ejPal = () => !!ej && ej.phase !== "fight";
-function ejDef() {                                   // the rival's own rig, apart from any world's line-up: Noro (as the kit has him), with a sword in his colours and Evil June's sword moves
-  if (EJ_DEF) return EJ_DEF;
-  const L = rosterSpecs(), nr = L.find(q => q.id === "noro"), ejs = L.find(q => q.id === "evil-june"), sp = JSON.parse(JSON.stringify(nr || ejs));
-  if (nr && ejs) { sp.id = "noro-rival"; sp.outfit.prop = { ...JSON.parse(JSON.stringify(ejs.outfit.prop)), main: "#eef4ff", fill: "#452f81", orb: "#ec1f1d", trim: "#fdfb0f", c1: "#fe0000", c2: "#fdfb0f", c3: "#9b7ee7" }; sp.move = JSON.parse(JSON.stringify(ejs.move)); }
+const EJ_SWORD = { noro: { main: "#eef4ff", fill: "#452f81", orb: "#ec1f1d", trim: "#fdfb0f", c1: "#fe0000", c2: "#fdfb0f", c3: "#9b7ee7" },
+  doir: { main: "#eef4ff", fill: "#1f6b2e", orb: "#34da2a", trim: "#fdfb0f", c1: "#34da2a", c2: "#fdfb0f", c3: "#9be89b" } };   // (each one's sword in his own colours)
+function ejDef(who = ejWho) {                        // the rival's own rig, apart from any world's line-up: Noro or Doir (as the kit has them), with a sword in his colours and Evil June's sword moves
+  if (EJ_DEFS[who]) return (EJ_DEF = EJ_DEFS[who]);
+  const L = rosterSpecs(), nr = L.find(q => q.id === who) || L.find(q => q.id === "noro"), ejs = L.find(q => q.id === "evil-june"), sp = JSON.parse(JSON.stringify(nr || ejs));
+  if (nr && ejs) { sp.id = who + "-rival"; sp.outfit.prop = { ...JSON.parse(JSON.stringify(ejs.outfit.prop)), ...(EJ_SWORD[who] || EJ_SWORD.noro) }; sp.move = JSON.parse(JSON.stringify(ejs.move)); }
   const r = buildChar(sp); r.root.visible = r.shadow.visible = false;
-  return (EJ_DEF = { id: "noro-rival", kit: true, ej: true, chase: true, name: "NORO", rig: r, sync: syncKitFoe, hw: 26, h: 112, hp: 20, speed: 185, jumpy: .75, atk: "waveslash", atk2: "tidedash", dmg: 2 });   // (extra deadly: tougher, quicker, two hearts a hit)
+  return (EJ_DEF = EJ_DEFS[who] = { id: who + "-rival", kit: true, ej: true, chase: true, name: who === "doir" ? "DOIR" : "NORO", rig: r, sync: syncKitFoe, hw: 26, h: 112, hp: 20, speed: 185, jumpy: .75, atk: "waveslash", atk2: "tidedash", dmg: 2 });   // (extra deadly: tougher, quicker, two hearts a hit)
 }
 function maybeEJ(force, revisit) {
   const S0 = STAGES[stage];
@@ -6799,11 +6836,12 @@ function maybeEJ(force, revisit) {
   const side = entrySide === "right" ? -1 : 1; let bx = null;                    // she drops in ahead of you, onto solid ground
   for (const d of [560, 460, 660, 360, 760, 260]) for (const sd of [side, -side]) { const x = player.x + sd * d; if (bx === null && x > 160 && x < WORLD - 160 && groundAt(x) !== null) bx = x; }
   if (bx === null) return false;
-  const D = ejDef(); hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };
+  ejWho = Math.random() < .5 ? "noro" : "doir"; const D = ejDef(); hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };   // (one or the other, each time)
   enemy = makeFoeState(D, bx); enemy.dir = Math.sign(player.x - bx) || -1; enemy.atkCd = 2.4; enemy.y = -60; enemy.vy = 200; enemy.onGround = false;
   showFoe(D); setFoeHud(); $("exitCue").classList.add("hidden"); SFX.ejSting(); ejDry = 0; ejSaveDry();
-  const b = $("banner"); b.innerHTML = `<div class="blk">NORO</div><div class="bar">HE'S FOUND YOU · EVERY WAY OUT IS SHUT</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${D.name}</div><div class="bar">HE'S FOUND YOU · EVERY WAY OUT IS SHUT</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+  setTimeout(() => { if (ej) startVO("rival"); }, 2600);   // (the first time either of them turns up: Rose, then Camila, the user 2026-10-25)
   return true;
 }
 function ejEnd() {                                   // gone (she knocked you out, she ran off, or the run's over): out of the boss slot, off the screen
@@ -6815,7 +6853,7 @@ function ejJoin() {                                  // beaten: up she gets, and
   const D = ejDef(), e = enemy, r = D.rig, st = makeState(e.x, r);
   Object.assign(st, { y: e.y, vy: 0, onGround: e.onGround, plat: e.plat, face: Math.sign(player.x - e.x) || 1, sq: -.3, sqv: 0, wave: 1 }); FLASHSET(r.mats, 0); r.root.visible = r.shadow.visible = true;
   e.ks = null; ej = { phase: "partner", st, r, t: 0, atkCd: 1.6, waveT: 1.3, hopT: 0 };
-  if (teamCount() > 2) teamChoose({ name: "NORO", kind: "RIVAL", home: () => { ejEnd(); toast("NORO HEADS OFF · TILL NEXT TIME", 2600); } });   // (two along already: you choose who goes home, Noro maybe)
+  if (teamCount() > 2) teamChoose({ name: D.name, kind: "RIVAL", home: () => { ejEnd(); toast(D.name + " HEADS OFF · TILL NEXT TIME", 2600); } });   // (two along already: you choose who goes home, Noro maybe)
   foe = FOES[STAGES[stage].foe] || FOES[0]; enemy = makeFoeState(foe, WORLD - 360); bossIn = false; bossCue = 0; setFoeHud();
   wayCue();
   puffs(st.x, st.y - 40, 8, 40, 160); SFX.fanfare();
@@ -7928,11 +7966,11 @@ function teamMembers() {
   const L = [];
   [tamed, tamed2].forEach(t => { if (t) L.push({ name: petDef(petSp(t), t.w).name, kind: petNoun(petSp(t)), home: () => catLeave("% HEADS HOME", t) }); });
   if (ally) L.push({ name: ally.A.name, kind: ally.A.crew ? "BERRY BUDDIES" : "BERRY BUDDY", home: () => allyLeave("% HEADS HOME") });
-  if (ejPal() && !(teamAsk && teamAsk.noroNew)) L.push({ name: "NORO", kind: "RIVAL", home: () => { ejEnd(); toast("NORO HEADS OFF · TILL NEXT TIME", 2600); } });
+  if (ejPal() && !(teamAsk && teamAsk.noroNew)) { const nm = (EJ_DEF || {}).name || "NORO"; L.push({ name: nm, kind: "RIVAL", home: () => { ejEnd(); toast(nm + " HEADS OFF · TILL NEXT TIME", 2600); } }); }
   return L;
 }
 function teamChoose(nc) {                          // a third: everything stops, and you pick who goes home (the newcomer last, picked to start with)
-  teamAsk = { noroNew: nc.name === "NORO" }; const L = [...teamMembers(), { ...nc, isNew: true }]; teamAsk = { L, sel: L.length - 1 }; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  teamAsk = { noroNew: nc.kind === "RIVAL" }; const L = [...teamMembers(), { ...nc, isNew: true }]; teamAsk = { L, sel: L.length - 1 }; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
   menuUp = "team"; SFX.confirm();
   $("teamBtns").innerHTML = L.map((m, i) => `<button data-t="${i}"><b>${m.name}</b><small>${m.kind}${m.isNew ? " · NEW" : ""}</small></button>`).join("");
   $("teamMnu").classList.add("show"); markMenu();
@@ -17743,7 +17781,7 @@ function update(dt) {
   if (ejFight() && player.hitWall && (player.x < 60 || player.x > WORLD - 60) && (ej.bump -= dt) <= 0) { ej.bump = 1.6; popText(player.x, player.y - 140, "LOCKED!"); SFX.thud(); }   // (Evil June's shut the way out)
   else if (ej) ej.bump = Math.max(0, (ej.bump || 0) - dt);
   if (player.dead && !player.catsGone) { player.catsGone = true; catsOnKO(); }   // (knocked out: one you were chasing gets away; your own cat stays)
-  if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) if (story && !arena) koShow(); else showModal("KNOCKED OUT", ejFight() ? "NORO wins this round, and he's gone. Reset to carry on." : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
+  if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) if (story && !arena) koShow(); else showModal("KNOCKED OUT", ejFight() ? `${foe.name} wins this round, and he's gone. Reset to carry on.` : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
   shake = Math.max(0, shake - dt * 40);
   camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;   // (the blow's knock to the camera, springing back)
 }
