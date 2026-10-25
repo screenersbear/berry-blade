@@ -3500,7 +3500,7 @@ function mergeLocal(g) {                            // a group's meshes as one p
   buckets.forEach((geos, mat) => { const merged = mergeGeometries(geos, false); if (merged) g.add(new THREE.Mesh(merged, mat)); });
 }
 function buildSet(s) {
-  const st = STAGES[s], objs = [], fg = [], rng = rngF(9001 + s * 13), R = (a, b) => a + rng() * (b - a), M = tropMats();
+  const st = STAGES[s], objs = [], fg = [], fgSee = [], rng = rngF(9001 + s * 13), R = (a, b) => a + rng() * (b - a), M = tropMats();
   scene.traverse(o => { if (o.isLight) o.layers.enable(1); });   // (the foreground's in the same sun)
   for (const P of st.set) {
     const g = new THREE.Group(); scene.add(g); (P.fg ? fg : objs).push(g); if (P.fg) g.name = "fg";
@@ -3655,8 +3655,9 @@ function buildSet(s) {
       for (let x = X(280); x < W0 + 6; x += R(1.2, 2.2)) g.add(at(mk(new THREE.IcosahedronGeometry(R(.8, 1.5), 0).scale(1.5, .55, 1), null, { mat: lv[Math.floor(R(0, 4))], ol: 0 }), x, top - R(0, .3), R(-6.5, -1.2)));   // (leaves bunched along its edge)
       for (let i = 0; i < 14; i++) tropLiana(g, M, X(R(400, WORLD)), top, R(-5, -1.2), R(2, 5.5), rng); }
     if (P.fg) { mergeLocal(g); g.traverse(o => o.layers.set(1)); }
+    if (P.fg && P.k === "giant") { g.traverse(o => { if (o.isMesh) o.material = o.material.clone(); }); fgSee.push({ g, x: X(P.x), r: 2.7, z: P.z ?? 4.4 }); }   // (its own materials: it fades, fgSeeThru)
   }
-  return { objs, fg };
+  return { objs, fg, fgSee };
 }
 // the forest's rooms as the user drew them (columns 1-6, rows A-D, 2026-10-24; columns 7-8 the next day: the whole world now). Each authored room's own ground,
 // platforms, ways in and out, baddies (where they stand), items and set pieces replace what grew there. Rooms keep their size ("do all this to
@@ -3803,7 +3804,7 @@ function setScreen(s) {                              // build stage s (its platf
     if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
     level.objs.push(buildRowBits(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
-    level.fg = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
+    level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
     restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
     if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
@@ -7469,7 +7470,7 @@ function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ cli
   const L = p.climb, upHeld = keys.ArrowUp || keys.KeyW || pad.u, dir = p.climbAuto || ((held.down ? 1 : 0) - (upHeld ? 1 : 0));   // (climbAuto: climbing on in from the room before)
   p.x = approach(p.x, L.x, 300 * dt); p.vx = 0; p.vy = dir * (L.wallClimb ? 150 : 200); p.y += p.vy * dt; p.onGround = false;
   const ph0 = p.climbPh || 0; p.climbPh += Math.abs(p.vy) * dt * (L.wallClimb ? .045 : .06);
-  if (L.wallClimb && Math.floor(ph0 / Math.PI) !== Math.floor(p.climbPh / Math.PI)) { SFX.punch(); const H = p.rig.heightPx || 92; dust(p.x + (L.wall || 0) * 14, p.y - H * 1.05, 2, -(L.wall || 0)); shake = Math.max(shake, 1.2); }   p.rot = 0; p.bounceT = -1; p.atkT = -1; p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt);   // each grip: the gauntlet punched into the rock
+  if (L.wallClimb && Math.floor(ph0 / Math.PI) !== Math.floor(p.climbPh / Math.PI)) { SFX.punch(); const H = p.rig.heightPx || 92; dust(p.x + (L.wall || 0) * 14, p.y - H * 1.05, 2, -(L.wall || 0)); shake = Math.max(shake, 1.2); }   p.rot = 0; p.bounceT = -1; p.atkT = -1;   // each grip: the gauntlet punched into the rock (p.inv, p.safeT: counted down in updatePlayer)
   if (p.vy && (p.climbT = (p.climbT || 0) - dt) <= 0) { p.climbT = .26; SFX.climb(); }
   if (p.hurtT > 0 || p.dead) p.climb = null;
   else if (L.wallClimb && !L.ledge && !transit && p.y <= L.top + 40 && dir < 0 && patrolLock) p.y = L.top + 40;   // (shut: it holds you at the top)
@@ -17697,6 +17698,14 @@ function update(dt) {
   camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;   // (the blow's knock to the camera, springing back)
 }
 let warmAll = false;                                 // (while loading: scenery shows even on the character screen, so it gets drawn)
+function fgSeeThru(dt) {                          // a tree in the foreground (the forest's A6 / B6, "so the player hides behind it"): see-through while a baddie's behind
+  for (const F of level.fgSee || []) {             // it, so none is ever out of sight (the user, 2026-10-25: "invisible enemies in A6"). Its trunk, seen from the camera, on the actors' plane:
+    const cz = camera.position.z, kk = cz / Math.max(1, cz - F.z), c = camera.position.x + (F.x - camera.position.x) * kk, hw = F.r * kk;
+    const hid = [...baddies, ...(bossIn && enemy ? [enemy] : [])].some(b => b && !b.dead && !b.gone && !b.under && Math.abs(X(b.x) - c) < hw + X(b.hw || 24) * .5);
+    const was = F.k ?? 1; F.k = approach(was, hid ? .4 : 1, dt * 3); if (F.k === was) continue;
+    F.g.traverse(o => { if (!o.isMesh) return; const m = o.material, t = F.k < .99; if (m.transparent !== t) { m.transparent = t; m.needsUpdate = true; } m.opacity = F.k; m.depthWrite = !t; });
+  }
+}
 function render(dt) {
   syncMini();
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
@@ -17726,7 +17735,7 @@ function render(dt) {
   renderer.render(scene, camera);
   renderer.clearDepth();
   renderer.render(actors, camera);
-  if (level.fg && level.fg.length && !bepSel) { const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
+  if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
   renderer.render(gradeScene, gradeCam);
 }
