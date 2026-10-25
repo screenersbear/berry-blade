@@ -3226,8 +3226,8 @@ function syncBloom() {
   const a = F.geo.attributes.position, camL = camX - 22; F.seeds.forEach(([x, p, z, ph], i) => { const u = (p + time * .03) % 1; a.setXYZ(i, camL + ((X(x) - camL) % 44 + 44) % 44 + Math.sin(time * .7 + ph) * .5, Y(GROUND) + .4 + u * 6, z); }); a.needsUpdate = true;
 }
 let restCamp = null;
-function buildRestCamp() {                        // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
-  let x = 1280; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = 1280 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }
+function buildRestCamp(s) {                       // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
+  const x0 = (STAGES[s] || {}).restX ?? 1280; let x = x0; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = x0 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }   // (restX: where the user's map has the flame, the forest's B7)
   const y = groundAt(x) ?? GROUND, g = new THREE.Group(); g.position.set(X(x), Y(y), -.6); actors.add(g);
   const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
@@ -3441,29 +3441,71 @@ function buildSet(s) {
       [[-4.6, -1.7, 7], [2.3, 4.4, 2]].forEach(([z0, z1, rows]) => { for (let lv = 0; lv < rows; lv++) for (let k = 0; k < 4 - Math.floor(lv / 3); k++) {   // (stacked from the ground, a little narrower going up)
         const r = R(.7, 1.3) - lv * .04; g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: rng() < .5 ? mR : mR2, ol: .04 }), gx + R(-2.4, .4) + lv * .15, gy + r * .7 + lv * 1.25, R(z0, z1))); } });
       for (let i = 0; i < 7; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.25, .5), 0), null, { mat: mR2, ol: .03 }), gx - R(2.6, 5.5), gy + .15, R(-1.4, 1.8))); }   // (and bits of it, scattered)
+    if (P.k === "leaner") {                         // the leaning tree east of the giant (the forest's column 7): its foot in C7, up through B7 leaning east, on through A7 to the canopy; its roots down in D7
+      const bark = toon("#a9825a"), barkD = toon("#7c5a3a"), moss = toon("#5f9c3e"), gy = Y(GROUND), x = X(P.x), z = P.z ?? -3.4;
+      const limb = (ax, ay, bx, by, r0, r1, zz = z, bk = bark) => { const d = new THREE.Vector3(bx - ax, by - ay, 0), L = d.length(), n = d.clone().normalize(), c = mk(new THREE.CylinderGeometry(r1, r0, L, 11), null, { mat: bk, ol: .05 });
+        pointAlong(c, n); at(c, (ax + bx) / 2, (ay + by) / 2, zz); g.add(c);
+        for (let i = 0; i < Math.round(L * 1.3); i++) { const u = R(.05, .95), r = r0 + (r1 - r0) * u, ang = R(-1.1, 1.1), f = mk(new THREE.BoxGeometry(.12, R(.7, 1.8), .1), null, { mat: barkD, ol: 0 });   // (furrows down its front)
+          pointAlong(f, n); at(f, ax + d.x * u + n.y * Math.sin(ang) * r * .96, ay + d.y * u - n.x * Math.sin(ang) * r * .96, zz + Math.cos(ang) * r * .96); g.add(f); }
+        for (let i = 0; i < Math.round(L * .35); i++) { const u = R(.1, .9), r = r0 + (r1 - r0) * u; g.add(at(mk(new THREE.IcosahedronGeometry(R(.25, .5), 0).scale(1.4, .5, 1), null, { mat: moss, ol: .02 }), ax + d.x * u + R(-.4, .4), ay + d.y * u, zz + r * .85)); } };
+      const lean = .42;                              // (how far it leans: east, about 24 degrees)
+      if (P.part === "foot") { limb(x, gy - 1, x + 18 * Math.sin(lean * .5), gy + 18, 3.2, 2.7);   // C7: its great foot, a root flaring out east along the floor (the user's curve) and one back west
+        [[1, 3.2, 1.25, .5], [1, 5.6, .8, .32], [-1, 2.8, 1, .4], [-1, 4.6, .7, .3]].forEach(([sd, len, r0, r1], i) => limb(x + sd * 1.8, gy + 2.4 - i * .3, x + sd * (1.8 + len), gy - .3, r0, r1, z + (i % 2 ? .9 : -.6))); }
+      if (P.part === "lean") limb(x, gy - 1.5, x + 20 * Math.sin(lean), gy - 1.5 + 20 * Math.cos(lean), 2.7, 2.2);   // B7: up out of the floor, leaning east (the rest stop at its foot)
+      if (P.part === "top") { const bx = x - 15 * Math.sin(lean), by = gy - 15 * Math.cos(lean);   // A7: up out of the canopy below, on up east to the roof of leaves; and two trees further back
+        limb(bx, by, x + 14 * Math.sin(lean), gy + 14 * Math.cos(lean), 2.3, 1.7);
+        limb(X(220), gy - 2, X(320), gy + 16, .75, .55, -6.5, barkD); limb(X(560), gy - 2, X(1240), gy + 16, .7, .45, -7.5, barkD); }
+      if (P.part === "roots") [[X(-200), gy + 13, X(1350), gy - .3, .7, .3], [X(300), gy + 13, X(2100), gy - .3, .55, .25], [X(1500), gy + 13, X(2700), gy + 2, .5, .25]].forEach(([ax, ay, bx2, by2, r0, r1], i) => limb(ax, ay, bx2, by2, r0, r1, -5.5 - i * .8, barkD));   // D7: its roots down through the dark, far back
+    }
+    if (P.k === "fringe") {                         // the roof of leaves along the top (the forest's A7: the canopy's edge over the ledge, the sky still open below it)
+      const gy = Y(GROUND), W0 = X(WORLD), lv = ["#3f8a3c", "#55a046", "#2f6a3e", "#4a8a4a"].map(c => toon(c));
+      for (let x = -12; x < W0 + 12; x += R(1.6, 2.6)) { g.add(at(mk(new THREE.IcosahedronGeometry(R(1.8, 2.8), 0).scale(1.5, .55, 1), null, { mat: lv[Math.floor(R(0, 4))], ol: 0 }), x, gy + R(9.6, 10.6), R(-9, -1)));
+        g.add(at(mk(new THREE.IcosahedronGeometry(R(1, 1.6), 0).scale(1.3, .6, 1), null, { mat: lv[Math.floor(R(0, 4))], ol: 0 }), x + R(-.6, .6), gy + R(8.9, 9.5), R(-7, -1.5))); }   // (the scallops hanging under it)
+      for (let i = 0; i < 16; i++) tropLiana(g, M, R(0, W0), gy + 9.4, R(-6, -1), R(1.2, 3.6), rng); }
+    if (P.k === "sun") {                            // a patch in the sun (the forest's B7: the user drew its floor yellow): light down through the gap the leaning tree makes in the canopy, the moss lit gold
+      const gy = Y(GROUND), x0 = X(P.x0), x1 = X(P.x1), mL = toon("#a9c84a"), mL2 = toon("#98bd44"), pool = new THREE.CircleGeometry(1, 18).rotateX(-Math.PI / 2);
+      for (let x = x0 + 1; x < x1 - .5; x += R(1.4, 2.4)) { const m = mk(pool, null, { mat: rng() < .5 ? mL : mL2, ol: 0 }); m.scale.set(R(1.4, 2.4), 1, R(1.6, 3)); at(m, x, gy + .015 + R(0, .01), R(-3.4, 1.8)); g.add(m); }   // (sunny patches of moss, not one mat)
+      for (let i = 0; i < (x1 - x0) * 3; i++) g.add(at(mk(new THREE.ConeGeometry(R(.05, .09), R(.18, .4), 4), null, { mat: rng() < .5 ? mL : mL2, ol: 0 }), R(x0, x1), gy + .1, R(-4.8, 2.2)));
+      const sh = new THREE.MeshBasicMaterial({ color: "#fff1a6", transparent: true, opacity: .16, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, side: THREE.DoubleSide });
+      for (let i = 0; i < 3; i++) { const w = R(3, 5), m = new THREE.Mesh(new THREE.PlaneGeometry(w, 16), sh); m.rotation.z = -.22; at(m, x0 + (x1 - x0) * (.25 + i * .25) + 1.6, gy + 7.6, -2.2 - i * .6); g.add(m); } }
+    if (P.k === "gate") {                           // a wooden gateway (the forest's B8, the user's brown frame): two posts, a beam across over them, vines on it; Glos waits by it, the way out past it
+      const wA = toon("#7a4a2a"), wB = toon("#5a3520"), gy = Y(GROUND), x0 = X(P.x0), x1 = X(P.x1), h = P.h ?? 8.6, z = P.z ?? -2.4;
+      [x0, x1].forEach(px => { g.add(at(mk(new THREE.BoxGeometry(.62, h, .62), null, { mat: wA, ol: .04 }), px, gy + h / 2, z));
+        g.add(at(mk(new THREE.BoxGeometry(.9, .5, .9), null, { mat: wB, ol: .03 }), px, gy + .25, z)); });
+      g.add(at(mk(new THREE.BoxGeometry(x1 - x0 + 2.6, .7, .8), null, { mat: wA, ol: .04 }), (x0 + x1) / 2 - .5, gy + h + .3, z));   // (the beam, out past the posts: further to the west, as drawn)
+      g.add(at(mk(new THREE.BoxGeometry(x1 - x0 + 1.2, .4, .7), null, { mat: wB, ol: .03 }), (x0 + x1) / 2, gy + h - 1.1, z));
+      for (let i = 0; i < 9; i++) tropLiana(g, M, R(x0 - .8, x1 + .3), gy + h - .1, z + .45, R(1, 3.4), rng); }
+    if (P.k === "plantain") tropPlantain(g, M, X(P.x), Y(groundAt(P.x) ?? GROUND), P.z ?? -3.2, rng, P.s ?? 6);   // a great plantain (the forest's B8: its leaves up in A8)
+    if (P.k === "curtain") {                        // greenery hanging from the low earth overhead (the forest's D8, under C8's solid ground): thicker and longer to the east
+      const top = Y(P.y), W0 = X(WORLD), D = { side: THREE.DoubleSide }, lv = ["#3f7d39", "#4f9a3a", "#2f6a3e", "#5d8f34"].map(c => toon(c, D)), strand = new THREE.PlaneGeometry(.12, 1).translate(0, -.5, 0);
+      for (let i = 0; i < 260; i++) { const u = Math.pow(rng(), .6), x = W0 * (.12 + .88 * u), len = R(.6, 1.2) + u * R(1.5, 5.2), m = new THREE.Mesh(strand, lv[i % 4]);   // (u: further east, longer)
+        m.scale.set(R(.8, 1.6), len, 1); m.position.set(x + R(-.4, .4), top + .1, R(-6, -1.2)); m.rotation.set(R(-.1, .1), R(0, TAU), R(-.08, .08)); g.add(m); }
+      for (let x = X(280); x < W0 + 6; x += R(1.2, 2.2)) g.add(at(mk(new THREE.IcosahedronGeometry(R(.8, 1.5), 0).scale(1.5, .55, 1), null, { mat: lv[Math.floor(R(0, 4))], ol: 0 }), x, top - R(0, .3), R(-6.5, -1.2)));   // (leaves bunched along its edge)
+      for (let i = 0; i < 14; i++) tropLiana(g, M, X(R(400, WORLD)), top, R(-5, -1.2), R(2, 5.5), rng); }
     if (P.fg) { mergeLocal(g); g.traverse(o => o.layers.set(1)); }
   }
   return { objs, fg };
 }
-// the forest's rooms as the user drew them (columns 1-6, rows A-D, 2026-10-24; columns 7-12 are still grown). Each authored room's own ground,
+// the forest's rooms as the user drew them (columns 1-6, rows A-D, 2026-10-24; columns 7-8 the next day: the whole world now). Each authored room's own ground,
 // platforms, ways in and out, baddies (where they stand), items and set pieces replace what grew there. Rooms keep their size ("do all this to
 // scale"): one box of the user's map is one room
 const FOREST_BRIDGE_Y = 190, FOREST_TREE_X = 1380;   // (the rope bridge's height; the giant tree's trunk, down column 6 through all four rows)
 function authorForest() {
   const W = WORLDS[0], S0 = W.stages, R0 = W.roster, at = c => S0.findIndex(q => q.cell === c && !q.arena && !q.cut), BY = FOREST_BRIDGE_Y, TX = FOREST_TREE_X;
-  const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "B2", "B3", "B4", "B5", "B6", "B7", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "D1", "D2", "D3", "D4", "D5", "D6", "D7"].forEach(c => { C[c] = at(c); });
+  const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"].forEach(c => { C[c] = at(c); });
   if (Object.values(C).some(i => i < 0) || S0[0].cell !== "B1") { console.warn("forest: a room's missing", C, S0[0].cell); return; }
   const KEYS = ["plats", "plats2", "ground", "gaps", "ceils", "ladders", "poles", "below", "up", "upX", "down", "downX", "downWall", "downCam", "climbUp", "climbWall", "climbTip", "noClimbFace", "arriveX", "arriveF",
-    "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "prev", "next"];
+    "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "restX", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "prev", "next"];
   const room = (c, o, roster) => { const q = S0[C[c]]; KEYS.forEach(k => delete q[k]); Object.assign(q, { authored: true, plats: [] }, o);   // (only the platforms listed: none of the hour's own)
   if (roster) R0[C[c]] = roster; return q; };
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
-  const TAN = "#c9a46a", TAN2 = "#a8844e", EARTH = "#7a5236", westTo = S0[C.A1].toWorld ?? S0[C.D1].toWorld ?? 1;
+  const TAN = "#c9a46a", TAN2 = "#a8844e", EARTH = "#7a5236", westTo = S0[C.A1].toWorld ?? S0[C.D1].toWorld ?? 1, northTo = S0[C.A8].toWorld ?? S0[C.B8].toWorld ?? 8, eastTo = S0[C.D8].toWorld ?? 4;   // (where the three ways out lead: the exit graph's, before the rooms are redone)
   const bepI = [S0.findIndex(q => q.bep && !q.cut && /^[A-D][1-6]$/.test(q.cell || "")), S0.findIndex(q => q.bep && !q.cut)].find(i => i >= 0) ?? -1, bep = bepI >= 0 ? S0[bepI].bep : { trail: 780, zone: 250, left: 20, kind: "door" };
   if (bepI >= 0) delete S0[bepI].bep;                // (the beps' way in: to C4, where the user put it)
-  const cutRoom = i => { S0[i].cut = true; delete S0[i].cell; R0[i] = []; };
+  const cutRoom = i => { S0[i].cut = true; delete S0[i].cell; delete S0[i].toWorld; delete S0[i].boss; R0[i] = []; };   // (no way out left in it: A8 was one)
   // the way in from the beach is C1 now (the world's first room, stage 0, was B1: B1 is solid earth); B4 is solid dirt (the tan block)
   const oC1 = C.C1; S0[0].cell = "C1"; S0[0].elev = S0[oC1].elev; cutRoom(oC1); C.C1 = 0; cutRoom(C.B4);
+  cutRoom(C.A8); cutRoom(C.C8);                      // (A8: only the sky over B8, its plantain's leaves; C8: solid ground, the user's map, 2026-10-25)
   S0.forEach(q => { if (q.hub) { delete q.hub; if (!q.rest) delete q.peace; } });   // (the hub's D5 now)
   // the hidden cove (behind Camila's rocks in A1): one room on the shore, water to the left to swim in, a mango, and Burr, who lives there
   const COVE = S0.length; S0.push({ h: S0[C.A1].h, col: 999, name: "THE HIDDEN COVE", elev: 0, foe: 0, authored: true, cove: true, ground: [[0, 110], [640, 110], [790, 0]], swim: [-200, 720, GROUND + 6],
@@ -3491,6 +3533,9 @@ function authorForest() {
   // A6: the top of the giant tree, in front of you; a mini boss (out in the open, not behind the trunk)
   const a6 = room("A6", { ground: [[0, 0]], plats: [[520, 330, 180, "shroom"], [2050, 320, 200, "slab"]], prev: C.A5, next: C.A7, set: [{ k: "giant", part: "top", x: TX, fg: true }] },
     [["leafy", "leaf", 650], ["thornball", "purple", 950], ["mossback", "moss", 1950, "mini"], ["twiggy", "olive", 2380]]); nm(a6, "GIANT TREE");
+  // A7: the ledge on from A6 "ends halfway through screen" (the user, 2026-10-25): off it and down into B7. The canopy's edge along the top,
+  // the leaning tree up through it to the east, two more trees far back. A8 is only the sky over B8 (no room)
+  room("A7", { ground: [[0, 0]], gaps: [[1230, 2760]], below: C.B7, noRight: true, prev: C.A6, set: [{ k: "fringe" }, { k: "leaner", part: "top", x: 2050, z: -3.6 }] }, []);
 
   // ── row B
   // B2: B1's solid earth at the left, Camila's rock up it into A1; the first huge tree's trunk; a mini boss on the floor
@@ -3505,7 +3550,12 @@ function authorForest() {
     set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 650], ["leafy", "leaf", 1250]]);
   // B6: the giant tree's trunk in front of you, dark under the canopy
   room("B6", { dark: true, ground: [[0, 0]], prev: C.B5, next: C.B7, set: [{ k: "giant", part: "trunk", x: TX, fg: true }, { k: "canopy" }] }, [["leafy", "leaf", 550], ["stumpy", "olive", 2200]]);   // (two baddies: the user, 2026-10-24)
-  S0[C.B7].prev = C.B6;
+  // B7: a rest stop at the foot of the leaning tree, in a patch of sun (the user drew its floor yellow); past the tree a hole down to C7's ledge
+  // (and back up it from there); on to B8
+  const b7 = room("B7", { ground: [[0, 0]], gaps: [[1560, 1800]], below: C.C7, prev: C.B6, next: C.B8, rest: true, peace: true, restX: 760,
+    set: [{ k: "leaner", part: "lean", x: 1250 }, { k: "sun", x0: 0, x1: 1460 }] }, []); nm(b7, "REST STOP");
+  // B8: GLOS by a wooden gateway, the way out east past it (to the lakebed); the great plantain at the far end, its leaves up in A8
+  room("B8", { ground: [[0, 0]], boss: true, bossX: 1250, toWorld: northTo, prev: C.B7, set: [{ k: "gate", x0: 430, x1: 1150, h: 7.2 }, { k: "plantain", x: 2150, s: 4.6 }] }, []);
 
   // ── row C
   // C1: the way in from the beach; a tall post with an item on it only Rose can reach (her big jump, her double jump, her rising blow); 3 baddies
@@ -3530,7 +3580,10 @@ function authorForest() {
   room("C6", { dark: true, ground: [[0, 0]], gaps: [[1330, 1530]], below: C.D6, noLeft: true, next: C.C7, arriveX: 1590, arriveF: 1, plats: [[150, 300, 520, "slab"], [960, 170, 300, "slab"]],
     items: [["fruit", 1110, 170]], set: [{ k: "giant", part: "trunk", x: TX, z: -3.4 }, { k: "earth", side: -1, col: EARTH }] },
     [["leafy", "leaf", { plat: 0 }], ["stumpy", "olive", 1900], ["pinecone", "rust", 2250]]);
-  S0[C.C7].prev = C.C6;
+  // C7: the leaning tree's great foot (you walk in front of it); 3 baddies; a ledge out of C8's solid ground at the far end, up it and through
+  // B7's hole above (a double jump from the ledge; too high from the floor, but for Rose's big jump); a hole in the floor down to D7
+  room("C7", { ground: [[0, 0]], gaps: [[700, 900]], below: C.D7, noRight: true, prev: C.C6, hopY: 0, plats: [[1640, 230, 920, "jut"]],
+    set: [{ k: "leaner", part: "foot", x: 1150 }, { k: "earth", side: 1, col: EARTH }] }, [["leafy", "leaf", 1180], ["acorn", "rust", 1600], ["stumpy", "olive", 2250]]);
 
   // ── row D
   // D1: GLOS, at the world's surprise quick way out (to Cuss' Waves, the easiest of its three); three platforms
@@ -3546,7 +3599,12 @@ function authorForest() {
   const d5 = room("D5", { ground: [[0, 0]], hub: 1, peace: true, prev: C.D4, next: C.D6, set: [{ k: "pillars", xs: [110, 2450] }] }, []); nm(d5, "HUB");
   // D6: the giant tree's roots (you walk in front of it, as in C6); ledges out of its trunk up into C6; on to D7 along the bottom
   room("D6", { dark: true, ground: [[0, 0]], climbUp: { x: TX, to: C.C6 }, noClimbFace: true, prev: C.D5, next: C.D7, set: [{ k: "giant", part: "roots", x: TX, z: -3.4 }, { k: "shelves" }] }, []);
-  S0[C.D7].prev = C.D6;
+  // D7: down from C7's hole onto two platforms that lead back up to it; 3 baddies on the floor, one on the lower platform; the leaning tree's
+  // roots far back; on to D8 (back west to D6)
+  room("D7", { ground: [[0, 0]], plats: [[380, 170, 760, "slab"], [1480, 300, 900, "slab"]], prev: C.D6, next: C.D8, set: [{ k: "leaner", part: "roots", x: 0 }] },
+    [["twiggy", "olive", 430], ["acorn", "rust", 1280], ["leafy", "leaf", 2260], ["pinecone", "rust", { plat: 1, x: 2150 }]]);
+  // D8: GLOS again, under C8's solid ground, greenery hanging thick from it; the way out east (to the dunes)
+  room("D8", { ground: [[0, 0]], ceils: [[-600, 3200, 120]], boss: true, bossX: 1700, toWorld: eastTo, prev: C.D7, set: [{ k: "curtain", y: 120 }] }, []);   // (the ceiling a little lower than C4's: so C8's earth shows, as drawn)
 
   // nothing left leading into a room that's gone
   S0.forEach((q, i) => { if (q.cut) return; ["next", "prev", "below", "up", "down", "nextHi"].forEach(k => { if (q[k] !== undefined && S0[q[k]] && S0[q[k]].cut) { console.warn("forest: a way into a cut room", i, q.cell, k); delete q[k]; } });
@@ -3568,7 +3626,7 @@ function setScreen(s) {                              // build stage s (its platf
     if (world !== 9) level.objs.push(buildDeepBits(s));
     level.objs.push(buildRowBits(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
     level.fg = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
-    restCamp = STAGES[s].rest ? buildRestCamp() : null; if (restCamp) level.objs.push(restCamp.g);
+    restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
     if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
     bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
@@ -5302,6 +5360,7 @@ function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); e
 function storyNew(slot, id) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
 const LAYOUT = 14;                                  // the worlds' layout a save was made on (8 columns since 2026-10-24, 12 the day before; the forest hand-made): an older one's rooms aren't where they were
 function storyLoad(slot, q) { if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
+  { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
   tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) && q.cat2 === q.w ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
