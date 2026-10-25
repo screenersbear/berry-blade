@@ -4654,7 +4654,10 @@ const OWN_ANIMS = {                                  // ... except where one of 
     bodyY: [[0, -.06], [.1, -.27], [.3, -.27], [.5, -.06]], lean: [[0, .2], [.1, .4], [.3, .4], [.5, .2]],   // a lunge into each (the user, 2026-10-20: "the front knee should be bent and she's leaning forward and only one leg is extended back")
     fNx: [[0, .37], [.1, .16], [.4, .16], [.5, .37]], fFx: [[0, -.4], [.1, -.56], [.4, -.56], [.5, -.4]] },
   jab: { fNx: [[0, .37], [.13, .33], [.17, .26], [.22, .24], [.38, .24], [.6, .37]], fFx: [[0, -.4], [.13, -.42], [.22, -.58], [.38, -.56], [.6, -.4]],   // ... and into the jab
-    bodyY: [[0, 0], [.13, -.15], [.2, -.22], [.24, -.28], [.38, -.27], [.6, 0]] } } };   // (the user, 2026-10-20: Camila moves exactly like Chase, Rose exactly like June)
+    bodyY: [[0, 0], [.13, -.15], [.2, -.22], [.24, -.28], [.38, -.27], [.6, 0]] },
+  onetwo: { twist: [[0, 0], [.1, -.12], [.25, -.3], [.4, -.05], [.46, 0]], bS: [[0, 0], [.2, 0], [.25, .32], [.31, .27], [.36, 0]], lean: [[0, .1], [.05, .02], [.1, .36], [.25, .45], [.46, .12]] },   // her forward combo's (attack holding forward): the second punch out as far as the first, the shoulder brought round and the arm stretched (28 px out → 51), leaning in
+  upperhook: { twist: [[0, 0], [.05, .25], [.16, -.3], [.24, -.25], [.32, -.3], [.42, -.15], [.52, 0]], elbB: [[0, 1.5], [.22, 1.7], [.32, .45], [.38, .5], [.46, 1.5], [.52, 1.4]],
+    bS: [[0, 0], [.27, 0], [.32, .3], [.38, .26], [.43, 0]], lean: [[0, .1], [.05, .35], [.16, -.28], [.24, -.18], [.32, .5], [.52, .12]] } } };   // ... and the hook after the uppercut reaching out too (22 px → 51). The user, 2026-10-25: "several of the moves kind of attack in her same place, like they dont extend further at all"   // (the user, 2026-10-20: Camila moves exactly like Chase, Rose exactly like June)
 const OWN_JUMP = { rose: 1.15 };                     // ... and Rose jumps a little higher than Camila (the user, 2026-10-23): June's moves, her own spring
 function rosterSpecs() {
   const list = shippedSpecs(), edited = new Set();
@@ -7621,6 +7624,7 @@ function updatePlayer(dt) {
   if (p.tackle) tackleStep(p, dt);
   else if (MV && MV.slide && p.atkT < MV.slide) { }                                       // a dash keeps its speed
   else if (MV && MV.stepIn && p.atkT >= MV.stepIn[0] && p.atkT < MV.stepIn[0] + MV.stepIn[2]) { }   // (and so does the jab's step in, for a moment)
+  else if (!cat && MV && attacking && p.onGround && p === player && p.chain && p.chain.kind === "B" && (held.left || held.right) && fwdDrive(p, dt)) { }   // (holding forward: the combo carries you on after what it knocks back)
   else if ((!cat || MV) && attacking && p.onGround) p.vx = approach(p.vx, 0, 2600 * dt);   // humans plant their feet while striking
   else if (!(attacking && Math.abs(p.vx) > maxV && Math.sign(p.vx) === mx)) p.vx = approach(p.vx, target, rate * dt * (attacking ? .5 : 1));
   if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle) p.face = ax;
@@ -7866,6 +7870,24 @@ function blockHit(p, d) {                  // a blocked hit: pushed back a littl
   p.inv = .3; p.vx = d * 170; guardFx.hit = .25; hitstop = .03; shake = Math.max(shake, 2);
   SFX.block(); sparks(p.x - d * 30, p.y - (p.rig.heightPx || 92) * .55, 5);
   bounceOff(p, d);
+}
+// combo B (attack holding forward): each blow carries you on up to what's in front, into its reach, as far as it's been knocked back; with
+// nothing there, a little way on all the same. Feet planted again after its last blow (the user, 2026-10-25: "several of the moves kind of
+// attack in her same place, like they dont extend further at all so they're not effective")
+function fwdDrive(p, dt) {
+  const nh = hitsNow(p).find(h => p.atkT < h.t1); if (!nh) return false;   // (past its last blow: the follow-through stays put)
+  const gap = frontGap(p, 360), lead = Math.max(.06, nh.t0 - p.atkT);
+  const want = gap === null ? 120 : clamp((gap - (nh.reach || 90) * .6) / lead, 0, 480);   // (up to just inside the blow's reach by the time it lands)
+  p.vx = approach(p.vx, p.face * want, 6000 * dt); return true;
+}
+let knockK = 1;                                   // (combat: the player's blow landing now knocks back this much of its kind's)
+const hitK = (T, d, k) => { knockK = fwdKnock(); try { return T.hit(d, k); } finally { knockK = 1; } };
+const fwdKnock = () => { const p = player; return p && p.atkT >= 0 && p.chain && p.chain.kind === "B" && p.atkIdx < p.chain.list.length - 1 ? .45 : 1; };   // (and its blows before the last knock back less: what's hit stays for the next; the last sends it off)
+function frontGap(p, far) {                       // the nearest one to hit in front of you, at your height: from you to its near side (px), null if none within far
+  let best = null; const see = (e, hw, h) => { const d = (e.x - p.x) * p.face - hw; if (d < -hw || d > far || Math.abs((e.y - h / 2) - (p.y - 46)) > 140) return; if (best === null || d < best) best = d; };
+  for (const b of baddies) if (!b.dead && !b.gone && !b.under && !b.flee && !b.sleep && !b.calm && b.happyT === undefined) see(b, b.hw, b.h);
+  if (duo) duoTargets().forEach(d => see(d.e, d.D.hw, d.D.h)); else if (bossIn && !enemy.dead && !enemy.gone) see(enemy, enemy.def.hw, enemy.def.h);
+  return best === null ? null : Math.max(0, best);
 }
 function bounceOff(p, d) {                 // whoever was pressing in on the shield bounces off it (the smaller, the further) and holds off for a moment, so you can turn
   const list = baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined).map(b => [b, b.hw, b.h, b.wt]);
@@ -17350,8 +17372,9 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1);   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
   if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .85; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
-  else { b.vx = dir * KB[0] * 1.2 / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
-    if (kind === "upper" || kind === "launch") { b.vy = -440 / Math.sqrt(b.wt); b.juggleT = .9; } }   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
+  else { b.vx = dir * KB[0] * 1.2 * knockK / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
+    if ((kind === "upper" || kind === "launch") && knockK >= 1) { b.vy = -440 / Math.sqrt(b.wt); b.juggleT = .9; }   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
+    if (knockK < 1 && kind !== "stomp") b.vy = Math.max(b.vy, -220 / Math.sqrt(b.wt)); }   // (a forward combo's blow before its last: a little pop, not up out of reach of the next)
   b.onGround = false;
   b.sq = kind === "stomp" ? -.45 : .22; b.sqv = 0;
   hitFeel(b, dir, kind, false);
@@ -17633,7 +17656,7 @@ function combat() {
   let clashed = false;
   const strike = (got, hb, kind, dirOf, lead) => { for (const T of L) { if (clashed) return; if (got.has(T.e) || (T.e !== secret && walled(T.e.x, p.x))) continue;   // each window hits each target once (none through a hero's wall)
     if (!p.combo && tryClash(p, T, hb, pb)) { clashed = true; got.add(T.e); return; }   // both attacks at once: a clash instead
-    if (!lead && overlap(hb, T.hurt || T.box) && T.hit(dirOf(T), kind)) { got.add(T.e); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) { p.chainHit = true; airLanded(p); }
+    if (!lead && overlap(hb, T.hurt || T.box) && hitK(T, dirOf(T), kind)) { got.add(T.e); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) { p.chainHit = true; airLanded(p); }
       if (kind === "tackle" && p.tackle && p.tackle.t < TKL.wind + TKL.lunge) { p.tackle.t = TKL.wind + TKL.lunge; p.vx *= .3; } } } };   // (the tackle that lands stops driving: it doesn't run on into what it knocked away, the user 2026-10-22)   // (a tackle or charged combo that's landed: not hurt for a moment after, the user 2026-10-22: still open while winding up)   // (lead: the swing's not landed yet, so only a clash)
   const hitsOf = i => (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set());
   const CM = p.rig.kind === "cat" && p.atkT >= 0 && p.atkKind && KIT.CAT_MOVES[p.atkKind];
