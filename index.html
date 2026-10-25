@@ -927,7 +927,7 @@ const WX = WORLD * S, WS = WX / 48;           // the room's width in 3D units (a
 const X = x => x * S, Y = y => (GROUND - y) * S;
 // the stitched worlds' grid (see swapPan): each screen's place in one drawing of its world
 const ROW_H = 440, SEAM_T = 86;                      // a row's height (px), and how far under a room's floor its edge with the room below is (its floor's thickness: the room below's ceiling, buildHoleCeil's, just under it at 90)
-const STITCH = new Set([0]);                         // the worlds built as one piece so far: Berry Woods
+const STITCH = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);   // the worlds built as one piece: all of them (Berry Woods first; the rest the user, 2026-10-25: "then rebuild all the worlds currently with this new screen/world approach")
 const cellOff = s => { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.cell || ""); return m && !q.arena && !q.cut ? { x: (+m[2] - 1) * WX, y: -"ABCD".indexOf(m[1]) * ROW_H * S } : null; };   // a screen's place in the world (3D units)
 
 const INK = "#151318";
@@ -6689,7 +6689,7 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   if (!old) { transit = false; return; }
   const G = new THREE.Group(), N = new THREE.Group(); G.position.set(dx, dy, 0); scene.add(G, N);
   old.objs.forEach(o => G.add(o)); level.objs.forEach(o => N.add(o));   // (the old screen moved to its place; the new one where it is)
-  const skyS = new THREE.Scene(); if (level.sky) skyS.add(level.sky); if (old.sky) old.sky.visible = false;   // (one sky over both: the new screen's, whole)
+  const skyS = new THREE.Scene(); if (level.sky) skyS.add(level.sky); if (old.sky) old.sky.visible = false; skyBitsOff(G);   // (one sky over both: the new screen's, whole; its moon and sun too)
   const ax = dir === "left" || dir === "right", cut = ax ? (dx > 0 ? WX : 0) : (dy > 0 ? dy - SEAM_T * S : -SEAM_T * S);   // the edge they share
   const sg = ax ? (dx > 0 ? 1 : -1) : (dy > 0 ? 1 : -1), nrm = ax ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
   const cutOld = new THREE.Plane(nrm.clone().multiplyScalar(sg), -sg * cut), cutNew = new THREE.Plane(nrm.clone().multiplyScalar(-sg), sg * cut);   // (each keeps its own side)
@@ -6740,7 +6740,7 @@ function panFg(P = pan) {                           // and their foregrounds, ea
 // far as half a screen, and when you're back down it goes again (kept built while you're in the room: another look is at once)
 let peek = null, peekCache = null;
 function peekWant(s) {                             // the room above s, if it's one you can jump up into but often not come out onto (open, or a wide hole): -1 if none
-  if (!STITCH.has(world) || s < 0 || !STAGES[s]) return -1;
+  if (!STITCH.has(world) || s < 0 || !STAGES[s] || STAGES[s].deep) return -1;   // (the deep: you swim up, not jump)
   const i = STAGES.findIndex(q => q && q.below === s && ((q.open || q.openPit) || (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD && b - a >= 600)));
   return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
 }
@@ -6757,7 +6757,7 @@ function buildGhost(s) {                           // the room above built, this
   FLOOR_LOW = keep.FL; SINK = keep.SK; WATER = keep.WA; if (!hourEase) setLook(hour);
   if (!ghost || ghost === level) return null;
   const o0 = cellOff(stage), o1 = cellOff(s), G = new THREE.Group(); G.position.set(o1.x - o0.x, o1.y - o0.y, 0); G.visible = false; scene.add(G); ghost.objs.forEach(o => G.add(o));
-  if (ghost.sky) ghost.sky.visible = false;
+  if (ghost.sky) ghost.sky.visible = false; skyBitsOff(G);
   return { s, level: ghost, G, from: stage };
 }
 function startPeek(to) {
@@ -6777,6 +6777,7 @@ function endPeek() {
 }
 function dropPeekCache() { if (peek) endPeek(); const C = peekCache; peekCache = null; if (!C) return; scene.remove(C.G); disposeLevel(C.level); }
 let ghostBuild = false;
+const skyBitsOff = G => G.traverse(o => { if (o.isMesh && o.position.z < -70 && o.material && o.material.fog === false && !o.material.depthWrite) o.visible = false; });   // (a screen not the one you're in: its moon and sun in the sky away, the camera's screen's are the ones up there: Kesh's garden)
 function lookGrab() {                               // the light as it is (to ease from one screen's into the next's while panning)
   const U = gradeMat.uniforms;
   return { fog: FOG.clone(), near: scene.fog.near, far: scene.fog.far, sun: [sun.color.clone(), sun.intensity], sun2: [sun2.color.clone(), sun2.intensity],
@@ -7687,7 +7688,7 @@ function updatePlayer(dt) {
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
   const huAny = STAGES[stage].up === undefined && p.vy < 0 && p.y < (STAGES[stage].hopY ?? (groundAt(p.x) ?? GROUND) - (STAGES[stage].hopUp ?? 400)) ? holeAbove(p.x) : null, hu = !cu ? huAny : null;   // (huAny: a climb's room too, only for a look up into the room above)   // (hopY: as high as this, wherever you jump from: the forest's C5, from its top platform)   // (fallen in by a hole, no way back up: jumped high enough near under it)
   if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
-  else if (huAny && STITCH.has(world) && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && p.x > huAny.a - 60 && p.x < huAny.b + 60 && !landAbove(huAny, p.x)) startPeek(huAny.to);   // (nowhere up there to come out onto: a look up into it, and back down)
+  else if (huAny && STITCH.has(world) && !STAGES[stage].deep && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && p.x > huAny.a - 60 && p.x < huAny.b + 60 && !landAbove(huAny, p.x)) startPeek(huAny.to);   // (nowhere up there to come out onto: a look up into it, and back down)
   else if (hu && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && (STITCH.has(world) ? p.x > hu.a - 60 && p.x < hu.b + 60 : Math.abs(p.x - hu.x) < 640)) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21; stitched: only up through the hole itself, and with nowhere up there to land, a look up into it and back down)
   else if (STAGES[stage].dive && !p.dead && p.x > STAGES[stage].dive[0] && p.x < STAGES[stage].dive[1] && p.y > SINK - 6) { if (!transit) diveWorld(STAGES[stage].diveTo); }   // (the deep's pool: down, not back up)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
@@ -14861,6 +14862,20 @@ growWorlds(); squeezeWorlds(); addArenas(); deepenWorlds();
 WORLDS.forEach((W, w) => { if (!W.deep) return; leftExit(W, w); if (w !== 9 && !W.stages.some(q => q.climbWall && !q.arena)) placeClimbWall(W, w); joinOrphans(W, w); });   // (once every world's ways out are in: the lakebed's west one just above. A climb wall shut to make one: Camila's climb somewhere else)
 authorForest();                                      // (the forest's hand-made rooms, over what grew: the user's map, 2026-10-24)
 placeDive();                                         // (the deep's hidden way in, in Cuss' sea caves)
+stitchEdges();                                       // (every stitched world's screens side by side: their floors meeting at one height)
+function stitchEdges() {                             // the floors of two screens side by side meet at one height: each ramps to it over its last 260 px (the user, 2026-10-25:
+  const R = 260, profOf = q => { const P = []; let d = 0; (q.steps || []).forEach(([x, dy]) => { P.push([x, d], [x, dy]); d = dy; }); (q.ground || []).forEach(p => P.push(p.slice())); P.sort((u, v) => u[0] - v[0]); return P; };   //  "rebuild all the worlds currently with this new screen/world approach")
+  const dyAt = (P, x) => { if (!P.length) return 0; for (let i = P.length - 1; i >= 0; i--) if (x >= P[i][0]) { const n = P[i + 1]; return n && n[0] > P[i][0] ? lerp(P[i][1], n[1], (x - P[i][0]) / (n[0] - P[i][0])) : P[i][1]; } return P[0][1]; };   // (as groundAt, without the pits)
+  WORLDS.forEach((W, w) => { if (!STITCH.has(w) || w === 0) return;   // (the forest is hand-made, meeting already)
+    const S0 = W.stages, at = c => S0.findIndex(q => q.cell === c && !q.arena && !q.cut);
+    for (const r of "ABCD") for (let c = 0; c < 9; c++) { const a = at(r + c), b = at(r + (c + 1)); if (a < 0 || b < 0) continue; const A = S0[a], B = S0[b];
+      if (A.noRight || B.noLeft || (A.next ?? a + 1) !== b || (A.toWorld !== undefined && !A.exitLeft) || B.exitLeft) continue;   // (a world's way out at that edge: as it is)
+      if ((A.gaps || []).some(([g0, g1]) => g1 > WORLD - R - 60) || (B.gaps || []).some(([g0, g1]) => g0 < R + 60)) continue;   // (a pit at the edge: as it is)
+      const PA = profOf(A), PB = profOf(B), ha = dyAt(PA, WORLD), hb = dyAt(PB, 0); if (Math.abs(ha - hb) <= 4) continue;
+      const t = Math.round((ha + hb) / 2), ra = dyAt(PA, WORLD - R), rb = dyAt(PB, R);
+      A.ground = [...PA.filter(q => q[0] < WORLD - R), [WORLD - R, ra], [WORLD, t]]; delete A.steps;
+      B.ground = [[0, t], [R, rb], ...PB.filter(q => q[0] > R)]; delete B.steps; } });
+}
 STAGES.splice(0, STAGES.length, ...WORLDS[world].stages);
 FOES.forEach(hideFoe); FOES.splice(0, FOES.length, ...woodFoes()); foe = FOES[0];   // the woods' old seven bosses are retired (kept for their own worlds later, and the editor)
 queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[0])));   // (the woods are loaded from the start, without setWorld: thinned once every world's set up)
