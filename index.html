@@ -521,7 +521,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261025w"></script>
+<script src="charkit.js?v=20261025s"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261025a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -762,6 +762,7 @@ let trail = [0], roomsDone = new Set(), roomsSeen = new Set(), dayHeld = 0;   //
 // world by its way in (or a door): a new day at midday. Walk back into the world you came from and the clock carries on. Kesh's garden goes
 // round its own hours (night first, then the light); the beach is always morning; the casino, always night. Dawn is the blue hour's rooms
 // and sky, lit for dawn (dawnLook: warm, pink, low sun)
+let hourTurn = -1, hourWas = null, hourEase = null;   // (the room the hour turned in as you came into it, the hour before; the light easing into the new one: hourEaseTick)
 let dayClock = 0, stayCols = new Set(), roomHour = new Map(), entrySide = "left", worldStack = [], cineSeen = new Set(), dawnNow = false;
 const DAY_ROOMS = 3, HOUR_OF = [0, 1, 3, 5, 6, 5], KESH_CYCLE = [0, 2, 3, 4, 5, 6];   // (each step of the day: the world's hour (its screens); the sixth, dawn, on the blue hour's rooms)
 const dayPos = () => Math.floor(Math.max(0, dayClock - 1) / DAY_ROOMS) % HOUR_OF.length;   // (0 midday … 4 night, 5 dawn)
@@ -771,8 +772,9 @@ const colOf = s => +String(STAGES[s].cell || "").slice(1) || 0;
 let clockPrev = null, clockCur = null;             // the room you were in before this one, and this one
 function clockEnter(s) {                             // into a room: the day moves on a room (the user, 2026-10-24: in and out of the same room again and again (a fall, a try at a hole or a ledge) doesn't count, "until they go somewhere else")
   const k = world + ":" + s; if (k === clockPrev) { clockPrev = clockCur; clockCur = k; } else { clockPrev = clockCur; clockCur = k; dayClock++; }
-  const pos = dayPos();
+  const pos = dayPos(), was = { h: dayHeld, dawn: dawnNow };
   dayHeld = world === 9 ? BEACH_HOUR[0] : (world === 5 ? KESH_CYCLE : HOUR_OF)[pos]; dawnNow = pos === 5 && world !== 5 && world !== 9 && world !== 11;
+  hourTurn = was.h !== dayHeld || was.dawn !== dawnNow ? s : -1; hourWas = was;   // (the hour turned as you came into this room: see setScreen's hold, sleepersFor)
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
 const DAWN_PINK = "#ffb4a6", DAWN_SUN = "#ffc6ae";
@@ -1118,7 +1120,7 @@ function buildFurnace() {
     for (let k = -1; k <= 1; k++) hand.add(pointAlong(at(P(new THREE.ConeGeometry(.06, .26, 12), mCl, .02), k * .1, -.18, 0), new THREE.Vector3(k * .3, -1, 0)));
     return { A, joints, hand };
   });
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.25, 18), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .32, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(1.25, 18), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
   return { root, yaw, bob, tilt, body, feet, flames, glow, groundGlow, head, arms, mats, shadow };
 }
@@ -1143,7 +1145,7 @@ function foeBase(pivot, shadowR) {
   const M = (c, extra) => { const m = toonT(c, extra); mats.push(m); return m; };
   const P = (geo, mat, ol = .035, smooth = true) => mk(geo, null, { mat, ol, smooth });
   const root = group(actors), yaw = group(root), bob = group(yaw), tilt = group(bob, 0, pivot, 0), body = group(tilt, 0, -pivot, 0);
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(shadowR, 20), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .32, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(shadowR, 20), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
   return { root, yaw, bob, tilt, body, mats, M, P, shadow, legs: [], arms: [], chains: [], bobAmt: .08, stride: .3, swing: .2 };
 }
@@ -1923,14 +1925,15 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
         quad([ax, ay, z1], [bx, by, z1], [bx, by, z0], [ax, ay, z0]); if (lip) quad([ax, ay - .35, z1], [bx, by - .35, z1], [bx, by, z1], [ax, ay, z1]); }
       const tg = new THREE.BufferGeometry(); tg.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); tg.computeVertexNormals(); const t = new THREE.Mesh(tg, mTurf); scene.add(t); pitKeep.add(t);
     };
-    part(-900, WORLD + 900, -9, -2.2, false);
+    if (st.openPit) { let x1 = -900; G0.slice().sort((a, b) => a[0] - b[0]).forEach(([a, b]) => { if (a > x1) part(x1, a, -9, -2.2, false); x1 = Math.max(x1, b); }); if (x1 < WORLD + 900) part(x1, WORLD + 900, -9, -2.2, false); }   // (openPit: open all the way back, the land's edge only: the forest's A2, a corner of land over the canopy)
+    else part(-900, WORLD + 900, -9, -2.2, false);
     let x0 = -900; G0.slice().sort((a, b) => a[0] - b[0]).forEach(([a, b]) => { if (a > x0) part(x0, a, -2.2, 5.05, true); x0 = Math.max(x0, b); }); if (x0 < WORLD + 900) part(x0, WORLD + 900, -2.2, 5.05, true);
     for (const [a0, b0] of G0) { const a = Math.max(a0, -900), b = Math.min(b0, WORLD + 900), xa = X(a), xb = X(b), ya = Y(groundAt(a)), yb = Y(groundAt(b)), lo = Math.min(ya, yb);
-      const dk = STITCH.has(world) ? new THREE.Mesh(new THREE.PlaneGeometry(xb - xa - .04, 7.15).rotateX(-Math.PI / 2), mPit) : new THREE.Mesh(new THREE.BoxGeometry(xb - xa - .04, 14, 7.15), mPit); at(dk, (xa + xb) / 2, STITCH.has(world) ? Math.max(lo - 1.5, FB + .3) : lo - 1.5 - 7, 1.47); scene.add(dk); pitKeep.add(dk);   // dark, a little way down (stitched: only from above, a hole you see the room below through from under it)
+      const dk = st.openPit ? null : STITCH.has(world) ? new THREE.Mesh(new THREE.PlaneGeometry(xb - xa - .04, 7.15).rotateX(-Math.PI / 2), mPit) : new THREE.Mesh(new THREE.BoxGeometry(xb - xa - .04, 14, 7.15), mPit); if (dk) { at(dk, (xa + xb) / 2, STITCH.has(world) ? Math.max(lo - 1.5, FB + .3) : lo - 1.5 - 7, 1.47); scene.add(dk); pitKeep.add(dk); }   // dark, a little way down (stitched: only from above, a hole you see the room below through from under it)
       [[a, xa, ya, 1], [b, xb, yb, -1]].forEach(([e, ex, ey, sd]) => { if (e <= -890 || e >= WORLD + 890) return;   // down each side: limestone and hanging roots
         for (let y = ey - .35; y > ey - 2.2; y -= R2(.4, .7)) for (let z = -2; z < 5; z += R2(.8, 1.4)) { const m = mk(new THREE.DodecahedronGeometry(R2(.2, .4), 0).scale(.6, 1, 1), null, { mat: mStone, ol: .03 }); at(m, ex + sd * .06, y, z); scene.add(m); pitKeep.add(m); }
         for (let z = -2; z < 5; z += R2(.45, 1)) { const len = R2(.4, 1.6), v = mk(new THREE.CylinderGeometry(.03, .02, len, 4), null, { mat: mMoss, ol: .012 }); at(v, ex + sd * .12, ey - len / 2, z); scene.add(v); pitKeep.add(v); } });
-      for (let x = xa + .25; x < xb - .2; x += R2(.4, .9)) { const len = R2(.5, 1.9), v = mk(new THREE.CylinderGeometry(.035, .02, len, 4), null, { mat: barkPitM, ol: .012 }); at(v, x, Y(groundAt(x / S)) - len / 2, -2.12); scene.add(v); pitKeep.add(v); }   // roots out of the bank behind
+      if (!st.openPit) for (let x = xa + .25; x < xb - .2; x += R2(.4, .9)) { const len = R2(.5, 1.9), v = mk(new THREE.CylinderGeometry(.035, .02, len, 4), null, { mat: barkPitM, ol: .012 }); at(v, x, Y(groundAt(x / S)) - len / 2, -2.12); scene.add(v); pitKeep.add(v); }   // roots out of the bank behind
     }
     GAPS.push(...G0);
   } else if (PROFILE.length) {                       // shaped ground: earth that steps and slopes, turf on top
@@ -2121,9 +2124,9 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   if (GAPS.length) {                                 // nothing left standing in a pit: the grass, the flowers, the plants and rocks over one are taken away
     const bands = GAPS.map(([a, b]) => [X(a) - .15, X(b) + .15]), inPit = x => bands.some(([a, b]) => x > a && x < b), box = new THREE.Box3(), c = new THREE.Vector3(), m4b = new THREE.Matrix4(), pv = new THREE.Vector3(), z0 = new THREE.Matrix4().makeScale(0, 0, 0);
     [...scene.children].filter(o => !before.has(o) && !pitKeep.has(o)).forEach(o => {
-      if (o.isInstancedMesh) { for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4b); pv.setFromMatrixPosition(m4b); if (pv.z > -2.4 && inPit(pv.x)) o.setMatrixAt(i, z0); } o.instanceMatrix.needsUpdate = true; return; }
+      if (o.isInstancedMesh) { for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4b); pv.setFromMatrixPosition(m4b); if ((pv.z > -2.4 || st.openPit) && inPit(pv.x)) o.setMatrixAt(i, z0); } o.instanceMatrix.needsUpdate = true; return; }
       box.setFromObject(o); if (box.isEmpty()) return; box.getCenter(c);
-      if (box.min.z > -2.6 && inPit(c.x) && box.max.y < Y(GROUND) + 4.5 && box.max.x - box.min.x < 6) scene.remove(o);
+      if (box.min.z > (st.openPit ? -10.4 : -2.6) && inPit(c.x) && box.max.y < Y(GROUND) + 4.5 && box.max.x - box.min.x < 6) scene.remove(o);
     });
   }
   bakeStatic([...scene.children].filter(o => !before.has(o)), keepW);
@@ -3554,7 +3557,7 @@ function buildSet(s) {
     }
     if (P.k === "ceiba") { const c = tropCeiba(g, M, X(P.x), Y(P.base ?? GROUND), P.z ?? -3, rng, { h: P.h ?? 14, ol: .05, crown: P.crown !== false, back: !!P.back, crownK: P.crownK ?? 1, crownBack: !!P.crownBack, bloom: P.bloom || null }); c.scale.setScalar(P.scale ?? 1.6); }   // (crown false: its trunk, the room above has the crown)
     if (P.k === "willow") { const gy = groundAt(P.x) ?? GROUND; tropWillow(g, X(P.x), Y(gy), P.z ?? -2.6, rng, { h: P.h ?? 9, spread: P.spread ?? 7.5, trunkK: P.trunkK ?? 1, thick: P.thick ?? 1 });
-      const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d1a10", transparent: true, opacity: .32, depthWrite: false }));   // its shade, over the camp
+      const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d1a10", transparent: true, opacity: .32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));   // its shade, over the camp
       sh.scale.set(P.spread ?? 7.5, 1, 4.2); at(sh, X(P.x), Y(gy) + .04, .2); g.add(sh); }
     if (P.k === "giant") giantTree(g, P.part || "trunk", X(P.x), Y(groundAt(P.x) ?? GROUND), P.z ?? 4.4, rng);
     if (P.k === "earth") {                          // solid ground where the map has no room (the forest's B1, B4): a wall of earth at that end, strata and roots in it
@@ -3741,11 +3744,12 @@ function authorForest() {
   // ── row A
   // A1: Camila's rocks at the left (the cove behind them); the bridge's ladder at the right, the bridge on from there; the edge where her climb
   // up from B2 comes out, off it and down into B2
-  room("A1", { ground: [[0, 0], [2575, 0], [2576, 900]], plats: [[2150, BY, 420, "bridge"]], poles: [[2190, BY]], secret: { who: "camila", x: 150, side: -1, door: true },
-    prev: COVE, next: C.A2, arriveX: 2440, arriveF: -1, set: [{ k: "bridge" }, { k: "mountain", x0: 110, x1: 330 }] }, [["leafy", "leaf", 750], ["acorn", "rust", 1250], ["twiggy", "olive", 1750]]);   // (three baddies, the rocks in a mountain: the user, 2026-10-25)
+  room("A1", { ground: [[0, 0]], plats: [[2150, BY, 420, "bridge"]], poles: [[2190, BY]], secret: { who: "camila", x: 150, side: -1, door: true },   // (its floor on into A2's corner: B2's climb comes up there now, the user 2026-10-25)
+    prev: COVE, next: C.A2, set: [{ k: "bridge" }, { k: "mountain", x0: 110, x1: 330 }] }, [["leafy", "leaf", 750], ["acorn", "rust", 1250], ["twiggy", "olive", 1750]]);   // (three baddies, the rocks in a mountain: the user, 2026-10-25)
   // A2, A3: the canopy, no floor: the bridge right across, the two huge trees' crowns (their trunks in B2 and B3); off it and down into B2 / B3
-  room("A2", { open: true, gaps: [[-200, 2760]], below: C.B2, plats: [[-10, BY, 2580, "bridge"]], prev: C.A1, next: C.A3, items: [["gum", 2300, BY]],
-    set: [{ k: "bridge" }, { k: "ceiba", x: 1350, base: GROUND + ROW_H, h: 18.4, z: -5, scale: 1.3, crownK: 1.75, crownBack: true, bloom: "#ff8fb1" }] }, [["acorn", "rust", { plat: 0, x: 700 }], ["leafy", "leaf", { plat: 0, x: 1750 }]]);   // (two on each bridge: the user, 2026-10-25)   // (the great trees' crowns up level with the bridge, in flower: the user, 2026-10-24, "the tops of the two big trees ... stand out more")
+  room("A2", { openPit: true, ground: [[0, 0]], gaps: [[640, 2760]], below: C.B2, plats: [[-10, BY, 2580, "bridge"], [72, GROUND - 140, 376, "camTop"]], prev: C.A1, next: C.A3, items: [["gum", 2300, BY]],
+    down: C.B2, downX: 260, downCam: true, camTop: 140,   // (a corner of land at its left, A1's floor on into it, the top of Camila's rock up out of it: B2's climb comes up here, and back down it. The user, 2026-10-25: "b2 goes up to a2 ... so they really can only jump down or move left to a 1")
+    set: [{ k: "bridge" }, { k: "camTop", x: 260, h: 140 }, { k: "ceiba", x: 1350, base: GROUND + ROW_H, h: 18.4, z: -5, scale: 1.3, crownK: 1.75, crownBack: true, bloom: "#ff8fb1" }] }, [["acorn", "rust", { plat: 0, x: 700 }], ["leafy", "leaf", { plat: 0, x: 1750 }]]);   // (two on each bridge: the user, 2026-10-25)   // (the great trees' crowns up level with the bridge, in flower: the user, 2026-10-24, "the tops of the two big trees ... stand out more")
   room("A3", { open: true, gaps: [[-200, 2760]], below: C.B3, plats: [[-10, BY, 2580, "bridge"]], prev: C.A2, next: C.A4,
     set: [{ k: "bridge" }, { k: "ceiba", x: 820, base: GROUND + ROW_H, h: 18.8, z: -5, scale: 1.3, crownK: 1.75, crownBack: true, bloom: "#ffb347" }] }, [["twiggy", "olive", { plat: 0, x: 650 }], ["leafy", "rust", { plat: 0, x: 1900 }]]);
   [C.A2, C.A3].forEach(i => nm(S0[i], "CANOPY"));
@@ -3770,7 +3774,7 @@ function authorForest() {
 
   // ── row B
   // B2: B1's solid earth at the left, Camila's rock up it into A1; the first huge tree's trunk; a mini boss on the floor
-  room("B2", { ground: [[0, 0]], noLeft: true, climbUp: { x: 260, to: C.A1 }, climbWall: true, next: C.B3,
+  room("B2", { ground: [[0, 0]], noLeft: true, climbUp: { x: 260, to: C.A2 }, climbWall: true, next: C.B3,
     set: [{ k: "earth", side: -1, col: EARTH }, { k: "ceiba", x: 1350, crown: false, back: true, h: 40, scale: 1.3, z: -5 }, { k: "camRock", x: 260 }] }, [["logger", "bark", 1250, "mini"]]);
   // B3: the second trunk, two baddies; in the middle the top of Camila's rock (down it into C3); at the far end B4's dirt, her rock up it into A4
   room("B3", { ground: [[0, 0]], noRight: true, prev: C.B2, down: C.C3, downX: 1180, downCam: true, camTop: 140, plats: [[992, GROUND - 140, 376, "camTop"]], climbUp: { x: 2380, to: C.A4 }, climbWall: true, arriveX: 1180, arriveF: 1,
@@ -3864,7 +3868,27 @@ function setScreen(s) {                              // build stage s (its platf
     bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
     dropTextures();
   }
-  setLook(h);
+  if (!ghostBuild) { if (hourEase) hourEaseEnd(false); if (peekCache && peekCache.from !== s) dropPeekCache(); }
+  if (mode === "play" && panKeep && !ghostBuild && hourTurn === s && hourWas) hourHold(h); else setLook(h);   // (a stitched world's pan: in under the hour you left, the new one coming on once you're there)
+}
+// the hour turning as you pan into the next screen (the user, 2026-10-25: "let's do that slide into the new hour when you already arrived
+// there"): the screen comes in under the light you left, and once you're in it the light and the sky ease into the new hour, ~2 s
+function hourHold(h) {
+  const hk = dayHeld, dk = dawnNow; setLook(h); const L1 = lookGrab(), map1 = level.sky && level.sky.material.map, col1 = level.sky && level.sky.material.color ? level.sky.material.color.clone() : null;
+  dayHeld = hourWas.h; dawnNow = hourWas.dawn; setLook(hourWas.h); dayHeld = hk; dawnNow = dk; const L0 = lookGrab();
+  let sky = null; if (level.sky && map1) { sky = new THREE.Mesh(level.sky.geometry, new THREE.MeshBasicMaterial({ map: map1, fog: false, transparent: true, opacity: 0, depthWrite: false }));
+    if (col1) sky.material.color.copy(col1); sky.position.copy(level.sky.position); sky.position.z += .5; scene.add(sky); }   // (the new hour's sky, faded in over the old one)
+  hourEase = { t: 0, T: 2, L0, L1, h, level, sky };
+}
+function hourEaseTick(dt) {
+  const E = hourEase; if (!E || pan || panFade > 0) return; if (E.level !== level) return hourEaseEnd(false);
+  E.t += dt; const u = Math.min(1, E.t / E.T), e = u * u * (3 - 2 * u); lookLerp(E.L0, E.L1, e); if (E.sky) E.sky.material.opacity = e;
+  if (u >= 1) hourEaseEnd(true);
+}
+function hourEaseEnd(apply) {
+  const E = hourEase; hourEase = null; if (!E) return;
+  if (E.sky) { scene.remove(E.sky); E.sky.material.dispose(); }
+  if (apply && E.level === level) setLook(E.h);
 }
 
 // ───────────────────────────── particles (3D) ─────────────────────────────
@@ -6656,7 +6680,7 @@ const rowStep = (a, b) => { const A = cellOff(a), B = cellOff(b); return STITCH.
 function swapPan(dir, ns, work) {                   // as swapSlide, for a stitched world's neighbouring screens (else it is swapSlide)
   const o0 = cellOff(stage), o1 = cellOff(ns);
   if (!STITCH.has(world) || !o0 || !o1 || Math.abs(o0.x - o1.x) > WX + .01 || Math.abs(o0.y - o1.y) > ROW_H * S + .01 || hideout || stronghold || arena || mode !== "play" || !player) return swapSlide(dir, work);
-  transit = true; if (pan) panEnd();
+  transit = true; if (pan) panEnd(); const s0 = stage;
   const dx = o0.x - o1.x, dy = o0.y - o1.y, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
   const was = q => q ? { q, x: q.x + dx / S, y: q.y - dy / S } : null;
   const movers = [player, ...palsAll(), ally && ally.st, ej && ej.st].filter(Boolean).map(was);
@@ -6671,7 +6695,8 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   const cutOld = new THREE.Plane(nrm.clone().multiplyScalar(sg), -sg * cut), cutNew = new THREE.Plane(nrm.clone().multiplyScalar(-sg), sg * cut);   // (each keeps its own side)
   const ends = movers.map(m => m && { ...m, x1: m.q.x, y1: m.q.y }).filter(m => m && STAGES[stage] && (m.q === player || Math.abs(m.x - m.x1) < 900));
   warmFrame(); const pos1 = camera.position.clone(), quat1 = camera.quaternion.clone(), L1 = lookGrab();
-  pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone() };
+  pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0 };
+  { const up = peekWant(stage); if (up >= 0 && up !== s0 && !peekCache) peekCache = buildGhost(up); }   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
   panTick(0); render(0);                             // (drawn at once, where the camera was: the frame warmFrame drew is never seen)
 }
 function panTick(dt) {
@@ -6690,24 +6715,68 @@ function panEnd(fade) {
   for (const m of P.ends) { m.q.x = m.x1; m.q.y = m.y1; }
   lookLerp(P.L0, P.L1, 1);
   if (level.sky) scene.add(level.sky);
-  [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N, P.G);
-  P.G.position.set(0, 0, 0); disposeLevel(P.old); dropTextures();
+  [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N);
+  if (peekWant(stage) === P.s0 && !peekCache) { P.G.visible = false; peekCache = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (down from the room above into one you can look back up into: the room you left kept for it, in its place already)
+  else { scene.remove(P.G); P.G.position.set(0, 0, 0); disposeLevel(P.old); } dropTextures();
   if (!panFade) transit = false;
 }
 function panFadeTick(dt) { panFade = Math.max(0, panFade - dt); if (slideCv) slideCv.style.opacity = panFade / .2; if (!panFade) { if (slideCv) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } transit = false; } }
-function panScene() {                               // the screens, while panning: the sky, then each screen cut at the edge it shares with the other
+function panScene(P = pan) {                        // the screens, while panning (or peeking): the sky, then each screen cut at the edge it shares with the other
   const bg = scene.background, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(); scene.background = null;
-  renderer.setClearColor(FOG, 1); renderer.clear(); renderer.render(pan.skyS, camera);
-  pan.N.visible = false; renderer.clippingPlanes = [pan.cutOld]; renderer.render(scene, camera);
-  pan.N.visible = true; pan.G.visible = false; renderer.clippingPlanes = [pan.cutNew]; renderer.render(scene, camera);
-  pan.G.visible = true; renderer.clippingPlanes = []; scene.background = bg; renderer.setClearColor(cc, ca);
+  renderer.setClearColor(FOG, 1); renderer.clear(); renderer.render(P.skyS, camera);
+  P.N.visible = false; renderer.clippingPlanes = [P.cutOld]; renderer.render(scene, camera);
+  P.N.visible = true; P.G.visible = false; renderer.clippingPlanes = [P.cutNew]; renderer.render(scene, camera);
+  P.G.visible = true; renderer.clippingPlanes = []; scene.background = bg; renderer.setClearColor(cc, ca);
 }
-function panFg() {                                  // and their foregrounds, each as cut
+function panFg(P = pan) {                           // and their foregrounds, each as cut
   const bg = scene.background; scene.background = null; camera.layers.set(1);
-  pan.N.visible = false; renderer.clippingPlanes = [pan.cutOld]; renderer.render(scene, camera);
-  pan.N.visible = true; pan.G.visible = false; renderer.clippingPlanes = [pan.cutNew]; renderer.render(scene, camera);
-  pan.G.visible = true; renderer.clippingPlanes = []; camera.layers.set(0); scene.background = bg;
+  P.N.visible = false; renderer.clippingPlanes = [P.cutOld]; renderer.render(scene, camera);
+  P.N.visible = true; P.G.visible = false; renderer.clippingPlanes = [P.cutNew]; renderer.render(scene, camera);
+  P.G.visible = true; renderer.clippingPlanes = []; camera.layers.set(0); scene.background = bg;
 }
+// a look up into the room above (the user, 2026-10-25: "if a player ever jumps up in a screen that doesnt have a platform for them to land on,
+// the camera pans up a little to show some of the top screen and then they drop back down to where they were"): the room above built beside
+// this one (as a pan's old screen is: its own group, in its place, the two cut at their edge), play going on; the camera comes up after you as
+// far as half a screen, and when you're back down it goes again (kept built while you're in the room: another look is at once)
+let peek = null, peekCache = null;
+function peekWant(s) {                             // the room above s, if it's one you can jump up into but often not come out onto (open, or a wide hole): -1 if none
+  if (!STITCH.has(world) || s < 0 || !STAGES[s]) return -1;
+  const i = STAGES.findIndex(q => q && q.below === s && ((q.open || q.openPit) || (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD && b - a >= 600)));
+  return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
+}
+function landAbove(hu, px) {                       // is there somewhere up there to come out onto (goRoomUp's lip), near enough above you?
+  let af = hu.x < (hu.a + hu.b) / 2 ? -1 : 1; if (af < 0 && hu.a - 40 < 60) af = 1; if (af > 0 && hu.b + 40 > WORLD - 60) af = -1;
+  const ax = af < 0 ? hu.a - 40 : hu.b + 40; return ax > 60 && ax < WORLD - 60 && Math.abs(ax - px) < 260;
+}
+function buildGhost(s) {                           // the room above built, this one's play left as it is (its platforms, pits, ladders; its own bits)
+  const keep = { level, rowFx, restCamp, ruinFx, bloomFx, hour, P: PLATFORMS.slice(), G: GAPS.slice(), PR: PROFILE.slice(), C: CEILS.slice(), L: LADDERS.slice(), FL: FLOOR_LOW, SK: SINK, WA: WATER };
+  panKeep = {}; ghostBuild = true; let ghost = null;
+  try { setScreen(s); ghost = level; } catch (e) { console.error("peek build failed", e); } finally { panKeep = null; ghostBuild = false; }
+  ({ level, rowFx, restCamp, ruinFx, bloomFx, hour } = keep);
+  PLATFORMS.splice(0, PLATFORMS.length, ...keep.P); GAPS.splice(0, GAPS.length, ...keep.G); PROFILE.splice(0, PROFILE.length, ...keep.PR); CEILS.splice(0, CEILS.length, ...keep.C); LADDERS.splice(0, LADDERS.length, ...keep.L);
+  FLOOR_LOW = keep.FL; SINK = keep.SK; WATER = keep.WA; if (!hourEase) setLook(hour);
+  if (!ghost || ghost === level) return null;
+  const o0 = cellOff(stage), o1 = cellOff(s), G = new THREE.Group(); G.position.set(o1.x - o0.x, o1.y - o0.y, 0); G.visible = false; scene.add(G); ghost.objs.forEach(o => G.add(o));
+  if (ghost.sky) ghost.sky.visible = false;
+  return { s, level: ghost, G, from: stage };
+}
+function startPeek(to) {
+  if (peek || pan || transit || !STITCH.has(world)) return;
+  if (!peekCache || peekCache.s !== to || peekCache.from !== stage) { dropPeekCache(); peekCache = buildGhost(to); }
+  if (!peekCache) return;
+  const G = peekCache.G, N = new THREE.Group(), dy = G.position.y, cut = dy - SEAM_T * S; scene.add(N); level.objs.forEach(o => N.add(o)); G.visible = true;
+  const skyS = new THREE.Scene(); if (level.sky) skyS.add(level.sky);
+  peek = { G, N, skyS, cutOld: new THREE.Plane(new THREE.Vector3(0, 1, 0), -cut), cutNew: new THREE.Plane(new THREE.Vector3(0, -1, 0), cut) };
+}
+function peekTick() {                              // (render: once you're back on your feet and the camera's back down, the look up's over)
+  if (peek && ((player && player.onGround && camLift < .25) || mode !== "play" || transit)) endPeek();
+}
+function endPeek() {
+  const P = peek; if (!P) return; peek = null;
+  if (level.sky) scene.add(level.sky); [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N); P.G.visible = false;
+}
+function dropPeekCache() { if (peek) endPeek(); const C = peekCache; peekCache = null; if (!C) return; scene.remove(C.G); disposeLevel(C.level); }
+let ghostBuild = false;
 function lookGrab() {                               // the light as it is (to ease from one screen's into the next's while panning)
   const U = gradeMat.uniforms;
   return { fog: FOG.clone(), near: scene.fog.near, far: scene.fog.far, sun: [sun.color.clone(), sun.intensity], sun2: [sun2.color.clone(), sun2.intensity],
@@ -6824,7 +6893,7 @@ function holeAbove(px) {                           // the room above that drops 
     STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.below !== stage) return; const G0 = (q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }
   const v = holeAbove.v; if (!v) return null;
   const [a, b] = v.gaps.reduce((m, g) => Math.abs((g[0] + g[1]) / 2 - px) < Math.abs((m[0] + m[1]) / 2 - px) ? g : m);
-  return { to: v.to, x: (a + b) / 2 };
+  return { to: v.to, x: (a + b) / 2, a, b };
 }
 function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out at that edge of the room above)                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
   cine = null; const fy = player.y, rs = rowStep(stage, ns);
@@ -7616,9 +7685,10 @@ function updatePlayer(dt) {
   const dropTo = STAGES[stage].below;                // a drop with a room under it: you fall on down into it
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && !patrolLock && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(SINK - 6, FLOOR_LOW + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
-  const hu = !cu && STAGES[stage].up === undefined && p.vy < 0 && p.y < (STAGES[stage].hopY ?? (groundAt(p.x) ?? GROUND) - (STAGES[stage].hopUp ?? 400)) ? holeAbove(p.x) : null;   // (hopY: as high as this, wherever you jump from: the forest's C5, from its top platform)   // (fallen in by a hole, no way back up: jumped high enough near under it)
+  const huAny = STAGES[stage].up === undefined && p.vy < 0 && p.y < (STAGES[stage].hopY ?? (groundAt(p.x) ?? GROUND) - (STAGES[stage].hopUp ?? 400)) ? holeAbove(p.x) : null, hu = !cu ? huAny : null;   // (huAny: a climb's room too, only for a look up into the room above)   // (hopY: as high as this, wherever you jump from: the forest's C5, from its top platform)   // (fallen in by a hole, no way back up: jumped high enough near under it)
   if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
-  else if (hu && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - hu.x) < 640) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21)
+  else if (huAny && STITCH.has(world) && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && p.x > huAny.a - 60 && p.x < huAny.b + 60 && !landAbove(huAny, p.x)) startPeek(huAny.to);   // (nowhere up there to come out onto: a look up into it, and back down)
+  else if (hu && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && (STITCH.has(world) ? p.x > hu.a - 60 && p.x < hu.b + 60 : Math.abs(p.x - hu.x) < 640)) goRoomUp(hu.to, hu.x);   // (back up through it: the user, 2026-10-21; stitched: only up through the hole itself, and with nowhere up there to land, a look up into it and back down)
   else if (STAGES[stage].dive && !p.dead && p.x > STAGES[stage].dive[0] && p.x < STAGES[stage].dive[1] && p.y > SINK - 6) { if (!transit) diveWorld(STAGES[stage].diveTo); }   // (the deep's pool: down, not back up)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
   if (STAGES[stage].dive && Math.random() < dt * 7) { const [a, b] = STAGES[stage].dive; spawn("bubble", X(rand(a + 30, b - 30)), Y(SINK + 20), rand(-.8, .8), V(rand(-.15, .15), rand(1.2, 2.2), 0), 1.4, rand(.12, .22), { g: -1.5, drag: .6 }); }   // (bubbles rising out of it: the only sign)
@@ -9472,7 +9542,7 @@ function bbRig(col) {                            // the shared kit: body groups,
   const r = { mats, M, mB: M(col), mD: M(dark ? shade(.18) : shade(-.2, .05)), mL: M(shade(dark ? .32 : .13)), mE: M("#17151c"), mW: dark ? M("#f2efe8") : null,
     P: (geo, mat) => mk(geo, null, { mat, ol: 0, smooth: true }), eyes: [], feet: [], arms: [], legs: [], sp: [], clk: Math.random() * 9 };
   r.root = group(actors); r.yaw = group(r.root); r.sz = group(r.yaw); r.bob = group(r.sz); r.tilt = group(r.bob); r.body = group(r.tilt);
-  r.shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 18), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
+  r.shadow = new THREE.Mesh(new THREE.CircleGeometry(1, 18), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   r.shadow.rotation.x = -Math.PI / 2; scene.add(r.shadow);
   r.eye = (par, x, y, z, rad) => {               // a dark eye with a glint (a white one first, on the darkest berries)
     const g = group(par, x, y, z);
@@ -15418,6 +15488,7 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
 let sleepPlan = new Map();                       // this run: room → the roster entries asleep in it
 function sleepersFor(k) {
   if (!(hour >= 5 && (roomHour.get(k) ?? STAGES[k].h) < 5)) return [];
+  if (k === hourTurn) return [];                    // (night came on as you walked in: nobody's asleep here yet. The user, 2026-10-25 "for night time, dont put any berries to sleep on that same screen")
   if (!sleepPlan.has(k)) {
     const pool = (BB_ROSTER[k] || []).map(([type, , at, tag], i) => ({ type, at, i, tag })).filter(q => q.tag !== "mini" && !(q.at && q.at.gap !== undefined) && !sadSpots.has(k + ":" + q.i) && BB_TYPES[q.type] && !["float", "breach"].includes(BB_TYPES[q.type].move)).map(q => q.i);
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
@@ -16186,7 +16257,7 @@ function startBeps() {                            // the room's clear: was the s
   const B = home === stage ? STAGES[stage].bep : null, rt0 = B ? null : bepRoute(), back = rt0 ? rt0.x < player.x : colOf(home) < colOf(stage);   // (which way the way on goes from here)
   spawnFriends(["S", "M", "B"], B || { trail: back ? 0 : WORLD });
   bepEv = { B: STAGES[home].bep, mode: B ? "trail" : back ? "escortBack" : "escort", phase: "pop", t: 0, lead: null, wait: false };
-  if (!B) { bepRun.escort = friends.map(f => "#" + f.r.mB.color.getHexString()); bepRun.back = back; }   // from here on they lead you room by room (back the way you came, mostly)
+  if (!B) { bepRun.escort = friends.map(f => "#" + f.r.mB.color.getHexString()); bepRun.back = back; bepRun.at = stage; bepRun.next = rt0 ? rt0.to : undefined; }   // from here on they lead you room by room (back the way you came, mostly)
 }
 function bepRoute() {                              // the way on from this room toward the hideout, by the shortest way through the rooms: { kind (right, left, up, down: a rope; drop: a hole; climb), x, side (which side of it you are), R (a rope), a, b (a hole's edges) }
   const home = bepHome(); if (home < 0 || home === stage) return null;
@@ -16215,9 +16286,12 @@ function bepGapAhead(f, dx, skip) {               // a gap to bound over: right 
 const bepSpot = (rt, T) => rt.kind === "right" ? firmNear(WORLD - 150 - T.lag * 600, -1) : rt.kind === "left" ? firmNear(150 + T.lag * 600, 1) : rt.R ? escortSpot(T, true, rt.R)   // where each one waits for you, back from the way on
   : clamp((rt.kind === "drop" ? (rt.side > 0 ? rt.a - 40 : rt.b + 40) : rt.x - rt.side * 60) - rt.side * T.lag * 400, 40, WORLD - 40);
 function spawnEscort(cameBack) {                  // still leading you: they come into each room a little ahead of you, toward its way on to the hideout (whichever way that is)
+  const from = bepRun.cur; bepRun.cur = stage;        // (the room you've come from: every room change calls this)
   if (!bepRun.escort) return;
   const home = bepHome(), cols = bepRun.escort; if (home < 0) return;
+  if (bepRun.at !== undefined && stage !== bepRun.at && !(from === bepRun.at && stage === bepRun.next)) return;   // (not the way to their hideout: they don't come; they wait for you in the room you left them in. The user, 2026-10-25: "beps shouldn't follow you to the wrong screen, but they should wait for you on the last screen you left them at that was heading in the right direction")
   const rt = home === stage ? null : bepRoute(); if (home !== stage && !rt) return;     // (no way on from here: they wait where they were)
+  bepRun.at = stage; bepRun.next = rt ? rt.to : home;
   const B0 = STAGES[home].bep, vert = entrySide === "top" || entrySide === "bottom";   // (into the hideout's room: on the side you came in by, or toward its way in beside you)
   const back = home === stage ? (vert ? B0.zone < player.x : entrySide === "right") : rt.x < player.x;
   const jut = back && entryHi ? hiPlat() : null;   // (back into a split room by its upper way: they come in up on that ledge with you, not on the lower path. The user, 2026-10-18)
@@ -17808,7 +17882,7 @@ function syncWorld(dt) {
     else if (gyC !== null && !player.sunk) camBase = lerp(camBase, Y(gyC) + hiP, 1 - Math.exp(-dt * 2.2));
     else if (gyC === null && onPl && player.plat.kind === "bridge" && !player.sunk) camBase = lerp(camBase, Y(player.plat.y) - 3.2, 1 - Math.exp(-dt * 2.2));   // (A2, A3: nothing below but the bridge)
     if (!Number.isFinite(camBase)) camBase = Y(GROUND); if (!Number.isFinite(camLift)) camLift = 0;   // (never stuck on a bad number: a NaN here blanked the whole view)
-    camLift = lerp(camLift, clamp((Y(player.y) - camBase - 2.2) * .45, 0, 1.4), 1 - Math.exp(-dt * 3));
+    camLift = lerp(camLift, peek ? clamp((Y(player.y) - camBase - 2.2) * .8, 0, 4.6) : clamp((Y(player.y) - camBase - 2.2) * .45, 0, 1.4), 1 - Math.exp(-dt * (peek ? 4 : 3)));   // (peek: up after you, half a screen, to see into the room above)
     const sx = shake ? rand(-.5, .5) * shake * S : 0, sy = shake ? rand(-.5, .5) * shake * S : 0;
     const cy = cine ? cine.camY : 0;                  // (the gate: panning up the keep)
     camPush = lerp(camPush, slowMo > 0 ? 1 : 0, 1 - Math.exp(-dt * (slowMo > 0 ? 9 : 3)));   // (the last kill: leaning in, then easing back)
@@ -17901,7 +17975,7 @@ function fgSeeThru(dt) {                          // a tree in the foreground (t
   }
 }
 function render(dt) {
-  syncMini();
+  syncMini(); hourEaseTick(dt); peekTick();
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);
@@ -17926,10 +18000,10 @@ function render(dt) {
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
-  if (pan) panScene(); else renderer.render(scene, camera);
+  if (pan) panScene(); else if (peek) panScene(peek); else renderer.render(scene, camera);
   renderer.clearDepth();
   renderer.render(actors, camera);
-  if (pan) panFg(); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
+  if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
   renderer.render(gradeScene, gradeCam);
 }

@@ -833,7 +833,7 @@ function buildCat(R) {
     hat.add(at(P(new THREE.CylinderGeometry(.22, .19, .42, 14), mHat), 0, .23, 0));
     hat.add(at(P(new THREE.CylinderGeometry(.199, .196, .1, 14), mBand), 0, .08, 0));
   }
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(.6, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(.6, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
   return Object.assign(R, { kind: "cat", root, yaw, spin, body, torso, arms, legs, tail, gloves, shoes, head, hat: hatPivot, hatG: hat, mats, texs, shadow, mFace, faceO, faceB, dogEars, gills });
 }
@@ -1458,7 +1458,7 @@ function buildHuman(R) {
   const chains = [];
   const tail = O.tail.on ? new Tube(body, 9, 30, 10, t => rounded(lerp(.036, .048, THREE.MathUtils.smoothstep(t, .05, .75)), t, .05, .14) * O.tail.thick,
     M("#ffffff", { map: T(bandArt(col(O.tail.col), [[.84, 1, col(O.tail.tip)]])) })) : null;   // the cat tail (posed every frame in syncHuman)
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(.5, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false }));
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(.5, 16), new THREE.MeshBasicMaterial({ color: "#0e1e16", transparent: true, opacity: .3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
   shadow.rotation.x = -Math.PI / 2; if (SHADOWS) SHADOWS.add(shadow);
   const prop = O.prop.kind === "sword" ? buildSword(body, M, P, O.prop) : O.prop.kind === "gauntlet" ? buildGauntlet(body, M, P, O.prop) : null;
   Object.assign(R, { kind: "human", root, yaw, spin, body, torso, arms, legs, hands, feet, head, chest, hips, ears, cap, spike, pads, headband, tail,
