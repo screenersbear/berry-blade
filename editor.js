@@ -333,6 +333,45 @@ function putKey(A, kind, sc, t, v, start, rest) {                // your key for
   ks.push([+t.toFixed(4), v - base(t)]);
   const tr = buildTrack(kind, sc, ks, base, KIT.ANIM_CH[sc]); if (tr) A[sc] = tr; else delete A[sc];
 }
+// ── where a move connects (the user, 2026-10-24: "can the editor in the game show a highlight like the artifact on where an animation connects? and also,
+// is it possible to change where it connects?"): each hit window pink on the timeline (drag it along, or by an end to make it longer or shorter), the
+// box it hits on the stage (bright while it's live), and sliders for when it starts and ends, how far it reaches and how high. Your changes are this
+// character's own (spec.move.hits[kind]: one entry per window, its t0 / t1 / reach / y0 / y1); the game plays them (work.html hitsNow)
+const hitsFor = (kind, sp = cur.spec) => { const S = moveDef(kind, sp); if (!S || !S.hits) return []; const o = ((sp.move.hits || {})[kind]) || []; return S.hits.map((h, i) => o[i] ? { ...h, ...o[i] } : { ...h }); };
+const limbHits = sp => sp.base !== "cat" && ["none", "gauntlet"].includes(sp.outfit.prop.kind);   // (fists and feet: the blow lands where the limb is, as in the game)
+function hitPatch(kind, i, patch, commit) { const n = clone(cur.spec), H = n.move.hits = n.move.hits || {}, L = H[kind] = (H[kind] || []).slice(); while (L.length <= i) L.push({}); L[i] = { ...(L[i] || {}), ...patch }; stageSpec(n, commit); }
+function renderHits() {
+  const box = $("tlHits"); box.innerHTML = ""; if (!isMove()) return;
+  const kind = moveKind(), S = moveDef(kind); if (!S) return; const dur = S.dur, t = clamp(tl.t, 0, dur);
+  hitsFor(kind).forEach((h, i) => {
+    const d = el("div", "hit" + (t >= h.t0 && t <= h.t1 ? " on" : "")); d.style.left = (h.t0 / dur * 100) + "%"; d.style.width = Math.max(.6, (h.t1 - h.t0) / dur * 100) + "%";
+    d.title = `Hit ${i + 1}: ${h.t0.toFixed(2)}s to ${h.t1.toFixed(2)}s, when this blow can connect. Drag it along, or by an end`; d.append(el("i", "a"), el("i", "b"));
+    d.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); setPaused(true, false); beginDrag(); const end = e.target.classList.contains("a") ? "a" : e.target.classList.contains("b") ? "b" : "m";
+      const u0 = barU(e), x0 = e.clientX, h0 = { ...h }; let moved = end !== "m"; d.setPointerCapture(e.pointerId);   // (the middle: a click still scrubs; only a drag moves the window)
+      const mv = ev => { if (!moved && Math.abs(ev.clientX - x0) < 5) return; moved = true; const dt2 = (barU(ev) - u0) * dur; let a = h0.t0, b = h0.t1;
+        if (end === "a") a = clamp(h0.t0 + dt2, 0, h0.t1 - .02); else if (end === "b") b = clamp(h0.t1 + dt2, h0.t0 + .02, dur); else { const w = h0.t1 - h0.t0; a = clamp(h0.t0 + dt2, 0, dur - w); b = a + w; }
+        hitPatch(kind, i, { t0: +a.toFixed(3), t1: +b.toFixed(3) }, false); scrubTo((end === "b" ? b : a) / dur); renderHits(); };
+      const up = ev => { d.removeEventListener("pointermove", mv); d.removeEventListener("pointerup", up); d.removeEventListener("pointercancel", up); if (!moved && ev.type === "pointerup") scrubTo(barU(ev)); endDrag(); renderHits(); if (tab === "ANIMATE") renderControls(); };
+      d.addEventListener("pointermove", mv); d.addEventListener("pointerup", up); d.addEventListener("pointercancel", up); });
+    box.append(d);
+  });
+}
+const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial({ color: "#ff5fa8", transparent: true, opacity: .3, depthWrite: false }));
+hitBox.add(new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)), new THREE.LineBasicMaterial({ color: "#ff5fa8" }))); hitBox.visible = false; hitBox.renderOrder = 5; scene.add(hitBox);
+const _lw = new THREE.Vector3();
+function syncHitBox() {                                          // the box the blow lands in right now (the game's own sum: combat()'s), faint between its windows
+  hitBox.visible = false; if (cur.villain || !rig || rig.kind === "cat") return;
+  const kind = isMove() ? moveKind() : st.atkT >= 0 ? st.atkKind : null, S = kind && moveDef(kind); if (!S || !S.hits) return;
+  const t = isMove() ? clamp(tl.t, 0, S.dur) : st.atkT, L = hitsFor(kind); if (!L.length) return;
+  let h = L.find(q => t >= q.t0 && t <= q.t1), live = !!h; if (!h) h = L.find(q => q.t0 > t) || L[L.length - 1];
+  const sp = rig.spec, f = st.face || 1, tall = (rig.heightPx || 92) / 92, rk = 1 + ((sp.move.reach ?? 1) - 1) * .6, limb = limbHits(sp) && !h.wide;
+  rig.root.updateMatrixWorld(true); const rx = rig.root.position.x, ry = rig.root.position.y;   // (where she stands on the stage: the box is placed from there, in the game's pixels)
+  let fw = 0, bw = 0; if (limb) [...rig.hands, ...rig.feet].forEach(m => { m.getWorldPosition(_lw); const d = (_lw.x - rx) * 40 * f; fw = Math.max(fw, d); bw = Math.max(bw, -d); });
+  const xa = st.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = st.x + f * Math.max(limb ? Math.max(fw + (sp.outfit.prop.kind === "gauntlet" ? 44 : 16), 26) : h.reach * tall * rk, 0);
+  const ya = st.y - h.y0 * tall, yb = st.y - h.y1 * tall, x1 = rx + (Math.min(xa, xb) - st.x) / 40, x2 = rx + (Math.max(xa, xb) - st.x) / 40, y1 = ry + (st.y - Math.max(ya, yb)) / 40, y2 = ry + (st.y - Math.min(ya, yb)) / 40;
+  hitBox.position.set((x1 + x2) / 2, (y1 + y2) / 2, 0); hitBox.scale.set(Math.max(.02, x2 - x1), Math.max(.02, y2 - y1), .9);
+  hitBox.material.opacity = live ? .34 : .08; hitBox.children[0].material.opacity = live ? 1 : .35; hitBox.children[0].material.transparent = true; hitBox.visible = true;
+}
 function ownKeys(kind = moveKind()) {                            // [{ t, sc }]: every key of yours on a move
   const own = (cur.spec.move.anims || {})[kind] || {}, out = [];
   for (const sc in own) { const base = baseFn(kind, sc, restOf(kind, sc) ?? own[sc][0][1]); keysOn(own[sc], base).forEach(([t]) => out.push({ t, sc })); }
@@ -584,13 +623,14 @@ function updateTL() {
 }
 // the timeline's diamonds = your keys on the picked move. Click one for what to do with it (the user, 2026-10-23: "add a way to delete the dots you've made
 // by clicking on them on the timeline and having the options pop up")
-const PARTS = [["lead arm", ["armF", "spF", "elbF", "aS", "gF"]], ["rear arm", ["armB", "spB", "elbB", "bS", "gB"]], ["front leg", ["fNx", "fNy", "fNz", "hN"]], ["back leg", ["fFx", "fFy", "fFz", "hF"]],
+const PARTS = [["lead arm", ["armF", "spF", "elbF", "aS", "gF", "wF"]], ["rear arm", ["armB", "spB", "elbB", "bS", "gB", "wB"]], ["front leg", ["fNx", "fNy", "fNz", "hN"]], ["back leg", ["fFx", "fFy", "fFz", "hF"]],
   ["body", ["lean", "arch", "bodyY", "twist", "spin", "flip"]], ["upper body twist", ["twistU"]], ["hip twist", ["twistH"]], ["head", ["headRot"]], ["toes", ["fP"]], ["sword", ["blade", "grip"]],
   ["tail", ["tailBase", "tailCurl"]], ["hat", ["hatTilt", "hatLift"]]];
 const partOf = sc => { const p = (PARTS.find(([, cs]) => cs.includes(sc)) || ["other"])[0]; return cur.spec.base === "cat" ? p.replace(" arm", " paw") : p; };
 let keyMenuEl = null;
 function closeKeyMenu() { if (keyMenuEl) { keyMenuEl.remove(); keyMenuEl = null; } }
 function renderKeys() {
+  renderHits();
   const box = $("tlKeys"); box.innerHTML = ""; closeKeyMenu(); if (!isMove()) return;
   const S = moveDef(moveKind()), groups = [];
   ownKeys().sort((a, b) => a.t - b.t).forEach(k => { const g = groups.find(q => Math.abs(q.t - k.t) < .009); if (g) g.ks.push(k); else groups.push({ t: k.t, ks: [k] }); });
@@ -640,7 +680,8 @@ function frame(now) {
   if (tl.paused && isMove()) updateOnion();
   if (tl.paused || tl.nudge) { settle(st); tl.nudge = false; }
   rig.sync(st, rig, sdt);
-  updateTL(); syncHandles();
+  updateTL(); syncHandles(); syncHitBox();
+  if (isMove()) { const on = [...$("tlHits").children], S0 = moveDef(moveKind()); if (S0 && on.length) { const tt = clamp(tl.t, 0, S0.dur); hitsFor(moveKind()).forEach((h, i) => on[i] && on[i].classList.toggle("on", tt >= h.t0 && tt <= h.t1)); } }
   KIT.syncCards(cards, st, true);
   const gy = 0, hgt = Math.max(0, (GROUND - st.y) / 40), sc = rig.spec.body.scale;
   rig.shadow.position.set(0, .02, 0); rig.shadow.scale.setScalar(clamp(1 - hgt / 7, .3, 1) * sc);
@@ -894,7 +935,7 @@ function villainFrame(dt) {                                    // the stage with
 }
 // pose mode: the standing pose (and the block pose) are this character's own; sliders start from the move set's
 let poseWhich = "stance";
-const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["armF", "Lead arm raise"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["armB", "Rear arm raise"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"],
+const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["armF", "Lead arm raise"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["wF", "Lead fist bend"], ["armB", "Rear arm raise"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["wB", "Rear fist bend"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["headRot", "Head tilt"]];
 const C_POSE = [["lean", "Lean forward"], ["arch", "Arch the back"], ["bodyY", "Crouch (− lower)"], ["armF", "Front paw raise"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw raise"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["tailBase", "Tail up"], ["tailCurl", "Tail curl"], ["hatTilt", "Hat tilt"], ["headRot", "Head tilt"]];
@@ -953,7 +994,7 @@ function densify(tr) {                                       // copy a move's ow
   for (let i = 0; i < tr.length - 1; i++) { const [a, va] = tr[i], b = tr[i + 1][0]; out.push([a, va]); [.25, .5, .75].forEach(f => { const t = a + (b - a) * f; out.push([+t.toFixed(4), KIT.keyv(tr, t)]); }); }
   out.push([...tr[tr.length - 1]]); return out;
 }
-const H_ANIM = [["armF", "Lead arm"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["aS", "Lead arm stretch"], ["gF", "Lead fist size"], ["armB", "Rear arm"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["bS", "Rear arm stretch"], ["gB", "Rear fist size"],
+const H_ANIM = [["armF", "Lead arm"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["aS", "Lead arm stretch"], ["gF", "Lead fist size"], ["wF", "Lead fist bend"], ["armB", "Rear arm"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["bS", "Rear arm stretch"], ["gB", "Rear fist size"], ["wB", "Rear fist bend"],
   ["lean", "Lean"], ["arch", "Arch"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["bodyY", "Crouch / rise"], ["fNx", "Front foot forward"], ["fNy", "Front foot lift"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot forward"], ["fFy", "Back foot lift"], ["fFz", "Back foot out to the side"],
   ["headRot", "Head tilt"], ["spin", "Spin"], ["flip", "Flip"]];
 const C_ANIM = [["armF", "Front paw"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"], ["lean", "Lean"], ["arch", "Arch"], ["bodyY", "Crouch / rise"],
@@ -1003,6 +1044,30 @@ function renderAnimate(box) {
     inp.addEventListener("change", () => { start = null; endDrag(); renderKeys(); renderControls(); });
     row.append(l, out, inp); box.append(row);
   });
+  if (!cat && (S.hits || []).length) {                         // where it connects (the pink on the timeline and the stage)
+    box.append(el("h4", "hitbox-h", "WHERE IT CONNECTS"));
+    box.append(el("p", "note", limbHits(sp) ? "The pink: when each blow can land, and the box it lands in. Drag a window on the timeline, or use these. A fist or foot lands where it really is: to reach further, move the arm or leg." : "The pink: when each blow can land, and the box it lands in. Drag a window on the timeline, or use these."));
+    hitsFor(kind).forEach((h, i) => {
+      const L = [["t0", `Hit ${i + 1} starts`, 0, S.dur, .01, v => v.toFixed(2) + "s"], ["t1", `Hit ${i + 1} ends`, 0, S.dur, .01, v => v.toFixed(2) + "s"]];
+      if (!limbHits(sp) || h.wide) L.push(["reach", `Hit ${i + 1} reach`, 20, 280, 1, v => Math.round(v) + " px"]);
+      L.push(["y0", `Hit ${i + 1} top`, -40, 280, 1, v => Math.round(v) + " px up"], ["y1", `Hit ${i + 1} bottom`, -100, 240, 1, v => Math.round(v) + " px up"]);
+      L.forEach(([k, lab, lo, hi, stp, fmt]) => {
+        const id = "c" + (ctlN++), row = el("div", "row"), l = el("label", null, lab), v0 = +h[k] || 0, out = el("output", null, fmt(v0));
+        const inp = Object.assign(document.createElement("input"), { type: "range", id, min: lo, max: hi, step: stp, value: v0 }); l.htmlFor = id;
+        const fill = v => inp.style.setProperty("--fill", ((v - lo) / (hi - lo) * 100) + "%"); fill(v0);
+        row.classList.toggle("changed", !!(((sp.move.hits || {})[kind] || [])[i] || {})[k] !== undefined);
+        inp.addEventListener("pointerdown", () => { setPaused(true, false); beginDrag(); }); inp.addEventListener("focus", beginDrag);
+        inp.addEventListener("input", () => { let v = +inp.value; const cH = hitsFor(kind)[i];
+          if (k === "t0") v = Math.min(v, cH.t1 - .02); if (k === "t1") v = Math.max(v, cH.t0 + .02); if (k === "y1") v = Math.min(v, cH.y0 - 10); if (k === "y0") v = Math.max(v, cH.y1 + 10);
+          hitPatch(kind, i, { [k]: +v.toFixed(3) }, false); out.textContent = fmt(v); fill(v); if (k === "t0" || k === "t1") scrubTo(v / S.dur); renderHits(); });
+        inp.addEventListener("change", () => { endDrag(); renderControls(); });
+        row.append(l, out, inp); box.append(row);
+      });
+    });
+    const hr = el("div", "addrow"), hb = el("button", "chip", "HITS BACK TO THE ORIGINAL"); hb.type = "button"; hb.disabled = !((sp.move.hits || {})[kind]);
+    hb.onclick = () => { const n = clone(cur.spec); if (n.move.hits) delete n.move.hits[kind]; stageSpec(n); renderHits(); renderControls(); toast("HITS BACK TO THE ORIGINAL"); };
+    hr.append(hb); box.append(hr);
+  }
   const nClear = Object.keys((sp.move.clear || {})[kind] || {}).length;
   if (nClear) box.append(el("p", "note", `${nClear === animChans(kind).length ? "The whole move's original animation is cleared" : "Cleared: " + [...new Set(Object.keys(sp.move.clear[kind]).map(partOf))].join(", ")}: those parts hold still except where you key them. BACK TO THE ORIGINAL undoes it.`));
   const a = el("div", "addrow"), d = el("button", "chip", "DELETE KEYS HERE"), c = el("button", "chip", "CLEAR THE ORIGINAL"), cp = el("button", "chip", "CLEAR ONE PART…"), r = el("button", "chip", "BACK TO THE ORIGINAL"); a.append(d, c, cp, r); box.append(a);
@@ -1732,6 +1797,12 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .onion .ringhit {fill: none; stroke: transparent; stroke-width: 18; pointer-events: stroke; cursor: grab; touch-action: none; }
 #ed .onion .ringhit.tw {cursor: ew-resize; }
 #ed .hdtip {position: absolute; transform: translate(14px, -28px); background: var(--slate); color: var(--mango); font: 600 10px var(--body); letter-spacing: .18em; text-transform: uppercase; padding: 4px 8px; pointer-events: none; white-space: nowrap; }
+#ed .tlbar .hit {position: absolute; top: 3px; bottom: 3px; background: rgba(255, 95, 168, .78); cursor: grab; z-index: 1; }   /* a hit window: when the blow can connect (the Move Maker's pink) */
+#ed .tlbar .hit.on {background: #ff5fa8; box-shadow: 0 0 0 2px var(--paper); }
+#ed .tlbar .hit i {position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+#ed .tlbar .hit i.a {left: -4px; } #ed .tlbar .hit i.b {right: -4px; }
+#ed .tlbar .hit i::after {content: ""; position: absolute; left: 3px; top: 3px; bottom: 3px; width: 2px; background: var(--paper); opacity: .8; }
+#ed .hitbox-h {margin: 12px 0 2px; font: 600 11px var(--body); letter-spacing: .2em; color: var(--mango); }
 #ed .tlbar .band {position: absolute; top: 0; bottom: 0; background: rgba(255, 246, 207, .2); border-left: 1px solid rgba(255, 246, 207, .4); border-right: 1px solid rgba(255, 246, 207, .4); pointer-events: none; }
 #ed #ref {position: absolute; right: 28px; top: 28px; margin: 0; background: var(--paper); padding: 6px 6px 0; box-shadow: 6px 6px 0 var(--slate); cursor: zoom-in; max-width: 34%; }
 #ed #ref img {display: block; max-width: 100%; max-height: 220px; }
@@ -1886,7 +1957,7 @@ const ED_MARKUP = `<div class="app">
         <select id="tlMove" aria-label="Move to play on the timeline"></select>
         <button class="btn small" id="tlPlay" aria-label="Pause">❚❚</button>
         <button class="btn small" id="tlPrev" aria-label="Back one frame">◀</button><button class="btn small" id="tlNext" aria-label="Forward one frame">▶</button>
-        <div class="tlbar" id="tlBar" aria-label="Timeline: drag to scrub"><div class="fill" id="tlFill"></div><div class="band" id="tlBand" hidden></div><div id="tlKeys"></div><div class="head" id="tlHead"></div></div>
+        <div class="tlbar" id="tlBar" aria-label="Timeline: drag to scrub"><div class="fill" id="tlFill"></div><div class="band" id="tlBand" hidden></div><div id="tlHits"></div><div id="tlKeys"></div><div class="head" id="tlHead"></div></div>
         <output id="tlTime">LOOP</output>
         <div class="spd" id="tlSpd"><button class="btn small on" data-s="1">1×</button><button class="btn small" data-s=".5">½×</button><button class="btn small" data-s=".25">¼×</button><button class="btn small" data-s=".1">⅒×</button></div>
       </div>

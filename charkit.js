@@ -239,7 +239,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -259,7 +259,7 @@ const TOCSIN = {
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
     patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326", blush: "#ff86a8" },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },
 };
 const PRESETS = [
@@ -477,7 +477,7 @@ function layer(L) {
 // pose channels a character can set for its standing / block pose and keyframe in its moves (ranges keep them sane)
 const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], twistU: [-1.2, 1.2], twistH: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
   spF: [-.7, 1.6], spB: [-.7, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],
-  fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4] };
+  fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4], wF: [-2, 2], wB: [-2, 2] };   // (wF / wB: a fist bent at the wrist, 2026-10-24)
 const ANIM_CH = { ...POSE_CH, aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], fP: [-2, 1], grip: [0, 1] };
 function fitPose(v) { const o = {}; if (v && typeof v === "object") for (const k in POSE_CH) if (typeof v[k] === "number" && isFinite(v[k])) o[k] = clamp(v[k], ...POSE_CH[k]); return o; }
 function fitAnims(v) {                           // { move: { channel: [[t, value], ...] } }
@@ -503,6 +503,15 @@ function fitRests(v) {                           // the editor's note of what a 
   }
   return o;
 }
+function fitHits(v) {                            // a move's hit windows as this character has them (the editor's WHERE IT CONNECTS, 2026-10-24): { move: [{ t0, t1, reach, y0, y1 } | {}, ...] }
+  const o = {}; if (!v || typeof v !== "object") return o; const R = { t0: [0, 3], t1: [0, 3], reach: [0, 400], y0: [-200, 400], y1: [-200, 400] };
+  for (const kind of Object.keys(v).slice(0, 40)) {
+    if (!/^[a-z0-9_]{1,24}$/i.test(kind) || !Array.isArray(v[kind])) continue;
+    const L = v[kind].slice(0, 8).map(h => { const q = {}; if (h && typeof h === "object") for (const k in R) if (typeof h[k] === "number" && isFinite(h[k])) q[k] = clamp(h[k], ...R[k]); return q; });
+    if (L.some(q => Object.keys(q).length)) o[kind] = L;
+  }
+  return o;
+}
 function fit(t, v, path) {                     // shape v like the template t, keeping v's valid values
   if (Array.isArray(t)) {
     if (path === "colors.cards") return [0, 1, 2].map(i => hex(Array.isArray(v) ? v[i] : null, t[i]));
@@ -521,7 +530,8 @@ function fit(t, v, path) {                     // shape v like the template t, k
   if (/^move\.(stance|guard|rise|top|fall|hurt)$/.test(path)) return fitPose(v);
   if (path === "move.anims") return fitAnims(v);
   if (path === "move.rests") return fitRests(v);
-  if (path === "move.clear") return fitRests(v);   // (the editor's parts whose original animation you cleared, and the pose each holds: { move: { channel: value } })
+  if (path === "move.clear") return fitRests(v);
+  if (path === "move.hits") return fitHits(v);   // (the editor's parts whose original animation you cleared, and the pose each holds: { move: { channel: value } })
   if (t && typeof t === "object") {
     const o = {}, vv = v && typeof v === "object" && !Array.isArray(v) ? v : {};
     for (const k in t) o[k] = fit(t[k], vv[k], path ? path + "." + k : k);
@@ -1516,7 +1526,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, gF: 0, gB: 0, grip: 0, hN: 0, hF: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0 };
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -1954,7 +1964,7 @@ const STRIKES = {
 const PUNCH_S = { dur: .3, hits: [{ t0: .06, t1: .22 }] };   // (the air punch's timing, for its legs)
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
 const TWISTS = new Set(["twist", "twistU", "twistH"]);   // turns about the up axis: with the lead hand on the far side they turn the other way
-const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
+const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", wF: "wB", wB: "wF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
 function leadFar(p) {                       // is the prop (lead) hand on the far side right now?
   const pr = p.rig.spec.outfit && p.rig.spec.outfit.prop; if (!pr || pr.kind === "none" || pr.side === "near") return false;
   return (pr.side === "left") === (p.face > 0);
@@ -2499,7 +2509,7 @@ function syncHuman(p, r, dt = 0) {
   const shoulder = D.shoulder * Bd.shoulders, hp = clamp(p.hp ?? 3, 0, Math.max(3, ((r.prop && r.prop.rings) || []).length)), pr = r.prop, ps = r.spec.outfit.prop.side, propS = ps === "near" ? near : ps === "left" ? -1 : 1;
   const grip = pr && pr.kind === "sword" ? clamp(o.grip || 0, 0, 1) : 0; let wristFix = 0;
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
-    const i = s > 0 ? 1 : 0, isNear = s === near, st = isNear ? o.aS || 0 : o.bS || 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0);
+    const i = s > 0 ? 1 : 0, isNear = s === near, st = isNear ? o.aS || 0 : o.bS || 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
     let a = isNear ? o.armF : o.armB, e = isNear ? o.elbF : o.elbB, sp = isNear ? o.spF || 0 : o.spB || 0;
     _S.set(_SB.x, _SB.y - .02, s * shoulder * gw);
     if (grip > .001 && s === propS) {                                 // two-handed: bring the sword hand in where the other hand can reach the hilt too (the blade keeps its angle)
@@ -2532,10 +2542,10 @@ function syncHuman(p, r, dt = 0) {
     t.pts[0].set(_S.x, _S.y + .04, _S.z - s * .08); t.pts[1].copy(_S); t.pts[2].copy(_E); t.pts[3].copy(_W);
     t.pts[4].copy(_W).addScaledVector(_ad.set(Math.sin(fa), -Math.cos(fa), 0).applyQuaternion(qa), .04);
     t.update(FWD);
-    r.hands[i].position.copy(_W); r.hands[i].quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa);
+    r.hands[i].position.copy(_W); r.hands[i].quaternion.setFromEuler(_ae.set(0, 0, fa + wb)).premultiply(qa);
     r.hands[i].visible = !(pr && pr.hideHand && s === propS);
     if (pr && s === propS) {                                          // the prop hand
-      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk; pr.wr.rotation.y = -near * GAUNT.turn * fk; pr.thumbs[0].visible = s < 0; pr.thumbs[1].visible = s > 0;
+      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk + wb; pr.wr.rotation.y = -near * GAUNT.turn * fk; pr.thumbs[0].visible = s < 0; pr.thumbs[1].visible = s > 0;
         if (pr.spikeAim && pr.spikeSide !== s) { pr.spikeSide = s; pr.spikeAim.forEach(k => { k.sp.position.z = s * k.z; k.aim.quaternion.copy(k.q[s > 0 ? 1 : 0]); }); } }   // (the knuckle spikes: over to the thumb's side)
       if (pr.inner) { pr.inner.rotation.z = (o.wrist ?? -.6) + wristFix; pr.inner.rotation.x = o.roll || 0; }
     }

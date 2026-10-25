@@ -509,7 +509,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261024d"></script>
+<script src="charkit.js?v=20261024h"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261024e"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -672,7 +672,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261024d"></script>
+<script src="editor.js?v=20261024e"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -7241,7 +7241,7 @@ function syncSwingTrail() {
   while (swingTr.length < 2) swingTr.push(makeTrail());
   swingTr.forEach((T, i) => { if (T.who !== r) { T.who = r; T.S.length = 0; const P = r.spec.outfit.prop, gold = P.kind === "gauntlet", U = T.mesh.material.uniforms;   // (its colours: the blade's own, its pink fill out at the tip, its pale main by the hilt; a gauntlet's red going to gold; bare fists pink)
     if (sword) { U.cA.value.set(P.fill || "#f32782"); U.cB.value.set(P.main || "#fff7c0"); } else if (gold) { U.cA.value.set(P.fill || "#fc0000").lerp(new THREE.Color(P.main || "#ffde00"), .38); U.cB.value.copy(U.cA.value); } else { U.cA.value.set("#ff5fb4"); U.cB.value.set("#ff5fb4"); } } });
-  const S = p.atkT >= 0 && p.atkKind ? KIT.STRIKES[p.atkKind] : null, on = !!S && !p.dead && !transit && (S.hits || []).some(h => p.atkT >= h.t0 - .05 && p.atkT <= h.t1 + .02);   // (only through the blows themselves)
+  const S = p.atkT >= 0 && p.atkKind ? KIT.STRIKES[p.atkKind] : null, on = !!S && !p.dead && !transit && hitsNow(p).some(h => p.atkT >= h.t0 - .05 && p.atkT <= h.t1 + .02);   // (only through the blows themselves)
   if (on && sword) { pr.inner.updateWorldMatrix(true, false); trailPush(swingTr[0], pr.inner.localToWorld(_ta.set(.14, 0, 0)), pr.inner.localToWorld(_tb.set(1.2, 0, 0))); }
   else if (!sword) r.hands.forEach((h, i) => { h.updateWorldMatrix(true, false); h.localToWorld(_tc.set(0, -.07, 0)); const T = swingTr[i], L = T.last;   // fists: the one that's punching (flying), not the one held back
     if (!L) { T.last = { p: _tc.clone(), t: time }; return; } if (L.t === time) return;
@@ -16968,6 +16968,9 @@ function syncGhosts(dt) {                          // it fades in as it drives f
   });
 }
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+// a move's hit windows as this character has them (the editor's "WHERE IT CONNECTS", 2026-10-24: spec.move.hits[kind], one entry per window over the move's own)
+function hitsNow(p, kind = p.atkKind) { const S = KIT.STRIKES[kind]; if (!S || !S.hits) return []; const o = p.rig && p.rig.spec && p.rig.spec.move && p.rig.spec.move.hits && p.rig.spec.move.hits[kind];
+  return o && o.length ? S.hits.map((h, i) => o[i] ? { ...h, ...o[i] } : h) : S.hits; }
 function limbReach(p) {                              // bare-handed fighters: how far in front of (and behind) them a fist or foot really is right now, in px
   const r = p.rig; let fw = 0, bw = 0; r.root.updateMatrixWorld(true);
   [...r.hands, ...r.feet].forEach(m => { m.getWorldPosition(_limb); const d = (_limb.x / S - p.x) * p.face; fw = Math.max(fw, d); bw = Math.max(bw, -d); });
@@ -17008,7 +17011,7 @@ function combat() {
     L.push({ e: c, top: c.y - h, box: { x1: c.x - 40, x2: c.x + 40, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 46, x2: c.x + 46, y1: c.y - Math.max(h, 80), y2: c.y } }); }   // (land on it, or any hit: a little wider than it is, as it's small and quick)
   if (secret && secret.hp > 0) { const B = secret; L.push({ e: B, top: -9999, box: { x1: B.x - 10, x2: B.x + 120, y1: -9999, y2: GROUND + 400 }, hit: (d, k) => secretHit(d, k), touch: () => false }); }   // (the hero's wall: hits on it, none from it)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
-  if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) KIT.STRIKES[p.atkKind].hits.forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
+  if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) hitsNow(p).forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
   if (!L.length) return;
   const pb = { x1: p.x - 18, x2: p.x + 18, y1: p.y - (p.rig.heightPx || 92) * (p.crouch ? .62 : 1), y2: p.y };
@@ -17027,7 +17030,7 @@ function combat() {
   if (p.rig.kind === "human" && p.atkT >= 0) {                     // each strike has its own hit windows (a combo can land twice)
     const S = KIT.STRIKES[p.atkKind], f = p.face, tall = (p.rig.heightPx || 92) / 92, rk = 1 + (p.rig.spec.move.reach - 1) * .6;
     const pk = p.rig.spec.outfit.prop.kind, bare = pk === "none" || pk === "gauntlet", [fw, bw] = bare ? limbReach(p) : [0, 0];   // fists and feet: the box follows the limb itself (+16 px), not a set distance
-    S.hits.forEach((h, i) => {
+    hitsNow(p).forEach((h, i) => {
       if (p.atkT < h.t0 - CLASH_LEAD || p.atkT > h.t1) return;
       const limb = bare && !h.wide, xa = p.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = p.x + f * Math.max(limb ? Math.max(fw + (pk === "gauntlet" ? 44 : 16), 26) : h.reach * tall * rk, ghostHand(p, h, i) ? GHOST_REACH : 0);   // (a "wide" hit: a shoulder charge, a landing shock: not just the fist)   // a sword / gauntlet: how far the blade reaches
       strike(hitsOf(i), { x1: Math.min(xa, xb), x2: Math.max(xa, xb), y1: p.y - h.y0 * tall, y2: p.y - h.y1 * tall }, h.kind, () => f, p.atkT < h.t0);
