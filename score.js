@@ -535,6 +535,7 @@ window.BerryScore = (() => {
     for (let i = 1; i <= 12; i++) { const x = i / 12, k = to > from ? Math.sin(x * Math.PI / 2) : 1 - Math.cos(x * Math.PI / 2); p.linearRampToValueAtTime(from + (to - from) * k, t + x * dur); }
   }
   let curVol = -1, ac0 = null, master = null, playing = false, timer = 0, stopAt = 0, want = 0, song = 0, wantBpm = SONGS[0].bpm, players = [];
+  let xfNext = 0, xfUntil = 0;                       // (one quicker crossfade: out of a hub or a hideout, the room's own song back sooner. The user, 2026-10-25)
   function tick() {
     if (!playing) return;
     const now = ac0.currentTime;
@@ -542,10 +543,10 @@ window.BerryScore = (() => {
     const cur = players[players.length - 1];
     const SG = SONGS[song], waiting = SG.STYLES[want].orig && SG.clip.busy && (!cur || cur.k !== want || cur.song !== song);   // the recording is still decoding (a moment): wait for it rather than start without it
     if (!waiting && (!cur || cur.k !== want || cur.song !== song || Math.abs(cur.bpm - wantBpm) > .01 || cur.gloom !== gloom || (cur.fellBack && SG.clip.buf))) {
-      const t = now + .06, g = ac0.createGain(), band = Band(ac0, g, SG), fellBack = band.setStyle(want, t);
+      const t = now + .06, g = ac0.createGain(), band = Band(ac0, g, SG), fellBack = band.setStyle(want, t), X = xfNext && now < xfUntil ? xfNext : XF; xfNext = 0;
       const keep = !!cur && cur.song === song && cur.loop === SG.LOOP && !SG.STYLES[want].orig && !(SG.STYLES[cur.k] || {}).orig;   // (the same tune: on from where it is)
-      g.connect(master); if (cur) fadeParam(g.gain, 0, 1, t, XF); else { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + .05); }
-      if (cur) { fadeParam(cur.g.gain, cur.g.gain.value, 0, t, XF); cur.end = t + XF; }
+      g.connect(master); if (cur) fadeParam(g.gain, 0, 1, t, X); else { g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t + .05); }
+      if (cur) { fadeParam(cur.g.gain, cur.g.gain.value, 0, t, X); cur.end = t + X; }
       players.push({ k: want, song, loop: SG.LOOP, bpm: wantBpm, band, g, fellBack, slot: keep ? cur.slot : 0, tNext: keep ? Math.max(t, cur.tNext) : t, end: 0, gloom });
       while (players.filter(p => !p.end || p.end > now).length > 2 || players.length > 4) { const p = players.shift(); p.band.halt(now); p.g.disconnect(); }   // skimming through hours: keep it to a couple of bands
     }
@@ -573,7 +574,8 @@ window.BerryScore = (() => {
     stop(fade = .12) { if (!ac0 || !playing || stopAt) return; const now = ac0.currentTime;   // (a fade of a second or more: equal-power, under the incoming recording)
       if (fade >= 1) fadeParam(master.gain, master.gain.value, 0, now, fade); else master.gain.setTargetAtTime(0, now, fade / 3); stopAt = now + fade + .05; },
     setSong(i) { song = Math.max(0, Math.min(SONGS.length - 1, i | 0)); },   // 0: the woods (original) · 1: the waves (original) · 2: Volt Keep (original) · 3: Loof's sky (original) · 4: Sirocco's dunes (original) · 5: Evil June's (original) · 6: Kesh's garden (original) · 7: Vinella's candy works (original) · 8: Crux's city (original)
-    setGloom(v) { gloom = !!v; },                // (the uprising at 75%: darker everywhere, a touch slower)
+    setGloom(v) { gloom = !!v; },
+    quickFade(sec) { xfNext = sec; xfUntil = (ac0 ? ac0.currentTime : 0) + 2; },   // (the next change, if it comes in the next 2 s, crossfades over sec instead of 3 s)                // (the uprising at 75%: darker everywhere, a touch slower)
     setHour(k, tempo = 1) { const SG = SONGS[song]; want = Math.max(0, Math.min(SG.STYLES.length - 1, k)); wantBpm = (SG.STYLES[want].bpm || SG.bpm * tempo) * (gloom && !SG.STYLES[want].serene ? .92 : 1); if (SG.STYLES[want].orig && ac0) decodeClip(ac0, SG); },
     EASE, SERENE, EJ: 5, HUB,
     tick,

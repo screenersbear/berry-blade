@@ -523,7 +523,7 @@
 </style>
 <script src="charkit.js?v=20261024h"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="score.js?v=20261024e"></script>
+<script src="score.js?v=20261025a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="story.js?v=20261018a"></script>
@@ -647,7 +647,7 @@
 <div id="voCap" aria-live="polite"></div>
 <div id="pop">PARRY!</div>
 <div id="select" class="hidden"><div class="lockup big"><div class="blk" id="stitle">CHOOSE</div><div class="bar" id="ssub">YOUR CHARACTER</div></div>
-  <div class="foot"><div id="blurb"></div><div id="roster"></div><div id="tools"><button id="bEdit">EDIT CHARACTERS</button> <button id="bAch">ACHIEVEMENTS</button> <button id="bLvl">LEVEL SELECT</button></div><small id="shint"></small></div></div>
+  <div class="foot"><div id="blurb"></div><div id="roster"></div><div id="tools"><button id="bBack">‹ BACK</button> <button id="bEdit">EDIT CHARACTERS</button> <button id="bAch">ACHIEVEMENTS</button> <button id="bLvl">LEVEL SELECT</button></div><small id="shint"></small></div></div>
 <div id="achPop"><div class="ic">★</div><div><b>ACHIEVEMENT UNLOCKED</b><span id="achName"></span></div></div>
 <div id="holdTip"><div class="ic">!</div><div><b>TRY THIS</b><span>PRESS AND HOLD YOUR BUTTONS</span><i>JUMP, ATTACK, BLOCK, OR ATTACK + BLOCK TOGETHER: HOLD ONE DOWN AND ANOTHER MOVE COMES OUT</i></div></div>
 <div id="ach"><div class="panel">
@@ -3067,6 +3067,22 @@ const ROW_DRESS = {
   12: { D: { kind: "dungeon", c1: "#6e604a", c2: "#857559", c3: "#4e4434", torch: "#ffb030", chain: "#4a4a4a" }, A: { birds: "#2a2a2e", flags: ["#c8102e", "#ffd84a"], crenel: "#cdb98a" } },
 };
 const rowOf = q => String((q && q.cell) || "")[0];
+function buildHoleCeil(s) {                       // where a hole in the room above lets you jump up into it: that room's floor seen from below, along the top of the
+  const g = new THREE.Group(); scene.add(g); const S0 = STAGES[s];   // screen, broken at the hole (the user, 2026-10-25: "a strip of ceiling that ran above it and broke a certain point where the gap was")
+  if (!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy")) return g;   // (a ceiling of its own already)
+  const up = STAGES.findIndex(q => q && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)); if (up < 0) return g;
+  const gaps = STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]), spans = []; let x = -600;
+  for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]);
+  const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], wd = world === 0, R = rngF(777 + s * 31 + world * 101), RR = (a, b) => a + R() * (b - a), yb = Y(120), H = 6;
+  const mE = toon(wd ? "#5a4030" : c0), mE2 = toon(wd ? "#3e2c20" : new THREE.Color(c0).multiplyScalar(.72).getStyle()), mR = toon(wd ? "#4a3426" : c1), mMoss = toon("#4f7a34");
+  for (const [a, b] of spans) { const xa = X(a), xb = X(b), w = xb - xa; if (w <= .2) continue;
+    g.add(at(mk(new THREE.BoxGeometry(w, H, 16), null, { mat: mE, ol: .04 }), (xa + xb) / 2, yb + H / 2, -4.2));
+    for (let i = 0; i < w * 1.1; i++) g.add(at(mk(new THREE.DodecahedronGeometry(RR(.3, .75), 0), null, { mat: R() < .5 ? mE : mE2, ol: .03 }), xa + R() * w, yb + RR(-.12, .2), RR(-11, 3.4)));   // (its rough underside)
+    for (let i = 0; i < w * (wd ? 1.3 : .5); i++) { const hl = RR(.4, wd ? 2.2 : .8), v = mk(new THREE.CylinderGeometry(.05, .015, hl, 4), null, { mat: wd && R() < .3 ? mMoss : mR, ol: .012 }); v.rotation.z = RR(-.25, .25); at(v, xa + R() * w, yb - hl / 2 + .1, RR(-10, 3.2)); g.add(v); }   // (roots hanging from it in the forest; elsewhere a few spikes of rock)
+    [[xa, -1], [xb, 1]].forEach(([ex, sd]) => { if (ex < -10 || ex > X(WORLD) + 10) return; for (let k = 0; k < 8; k++) g.add(at(mk(new THREE.DodecahedronGeometry(RR(.4, .9), 0), null, { mat: R() < .5 ? mE : mE2, ol: .03 }), ex - sd * RR(0, .5), yb + RR(-.2, 1.6), RR(-10, 3.4))); });   // (the hole's ragged edges)
+  }
+  return g;
+}
 function buildRowDress(s, g) {
   const S0 = STAGES[s], r = rowOf(S0), D = (ROW_DRESS[world] || {})[r];
   if (!D || S0.arena || S0.cove || S0.deep || (r !== "A" && r !== "D")) return g;
@@ -3803,7 +3819,7 @@ function setScreen(s) {                              // build stage s (its platf
     if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
     if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
     if (world !== 9) level.objs.push(buildDeepBits(s));
-    level.objs.push(buildRowBits(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
+    level.objs.push(buildRowBits(s), buildHoleCeil(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
     level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
     restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
     if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
@@ -3889,6 +3905,7 @@ const bgm = {
   },
   pause() { musicOn = false; orig.pause(); orig.volume = 0; if (window.BerryScore) window.BerryScore.stop(); },
 };
+let musicHub = false, musicQuick = 0;
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
   const pcTale = !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
   const glosWait = !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
@@ -3900,7 +3917,8 @@ function syncMusic(dt) {                         // every frame: the right music
   voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
   const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) * voDuck : 0;
-  const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
+  const hubNow = mode === "play" && (inHub() || !!hideout); if (musicHub && !hubNow) { musicQuick = 1.6; if (S && S.quickFade) S.quickFade(1.2); } musicHub = hubNow; musicQuick = Math.max(0, musicQuick - dt);   // (out of a hub or a hideout: the room's song back in 1.2 s, not 3. The user, 2026-10-25: "it takes too long to fade back")
+  const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : musicQuick > 0 ? 1.2 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
   if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / fadeT);   // equal-power (2026-10-23: "make sure there's a fadeout cross over always"): the recording along a
   orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);               // sine as the score goes along a cosine, so the handover holds its loudness   // a crossfade with the score (shorter into the in-between, which restarts the same song)
   if (ov > 0 && orig.paused) orig.play().catch(() => {});
@@ -3915,7 +3933,7 @@ function syncMusic(dt) {                         // every frame: the right music
   else if (inHub() && S.HUB !== undefined && world !== 9) S.setHour(S.HUB, .94);   // (a hub: this world's tune, its hub take: the user, 2026-10-22)
   else if (mode === "play" && world !== 9 && freedNow() && S.SERENE) S.setHour(S.SERENE, .82);   // (set free: the world's tune at its most serene, all day)                // in the beps' hideout: this world's tune, slower and kinder
   else if (easing() && S.EASE) S.setHour(S.EASE); else S.setHour(Math.max(h, 0), SCREENS[Math.max(h, 0)].tempo); S.tick();
-  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL * (softTale ? .55 : 1) * voDuck); else if (S.state.playing) S.stop(on ? 3 : .12);   // (out under the recording over the same 3 s)
+  if (on && h >= 0 && ac && ac.state === "running") S.start(ac, MUSIC_VOL * (softTale ? .55 : 1) * voDuck); else if (S.state.playing) S.stop(on ? (musicQuick > 0 ? 1.2 : 3) : .12);   // (out under the recording over the same 3 s: 1.2 out of a hub)
 }
 function startMusic() {
   audio();
@@ -4221,7 +4239,11 @@ addEventListener("keydown", e => {
   if (statsUp) { if (!e.repeat) { e.preventDefault(); statsUp.ask ? askKey(e.code) : statsGo(); } return; }   // the stats card between worlds: any key goes on (or answers its question)
   if (transit && mode !== "play") return;
   if (achOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyX", "KeyZ", "KeyT"].includes(e.code)) { e.preventDefault(); closeAch(); } return; }
-  if (lvlOpen) { if (["Escape", "Backspace", "KeyL"].includes(e.code)) { e.preventDefault(); lvlBack(); } return; }
+  if (lvlOpen) { const c = e.code, d = { ArrowLeft: [-1, 0], KeyA: [-1, 0], ArrowRight: [1, 0], KeyD: [1, 0], ArrowUp: [0, -1], KeyW: [0, -1], ArrowDown: [0, 1], KeyS: [0, 1] }[c];
+    if (["Escape", "Backspace", "KeyL"].includes(c)) { e.preventDefault(); lvlBack(); }
+    else if (d) { e.preventDefault(); if (!lvlKey) { lvlKey = true; padMarks(); SFX.tick(); } else lvlMove(d[0], d[1]); }   // (the first press shows where you are; then each one moves)
+    else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(c)) { e.preventDefault(); const B = [...$("lvlList").querySelectorAll("button")]; if (lvlKey && B[lvlSel]) B[lvlSel].click(); else { lvlKey = true; padMarks(); } }
+    return; }
   if (itemsUp) { e.preventDefault(); if (!e.repeat) { const it = ITEMS.find(q => q.key === e.code); if (it) useItem(it.k); else if (e.code === "Escape") closeItems(); } return; }   // the items, held open: their keys
   if (e.code === "Slash" && !e.repeat && mode === "play" && openItems()) { e.preventDefault(); return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
@@ -4247,6 +4269,7 @@ addEventListener("keydown", e => {
     else if (e.code === "KeyT") showAch();
     else if (e.code === "KeyL") showLvl();
     else if (e.code === "Delete" || e.code === "Backspace") removeImported(sel);
+    else if (e.code === "Escape") selectBack();
     return;
   }
   if (mode === "world") {
@@ -4303,18 +4326,21 @@ function setPadHint(el, kb, pd) { el.dataset.kb = kb; el.dataset.pad = pd; el.in
 const padRep = k => { const now = performance.now(); if (!pad[k]) { padRT[k] = 0; return false; } if (!padPrev[k]) { padRT[k] = now + 360; return true; } if (now >= padRT[k]) { padRT[k] = now + 75; return true; } return false; };   // (held: it repeats)
 function padMarks() {                                // the pick on a screen that's only ever clicked (a knockout's buttons, the level select): marked while you're on a pad
   const MB = [...$("modal").querySelectorAll(".btns button")]; MB.forEach(b => b.classList.toggle("on", padUse && modalOpen && b === MB.filter(q => q.offsetParent !== null)[modalSel]));
-  const LB = [...$("lvlList").querySelectorAll("button")]; LB.forEach((b, i) => b.classList.toggle("on", padUse && lvlOpen && i === lvlSel));
+  const LB = [...$("lvlList").querySelectorAll("button")]; LB.forEach((b, i) => b.classList.toggle("on", (padUse || lvlKey) && lvlOpen && i === lvlSel));
 }
 function lvlBack() { if (lvlW >= 0) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was; padMarks(); SFX.tick(); } else closeLvl(); }   // (out of a world's rooms: back to the worlds; from there, closed)
+let lvlKey = false;                                  // (the arrow keys in the level select: its pick marked, as on a pad. The user, 2026-10-25: "you cant use your arrows to make selectiosn")
 function lvlPad(pr) {                                // the level select: ← → ↑ ↓ through it (as laid out), ✕ to go there, □ back a step
+  lvlMove(pr("l") ? -1 : pr("r") ? 1 : 0, padRep("u") ? -1 : padRep("d") ? 1 : 0);
+  const B = [...$("lvlList").querySelectorAll("button")]; if (pr("j") || pr("a")) { if (B[lvlSel]) B[lvlSel].click(); } else if (pr("sq") || pr("st")) lvlBack();
+}
+function lvlMove(dx, dy) {                           // (the next pick that way, as the buttons are laid out on screen)
   const B = [...$("lvlList").querySelectorAll("button")]; if (!B.length) return; let s = clamp(lvlSel, 0, B.length - 1);
-  const dx = pr("l") ? -1 : pr("r") ? 1 : 0, dy = padRep("u") ? -1 : padRep("d") ? 1 : 0;
   if (dx || dy) { const r0 = B[s].getBoundingClientRect(), cx = r0.left + r0.width / 2, cy = r0.top + r0.height / 2; let best = -1, bd = 1e9;   // (the nearest one that way, on screen)
     B.forEach((q, i) => { if (i === s) return; const r = q.getBoundingClientRect(), x = r.left + r.width / 2 - cx, y = r.top + r.height / 2 - cy, along = dx ? x * dx : y * dy, side = dx ? Math.abs(y) : Math.abs(x);
       if (along <= 4) return; const d = along + side * 2.5; if (d < bd) { bd = d; best = i; } });
     if (best < 0) best = dy ? (s + dy + B.length) % B.length : s; s = best; }
   if (s !== lvlSel) { lvlSel = s; SFX.tick(); padMarks(); B[s].scrollIntoView({ block: "nearest" }); }   // (instant: a smooth scroll doesn't run in a background tab)
-  if (pr("j") || pr("a")) { B[lvlSel].click(); } else if (pr("sq") || pr("st")) lvlBack();
 }
 function hintHtml() {                                // the controls along the bottom: the keys, or the pad's buttons
   const atk = rig && rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN";
@@ -4362,6 +4388,7 @@ function pollPad() {
     if (pad.u && !padPrev.u) cycleLook(-1);
     if (pad.d && !padPrev.d) cycleLook(1);
     if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) pick(sel);
+    else if ((pad.sq && !padPrev.sq) || (pad.st && !padPrev.st)) selectBack();
   } else if (mode === "world") {
     if (pad.l && !padPrev.l) setWorldSel(worldSel - 1);
     if (pad.r && !padPrev.r) setWorldSel(worldSel + 1);
@@ -4985,6 +5012,8 @@ $("lvlList").addEventListener("click", e => { const p = e.target.closest("[data-
   if (p) { lvlW = +p.dataset.pick; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); } else if (bk) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = Math.max(0, was); padMarks(); SFX.tick(); } else if (t) levelGo(+t.dataset.w, t.dataset.k, +t.dataset.a); });
 $("lvl").addEventListener("click", e => { if (e.target.id === "lvl") closeLvl(); });
 $("bLvl").addEventListener("click", () => { if (mode === "select") showLvl(); });
+$("bBack").addEventListener("click", () => { if (mode === "select" && !lookPick) selectBack(); });
+function selectBack() { SFX.tick(); showMainMenu(); showDev(); }   // (out of the developer's character select: back to the developer menu. The user, 2026-10-25: "you cant hit esc or exit out of that menu in any way")
 function levelGo(w, kind, a) {
   closeMenus(); story = null; tamed = tamed2 = null; hideCatRigs(); alliesOff(); closeLvl(); if (paused) closePause(); SFX.confirm();
   if (kind === "arena") return startShowdown(w);
@@ -5271,7 +5300,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -5366,7 +5395,8 @@ function treasureMark(g, kind, x, y, z) {                 // one mark, centred a
   else if (kind === "cat") { g.fillStyle = "#fff6e0"; g.beginPath(); g.ellipse(x, y + z * .3, z * .5, z * .42, 0, 0, TAU); g.fill(); g.stroke(); [[-.62, -.22], [-.22, -.68], [.22, -.68], [.62, -.22]].forEach(([a, b]) => { g.beginPath(); g.arc(x + a * z, y + b * z, z * .22, 0, TAU); g.fill(); g.stroke(); }); }   // a paw
   else { g.fillStyle = "#ffd203"; g.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? z * .42 : z; g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr); } g.closePath(); g.fill(); g.stroke(); }   // a star: treasure
 }
-function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true) {   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
+const DEV_CELLS = true;                              // (each room's name on the grid, C7 and so on, on the maps: a testing aid for now. The user, 2026-10-25: "this won't be in the final build": false takes them off)
+function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true, cells = null) {   // (cells: "cur" the room you're in labelled, "all" every room you've been in; DEV_CELLS only)   // the rooms you've been in, cw px a room (asp: its height to that), the grid's top left at (ox, oy); k: line weight
   // (as the 3DS draws it, the user 2026-10-22: a square block a room, none of its ground or ledges; grey, the one you're in yellow; a room you've not been in isn't there)
   const M = mapGrid(w), ch = cw * asp, pad = cw * .04, seen = seenOf(w), cur = mapGrid(world) === M ? stage : -1;
   const X = (c, x) => ox + (c - M.c0) * cw + pad + (x / WORLD) * (cw - pad * 2), Y = (r, y) => oy + (r - M.r0) * ch + ((y - MAP_TOP) / (MAP_BOT - MAP_TOP)) * ch;
@@ -5374,7 +5404,9 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true) {   // the roo
   const owned = mapOwned(w), all = owned || (!!dbgPick && w === world), rooms = all ? M.at.map((a, s) => a ? s : -1).filter(s => s >= 0) : [...seen];   // (the debug picker: all of them too)   // (the treasure map: the rooms you've not been in too, darker)
   for (const s of rooms) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
     if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;   // (off the little map: not drawn)
-    const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); drawn.add(s === cur ? "you" : seen.has(s) ? "been" : "unseen"); }
+    const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); drawn.add(s === cur ? "you" : seen.has(s) ? "been" : "unseen");
+    const q = WORLDS[w].stages[s]; if (DEV_CELLS && cells && q && q.cell && (s === cur || (cells === "all" && seen.has(s)))) { const fs = Math.max(8, Math.min(cw * .3, ch * .34, 15));   // (its name in the corner)
+      g.font = `bold ${fs.toFixed(1)}px Bungee, sans-serif`; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = s === cur ? "#2f3b43" : "#ffd203"; g.fillText(q.cell, bx + gap / 2 + fs * .25, by + gap / 2 + fs * .2); } }
   const MK = !marks ? {} : owned ? treasureMarks(w) : {}, z = Math.min(cw * .19, 9 * k);   // the treasure map's marks, in a row across the middle of each room
   if (marks) for (const s of seen) { const q = WORLDS[w].stages[s]; if (!q) continue; const L = MK[s] || (MK[s] = []);   // (and, map or no map, what's in a room you've been in: a rest stop you've reached, the hub)
     if (q.rest && restReached(w, s) && !L.includes("rest")) L.push("rest"); if (q.hub === 1 && !L.includes("hub")) L.push("hub"); if (!L.length) delete MK[s]; }
@@ -5412,7 +5444,7 @@ function syncMini() {                                // the little map, top righ
   const W0 = el.clientWidth - 4, H0 = el.clientHeight - 4, cw = W0 / 3.4, ch = cw, [c, r] = M.at[stage];   // (square rooms, about three across, the one you're in in the middle)
   const px = (c - M.c0) * cw + cw / 2, py = (r - M.r0) * ch + ch / 2;
   const key = [world, stage, seenOf(world).size, ((story && story.rests || {})[world] || []).length, W0, buddyAt.w === world ? JSON.stringify(buddyAt.rooms) : "", mapOwned(world) ? JSON.stringify(treasureMarks(world)) : ""].join(); if (key === miniKey) return; miniKey = key;
-  const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, W0 / 2 - px, H0 / 2 - py, .8);
+  const g = mapCanvas(el, W0, H0); drawWorldMap(g, world, cw, W0 / 2 - px, H0 / 2 - py, .8, 1, true, "cur");
 }
 function drawPauseMap() {                            // the whole world on the pause screen, as big as it'll go
   const el = $("pmap"), box = $("pmapBox"), M = mapGrid(world); if (!M || M.c1 < M.c0) { el.style.display = "none"; return; } el.style.display = "";
@@ -5420,7 +5452,7 @@ function drawPauseMap() {                            // the whole world on the p
   let cw = bw / nc; const asp = 1;                     // (square rooms, as the 3DS draws them)
   cw = Math.max(14, Math.min(cw, bh / (nr * asp)));
   const W0 = nc * cw + padX * 2, H0 = nr * cw * asp + padY * 2; el.style.width = W0 + 6 + "px"; el.style.height = H0 + 6 + "px";
-  const sig0 = $("pmapKey").dataset.sig, g = mapCanvas(el, W0, H0); drawMapKey($("pmapKey"), drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp));
+  const sig0 = $("pmapKey").dataset.sig, g = mapCanvas(el, W0, H0); drawMapKey($("pmapKey"), drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp, true, "all"));
   if ($("pmapKey").dataset.sig !== sig0 && !drawPauseMap.again) { drawPauseMap.again = true; drawPauseMap(); drawPauseMap.again = false; return; }   // (the key changed size: the map fitted again round it)
   if (dbgPick && M.at[dbgPick.sel]) { const [c, r] = M.at[dbgPick.sel]; g.strokeStyle = "#ff3e8a"; g.lineWidth = 3; g.strokeRect(padX + (c - M.c0) * cw + 1.5, padY + (r - M.r0) * cw * asp + 1.5, cw - 3, cw * asp - 3);
     g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
@@ -5514,6 +5546,7 @@ function markMenu() {
 function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ or ↓)
   if (transit) return;                               // (on the way into the game: the menus are still up under the fade)
   if (achOpen) { if (ok || back) closeAch(); return; }   // (the achievements over a menu: a controller's pick or back closes them, not the menu under them)
+  if (menuUp === "mappath") { if ((ok || back) && mapAnim && performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; }   // (the way being drawn: a press once it's there goes on)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
@@ -5548,7 +5581,7 @@ const LAYOUT = 14;                                  // the worlds' layout a save
 function storyLoad(slot, q) { if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) && q.cat2 === q.w ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) && q.cat2 === q.w ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -5619,6 +5652,17 @@ function mapMarks(w) {                            // the fighting on a world's m
 }
 const mapList = () => WORLDS.map((_, w) => w).filter(w => w < MAP_AT.length && (!story || story.visited.has(w)));
 function openMap() { if (!story) return; menuUp = "map"; mapSel = world; mapPick = null; drawMapPick(); $("pause").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); }
+const linkKey = (a, b) => Math.min(a, b) + "-" + Math.max(a, b);
+let mapAnim = null;                                  // (the way to a world drawn on the map: { from, to, then, t0 })
+function mapPath(from, to, then) {                  // the first time out of a world by a way to another: the island's map, the way there drawn out, then on into it (the user,
+  story.paths = [...(story.paths || []), linkKey(from, to)]; writeSave();   // 2026-10-25: "show the line to where you are able to go now be drawn out like a little path and then load the new area")
+  mapAnim = { from, to, then, t0: performance.now() }; menuUp = "mappath"; paused = true; mapSel = to; mapPick = null;
+  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); SFX.reveal && SFX.reveal();
+  mapAnim.timer = setTimeout(mapPathDone, 3200);
+}
+function mapPathDone() {                            // (drawn: on into the world; a press once it's there skips the wait)
+  const A = mapAnim; if (!A) return; clearTimeout(A.timer); mapAnim = null; $("map").classList.remove("show"); $("mapBtns").style.visibility = ""; menuUp = null; paused = false; SFX.tick(); A.then();
+}
 function closeMap() { $("map").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); }
 let mapPick = null;                              // { w, opts: [[label, room]], sel }: where in world w to start
 const restsOf = w => { const S0 = WORLDS[w].stages, M = mapGrid(w); return S0.map((q, i) => i).filter(i => S0[i].rest).sort((a, b) => { const A = M.at[a] || [0, 0], B = M.at[b] || [0, 0]; return A[0] - B[0] || A[1] - B[1]; }); };   // (left to right on the world's map)
@@ -5700,6 +5744,9 @@ function drawMap() {
     [[48, 232, 30], [96, 228, 40], [70, 286, 22]].forEach(([x, y, h]) => { o += `<rect x="${x - 7}" y="${y}" width="14" height="${h}" fill="#7c86d8" stroke="${N}" stroke-width="2"/><rect x="${x - 3}" y="${y + 6}" width="6" height="5" fill="#ffd84f"/>`; }); }
   MAP_LINKS.forEach(([a, b]) => { const [x1, y1] = MAP_AT[a], [x2, y2] = MAP_AT[b], on = V.has(a) && V.has(b);
     o += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${N}" stroke-width="${on ? 4 : 3}" stroke-dasharray="1 10" stroke-linecap="round" opacity="${on ? .95 : .3}"/>`; });
+  if (mapAnim) { const [x1, y1] = MAP_AT[mapAnim.from], [x2, y2] = MAP_AT[mapAnim.to], A = `begin="0.6s" dur="1.6s" fill="freeze"`; V.add(mapAnim.to);   // the way just opened up, drawn out from here to there (the user, 2026-10-25)
+    o += `<line x1="${x1}" y1="${y1}" x2="${x1}" y2="${y1}" stroke="#ffd203" stroke-width="9" stroke-dasharray="1 13" stroke-linecap="round"><animate attributeName="x2" from="${x1}" to="${x2}" ${A}/><animate attributeName="y2" from="${y1}" to="${y2}" ${A}/></line>`;
+    o += `<circle r="11" fill="#ffd203" stroke="${N}" stroke-width="3.5" opacity="0"><set attributeName="opacity" to="1" begin="0.6s"/><animateMotion path="M${x1} ${y1}L${x2} ${y2}" ${A}/></circle>`; }
   MAP_AT.forEach(([x, y], w) => { if (w >= WORLDS.length) return; const seen = V.has(w), sel = w === mapSel, nm = seen ? WORLDS[w].name : "???", tw = nm.length * 10.5 + 18;
     o += `<g class="node${seen ? "" : " lock"}" data-w="${w}" transform="translate(${x} ${y})">` + (sel ? `<circle class="ring" r="33" fill="none" stroke="#ffd203" stroke-width="7"/>` : "") +
       `<circle r="24" fill="${seen ? mapFill(w) : "#cfd6d8"}" stroke="${N}" stroke-width="4"/>` + (seen ? `<g fill="${N}">${MAP_ICON[w]}</g>` + mapMarks(w) : `<text y="9" text-anchor="middle" font-size="24" fill="${N}">?</text>`) +
@@ -5707,6 +5754,7 @@ function drawMap() {
       (seen && upOn(w) ? `<g transform="translate(0 67)"><rect x="-27" y="-10" width="54" height="19" rx="9.5" fill="${upPct(w) >= 100 ? "#ffd203" : "#ff5fa8"}" stroke="${N}" stroke-width="2.5"/><text y="4.5" text-anchor="middle" font-size="12" fill="${upPct(w) >= 100 ? N : "#fff"}">${Math.floor(upPct(w))}%</text></g>` : "") +
       (w === world ? `<g transform="translate(0 -40)"><path d="M-7 4 0 12 7 4Z" fill="${N}"/><rect x="-26" y="-14" width="52" height="19" fill="${N}"/><text y="1" text-anchor="middle" font-size="12" fill="#ffd203">YOU</text></g>` : "") + `</g>`; });
   $("mapBox").innerHTML = o + `</svg>`;
+  if (mapAnim) { $("mapSub").textContent = "ON TO " + WORLDS[mapAnim.to].name; $("mapBox").innerHTML = o + `</svg>`; return; }
   $("mapSub").textContent = V.has(mapSel) ? (mapSel === world ? "YOU ARE HERE · " : "GO TO · ") + WORLDS[mapSel].name + (upOn(mapSel) ? ` · UPRISING ${Math.floor(upPct(mapSel))}%` : "") : "THE ISLAND";
 }
 $("mbtns").addEventListener("click", e => { const b = e.target.closest("[data-m]"); if (b && !b.classList.contains("off")) { mainSel = [...$("mbtns").children].indexOf(b); mainChoose(b.dataset.m); } });
@@ -5718,7 +5766,7 @@ $("slots").addEventListener("click", e => { const b = e.target.closest("[data-s]
 $("heroList").addEventListener("click", e => { const b = e.target.closest("[data-h]"); if (b && !heroAsk) { heroSel = [...$("heroList").children].indexOf(b); heroPick(b.dataset.h); } });
 $("heroAsk").addEventListener("click", e => { const b = e.target.closest("[data-y]"); if (b) heroAnswer(b.dataset.y === "1"); });
 $("hero").addEventListener("click", e => { if (e.target.closest("[data-hb]")) { SFX.tick(); showSlots(slotKind); } });
-$("mapBox").addEventListener("click", e => { const n = e.target.closest("[data-w]"); if (n && !n.classList.contains("lock")) { mapSel = +n.dataset.w; mapPick = null; drawMap(); mapGo(mapSel); } });
+$("mapBox").addEventListener("click", e => { if (mapAnim) { if (performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; } const n = e.target.closest("[data-w]"); if (n && !n.classList.contains("lock")) { mapSel = +n.dataset.w; mapPick = null; drawMap(); mapGo(mapSel); } });
 $("mcBtns").addEventListener("click", e => { const b = e.target.closest("[data-mp]"); if (!b || !mapPick) return; if (b.dataset.mp === "x") { mapPick = null; SFX.tick(); drawMapPick(); drawMap(); } else mapGo(mapPick.w, mapPick.opts[+b.dataset.mp][1]); });
 $("map").addEventListener("click", e => { if (e.target.closest("[data-mb]")) closeMap(); });
 window.__story = { get story() { return story; }, get menuUp() { return menuUp; }, get duo() { return duo; }, get opening() { return opening; }, get gift() { return gift; }, get comicUp() { return comicUp; }, showMainMenu, loadSaves, writeSave, storyRun, storyNew, openMap, showSlots, heroURL, heroImg, drawMap };
@@ -6433,7 +6481,9 @@ function goWorld(w) {
 function statsGo() {                                  // (not in the first moment: a button still held from the fight doesn't skip it)
   if (!statsUp || statsUp.ask || performance.now() - statsUp.t0 < 900) return;
   if (statsUp.full && !statsUp.asked) { askShowdown(); return; }   // (pressed on before the bar filled: the question still comes first)
-  const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; goWorldNow(w);
+  const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, () => goWorldNow(w)); }   // (a way not yet drawn: the map first)
+  goWorldNow(w);
 }
 $("wstats").addEventListener("pointerdown", e => { if (!statsUp) return; e.preventDefault(); const a = e.target.closest("#wsAsk button"); if (a) askAnswer(a.dataset.a === "yes"); else if (!statsUp.ask) statsGo(); });
 function arrivalRoom(w, fromW) {                    // where you come into world w: its first room, or (its boss beaten) the door that leads back where you came from
