@@ -2060,7 +2060,7 @@ function updatePoseHuman(p, dt) {
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
-  else if (p.dive && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep): the game tilts the whole body along the stroke (p.rot)
+  else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
   else if (a >= 0 && p.atkKind === "punch") {
     if (a < .06) Object.assign(T, { lean: .04, armF: -.45, elbF: 1.9, armB: .6, elbB: 1.8, fNx: .2, fFx: -.18 });                 // cock the fist
@@ -2224,7 +2224,7 @@ function updatePoseCat(p, dt) {
     else Object.assign(T, { lean: .05, arch: 0, armF: 2.9, elbF: .3, armB: -.4, hatLift: .06, hatTilt: .15, tailBase: 1.1, tailCurl: -.25 });
   } else if (p.bounceT >= 0)    // flip: curl up into a ball like a cat
     Object.assign(T, { lean: .7, arch: .6, armF: 1.3, elbF: 1.5, armB: 1.0, elbB: 1.4, fNx: .14, fNy: .34, fFx: .04, fFy: .3, fP: -.4, tailBase: 2.3, tailCurl: .22, hatLift: .2 });
-  else if (p.dive && !p.onGround) Object.assign(T, catSwimPose(p, t));   // swimming (the deep): paddling, the tail waving it along
+  else if ((p.dive || p.swim) && !p.onGround) Object.assign(T, catSwimPose(p, t));   // swimming (the deep): paddling, the tail waving it along
   else if (!p.onGround) {
     if (p.vy < -160) Object.assign(T, { lean: .05, arch: -.3, armF: 2.5, elbF: .2, armB: -.7, fNx: -.02, fNy: .1, fFx: -.2, fFy: .04, fP: -.5, tailBase: 1.9, tailCurl: .03, hatTilt: -.12 }), layPose(T, m.rise, p);
     else if (p.vy < 160) Object.assign(T, { lean: .25, arch: .3, armF: 1.5, elbF: .7, armB: 1.0, elbB: .6, fNx: .14, fNy: .28, fFx: .02, fFy: .22, fP: -.2, tailBase: 1.3, tailCurl: -.12, hatLift: .06 }), layPose(T, m.top, p);
