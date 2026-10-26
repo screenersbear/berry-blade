@@ -1982,7 +1982,10 @@ const STRIKES = {
 // glowShot: a rapier dart, a fist of light, a pair of dice, a shockwave along the ground, chain lightning); trail: [t0, t1] its afterimages
 const turnKeys = (t0, t1, turns, dur) => { const K = [[0, 0]], N = Math.max(2, Math.ceil((t1 - t0) / .04)); if (t0 > 0) K.push([t0, 0]);   // a whole turn (or turns) keyed every few hundredths, as the keys hold then snap (keySnap): one long stretch would creep, then flick round at the end
   for (let i = 1; i <= N; i++) K.push([+(t0 + (t1 - t0) * i / N).toFixed(3), +(turns * TAU * i / N).toFixed(4)]); if (dur > t1) K.push([dur, +(turns * TAU).toFixed(4)]); return K; };
-const BUDDY_SP = { burr: "burr_flurry", stilt: "stilt_stomp", coil: "coil_spin", elpico: "elpico_drop", oldvic: "oldvic_hay", boxcars: "boxcars_roll", pipe: "pipe_slam", pipelet: "pipe_slam", vinnie: "vinnie_swoop", rink: "rink_roll", doir: "doir_rise", noro: "noro_rush" };
+const BUDDY_SP = { burr: "burr_flurry", stilt: "stilt_stomp", coil: "coil_spin", elpico: "elpico_drop", oldvic: "oldvic_hay", boxcars: "boxcars_roll", pipe: "pipe_slam", pipelet: "pipe_slam", vinnie: "vinnie_swoop", rink: "rink_roll", doir: "doir_rise", noro: "noro_rush",
+  bin: "bin_toss", tusker: "tusker_charge", rotor: "rotor_gust", chispa: "chispa_hop", brisa: "brisa_twirl", flora: "flora_flop" };   // (the six of 2026-10-26)
+// a berry buddy's own plain hits, in place of its move set's (Rotor: "shoots with the gun"). A blow marked only: no swing to land, just what it throws (shot)
+const BUDDY_PLAIN = { rotor: ["rotor_shot"] };
 Object.assign(STRIKES, {
   burr_flurry: { dur: .72, step: 380, slide: .14, sq: -.1, sfx: "slash", hits: [{ t0: .12, t1: .18, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" }, { t0: .26, t1: .32, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" },
     { t0: .44, t1: .52, reach: 135, back: 0, y0: 170, y1: 50, kind: "launch", fx: "sparks", shot: "dart" }],   // Burr: a lunge, two quick rapier thrusts, and a third driven up and through
@@ -2059,6 +2062,47 @@ Object.assign(STRIKES, {
       spin: turnKeys(.46, .7, 1, .86), lean: [[0, .1], [.08, .45], [.4, .45], [.5, -.3], [.68, -.35], [.86, .1]], bodyY: [[0, -.06], [.08, -.18], [.4, -.18], [.5, -.05], [.86, -.06]],
       fNx: [[0, .2], [.08, .4], [.4, .4], [.5, .15], [.58, .6], [.68, .6], [.78, .2], [.86, .2]], fNy: [[0, 0], [.4, 0], [.5, .15], [.58, .5], [.68, .5], [.78, .1], [.86, 0]],
       fFx: [[0, -.2], [.08, -.35], [.4, -.35], [.86, -.2]] } },
+  bin_toss: { dur: .8, step: 40, sq: -.08, sfx: "huff", sfx2: [.3, "toss"], hits: [{ t0: .32, t1: .34, reach: 0, back: 0, y0: 0, y1: 0, kind: "launch", only: true, shot: "bon" }],   // Bin & Bon (2026-10-26, the user: "bin throws bon at enemies"): both hands up to Bon on top of the clock, a lean back, and Bon flung at them; Bon flies back to sit again
+    keys: { armF: [[0, .4], [.12, 2.85], [.26, 3.05], [.34, 1.25], [.46, 1.0], [.8, .4]], elbF: [[0, .8], [.12, 1.4], [.26, 1.55], [.34, .15], [.5, .4], [.8, .8]],
+      armB: [[0, .4], [.14, 2.8], [.26, 3.0], [.34, 1.35], [.46, 1.0], [.8, .4]], elbB: [[0, .8], [.14, 1.4], [.26, 1.55], [.34, .2], [.5, .4], [.8, .8]],
+      lean: [[0, .1], [.12, -.2], [.26, -.32], [.34, .5], [.5, .35], [.8, .1]], bodyY: [[0, 0], [.12, -.08], [.26, -.12], [.34, -.05], [.8, 0]],
+      fNx: [[0, .24], [.26, .18], [.34, .42], [.6, .36], [.8, .24]], fFx: [[0, -.2], [.26, -.16], [.34, -.32], [.8, -.2]], headRot: [[0, 0], [.26, -.15], [.34, .12], [.8, 0]] } },
+  tusker_charge: { dur: .9, step: 0, surge: [.1, 760], slide: .5, trail: [.1, .46], sq: -.1, sfx: "dash", sfx2: [.58, "slam"],   // Tusker: the flag lowered like a lance, a charge right through them, then the pole brought down and planted, the ground shaking both ways
+    hits: [{ t0: .12, t1: .46, reach: 85, back: 20, y0: 140, y1: 20, kind: "tackle", fx: "dust" }, { t0: .6, t1: .7, reach: 130, back: 130, y0: 110, y1: -30, kind: "smash", wide: true, fx: "quake", shot: "wave" }],
+    keys: { armF: [[0, .6], [.08, 1.5], [.46, 1.5], [.52, 3.0], [.6, .7], [.75, .6], [.9, .6]], elbF: [[0, .8], [.08, .1], [.46, .1], [.52, .3], [.6, .1], [.9, .8]],
+      blade: [[0, .9], [.08, 0], [.46, 0], [.52, .3], [.6, 1.45], [.75, 1.45], [.9, .9]], grip: [[0, 0], [.9, 0]],
+      armB: [[0, .4], [.08, -.6], [.46, -.6], [.52, 1.2], [.6, .5], [.9, .4]], elbB: [[0, .8], [.08, .5], [.6, .8], [.9, .8]],
+      lean: [[0, .2], [.08, .6], [.46, .6], [.52, -.2], [.6, .5], [.75, .4], [.9, .2]], bodyY: [[0, 0], [.08, -.1], [.46, -.1], [.6, -.2], [.75, -.15], [.9, 0]],
+      fNx: [[0, .24], [.12, .5], [.2, .08], [.28, .5], [.36, .08], [.46, .4], [.6, .45], [.9, .24]], fFx: [[0, -.2], [.12, -.05], [.2, -.45], [.28, -.05], [.36, -.45], [.46, -.2], [.6, -.35], [.9, -.2]],
+      fNy: [[0, 0], [.16, .3], [.2, 0], [.32, .3], [.36, 0], [.9, 0]], fFy: [[0, 0], [.12, 0], [.24, .3], [.28, 0], [.4, .3], [.46, 0], [.9, 0]] } },
+  rotor_shot: { dur: .5, step: 0, sq: -.04, sfx: "blop", hits: [{ t0: .16, t1: .18, reach: 0, back: 0, y0: 0, y1: 0, kind: "jab", only: true, shot: "pellet" }],   // Rotor's plain hit: the gun up and aimed, a shot of light off the propeller, the kick of it
+    keys: { armF: [[0, .5], [.1, 1.55], [.16, 1.6], [.2, 1.9], [.3, 1.6], [.5, .5]], elbF: [[0, .9], [.1, .05], [.3, .1], [.5, .9]], blade: [[0, .9], [.1, 0], [.16, 0], [.2, -.25], [.3, 0], [.5, .9]], grip: [[0, 0], [.5, 0]],
+      armB: [[0, .4], [.1, .9], [.3, .9], [.5, .4]], elbB: [[0, .8], [.1, 1.4], [.5, .8]], lean: [[0, .1], [.1, .15], [.2, -.06], [.32, .1], [.5, .1]], headRot: [[0, 0], [.1, -.08], [.2, .06], [.5, 0]] } },
+  rotor_gust: { dur: 1.0, step: 0, sq: -.06, sfx: "blop", sfx2: [.62, "whoosh"],   // Rotor: three quick shots, the propeller wound up to a howl, then a gust of light that bowls them over
+    hits: [{ t0: .12, t1: .14, reach: 0, back: 0, y0: 0, y1: 0, kind: "jab", only: true, shot: "pellet" }, { t0: .22, t1: .24, reach: 0, back: 0, y0: 0, y1: 0, kind: "jab", only: true, shot: "pellet" },
+      { t0: .32, t1: .34, reach: 0, back: 0, y0: 0, y1: 0, kind: "jab", only: true, shot: "pellet" }, { t0: .62, t1: .64, reach: 0, back: 0, y0: 0, y1: 0, kind: "sweep", only: true, fx: "puffs", shot: "gust" }],
+    keys: { armF: [[0, .5], [.08, 1.6], [.12, 1.6], [.15, 1.8], [.22, 1.6], [.25, 1.8], [.32, 1.6], [.35, 1.8], [.42, 1.6], [.58, 1.55], [.64, 2.1], [.78, 1.6], [1.0, .5]],
+      elbF: [[0, .9], [.08, .05], [.58, .05], [.64, .2], [.8, .1], [1.0, .9]], blade: [[0, .9], [.08, 0], [.6, 0], [.64, -.35], [.8, 0], [1.0, .9]], grip: [[0, 0], [1.0, 0]],
+      armB: [[0, .4], [.08, 1.3], [.58, 1.4], [.64, 1.6], [1.0, .4]], elbB: [[0, .8], [.08, 1.2], [.58, 1.1], [1.0, .8]],
+      lean: [[0, .1], [.08, .2], [.4, .22], [.58, .3], [.64, -.25], [.8, -.1], [1.0, .1]], bodyY: [[0, 0], [.4, -.05], [.58, -.12], [.64, -.04], [1.0, 0]],
+      fNx: [[0, .24], [.58, .34], [.66, .2], [1.0, .24]], fFx: [[0, -.2], [.58, -.3], [.66, -.42], [1.0, -.2]] } },
+  chispa_hop: { dur: .8, step: 250, hop: -780, dive: [.4, 1000], sq: .14, sfx: "chirp", sfx2: [.06, "jump"],   // Chispa: a squat, up like a spark, two somersaults curled tight, and down on them in a pop of sparks
+    hits: [{ t0: .4, t1: .6, reach: 80, back: 70, y0: 120, y1: -20, kind: "smash", wide: true, land: true, fx: "sparks", shot: "spark" }],
+    keys: { flip: turnKeys(.08, .4, 2, .8), bodyY: [[0, 0], [.04, -.2], [.08, .05], [.4, 0], [.48, -.25], [.6, -.1], [.8, 0]],
+      armF: [[0, .3], [.06, 2.6], [.4, 2.6], [.48, .2], [.8, .3]], elbF: [[0, .5], [.06, .3], [.48, .5], [.8, .5]], armB: [[0, .3], [.06, 2.6], [.4, 2.6], [.48, .2], [.8, .3]], elbB: [[0, .5], [.06, .3], [.48, .5], [.8, .5]],
+      lean: [[0, .1], [.04, .3], [.08, 0], [.4, 0], [.48, .3], [.8, .1]] } },
+  brisa_twirl: { dur: .86, step: 120, slide: .5, sq: .06, sfx: "whoosh", sfx2: [.56, "whoosh"],   // Brisa: twice round like a little whirlwind, the cape of wings flared out, then a great flap that throws a gust ahead
+    hits: [{ t0: .1, t1: .24, reach: 100, back: 100, y0: 140, y1: 0, kind: "slash", wide: true, fx: "puffs" }, { t0: .28, t1: .42, reach: 100, back: 100, y0: 140, y1: 0, kind: "sweep", wide: true },
+      { t0: .56, t1: .58, reach: 0, back: 0, y0: 0, y1: 0, kind: "sweep", only: true, shot: "gust" }],
+    keys: { spin: turnKeys(.06, .46, 2, .86), armF: [[0, .3], [.06, 1.6], [.46, 1.6], [.52, 2.5], [.58, 1.3], [.7, .6], [.86, .3]], armB: [[0, .3], [.06, 1.6], [.46, 1.6], [.52, 2.5], [.58, 1.3], [.7, .6], [.86, .3]],
+      elbF: [[0, .4], [.06, 0], [.58, 0], [.86, .4]], elbB: [[0, .4], [.06, 0], [.58, 0], [.86, .4]],
+      lean: [[0, .05], [.06, 0], [.46, 0], [.52, -.25], [.58, .4], [.7, .2], [.86, .05]], bodyY: [[0, 0], [.06, -.06], [.46, -.06], [.52, .04], [.6, -.08], [.86, 0]] } },
+  flora_flop: { dur: .95, step: 140, hop: -640, dive: [.34, 1100], sq: .16, sfx: "jump", sfx2: [.02, "huff"],   // Flora: up with the wings spread, tipped right over, and down on them belly first: the ground shakes both ways
+    hits: [{ t0: .34, t1: .62, reach: 150, back: 150, y0: 90, y1: -30, kind: "smash", wide: true, land: true, fx: "quake", shot: "wave" }],
+    keys: { armF: [[0, .3], [.1, 2.8], [.3, 2.9], [.4, 1.8], [.5, .9], [.8, .6], [.95, .3]], armB: [[0, .3], [.1, 2.8], [.3, 2.9], [.4, 1.8], [.5, .9], [.8, .6], [.95, .3]],
+      elbF: [[0, .4], [.1, .2], [.5, .3], [.95, .4]], elbB: [[0, .4], [.1, .2], [.5, .3], [.95, .4]],
+      lean: [[0, .1], [.1, -.3], [.3, -.2], [.4, 1.1], [.5, 1.2], [.62, 1.0], [.84, .25], [.95, .1]], bodyY: [[0, -.1], [.08, -.25], [.12, 0], [.5, -.3], [.62, -.3], [.84, -.05], [.95, 0]],
+      fNy: [[0, 0], [.12, .4], [.34, .4], [.45, 0], [.95, 0]], fFy: [[0, 0], [.12, .4], [.34, .4], [.45, 0], [.95, 0]] } },
   doir_rise: { dur: .8, step: 180, hop: -820, dive: [.5, 900], sq: .12, sfx: "kick", hits: [{ t0: .06, t1: .26, reach: 95, back: 20, y0: 240, y1: 30, kind: "launch" },
     { t0: .5, t1: .72, reach: 105, back: 15, y0: 100, y1: -50, kind: "smash", land: true, fx: "sparks", shot: "wave" }],   // Doir: a rising knife-hand that lifts them, a forward flip over the top, and a heel brought down on them
     keys: { armF: [[0, .6], [.06, 2.9], [.22, 3.1], [.32, 2.0], [.5, .9], [.62, .5], [.8, .6]], elbF: [[0, 1.0], [.06, .1], [.22, .1], [.32, .4], [.8, 1.0]],
@@ -2882,7 +2926,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
