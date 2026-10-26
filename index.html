@@ -268,6 +268,15 @@
   #pmapKey { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 16px; max-width: 900px; font: 600 11px/1 "Jost", sans-serif; letter-spacing: .14em; color: var(--y); }   /* what the map's marks mean */
   #pmapKey:empty { display: none; } #pmapKey span { display: inline-flex; align-items: center; gap: 6px; background: rgba(47, 59, 67, .82); padding: 3px 9px 3px 4px; }
   #pmapKey canvas { width: 18px; height: 18px; }
+  #pWear { display: flex; align-items: center; gap: 12px; background: rgba(47, 59, 67, .86); border: 3px solid var(--y); box-shadow: 6px 6px 0 var(--s); padding: 4px 14px 4px 4px; cursor: pointer; color: var(--y); }   /* what Camila and Rose have on (ACCESSORIES) */
+  #pWear .pwH { font: 13px/1 "Bungee", sans-serif; letter-spacing: .06em; writing-mode: vertical-rl; transform: rotate(180deg); padding: 0 2px 0 6px; }
+  #pwCv canvas { display: block; width: 240px; height: 120px; }
+  #pwRows { display: flex; gap: 18px; font: 600 11px/1.3 "Jost", sans-serif; letter-spacing: .1em; } .pwHero { display: flex; flex-direction: column; gap: 2px; } .pwHero b { font: 13px/1.1 "Bungee", sans-serif; letter-spacing: .04em; }
+  #wearCv canvas { display: block; width: min(480px, 80vw); height: auto; aspect-ratio: 2 / 1; margin: 0 auto 6px; background: rgba(47, 59, 67, .08); }
+  #wearRows { flex-direction: column; align-items: stretch; min-width: min(440px, 84vw); }
+  #wearRows button { display: flex; justify-content: space-between; align-items: center; gap: 18px; } #wearRows .wv { display: inline-flex; align-items: center; gap: 6px; } #wearRows .wv svg { width: 24px; height: 24px; }
+  @media (max-height: 560px) { #wearCv canvas { width: 250px; margin-bottom: 2px; } #wear .lockup .bar, #wear small { display: none; } #wear .panel .blk { font-size: 22px; } #wearRows button { padding-top: 4px; padding-bottom: 3px; font-size: 11px; min-height: 0; } #wearRows { gap: 3px; } }   /* (a phone on its side: ACCESSORIES all on the screen) */
+  @media (max-height: 560px) { #pwCv { display: none; } #pWear { padding: 4px 12px; } #pWear .pwH { display: none; } #pwRows { font-size: 10px; } }   /* (a phone on its side: the words only, the map keeps its room) */
   #pause .panel { max-width: none; padding: 14px 20px 12px; }
   #pause .btns { justify-content: center; }
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
@@ -589,6 +598,12 @@
   <div class="btns"><button id="vlBack" data-v="back">BACK</button></div>
   <small data-pad="↑ ↓ to choose &middot; {j} to open &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to open &middot; Esc to go back</small>
 </div></div>
+<div id="wear" class="mnu"><div class="panel">
+  <div class="lockup"><div class="blk">ACCESSORIES</div><div class="bar" id="wearSub">WHAT CAMILA AND ROSE HAVE ON</div></div>
+  <div id="wearCv"></div>
+  <div class="btns" id="wearRows"></div>
+  <small data-pad="↑ ↓ to choose &middot; ← → to change &middot; {sq} to go back">↑ ↓ to choose &middot; ← → to change &middot; Esc to go back</small>
+</div></div>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
   <div class="btns" id="setBtns"><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="dev">DEVELOPER</button><button data-g="back">BACK</button></div>
@@ -692,6 +707,7 @@
   <div class="lockup ptitle"><div class="blk">PAUSED</div><div class="bar">BERRY BLADE</div></div>
   <div id="pmapBox"><canvas id="pmap"></canvas></div>
   <div id="pmapKey"></div>
+  <div id="pWear"><div class="pwH">ACCESSORIES</div><div id="pwCv"></div><div id="pwRows"></div></div>
   <div class="panel">
     <p id="pAsk" class="hidden"></p>
     <div class="btns" id="pbtns"><button data-p="resume">RETURN TO GAME</button><button data-p="ach">ACHIEVEMENTS</button><button data-p="lvl">LEVEL SELECT</button><button data-p="home">HOME SCREEN</button><button data-p="quit">QUIT GAME</button></div>
@@ -5133,7 +5149,7 @@ function buildChar(spec) {
   const H = HEARTS[spec.id], pr = spec.outfit && spec.outfit.prop;   // (his gauntlet carries a ring per heart, whatever an edit saved)
   if (H && pr && pr.kind === "gauntlet" && pr.rings !== H) spec = { ...spec, outfit: { ...spec.outfit, prop: { ...pr, rings: H } } };
   const r = KIT.build(spec), body = r.sync;
-  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); };
+  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt); };
   return r;
 }
 const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && sp.villain.on);
@@ -5366,12 +5382,12 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG" };
-function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "ach", "vlog", "quit"] : ["resume", "ach", "vlog", "lvl", "home"];   // (GAME LOG: the stats and the narration)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
+const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "wear", "ach", "vlog", "quit"] : ["resume", "wear", "ach", "vlog", "lvl", "home"];   // (GAME LOG: the stats and the narration)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
-function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); syncMini(); drawPauseMap(); }
+function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); drawPauseWear(); syncMini(); drawPauseMap(); }
 // debug (the user, 2026-10-22: "move to a new map on a world to test things and also the option to reset that room to new"; then "debug should be when
 // you press pause in the game menu, not outside", so no switch in the game settings): DEBUG in the pause menu opens it: any room of this world (picked on the map, every room shown), and the room you're in set back to new: its baddies, its
 // boss, its gifts, crates and items all back
@@ -5412,6 +5428,7 @@ function pauseChoose(what) {
   if (what === "dreset") { closePause(); SFX.confirm(); debugResetRoom(); return; }
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
   if (what === "vlog") { SFX.confirm(); showVlog("pause"); return; }
+  if (what === "wear") { SFX.confirm(); openWear(); return; }   // (what Camila and Rose wear: the user, 2026-10-26)
   if (what === "lvl") { SFX.confirm(); showLvl(); return; }
   if (what === "map") { SFX.confirm(); openMap(); return; }
   closePause(); SFX.confirm();
@@ -5420,6 +5437,9 @@ function pauseChoose(what) {
 }
 $("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) pauseChoose(b.dataset.p); });
+$("pWear").addEventListener("click", () => { if (paused && !menuUp && PAUSE_OPTS.includes("wear")) { SFX.confirm(); openWear(); } });
+$("wearRows").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (!b || menuUp !== "wear") return; if (b.dataset.w === "done") return closeWear();
+  const i = +b.dataset.w, r = b.getBoundingClientRect(); wearSel = i; wearCycle(i, e.clientX < r.left + r.width * .55 ? -1 : 1); });
 $("vlog").addEventListener("click", e => { const b = e.target.closest("[data-v]"); if (!b || menuUp !== "vlog") return; if (b.dataset.v === "back") vlogBack(); else { vlogSel = +b.dataset.v; markMenu(); vlogPick(vlogSel); } });
 $("pbtns").addEventListener("pointermove", e => { const b = e.target.closest("[data-p]"); if (b) { const i = PAUSE_OPTS.indexOf(b.dataset.p); if (i !== pauseSel) setPauseSel(i); } });
 // achievements: each one a ??? in the list until you get it; getting one pops up a card at the top for a few seconds (the game carries on)
@@ -5860,7 +5880,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
 function writeSave() {
   if (pro || (rideS && rideS.road)) return;          // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -6102,6 +6122,7 @@ function markMenu() {
   if (menuUp === "slots") { [...$("slList").children].forEach((b, i) => b.classList.toggle("on", i === slotSel)); $("slots").querySelector("[data-s=back]").classList.toggle("on", slotSel === 3); $("slDel").classList.toggle("on", slotSel === 4); $("slList").querySelectorAll(".ask i").forEach((b, i) => b.classList.toggle("on", i === (askSel ? 1 : 0))); }
   if (menuUp === "team" && teamAsk) [...$("teamBtns").children].forEach((b, i) => b.classList.toggle("on", i === teamAsk.sel));
   if (menuUp === "rideask") [...$("raBtns").children].forEach((b, i) => b.classList.toggle("on", i === rideAskSel));
+  if (menuUp === "wear") wearMark();
   if (menuUp === "rideskip") [...$("skBtns").children].forEach((b, i) => b.classList.toggle("on", i === skipSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
@@ -6111,6 +6132,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   if (menuUp === "mappath") { if ((ok || back) && mapAnim && performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; }   // (the way being drawn: a press once it's there goes on)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "rideask") { if (d) { rideAskSel = 1 - rideAskSel; SFX.tick(); markMenu(); } if (ok) rideAnswer(rideAskSel === 0); if (back) rideAnswer(false); return; }
+  if (M === "wear") { wearNav(d, ok, back, vert); return; }
   if (M === "rideskip") { if (d) { skipSel = 1 - skipSel; SFX.tick(); markMenu(); } if (ok) skipAnswer(skipSel === 0); return; }   // (no going back from it: you're on your way)
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
@@ -6147,7 +6169,7 @@ function storyLoad(slot, q) { if (q.layout === 14) { const dw = o => { const r =
   if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -16711,6 +16733,253 @@ const ITEM_SVG = {                                  // (the item cards' little p
 };
 let freeBag = { coins: 0, fruit: 0, gum: 0, power: 0 }, freeGot = new Set(), freeCats = new Set(), freeDogs = new Set(), freeMaps = new Set(), freeAxos = { axo: new Set(), axo2: new Set() };
 const freePets = sp => sp === "dog" ? freeDogs : isAxo(sp) ? freeAxos[sp] : freeCats;
+// ── accessories (the user, 2026-10-26: "i want the sellers you run into on la guagua to sell accessories that camila and rose can wear so the player can
+// customize them. it'll be like masks like noro has, sunglasses ... camila will have bandanas wrapped around her gauntlet and other arm and rose will have charms
+// that hang off the hilt of her sword ... make sure the accessories are 3d objects and big enough to be noticeable"). Samples for now: the user designs the real
+// ones later. Each is built onto the hero's own rig: shades and masks on her head, fitted to her own face (where the face picture has her eyes); bandanas round
+// the gauntlet's cuff and round the other forearm; a charm on a cord off the sword's pommel, hanging and swinging as she moves. What's worn is per hero, saved
+// with the file (story.gear: own, wear); free play has every sample to try
+const ACC = {
+  shades_star: { slot: "head", pl: true, name: "STAR SHADES", price: 45, desc: "PINK STAR FRAMES, DARK LENSES" },
+  shades_round: { slot: "head", pl: true, name: "ROUND SHADES", price: 40, desc: "BIG MANGO-YELLOW ROUNDS" },
+  mask_lucha: { slot: "head", name: "LUCHA MASK", price: 60, desc: "A MASK LIKE NORO'S: BLUE AND GOLD" },
+  mask_berry: { slot: "head", name: "BERRY MASK", price: 60, desc: "STRAWBERRY RED, LEAFY TIPS" },
+  band_red: { slot: "weapon", prop: "gauntlet", pl: true, name: "RED BANDANAS", price: 30, desc: "FOR CAMILA: ONE ROUND HER GAUNTLET, ONE ROUND HER OTHER ARM" },
+  band_teal: { slot: "weapon", prop: "gauntlet", pl: true, name: "TEAL BANDANAS", price: 30, desc: "FOR CAMILA: ONE ROUND HER GAUNTLET, ONE ROUND HER OTHER ARM" },
+  charm_star: { slot: "weapon", prop: "sword", name: "STAR CHARM", price: 35, desc: "FOR ROSE: A GOLD STAR HANGING OFF HER HILT" },
+  charm_berry: { slot: "weapon", prop: "sword", name: "BERRY CHARM", price: 35, desc: "FOR ROSE: A BERRY HANGING OFF HER HILT" },
+};
+const GEAR_HEROES = ["camila", "rose"], GEAR_WPN = { camila: "GAUNTLET", rose: "HILT" };
+const gearBlank = () => ({ own: [], wear: { camila: { head: null, weapon: null }, rose: { head: null, weapon: null } } });
+let freeGear = null;                                 // (free play: every sample, to try)
+function gearState() {
+  if (story) { const G = story.gear || (story.gear = gearBlank()); for (const id of GEAR_HEROES) G.wear[id] = G.wear[id] || { head: null, weapon: null }; return G; }
+  return freeGear || (freeGear = { ...gearBlank(), own: Object.keys(ACC) });
+}
+const gearFits = (id, hero) => { const A = ACC[id]; return !!A && (A.slot === "head" || A.prop === (hero === "rose" ? "sword" : "gauntlet")); };
+const gearOwned = id => gearState().own.includes(id);
+const ACC_SVG = {                                    // (the stand's and the menu's little pictures)
+  head: '<svg viewBox="0 0 40 40"><path d="M4 16 H36 M6 16 Q6 27 14 27 Q19 27 19 18 M21 18 Q21 27 26 27 Q34 27 34 16" fill="#3a1d52" stroke="#2f3b43" stroke-width="2.6" stroke-linejoin="round"/><path d="M9 19 L12 22" stroke="#fff" stroke-width="2"/></svg>',
+  mask: '<svg viewBox="0 0 40 40"><path d="M3 15 Q20 9 37 15 L33 25 Q26 29 20 23 Q14 29 7 25 Z" fill="#2a5bd6" stroke="#2f3b43" stroke-width="2.4" stroke-linejoin="round"/><ellipse cx="13" cy="18" rx="3.6" ry="2.6" fill="#ffd21a"/><ellipse cx="27" cy="18" rx="3.6" ry="2.6" fill="#ffd21a"/></svg>',
+  band: '<svg viewBox="0 0 40 40"><rect x="7" y="13" width="20" height="13" rx="3" fill="#e8242f" stroke="#2f3b43" stroke-width="2.4"/><path d="M27 19 L36 12 M27 20 L35 29" stroke="#e8242f" stroke-width="5" stroke-linecap="round"/><circle cx="13" cy="19" r="1.8" fill="#fff"/><circle cx="21" cy="19" r="1.8" fill="#fff"/></svg>',
+  charm: '<svg viewBox="0 0 40 40"><path d="M20 3 V13" stroke="#ff4fa3" stroke-width="2.6"/><path d="M20 13 L23 21 L32 21 L25 26 L28 35 L20 30 L12 35 L15 26 L8 21 L17 21 Z" fill="#e8a400" stroke="#2f3b43" stroke-width="2.2" stroke-linejoin="round"/></svg>' };
+const ACC_TINT = { shades_star: ["#3a1d52", "#ff4fa3"], shades_round: ["#1c3550", "#ffc81e"], mask_lucha: ["#2a5bd6", "#ffd21a"], mask_berry: ["#e8242f", "#3db04a"], band_red: ["#e8242f"], band_teal: ["#17b3a6"], charm_star: ["#ffd21a"], charm_berry: ["#e8242f"] };
+const accSvg = id => { let v = ACC_SVG[id.startsWith("mask") ? "mask" : id.startsWith("band") ? "band" : id.startsWith("charm") ? "charm" : "head"]; const T = ACC_TINT[id] || [];   // (each one's own colours)
+  if (id.startsWith("shades")) v = v.replace('fill="#3a1d52"', `fill="${T[0]}"`).replace('stroke="#2f3b43" stroke-width="2.6"', `stroke="${T[1]}" stroke-width="2.6"`); else if (id.startsWith("mask")) v = v.replace('fill="#2a5bd6"', `fill="${T[0]}"`).replaceAll('fill="#ffd21a"', `fill="${T[1]}"`);
+  else if (id.startsWith("band")) v = v.replaceAll("#e8242f", T[0]); else if (id === "charm_berry") v = v.replace('<path d="M20 13 L23 21', '<path fill-rule="evenodd" d="M20 13 L23 21').replace('fill="#e8a400" stroke="#2f3b43" stroke-width="2.2"', 'fill="#e8242f" stroke="#2f3b43" stroke-width="2.2"'); return v; };
+
+// where her eyes are on her head (head space: +x forward, y up, z across): the iris's colour found on her face picture and that point put onto the face mesh
+// through its own uv (as the 3DS export's eye beads do), and a probe to read the face's surface anywhere (for the masks, fitted to it)
+function gearFace(r) {
+  if (r.__face !== undefined) return r.__face; r.__face = null;
+  let face = null; r.root.traverse(o => { if (o.isMesh && o.material === r.mFace) face = o; }); if (!face || !r.faceArt || !r.head) return null;
+  const S = r.spec, col = (S.colors || {}).eyes || "#201008", cv = r.faceArt(S, false); if (!cv) return null;
+  const px = cv.getContext("2d").getImageData(0, 0, 512, 512).data, n = parseInt(col.slice(1), 16), want = [n >> 16, (n >> 8) & 255, n & 255], blobs = [[], []];
+  for (let y = 0; y < 512; y += 2) for (let x = 0; x < 512; x += 2) { const o = (y * 512 + x) * 4; if (Math.abs(px[o] - want[0]) + Math.abs(px[o + 1] - want[1]) + Math.abs(px[o + 2] - want[2]) < 12) blobs[x < 256 ? 0 : 1].push([x, y]); }
+  face.updateMatrix(); const M = face.matrix.clone(), Mi = M.clone().invert(), g = face.geometry, P = g.attributes.position, UV = g.attributes.uv, I = g.index, fy = (S.face || {}).faceY || 0;
+  const onHead = (x, y) => {                         // a flat-face pixel → the point on the face mesh (head space)
+    const zz = 1 - x / 256, yy = 1 - (y + fy) / 256, xx = Math.sqrt(Math.max(0, 1 - yy * yy - zz * zz));
+    let ph = Math.atan2(zz, -xx); if (ph < 0) ph += 2 * Math.PI; const u = ph / (2 * Math.PI), v = 1 - Math.acos(clamp(yy, -1, 1)) / Math.PI;
+    const nT = I ? I.count / 3 : P.count / 3, at3 = k => I ? I.getX(k) : k;
+    for (let t = 0; t < nT; t++) { const a = at3(t * 3), b = at3(t * 3 + 1), c = at3(t * 3 + 2);
+      const ax = UV.getX(a), ay = UV.getY(a), bx2 = UV.getX(b), by = UV.getY(b), cx = UV.getX(c), cy = UV.getY(c), d = (by - cy) * (ax - cx) + (cx - bx2) * (ay - cy); if (Math.abs(d) < 1e-12) continue;
+      const l1 = ((by - cy) * (u - cx) + (cx - bx2) * (v - cy)) / d, l2 = ((cy - ay) * (u - cx) + (ax - cx) * (v - cy)) / d, l3 = 1 - l1 - l2; if (l1 < -1e-4 || l2 < -1e-4 || l3 < -1e-4) continue;
+      const p = new THREE.Vector3(); [[a, l1], [b, l2], [c, l3]].forEach(([k, w]) => { p.x += P.getX(k) * w; p.y += P.getY(k) * w; p.z += P.getZ(k) * w; }); return p.applyMatrix4(M); }
+    return null; };
+  const probe = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), rc = new THREE.Raycaster();
+  const cast = (o, d) => { rc.set(o.clone().applyMatrix4(Mi), d.clone().transformDirection(Mi)); const h = rc.intersectObject(probe, false)[0]; if (!h) return null;
+    return { p: h.point.clone().applyMatrix4(M), n: h.face.normal.clone().transformDirection(M) }; };
+  const surf = (y, z) => cast(new THREE.Vector3(1.5, y, z), new THREE.Vector3(-1, 0, 0));   // (the face's front at that height and across)
+  const eyes = [];
+  for (const B of blobs) { if (B.length < 6) continue; let sx = 0, sy = 0, x0 = 512, x1 = 0, y0 = 512, y1 = 0; for (const [x, y] of B) { sx += x; sy += y; x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    const C = onHead(sx / B.length, sy / B.length), L = onHead(x0, sy / B.length), R = onHead(x1, sy / B.length), T = onHead(sx / B.length, y0), D = onHead(sx / B.length, y1);
+    if (C && L && R && T && D) eyes.push({ p: C, w: L.distanceTo(R), h: T.distanceTo(D) }); }
+  if (eyes.length < 2) return null;
+  const E = { y: (eyes[0].p.y + eyes[1].p.y) / 2, z: (Math.abs(eyes[0].p.z) + Math.abs(eyes[1].p.z)) / 2, x: (eyes[0].p.x + eyes[1].p.x) / 2, w: (eyes[0].w + eyes[1].w) / 2, h: (eyes[0].h + eyes[1].h) / 2, surf };
+  const sd = cast(new THREE.Vector3(0, E.y, 1.5), new THREE.Vector3(0, 0, -1)); E.side = sd ? Math.abs(sd.p.z) : E.z * 2.1;   // (how wide the head is there: where the shades' arms go back)
+  const mid = surf(E.y + .02, 0); E.mid = mid ? mid.p.x : E.x + .04;                                                   // (the bridge of her nose, near enough)
+  return (r.__face = E);
+}
+const gearRod = (a, b, rad, m) => { const d = new THREE.Vector3().subVectors(b, a), L = d.length(), c = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, L, 8), m);
+  c.position.copy(a).addScaledVector(d, .5); c.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); return c; };
+function starShape(R, r, n = 5, rot = Math.PI / 2) { const s = new THREE.Shape(); for (let i = 0; i <= n * 2; i++) { const a = rot + i * Math.PI / n, q = i % 2 ? r : R; i ? s.lineTo(Math.cos(a) * q, Math.sin(a) * q) : s.moveTo(Math.cos(a) * q, Math.sin(a) * q); } return s; }
+function buildShades(E, kind) {                      // two lenses in front of her eyes, a bridge, and the arms back along her head (chunky: it has to read at game size)
+  const g = new THREE.Group(), star = kind === "shades_star", frame = toon(star ? "#ff4fa3" : "#ffc81e"), glass = toon(star ? "#3a1d52" : "#1c3550"), shine = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+  const R = Math.max(E.w * .92, .08), T = .028, lens = [];
+  for (const s of [-1, 1]) {
+    const S0 = E.surf(E.y, s * E.z), lx = (S0 ? S0.p.x : E.x) + .055, yaw = S0 ? Math.atan2(S0.n.z, S0.n.x) * .55 : 0, L = group(g, lx, E.y + .006, s * E.z); L.rotation.y = -yaw; lens.push([L, lx]);
+    if (star) { const sh = starShape(R * 1.3, R * .66), rim = starShape(R * 1.3 + T * 1.6, R * .66 + T * 1.2); rim.holes.push(starShape(R * 1.3, R * .66));
+      L.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .018, bevelEnabled: false }).rotateY(Math.PI / 2), glass));
+      L.add(at(new THREE.Mesh(new THREE.ExtrudeGeometry(rim, { depth: .04, bevelEnabled: true, bevelSize: .006, bevelThickness: .006, bevelSegments: 1 }).rotateY(Math.PI / 2), frame), -.01, 0, 0)); }
+    else { L.add(new THREE.Mesh(new THREE.CylinderGeometry(R, R, .018, 28).rotateZ(Math.PI / 2), glass)); L.add(new THREE.Mesh(new THREE.TorusGeometry(R, T, 10, 30).rotateY(Math.PI / 2), frame)); }
+    L.add(at(new THREE.Mesh(new THREE.SphereGeometry(R * .2, 10, 8).scale(.3, 1, 1), shine), .016, R * .38, -s * R * .38));   // (a glint)
+    const out = new THREE.Vector3(lx - .01, E.y + .01, s * (E.z + R * (star ? 1.2 : 1))), back = new THREE.Vector3(-.03, E.y + .03, s * (E.side + .02));
+    g.add(gearRod(out, back, .016, frame)); }                                                                    // (an arm back along her head)
+  const zi = Math.max(.01, E.z - R * (star ? 1.05 : 1) + .01), bx0 = Math.max(E.mid + .045, (lens[0][1] + lens[1][1]) / 2);
+  g.add(gearRod(new THREE.Vector3(bx0, E.y + .03, -zi), new THREE.Vector3(bx0 + .01, E.y + .045, 0), .018, frame)); g.add(gearRod(new THREE.Vector3(bx0 + .01, E.y + .045, 0), new THREE.Vector3(bx0, E.y + .03, zi), .018, frame));   // (the bridge)
+  return g;
+}
+function maskArt(kind, E, Z, y0, y1) {               // the mask's picture: its outline, the holes for her eyes, its colours (drawn flat, laid onto her face)
+  const W = 512, H = 192, u = z => (z + Z) / (2 * Z) * W, v = y => (y1 - y) / (y1 - y0) * H, berry = kind === "mask_berry";
+  return tex(W, H, (c) => {
+    c.clearRect(0, 0, W, H); const ey = v(E.y), ex = [u(-E.z), u(E.z)], rx = E.w / (2 * Z) * W * .78, ry = E.h / (y1 - y0) * H * .82;
+    c.beginPath(); c.moveTo(2, H * .18); c.quadraticCurveTo(W * .25, H * .02, W * .5, H * (berry ? .2 : .1)); c.quadraticCurveTo(W * .75, H * .02, W - 2, H * .18);   // (the top edge: up at the temples)
+    c.lineTo(W - 22, H * .62); c.quadraticCurveTo(W * .78, H * .98, W * .58, H * .8); c.quadraticCurveTo(W * .5, H * .66, W * .42, H * .8); c.quadraticCurveTo(W * .22, H * .98, 22, H * .62); c.closePath();
+    c.fillStyle = berry ? "#e8242f" : "#2a5bd6"; c.fill();
+    if (berry) { c.fillStyle = "#ffe14d"; const R = rngF(5); for (let i = 0; i < 46; i++) { const x = 30 + R() * (W - 60), y = 20 + R() * (H - 50); c.beginPath(); c.ellipse(x, y, 4, 6, .3, 0, Math.PI * 2); c.fill(); }
+      c.fillStyle = "#3db04a"; for (const s of [-1, 1]) { const x0 = s < 0 ? 0 : W; c.beginPath(); c.moveTo(x0, H * .1); c.lineTo(x0 - s * 70, H * .3); c.lineTo(x0 - s * 30, H * .42); c.lineTo(x0 - s * 64, H * .55); c.lineTo(x0, H * .62); c.closePath(); c.fill(); }
+      c.beginPath(); c.moveTo(W * .44, H * .2); c.quadraticCurveTo(W * .5, -H * .05, W * .56, H * .2); c.quadraticCurveTo(W * .5, H * .32, W * .44, H * .2); c.fill(); }
+    else { c.strokeStyle = "#ffd21a"; c.lineWidth = 14; c.stroke(); c.fillStyle = "#ffffff"; c.beginPath(); c.moveTo(W * .5, H * .2); c.lineTo(W * .54, H * .45); c.lineTo(W * .5, H * .66); c.lineTo(W * .46, H * .45); c.closePath(); c.fill();
+      c.strokeStyle = "#ff3d5a"; c.lineWidth = 6; for (const s of [-1, 1]) { c.beginPath(); c.moveTo(W * .5 + s * 70, H * .2); c.quadraticCurveTo(W * .5 + s * 130, H * .08, W * .5 + s * 200, H * .26); c.stroke(); } }
+    for (const x of ex) { c.strokeStyle = berry ? "#3db04a" : "#ffd21a"; c.lineWidth = 12; c.beginPath(); c.ellipse(x, ey, rx + 6, ry + 6, 0, 0, Math.PI * 2); c.stroke();
+      c.save(); c.globalCompositeOperation = "destination-out"; c.beginPath(); c.ellipse(x, ey, rx, ry, 0, 0, Math.PI * 2); c.fill(); c.restore(); }   // (the holes she sees through)
+  });
+}
+function buildMask(E, kind) {                        // a band over her eyes, laid onto her own face (each point of it a little off the face's surface), its holes where her eyes are
+  const nz = 34, ny = 14, Z = E.z + E.w * 2.1, y0 = E.y - E.h * 1.45 - .035, y1 = E.y + E.h * 1.3 + .05, g = new THREE.Group(), map = maskArt(kind, E, Z, y0, y1);   // (brow to cheek, round to her ears: a mask, not goggles)
+  const sheet = (off, m) => { const pos = [], uv = [], idx = [], ok = [];
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nz; i++) { const z = -Z + 2 * Z * i / (nz - 1), y = y0 + (y1 - y0) * j / (ny - 1), s = E.surf(y, z);
+      if (s) { const p = s.p.clone().addScaledVector(s.n, off); pos.push(p.x, p.y, p.z); ok.push(true); } else { pos.push(0, y, z); ok.push(false); } uv.push(i / (nz - 1), j / (ny - 1)); }
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nz - 1; i++) { const a = j * nz + i, b = a + 1, c = a + nz, d = c + 1; if (ok[a] && ok[b] && ok[c] && ok[d]) idx.push(a, c, b, b, c, d); }
+    const G = new THREE.BufferGeometry(); G.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); G.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2)); G.setIndex(idx); G.computeVertexNormals();
+    g.add(new THREE.Mesh(G, m)); };
+  sheet(.026, toon("#ffffff", { map, alphaTest: .5, side: THREE.DoubleSide }));
+  sheet(.012, toon("#3a2a4a", { map, alphaTest: .5, side: THREE.DoubleSide }));   // (its underside: it has some thickness at the edge)
+  return g;
+}
+function bandArt(kind) {
+  const teal = kind === "band_teal";
+  return tex(256, 64, (c, W, H) => { c.fillStyle = teal ? "#17b3a6" : "#e8242f"; c.fillRect(0, 0, W, H); c.fillStyle = "#ffffff";
+    if (teal) { c.fillRect(0, 10, W, 6); c.fillRect(0, H - 16, W, 6); for (let x = 10; x < W; x += 26) { c.beginPath(); c.arc(x, H / 2, 5, 0, Math.PI * 2); c.fill(); } }
+    else for (let y = 10; y < H; y += 22) for (let x = (y / 22 % 2) * 13 + 8; x < W; x += 26) { c.beginPath(); c.arc(x, y, 4, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(x + 6, y + 4, 2, 0, Math.PI * 2); c.fill(); } });
+}
+function buildBand(kind, rad, ph) {                  // a bandana round an arm: a band (axis: the forearm), a knot on it and its two ends hanging out
+  const g = new THREE.Group(), map = bandArt(kind), m = toon("#ffffff", { map, side: THREE.DoubleSide }), mk2 = toon(kind === "band_teal" ? "#17b3a6" : "#e8242f");
+  const geo = new THREE.CylinderGeometry(rad * 1.05, rad, .11, 30, 2, true), P = geo.attributes.position;
+  for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i), a = Math.atan2(z, x), k = 1 + .045 * Math.sin(a * 5 + P.getY(i) * 30); P.setX(i, x * k); P.setZ(i, z * k); }   // (a little rumpled)
+  geo.computeVertexNormals(); g.add(new THREE.Mesh(geo, m));
+  const K = group(g, rad + .02, 0, 0); K.add(new THREE.Mesh(new THREE.SphereGeometry(.05, 12, 10).scale(.8, .9, 1.1), mk2));   // (the knot, on the outside)
+  const tg = group(K, .01, 0, 0), tails = [-1, 1].map(s => { const t = group(tg, 0, 0, s * .02); t.add(new THREE.Mesh(new THREE.BoxGeometry(.05, .17, .018).translate(0, -.085, 0), toon("#ffffff", { map }))); t.rotation.set(s * .3, 0, s * .22); return t; });
+  return { g, tg, tails, ph };                       // (tg: its two ends, hanging: set every frame, gearSync)
+}
+function buildCharm(kind) {                          // off the pommel on a cord: the pivot's -y hangs down, set every frame (gearSync)
+  const piv = new THREE.Group(), cord = toon("#ff4fa3"), gold = toon("#ffd21a"), Lc = .15;
+  piv.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.013, .013, Lc, 6), cord), 0, -Lc / 2, 0)); piv.add(at(new THREE.Mesh(new THREE.SphereGeometry(.028, 10, 8), gold), 0, -.03, 0));
+  const c = group(piv, 0, -Lc, 0);
+  if (kind === "charm_star") { const s = new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(.13, .062), { depth: .05, bevelEnabled: true, bevelSize: .012, bevelThickness: .012, bevelSegments: 2 }).translate(0, 0, -.025), gold); s.position.y = -.12; c.add(s);
+    c.add(at(new THREE.Mesh(new THREE.SphereGeometry(.022, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffffff" })), -.035, -.08, .045)); }
+  else { const red = toon("#e8242f"), b = new THREE.Mesh(new THREE.SphereGeometry(.1, 18, 14).scale(1, 1.18, 1), red); b.position.y = -.12; c.add(b);
+    const seed = toon("#ffe14d"); for (let i = 0; i < 14; i++) { const a = i * 2.4, yy = -.06 - (i % 5) * .03, rr = .1 * Math.sqrt(Math.max(0, 1 - Math.pow((yy + .12) / .118, 2))); c.add(at(new THREE.Mesh(new THREE.SphereGeometry(.012, 6, 5), seed), Math.cos(a) * rr * .98, yy, Math.sin(a) * rr * .98)); }
+    const leaf = toon("#3db04a"); c.add(at(new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(.075, .03, 5), { depth: .015, bevelEnabled: false }).rotateX(Math.PI / 2), leaf), 0, -.01, 0)); }
+  return piv;
+}
+// on and off a rig: dressGear(r, wear) puts on what's listed for her (what was on before comes off). The pieces' materials join r.mats (they flash with her when she's hit)
+function undressGear(r) {
+  const G = r.__gear; if (!G) return; G.nodes.forEach(o => { if (o.parent) o.parent.remove(o); o.traverse(m => { if (m.isMesh) { m.geometry.dispose(); const mm = m.material; if (mm.map) mm.map.dispose(); mm.dispose(); } }); });
+  if (r.mats) r.mats = r.mats.filter(m => !G.mats.includes(m)); r.__gear = null;
+}
+function dressGear(r, wear) {
+  undressGear(r); const G = { nodes: [], mats: [], bands: [], charm: null }; r.__gear = G; r.__gearKey = JSON.stringify(wear || {}); if (!wear) return;
+  const put = (parent, o) => { parent.add(o); G.nodes.push(o); o.traverse(m => { if (m.isMesh && !(m.material instanceof THREE.MeshBasicMaterial)) G.mats.push(m.material); }); };
+  if (wear.head && ACC[wear.head] && r.head) { const E = gearFace(r); if (E) put(r.head, wear.head.startsWith("mask") ? buildMask(E, wear.head) : buildShades(E, wear.head)); }
+  const pr = r.prop, w = wear.weapon && ACC[wear.weapon];
+  if (w && pr && pr.kind === w.prop) {
+    if (pr.kind === "gauntlet") {                    // one round the gauntlet's cuff, one round the other forearm
+      const B1 = buildBand(wear.weapon, .172, 0); B1.g.position.set(0, .2, 0); put(pr.group, B1.g); G.bands.push(B1);
+      r.root.updateMatrixWorld(true); const pw = pr.group.getWorldPosition(new THREE.Vector3()), hi = r.hands.length > 1 && r.hands[0].getWorldPosition(new THREE.Vector3()).distanceTo(pw) < r.hands[1].getWorldPosition(new THREE.Vector3()).distanceTo(pw) ? 1 : 0;
+      const H = r.hands[hi], rad = gearArmR(r, hi) / (H.scale.x || 1), B2 = buildBand(wear.weapon, rad, 1.7); B2.g.position.set(0, .22 / (H.scale.x || 1), 0); put(H, B2.g); G.bands.push(B2); }
+    else if (pr.kind === "sword" && pr.inner) { const piv = buildCharm(wear.weapon); piv.position.set(-.17, 0, 0); put(pr.inner, piv); G.charm = { piv, dir: new THREE.Vector3(0, -1, 0), dv: new THREE.Vector3(), prev: null, vel: new THREE.Vector3() }; } }
+  if (r.mats) r.mats.push(...G.mats);
+}
+function gearArmR(r, i) {                            // the forearm's radius a little up from the wrist (the arm's own tube), for the bandana round it
+  const t = r.arms && r.arms[i]; if (t && t.prof) return t.prof(.8) * 1.06 + .014; if (t && t.radV && t.radV.length) return t.radV[Math.floor(t.radV.length * .8)] * 1.06 + .014; return .1;
+}
+const _gq = new THREE.Quaternion(), _gq2 = new THREE.Quaternion(), _gv = new THREE.Vector3(), _gm = new THREE.Matrix4(), _gx = new THREE.Vector3(), _gz = new THREE.Vector3();
+function gearSync(r, dt) {                           // (after every sync: the bandanas' ends flap, the charm hangs and swings)
+  const G = r.__gear; if (!G) return;
+  for (const B of G.bands) { B.tails.forEach((t, k) => { t.rotation.z = (k ? -.22 : .22) + .16 * Math.sin(time * 7 + B.ph + k * 1.3); });   // (the ends hang from the knot and flap)
+    B.tg.parent.updateWorldMatrix(true, false); _gq.setFromRotationMatrix(_gm.makeBasis(_gx.set(1, 0, 0), _gv.set(0, 1, 0), _gz.set(0, 0, 1))); B.tg.parent.getWorldQuaternion(_gq2); B.tg.quaternion.copy(_gq2.invert().multiply(_gq)); }
+  const C = G.charm; if (!C) return;
+  C.piv.parent.updateWorldMatrix(true, false); C.piv.getWorldPosition(_gv);
+  if (C.prev && dt > 0) { const vx = (_gv.x - C.prev.x) / dt, vy = (_gv.y - C.prev.y) / dt, vz = (_gv.z - C.prev.z) / dt;
+    if (Math.abs(vx) + Math.abs(vy) > 80) C.vel.set(vx, vy, vz); else { const ax = (vx - C.vel.x) / dt, ay = (vy - C.vel.y) / dt; C.vel.set(vx, vy, vz);
+      const tx = clamp(-ax * .012, -2.5, 2.5), ty = -1 - clamp(ay * .012, -.8, .8), L = Math.hypot(tx, ty) || 1;   // (it lags the hand: a jerk swings it out, gravity brings it back)
+      C.dv.x += (tx / L - C.dir.x) * 60 * dt; C.dv.y += (ty / L - C.dir.y) * 60 * dt; C.dv.multiplyScalar(Math.exp(-5 * dt)); C.dir.addScaledVector(C.dv, dt).normalize(); } }
+  C.prev = (C.prev || new THREE.Vector3()).copy(_gv);
+  const down = C.dir, yA = _gx.copy(down).negate(), zA = _gz.set(0, 0, 1).addScaledVector(yA, -yA.z).normalize(), xA = new THREE.Vector3().crossVectors(yA, zA);   // (hanging, its face to the camera)
+  _gq.setFromRotationMatrix(_gm.makeBasis(xA, yA, zA)); C.piv.parent.getWorldQuaternion(_gq2); C.piv.quaternion.copy(_gq2.invert().multiply(_gq));
+}
+function gearCheck() {                               // (every frame: the heroes' rigs in what's listed for them, once it changes or a rig's new)
+  const G = gearState();
+  for (const id of GEAR_HEROES) { const r = roster.find(q => q.id === id); if (!r) continue; const W = G.wear[id] || {}, key = JSON.stringify(W); if (r.__gearKey !== key) dressGear(r, W); }
+}
+// the seller by the road: three of them on the counter, the ones you haven't got first
+function wearStock(f) {
+  if (f.stock) return f.stock; const L = Object.keys(ACC).sort(() => Math.random() - .5); return (f.stock = [...L.filter(id => !gearOwned(id)), ...L.filter(gearOwned)].slice(0, 3));
+}
+function buyAcc(id) {
+  const A = ACC[id], B = bag(), U = npcUp, G = gearState();
+  if (gearOwned(id)) { SFX.tick(); U.msg = `YOU'VE GOT THE ${A.name} ALREADY. PUT ${A.pl ? "THEM" : "IT"} ON FROM THE PAUSE MENU: ACCESSORIES.`; drawNpc(); return; }
+  if (B.coins < A.price) { SFX.nope(); U.msg = `THAT'S ${A.price} COINS, FRIEND. YOU'VE ONLY GOT ${B.coins}.`; drawNpc(); return; }
+  B.coins -= A.price; G.own.push(id); coinHud(true); SFX.buy();
+  const who = A.slot === "head" ? ((story && story.char) || "camila") : A.prop === "sword" ? "rose" : "camila", W = G.wear[who]; let on = false; if (W && !W[A.slot]) { W[A.slot] = id; on = true; }   // (on straight away if that spot's free)
+  U.msg = `THE ${A.name}! ${on ? (who === "rose" ? "ROSE" : "CAMILA") + "'S GOT " + (A.pl ? "THEM" : "IT") + " ON. " : ""}CHANGE WHAT THEY WEAR FROM THE PAUSE MENU: ACCESSORIES.`; drawNpc(); if (story) writeSave();
+}
+// the look of them, under the map in the pause menu and bigger in ACCESSORIES: a little renderer of its own, the two of them side by side in what they've got on
+let wearPv = null;
+function wearPreview(into, w, h) {
+  if (!wearPv) {
+    const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d);
+    const cam = new THREE.PerspectiveCamera(22, 2, .1, 60); wearPv = { R2, sc, cam, rigs: {} }; }
+  const V = wearPv, G = gearState();
+  for (const id of GEAR_HEROES) { const k = id === "rose" ? 1 : 0;
+    let E = V.rigs[id]; const src = roster.find(q => q.id === id); if (!src) continue;
+    if (!E || E.spec !== src.spec) { if (E) V.sc.remove(E.r.root); const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
+      const st = makeState(0, r); st.onGround = true; E = V.rigs[id] = { r, st, spec: src.spec }; }
+    const W = G.wear[id] || {}; if (E.r.__gearKey !== JSON.stringify(W)) dressGear(E.r, W);
+    const st = E.st; E.yaw = k ? -Math.PI / 2 - .3 : -Math.PI / 2 + .3; st.face = 1; for (let i = 0; i < 3; i++) { st.yaw = E.yaw; KIT.updatePose(st, 1 / 60); E.r.sync(st, E.r, 1 / 60); }
+    E.r.root.position.set(k ? .95 : -.95, 0, 0); E.r.root.visible = true; }
+  if (into && V.R2.domElement.parentNode !== into) into.appendChild(V.R2.domElement);
+  if (w && h && (V.w !== w || V.h !== h)) { V.w = w; V.h = h; V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
+  V.cam.position.set(0, 1.8, 5.5); V.cam.lookAt(0, 1.5, 0);   // (from the knees up: their heads, what's in their hands, a charm hanging under the hilt)
+  V.R2.render(V.sc, V.cam);
+}
+// the box under the map (the pause menu): what each of them has on, and ACCESSORIES to change it
+function wearLine(id) { const W = gearState().wear[id] || {}; return `<b>${id === "rose" ? "ROSE" : "CAMILA"}</b><span>HEAD · ${W.head ? ACC[W.head].name : "NOTHING"}</span><span>${GEAR_WPN[id]} · ${W.weapon ? ACC[W.weapon].name : "NOTHING"}</span>`; }
+function drawPauseWear() {
+  const B = $("pWear"); if (!B) return; $("pwRows").innerHTML = GEAR_HEROES.map(id => `<div class="pwHero">${wearLine(id)}</div>`).join("");
+  try { wearPreview($("pwCv"), 240, 120); } catch (e) { console.warn("wear preview", e); }
+}
+let wearSel = 0;
+const WEAR_ROWS = [["camila", "head"], ["camila", "weapon"], ["rose", "head"], ["rose", "weapon"]];
+function openWear() { menuUp = "wear"; wearSel = 0; $("pause").style.visibility = "hidden"; $("wear").classList.add("show"); drawWear(); markMenu(); }
+function closeWear() { $("wear").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); drawPauseWear(); }
+function wearChoices(hero, slot) { const G = gearState(); return [null, ...Object.keys(ACC).filter(id => ACC[id].slot === slot && G.own.includes(id) && gearFits(id, hero))]; }
+function wearCycle(i, d) {
+  const [hero, slot] = WEAR_ROWS[i], L = wearChoices(hero, slot), W = gearState().wear[hero]; if (L.length < 2) { SFX.nope(); return; }
+  const k = L.indexOf(W[slot] || null); W[slot] = L[(k + d + L.length) % L.length]; SFX.tick(); drawWear(); if (story) writeSave();
+}
+function drawWear() {
+  const G = gearState(), n = G.own.length;
+  $("wearSub").textContent = n ? `WHAT CAMILA AND ROSE HAVE ON · ${n} OF ${Object.keys(ACC).length} COLLECTED` : "NOTHING YET: THE SELLERS BY THE ROAD HAVE THEM";
+  $("wearRows").innerHTML = WEAR_ROWS.map(([hero, slot], i) => { const W = G.wear[hero] || {}, id = W[slot], L = wearChoices(hero, slot);
+    return `<button data-w="${i}"><span class="wl">${hero === "rose" ? "ROSE" : "CAMILA"} · ${slot === "head" ? "HEAD" : GEAR_WPN[hero]}</span><span class="wv">${L.length > 1 ? "‹ " : ""}${id ? accSvg(id) + ACC[id].name : "NOTHING"}${L.length > 1 ? " ›" : ""}</span></button>`; }).join("") + `<button data-w="done">DONE</button>`;
+  try { wearPreview($("wearCv"), 480, 240); } catch (e) { console.warn("wear preview", e); }
+  markMenu();
+}
+function wearMark() { [...$("wearRows").children].forEach((b, i) => b.classList.toggle("on", i === wearSel)); }
+function wearNav(d, ok, back, vert) {
+  if (back) { closeWear(); return; }
+  if (d && vert) { wearSel = (wearSel + d + 5) % 5; SFX.tick(); markMenu(); return; }
+  if (d && wearSel < 4) { wearCycle(wearSel, d); return; }
+  if (ok) { if (wearSel >= 4) closeWear(); else wearCycle(wearSel, 1); }
+}
+function wearTick(dt) {                              // (the big preview breathing while ACCESSORIES is up: the charm and the bandanas move)
+  if (menuUp !== "wear" || !wearPv) return; wearPv.t = (wearPv.t || 0) + dt; if (wearPv.t < 1 / 30) return; const s = wearPv.t; wearPv.t = 0;
+  for (const id of GEAR_HEROES) { const E = wearPv.rigs[id]; if (E) { E.st.yaw = E.yaw; KIT.updatePose(E.st, s); E.r.sync(E.st, E.r, s); E.r.root.position.x = id === "rose" ? .95 : -.95; } }
+  wearPv.R2.render(wearPv.sc, wearPv.cam);
+}
 // the treasure map (the user, 2026-10-22): the seller's, one per region. On your map from then on: every room of the region, and where its
 // cat, its dungeons (the beps' hideouts, the hatch down to the stronghold), its checkpoints (the rest stops) and its treasure (the gifts,
 // the crates, the items lying about, not yet taken) are
@@ -16950,7 +17219,7 @@ function closeNpc() { npcUp = null; document.body.classList.remove("talking"); i
 function npcRows() {                                 // [label, sub, action]
   const U = npcUp, role = U.f.npc, B = bag();
   if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]),
-    ...(U.f.road ? [] : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
+    ...(U.f.road ? wearStock(U.f).map(id => [`${accSvg(id)}<b>${ACC[id].name}</b><span class="pr">${ITEM_SVG.coin}${ACC[id].price}</span>`, gearOwned(id) ? "YOU'VE GOT THIS ONE" : ACC[id].desc, () => buyAcc(id)]) : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
   if (role === "caller") { const C = [...petsCaught("cat").map(w => ["cat", w]), ...petsCaught("dog").map(w => ["dog", w])];
     return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]), ["<b>LEAVE</b>", "", closeNpc]]; }
   const other = otherHero();
@@ -16959,7 +17228,7 @@ function npcRows() {                                 // [label, sub, action]
 function npcSays() {
   const U = npcUp, role = U.f.npc;
   if (U.msg) return U.msg;
-  if (role === "seller") return (U.f.road ? "FRESH FROM THE STAND, FOR THE ROAD AHEAD! " : "WARES FOR THE ROAD! ") + "PAY IN P COINS. YOU'VE GOT " + bag().coins + ".";
+  if (role === "seller") return (U.f.road ? "FRESH FROM THE STAND, FOR THE ROAD AHEAD! AND THINGS TO WEAR! " : "WARES FOR THE ROAD! ") + "PAY IN P COINS. YOU'VE GOT " + bag().coins + ".";
   if (role === "caller") return petsCaught("cat").length + petsCaught("dog").length ? "ONE RING OF THIS BELL AND A CAT OR DOG YOU'VE MADE FRIENDS WITH COMES RUNNING. WHO SHALL I CALL?" : "NO CATS OR DOGS TO CALL YET. CATCH ONE, AND I'LL RING IT TO YOU ANYWHERE YOU MEET ME.";
   return `GREETINGS, ${rig.name.toUpperCase()}. A WORD IN THE RIGHT EAR AND ${otherHero().name.toUpperCase()} TAKES OVER FROM YOU. SHALL I?`;
 }
@@ -19739,7 +20008,7 @@ function hatchHero() {                             // the user, 2026-10-25: "the
   camera.layers.set(3); renderer.render(actors, camera); camera.layers.set(0); return hm;
 }
 function render(dt) {
-  syncMini(); hourEaseTick(dt); peekTick();
+  syncMini(); hourEaseTick(dt); peekTick(); gearCheck(); wearTick(dt);
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);
