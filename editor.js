@@ -90,7 +90,7 @@ const isVillainSpec = s => !!(s && s.villain && s.villain.on);
 // the berry buddies: their moves (the plain hit, the special every couple of hits), on the game's own models (the user, 2026-10-25: "every move we do and
 // create should go in there for their respective characters"). Their look stays the game's; origin: as they ship
 const BUD = (window.BerryGame && window.BerryGame.buddies) || null;
-const buddyEntries = () => BUD ? BUD.list().map((b, i) => entry(BUD.spec(b.id), { id: "buddy:" + b.id, buddy: b.id, builtIn: false, created: 900 + i, ref: null, origin: BUD.plain(b.id) })) : [];
+const buddyEntries = () => BUD ? BUD.list().map((b, i) => { const e = entry(BUD.spec(b.id), { id: "buddy:" + b.id, buddy: b.id, builtIn: false, created: 900 + i, ref: null, origin: BUD.plain(b.id) }); e.spec.name = e.origin.name = b.name; return e; }) : [];   // (a pet's name: EVERY CAT / EVERY DOG, as it stands for all of them)
 const B_TABS = { ANIMATE: "animate" };
 const entry = (spec, extra = {}) => ({ id: spec.id, spec: KIT.normalize(spec), origin: KIT.normalize(extra.origin || spec), builtIn: false, created: Date.now(), ref: undefined, undo: [], redo: [], ...extra, spec: KIT.normalize(spec), origin: KIT.normalize(extra.origin || spec) });
 let cast = PRESETS.map((p, i) => entry(p, { builtIn: true, created: i, ref: null }));
@@ -185,10 +185,11 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
-  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
   const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
+  if (cur && cur.buddy && cur.spec === sp && cur.buddy.startsWith("pet-")) { add("Special (every couple of pounces)", (KIT.PET_SP || {})[cur.buddy.slice(4)], "", KIT.CAT_MOVES); return out; }   // (the pets: their pounce is the game's own, their special keyed)
   const TK = KIT.TK_CHARGE || {};                                // (a move used in more than one place shows in each: it's the one move, edited once)
   if (sp.base === "cat") { const C = KIT.CAT_MOVES;
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
@@ -1343,7 +1344,7 @@ function chipsOf(s) {
 function castItemHTML(e) {
   const s = e.spec;
   if (e.villain) return `<b>${s.name}</b><span class="chips">${e.villain.cols.slice(0, 4).map((c, i) => `<i style="background:${(e.look.colors || {})[i] || c}"></i>`).join("")}</span><small>VILLAIN${edited(e) ? " · EDITED" : ""}</small>`;
-  if (e.buddy) return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>BERRY BUDDY${edited(e) ? " · EDITED" : ""}</small>`;
+  if (e.buddy) return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>${e.buddy.startsWith("pet-") ? "PET" : "BERRY BUDDY"}${edited(e) ? " · EDITED" : ""}</small>`;
   if (isVillainSpec(s)) return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>VILLAIN${edited(e) ? " · EDITED" : ""}</small>`;
   return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>${e.builtIn ? (edited(e) ? "EDITED" : "ORIGINAL") : "NEW"}</small>`;
 }
@@ -1368,7 +1369,7 @@ function renderAll() {
   $("name").value = cur.spec.name;
   $("kindBar").textContent = cur.spec.base === "cat" ? "CREATURE" : cur.spec.body.build === "tall" ? "HERO" : "HERO · CHIBI";
   if (isVillainSpec(cur.spec)) $("kindBar").textContent = "VILLAIN";
-  if (cur.buddy) $("kindBar").textContent = "BERRY BUDDY · MOVES";
+  if (cur.buddy) $("kindBar").textContent = cur.buddy.startsWith("pet-") ? "PET · MOVES" : "BERRY BUDDY · MOVES";
   fillMoves(); renderKeys();
   showRef();
 }

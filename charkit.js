@@ -2057,6 +2057,25 @@ Object.assign(STRIKES, {
       fFx: [[0, -.2], [.06, -.1], [.36, -.1], [.8, -.2]], fFy: [[0, 0], [.06, .15], [.36, .3], [.56, .05], [.8, 0]], fP: [[0, 0], [.06, -.4], [.46, .3], [.56, .2], [.8, 0]],
       bodyY: [[0, 0], [.58, 0], [.66, -.25], [.8, 0]] } },
 });
+// the pets' specials (the user, 2026-10-26: "can you also give the pets a special attack? although it can be the same for all cats and then the same one for all
+// dogs"): every couple of landed pounces (work.html palLeap). The cat: onto it and curled into a pinwheel of claws, three blows; the dog: a tackle, then a bark
+// that sends a ring of sound on ahead (work.html petBark). Keyed on the pets' own build (the chibi Tocsin); no cards
+const PET_SP = { cat: "pet_pinwheel", dog: "pet_bark" }, noCards = a => ({ dist: 34, up: -6, r: .55, al: 0, s: .01 });
+Object.assign(CAT_MOVES, {
+  pet_pinwheel: { dur: .7, sfx: "whoosh", hits: [{ t0: .1, t1: .6, kind: "slash" }], ring: noCards,
+    keys: { flip: turnKeys(.08, .56, 2, .7), lean: [[0, .3], [.08, .8], [.56, .8], [.7, .3]], arch: [[0, .1], [.08, .5], [.56, .5], [.7, .1]], bodyY: [[0, 0], [.08, -.15], [.56, -.15], [.62, -.25], [.7, 0]],
+      armF: [[0, 1.0], [.08, 2.2], [.16, 1.1], [.24, 2.3], [.32, 1.1], [.4, 2.3], [.48, 1.1], [.56, 1.6], [.7, .6]], elbF: [[0, .6], [.08, .2], [.56, .2], [.7, .6]],
+      armB: [[0, 1.0], [.08, 1.1], [.16, 2.3], [.24, 1.1], [.32, 2.3], [.4, 1.1], [.48, 2.3], [.56, 1.4], [.7, .5]], elbB: [[0, .6], [.08, .2], [.56, .2], [.7, .6]],
+      fNx: [[0, .2], [.08, .3], [.56, .3], [.7, .2]], fFx: [[0, -.2], [.08, .1], [.56, .1], [.7, -.2]], fNy: [[0, 0], [.08, .5], [.56, .5], [.7, 0]], fFy: [[0, 0], [.08, .45], [.56, .45], [.7, 0]],
+      tailBase: [[0, 1.2], [.08, 2.0], [.56, 2.0], [.7, 1.2]], tailCurl: [[0, 0], [.08, .5], [.56, .5], [.7, 0]], headRot: [[0, 0], [.08, .3], [.56, .3], [.7, 0]] } },   // the cat: a pinwheel of claws, paws raking turn and turn about
+  pet_bark: { dur: .8, sfx: "jump", hits: [{ t0: .2, t1: .4, kind: "smash" }], ring: noCards,
+    keys: { lean: [[0, .3], [.1, .6], [.3, .4], [.38, -.15], [.46, .6], [.62, .55], [.8, .2]], arch: [[0, .1], [.3, .1], [.38, -.25], [.46, .35], [.62, .3], [.8, .05]],
+      headRot: [[0, 0], [.3, .1], [.38, .45], [.46, -.35], [.62, -.3], [.8, 0]], bodyY: [[0, 0], [.3, -.1], [.38, -.22], [.46, -.05], [.8, 0]],
+      armF: [[0, 1.0], [.1, 2.0], [.3, 1.6], [.38, .4], [.46, -.4], [.62, -.3], [.8, .5]], elbF: [[0, .6], [.1, .2], [.38, .8], [.46, .3], [.8, .6]],
+      armB: [[0, 1.0], [.1, 1.8], [.3, 1.5], [.38, .3], [.46, -.5], [.62, -.4], [.8, .4]], elbB: [[0, .6], [.1, .2], [.38, .8], [.46, .3], [.8, .6]],
+      tailBase: [[0, 1.2], [.38, .9], [.46, 2.3], [.62, 2.3], [.8, 1.3]], tailCurl: [[0, 0], [.46, -.3], [.8, 0]],
+      fNx: [[0, .2], [.1, .4], [.3, .3], [.38, .25], [.46, .35], [.8, .2]], fFx: [[0, -.2], [.1, -.35], [.38, -.25], [.46, -.35], [.8, -.2]], fNy: [[0, 0], [.1, .3], [.3, .1], [.38, 0], [.8, 0]], fFy: [[0, 0], [.1, .25], [.3, .1], [.38, 0], [.8, 0]] } },   // the dog: a tackle, back on its haunches, then the bark, head thrown forward, tail up
+});
 // the moves the game drives itself, keyed so the editor can pose them too (the user, 2026-10-25: "every move we do and create should go in there for
 // their respective characters"): the tackle, the charged tackle's dig-in, the back-step. pose: never played as an attack; screen: their sides as seen
 // (far / near), not lead / rear, as they were drawn. Their keys start as the poses they had
@@ -2844,7 +2863,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
