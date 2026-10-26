@@ -2498,7 +2498,9 @@ void main() {
   #include <colorspace_fragment>
   #include <fog_fragment>
 }`;
-const shaderMat = (vs, fs, u, extra) => new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, u]), vertexShader: vs, fragmentShader: fs, fog: true, ...extra });
+const clipVS = vs => "#include <clipping_planes_pars_vertex>\n" + vs.replace("gl_Position = projectionMatrix * mvPosition;", "gl_Position = projectionMatrix * mvPosition;\n  #include <clipping_planes_vertex>");   // (cut at a screen's edge while the camera pans to the next, as the rest of it is: the sea, the waves' curls and every rock
+const clipFS = fs => "#include <clipping_planes_pars_fragment>\n" + fs.replace("void main() {", "void main() {\n  #include <clipping_planes_fragment>");   //  went on drawn whole, the new screen's over the old one's half: the user 2026-10-25, "things that pop in and out ... as you change screens")
+const shaderMat = (vs, fs, u, extra) => new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, u]), vertexShader: clipVS(vs), fragmentShader: clipFS(fs), fog: true, clipping: true, ...extra });
 const seaCols = () => ({ cDeep: { value: new THREE.Color() }, cMid: { value: new THREE.Color() }, cLight: { value: new THREE.Color() }, cFoam: { value: new THREE.Color() }, cLine: { value: new THREE.Color() } });
 const SUN_DIR = new THREE.Vector3(-.5, .65, .55).normalize();
 const rockMat = () => shaderMat(ROCK_VS, ROCK_FS, { cBase: { value: new THREE.Color() }, cLit: { value: new THREE.Color() }, uSun: { value: SUN_DIR } });
@@ -2732,14 +2734,23 @@ function buildWaves(k = 0, seed = k) {
     if (bep.kind !== "cave") { scene.add(at(new THREE.Mesh(jag(new THREE.CylinderGeometry(.75, 1.05, 1.5, 8, 2), rng, .14), rockM), X(bep.zone) + .5, .4, -3.1));   // the boulder at the cliff's edge
     scene.add(at(mk(new THREE.CylinderGeometry(.7, .74, .12, 9), null, { mat: mSand, ol: 0 }), X(bep.zone) + .5, 1.12, -3.1)); }
   }
+  // (the hand-made waves are one drawing, the user 2026-10-25: "what can be done about background and possibly foreground things that pop in and out and change as you
+  // change screens?": what's out at sea, on the horizon and in the water in front is placed in that drawing, not made up again for each screen, so the next has the same where they meet)
+  const WA = !!(WORLDS[1].authored && STITCH.has(1) && world === 1 && /^[A-D]\d$/.test(ST.cell || "")), ox = WA ? (+ST.cell.slice(1) - 1) * WX : 0, wrow = WA ? "ABCD".indexOf(ST.cell[0]) : 0;
+  const slots = (step, m0, m1, salt) => { const o = []; for (let j = Math.floor((ox - m0) / step); j * step <= ox + WX + m1; j++) { const rs = rngF(salt + j * 131 + wrow * 7919); o.push([j * step - ox, rs, (a, b) => a + rs() * (b - a), j]); } return o; };   // [its x here, its own rng, R, slot]
+  const lowAt = lx => { const c = Math.floor((lx + ox) / WX) + 1, q = STAGES.find(s2 => s2 && s2.cell === ST.cell[0] + c && !s2.cut && !s2.arena); return !!(q && q.lowWaves); };   // (lowWaves where that bit of sea is, not where you are)
   // out at sea: sea stacks with foam round them, the big curling waves, mountains on the horizon
   const rocksFar = [];
-  for (let i = 0; i < 7; i++) {
+  if (WA) for (const [x0, rs, Rs] of slots(11, 40, 40, 3301)) { const x = x0 + Rs(0, 8), z = -Rs(7, 26), h = Rs(1.5, 4.5), r = Rs(.8, 2);
+    scene.add(at(new THREE.Mesh(jag(new THREE.CylinderGeometry(r * .55, r, h + 2, 7, 3), rs, r * .3), rockM), x, WY + h / 2 - 1, z));
+    rocksFar.push([x, z, r]); for (let j = 0; j < 7; j++) { const a = j / 7 * TAU; foamBits.push([x + Math.cos(a) * r * 1.05, z + Math.sin(a) * r * 1.05, r * .7]); } }
+  else for (let i = 0; i < 7; i++) {
     const x = R(-8, WX + 10), z = -R(7, 26), h = R(1.5, 4.5), r = R(.8, 2);
     scene.add(at(new THREE.Mesh(jag(new THREE.CylinderGeometry(r * .55, r, h + 2, 7, 3), rng, r * .3), rockM), x, WY + h / 2 - 1, z));
     rocksFar.push([x, z, r]); for (let j = 0; j < 7; j++) { const a = j / 7 * TAU; foamBits.push([x + Math.cos(a) * r * 1.05, z + Math.sin(a) * r * 1.05, r * .7]); }
   }
-  for (let i = 0; i < 6; i++) {                       // mountains, faint in the haze
+  if (WA) for (const [x0, rs, Rs] of slots(19 * WS, 80, 80, 3307)) { const h = Rs(6, 12), m = new THREE.Mesh(jag(new THREE.ConeGeometry(Rs(7, 12), h, 6, 3), rs, 1.2), mtnM); at(m, x0 + Rs(-5, 5), WY + h / 2 - 1, -Rs(62, 74)); scene.add(m); }
+  else for (let i = 0; i < 6; i++) {                  // mountains, faint in the haze
     const h = R(6, 12), m = new THREE.Mesh(jag(new THREE.ConeGeometry(R(7, 12), h, 6, 3), rng, 1.2), mtnM);
     at(m, -30 + i * 19 * WS + R(-5, 5), WY + h / 2 - 1, -R(62, 74)); scene.add(m);
   }
@@ -2766,18 +2777,20 @@ function buildWaves(k = 0, seed = k) {
     }
     pg.add(at(mk(new THREE.CylinderGeometry(.03, .05, 1.1, 6), null, { mat: mRoof, ol: 0 }), 0, .3 + tiers * 1.25 + .5, 0));
   };
-  cliff(-9, -19, 14, 9, 3); cliff(-3, -16, 8, 5, 2);
-  pagoda(-7, WY + 8.2, -19.5, 1.4, 3); pine(-12, WY + 7.6, -17.5, 1.2); pine(-2.5, WY + 4.6, -15, .9); pine(-4, WY + 7.4, -21, 1);
-  cliff(WX + 9, -23, 14, 7, 3); pagoda(WX + 8, WY + 6.3, -23, 1.1, 2); pine(WX + 3.5, WY + 5.6, -21, 1); pine(WX + 13, WY + 6.4, -24, 1.1);
+  if (!WA || ox === 0) { cliff(-9, -19, 14, 9, 3); cliff(-3, -16, 8, 5, 2);   // (the hand-made waves: these two at the drawing's ends, not at every screen's)
+    pagoda(-7, WY + 8.2, -19.5, 1.4, 3); pine(-12, WY + 7.6, -17.5, 1.2); pine(-2.5, WY + 4.6, -15, .9); pine(-4, WY + 7.4, -21, 1); }
+  if (!WA || ox === 7 * WX) { cliff(WX + 9, -23, 14, 7, 3); pagoda(WX + 8, WY + 6.3, -23, 1.1, 2); pine(WX + 3.5, WY + 5.6, -21, 1); pine(WX + 13, WY + 6.4, -24, 1.1); }
   const topElev = Math.max(...STAGES.map(q => q.elev || 0)), yA = (topElev - (ST.elev || 0)) * ROW_RISE * S, col = ST.cell ? +ST.cell.slice(1) : 0;
   if (col >= 3 && yA > 1) {                           // from where the climb starts: the high cliffs ahead, the shrine on top
     const r3 = rngF(901 + seed), R3 = (a, b) => a + r3() * (b - a), hTop = Math.min(yA, 12);
-    for (let i = 0; i < 9; i++) { const ww = R3(4, 8), x = R3(WX - 4, WX + 28), z = -R3(34, 50), hh = hTop - WY + R3(-2.2, .4) - (x < WX + 2 ? R3(1.5, 3.5) : 0);
+    if (WA) for (const [x0, rs, Rs] of slots(6, 60, 60, 3313)) { if (x0 + ox < 3 * WX - 4) continue; const ww = Rs(6, 10), x = x0 + Rs(0, 3), z = -Rs(34, 50), hh = hTop - WY + Rs(-2.2, .4);   // (one long wall of them, from where the climb starts on to the drawing's end)
+      scene.add(at(new THREE.Mesh(jag(new THREE.CylinderGeometry(ww * .42, ww * .62, hh, 7, 6), rs, ww * .16), rockM), x, WY + hh / 2 - .6, z)); }
+    if (!WA) for (let i = 0; i < 9; i++) { const ww = R3(4, 8), x = R3(WX - 4, WX + 28), z = -R3(34, 50), hh = hTop - WY + R3(-2.2, .4) - (x < WX + 2 ? R3(1.5, 3.5) : 0);
       scene.add(at(new THREE.Mesh(jag(new THREE.CylinderGeometry(ww * .42, ww * .62, hh, 7, 6), r3, ww * .16), rockM), x, WY + hh / 2 - .6, z)); }
-    scene.add(at(new THREE.Mesh(jag(new THREE.BoxGeometry(28, 2.6, 12, 7, 2, 3), r3, .45), rockM), WX + 15, hTop - 1.9, -42));       // the plateau up top: turf, pines, the shrine's pagoda
+    if (!WA || ox === 7 * WX) { scene.add(at(new THREE.Mesh(jag(new THREE.BoxGeometry(28, 2.6, 12, 7, 2, 3), r3, .45), rockM), WX + 15, hTop - 1.9, -42));       // the plateau up top: turf, pines, the shrine's pagoda (the drawing's end)
     scene.add(at(mk(new THREE.BoxGeometry(27.6, .3, 11.6), null, { mat: mGrass, ol: 0 }), WX + 15, hTop - .55, -42));
     for (let i = 0; i < 5; i++) pine(R3(WX + 3, WX + 27), hTop - .45, -R3(37, 47), R3(1.1, 1.6));
-    pagoda(WX + 12, hTop - .45, -41, 1.3, 2);
+    pagoda(WX + 12, hTop - .45, -41, 1.3, 2); }
   }
   let cloudSea = null;
   if (ST.peak) {                                    // on the summit: the mountain falls away behind us into a sea of cloud, lower peaks poking through it
@@ -2893,12 +2906,18 @@ function buildWaves(k = 0, seed = k) {
     waves.push({ g, x, z, s, dir, speed, ph, fg, broke: false });
   };
   const hi = (ST.elev || 0) >= 2 || !!ST.lowWaves, lw = ST.lowWaves ? .5 : 1;   // (lowWaves: platforms up over the water: the waves stay down behind them, the user 2026-10-25)
+  if (WA) {                                          // (in the drawing: five far off to a screen's width, three close in, each as low as the sea it's in)
+    const FAR = [[-16, 1.3, 9, 1, .35, 1, 0], [-34, 2.3, 14, -1, .25, 0, 1], [-26, 1.9, 12, 1, .3, 0, 1], [-14, 1.1, 7, -1, .4, 1, 0], [-31, 1.7, 10, 1, .3, 0, 1]], NEAR = [[6.6, .36, 5, 1, .45], [7.2, .4, 6, 1, .4], [6.4, .34, 5, 1, .45]];   // [z, size, depth, way, speed, not when high, lowered]
+    for (const [x0, rs, Rs, j] of slots(WX / 5, 50, 50, 3317)) { const F = FAR[((j % 5) + 5) % 5], x = x0 + Rs(-2, 2), lo = lowAt(x), hiHere = (ST.elev || 0) >= 2 || lo; if (F[5] && hiHere) continue; addWave(x, F[0], F[1] * (F[6] && lo ? .5 : 1), F[2], F[3], F[4], rs(), false); }
+    for (const [x0, rs, Rs, j] of slots(WX / 3, 12, 12, 3323)) { const F = NEAR[((j % 3) + 3) % 3], x = x0 + Rs(-2, 2); if (lowAt(x)) continue; addWave(x, F[0], F[1], F[2], F[3], F[4], rs(), true); }
+  } else {
   if (!hi) addWave(4 * WS, -16, 1.3, 9, 1, .35, 0, false); addWave(24 * WS, -26, 1.9 * lw, 12, 1, .3, .35, false); if (!hi) addWave(40 * WS, -14, 1.1, 7, -1, .4, .6, false);
   addWave(15 * WS, -34, 2.3 * lw, 14, -1, .25, .8, false); addWave(52 * WS, -31, 1.7 * lw, 10, 1, .3, .15, false);
-  if (!ST.lowWaves) { addWave(8 * WS, 6.6, .36, 5, 1, .45, .2, true); addWave(30 * WS, 7.2, .4, 6, 1, .4, .55, true); addWave(46 * WS, 6.4, .34, 5, 1, .45, .85, true); }
+  if (!ST.lowWaves) { addWave(8 * WS, 6.6, .36, 5, 1, .45, .2, true); addWave(30 * WS, 7.2, .4, 6, 1, .4, .55, true); addWave(46 * WS, 6.4, .34, 5, 1, .45, .85, true); } }
   // foreground rocks the waves crash against
   const fgRocks = [];
-  for (let x = -4; x < WX + 8; x += R(9, 15)) { const r = R(.7, 1.3), z = R(5.4, 7.4); scene.add(at(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0).scale(1.3, 1, 1), rng, r * .35), rockM), x, WY + r * .35, z)); fgRocks.push([x, z, r, R(0, 5)]); for (let j = 0; j < 6; j++) { const a = j / 6 * TAU; foamBits.push([x + Math.cos(a) * r * 1.3, z + Math.sin(a) * r, r * .6]); } }
+  if (WA) for (const [x0, rs, Rs] of slots(12, 6, 10, 3319)) { const x = x0 + Rs(0, 5), r = Rs(.7, 1.3), z = Rs(5.4, 7.4); scene.add(at(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0).scale(1.3, 1, 1), rs, r * .35), rockM), x, WY + r * .35, z)); fgRocks.push([x, z, r, Rs(0, 5)]); for (let j = 0; j < 6; j++) { const a = j / 6 * TAU; foamBits.push([x + Math.cos(a) * r * 1.3, z + Math.sin(a) * r, r * .6]); } }
+  else for (let x = -4; x < WX + 8; x += R(9, 15)) { const r = R(.7, 1.3), z = R(5.4, 7.4); scene.add(at(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0).scale(1.3, 1, 1), rng, r * .35), rockM), x, WY + r * .35, z)); fgRocks.push([x, z, r, R(0, 5)]); for (let j = 0; j < 6; j++) { const a = j / 6 * TAU; foamBits.push([x + Math.cos(a) * r * 1.3, z + Math.sin(a) * r, r * .6]); } }
   // the foam: flat cream patches riding the swell wherever the sea meets rock, posts or shore
   const foam = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 10, 6), mFoam, foamBits.length); scene.add(foam); keep.add(foam);
   // spray: drops thrown up when a wave breaks or slaps a rock (a small pool, recycled)
@@ -2919,9 +2938,10 @@ function buildWaves(k = 0, seed = k) {
   // drifting clouds in front of the printed sky
   const clouds = [];
   const skyDrop = WY - Y(GROUND + 46);
-  for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(17, 5.3), new THREE.MeshBasicMaterial({ transparent: true, fog: false, depthWrite: false })); at(m, -6 + i * 45, R(15, 19) + skyDrop, -76); scene.add(m); keep.add(m); clouds.push({ m, x0: m.position.x, v: R(.25, .45) }); }
+  for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(17, 5.3), new THREE.MeshBasicMaterial({ transparent: true, fog: false, depthWrite: false })); at(m, -6 + i * 45, WA ? 16.4 + i * 1.7 + skyDrop : R(15, 19) + skyDrop, -76); scene.add(m); keep.add(m); clouds.push({ m, x0: m.position.x, v: WA ? .3 + i * .1 : R(.25, .45), i }); }
   const tallSky = skyDrop < -.5, sky = new THREE.Mesh(new THREE.PlaneGeometry(150, tallSky ? 72 : 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k, tallSky), fog: false }));
   at(sky, WX / 2, (tallSky ? 30 : 12) + skyDrop, -80); scene.add(sky); keep.add(sky);     // its horizon sits on the sea, however far below
+  if (WA) clouds.forEach(c => { sky.add(c.m); c.m.position.y -= sky.position.y; c.m.position.z = 4; });   // (the hand-made waves: the drifting clouds on the sky, which goes along with the camera from screen to screen)
   let skyHi = null;
   if (ST.castle) { skyHi = new THREE.Mesh(new THREE.PlaneGeometry(260, 120), new THREE.MeshBasicMaterial({ color: WAVE_SCREENS[k].sky.top, fog: false })); at(skyHi, WX / 2, 66 + skyDrop + 60 - .1, -80.05); scene.add(skyHi); keep.add(skyHi); }   // (the camera pans way up the keep: more sky above)
   // spray in the air: the floating motes of the woods, as sea mist
@@ -2962,7 +2982,7 @@ function buildWaves(k = 0, seed = k) {
       const flap = Math.sin(t * .35 + B.ph) > .3 ? Math.sin(t * 9 + B.ph) * .55 : .12;
       birdWings.forEach((Wg, j) => { mW.makeRotationX((j ? -1 : 1) * flap).setPosition(0, .05, (j ? 1 : -1) * .1); Wg.setMatrixAt(i, mW2.multiplyMatrices(m4, mW)); });
     }); birdBody.instanceMatrix.needsUpdate = true; birdWings.forEach(Wg => { Wg.instanceMatrix.needsUpdate = true; }); }
-    for (const c of clouds) { c.m.position.x = c.x0 + ((t * c.v) % 100); if (c.m.position.x > 90) c.x0 -= 130; }
+    for (const c of clouds) { if (WA) { c.m.position.x = -102 + ((t * c.v + c.i * 100) % 200); continue; } c.m.position.x = c.x0 + ((t * c.v) % 100); if (c.m.position.x > 90) c.x0 -= 130; }   // (WA: on the sky, round its middle; it wraps out of sight)
     if (shrine && shrine.open && shrine.t < 1) { shrine.t = Math.min(1, shrine.t + dt * .35); const e = ease(shrine.t);   // the doors swing open on a warm light
       shrine.doors[0].rotation.y = 1.9 * e; shrine.doors[1].rotation.y = -1.9 * e; shrine.glow.material.color.set("#2a1a16").lerp(SHRINE_LIGHT, e); }
     if (gate) {                                      // the keep's great doors slide apart; its spires arc; its beacon blinks
@@ -3310,7 +3330,7 @@ function syncRowMore(dt, t) {                        // the rows' other moving b
 function buildLadders() {                          // wooden ladders up the cliff faces, facing us, hooked over the top of the rock
   const mW = toon("#8a5a34"), mR = toon("#6b4126"), z = -.4;
   return LADDERS.map(L => {
-    const g = group(scene), x = X(L.x), y0 = Y(L.bot) - .05, y1 = Y(L.top) + .45, h = y1 - y0; if (L.rock || (L.camila && (STAGES[level.s] || {}).authored)) return g;   // (Camila's rock: no ladder on it; in the hand-made forest, her pattern on the rock's the sign)
+    const g = group(scene), x = X(L.x), y0 = Y(L.bot) - .05, y1 = Y(L.rope === "up" ? Math.min(L.top, -60) : L.top) + .45, h = y1 - y0;   // (a rope ladder up into the room above: on up past the screen's top, as you go on climbing it; it stopped short in view, the user 2026-10-25 "the ladder in b3 ends even though you can keep climbing up") if (L.rock || (L.camila && (STAGES[level.s] || {}).authored)) return g;   // (Camila's rock: no ladder on it; in the hand-made forest, her pattern on the rock's the sign)
     [-1, 1].forEach(sx => { g.add(at(mk(new THREE.BoxGeometry(.1, h, .1), null, { mat: mW }), x + sx * .3, y0 + h / 2, z));
       g.add(at(mk(new THREE.BoxGeometry(.1, .1, .5), null, { mat: mW }), x + sx * .3, y1 - .05, z - .2)); });   // the hooks over the lip
     for (let y = y0 + .32; y < y1 - .2; y += .36) g.add(at(mk(new THREE.BoxGeometry(.62, .07, .08), null, { mat: mR }), x, y, z));
@@ -3592,7 +3612,7 @@ function wavesSet(P, g, s, rng, R) {
   const beam = (x0, y0, x1, y1, z, r = .07, m = mPost) => { const L = Math.hypot(x1 - x0, y1 - y0), b = mk(new THREE.CylinderGeometry(r, r, L, 6), null, { mat: m, ol: .01 }); b.rotation.z = Math.atan2(x0 - x1, y1 - y0); return put(b, (x0 + x1) / 2, (y0 + y1) / 2, z); };
   if (P.k === "ship") {                              // the S.S. Pineapple, moored at the dock (its hull in strakes, narrowing to the keel, back from the platforms in front of it)
     const S1 = W1.ship, N = 20, y0 = S1.y + 12, bh = (S1.keel - y0) / N, mStripe = toon("#f2c84b"), mHull = toon("#9c3a2e"), mHull2 = toon("#8a3328"), mKeel = toon("#3a2a2e"), mTrim = toon("#efe3c4"), wl = (ROW_H * 3 + GROUND + 46 - y0) / (S1.keel - y0);   // (darker than the scaffolds' vermilion in front of her; a cream trim; dark from her waterline down)
-    const zf = u => u <= .06 ? 2.5 - u / .06 * 5.3 : -2.8 - (u - .06) * 1.4, xs = u => [S1.x0 + 900 * Math.pow(u, 1.6), S1.x1 - 1000 * Math.pow(u, 1.3)];   // (her stripe under the deck's edge, the rest of her far back: in the background, the user 2026-10-25)
+    const zf = u => u <= .06 ? 2.5 - u / .06 * 5.3 : -2.8 - (u - .06) * 1.4, xs = u => [S1.x0 + 900 * Math.pow(u, 1.6), S1.x1 + 800 * Math.pow(u, 1.2)];   // (her far end on behind the rock: the user, 2026-10-25 "the boat should not end around d4")   // (her stripe under the deck's edge, the rest of her far back: in the background, the user 2026-10-25)
     for (let i = 0; i < N; i++) { const u = i / N, [xa, xb] = xs((i + 1) / N), z1 = zf(u), z0 = -6.2, w = X(xb - xa), cx = LX((xa + xb) / 2), cy = LY(y0 + (i + .5) * bh);
       put(box(w, bh * S + .02, z1 - z0, i === 0 ? mStripe : i === 2 ? mTrim : (i + 1) / N > wl - .04 ? mKeel : i % 2 ? mHull : mHull2, .02), cx, cy, (z0 + z1) / 2);
       if (i > 1) put(box(w + .02, .05, .06, mPlank), cx, LY(y0 + i * bh), z1 + .02);   // (the seams between the strakes)
@@ -3603,15 +3623,16 @@ function wavesSet(P, g, s, rng, R) {
     post(LX(S1.mast), LY(S1.y), LY(-360), -1.95, .3, mDeck); post(LX(S1.fore), LY(S1.y), LY(S1.nest[2]), -1.95, .22, mDeck);   // (the main mast, up out of sight; the foremast up to the crow's nest)
     [[S1.fore, -1], [S1.mast, 1]].forEach(([mx, sd]) => beam(LX(mx), LY(S1.nest[2] + 220), LX(mx + sd * 520), LY(S1.nest[2] + 8), -1.55, .09, mDeck));   // (braces under the nest)
     beam(LX(S1.nest[0] + 30), LY(S1.nest[2] + 6), LX(S1.fore), LY(S1.nest[2] + 300), -1.55, .09, mDeck);
-    put(mk(new THREE.CylinderGeometry(.12, .12, X(S1.tip - S1.mast) * .92, 8).rotateZ(Math.PI / 2), null, { mat: mDeck, ol: .02 }), LX(S1.mast + (S1.tip - S1.mast) * .46), LY(30), -2.9);   // (the yard the sail hangs from)
+    const sT = S1.sailTop ?? 40;   // (the sail's top, world px)
+    put(mk(new THREE.CylinderGeometry(.12, .12, X(S1.tip - S1.mast) * .92, 8).rotateZ(Math.PI / 2), null, { mat: mDeck, ol: .02 }), LX(S1.mast + (S1.tip - S1.mast) * .46), LY(sT - 10), -2.9);   // (the yard the sail hangs from)
     const sailM = toon("#ffffff"); sailM.side = THREE.DoubleSide;   // the sail: Cuss' propaganda on it
-    const sailH = 600, sailW = S1.tip - S1.mast;
+    const sailH = S1.sailH ?? 600, sailW = S1.tip - S1.mast;
     sailM.map = tex(2048, Math.round(2048 * sailH / sailW), (c, w, h) => { c.fillStyle = "#f6dc7a"; c.fillRect(0, 0, w, h); c.fillStyle = "#e6c25a"; for (let x = 60; x < w; x += 110) c.fillRect(x, 0, 4, h);
-      const pr = bossPortrait(), r = h * .4, cx = w * .3, cy = h * .5; c.fillStyle = "#fff4dc"; c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
+      const pr = bossPortrait(), r = h * (S1.sailH ? .32 : .4), cx = w * .3, cy = h * (S1.sailH ? .64 : .5);   // (hung lower: the face a little smaller and lower on it, all of it in view from the deck) c.fillStyle = "#fff4dc"; c.beginPath(); c.arc(cx, cy, r, 0, TAU); c.fill();
       c.save(); c.beginPath(); c.arc(cx, cy, r - 6, 0, TAU); c.clip(); c.drawImage(pr.c, cx - r * .86, cy - r * 1.02, r * 1.72, r * 2.15); c.restore();
       c.lineWidth = 10; c.strokeStyle = "#c8402c"; c.beginPath(); c.arc(cx, cy, r - 3, 0, TAU); c.stroke();
       c.fillStyle = "#c8402c"; c.font = `900 ${Math.round(h * .16)}px sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; c.fillText("LOYAL TO " + (shBoss().name || "CUSS"), w * .62, cy, w * .4); });
-    const pts = [[S1.mast + 40, 40], [S1.tip - 380, 190], [S1.tip, 380], [S1.tip - 560, 590], [S1.mast + 40, 40 + sailH]].map(([x, y]) => [LX(x), LY(y)]);
+    const pts = [[S1.mast + 40, 0], [S1.tip - 380, .25], [S1.tip, .633], [S1.tip - 560, .983], [S1.mast + 40, 1]].map(([x, f]) => [LX(x), LY(sT + f * sailH)]);
     const sh = new THREE.Shape(); pts.forEach(([x, y], i) => i ? sh.lineTo(x, y) : sh.moveTo(x, y)); sh.closePath();
     const sg = new THREE.ShapeGeometry(sh), pa = sg.attributes.position, uv = sg.attributes.uv, xs0 = pts.map(p => p[0]), ys0 = pts.map(p => p[1]), mnx = Math.min(...xs0), mxx = Math.max(...xs0), mny = Math.min(...ys0), mxy = Math.max(...ys0);
     for (let i = 0; i < pa.count; i++) uv.setXY(i, (pa.getX(i) - mnx) / (mxx - mnx), (pa.getY(i) - mny) / (mxy - mny));
@@ -3630,6 +3651,16 @@ function wavesSet(P, g, s, rng, R) {
     const Zq = STAGES[zi].zip, oa = org(STAGES[zi]), ob = org(STAGES[Zq.to]);
     post(ax + .1, ay + .25, LY(oa.y + Zq.base0), -.25, .13); post(bx + .1, by + .25, LY(ob.y + Zq.base1), -.25, .13);   // (its posts: on the scaffold, and at its foot on the deck)
     [[ax, ay], [bx, by]].forEach(([x, y]) => put(mk(new THREE.CylinderGeometry(.18, .18, .12, 12).rotateX(Math.PI / 2), null, { mat: mL, ol: .02 }), x + .1, y + .05, -.1));   // (the pulleys)
+    return true;
+  }
+  if (P.k === "rocks") {                             // the rock behind (the hand-made waves): one formation per row in the world's drawing (W1.rocks), each screen drawing what of it it can
+    const row = (st.cell || "A")[0], vx0 = o.x - 760, vx1 = o.x + WORLD + 760, bot = Math.min(WM.WY - 2, -14);   // see, column by column from the formation's own start, so the screen next door has the very same rock where they meet
+    for (const Q of W1.rocks || []) { if (Q.row !== row || Q.x1 < vx0 || Q.x0 > vx1) continue; const z = Q.z ?? -6, mid = (Q.x0 + Q.x1) / 2, half = (Q.x1 - Q.x0) / 2;
+      for (let x = Q.x0, k = 0; x < Q.x1; k++) { const rs = rngF(Q.salt * 1009 + k * 977), Rs = (a, b) => a + rs() * (b - a), w = Rs(170, 330), xc = x + w / 2, u = (xc - Q.x0) / (Q.x1 - Q.x0);
+        const tp = Q.steps ? Q.top + Math.floor((1 - u) * 6) * 100 + Rs(-15, 15) : Q.spire ? Q.top + Math.pow(Math.abs(xc - mid) / half, 1.4) * 320 + Rs(-20, 20) : Q.top + Rs(-45, 55);
+        const d = Rs(3.2, 4.6), zz = z + Rs(-.6, .6), ww = w * S + .3; x += w * Rs(.82, .96); if (xc + w < vx0 || xc - w > vx1) continue;
+        const h = Y(tp) - bot; put(new THREE.Mesh(jag(new THREE.BoxGeometry(ww, h, d, Math.max(1, Math.round(ww / 1.6)), Math.max(1, Math.round(h / 1.8)), 2), rs, .32), rockM), LX(xc), bot + h / 2, zz); }
+      if (Q.cave !== undefined && Q.home === st.cell) wavesSet({ k: "crag", x0: Q.cave, x1: Q.cave, top: Q.top, z, cave: Q.cave }, g, s, rng, R); }   // (the beps' cave mouth, in its own screen)
     return true;
   }
   if (P.k === "crag") {                              // the cliffs behind: rock in great jagged columns, sand (turf) on top; stepped, a spire, the beps' cave in it
@@ -3666,7 +3697,7 @@ function wavesSet(P, g, s, rng, R) {
   }
   if (P.k === "under") {                             // under the shelf: the underground scaffolding (posts holding it up), the rock behind
     const xa = X(P.x0), xb = X(P.x1), w = xb - xa, cx = (xa + xb) / 2, gy = Y(GROUND), sy = Y(250) - 1.5, mDk = toon("#262634");
-    put(box(w, sy - gy + .4, .8, mDk), cx, (gy + sy) / 2, -3.7);
+    put(rk(w, sy - gy + .4, .8, .2), cx, (gy + sy) / 2, -3.7);   // (rock, as the sheets have it under there: the user, 2026-10-25)
     for (let x = xa + 1; x < xb - .4; x += 3.8) [-2.5, 2.3].forEach(zz => post(x, gy - .05, sy + .05, zz, .14));
     for (let x = xa + 1; x < xb - 4.2; x += 7.6) beam(x, gy + .3, x + 3.8, sy - .2, -2.5, .07);
     return true;
@@ -4016,20 +4047,20 @@ function authorWaves() {
   const KEEPK = new Set(["h", "col", "foe", "gen", "like", "deepNew", "cell", "name"]);
   S0.forEach(q => { if (!q.cut && q.cell) delete q.bep; });   // (the beps' one way in: C6's cave)
   const room = (c, o, roster) => { const q = S0[C[c]]; Object.keys(q).forEach(k => { if (!KEEPK.has(k)) delete q[k]; });
-    Object.assign(q, { authored: true, noDress: true, elev: ELEV[c[0]], plats: [] }, o); R0[C[c]] = roster || []; return q; };
+    Object.assign(q, { authored: true, noDress: true, elev: ELEV[c[0]], plats: [] }, o); q.set = [...(q.set || []), { k: "rocks" }]; R0[C[c]] = roster || []; return q; };   // (rocks: what of the world's rock is in view, W.rocks)
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
 
   // ── row A: the scaffold up top, the sky the zipline crosses, the crow's nest and the sail, the mountain's top, the clifftop and Cuss' plateau
   room("A1", { ground: [[0, -140]], looks: [[-200, 2800, "scaf"]], downX: 950, down: C.B1, noRight: true, exitLeft: true,   // (the scaffold: its left end the way out to Loof's sky, Cuss always on that side, between you and it; the zipline at the right. The user, 2026-10-25)
     boss: true, bossX: 420, bossLeft: true, toWorld: SKY, zip: { x: 2250, y: 150, to: C.B2, ex: 2380, ey: 300, base0: 330, base1: 470 },
-    set: [{ k: "crag", x0: -400, x1: 1000, top: -40, z: -7.5 }, { k: "zip" }] });
+    set: [{ k: "zip" }] });
   room("A2", { open: true, gaps: [[-200, 2760]], below: C.B2, noLeft: true, noRight: true, set: [{ k: "zip" }] });   // (only the zipline crosses it)
   const a3 = room("A3", { ground: [[0, -170]], gaps: [[-200, 640]], below: C.B3, looks: [[640, 2800, "nest"]], downX: 1150, down: C.B3, noLeft: true, next: C.A4,
     rest: true, peace: true, restX: 1750, set: [{ k: "ship" }] }); nm(a3, "REST STOP");   // (a checkpoint up in the crow's nest)
   room("A4", { ground: [[0, -170]], gaps: [[640, 2760]], below: C.B4, looks: [[-200, 640, "nest"]], prev: C.A3, noRight: true, set: [{ k: "ship" }] });
   room("A5", { open: true, gaps: [[-200, 2760]], below: C.B5, noLeft: true, noRight: true, set: [{ k: "ship" }] });
   room("A6", { ground: [[0, 0], [1450, 0], [1450, -115]], gaps: [[-200, 900]], below: C.B6, looks: [[900, 1450, "scaf"]], downX: 1150, down: C.B6, noLeft: true, next: C.A7,   // (the scaffold's top, then up onto the clifftop)
-    set: [{ k: "crag", x0: -600, x1: 1000, top: 60, z: -6, steps: true }] });
+    });
   room("A7", { ground: [[0, -115], [1300, -115], [1850, -200], [2560, -200]], prev: C.A6, next: C.A8 },
     [["crab", "orange", 500], ["inkling", "green", 950], ["starfish", "red", 1750], ["octo", "blue", 2250]]);
   room("A8", { ground: [[0, -200]], prev: C.A7, boss: true, bossX: 1450, toWorld: KEEP, peak: true, shrine: true, set: [{ k: "flag", x: 720 }] });   // (a big flag with Cuss' photo; on to Volt Keep)
@@ -4042,8 +4073,8 @@ function authorWaves() {
   room("B3", { ground: [[0, 0]], looks: [[-200, 2800, "deck"]], upX: 1150, up: C.A3, prev: C.B2, next: C.B4,
     set: [{ k: "ship" }] }, [["crab", "purple", 650], ["seahorse", "green", 1550]]);
   room("B4", { ground: [[0, 0]], gaps: [[1500, 2760]], below: C.C4, looks: [[-200, 1500, "deck"]], prev: C.B3, noRight: true,   // (off the deck's end: down onto the hub's rock in C4)
-    set: [{ k: "ship" }, { k: "crag", x0: 1800, x1: 2700, top: 120, z: -5, spire: true }] }, [["kraken", "purple", 800, "mini"]]);
-  room("B5", { ground: [[0, 0]], gaps: [[-200, 1700]], below: C.C5, rise: true, noLeft: true, next: C.B6, set: [{ k: "crag", x0: -400, x1: 2900, top: -120, z: -7, steps: true }] },
+    set: [{ k: "ship" }] }, [["kraken", "purple", 800, "mini"]]);
+  room("B5", { ground: [[0, 0]], gaps: [[-200, 1700]], below: C.C5, rise: true, noLeft: true, next: C.B6 },
     [["crab", "orange", 2250]]);
   room("B6", { ground: [[0, 0]], plats: [[180, 260, 2070, "scaf"]], poles: [[2200, 260]], upX: 1150, upY: 260, up: C.A6, prev: C.B5, next: C.B7,   // (the ladder up the scaffold's frame onto its top, in A6)
     set: [{ k: "frame", x0: 900, x1: 1450, y0: 260, y1: 30 }] }, [["octo", "orange", 800, "mini"], ["inkling", "red", { plat: 0, x: 600 }], ["starfish", "orange", { plat: 0, x: 1550 }]]);
@@ -4052,19 +4083,19 @@ function authorWaves() {
   room("B8", { dark: true, ground: [[0, 0]], prev: C.B7, noRight: true, items: [["fruit", 1900]], set: [{ k: "cave", x1: 2500, shafts: true }] });   // (the dark cave behind it, light coming in; a berry buddy's home)
 
   // ── row C: the rock path, the ledges in front of the hull, the hub's rock, the platform on two ladders, the beps' cave, the open clifftop
-  room("C1", { ground: [[0, 0]], gaps: [[2400, 2760]], below: C.D1, plats: [[2200, 320, 400, "rock"]], upX: 170, up: C.B1, noLeft: true, next: C.C2, bepNoRight: true, set: [{ k: "crag", x0: -400, x1: 2300, top: -30, z: -6 }] },   // (the rock path; C2's rock comes in at its right end, so you see the way here and the ladder up to B1. The user, 2026-10-25)
+  room("C1", { ground: [[0, 0]], gaps: [[2400, 2760]], below: C.D1, plats: [[2200, 320, 400, "rock"]], upX: 170, up: C.B1, noLeft: true, next: C.C2, bepNoRight: true },   // (the rock path; C2's rock comes in at its right end, so you see the way here and the ladder up to B1. The user, 2026-10-25)
     [["inkling", "red", 700], ["crab", "orange", 1150], ["starfish", "purple", 1650]]);
   room("C2", { open: true, gaps: [[-200, 2760]], below: C.D2, rise: true, plats: [[-40, 320, 1340, "rock"], [1420, 450, 1180, "scaf"]], prev: C.C1, next: C.C3, bepNoRight: true,   // (the dock's stack comes in from C3 at the right: off its end onto the rock formation, which runs on into C1. The user, 2026-10-25)
-    set: [{ k: "crag", x0: 200, x1: 1100, top: 120, z: -5, spire: true }, { k: "ship" }] }, [["octo", "purple", { plat: 0, x: 450 }], ["crab", "blue", { plat: 0, x: 950 }]]);
+    set: [{ k: "ship" }] }, [["octo", "purple", { plat: 0, x: 450 }], ["crab", "blue", { plat: 0, x: 950 }]]);
   room("C3", { open: true, gaps: [[-200, 2760]], below: C.D3, rise: true, plats: [[-40, 450, 2140, "scaf"], [1550, 250, 1050, "scaf"]], prev: C.C2, next: C.C4, bepNoLeft: true,   // (the top of the stack raised from the docks of D2 and D3, on into C2; the ship far behind, in the water)
     set: [{ k: "ship" }] },
     [["inkling", "orange", { plat: 0, x: 700 }], ["seahorse", "yellow", { plat: 0, x: 1400 }], ["crab", "blue", { plat: 1, x: 1950 }], ["octo", "red", { plat: 1, x: 2350 }]]);
   const c4 = room("C4", { ground: [[0, -140]], gaps: [[-200, 1400]], below: C.D4, plats: [[-40, 250, 740, "scaf"], [950, 300, 230, "rock"]], prev: C.C3, next: C.C5,   // (the hub: the npcs on the rock platform)
-    hub: 1, peace: true, hubSpots: [1650, 1980, 2300], set: [{ k: "ship" }, { k: "crag", x0: 1300, x1: 2900, top: 40, z: -5 }] }); nm(c4, "HUB");
+    hub: 1, peace: true, hubSpots: [1650, 1980, 2300], set: [{ k: "ship" }] }); nm(c4, "HUB");
   room("C5", { ground: [[0, -140]], gaps: [[700, 2760]], below: C.D5, rise: true, plats: [[850, 240, 220, "rock"], [1250, 130, 450, "rock"], [1000, 420, 1560, "scaf"]],   // (in at the top from the hub: up the ledges and into B5, or down onto the platform or D5's shelf)
     downX: 1700, downY: 420, down: C.D5, prev: C.C4, next: C.C6, riseX: 1475 }, [["starfish", "orange", { plat: 1, x: 1500 }], ["crab", "orange", { plat: 2, x: 1350 }]]);
   room("C6", { ground: [[0, 0], [1550, 0], [1550, -160]], gaps: [[-200, 1550]], below: C.D6, rise: true, plats: [[0, 420, 1250, "scaf"]], downX: 900, downY: 420, down: C.D6,   // (the platform's right end; over to the rock, the beps' cave in it)
-    bep: { trail: 1750, zone: 2300, left: 2540, kind: "cave" }, prev: C.C5, next: C.C7, set: [{ k: "crag", x0: 1700, x1: 2900, top: 20, z: -4.6, cave: 2300 }] },
+    bep: { trail: 1750, zone: 2300, left: 2540, kind: "cave" }, prev: C.C5, next: C.C7 },
     [["inkling", "green", { plat: 0, x: 700 }], ["crab", "red", 2000]]);
   room("C7", { ground: [[0, -160], [700, -160], [700, -40], [2560, -40]], looks: [[700, 2800, "slab"]], plats: [[950, 290, 380, "rock"]], prev: C.C6, next: C.C8 },   // (out in the open air, on the cliff: the ledge held up on posts)
     [["crab", "orange", 1550], ["jelly", "aqua", { plat: 0, x: 1140 }]]);
@@ -4072,13 +4103,13 @@ function authorWaves() {
     items: [["power", 1765, 140]], prev: C.C7, noRight: true }, [["seahorse", "aqua", { plat: 0, x: 350 }]]);   // (the star: a power-up; off the ledge's end down to Cuss)
 
   // ── row D: the dock over the waves, the stacked platforms, Rose's jump, the shelf and the underground scaffolding, Cuss at the water
-  room("D1", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], next: C.D2,   // (the way in from the woods, at its left: the dock)
-    set: [{ k: "crag", x0: -400, x1: 2900, top: -40, z: -7 }] }, [["crab", "orange", 1400]]);
+  room("D1", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], next: C.D2 },   // (the way in from the woods, at its left: the dock)
+    [["crab", "orange", 1400]]);
   room("D2", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 2050, plats: [[1350, 350, 400, "scaf"], [1850, 230, 710, "scaf"]], prev: C.D1, next: C.D3,   // (the stack raised from the dock begins: up it and into C2 / C3)
-    set: [{ k: "crag", x0: -400, x1: 1500, top: -60, z: -5 }, { k: "ship" }] }, [["inkling", "red", 600], ["seahorse", "aqua", 1450], ["crab", "blue", 2150]]);
-  room("D3", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 625, plats: [[-40, 230, 340, "scaf"], [400, 110, 450, "scaf"], [1100, 230, 400, "scaf"], [1650, 350, 420, "scaf"]], prev: C.D2, next: C.D4,   // (the stack's top: jump up off it into C3)
+    set: [{ k: "ship" }] }, [["inkling", "red", 600], ["seahorse", "aqua", 1450], ["crab", "blue", 2150]]);
+  room("D3", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 625, plats: [[-40, 265, 340, "scaf"], [400, 185, 450, "scaf"], [1100, 230, 400, "scaf"], [1650, 350, 420, "scaf"]], prev: C.D2, next: C.D4,   // (the stack's top: jump up off it into C3)
     set: [{ k: "ship" }] }, [["crab", "purple", 420], ["inkling", "orange", 1350], ["squidlet", "pink", { plat: 3, x: 1800 }]]);
-  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2000, 88, 480, "rock"]], prev: C.D3, next: C.D5, set: [{ k: "ship" }] },   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
+  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2120, 182, 440, "rock"]], prev: C.D3, next: C.D5, set: [{ k: "ship" }] },   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
     [["octo", "purple", 750], ["crab", "orange", 1450]]);
   room("D5", { ground: [[0, 0]], gaps: [[-200, 650]], plats: [[-40, 250, 2600, "shelf"]], poles: [[720, 250]], upX: 1700, upY: 250, up: C.C5, prev: C.D4, next: C.D6, bepNoLeft: true,   // (the shelf, and under it the underground scaffolding)
     set: [{ k: "under", x0: 650, x1: 2800 }] }, [["starfish", "red", { plat: 0, x: 1200 }], ["crab", "orange", 1100], ["inkling", "purple", 1900]]);
@@ -4089,7 +4120,20 @@ function authorWaves() {
     set: [{ k: "posts", x0: 0, x1: 1150 }] });
 
   W.ship = { x0: WORLD + 1250, x1: WORLD * 3 + 1500, y: ROW_H + GROUND, keel: ROW_H * 3 + GROUND + 110, mast: WORLD * 3, fore: WORLD * 2 + 1900, nest: [WORLD * 2 + 640, WORLD * 3 + 640, 300],   // (the S.S. Pineapple, in world px: B2's deck to B4's, her keel down in C3-C4, the crow's nest over A3-A4)
-    tip: WORLD * 4 + 1300, anchor: WORLD * 2 + 420, anchorY: ROW_H * 2 + 230, name: WORLD * 2 + 1300 };
+    tip: WORLD * 4 + 1300, anchor: WORLD * 2 + 420, anchorY: ROW_H * 2 + 230, name: WORLD * 2 + 1300, sailTop: ROW_H - 10, sailH: 460 };   // (the sail hung lower, Cuss' face in view from B4's deck: the user, 2026-10-25)
+  // the rock behind, as the sheets have it: one formation per row, in world px (top: as the row's own y), each screen drawing what of it it can see. The C4 and D4 rock stands in
+  // front of the ship's far end, which goes on behind it (the user, 2026-10-25: "it's supposed to hide behind some rocks that appear in d4 and imply that the boat goes way further back";
+  // "c5 doesnt have a rock background like it should. make sure that c5, 6, b6, and the lower ones all have rocks behind them like in the drawings")
+  const CX = c => (c - 1) * WORLD;
+  W.rocks = [
+    { row: "A", x0: CX(1) - 400, x1: CX(1) + 1000, top: -40, z: -7.5, salt: 101 }, { row: "A", x0: CX(6) - 600, x1: CX(6) + 1000, top: 60, z: -6, steps: true, salt: 103 },
+    { row: "B", x0: CX(4) + 1800, x1: CX(4) + 2700, top: 120, z: -5, spire: true, salt: 105 }, { row: "B", x0: CX(5) - 400, x1: CX(5) + 2900, top: -120, z: -7, steps: true, salt: 107 },
+    { row: "B", x0: CX(6) - 200, x1: CX(7) + 100, top: -200, z: -6.5, salt: 109 },
+    { row: "C", x0: CX(1) - 400, x1: CX(1) + 2300, top: -30, z: -6, salt: 111 }, { row: "C", x0: CX(2) + 200, x1: CX(2) + 1100, top: 120, z: -5, spire: true, salt: 113 },
+    { row: "C", x0: CX(4) + 1300, x1: CX(4) + 2900, top: 40, z: -4.0, salt: 115 }, { row: "C", x0: CX(5) - 200, x1: CX(6) + 1800, top: -200, z: -6, salt: 117 },
+    { row: "C", x0: CX(6) + 1700, x1: CX(6) + 2900, top: 20, z: -4.6, cave: 2300, home: "C6", salt: 119 },
+    { row: "D", x0: CX(1) - 400, x1: CX(1) + 2900, top: -40, z: -7, salt: 121 }, { row: "D", x0: CX(2) - 400, x1: CX(2) + 1500, top: -60, z: -5, salt: 123 },
+    { row: "D", x0: CX(4) + 550, x1: CX(5) + 300, top: -300, z: -4.3, salt: 125 }, { row: "D", x0: CX(5) - 200, x1: CX(8) + 2150, top: -300, z: -5.2, salt: 127 } ];
   W.buddyHomes = { stilt: [C.A3, C.B8] };              // (the sheet's two berry buddies: Stilt's home is one or the other each stay)
   W.authored = true; W.rosterThin = null; mapGridC.delete(1);
 }
@@ -7122,6 +7166,9 @@ function goRoomSwimUp(ns) {                        // the deep: swum up off the 
 }
 const safeNear = x => { for (let d = 0; d < WORLD; d += 20) for (const v of [x - d, x + d]) { if (v < 60 || v > WORLD - 60) continue;   // the nearest footing to x: the ground, or a platform (a fall into the water puts you back there)
   if (groundAt(v) !== null) return { x: v, y: groundAt(v), plat: null }; const P0 = PLATFORMS.find(q => v > q.x + 20 && v < q.x + q.w - 20); if (P0) return { x: v, y: P0.y, plat: P0 }; } return { x, y: GROUND, plat: null }; };
+function riseTop(ns, x) {                          // where you have to get up to, here, to go on up into room ns: the top of what's over you there to land on (in this room's y), else over the top edge
+  let t = -12; for (const q of STAGES[ns].plats || []) if (x > q[0] && x < q[0] + q[2]) t = Math.max(t, q[1] - ROW_H); return t;   // (the user, 2026-10-25: "you can easily get pushed up to the platform on c3 ... a little less sensitivity of how high")
+}
 function goRoomRise(ns) {                          // the hand-made waves: jumped up through the open floor of the room above, on up into it, just as you were going
   cine = null; const fx = player.x, fy = player.y, vx = player.vx, vy = player.vy, face = player.face, fj = player.fullJump, aj = player.airJumps;
   swapPan("up", ns, () => {
@@ -7972,7 +8019,7 @@ function updatePlayer(dt) {
   if (dropTo !== undefined && !stronghold && !hideout && !arena && !transit && !patrolLock && GAPS.length && !p.dead && !p.climb && overGap(p.x) && p.y > Math.min(SINK - 6, FLOOR_LOW + 200)) goRoomDrop(dropTo);
   const cu = STAGES[stage].climbUp;                  // off the top of a climb's ledges: on up into the room above
   const riseU = world === 1 && STAGES[stage].authored && STITCH.has(world) && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && p.vy < 0 && p.y < 20 ? holeAbove(p.x) : null;   // (the hand-made waves: up through the open floor of the room above, on up into it)
-  if (riseU && STAGES[riseU.to].rise && p.x > riseU.a && p.x < riseU.b) goRoomRise(riseU.to);
+  if (riseU && STAGES[riseU.to].rise && p.x > riseU.a && p.x < riseU.b && p.y < riseTop(riseU.to, p.x) - 2) goRoomRise(riseU.to);
   const huAny = !(world === 1 && STAGES[stage].authored) && STAGES[stage].up === undefined && p.vy < 0 && p.y < (STAGES[stage].hopY ?? (groundAt(p.x) ?? GROUND) - (STAGES[stage].hopUp ?? 400)) ? holeAbove(p.x) : null, hu = !cu ? huAny : null;   // (huAny: a climb's room too, only for a look up into the room above)   // (hopY: as high as this, wherever you jump from: the forest's C5, from its top platform)   // (fallen in by a hole, no way back up: jumped high enough near under it)
   const huLow = !huAny && STITCH.has(world) && STAGES[stage].up === undefined && p.vy < 0 && !peek && p.y < (groundAt(p.x) ?? GROUND) - 110 && peekWant(stage) >= 0 ? holeAbove(p.x) : null;   // (a room built to look up out of: any jump under its opening looks up, not only one high enough to hop through. The user, 2026-10-25: "if a player ever jumps up")
   if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
@@ -8093,10 +8140,10 @@ function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ cli
   if (p.hurtT > 0 || p.dead) p.climb = null;
   else if (L.wallClimb && !L.ledge && !transit && p.y <= L.top + 40 && dir < 0 && patrolLock) p.y = L.top + 40;   // (shut: it holds you at the top)
   else if (L.wallClimb && !L.ledge && !transit && p.y <= L.top + 40 && dir < 0) { p.climb = null; p.climbAuto = 0; goRoomUp(L.to, undefined, L.wallClimb === "side" ? L.x - L.wall * 40 : undefined); }   // up off the top: on into the room above
-  else if (L.rope && !transit && (L.rope === "up" ? p.y <= L.top + 60 : p.y >= L.bot - 60) && !p.climbAuto) { if (ropeOpen(L)) goRoomV(L.to, L.rope === "up"); else p.y = L.rope === "up" ? L.top + 60 : L.bot - 60; }   // a rope ladder: off the top (or the bottom) into the room above (or below)
-  else if (jumpBuf > 0 && (JUMP_KEYS.some(k => keys[k]) || pad.j)) {   // jump: let go and hop off, anywhere on it (the user, 2026-10-20: "so they dont have to climb all the way up or down")
+  else if (jumpBuf > 0 && (JUMP_KEYS.some(k => keys[k]) || pad.j) && !transit) {   // jump: let go and hop off, anywhere on it (the user, 2026-10-20: "so they dont have to climb all the way up or down"; 2026-10-25 "in general, allow the player to jump off ladder": first, so near a rope's ends too)
     const hd = (held.right ? 1 : 0) - (held.left ? 1 : 0), d = hd || (L.wall ? -L.wall : p.face || 1);
     p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.vy = -460; p.vx = d * 260; p.face = d; p.airJumps = 1; p.ladderCd = .45; SFX.jump(); }
+  else if (L.rope && !transit && (L.rope === "up" ? p.y <= L.top + 60 : p.y >= L.bot - 60) && !p.climbAuto) { if (ropeOpen(L)) goRoomV(L.to, L.rope === "up"); else p.y = L.rope === "up" ? L.top + 60 : L.bot - 60; }   // a rope ladder: off the top (or the bottom) into the room above (or below)
   else if (p.y <= L.top) { p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.y = L.top; p.x = L.face + L.wall * 24; p.face = L.wall || p.face || 1; p.vy = 0; p.onGround = true; p.plat = L.pole || L.ledge || L.onPlat ? PLATFORMS.find(q => L.x >= q.x && L.x <= q.x + q.w && Math.abs(q.y - L.top) < 6) || null : null; p.sq = -.15; p.sqv = 0; if (L.ledge) { p.x = L.x; dust(p.x, p.y, 4); SFX.land(); } }   // (over the ledge: up on its top)
   else if (p.y >= L.bot) { p.climb = null; p.climbAuto = 0; p.y = L.bot; p.vy = 0; p.onGround = true; p.plat = PLATFORMS.find(q => L.x >= q.x && L.x <= q.x + q.w && Math.abs(q.y - L.bot) < 6) || null; }   // (the foot of a rope that stands on a platform: onto it)
   if (L.wallClimb === "side") { p.face = L.wall; p.yaw = lerp(p.yaw, L.wall > 0 ? 0 : -Math.PI, 1 - Math.exp(-dt * 12)); }   // side on, facing the wall
@@ -18294,6 +18341,7 @@ function syncWorld(dt) {
   const dc = comicCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
   if (pan) { camera.position.copy(pan.pos); camera.quaternion.copy(pan.quat); }   // (between stitched screens: the camera on its way across)
+  if (level.sky && STITCH.has(world) && mode === "play") { const K = level.sky.userData; if (K.x0 === undefined) K.x0 = level.sky.position.x; level.sky.position.x = K.x0 + camera.position.x - WX / 2; if (hourEase && hourEase.sky && hourEase.level === level) hourEase.sky.position.x = level.sky.position.x; }   // (a stitched world's sky at infinity: it goes along with the camera, so crossing into the next screen it stays where it was, sun, moon and all; each screen's own was centred on it and jumped a screen's width. The user, 2026-10-25: "things that pop in and out and change as you change screens")
   sun.position.set(camX - 7, look.sun[2], 11); sun.target.position.set(camX, 0, 0);
   sun2.position.copy(sun.position); sun2.target.position.copy(sun.target.position);
   level.shafts.forEach((m, i) => m.material.opacity = look.shaftOp[0] + look.shaftOp[1] * Math.sin(time * .7 + i * 1.7));
@@ -18375,6 +18423,12 @@ function fgSeeThru(dt) {                          // a tree in the foreground (t
     F.g.traverse(o => { if (!o.isMesh) return; const m = o.material, t = F.k < .99; if (m.transparent !== t) { m.transparent = t; m.needsUpdate = true; } m.opacity = F.k; m.depthWrite = !t; });
   }
 }
+function hatchHero() {                             // the user, 2026-10-25: "they have this like hole in the floor that the ladders are meant to bring you in but the character model actually goes
+  const p = player, L = p && p.climb;              // OVER that and doesnt actually go through it": everyone's drawn over the scenery; on a rope down through a floor, with any of them below its top, the hero's drawn
+  if (!L || L.rope !== "down" || !(p.y > L.top + 2) || mode !== "play" || pan || peek || !p.rig || !p.rig.root) return null;   // first, against the scenery's own depth, then kept out of the actors' pass (the layers put back after it)
+  const hm = []; p.rig.root.traverse(o => { hm.push([o, o.layers.mask]); o.layers.set(3); }); actors.traverse(o => { if (o.isLight) o.layers.enable(3); });
+  camera.layers.set(3); renderer.render(actors, camera); camera.layers.set(0); return hm;
+}
 function render(dt) {
   syncMini(); hourEaseTick(dt); peekTick();
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
@@ -18402,8 +18456,10 @@ function render(dt) {
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   if (pan) panScene(); else if (peek) panScene(peek); else renderer.render(scene, camera);
+  const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
   renderer.render(actors, camera);
+  if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
   if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
   renderer.render(gradeScene, gradeCam);
