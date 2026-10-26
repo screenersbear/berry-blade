@@ -295,6 +295,9 @@
   #banner.stay { animation: none; opacity: 1; transform: translate(-50%, -50%); }
   #fade { position: fixed; inset: 0; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .45s; z-index: 45; }
   #fade.on { opacity: 1; }
+  #proBlack { position: fixed; inset: 0; background: #000; z-index: 46; display: none; pointer-events: none; }   /* (the prologue's black: over the game and the fade, under the voice's words and the story) */
+  #proBlack.show { display: block; } #proTitle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .9s; } #proTitle.on { opacity: 1; }
+  #skipHint.pro { z-index: 60; }
   #wstats { position: fixed; inset: 0; z-index: 47; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .6s; display: flex; align-items: center; justify-content: center; }
   #wstats.show { opacity: 1; pointer-events: auto; cursor: pointer; }
   #wstats .wsIn { opacity: 0; transition: opacity .5s .55s; display: flex; flex-direction: column; align-items: center; gap: 22px; }
@@ -449,6 +452,10 @@
   /* the story so far, off the beach: two comic pages, a panel at a time (the ones before it grayed), read out; the first page turns over onto the second */
   #tale { position: fixed; inset: 0; z-index: 49; display: none; align-items: center; justify-content: center; background: var(--s); perspective: 1900px; overflow: hidden; }
   #tale.show { display: flex; }
+  #tale.sky { background: transparent; align-items: flex-start; }   /* (the prologue: the panels over the sky, La Guagua under them) */
+  #tale.sky .page { width: min(96vw, 128vh); margin-top: 1.6vh; background: transparent; padding: 0; gap: 1vw; box-shadow: none; }
+  #tale.sky .cp { width: calc((100% - 3vw) / 4); } #tale.sky .cp:nth-child(even) { transform: scale(.9) rotate(1.5deg); }
+  body.oneUp #tale.sky .page { align-items: center; justify-content: flex-start; } body.oneUp #tale.sky .cp.now { width: min(52vw, calc(34vh * 4 / 3)); margin: 1.5vh 0 0 0; }
   #tale .page { position: absolute; width: min(94vw, 172vh); background: var(--y); padding: 14px; box-sizing: border-box; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 12px;
     box-shadow: 10px 10px 0 #000; transform-origin: left center; transition: transform 1s cubic-bezier(.55, 0, .35, 1), opacity .35s .65s, box-shadow 1s; }
   #tale .page.p1 { z-index: 2; } #tale .page.p2 { z-index: 1; }
@@ -628,6 +635,7 @@
 <div id="catHud" class="hidden"><b id="catName">CATCH THE CAT!</b><span id="catPaws"></span></div>
 <div id="koScr"><div class="lockup big"><div class="blk">KNOCKED OUT</div><div class="bar" id="koSub">&nbsp;</div></div></div>
 <div id="fade"><div class="lockup big"><div class="blk" id="fadeName">&nbsp;</div><div class="bar">LOADING</div></div></div>
+<div id="proBlack"><div class="lockup big" id="proTitle"><div class="blk">BERRY WOODS</div></div></div>
 <div id="weapon"></div>
 <div id="life" class="hud lockup hidden"><div class="blk" id="pname">TOCSIN</div><div class="bar"><span id="hearts"></span></div></div>
 <canvas id="mini" class="hidden"></canvas>
@@ -4258,18 +4266,19 @@ const bgm = {
 };
 let musicHub = false, musicQuick = 0;
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
-  const pcTale = !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
-  const glosWait = !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
-  const softTale = !!tale && !pcTale;                // (the phone and the zip: no borrowed song, so the score's own soft take under the voice, 2026-10-23: "the music wasnt playing during the cutscene")
+  const pcPro = !!pro && !!window.BERRY_PC && !!PC_REC.prologue;   // (the PC page: the prologue's own song, all the way through it)
+  const pcTale = !pcPro && !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
+  const glosWait = !pro && !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
+  const softTale = (!!tale || !!pro) && !pcTale && !pcPro;                // (the phone and the zip: no borrowed song, so the score's own soft take under the voice, 2026-10-23: "the music wasnt playing during the cutscene")
   if (mode !== "play") recSeenW = -1; else if (!transit && world !== recSeenW) { recSeenW = world; recFirst = { w: world, h: hour }; }   // (into a world, a new game or a loaded one: its recording first, whatever the hour)
   if (recFirst && (recFirst.w !== world || recFirst.h !== hour)) recFirst = null;   // (then, the hour on: the day's own versions)
-  const S = window.BerryScore, h = pcTale ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
-  const R = pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
+  const S = window.BerryScore, h = pcTale || pcPro ? -1 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
+  const R = pcPro ? PC_REC.prologue : pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
   voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
-  const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : 1) * voDuck : 0;
+  const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : pcPro ? .75 : 1) * voDuck : 0;
   const hubNow = mode === "play" && (inHub() || !!hideout); if (musicHub && !hubNow) { musicQuick = 1.6; if (S && S.quickFade) S.quickFade(1.2); } musicHub = hubNow; musicQuick = Math.max(0, musicQuick - dt);   // (out of a hub or a hideout: the room's song back in 1.2 s, not 3. The user, 2026-10-25: "it takes too long to fade back")
-  const fadeT = world === 9 && opening ? .25 : pcTale ? .8 : musicQuick > 0 ? 1.2 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
+  const fadeT = pcPro ? 1.2 : world === 9 && opening ? .25 : pcTale ? .8 : musicQuick > 0 ? 1.2 : easing() ? 1.5 : 3;   // (Glos's song in at once as he drops; the story's quicker too; the score's own crossfade is 3 s)
   if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / fadeT);   // equal-power (2026-10-23: "make sure there's a fadeout cross over always"): the recording along a
   orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);               // sine as the score goes along a cosine, so the handover holds its loudness   // a crossfade with the score (shorter into the in-between, which restarts the same song)
   if (ov > 0 && orig.paused) orig.play().catch(() => {});
@@ -5682,6 +5691,7 @@ const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_K
 const spawnRoom = () => { const c = story && story.check, e = story && story.entry;   // (the user, 2026-10-20: not the room you quit in)
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
+  if (pro) return;                                   // (not in the middle of the prologue: the file starts in the woods)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
   all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
@@ -5974,7 +5984,7 @@ function fixRests(w0, s0) {                        // rest stops saved before th
   return s1;
 }
 const restOK = w => !!story && ((story.rests || {})[w] || []).some(r => ((WORLDS[w] && WORLDS[w].stages[r]) || {}).rest);   // (a rest stop you can start from there)
-function storyBegin(slot) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; story = { slot, char: null, armed: false, t: 0, visited: new Set([9]), uprise: {} }; storyRun(9, 0, true); }   // a new game: the beach, its opening, then who you are
+function storyBegin(slot) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; story = { slot, char: null, armed: true, t: 0, visited: new Set([0]), uprise: {} }; startPrologue(); }   // a new game: the prologue (the black, the beach, La Guagua), who you are, then the woods (the beach's start skipped: the user, 2026-10-26)
 function storyRun(w, s, fresh) {                     // into a story run (a new game, a loaded one, or a trip from the world map) at world w's room s
   if (vo) voEnd(); voQ = [];                         // (a voice-over from the last run stops; the ones waiting go too, to come up again when they're met again. Left waiting, nothing played them: the 25% one never came, the user 2026-10-25)
   const id = story.char || "camila", i = roster.findIndex(r => r.id === id); if (i < 0) { toast("CAN'T FIND " + String(id).toUpperCase()); return; }
@@ -5983,6 +5993,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
     closeMenus(); endIntro(); endCameo(); clearTrap(); if (stronghold) stronghold = null; cine = null; clearStage(); bepEv = null; clearGifts();
     beachOpening = fresh && w === 9 && s === 0; level.s = -2;
     setWorld(w); level.s = -2; oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); story.entry = { w, s }; story.check = null; rollSad(); levelTest = false; wstReset(); cameoWorlds = new Set();
+    if (pro && w === 0) intro = { t: 0, cast: [], lock: true };   // (in from the prologue: held, no cameo or Noro rolled, till the two of them drop in)
     mode = "play"; setScreen(s); beginPlay(); beachOpening = false;
     roster.forEach(r => { if (r !== rig) r.root.visible = r.shadow.visible = false; });
     if (fresh && w === 9 && s === 0) startOpening();   // (a new game: Camila and Rose on the beach, and Glos coming down)
@@ -5992,7 +6003,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
   }, WORLDS[w].name);
 }
 function quitToTitle() {                             // save (a story run) and back to the title card
-  if (story) writeSave(); story = null; tamed = tamed2 = null; alliesOff(); modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
+  proAbort(); if (story) writeSave(); story = null; tamed = tamed2 = null; alliesOff(); modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
   showSelect(); titleUp = true; $("title").classList.remove("hidden"); bgm.pause();
 }
 function storyModal() {                              // knocked out in a story run: try again, or save and quit (the testing tools are under the gear)
@@ -6190,7 +6201,7 @@ const OPEN_MOBS = [["leafy", "leaf", 820, 0], ["acorn", "bark", 1190, 1], ["twig
 const gj_pre = o => !o.gj || o.gj.ph === "wait";
 function knockPalm(kk, dir) { if (!kk || kk.t >= 0) return; kk.t = 0; kk.dir = dir; SFX.wood(); SFX.thud(); sparks(kk.x - dir * 10, GROUND - 70, 10); slashFlair(kk.x - dir * 16, GROUND - 70, false); shake = Math.max(shake, 5); }   // a blow on the trunk: it starts to go
 function updateOpening(dt) {
-  const o = opening; if (!o || o.picked) return; o.t += dt; const t = o.t, L = level, G = o.G, e = o.ge;
+  const o = opening; if (!o || o.picked || (pro && pro.ph === "black")) return; o.t += dt; const t = o.t, L = level, G = o.G, e = o.ge;   // (the prologue: it waits for the light)
   const K = L.knock || [], allDown = K.length && K.every(k => k.down); if (allDown) o.endT = (o.endT || 0) + dt;
   o.focus = lerp(o.focus, o.asked ? 520 : t < 2.4 ? 640 : t < 6.6 ? 790 : (o.endT || 0) < 1 ? clamp(o.watch ?? 790, 790, 2120) : 760, 1 - Math.exp(-dt * 1.8)); player.x = o.focus; player.face = 1;   // (the kids and Glos together, then each palm as it's hit, then back)
   // Glos: floating down out of the sky in a swirl of leaves, a look round, a sweep of his arm to the right, then off after his baddies
@@ -6233,11 +6244,11 @@ function updateOpening(dt) {
     else s.yaw = lerp(s.yaw, -Math.PI / 2 + (k.id === "rose" ? .3 : -.3), 1 - Math.exp(-dt * 5));
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt); }
   if (!o.startled && t > 3.1) { o.startled = true; SFX.startle && SFX.startle(); }
-  if (!o.voSaid && t > 3.6) { o.voSaid = true; startVO("glos"); }   // (Camila, as Glos comes down)
+  if (!o.voSaid && t > 3.6) { o.voSaid = true; if (!pro) startVO("glos"); }   // (the prologue: Camila's own line goes on over it instead)   // (Camila, as Glos comes down)
   if ((o.endT || 0) > 3 || t > 22) openingAsk();
 }
 function openingAsk() {                              // everything gone off to the right: who are you?
-  const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); if (oneUp()) beachPick(); else showHero(story.slot, true);
+  const o = opening; if (!o || o.asked) return; o.asked = true; finishOpening(); $("skipHint").classList.remove("show"); if (pro) { pro.over = true; return; } if (oneUp()) beachPick(); else showHero(story.slot, true);   // (the prologue: on to La Guagua once her line's said)
 }
 // on a phone (oneUp: a small screen), "who are you?" is asked on the beach itself (the user, 2026-10-25: "on the 3ds and maybe mobile, when it
 // gives you the choice of selecitng a character, don't make it a menu popup. instead show the text on the screen and have an arrow over each
@@ -6251,22 +6262,23 @@ function drawBeachPick() {
   $("bpHint").textContent = T ? (bPick.ask ? "OR TAP THE OTHER ONE" : "TAP CAMILA OR ROSE") : padUse ? padText(bPick.ask ? "{j} YES · {sq} NO" : "← → TO CHOOSE · {j} TO PICK") : bPick.ask ? "ENTER YES · ESC NO" : "← → TO CHOOSE · ENTER TO PICK";
   document.querySelectorAll(".bpArr").forEach(a => a.classList.toggle("on", a.dataset.h === bPick.id));
 }
+const pickCast = () => opening ? opening.kids : pro && pro.road ? pro.road.kids : [];   // (who's to choose from: the two on the beach, or on La Guagua)
 function beachPickTick() {                           // (every frame: each arrow over its head)
-  if (!bPick || !opening) return;
-  opening.kids.forEach(k => { const a = document.querySelector(`.bpArr[data-h="${k.id}"]`); if (!a) return; _bpV.set(X(k.st.x), Y(k.st.y - (k.r.heightPx || 105) + 2), 0).project(camera);
+  if (!bPick || !pickCast().length) return;
+  pickCast().forEach(k => { const a = document.querySelector(`.bpArr[data-h="${k.id}"]`); if (!a) return; _bpV.set(X(k.st.x), Y(k.st.y - (k.h || k.r.heightPx || 105) + 2), k.st.z || 0).project(camera);
     a.style.left = ((_bpV.x + 1) / 2 * innerWidth).toFixed(1) + "px"; a.style.top = ((1 - _bpV.y) / 2 * innerHeight).toFixed(1) + "px"; });
 }
 function beachPickGo(id) {                           // (a hero chosen: the arrow moves to them; chosen again: asked; again: you're them)
   if (!bPick) return; if (bPick.id !== id) { bPick.id = id; bPick.ask = false; SFX.tick(); return drawBeachPick(); }
   if (!bPick.ask) { bPick.ask = true; SFX.confirm(); return drawBeachPick(); }
-  bPick = null; menuUp = null; $("beachPick").classList.remove("show"); SFX.confirm(); openingPicked(id);
+  bPick = null; menuUp = null; $("beachPick").classList.remove("show"); SFX.confirm(); if (pro) proPicked(id); else openingPicked(id);
 }
 function beachPickNav(d, ok, back) {
-  if (d && opening) { const K = opening.kids.slice().sort((a, b) => a.st.x - b.st.x), i = K.findIndex(k => k.id === bPick.id), j = clamp(i + d, 0, K.length - 1); if (j !== i) beachPickGo(K[j].id); }   // (← the one on the left, → the one on the right)
+  if (d && pickCast().length) { const K = pickCast().slice().sort((a, b) => a.st.x - b.st.x), i = K.findIndex(k => k.id === bPick.id), j = clamp(i + d, 0, K.length - 1); if (j !== i) beachPickGo(K[j].id); }   // (← the one on the left, → the one on the right)
   else if (ok) beachPickGo(bPick.id); else if (back && bPick.ask) { bPick.ask = false; SFX.tick(); drawBeachPick(); }
 }
-addEventListener("pointerdown", e => { if (!bPick || !opening || e.target.closest("button, #touch, .tpad")) return;   // (a tap: the hero nearest it, on the screen)
-  let best = null, bd = 1e9; opening.kids.forEach(k => { _bpV.set(X(k.st.x), Y(k.st.y - (k.r.heightPx || 105) * .5), 0).project(camera); const d = Math.abs((_bpV.x + 1) / 2 * innerWidth - e.clientX); if (d < bd) { bd = d; best = k; } });
+addEventListener("pointerdown", e => { if (!bPick || !pickCast().length || e.target.closest("button, #touch, .tpad")) return;   // (a tap: the hero nearest it, on the screen)
+  let best = null, bd = 1e9; pickCast().forEach(k => { _bpV.set(X(k.st.x), Y(k.st.y - (k.r.heightPx || 105) * .5), 0).project(camera); const d = Math.abs((_bpV.x + 1) / 2 * innerWidth - e.clientX); if (d < bd) { bd = d; best = k; } });
   if (best && bd < innerWidth * .3) { e.preventDefault(); beachPickGo(best.id); } }, true);
 function finishOpening() {                           // (skipped, or played out): the palms flat, Glos and his lot gone into the forest
   const o = opening; if (!o) return;
@@ -6274,7 +6286,7 @@ function finishOpening() {                           // (skipped, or played out)
   hideFoe(o.G); o.mobs.forEach(disposeBaddy); o.mobs = []; o.mobsDone = true;
   o.kids.forEach(k => { const s = k.st; Object.assign(s, { sit: 0, eat: 0, startle: 0, y: GROUND, vy: 0, onGround: true, z: 0, face: k.id === "rose" ? 1 : -1 }); k.fruit.visible = false; });
 }
-function skipOpening() { if (!opening || opening.asked) return; SFX.tick(); openingAsk(); }
+function skipOpening() { if (pro) return proSkip(); if (!opening || opening.asked) return; SFX.tick(); openingAsk(); }
 function openingPicked(id) {                         // you're June (or Chase): the other one's at your side, and the berry baddies Glos left behind are here
   const o = opening; closeMenus(); story.char = id; sel = roster.findIndex(r => r.id === id); rig = bareRig(id);
   const me = o.kids.find(k => k.id === id), you = o.kids.find(k => k.id !== id);
@@ -6287,6 +6299,178 @@ function openingPicked(id) {                         // you're June (or Chase): 
   story.visited.add(9); writeSave(); holdTipSoon();
 }
 function endOpening() { const o = opening; if (!o) return; finishOpening(); o.kids.forEach(k => { actors.remove(k.fruit); if (k.r !== rig) k.r.root.visible = k.r.shadow.visible = false; }); opening = null; $("skipHint").classList.remove("show"); }
+let pro = null, proCam = null;                       // a new game's prologue (the user, 2026-10-26: "when you hit new game, play beach sounds. screen is black the whole time. camile starts the voice over ... then it starts to fade into the beach scene ... then it fades to black again. then it fades into a scene of camila and rose on la guagua being driven by one of the berry buddies across a high way next to a sandy beach road, sun setting in the background. the opening narration plays with the comic strips appearing over the sky above la guagua"; "at the end of her voice over, fade to black as the car speeds up out of frame and then the berry woods title appears and the first map beings"): ph black · in · beach · out · bus · pick · go · title
+const GUAGUA_B = { body: "#e8a5b0", roof: "#e8a5b0", belt: "#93c393", beltDk: "#6b9898", arch: "#6b9898", bed: "#e8a5b0", rail: "#93c393" };   // (La Guagua's colours: the user's pick, 2026-10-26, "B: pink top")
+const proFrozen = () => !!pro && (!!pro.road || (pro.ph === "title" && !pro.dropped));   // (on the road, and under the black before the woods: the game waits, the prologue moves itself)
+function startPrologue() {
+  pro = { ph: "black", t: 0, a: 1 }; const B = $("proBlack"); B.style.opacity = 1; B.classList.add("show"); $("proTitle").classList.remove("on");
+  $("skipHint").classList.add("pro"); voLoad(); taleLoad(); guaguaLoad();
+  storyRun(9, 0, true);                              // (the beach built behind the black, its shore heard; the opening waits for the light)
+}
+function proTick(dt) {                               // (every frame, paused or not)
+  const P = pro, B = $("proBlack"); P.t += dt;
+  const fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); B.style.opacity = P.a.toFixed(3); };
+  if (P.ph === "black") { fade(1, 1); if (!P.said && P.t > 1.6) { P.said = true; startVO("pro1"); } if (P.said && !vo && P.t > 2.6) { P.ph = "in"; P.t = 0; startVO("pro2"); } }   // "We were too young ...", then the beach comes up as she goes on
+  else if (P.ph === "in") { fade(0, 2.8); if (P.a <= 0) { P.ph = "beach"; P.t = 0; } }
+  else if (P.ph === "beach") { if (P.over && !vo) { P.ph = "out"; P.t = 0; } }      // (Glos and his lot gone into the forest, and her line said)
+  else if (P.ph === "out") { fade(1, 1.3); if (P.a >= 1 && P.t > 1.6) { proBus(); P.ph = "bus"; P.t = 0; } }
+  else if (P.ph === "bus") { fade(0, 2.4); if (!P.told && P.t > 2.2) { P.told = true; startTale(proPickNow, { sky: true }); } }   // the story so far, its panels over the sky above them
+  else if (P.ph === "go") { const R = P.road; if (P.t > .35) { R.v = Math.min(R.v + 15 * dt, 42); R.busX += R.v * dt; } if (P.t > 1.2) fade(1, .9); if (P.a >= 1 && P.t > 2.3) { P.ph = "title"; P.t = 0; $("proTitle").classList.add("on"); } }   // off it goes, out of the picture
+  else if (P.ph === "title") { if (!P.built && P.t > .9) { P.built = true; proWoods(); }   // the Berry Woods on the black, the forest built under it
+    if (P.built && !transit && P.t > 3) { if (!P.dropped) { P.dropped = true; $("proTitle").classList.remove("on"); startIntro(); } fade(0, 1.5); if (P.a <= 0) proDone(); } }   // (the two of them drop in as it lifts)
+  if (P.road) roadTick(P.road, dt);
+}
+function proSkip() {                                 // (Enter / Esc / Start, or SKIP, before the road: on to La Guagua)
+  const P = pro; if (!P || !["black", "in", "beach"].includes(P.ph)) return; SFX.tick(); voEnd(); voQ = [];
+  if (opening && !opening.asked) { opening.asked = true; finishOpening(); } P.over = true; P.ph = "out"; P.t = 0; $("skipHint").classList.remove("show");
+}
+function proBus() {                                  // behind the black: the beach let go, the coast road and La Guagua at sunset
+  endOpening(); clearBaddies(); clearHz(); FOES.forEach(hideFoe); bossIn = false; clearGifts(); for (const k in keys) keys[k] = false;
+  level.objs.forEach(o => { o.visible = false; }); (level.fg || []).forEach(o => { o.visible = false; });
+  dawnNow = false; dayHeld = 4; setLook(4);          // (SUNSET's light)
+  rig = bareRig("camila"); Object.assign(player, { x: -4000, y: GROUND, vx: 0, vy: 0, onGround: true, plat: null });   // (you, out of the way: the two on the bus are the roster's own, so not yours)
+  pro.road = buildRoad(); const R = pro.road; proCam = { x: R.cx, y: 4.7, z: 17, tx: R.cx, ty: 3.75, tz: 0 };
+}
+function proPickNow() { const P = pro; if (!P) return; P.ph = "pick"; P.t = 0; paused = true; beachPick(); }   // the story told: who are you?
+function proPicked(id) { const P = pro; if (!P) return; story.char = id; sel = roster.findIndex(r => r.id === id); P.ph = "go"; P.t = 0; SFX.whoosh(); }
+function proWoods() {                                // under the black: the road let go, the forest's first room
+  const R = pro.road; pro.road = null; disposeRoad(R); proCam = null; paused = false;
+  story.visited = new Set([0]); story.tale = true; story.armed = true; story.vo = [...new Set([...(story.vo || []), "glos"])];
+  storyRun(0, 0, true);
+}
+function proDone() { pro = null; $("proBlack").classList.remove("show"); $("skipHint").classList.remove("pro"); writeSave(); }
+function proAbort() {                                // (off to the title in the middle of it)
+  if (!pro) return; const R = pro.road; pro = null; if (R) disposeRoad(R); proCam = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("skipHint").classList.remove("pro");
+}
+let guaguaPics = null;                               // La Guagua (the user, 2026-10-25: "a bus the characters ride between worlds ... a mix of these two, the yellow van vibe, but with a bit of a pickup truck thing in the back for a character to sit on"; the mockup 10-26, colours B): a cab-over van, its windows see-through (the driver at the wheel), an open bed behind with a roll bar
+function guaguaLoad() {                              // the logo (the user's): the G as a little bus, and the whole word (story/guagua.js: data URLs, so the PC page can use them)
+  if (guaguaPics) return; guaguaPics = { g: null, word: null };
+  const go = () => { const A = window.BERRY_GUAGUA; if (!A) return; for (const k of ["g", "word"]) { const im = new Image(); im.onload = () => { guaguaPics[k] = im; if (guaguaPics.onload) guaguaPics.onload(); }; im.src = A[k]; } };
+  if (window.BERRY_GUAGUA) return go();
+  const el = document.createElement("script"); el.src = "story/guagua.js?v=20261026"; el.onload = go; document.head.appendChild(el);
+}
+function buildGuagua(look = {}) {
+  const C = { body: "#93c393", belt: "#e8a5b0", beltDk: "#bf8285", low: "#fbf6ef", roof: "#93c393", arch: "#bf8285", bed: "#93c393", rail: "#e8a5b0", trim: "#6b9898", ...look };
+  const mat = {}, M = k => mat[k] || (mat[k] = toon(C[k] || k)), dark = toon("#2c3940"), chrome = toon("#e9eef0"), tire = toon("#2a3238"), hub = toon("#fbf6ef"), amber = toon("#ffb02e"), red = toon("#e5484d");
+  const glass = toon("#3b5866", { transparent: true, opacity: .55, depthWrite: false }), lampOn = new THREE.MeshBasicMaterial({ color: "#fff6cf" }), seat = toon("#bf8285"), inside = toon("#55424a");
+  const P = (geo, m) => mk(geo, null, { mat: m, ol: .02 }), root = new THREE.Group(), B = group(root, 0, 0, 0), Wd = 2.9, half = Wd / 2;   // (B: the body, on its springs over the wheels)
+  B.add(at(P(bx(7.3, .5, Wd - .3), dark), -.05, .72, 0));                                        // the chassis
+  const wheels = [];
+  for (const wx of [2.35, -2.3]) for (const s of [-1, 1]) {
+    const w = group(root, wx, .62, s * (half - .12)); w.rotation.x = Math.PI / 2; const spin = group(w, 0, 0, 0); wheels.push(spin);
+    spin.add(P(new THREE.CylinderGeometry(.62, .62, .46, 26), tire)); spin.add(P(new THREE.CylinderGeometry(.34, .34, .48, 20), hub)); spin.add(P(new THREE.CylinderGeometry(.13, .13, .5, 12), M("body")));
+    for (let k = 0; k < 5; k++) spin.add(at(P(new THREE.CylinderGeometry(.035, .035, .5, 6), M("trim")), Math.cos(k * 1.2566) * .22, 0, Math.sin(k * 1.2566) * .22));
+    B.add(at(P(new THREE.TorusGeometry(.78, .11, 8, 22, Math.PI), M("arch")), wx, .62, s * (half + .02)));   // the wheel's arch, a rolled lip
+    B.add(at(P(bx(.08, .5, .42), dark), wx - .86, .55, s * (half - .2)));                                    // its mud flap
+  }
+  const cx0 = -1.05, cx1 = 3.45, cl = cx1 - cx0, cm = (cx0 + cx1) / 2, fx = cx1 + .01;          // (the cabin, front to back: the bed's behind it)
+  B.add(at(P(new RoundedBoxGeometry(cl, 1.25, Wd, 5, .34), M("low")), cm, 1.5, 0));             // the lower body (the word's on it)
+  B.add(at(P(new RoundedBoxGeometry(cl + .04, .2, Wd + .04, 3, .08), M("beltDk")), cm, 2.12, 0));   // the belt's shadow line
+  B.add(at(P(new RoundedBoxGeometry(cl + .06, .3, Wd + .06, 3, .1), M("belt")), cm, 2.33, 0));    // the belt
+  B.add(at(P(new RoundedBoxGeometry(cl, .5, Wd, 5, .22), M("roof")), cm, 3.42, 0));              // the roof, round-shouldered
+  B.add(at(P(new RoundedBoxGeometry(cl - .7, .14, Wd - .5, 3, .06), M("low")), cm - .2, 3.72, 0));   // a white roof panel
+  for (const x of [cx1 - .1, cx1 - 1.42, cx1 - 2.8, cx0 + .12]) B.add(at(P(new RoundedBoxGeometry(.22, .82, Wd, 3, .06), M("body")), x, 2.86, 0));   // the pillars between the windows
+  B.add(at(P(bx(.12, .82, Wd - .1), M("body")), cx0 + .06, 2.86, 0));                            // the back wall, behind the bench
+  for (const s of [-1, 1]) { const z = s * (half - .03);                                            // the windows: dark glass, see-through
+    [[cx1 - .76, 1.12], [cx1 - 2.11, 1.16], [cx1 - 3.46, .98]].forEach(([x, w]) => { B.add(at(new THREE.Mesh(new THREE.BoxGeometry(w, .8, .04), glass), x, 2.86, z));
+      const sh = new THREE.Mesh(new THREE.PlaneGeometry(.12, .74), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: .28, depthWrite: false })); sh.rotation.z = -.5; if (s < 0) sh.rotation.y = Math.PI; at(sh, x - w * .22, 2.86, z + s * .03); B.add(sh); }); }
+  { const ws = group(B, fx - .05, 2.9, 0); ws.rotation.z = -.12;                                   // the windscreen in two panes
+    for (const s of [-1, 1]) { ws.add(at(new THREE.Mesh(new THREE.BoxGeometry(.05, .86, 1.2), glass), 0, 0, s * .66));
+      const sh = new THREE.Mesh(new THREE.PlaneGeometry(.16, .84).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: .3, depthWrite: false })); sh.rotation.x = .5; at(sh, .04, .05, s * .66 - .25); ws.add(sh); }
+    ws.add(at(P(bx(.12, .9, .12), M("body")), 0, 0, 0)); for (const s of [-1, 1]) ws.add(at(P(bx(.14, .9, .1), M("body")), 0, 0, s * (half - .05))); }
+  B.add(at(P(bx(cl - .2, .1, Wd - .2), inside), cm, 2.08, 0));                                    // inside: the floor at the sill, the seats, the dash, the wheel
+  B.add(at(P(new RoundedBoxGeometry(.5, .5, .9, 3, .1), seat), cx1 - 1.05, 2.38, -.62)); B.add(at(P(new RoundedBoxGeometry(.14, .75, .9, 3, .06), seat), cx1 - 1.3, 2.62, -.62));   // the driver's seat
+  B.add(at(P(new RoundedBoxGeometry(.5, .5, 1.1, 3, .1), seat), cx1 - 1.05, 2.38, .5)); B.add(at(P(new RoundedBoxGeometry(.14, .75, 1.1, 3, .06), seat), cx1 - 1.3, 2.62, .5));
+  for (const x of [cx1 - 2.4, cx1 - 3.5]) { B.add(at(P(new RoundedBoxGeometry(.55, .45, Wd - .4, 3, .1), seat), x, 2.36, 0)); B.add(at(P(new RoundedBoxGeometry(.14, .7, Wd - .4, 3, .06), seat), x - .28, 2.6, 0)); }
+  B.add(at(P(bx(.45, .3, Wd - .3), dark), cx1 - .35, 2.42, 0));                                   // the dash
+  { const wh = P(new THREE.TorusGeometry(.2, .04, 6, 16), dark); wh.rotation.y = Math.PI / 2; wh.rotation.z = .5; at(wh, cx1 - .62, 2.7, -.62); B.add(wh); }
+  for (const s of [-1, 1]) B.add(at(P(new THREE.CylinderGeometry(.045, .045, cl - 1.1, 8).rotateZ(Math.PI / 2), chrome), cm - .25, 3.92, s * (half - .38)));   // the roof rack and what's on it, off between worlds
+  for (let k = 0; k < 4; k++) { const x = cx0 + .7 + k * (cl - 1.6) / 3; B.add(at(P(new THREE.CylinderGeometry(.04, .04, Wd - .76, 8).rotateX(Math.PI / 2), chrome), x, 3.92, 0));
+    for (const s of [-1, 1]) B.add(at(P(new THREE.CylinderGeometry(.04, .04, .28, 6), chrome), x, 3.8, s * (half - .38))); }
+  B.add(at(P(bx(1.05, .62, .9), M("beltDk")), cm + .55, 4.27, -.35)); B.add(at(P(bx(.12, .64, .94), M("low")), cm + .55, 4.27, -.35));   // a suitcase (the luggage in the logo's colours too)
+  B.add(at(P(new THREE.CylinderGeometry(.34, .34, 1.4, 14).rotateX(Math.PI / 2), M("belt")), cm - .7, 4.28, .2));   // a rolled-up mat
+  B.add(at(P(bx(.7, .5, .7), M("trim")), cm - 1.45, 4.2, -.4));                                   // a crate
+  const sign = group(B, fx - .02, 3.62, 0); sign.add(P(new RoundedBoxGeometry(.14, .34, 1.9, 3, .06), dark));   // the route sign: LA GUAGUA in lights
+  { const t = tex(512, 96, (g, w, h) => { g.fillStyle = "#24303a"; g.fillRect(0, 0, w, h); g.font = "900 64px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffd77a"; g.fillText("LA GUAGUA", w / 2, h / 2 + 4); });
+    sign.add(at(new THREE.Mesh(new THREE.PlaneGeometry(1.8, .3).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ map: t })), .08, 0, 0)); }
+  for (const s of [-1, 1]) {
+    const lamp = group(B, fx + .02, 1.48, s * .98); lamp.rotation.z = Math.PI / 2;                 // the round lamps, the turn signals, the mirrors on their stalks
+    lamp.add(P(new THREE.CylinderGeometry(.34, .34, .12, 22), chrome)); lamp.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.26, .26, .14, 22), lampOn), 0, -.02, 0));
+    B.add(at(P(ball(.1, 10, 8), amber), fx + .01, 1.48, s * 1.34));
+    const mir = group(B, cx1 - .55, 2.75, s * (half + .25)); mir.add(at(P(new THREE.CylinderGeometry(.03, .03, .42, 6).rotateX(Math.PI / 2), dark), 0, 0, -s * .2)); mir.add(at(P(new RoundedBoxGeometry(.12, .42, .3, 3, .06), dark), .05, .1, 0));
+  }
+  { const gr = group(B, fx + .02, 1.42, 0); gr.add(P(new RoundedBoxGeometry(.06, .5, .9, 3, .08), dark));   // the grille: three bars
+    for (let k = 0; k < 3; k++) gr.add(at(P(new THREE.CylinderGeometry(.03, .03, .8, 6).rotateX(Math.PI / 2), chrome), .04, -.15 + k * .15, 0)); }
+  B.add(at(P(new RoundedBoxGeometry(.32, .28, Wd + .2, 3, .12), chrome), fx + .06, .9, 0)); B.add(at(P(bx(.04, .2, .5), hub), fx + .23, .9, 0));   // the bumper, its plate
+  const decal = (k, w, place) => { const make = () => { const im = guaguaPics && guaguaPics[k]; if (!im || place.done) return; place.done = true; const t = new THREE.Texture(im); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * im.height / im.width), toon("#ffffff", { map: t, transparent: true, alphaTest: .5 })); place(m); }; make(); return make; };
+  const later = [decal("g", .62, m => { m.rotation.y = Math.PI / 2; at(m, fx + .045, 2.1, 0); B.add(m); })];   // the little bus G, on the nose
+  for (const s of [-1, 1]) { const z = s * (half + .012);
+    B.add(at(P(bx(.05, 1.12, .05), M("beltDk")), cx1 - 1.42, 1.5, z)); B.add(at(P(bx(.24, .07, .06), chrome), cx1 - 1.62, 1.95, z + s * .02));   // the cab door's seam and handle
+    later.push(decal("word", 2.3, m => { if (s < 0) m.rotation.y = Math.PI; at(m, .2, 1.48, z + s * .01); B.add(m); })); }   // the word, between the arches
+  if (guaguaPics) guaguaPics.onload = () => later.forEach(f => f());
+  const bx0 = -3.62, bx1 = cx0 - .02, bl = bx1 - bx0, bm = (bx0 + bx1) / 2, by = 1.12;           // the bed: low sides with a rail, a tailgate, a roll bar with two lamps, a cushion against the cab, a spare, a cool box
+  B.add(at(P(bx(bl, .16, Wd - .1), toon("#a7754f")), bm, by - .04, 0)); for (let k = 0; k < 4; k++) B.add(at(P(bx(bl - .1, .03, .05), toon("#8a5e3e")), bm, by + .05, -1.05 + k * .7));
+  for (const s of [-1, 1]) { B.add(at(P(new RoundedBoxGeometry(bl, .62, .16, 3, .06), M("bed")), bm, by + .3, s * (half - .08))); B.add(at(P(new RoundedBoxGeometry(bl + .04, .12, .24, 3, .05), M("rail")), bm, by + .64, s * (half - .08))); }
+  B.add(at(P(new RoundedBoxGeometry(.16, .62, Wd - .1, 3, .06), M("bed")), bx0 + .08, by + .3, 0)); B.add(at(P(new RoundedBoxGeometry(.24, .12, Wd + .02, 3, .05), M("rail")), bx0 + .08, by + .64, 0));
+  for (const s of [-1, 1]) B.add(at(P(bx(.08, .34, .3), red), bx0 - .02, by + .2, s * (half - .3)));
+  const rbX = bx1 - 1.05, rbH = 1.55, rbW = half - .14;   // (the roll bar a step back from the cab: Camila sat between it and the cab, Rose holding on to it)
+  { const rb = group(B, rbX, by + .7, 0), r = .09; for (const s of [-1, 1]) rb.add(at(P(new THREE.CylinderGeometry(r, r, rbH, 10), chrome), 0, rbH / 2, s * rbW));
+    rb.add(at(P(new THREE.CylinderGeometry(r, r, rbW * 2, 10).rotateX(Math.PI / 2), chrome), 0, rbH, 0));
+    for (const s of [-1, 1]) { const l = group(rb, .05, rbH + .2, s * .55); l.add(P(new THREE.CylinderGeometry(.2, .2, .22, 16).rotateZ(Math.PI / 2), chrome)); l.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.15, .15, .24, 16).rotateZ(Math.PI / 2), lampOn), .02, 0, 0)); } }
+  B.add(at(P(new RoundedBoxGeometry(.9, .26, Wd - .5, 4, .1), M("belt")), bx1 - .6, by + .16, 0)); B.add(at(P(new RoundedBoxGeometry(.2, .72, Wd - .5, 4, .08), M("beltDk")), bx1 - .12, by + .55, 0));   // the cushion, its back against the cab
+  { const sp = group(B, bx0 + .7, by + .12, -.6); sp.add(P(new THREE.CylinderGeometry(.5, .5, .24, 22), tire)); sp.add(P(new THREE.CylinderGeometry(.26, .26, .26, 16), hub)); }   // the spare, lying flat
+  B.add(at(P(bx(.7, .5, .55), hub), bx0 + .7, by + .25, .75)); B.add(at(P(bx(.74, .12, .6), M("body")), bx0 + .7, by + .55, .75));   // a cool box
+  B.add(at(P(new THREE.CylinderGeometry(.07, .09, .6, 8).rotateZ(Math.PI / 2), dark), bx0 - .1, .55, half - .45));   // the exhaust
+  root.userData = { B, wheels, by, bx1, rbX, rbTop: by + .7 + rbH, cx1, mats: Object.values(mat) };
+  return root;
+}
+const ROAD_V = 9, BUS_K = 1.2;                        // (the coast going by, units a second; La Guagua's size)
+function buildRoad() {                               // the coast road at sunset: the sky, the sea, the sand and a sandy track along it, the highway, the verge; what goes by, wrapping round
+  const cx = X(WORLD / 2), G = group(scene, 0, 0, 0), R = { G, cx, span: 46, scroll: [], v: ROAD_V, t: 0, busX: cx - 1.2, busZ: .25 }, rng = rngF(1026), Rn = (a, b) => a + rng() * (b - a), M = tropMats();
+  const add = (o, scrolls) => { G.add(o); if (scrolls) R.scroll.push(o); return o; }, box = (w, h, d, c, x, y, z, s) => add(at(mk(new THREE.BoxGeometry(w, h, d), null, { mat: toon(c), ol: 0 }), x, y, z), s);
+  add(at(new THREE.Mesh(new THREE.PlaneGeometry(190, 56), new THREE.MeshBasicMaterial({ map: waveSkyTex(4, true), fog: false })), cx, 17, -84));   // the sunset sky (the beach's own, its sun going down)
+  const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() }), sc = (SCREENS[4] && SCREENS[4].sea) || WAVE_SCREENS[4].sea || CARIB_SEA;
+  seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line); R.seaM = seaM;
+  add(at(new THREE.Mesh(new THREE.PlaneGeometry(240, 80, 120, 40).rotateX(-Math.PI / 2), seaM), cx, -.55, -52));
+  box(240, 1, 12, "#e9b98a", cx, -.55, -8.6); box(240, .04, .5, "#fff3e2", cx, -.04, -14.3);       // the beach, the foam along its edge
+  box(240, .12, 2.1, "#f1d1a4", cx, -.03, -4.2);                                                     // the sandy track along it
+  box(240, .2, 5.6, "#5d5865", cx, -.1, .2); box(240, .02, .14, "#f6ead6", cx, .005, -2.35); box(240, .3, .32, "#d9c2a6", cx, .05, -2.72);   // the highway, its edge line, the curb on the sea side
+  for (let i = 0; i < 24; i++) box(2.2, .02, .16, "#f7d36b", cx - R.span + i * 4, .006, 2.3, true);   // the dashes down the middle
+  box(240, .3, 7, "#c6a874", cx, -.15, 6.3);                                                         // the verge on this side
+  for (let i = 0; i < 9; i++) { const x = cx - R.span + i * 10.2 + Rn(-1, 1), z = -Rn(5.6, 12.5), g = tropPalm(G, M, x, -.05, z, rng, { h: Rn(6.5, 10.5), lean: Rn(-.35, .1), coco: true }); g.rotation.x = -Rn(.04, .16); R.scroll.push(g); }   // coconut palms on the sand, leaning out to sea
+  for (let i = 0; i < 8; i++) { const x = cx - R.span + i * 11.5, p = group(G, x, 0, -3.05); R.scroll.push(p);   // the streetlights along the sea side, just come on
+    p.add(at(mk(new THREE.CylinderGeometry(.08, .11, 5.4, 8), null, { mat: toon("#7c8590"), ol: 0 }), 0, 2.7, 0)); p.add(at(mk(new THREE.BoxGeometry(.1, .1, 1.3), null, { mat: toon("#7c8590"), ol: 0 }), 0, 5.35, .6));
+    p.add(at(mk(new THREE.BoxGeometry(.4, .16, .3), null, { mat: toon("#4a525c"), ol: 0 }), 0, 5.3, 1.2)); p.add(at(new THREE.Mesh(new THREE.BoxGeometry(.3, .04, .22), new THREE.MeshBasicMaterial({ color: "#ffe2a0" })), 0, 5.21, 1.2)); }
+  for (let i = 0; i < 30; i++) { const x = cx - R.span + i * 3.07, p = group(G, x, 0, 4.4); R.scroll.push(p);   // the fence along the verge: posts and a rail
+    p.add(at(mk(new THREE.BoxGeometry(.14, .9, .14), null, { mat: toon("#9a7552"), ol: 0 }), 0, .45, 0)); p.add(at(mk(new THREE.BoxGeometry(3.07, .1, .08), null, { mat: toon("#b08a62"), ol: 0 }), 1.53, .72, 0)); }
+  const bushM = ["#4f8a3a", "#3f7a33", "#6a9a3a"].map(c => toon(c));
+  for (let i = 0; i < 14; i++) { const r = Rn(.5, 1.1); R.scroll.push(add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bushM[i % 3], ol: 0 }), cx - R.span + i * 6.6 + Rn(-1, 1), r * .35, Rn(5.2, 8.5)))); }   // sea grape on the verge
+  for (let i = 0; i < 10; i++) { const r = Rn(.3, .8); R.scroll.push(add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: toon(i % 2 ? "#8d7f86" : "#6f6670"), ol: 0 }), cx - R.span + i * 9.3, -.1 + r * .3, -Rn(6, 13)))); }   // rocks on the sand
+  const bus = buildGuagua(GUAGUA_B); bus.scale.setScalar(BUS_K); at(bus, R.busX, 0, R.busZ); actors.add(bus); R.bus = bus;   // La Guagua, and who's on it: Camila sat back against the cab looking out, Rose stood beside her holding on, a berry buddy driving
+  const U = bus.userData, ride = (id, r, lx, ly, lz, face, yaw, extra) => { const st = makeState(0, r); Object.assign(st, { face, yaw, onGround: true, vx: 0, vy: 0 }, extra || {}); r.root.visible = r.shadow.visible = true; return { id, r, st, lx, ly, lz, yaw }; };
+  const rc = roster.find(q => q.id === "camila"), rr = roster.find(q => q.id === "rose"); R.kids = [];
+  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - 1.42, U.by + .08, -.5, 1, -.62), hold: true });
+  if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });
+  const A = ALLIES.find(a => a.id === "burr"); if (A) { const r = allyRig(A); R.driver = ride("burr", r, U.cx1 - .92, 1.15, -.62, 1, -.2, { sit: 1 }); }   // (his head in the window, behind the wheel)
+  return R;
+}
+function roadTick(R, dt) {                           // (every frame: the coast going by, the wheels turning, the body on its springs, them riding)
+  R.t += dt; R.seaM.uniforms.uT.value = R.t;
+  for (const o of R.scroll) { o.position.x -= ROAD_V * dt; if (o.position.x < R.cx - R.span) o.position.x += 2 * R.span; }
+  const U = R.bus.userData, bob = .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1), roll = .007 * Math.sin(R.t * 3.3);
+  U.B.position.y = bob; U.B.rotation.x = roll; R.bus.position.x = R.busX;
+  U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
+  const place = c => { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.yaw = c.yaw; s.vx = 0; s.onGround = true;
+    s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
+    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }   // (her other hand up on the roll bar: the blade's in the first)
+    c.r.sync(s, c.r, dt); };
+  R.kids.forEach(place); if (R.driver) place(R.driver);
+}
+function disposeRoad(R) {
+  scene.remove(R.G); actors.remove(R.bus); R.G.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); R.bus.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+  [...(R.kids || []), R.driver].forEach(c => { if (c) c.r.root.visible = c.r.shadow.visible = false; }); R.seaM.dispose();
+}
 // the end of the third room: a bep comes hopping out to them, and the page turns into a comic: it points the way Glos went, into the
 // forest, and gives them the berry sword and the gauntlet; they put them on, and after him
 let gift = null, comicUp = false, comicCam = null;
@@ -6395,18 +6579,18 @@ let tutor = null;                                    // the lesson on show: { id
 const kn = k => { const T = window.BERRY_TOUCH; if (k === "atk") return T ? "○" : padUse ? padName("a") : "X"; if (k === "block") return T ? "□" : padUse ? padName("sq") : "C"; return { up: "↑", down: "↓", lr: "← →" }[k] || k; };
 const keyTag = k => `<span class="key">${kn(k)}</span>`;
 const TUTOR = {
-  moves: { room: 0, armed: false, panels: [
+  moves: { at: [[9, 0, false], [0, "C1", true]], panels: [   // (where: [world, its room (or cell), armed]; the woods' since the new game starts there, 2026-10-26)
     { cap: () => `TAP ${keyTag("atk")} AGAIN AND AGAIN: A COMBO! HOLD ${keyTag("lr")} AS YOU DO AND IT CHANGES`, pose: "combo" },
     { cap: () => `${keyTag("up")} AND ${keyTag("atk")}: UP IT GOES! JUMP AFTER IT AND KEEP HITTING`, pose: "launch" },
     { cap: () => `${keyTag("down")} AND ${keyTag("atk")}: A SLIDE, RIGHT INTO THEM`, pose: "slide" } ] },
-  weapon: { room: 2, armed: true, vo: "weapon", panels: [   // (read out by Camila, no words on the page: the user, 2026-10-23)
+  weapon: { at: [[9, 2, true], [0, "C2", true]], vo: "weapon", panels: [   // (read out by Camila, no words on the page: the user, 2026-10-23)
     { cap: () => `YOUR WEAPON IS YOUR HEALTH: EVERY HIT YOU TAKE COSTS A PIECE OF IT`, pose: "health" },
     { cap: () => `BEAT BADDIES AND ITS SPIKES COME OUT: MORE POWER IN EVERY BLOW`, pose: "power" },
     { cap: () => `HOLD ${keyTag("atk")} TO CHARGE IT UP, THEN LET GO FOR A BIG COMBO`, pose: "charge" } ] },
 };
 function maybeTutor() {                              // into the lesson's room, the baddies near (or well on in): the page
-  if (!story || world !== 9 || tutor || comicUp || gift || opening || cine || intro || transit || mode !== "play" || !player || player.dead || paused || modalOpen || menuUp) return;
-  for (const id in TUTOR) { const T = TUTOR[id]; if (T.room !== stage || !!story.armed !== T.armed || (story.tut || []).includes(id)) continue;
+  if (!story || tutor || comicUp || gift || opening || pro || cine || intro || vo || transit || mode !== "play" || !player || player.dead || paused || modalOpen || menuUp) return;   // (not over a voice-over: the woods' first)
+  for (const id in TUTOR) { const T = TUTOR[id]; if ((story.tut || []).includes(id) || !T.at.some(([w, r, a]) => w === world && (typeof r === "string" ? (STAGES[stage] || {}).cell === r : r === stage) && !!story.armed === a)) continue;
     const near = baddies.filter(b => !b.dead && !b.gone && !b.under).reduce((m, b) => Math.min(m, Math.abs(b.x - player.x)), 1e9);
     if (near > 560 && player.x < 560) continue;
     (story.tut || (story.tut = [])).push(id); writeSave(); showTutor(id); return; }
@@ -6543,8 +6727,8 @@ const TALE = [                                       // (told by Camila, grown u
   { img: "story/p4.jpg", who: "camila", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
   { img: "story/p5.jpg", who: "camila", text: "But now, our lives are not our own. And we've been without peace for too long..." },
   { img: "story/p6.jpg", who: "camila", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
-  { img: "story/p7.jpg", who: "camila", text: "Please, help us now to bring our friends back on our side." },
-  { img: "story/p8.jpg", who: "camila", text: "And fight for our home." },
+  { img: "story/p8.jpg", who: "camila", text: "It's been a year now since the elders granted these relics to us," },   // (the last two new, the user 2026-10-26: "its been a year now since the elders granted these relics to us, imploring us to quite literally beat some sense into the other berries and fight back against the greedy rulers...")
+  { img: "story/p7.jpg", who: "camila", text: "imploring us to quite literally beat some sense into the other berries, and fight back against the greedy rulers..." },
 ];
 const TALE_P1 = 5, TALE_VOL = .9;                   // (louder since 2026-10-23, the user: "the voice which was kind of low, and then loud background sounds": the sea and the bugs go quiet under it now)                   // (the first page's panels; then it turns over)
 let tale = null; const taleVo = { state: "idle", bufs: [] };
@@ -6554,15 +6738,15 @@ function taleLoad() {                                // the voice (decoded once)
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(A.map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { taleVo.bufs[i] = buf; }).catch(() => { }))).then(() => { taleVo.state = "ready"; }); };
   if (window.BERRY_TALE) return go();
-  const el = document.createElement("script"); el.src = "story/tale.js?v=20261024b"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/tale.js?v=20261026"; el.onload = go; el.onerror = () => { taleVo.state = "failed"; }; document.head.appendChild(el);
 }
-function startTale(then) {
-  taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show");
+function startTale(then, opt = {}) {                // (opt.sky: over the sky above La Guagua, four a page across the top, the scene below: the prologue)
+  taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show"); const P1 = opt.sky ? 4 : TALE_P1;
   const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span></div>`;
-  $("tale").innerHTML = `<div class="page p2">${TALE.slice(TALE_P1).map((q, i) => panel(q, i + TALE_P1)).join("")}</div><div class="page p1">${TALE.slice(0, TALE_P1).map(panel).join("")}</div>
+  $("tale").innerHTML = `<div class="page p2">${TALE.slice(P1).map((q, i) => panel(q, i + P1)).join("")}</div><div class="page p1">${TALE.slice(0, P1).map(panel).join("")}</div>
     <button class="skip">SKIP ${padUse ? padName("st") : window.BERRY_TOUCH ? "" : "· ESC"}</button><span class="go">${window.BERRY_TOUCH ? "TAP FOR THE NEXT ONE" : "ANY BUTTON FOR THE NEXT ONE"}</span>`;
-  $("tale").classList.add("show"); document.body.classList.toggle("oneUp", oneUp());
-  tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now() };
+  $("tale").classList.toggle("sky", !!opt.sky); $("tale").classList.add("show"); document.body.classList.toggle("oneUp", oneUp());
+  tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now(), p1: P1 };
 }
 function taleTick(dt) {                              // (every frame, paused or not: the game's paused under it)
   const T = tale; if (T.sayAt >= 0 && (T.sayAt -= dt) < 0) taleSay(T.i);
@@ -6578,25 +6762,27 @@ function taleHush() { const T = tale; if (T && T.src) { try { T.src.stop(); } ca
 function taleStep() {
   const T = tale, n = T.i + 1; taleHush();
   if (n >= TALE.length) return endTale();
-  const cp = k => k < TALE_P1 ? $("tale").querySelector(".p1").children[k] : $("tale").querySelector(".p2").children[k - TALE_P1];
-  if (n === TALE_P1 && !T.turned) { T.turned = true; if (!document.body.classList.contains("oneUp")) { $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; } }   // the page turns over (a phone: a panel at a time, no turn)
+  const cp = k => k < T.p1 ? $("tale").querySelector(".p1").children[k] : $("tale").querySelector(".p2").children[k - T.p1];
+  if (n === T.p1 && !T.turned) { T.turned = true; if (!document.body.classList.contains("oneUp")) { $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; } }   // the page turns over (a phone: a panel at a time, no turn)
   for (let k = 0; k < n; k++) cp(k).classList.add("past");
   cp(n).classList.add("on"); SFX.tick(); T.i = n; $("tale").querySelectorAll(".cp").forEach(el => el.classList.toggle("now", el === cp(n)));   // (a phone shows only the one .now)
   const words = TALE[n].text.split(/\s+/).length; T.wait = 1.2 + words * .36; T.sayAt = .35;   // (no voice, or none yet: time to read it)
 }
-function taleNext() { const T = tale; if (!T || performance.now() - T.t0 < 600) return; if (T.turned && T.i < TALE_P1) return; T.sayAt = -1; T.wait = 0; }   // (not in the first moment: a button held from the stats screen; not mid-turn)
+function taleNext() { const T = tale; if (!T || performance.now() - T.t0 < 600) return; if (T.turned && T.i < T.p1) return; T.sayAt = -1; T.wait = 0; }   // (not in the first moment: a button held from the stats screen; not mid-turn)
 function taleSkip() { if (tale) endTale(); }
 function endTale() {
   const T = tale; taleHush(); tale = null; if (story) story.tale = true;
   $("tale").querySelectorAll(".page").forEach(el => el.classList.add("out"));
   setTimeout(() => { comicUp = false; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (T.then) T.then(); }, 380);
-  setTimeout(() => { if (!tale) $("tale").classList.remove("show"); }, T.then ? 380 + 520 : 380);   // (under the fade to the woods by then)
+  setTimeout(() => { if (!tale) $("tale").classList.remove("show", "sky"); }, T.then ? 380 + 520 : 380);   // (under the fade to the woods by then)
 }
 // ── voice-overs (the user, 2026-10-23: "we will have some instances with voice overs. let's do the first one. when you first enter the island and the
 // one character waves and goes away, it triggers this voiceover that plays over the player's regular actions"): Camila speaking (her voice = the
 // story's narration voice: story/vo.js, made by .claude/berry-tools/make_vo_audio.py), a line at a time with its words along the foot of the screen;
 // you play on under it, the music and the bugs dipped. Each one once a story (story.vo); paused, the line stops, and starts again once you're back
-const VO = { woods: ["And so, Rose and I decided to fight for our people.",
+const VO = { pro1: ["We were too young to remember a time without them."],   // (the prologue, 2026-10-26: on the black)
+  pro2: ["One of my first conscious memories was sitting with Rose, and that grimy Glos crashing down upon our beach and forcefully taking over the Berry Forest. And she wasn't the first."],   // (the beach fading in, Glos crashing down)
+  woods: ["And so, Rose and I decided to fight for our people.",
   "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes.",
   "Good luck, Rose. I'll see you around.", "Good luck TO YOU!"],   // (told by the two of them grown up, the user 2026-10-24: Camila, then Rose back at her "with emphasis")
   glos: ["That was the day Glos came down onto our beach, with her berry baddies right behind her."],   // (the opening, as she floats down: the user 2026-10-25 "need a voiceover right after glos appears"; my words)
@@ -6624,7 +6810,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261025b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261026"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -6635,7 +6821,7 @@ const vlogLine = id => { const [k, n] = String(id).split(":"), i = +n; if (k ===
 // the narration (the user, 2026-10-24: "don't show each individaul line as playable, none should be playable. just show them in sections. find a
 // summary of it for the title and then the player opens it and sees all that was show. call the section 'narration'"): what's been told so far,
 // a section for each telling, in the order you heard them, each under a title that sums it up; open one and its words are there to read
-const VLOG_TITLE = { rival: "THE ONES WHO TRIED TO WALK AWAY", glos: "GLOS COMES TO OUR BEACH", gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
+const VLOG_TITLE = { pro1: "TOO YOUNG TO REMEMBER", pro2: "THE DAY GLOS CAME", rival: "THE ONES WHO TRIED TO WALK AWAY", glos: "GLOS COMES TO OUR BEACH", gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DOIR SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
   buddy: "THE BERRIES WHO JOINED US", pet: "THE ISLAND'S LITTLE ONES", sad: "THE SAD BERRIES", toll: "THE LAND TOOK A TOLL" };
 const vlogSections = () => { const S = []; vlogHeard().map(vlogLine).filter(Boolean).forEach(q => { let x = S.find(z => z.k === q.k); if (!x) S.push(x = { k: q.k, title: VLOG_TITLE[q.k] || "WHAT WE WERE TOLD", lines: [] }); x.lines[q.i] = q.text; });
   return S.map(x => ({ ...x, lines: x.lines.filter(Boolean) })); };
@@ -18418,7 +18604,7 @@ function syncWorld(dt) {
     camera.lookAt(camX + sx + camKick * .6, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2, 0);
     if (arena) arenaCam(sx, sy);
   }
-  const dc = comicCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
+  const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
   if (pan) { camera.position.copy(pan.pos); camera.quaternion.copy(pan.quat); }   // (between stitched screens: the camera on its way across)
   if (level.sky && STITCH.has(world) && mode === "play") { const K = level.sky.userData; if (K.x0 === undefined) K.x0 = level.sky.position.x; level.sky.position.x = K.x0 + camera.position.x - WX / 2; if (hourEase && hourEase.sky && hourEase.level === level) hourEase.sky.position.x = level.sky.position.x; }   // (a stitched world's sky at infinity: it goes along with the camera, so crossing into the next screen it stays where it was, sun, moon and all; each screen's own was centred on it and jumped a screen's width. The user, 2026-10-25: "things that pop in and out and change as you change screens")
@@ -18568,12 +18754,12 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || proFrozen()) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? .35 : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt);   // (the last kill's slow motion)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
