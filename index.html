@@ -296,6 +296,7 @@
   #fade { position: fixed; inset: 0; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .45s; z-index: 45; }
   #fade.on { opacity: 1; }
   #proBlack { position: fixed; inset: 0; background: #000; z-index: 46; display: none; pointer-events: none; }   /* (the prologue's black: over the game and the fade, under the voice's words and the story) */
+  body.riding #weapon, body.riding #life, body.riding #mini, body.riding #hud, body.riding #hint, body.riding #coinHud, body.riding #team, body.riding #catHud, body.riding #bepLife, body.riding #bepArrow, body.riding #exitCue { visibility: hidden !important; }   /* (on La Guagua between worlds: no HUD) */
   #proBlack.show { display: block; } #proTitle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .9s; } #proTitle.on { opacity: 1; }
   #skipHint.pro { z-index: 60; }
   #wstats { position: fixed; inset: 0; z-index: 47; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .6s; display: flex; align-items: center; justify-content: center; }
@@ -4608,6 +4609,7 @@ addEventListener("keydown", e => {
   if (e.code === "Slash" && !e.repeat && mode === "play" && openItems()) { e.preventDefault(); return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
   if (comicUp) { if (!e.repeat) { e.preventDefault(); if (tale && ["Escape", "Enter"].includes(e.code)) taleSkip(); else comicNext(); } return; }     // the bep's comic page: any key (the story's: Esc / Enter skips it)
+  if (rideS && rideS.ph !== "lift") { e.preventDefault(); if (!e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) rideSkip(); return; }   // (on La Guagua: only skipping)
   if (opening && !e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); skipOpening(); return; }   // (the opening can be skipped)
   if (mode === "select") {
     if (e.repeat) return;
@@ -4724,6 +4726,7 @@ function pollPad() {
       padPrev = { ...pad }; return; }
     if (!modalOpen) modalWas = false; }
   if (comicUp) { if (tale && pad.st && !padPrev.st) taleSkip(); else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
+  if (rideS && rideS.ph !== "lift") { if ((pad.st && !padPrev.st) || (pad.j && !padPrev.j)) rideSkip(); padPrev = { ...pad }; return; }
   if (opening && ((pad.st && !padPrev.st) || (pad.j && !padPrev.j))) { skipOpening(); padPrev = { ...pad }; return; }
   if (menuUp && !titleUp) { const pr = k => pad[k] && !padPrev[k];
     menuNav(pr("l") || pr("u") ? -1 : pr("r") || pr("d") ? 1 : 0, pr("j") || pr("a"), pr("bl") || pr("st"), pr("u") || pr("d")); padPrev = { ...pad }; return; }
@@ -5691,7 +5694,7 @@ const loadSaves = () => { try { const a = JSON.parse(localStorage.getItem(SAVE_K
 const spawnRoom = () => { const c = story && story.check, e = story && story.entry;   // (the user, 2026-10-20: not the room you quit in)
   return c && c.w === world ? c.s : e && e.w === world ? e.s : arena ? arena.back : stage; };
 function writeSave() {
-  if (pro) return;                                   // (not in the middle of the prologue: the file starts in the woods)
+  if (pro || (rideS && rideS.road)) return;          // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
   all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: ally ? ally.A.w : null, allyId: ally ? ally.A.id : null, where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
@@ -5973,8 +5976,8 @@ function storyNew(slot, id) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; 
 const LAYOUT = 14;                                  // the worlds' layout a save was made on (8 columns since 2026-10-24, 12 the day before; the forest hand-made): an older one's rooms aren't where they were
 function storyLoad(slot, q) { if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
-  mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) && q.cat === q.w ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) && q.cat2 === q.w ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null && q.ally === q.w ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.ally != null ? q.allyId || q.ally : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -6003,7 +6006,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
   }, WORLDS[w].name);
 }
 function quitToTitle() {                             // save (a story run) and back to the title card
-  proAbort(); if (story) writeSave(); story = null; tamed = tamed2 = null; alliesOff(); modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
+  proAbort(); rideAbort(); if (story) writeSave(); story = null; tamed = tamed2 = null; alliesOff(); modalOpen = false; $("modal").classList.remove("show"); if (paused) closePause(); endOpening(); endGift(true);
   showSelect(); titleUp = true; $("title").classList.remove("hidden"); bgm.pause();
 }
 function storyModal() {                              // knocked out in a story run: try again, or save and quit (the testing tools are under the gear)
@@ -6286,7 +6289,7 @@ function finishOpening() {                           // (skipped, or played out)
   hideFoe(o.G); o.mobs.forEach(disposeBaddy); o.mobs = []; o.mobsDone = true;
   o.kids.forEach(k => { const s = k.st; Object.assign(s, { sit: 0, eat: 0, startle: 0, y: GROUND, vy: 0, onGround: true, z: 0, face: k.id === "rose" ? 1 : -1 }); k.fruit.visible = false; });
 }
-function skipOpening() { if (pro) return proSkip(); if (!opening || opening.asked) return; SFX.tick(); openingAsk(); }
+function skipOpening() { if (rideS) return rideSkip(); if (pro) return proSkip(); if (!opening || opening.asked) return; SFX.tick(); openingAsk(); }
 function openingPicked(id) {                         // you're June (or Chase): the other one's at your side, and the berry baddies Glos left behind are here
   const o = opening; closeMenus(); story.char = id; sel = roster.findIndex(r => r.id === id); rig = bareRig(id);
   const me = o.kids.find(k => k.id === id), you = o.kids.find(k => k.id !== id);
@@ -6477,6 +6480,162 @@ function disposeRoad(R) {
   scene.remove(R.G); actors.remove(R.bus); R.G.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); R.bus.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
   [...(R.kids || []), R.driver].forEach(c => { if (c) c.r.root.visible = c.r.shadow.visible = false; }); R.seaM.dispose();
 }
+// La Guagua between worlds (the user, 2026-10-26: "in between maps, theyll ride la guaga with whoever they complteed the level with ebing in the car ... build for each connection a road that has
+// environments rsembling the world we came from and starts to look like the next world they're going to ... this will happen the first time going to each new world, and then you can fast travel after that")
+let rideS = null;                                    // ph: out (to black) · in (the road comes up) · drive · end (to black, then on into the world)
+const RIDE_T = 16;                                   // (the drive, seconds: from one world's look into the next's)
+const rideTo = w => !!story && w !== world && !story.visited.has(w) && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (the first time into a world, and by road: never down into the deep)
+const rideMat = {}, rMat = c => rideMat[c] || (rideMat[c] = toon(c)), rPick = (rng, L) => L[Math.floor(rng() * L.length)];
+const rBox = (w, h, d, c, x = 0, y = 0, z = 0) => at(mk(new THREE.BoxGeometry(w, h, d), null, { mat: rMat(c), ol: 0 }), x, y, z);
+const rCyl = (r0, r1, h, c, n = 8) => mk(new THREE.CylinderGeometry(r0, r1, h, n), null, { mat: rMat(c), ol: 0 });
+const rGeo = (geo, c, sx = 1, sy = 1, sz = 1) => mk(geo.scale(sx, sy, sz), null, { mat: rMat(c), ol: 0 });
+const rBall = (r, c, sx, sy, sz, d = 0) => rGeo(new THREE.IcosahedronGeometry(r, d), c, sx, sy, sz), rRock = (r, c) => rGeo(new THREE.DodecahedronGeometry(r, 0), c, 1.3, .75, 1);
+const rTree = (rng, h, trunk, crown, k = 1) => { const g = new THREE.Group(); g.add(at(rCyl(.18 * k, .26 * k, h, trunk, 7), 0, h / 2, 0)); g.add(at(rBall(1.2 * k, crown, 1.3, .8, 1.1), 0, h + .4 * k, 0)); return g; };
+let rideTM = null; const rPalm = (rng, o) => tropPalm(null, rideTM || (rideTM = tropMats()), 0, 0, 0, rng, o);
+const rLamp = (c, glow, h = 3.4) => { const g = new THREE.Group(); g.add(at(rCyl(.06, .08, h, c), 0, h / 2, 0)); g.add(rBox(.5, .14, .3, c, .2, h, 0)); g.add(at(new THREE.Mesh(new THREE.BoxGeometry(.35, .04, .2), new THREE.MeshBasicMaterial({ color: glow })), .2, h - .08, 0)); return g; };
+const RIDE_KIT = {                                   // each world by the road: its ground (the far side), its verge (this side), the far land (or the sea), and what goes by: near (low, this side), curb (tall, over the road), mid, back
+  0: { ground: "#5f9a43", verge: "#6aa64a", far: "#4f8a3a",   // the berry woods: ferns, bushes, flame trees, royal palms, green hills
+    near: [rng => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) g.add(at(rGeo(new THREE.ConeGeometry(.25, 1 + rng() * .6, 5), "#3f7a33"), (i - 1) * .3, .5, rng() * .3)); return g; }, rng => at(rBall(.6 + rng() * .5, "#4f8a3a", 1.4, .8, 1), 0, .3, 0)],
+    mid: [rng => rPalm(rng, { h: 6 + rng() * 3, royal: true }), rng => rTree(rng, 3.5 + rng() * 1.5, "#6b4a32", "#e0482a", 1.3), rng => rTree(rng, 3 + rng() * 1.5, "#6b4a32", "#3f8a3a", 1.2)],
+    back: [rng => at(rBall(9 + rng() * 5, "#3f6f36", 1.6, .55, .6), 0, 0, 0)] },
+  1: { ground: "#e9c48a", verge: "#d8b27a", sea: true,      // Cuss' Waves: rocks, coconut palms, the sea
+    near: [rng => at(rRock(.5 + rng() * .5, "#7d7a86"), 0, .2, 0)],
+    mid: [rng => rPalm(rng, { h: 6 + rng() * 4, coco: true, lean: rng() * .4 - .2 }), rng => at(rRock(1 + rng(), "#6f6670"), 0, .4, 0)], back: [] },
+  2: { ground: "#7c8086", verge: "#8a8f96", far: "#5d6168",  // Volt Keep: crates, posts, pylons, pipes, factories
+    near: [rng => { const g = new THREE.Group(); g.add(rBox(.9, .9, .9, "#a07a3a", 0, .45, 0)); if (rng() < .5) g.add(rBox(.7, .7, .7, "#8a6a32", .1, 1.25, 0)); return g; }, () => { const g = new THREE.Group(); g.add(rBox(.14, 1.3, .14, "#ffd203", 0, .65, 0)); return g; }],
+    curb: [() => rLamp("#4a525c", "#bfe8ff", 4)],
+    mid: [rng => { const g = new THREE.Group(), h = 7 + rng() * 3; [-1, 1].forEach(s => g.add(rBox(.16, h, .16, "#5d6670", s * .6, h / 2, 0))); for (let y = 1.5; y < h; y += 1.6) g.add(rBox(1.4, .1, .1, "#5d6670", 0, y, 0)); return g; },
+      () => { const g = new THREE.Group(), p = rCyl(.35, .35, 5, "#9aa3ad", 10); p.rotation.z = Math.PI / 2; g.add(at(p, 0, 1.6, 0)); [-2, 2].forEach(x => g.add(rBox(.2, 1.6, .2, "#5d6670", x, .8, 0))); return g; }],
+    back: [rng => { const g = new THREE.Group(), w = 8 + rng() * 6, h = 5 + rng() * 5; g.add(rBox(w, h, 4, "#4a4f58", 0, h / 2, 0)); g.add(at(rCyl(.7, .9, 6, "#3c4048", 10), w * .3, h + 3, 0)); return g; }] },
+  3: { ground: "#eef3ff", verge: "#e2ebff", far: "#cfe0ff",  // Loof's sky: cloud for ground, balloons, floating isles
+    near: [rng => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) g.add(at(rBall(.5 + rng() * .4, "#ffffff", 1, 1, 1, 1), (i - 1) * .55, .3, rng() * .3)); return g; }],
+    mid: [rng => { const g = new THREE.Group(), h = 4 + rng() * 3; g.add(at(rCyl(.02, .02, h, "#ffffff", 4), 0, h / 2, 0)); g.add(at(rBall(.9, rPick(rng, ["#ff6a6a", "#ffd203", "#6ac8ff", "#9cf06a"]), 1, 1.15, 1, 1), 0, h + .8, 0)); return g; }],
+    back: [rng => { const g = new THREE.Group(), r = 4 + rng() * 2; g.add(at(rGeo(new THREE.ConeGeometry(r, 4, 7).rotateX(Math.PI), "#8a7560"), 0, 6, 0)); g.add(at(rBall(r + .2, "#7fc05a", 1, .3, 1), 0, 8, 0)); return g; }] },
+  4: { ground: "#e8b56a", verge: "#e0a85a", far: "#d99a50",  // Sirocco's dunes: sandstone, cacti, dunes
+    near: [rng => at(rRock(.4 + rng() * .4, "#c77f45"), 0, .2, 0)],
+    mid: [rng => { const g = new THREE.Group(), h = 2.5 + rng() * 2; g.add(at(rCyl(.3, .34, h, "#4f9a4a"), 0, h / 2, 0)); [-1, 1].forEach(s => { if (rng() < .7) { g.add(at(rCyl(.18, .2, 1.1, "#4f9a4a"), s * .5, h * .55 + .4, 0)); g.add(at(rCyl(.18, .18, .5, "#4f9a4a"), s * .3, h * .55, 0).rotateZ(Math.PI / 2)); } }); return g; }],
+    back: [rng => at(rBall(10 + rng() * 6, "#e4a95e", 1.8, .4, .7), 0, 0, 0)] },
+  5: { ground: "#5aa24a", verge: "#66b052", far: "#3f8a3a",  // Kesh's garden: flower beds, topiary, hedges
+    near: [rng => { const g = new THREE.Group(), c = rPick(rng, ["#ff7ab0", "#ffd203", "#ffffff", "#c88aff"]); g.add(at(rBall(.55, "#3f8a3a", 1.3, .8, 1), 0, .35, 0)); for (let i = 0; i < 5; i++) g.add(at(rBall(.12, c), (rng() - .5) * 1.1, .55 + rng() * .25, (rng() - .5) * .6)); return g; }],
+    mid: [() => { const g = new THREE.Group(); g.add(at(rCyl(.5, .4, .6, "#b06a45"), 0, .3, 0)); g.add(at(rGeo(new THREE.ConeGeometry(.8, 2.4, 8), "#2f7a3a"), 0, 1.8, 0)); return g; }, rng => rTree(rng, 3 + rng(), "#6b4a32", "#4f9a3a", 1.1)],
+    back: [rng => rBox(14 + rng() * 6, 3 + rng() * 2, 2, "#2f6f36", 0, 1.5, 0)] },
+  6: { ground: "#f6b6d0", verge: "#f8c4da", far: "#e98ab4",  // Vinella's candy works: gumdrops, canes, lollipops, factories
+    near: [rng => at(rBall(.4, rPick(rng, ["#ff5a8a", "#7ad0ff", "#ffd203", "#9cf06a"]), 1, .7, 1, 1), 0, .25, 0)],
+    mid: [rng => { const g = new THREE.Group(), h = 3 + rng() * 1.5; g.add(at(rCyl(.14, .14, h, "#ffffff"), 0, h / 2, 0)); for (let y = .4; y < h; y += .55) g.add(at(rGeo(new THREE.TorusGeometry(.15, .05, 5, 10).rotateX(Math.PI / 2), "#e5484d"), 0, y, 0)); return g; },
+      rng => { const g = new THREE.Group(), h = 3 + rng() * 2; g.add(at(rCyl(.07, .07, h, "#ffffff"), 0, h / 2, 0)); g.add(at(rGeo(new THREE.CylinderGeometry(1, 1, .25, 18).rotateX(Math.PI / 2), rPick(rng, ["#ff5a8a", "#ffd203", "#7ad0ff"])), 0, h + .8, 0)); return g; }],
+    back: [rng => { const g = new THREE.Group(), w = 7 + rng() * 5, h = 5 + rng() * 4; g.add(rBox(w, h, 4, "#e070a0", 0, h / 2, 0)); g.add(at(rCyl(.7, .7, 5, "#ffffff", 10), -w * .3, h + 2.5, 0)); return g; }] },
+  7: { ground: "#6d6f78", verge: "#7a7c85", far: "#555761",  // Crux's city: kerbs, street lamps, buildings, a skyline
+    near: [() => rBox(1.6, .25, .5, "#9a9ca4", 0, .12, 0)], curb: [() => rLamp("#3c3f48", "#ffe2a0")],
+    mid: [rng => { const g = new THREE.Group(), h = 6 + rng() * 6, w = 3 + rng() * 2; g.add(rBox(w, h, 2.5, rPick(rng, ["#8a5a4a", "#5a6a8a", "#7a7a6a", "#a0705a"]), 0, h / 2, 0)); for (let y = 1; y < h - .5; y += 1.2) for (let x = -w / 2 + .6; x < w / 2 - .3; x += .9) g.add(rBox(.45, .6, .05, "#ffe9a8", x, y, 1.27)); return g; }],
+    back: [rng => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const h = 8 + rng() * 10; g.add(rBox(3 + rng() * 2, h, 3, "#3e4250", (i - 1) * 4, h / 2, 0)); } return g; }] },
+  8: { ground: "#6f8a4a", verge: "#7a9a52", sea: true, lake: true,   // the Turtle's lakebed: reeds, willows, mossy rocks, the lake
+    near: [rng => { const g = new THREE.Group(); for (let i = 0; i < 5; i++) g.add(at(rGeo(new THREE.ConeGeometry(.05, 1.2 + rng(), 4), "#7a9a3a"), (rng() - .5) * .6, .6, (rng() - .5) * .4)); return g; }],
+    mid: [rng => rTree(rng, 3 + rng(), "#5a4a3a", "#6a9a4a", 1.4), rng => at(rRock(.8 + rng() * .5, "#6a7a6a"), 0, .3, 0)], back: [] },
+  9: { ground: "#f2d29a", verge: "#e9c48a", sea: true,      // the beach: palms, rocks, the sea
+    near: [rng => at(rRock(.4 + rng() * .4, "#8d7f86"), 0, .2, 0)], mid: [rng => rPalm(rng, { h: 6.5 + rng() * 4, coco: true, lean: rng() * .4 - .2 })], back: [] },
+  10: { ground: "#e3c08a", verge: "#d8b27a", far: "#c99a62", // Trumpeto's bazaar: banners, tents, domes
+    near: [rng => at(rRock(.35 + rng() * .3, "#b08a5a"), 0, .15, 0)], curb: [rng => { const g = new THREE.Group(); g.add(at(rCyl(.05, .05, 3, "#7a5a3a"), 0, 1.5, 0)); g.add(rBox(.05, .9, .55, rPick(rng, ["#e5484d", "#2d5bd6", "#ffd203"]), 0, 2.5, .28)); return g; }],
+    mid: [rng => { const g = new THREE.Group(); g.add(rBox(2.4, 1.6, 2, "#f3e2c0", 0, .8, 0)); g.add(at(rGeo(new THREE.ConeGeometry(1.9, 1.4, 4).rotateY(Math.PI / 4), rPick(rng, ["#e5484d", "#ffd203", "#2d9bd6", "#9a4ad6"])), 0, 2.3, 0)); return g; }],
+    back: [() => { const g = new THREE.Group(); g.add(rBox(6, 4, 4, "#d9b27a", 0, 2, 0)); g.add(at(rBall(2.4, "#e0b040", 1, .9, 1, 1), 0, 4.6, 0)); return g; }] },
+  11: { ground: "#3a3448", verge: "#443d55", far: "#2a2538", night: true,   // Master No's casino: neon signs, palms, lit towers, at night
+    near: [() => rBox(1.4, .2, .4, "#ffcf6a", 0, .1, 0)], curb: [rng => { const g = new THREE.Group(); g.add(at(rCyl(.06, .06, 2.4, "#2a2538"), 0, 1.2, 0)); g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.2, .5, .1), new THREE.MeshBasicMaterial({ color: rPick(rng, ["#ff3a9a", "#3affd2", "#ffd203"]) })), 0, 2.65, 0)); return g; }],
+    mid: [rng => rPalm(rng, { h: 6 + rng() * 2, coco: true })],
+    back: [rng => { const g = new THREE.Group(), h = 10 + rng() * 8; g.add(rBox(5, h, 4, "#2e2840", 0, h / 2, 0)); for (let y = 1.5; y < h; y += 2) g.add(at(new THREE.Mesh(new THREE.BoxGeometry(4.4, .3, .05), new THREE.MeshBasicMaterial({ color: "#ffcf6a" })), 0, y, 2.03)); return g; }] },
+  12: { ground: "#7a7a72", verge: "#86867c", far: "#5f5f58", // King P's castle: stone, banners, walls, towers
+    near: [rng => at(rRock(.4 + rng() * .3, "#8a8a80"), 0, .2, 0)], curb: [() => { const g = new THREE.Group(); g.add(at(rCyl(.06, .06, 3, "#4a4a44"), 0, 1.5, 0)); g.add(rBox(.05, 1, .6, "#6a2ad6", 0, 2.4, .3)); return g; }],
+    mid: [() => { const g = new THREE.Group(); g.add(rBox(4, 2.2, 1, "#8a8a80", 0, 1.1, 0)); for (let x = -1.6; x <= 1.6; x += .8) g.add(rBox(.45, .45, 1, "#8a8a80", x, 2.42, 0)); return g; }],
+    back: [rng => { const g = new THREE.Group(), h = 9 + rng() * 5; g.add(at(rCyl(2, 2.2, h, "#6a6a62", 10), 0, h / 2, 0)); g.add(at(rGeo(new THREE.ConeGeometry(2.6, 3, 10), "#6a2ad6"), 0, h + 1.5, 0)); return g; }] },
+  13: null,                                          // (the deep: down Cuss' pool, never by road)
+};
+function startRide(from, to, then) {                 // (statsGo: the first time into a world)
+  rideS = { from, to, then, ph: "out", t: 0, a: 0 }; document.body.classList.add("riding"); const B = $("proBlack"); B.style.opacity = 0; B.classList.add("show"); $("proTitle").classList.remove("on");
+  for (const k in keys) keys[k] = false; guaguaLoad();
+}
+function rideSkip() { const P = rideS; if (!P || !["in", "drive"].includes(P.ph)) return; SFX.tick(); P.ph = "end"; P.t = 0; $("skipHint").classList.remove("show"); }   // (Enter / Esc / Start, or SKIP: on into the world)
+function rideSeats() {                               // who's in La Guagua and where (the user, 2026-10-26): with a buddy, the buddy drives and the girls are in the back; on your own, Camila drives and Rose is in
+  const me = story.char || "camila", other = me === "rose" ? "camila" : "rose", R = [], mine = { st: player, r: rig };   // the back; with three, one drives and the other two look out of the windows on your side, one in the passenger seat, one
+  const oR = roster.find(q => q.id === other), oth = oR ? { st: makeState(0, oR), r: oR } : null, girl = id => id === me ? mine : oth;   // in the back seat. The pets ride in the bed with the girls
+  const people = []; if (ally) [ally, ...(ally.crew || [])].forEach(m => people.push({ st: m.st, r: m.r }));
+  const seat = (c, o) => { if (c) R.push({ ...c, ...o }); };
+  if (people.length) { seat(people[0], { slot: "drive", look: true, sit: 1 }); seat(people[1], { slot: "pass", look: true, sit: 1 }); seat(people[2], { slot: "back", look: true, sit: 1 }); people.slice(3).forEach((c, i) => seat(c, { slot: "bed" + i, sit: 1 }));
+    seat(girl("camila"), { slot: "camila", sit: 1 }); seat(girl("rose"), { slot: "rose", hold: true }); }
+  else { seat(girl("camila"), { slot: "drive", look: true, sit: 1 }); seat(girl("rose"), { slot: "rose", hold: true }); }
+  palsAll().forEach((q, i) => seat({ st: q, r: q.rig }, { slot: "pet" + i, sit: 1 }));
+  return { R, oth };
+}
+function rideBuild() {                               // behind the black: the room let go, the road between the two worlds, everyone in La Guagua
+  const P = rideS; clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); clearBaddies(); clearHz(); FOES.forEach(hideFoe); bossIn = false; endCameo(); clearTrap(); patrolClear(); ejEnd(); wildClear(); strayClear(); allyHide(allyHere); allyHere = null;   // (Noro stays in this world, as ever)
+  if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; }
+  level.objs.forEach(o => { o.visible = false; }); (level.fg || []).forEach(o => { o.visible = false; });
+  const night = RIDE_KIT[P.from].night || RIDE_KIT[P.to].night; if (night) setLook(6);
+  P.road = buildRide(P.from, P.to, night ? 6 : Math.min(6, hour)); const R = P.road, S = rideSeats(); R.riders = S.R; R.oth = S.oth;
+  const U = R.bus.userData, A0 = ALLIES.find(a => a.id === "elpico"), H0 = A0 ? allyRig(A0).heightPx : 120, inCab = r => 1.66 + .72 * (H0 - r.heightPx) / 48;   // (sat in the cab: each one's head in the window, whatever their size)
+  const SL = { drive: [U.cx1 - .92, null, -.62, -.2], pass: [U.cx1 - .92, null, .5, -Math.PI / 2 + .35], back: [U.cx1 - 2.4, null, .55, -Math.PI / 2 + .25],
+    camila: [U.bx1 - .42, U.by + .3, .45, -Math.PI + .95], rose: [U.bx1 - 1.42, U.by + .08, -.5, -.62], pet0: [U.bx1 - 1.15, U.by + .08, .3, -Math.PI / 2 - .3], pet1: [U.bx1 - 1.85, U.by + .62, .75, -Math.PI / 2 + .35],
+    bed0: [U.bx1 - 1.85, U.by + .08, .1, -Math.PI / 2], bed1: [U.bx1 - 2.3, U.by + .08, .3, -Math.PI / 2] };
+  R.riders.forEach(c => { const [lx, ly, lz, yaw] = SL[c.slot] || SL.bed0; Object.assign(c, { lx, ly: ly ?? inCab(c.r), lz, yaw });
+    Object.assign(c.st, { sit: c.sit || 0, face: 1, yaw, vx: 0, vy: 0, onGround: true, plat: null, atkT: -1, atkKind: null, combo: null, wave: 0, sprint: false, climb: null, tackle: null, block: false, hurtT: 0, inv: 0, bus: true });
+    c.r.root.visible = c.r.shadow.visible = true; });
+  proCam = { x: R.busX + .3, y: 5.5, z: 24, tx: R.busX + .3, ty: 4.2, tz: 0 };   // (La Guagua in the middle, the world going by round it)
+}
+function buildRide(from, to, sky) {                  // the road between two worlds: the highway, its verges, the far land or the sea, and what goes by: from's at first, more and more to's
+  const cx = X(WORLD / 2), G = group(scene, 0, 0, 0), A = RIDE_KIT[from], B = RIDE_KIT[to], rng = rngF(700 + from * 31 + to * 7), R = { G, cx, span: 46, slots: [], v: ROAD_V, t: 0, p: 0, busX: cx - 1.2, busZ: .25, A, B, rng };
+  G.add(at(new THREE.Mesh(new THREE.PlaneGeometry(190, 56), new THREE.MeshBasicMaterial({ map: waveSkyTex(sky, true), fog: false })), cx, 17, -84));   // (the hour's sky)
+  R.mG = toon(A.ground); R.mV = toon(A.verge); R.mF = toon(A.far || A.ground); R.mats = [R.mG, R.mV, R.mF];
+  if (A.sea || B.sea) { const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() }), sc = (WAVE_SCREENS[sky] || {}).sea || CARIB_SEA;   // the sea (or the lake), under the far land when there's land
+    seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line); R.seaM = seaM;
+    G.add(at(new THREE.Mesh(new THREE.PlaneGeometry(240, 80, 120, 40).rotateX(-Math.PI / 2), seaM), cx, -.55, -52)); }
+  R.farBand = at(mk(new THREE.BoxGeometry(260, .5, 96), null, { mat: R.mF, ol: 0 }), cx, A.sea ? -1.8 : -.05, -60); G.add(R.farBand);
+  G.add(at(mk(new THREE.BoxGeometry(240, 1, 12), null, { mat: R.mG, ol: 0 }), cx, -.55, -8.6));                     // the ground on the far side
+  G.add(rBox(240, .2, 5.6, "#5d5865", cx, -.1, .2)); G.add(rBox(240, .02, .14, "#f6ead6", cx, .005, -2.35)); G.add(rBox(240, .3, .32, "#d9c2a6", cx, .05, -2.72));   // the highway, its edge line, the curb
+  G.add(at(mk(new THREE.BoxGeometry(240, .3, 24), null, { mat: R.mV, ol: 0 }), cx, -.15, 14.8));                    // the verge on this side
+  for (let i = 0; i < 24; i++) { const d = group(G, cx - R.span + i * 4, 0, 0); d.add(rBox(2.2, .02, .16, "#f7d36b", 0, .006, 2.3)); R.slots.push({ row: "dash", x: d.position.x, g: d }); }   // the dashes down the middle
+  const slot = (row, n, z0, z1) => { for (let i = 0; i < n; i++) { const s = { row, x: cx - R.span + (i + .5) * 2 * R.span / n + (rng() - .5) * 2, z: z0 + rng() * (z1 - z0), g: null }; rideFill(R, s, A); R.slots.push(s); } };
+  slot("near", 18, 5.5, 11); slot("curb", 8, -3.1, -3.1); slot("mid", 12, -4.5, -12); slot("back", 7, -22, -34);
+  const bus = buildGuagua(GUAGUA_B); bus.scale.setScalar(BUS_K); at(bus, R.busX, 0, R.busZ); actors.add(bus); R.bus = bus;
+  return R;
+}
+function rideFill(R, s, K) {                         // a slot's piece: one of that world's (none, for a row it hasn't got)
+  if (s.g) { R.G.remove(s.g); s.g.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); s.g = null; }
+  const L = K[s.row] || []; if (!L.length) return; const g = rPick(R.rng, L)(R.rng); if (!g) return;
+  R.G.add(g); g.position.set(s.x, s.row === "back" ? -.4 : 0, s.z); g.rotation.y += (R.rng() - .5) * .6; if (s.row === "mid") g.scale.multiplyScalar(.85 + R.rng() * .3); s.g = g;
+}
+function rideRoadTick(R, dt) {                       // (every frame: the road going by, from one world's look into the next's; La Guagua, and everyone in it)
+  R.t += dt; if (R.seaM) R.seaM.uniforms.uT.value = R.t;
+  const p = R.p, e = p * p * (3 - 2 * p), cB = R._cB || (R._cB = [new THREE.Color(R.B.ground), new THREE.Color(R.B.verge), new THREE.Color(R.B.far || R.B.ground)]);
+  R.mG.color.set(R.A.ground).lerp(cB[0], e); R.mV.color.set(R.A.verge).lerp(cB[1], e); R.mF.color.set(R.A.far || R.A.ground).lerp(cB[2], e);
+  { const k = clamp((p - .35) / .3, 0, 1), y0 = R.A.sea ? -1.8 : -.05, y1 = R.B.sea ? -1.8 : -.05; R.farBand.position.y = lerp(y0, y1, k * k * (3 - 2 * k)); }   // (the far land sinking under the sea, or coming up out of it)
+  for (const s of R.slots) { s.x -= R.v * dt; if (s.g) s.g.position.x = s.x;
+    if (s.x < R.cx - R.span) { s.x += 2 * R.span; if (s.row === "dash") { s.g.position.x = s.x; continue; } rideFill(R, s, R.rng() < p ? R.B : R.A); } }   // (round again: the next world's, more and more)
+  const U = R.bus.userData, bob = .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1); U.B.position.y = bob; U.B.rotation.x = .007 * Math.sin(R.t * 3.3); R.bus.position.x = R.busX;
+  U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
+  for (const c of R.riders) { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.vy = 0; s.onGround = true;
+    s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .75 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
+    s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
+    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }   // (a hand up on the roll bar)
+    if (c.look) s.out.headRot = (s.out.headRot || 0) + .08 * Math.sin(R.t * 2.1 + c.lz);
+    c.r.sync(s, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; }
+}
+function rideTick(dt) {                              // (every frame, paused or not)
+  const P = rideS, Bl = $("proBlack"); P.t += dt; const fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); };
+  if (P.ph === "out") { fade(1, .8); if (P.a >= 1 && P.t > .9) { rideBuild(); P.ph = "in"; P.t = 0; $("skipHint").classList.add("pro", "show"); } }
+  else if (P.ph === "in") { fade(0, 1.4); if (P.a <= 0) { P.ph = "drive"; P.t = 0; } }
+  else if (P.ph === "drive") { if (P.t > RIDE_T) { P.ph = "end"; P.t = 0; } }
+  else if (P.ph === "end") { fade(1, 1); if (P.a >= 1 && P.t > 1.05) return rideEnd(); }
+  else if (P.ph === "title") { if (!P.named && P.t > .5) { P.named = true; $("proTitle").classList.add("on"); } if (P.t > 2.7 && !transit) { $("proTitle").classList.remove("on"); P.ph = "lift"; P.t = 0; document.body.classList.remove("riding"); } }   // (the new world's name on the black, as the woods' after the prologue)
+  else if (P.ph === "lift") { fade(0, 1.2); if (P.a <= 0) rideDone(); }
+  if (P.road) { const R = P.road; if (P.ph === "drive") R.p = clamp(P.t / RIDE_T, 0, 1); else if (P.ph === "end") R.p = Math.min(1, R.p + dt * .5); rideRoadTick(R, dt); }
+}
+function rideClear(R) {                              // (the road and the bus gone; whoever rode, off the bus)
+  scene.remove(R.G); actors.remove(R.bus); [R.G, R.bus].forEach(G => G.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); })); R.mats.forEach(m => m.dispose()); if (R.seaM) R.seaM.dispose();
+  if (R.oth) R.oth.r.root.visible = R.oth.r.shadow.visible = false; (R.riders || []).forEach(c => { c.st.sit = 0; c.st.z = 0; c.st.bus = false; });
+}
+function rideEnd() {                                 // under the black: off the road and on into the new world, built under it; its name comes up on the black, then the black lifts
+  const P = rideS; proCam = null; $("skipHint").classList.remove("pro", "show"); for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  if (P.road) rideClear(P.road); P.road = null; $("proTitle").firstElementChild.textContent = WORLDS[P.to].name; P.ph = "title"; P.t = 0; P.then();
+}
+function rideDone() { rideS = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("proTitle").firstElementChild.textContent = "BERRY WOODS"; document.body.classList.remove("riding"); }   // (the prologue's title back as it was)
+function rideAbort() { const P = rideS; if (!P) return; proCam = null; if (P.road) rideClear(P.road); rideDone(); $("skipHint").classList.remove("pro", "show"); }   // (off to the title in the middle of it)
 // the end of the third room: a bep comes hopping out to them, and the page turns into a comic: it points the way Glos went, into the
 // forest, and gives them the berry sword and the gauntlet; they put them on, and after him
 let gift = null, comicUp = false, comicCam = null;
@@ -7061,8 +7220,9 @@ function statsGo() {                                  // (not in the first momen
   if (!statsUp || statsUp.ask || performance.now() - statsUp.t0 < 900) return;
   if (statsUp.full && !statsUp.asked) { askShowdown(); return; }   // (pressed on before the bar filled: the question still comes first)
   const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
-  if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, () => goWorldNow(w)); }   // (a way not yet drawn: the map first)
-  goWorldNow(w);
+  const go = rideTo(w) ? () => { $("wstats").classList.remove("show"); startRide(world, w, () => goWorldNow(w)); } : () => goWorldNow(w);   // (the first time into a world: La Guagua there, the user 2026-10-26)
+  if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, go); }   // (a way not yet drawn: the map first)
+  go();
 }
 $("wstats").addEventListener("pointerdown", e => { if (!statsUp) return; e.preventDefault(); const a = e.target.closest("#wsAsk button"); if (a) askAnswer(a.dataset.a === "yes"); else if (!statsUp.ask) statsGo(); });
 function arrivalRoom(w, fromW) {                    // where you come into world w: its first room, or (its boss beaten) the door that leads back where you came from
@@ -9212,7 +9372,7 @@ function allyJoin(A, r, st, quiet, crew) {         // it's with you now
   if (story) writeSave();
 }
 function allyToCheck() {                           // a full party and someone else joins: your ally goes to wait at the last rest stop you were at in this world
-  const a = ally; if (!a) return;                  // (the user, 2026-10-21: "send the non cat party member to a checkpoint you were at"); none yet, it heads home
+  const a = ally; if (!a) return; if (a.A.w !== world) { allyLeave("% HEADS HOME"); return; }   // (the user, 2026-10-21: "send the non cat party member to a checkpoint you were at"); none yet, it heads home (and one from another world heads home)
   const R = story && story.rests && story.rests[world], ck = story && story.check && story.check.w === world ? story.check.s : R && R.length ? R[R.length - 1] : null;
   if (ck === null || ck === undefined || buddyAt.w !== world) { allyLeave("% HEADS HOME"); return; }
   buddyAt.rooms[a.A.id] = ck; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true;   // (there it stays: no wandering off)
@@ -9225,11 +9385,8 @@ function allyLeave(msg) {                          // it heads home: off out of 
   else allyHide(a);
   if (story) writeSave();
 }
-function palsStay() {                              // off into another world: your cat and your ally stay in this one (the user, 2026-10-20: "they only stay for the world you found them in")
-  const nm = [tamed && petDef(petSp(tamed), tamed.w).name, tamed2 && petDef(petSp(tamed2), tamed2.w).name, ally && ally.A.name].filter(Boolean), many = nm.length > 1 || !!(ally && ally.A.crew);
-  if (tamed || tamed2) { hideCatRigs(); tamed = tamed2 = null; pal = pal2 = null; }
-  allyHide(ally); allyHide(allyHere); ally = allyHere = null;
-  if (nm.length) setTimeout(() => toast(nm.join(" AND ") + (many ? " STAY" : " STAYS") + " BEHIND"), 700);
+function palsStay() {                              // off into another world: your pets and your berry buddies come along now (the user, 2026-10-26: "makit where they can travel now with you from world to world"; since 10-20 they'd stayed in the world you found them in)
+  allyHide(allyHere); allyHere = null; if (ally) { allyHide(ally); ally.away = true; }   // (the one with you: at your side again in the new world's first room)
 }
 function updateAllyHere(dt) {                      // waiting: it turns to watch you, waves when it sees you, and joins when you reach it
   const H = allyHere; if (!H || mode !== "play" || !player) return; const s = H.st, p = player, d = Math.abs(p.x - s.x); H.t += dt;
@@ -9248,7 +9405,7 @@ function updateAllyHere(dt) {                      // waiting: it turns to watch
 function allyPlace(x, y, face) { const s = ally.st; x = shoreX(x); if (STAGES[stage].swim) y = groundAt(x) ?? y; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player;
   (ally.crew || []).forEach(m => Object.assign(m.st, { x: clamp(shoreX(x - face * m.off), 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 })); }
 function updateAlly(dt) {                          // with you: just behind you, hopping up and down after you, and at any baddy (or the boss) that comes near
-  if (allyBring !== null && mode === "play" && player && !transit) { const A = ALLIES.find(a => (a.id === allyBring || a.w === allyBring) && a.w === world); allyBring = null;
+  if (allyBring !== null && mode === "play" && player && !transit) { const A = ALLIES.find(a => a.id === allyBring) || ALLIES.find(a => a.w === allyBring && a.w === world); allyBring = null;   // (by its name: from any world now)
     if (A) { const r = allyRig(A), st = makeState(player.x, r); allyJoin(A, r, st, true); allyPlace(player.x - player.face * 90, player.y, player.face); } }
   if (!ally || mode !== "play" || !player) return;
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt;
@@ -18458,7 +18615,7 @@ function finishSync(p, r) {
   if (p === player && mode === "play" && aura.show > .01 && !hurt) {           // charging: the whole body lights up in the stage color
     const c = CHARGE_COL[aura.lv], k = aura.show * [.08, .16, .24, .34][aura.lv] * (.7 + .3 * Math.sin(time * (12 + aura.lv * 6))); FLASHC(r.mats, c.r * k, c.g * k, c.b * k);
   } else FLASHSET(r.mats, hurt);
-  const gy = Y(groundBelow(p)), hgt = Y(p.y) - gy, ss = clamp(1 - hgt / 7, .3, 1);
+  const gy = p.bus ? Y(p.y) : Y(groundBelow(p)), hgt = Y(p.y) - gy, ss = clamp(1 - hgt / 7, .3, 1);   // (on La Guagua: under them, on the seat or the bed)
   r.shadow.position.set(X(p.x), gy + .02, p.z || 0); r.shadow.scale.setScalar(ss * r.spec.body.scale);
 }
 function FLASHC(mats, r, g, b) { mats.forEach(m => { const e = m.userData.glowE; m.emissive.setRGB(r + (e ? e[0] : 0), g + (e ? e[1] : 0), b + (e ? e[2] : 0)); }); }   // keeps a glowing sword / gauntlet lit
@@ -18733,9 +18890,9 @@ function render(dt) {
   syncCards(); syncHazards(); syncBubble(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
-  gradeMat.uniforms.ruin.value = mode === "play" && !hideout ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
-  gradeMat.uniforms.bloom.value = mode === "play" && !hideout && world !== 9 && freedNow() ? 1 : 0;
-  if (!pan) gradeMat.uniforms.dim.value = !bepSel && !hideout && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : 0;   // (the forest's underground rooms)
+  gradeMat.uniforms.ruin.value = mode === "play" && !hideout && !rideS ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
+  gradeMat.uniforms.bloom.value = mode === "play" && !hideout && !rideS && world !== 9 && freedNow() ? 1 : 0;
+  if (!pan) gradeMat.uniforms.dim.value = !bepSel && !hideout && !rideS && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : 0;   // (the forest's underground rooms)
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
@@ -18773,12 +18930,12 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || proFrozen()) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || proFrozen() || (!!rideS && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? .35 : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt);   // (the last kill's slow motion)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
