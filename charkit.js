@@ -1687,6 +1687,11 @@ function climbPose(p, cat) {
   if (cat) Object.assign(T, { tailBase: 1.1, tailCurl: .12, tailSwish: .25 * s, hatTilt: -.1 });
   return T;
 }
+function dodgePose(p) {                            // the back-step (2026-10-25): leaning back into the hop, the guard up, knees drawn up a little, the front foot trailing
+  const u = Math.min(1, (p.dodge.t || 0) / .3), s = Math.sin(u * Math.PI);
+  return { lean: -.32 * s, arch: -.12 * s, bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1,
+    fNx: .2 + .08 * s, fNy: .1 + .14 * s, fFx: -.16, fFy: .06 + .1 * s, fP: -.2 };
+}
 function zipPose(p) {                              // hanging from the zipline's trolley (the waves, 2026-10-25): both hands up on its bar, legs swinging a little under you
   const s = Math.sin(p.zipPh || 0);
   return { lean: -.06 + .05 * s, arch: .05, bodyY: -.02, headRot: .2, armF: 2.95, elbF: .22, armB: 2.95, elbB: .22, spF: .16, spB: .16,
@@ -2065,6 +2070,7 @@ function updatePoseHuman(p, dt) {
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
+  else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);

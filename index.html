@@ -521,7 +521,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261025w"></script>
+<script src="charkit.js?v=20261025x"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261025a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -7816,7 +7816,7 @@ function updatePlayer(dt) {
   p.tkDig = approach(p.tkDig || 0, p.tkCharge ? 1 : 0, dt * 8);
   p.tackleK = approach(p.tackleK || 0, p.tackle ? 1 : 0, dt * (p.tackle ? 14 : 6)); p.hitFlash = Math.max(0, (p.hitFlash || 0) - dt);
   // block: hold C. Stops you, locks your facing, and turns away anything that comes at you from the front
-  p.block = held.block && control && p.atkT < 0 && !p.combo && !p.tackle && !p.tackleLock;
+  p.block = held.block && control && p.atkT < 0 && !p.combo && !p.tackle && !p.tackleLock && !p.dodge;
   if (p.block && !p.wasBlock) p.blockAt = time; p.wasBlock = p.block;            // when the guard went up: block just as a shot arrives and it's a parry
   // the guard starts with the hands drawn in close and opens out as you hold it (still blocking all the while), arms wide to a T,
   // and at the end of it a pink bubble pops up round you that takes one hit for you. With the bubble up you can't block: try, and you're just tired
@@ -7827,6 +7827,14 @@ function updatePlayer(dt) {
     if (p.blockHold > 1.55) { p.block = false; makeBubble(p); }                // the T done: the bubble
   } else { p.blockHold = 0; p.tpose = approach(p.tpose || 0, 0, dt * 5); }
   p.blockBtn = held.block;
+  // the back-step (the user, 2026-10-25: "when they block and press back, away from where they are facing, they'll do a swift jump backwards a few
+  // step. this is a sort of dodge/defensive measure. if you're holding block and press back, it should work, but also ... simultaneously hit back and
+  // block"): back pressed with the guard up, or back and block within a moment of each other, whichever first
+  { let bk = p.face > 0 ? held.left : held.right;
+    if (p.blkDownT === time && !bk && time - (p.turnT ?? -9) < .15 && (p.faceWas > 0 ? held.left : held.right)) { p.face = p.faceWas; bk = true; p.backDownT = p.turnT; p.backWas = true; }   // (back pressed a moment before block had turned you round: facing on again, and the step back)
+    const bkEdge = bk && !p.backWas; if (bkEdge) p.backDownT = time; p.backWas = bk; p.dodgeCd = Math.max(0, (p.dodgeCd || 0) - dt);
+    const both = bk && held.block && (bkEdge || (p.blkDownT === time && time - (p.backDownT ?? -9) < .15));   // (holding block, back pressed; or block pressed just after back)
+    if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p); }
   // sprint: two quick taps the same way, then keep holding
   if (ax && ax === p.runDir && control && !p.block && !(p.tpose > 0) && !(p.onGround && held.down) && !(p.onGround && p.hitWall === ax)) p.runT = (p.runT || 0) + dt;   // keep going the same way…
   else { p.runT = 0; p.runDir = ax; }                                                   // …stop, turn, block or hit a wall and it starts over
@@ -7894,11 +7902,12 @@ function updatePlayer(dt) {
   const target = control ? mx * maxV : p.hurtT > 0 && p.onGround ? 0 : p.vx;   // knocked back: once you're down again you stop, no sliding on
   if (p.tackle) tackleStep(p, dt);
   else if (MV && MV.slide && p.atkT < MV.slide) { }                                       // a dash keeps its speed
+  else if (p.dodge) { }                                                                   // (the back-step keeps its speed till you land)
   else if (MV && MV.stepIn && p.atkT >= MV.stepIn[0] && p.atkT < MV.stepIn[0] + MV.stepIn[2]) { }   // (and so does the jab's step in, for a moment)
   else if (!cat && MV && attacking && p.onGround && p === player && p.chain && p.chain.kind === "B" && (held.left || held.right) && fwdDrive(p, dt)) { }   // (holding forward: the combo carries you on after what it knocks back)
   else if ((!cat || MV) && attacking && p.onGround) p.vx = approach(p.vx, 0, 2600 * dt);   // humans plant their feet while striking
   else if (!(attacking && Math.abs(p.vx) > maxV && Math.sign(p.vx) === mx)) p.vx = approach(p.vx, target, rate * dt * (attacking ? .5 : 1));
-  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle) p.face = ax;
+  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle && !p.dodge) { if (p.face !== ax) { p.turnT = time; p.faceWas = p.face; } p.face = ax; }
   if (p.carry > 0) { p.carry -= dt; p.vx = p.carryDir * Math.max(p.carryDir * p.vx, 300); }
 
   if (wet) {                                         // swimming (the user, 2026-10-24: "move up and down the water in a floaty way, no jumping, and can attack still")
@@ -7943,6 +7952,7 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
+  if (p.dodge && (((p.dodge.t += dt) > .08 && p.onGround) || p.dodge.t > .7)) { p.dodge = null; p.vx *= .25; if (p.onGround) dust(p.x, p.y, 4, -p.face); }   // (down again: the back-step done)
   if (p.onGround || p.dive) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; p.stomped = null; }   // back on your feet: the rising hit and the bubble's drift reset
   const span = p.combo ? p.comboSpan : p.tackle ? p.tackle.span : null;   // (charging an attack or the tackle, you can walk off a ledge: only a combo under way, the charged tackle's included, holds you to your footing; the user, 2026-10-17)
   if (span) { const [a, b] = span; if (p.x < a || p.x > b) { p.x = clamp(p.x, a, b); p.vx = 0; } }   // a combo (or a tackle) stops at the edge: it never carries you off a ledge
@@ -8000,6 +8010,10 @@ function updatePlayer(dt) {
   updatePose(p, dt);
 }
 
+function startDodge(p) {                             // the back-step: a swift low hop back a few steps (~200 px), still facing on, and safe through it
+  Object.assign(p, { dodge: { t: 0 }, dodgeCd: .45, vx: -p.face * 560, vy: -420 * JUMPK, fullJump: true, jumpT: time, onGround: false, plat: null, coyote: 0, block: false, blockHold: 0, tpose: 0, chargeT: 0, chargeLv: 0, jcharging: false, jcharge: 0, bounceT: -1, sq: -.18, sqv: 0 });
+  p.inv = Math.max(p.inv || 0, .32); jumpBuf = 0; dust(p.x, p.y, 5, p.face); (SFX.dash || SFX.jump)();
+}
 function doJump(p, mv, k, full) {                 // k: how wound up (0 a plain jump, 1 a full second's wind-up) · full: fired on letting go, so it doesn't cut short
   p.coyote = 0; p.jumpT = time; p.bigJ = k; p.vy = -830 * JUMPK * Math.sqrt(mv.jump) * (1 + .2 * k); p.onGround = false; p.sq = .3 + .2 * k; p.sqv = 0; p.bounceT = -1; p.fullJump = full;
   dust(p.x, p.y, 6 + Math.round(k * 8));
