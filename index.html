@@ -785,13 +785,15 @@ let dayClock = 0, stayCols = new Set(), roomHour = new Map(), entrySide = "left"
 const DAY_ROOMS = 3, HOUR_OF = [0, 1, 3, 5, 6, 5], KESH_CYCLE = [0, 2, 3, 4, 5, 6];   // (each step of the day: the world's hour (its screens); the sixth, dawn, on the blue hour's rooms)
 const dayPos = () => Math.floor(Math.max(0, dayClock - 1) / DAY_ROOMS) % HOUR_OF.length;   // (0 midday … 4 night, 5 dawn)
 const nightHeld = () => world === 5 ? 0 : HOUR_OF[4];
+const hourAt = (w, pos) => ({ h: w === 9 ? BEACH_HOUR[0] : (w === 5 ? KESH_CYCLE : HOUR_OF)[pos], dawn: pos === 5 && w !== 5 && w !== 9 && w !== 11 });   // (world w's hour at step pos of the day, and whether it's dawn's light)
+const nextDay = () => ((dayPos() + 1) % HOUR_OF.length) * DAY_ROOMS;   // into another world: the next step of the day on from the one you left (clockEnter moves it on onto that step's first room). The user, 2026-10-26: "going to a new world moves one daytime setting ahead"
 const nightNow = () => world === 11 || (world === 5 ? dayHeld <= 2 : dayHeld === HOUR_OF[4] && !dawnNow);
 const colOf = s => +String(STAGES[s].cell || "").slice(1) || 0;
 let clockPrev = null, clockCur = null;             // the room you were in before this one, and this one
 function clockEnter(s) {                             // into a room: the day moves on a room (the user, 2026-10-24: in and out of the same room again and again (a fall, a try at a hole or a ledge) doesn't count, "until they go somewhere else")
   const k = world + ":" + s; if (k === clockPrev) { clockPrev = clockCur; clockCur = k; } else { clockPrev = clockCur; clockCur = k; dayClock++; }
   const pos = dayPos(), was = { h: dayHeld, dawn: dawnNow };
-  dayHeld = world === 9 ? BEACH_HOUR[0] : (world === 5 ? KESH_CYCLE : HOUR_OF)[pos]; dawnNow = pos === 5 && world !== 5 && world !== 9 && world !== 11;
+  { const H = hourAt(world, pos); dayHeld = H.h; dawnNow = H.dawn; }
   hourTurn = was.h !== dayHeld || was.dawn !== dawnNow ? s : -1; hourWas = was;   // (the hour turned as you came into this room: see setScreen's hold, sleepersFor)
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
@@ -4789,7 +4791,8 @@ let pad = { l: false, r: false, j: false, a: false }, padPrev = { j: false, a: f
 // show its buttons (the PlayStation shapes, or an Xbox pad's letters) in place of the keys. A key pressed: back to the keys' prompts
 let padUse = false, padKind = "ps", padRT = {}, modalSel = 0, modalWas = false, lvlSel = 0;
 const PAD_NAMES = { ps: { j: "✕", a: "○", sq: "□", tk: "△", st: "OPTIONS", it: "L2", lb: "L1", rb: "R1" }, xbox: { j: "A", a: "B", sq: "X", tk: "Y", st: "MENU", it: "LT", lb: "LB", rb: "RB" } };
-const padName = k => PAD_NAMES[padKind][k] || k;
+const PAD_XBOX = /xbox|x-box|xinput|045e|28de|valve|steam/i;   // (an Xbox pad's letters: Microsoft's, and the Steam Deck's own controls, A B X Y the same way round: its ids carry Valve's 28de, "Steam Deck"
+const padName = k => PAD_NAMES[padKind][k] || k;   //  or, through Steam Input, "Microsoft X-Box 360 pad". The user, 2026-10-26: "make it recognize the steam deck controller")
 const padText = s => s.replace(/\{(\w+)\}/g, (_, k) => padName(k));
 function padMode(on) {
   if (on === padUse) return; padUse = on; document.body.classList.toggle("padUse", on);
@@ -4825,7 +4828,7 @@ function pollPad() {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
   if (!gp) { pad = { l: false, r: false, j: false, a: false }; return; }
   const b = i => gp.buttons[i] && gp.buttons[i].pressed;
-  if (gp.buttons.some(q => q && q.pressed) || gp.axes.slice(0, 2).some(v => Math.abs(v) > .5)) { padKind = /xbox|xinput|045e/i.test(gp.id) ? "xbox" : "ps"; padMode(true); }
+  if (gp.buttons.some(q => q && q.pressed) || gp.axes.slice(0, 2).some(v => Math.abs(v) > .5)) { padKind = PAD_XBOX.test(gp.id) ? "xbox" : "ps"; padMode(true); }
   pad = { l: gp.axes[0] < -.35 || b(14), r: gp.axes[0] > .35 || b(15), d: gp.axes[1] > .5 || b(13), u: gp.axes[1] < -.5 || b(12), du: b(12), j: b(0), a: b(1), bl: b(2) || b(4) || b(5) || b(7), tk: b(3), st: b(9), it: b(6), sq: b(2) };   // (L2, button 6: the items, since 2026-10-21)   // (as on the phone's screen, the Backbone's way: ✕ jump, ○ attack, □ block, △ tackle; the shoulders block too)
   { const pr = k => pad[k] && !padPrev[k];   // (the enemies & npcs viewer reads the pad itself: castPad)
     if (achOpen && !menuUp) { if (pr("j") || pr("a") || pr("sq") || pr("st")) closeAch(); padPrev = { ...pad }; return; }   // (the achievements over the pause menu or the character select)
@@ -6577,21 +6580,24 @@ function buildGuagua(look = {}) {
   const sign = group(B, fx - .02, 3.62, 0); sign.add(P(new RoundedBoxGeometry(.14, .34, 1.9, 3, .06), dark));   // the route sign: LA GUAGUA in lights
   { const t = tex(512, 96, (g, w, h) => { g.fillStyle = "#24303a"; g.fillRect(0, 0, w, h); g.font = "900 64px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffd77a"; g.fillText("LA GUAGUA", w / 2, h / 2 + 4); });
     sign.add(at(new THREE.Mesh(new THREE.PlaneGeometry(1.8, .3).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ map: t })), .08, 0, 0)); }
+  const hood = .55, nx = fx + hood;                                                             // the hood: the nose out in front of the cab, so the front isn't flat (the user, 2026-10-26)
+  { const h = group(B, fx + hood / 2 - .2, 1.44, 0); h.rotation.z = -.07; h.add(P(new RoundedBoxGeometry(hood + .4, .92, Wd - .12, 5, .26), M("low")));   // (falling away a little to the front)
+    B.add(at(P(bx(.06, .05, Wd - .5), M("beltDk")), fx + .1, 1.9, 0)); }   // (its seam with the cab, along the top)
   for (const s of [-1, 1]) {
-    const lamp = group(B, fx + .02, 1.48, s * .98); lamp.rotation.z = Math.PI / 2;                 // the round lamps, the turn signals, the mirrors on their stalks
+    const lamp = group(B, nx + .02, 1.48, s * .98); lamp.rotation.z = Math.PI / 2;                 // the round lamps, the turn signals, the mirrors on their stalks
     lamp.add(P(new THREE.CylinderGeometry(.34, .34, .12, 22), chrome)); lamp.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.26, .26, .14, 22), lampOn), 0, -.02, 0));
-    B.add(at(P(ball(.1, 10, 8), amber), fx + .01, 1.48, s * 1.34));
+    B.add(at(P(ball(.1, 10, 8), amber), nx + .01, 1.48, s * 1.3));
     const mir = group(B, cx1 - .55, 2.75, s * (half + .25)); mir.add(at(P(new THREE.CylinderGeometry(.03, .03, .42, 6).rotateX(Math.PI / 2), dark), 0, 0, -s * .2)); mir.add(at(P(new RoundedBoxGeometry(.12, .42, .3, 3, .06), dark), .05, .1, 0));
   }
-  { const gr = group(B, fx + .02, 1.42, 0); gr.add(P(new RoundedBoxGeometry(.06, .5, .9, 3, .08), dark));   // the grille: three bars
+  { const gr = group(B, nx + .02, 1.42, 0); gr.add(P(new RoundedBoxGeometry(.06, .5, .9, 3, .08), dark));   // the grille: three bars
     for (let k = 0; k < 3; k++) gr.add(at(P(new THREE.CylinderGeometry(.03, .03, .8, 6).rotateX(Math.PI / 2), chrome), .04, -.15 + k * .15, 0)); }
-  B.add(at(P(new RoundedBoxGeometry(.32, .28, Wd + .2, 3, .12), chrome), fx + .06, .9, 0)); B.add(at(P(bx(.04, .2, .5), hub), fx + .23, .9, 0));   // the bumper, its plate
+  B.add(at(P(new RoundedBoxGeometry(.32, .28, Wd + .2, 3, .12), chrome), nx + .06, .9, 0)); B.add(at(P(bx(.04, .2, .5), hub), nx + .23, .9, 0));   // the bumper, its plate
   const decal = (k, w, place) => { const make = () => { const im = guaguaPics && guaguaPics[k]; if (!im || place.done) return; place.done = true; const t = new THREE.Texture(im); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
       const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * im.height / im.width), toon("#ffffff", { map: t, transparent: true, alphaTest: .5 })); place(m); }; make(); return make; };
-  const later = [decal("g", .62, m => { m.rotation.y = Math.PI / 2; at(m, fx + .045, 2.1, 0); B.add(m); })];   // the little bus G, on the nose
+  const later = [];                                 // the logo, just the little bus G, on each cab door: no word (the user, 2026-10-26: "make la guagua not have the text of the logo on it but just the logo on the door")
   for (const s of [-1, 1]) { const z = s * (half + .012);
     B.add(at(P(bx(.05, 1.12, .05), M("beltDk")), cx1 - 1.42, 1.5, z)); B.add(at(P(bx(.24, .07, .06), chrome), cx1 - 1.62, 1.95, z + s * .02));   // the cab door's seam and handle
-    later.push(decal("word", 2.3, m => { if (s < 0) m.rotation.y = Math.PI; at(m, .2, 1.48, z + s * .01); B.add(m); })); }   // the word, between the arches
+    later.push(decal("g", .56, m => { if (s < 0) m.rotation.y = Math.PI; at(m, cx1 - .62, 1.78, z + s * .01); B.add(m); })); }   // (up clear of the wheel's arch)
   if (guaguaPics) guaguaPics.onload = () => later.forEach(f => f());
   const bx0 = -3.62, bx1 = cx0 - .02, bl = bx1 - bx0, bm = (bx0 + bx1) / 2, by = 1.12;           // the bed: low sides with a rail, a tailgate, a roll bar with two lamps, a cushion against the cab, a spare, a cool box
   B.add(at(P(bx(bl, .16, Wd - .1), toon("#a7754f")), bm, by - .04, 0)); for (let k = 0; k < 4; k++) B.add(at(P(bx(bl - .1, .03, .05), toon("#8a5e3e")), bm, by + .05, -1.05 + k * .7));
@@ -6757,8 +6763,11 @@ function rideBuild() {                               // behind the black: the ro
   const P = rideS; clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); clearBaddies(); clearHz(); FOES.forEach(hideFoe); bossIn = false; endCameo(); clearTrap(); patrolClear(); ejEnd(); wildClear(); strayClear(); allyHide(allyHere); allyHere = null;   // (Noro stays in this world, as ever)
   if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; }
   level.objs.forEach(o => { o.visible = false; }); (level.fg || []).forEach(o => { o.visible = false; });
-  const night = RIDE_KIT[P.from].night || RIDE_KIT[P.to].night; if (night) setLook(6);
-  P.road = buildRide(P.from, P.to, night ? 6 : Math.min(6, hour)); const R = P.road, S2 = rideSeats(); R.riders = S2.R; R.oth = S2.oth;
+  // the light you left in, easing into the next world's next step of the day by the time you're there (the user, 2026-10-26: "when riding la guagua from level to level, show the
+  // day light setting of when the player left the last world and slowly transition to the next daytime setting by the time they arrive to the next world"). The casino: night at its end
+  const nA = !!RIDE_KIT[P.from].night, nB = !!RIDE_KIT[P.to].night, H1 = hourAt(P.to, (dayPos() + 1) % HOUR_OF.length);
+  const L0 = lookFrom(nA ? WORLDS[P.from].screens[6] : dawnNow ? dawnLook(P.from) : WORLDS[P.from].screens[dayHeld]), L1 = lookFrom(nB ? WORLDS[P.to].screens[6] : H1.dawn ? dawnLook(P.to) : WORLDS[P.to].screens[H1.h]); lookLerp(L0, L1, 0);
+  P.road = buildRide(P.from, P.to, nA ? 6 : Math.min(6, dayHeld), nB ? 6 : Math.min(6, H1.h)); const R = P.road, S2 = rideSeats(); R.riders = S2.R; R.oth = S2.oth; R.L0 = L0; R.L1 = L1;
   R.ev = { kind: rideRollEv(), ph: "wait", at: RIDE_T * .4, t: 0 };   // (a stop on the way, or none: see RIDE_EV)
   rideSeat(R); proCam = rideCam(R);
 }
@@ -6775,9 +6784,11 @@ function rideSeat(R) {                               // everyone into their plac
   const hv = new THREE.Vector3(); R.riders.forEach(c => { if (!["drive", "pass", "back"].includes(c.slot) || !c.r.head) return; c.r.root.updateMatrixWorld(true); c.r.head.getWorldPosition(hv); c.ly += 2.84 - hv.y / BUS_K; });
   rideRoadTick(R, 0);
 }
-function buildRide(from, to, sky) {                  // the road between two worlds: the highway, its verges, the far land or the sea, and what goes by: from's at first, more and more to's
+function buildRide(from, to, sky, sky2 = sky) {      // the road between two worlds: the highway, its verges, the far land or the sea, and what goes by: from's at first, more and more to's
   const cx = X(WORLD / 2), G = group(scene, 0, 0, 0), A = RIDE_KIT[from], B = RIDE_KIT[to], rng = rngF(700 + from * 31 + to * 7), R = { G, cx, span: 46, slots: [], v: ROAD_V, t: 0, p: 0, busX: cx - 1.2, busZ: .25, A, B, rng };
   G.add(at(new THREE.Mesh(new THREE.PlaneGeometry(190, 56), new THREE.MeshBasicMaterial({ map: waveSkyTex(sky, true), fog: false })), cx, 17, -84));   // (the hour's sky)
+  if (sky2 !== sky) { R.skyB = at(new THREE.Mesh(new THREE.PlaneGeometry(190, 56), new THREE.MeshBasicMaterial({ map: waveSkyTex(sky2, true), fog: false, transparent: true, opacity: 0, depthWrite: false })), cx, 17, -83.9); G.add(R.skyB); }   // (the next hour's, faded in over it on the way)
+  R.seaC = [(WAVE_SCREENS[sky] || {}).sea || CARIB_SEA, (WAVE_SCREENS[sky2] || {}).sea || CARIB_SEA];
   R.mG = toon(A.ground); R.mV = toon(A.verge); R.mF = toon(A.far || A.ground); R.mats = [R.mG, R.mV, R.mF];
   if (A.sea || B.sea) { const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() }), sc = (WAVE_SCREENS[sky] || {}).sea || CARIB_SEA;   // the sea (or the lake), under the far land when there's land
     seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line); R.seaM = seaM;
@@ -6817,6 +6828,8 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
   R.t += dt; if (R.seaM) R.seaM.uniforms.uT.value = R.t; if (dt > 0) guaguaSound(R);
   const p = R.p, e = p * p * (3 - 2 * p), cB = R._cB || (R._cB = [new THREE.Color(R.B.ground), new THREE.Color(R.B.verge), new THREE.Color(R.B.far || R.B.ground)]);
   R.mG.color.set(R.A.ground).lerp(cB[0], e); R.mV.color.set(R.A.verge).lerp(cB[1], e); R.mF.color.set(R.A.far || R.A.ground).lerp(cB[2], e);
+  if (R.L0) { lookLerp(R.L0, R.L1, e); if (R.skyB) R.skyB.material.opacity = e;   // (the light and the sky: the hour you left in, into the next world's next one)
+    if (R.seaM && R.seaC[0] !== R.seaC[1]) { const [a, b] = R.seaC, U = R.seaM.uniforms, t = R._sc || (R._sc = new THREE.Color()); for (const [k, n] of [["cDeep", "deep"], ["cMid", "mid"], ["cLight", "light"], ["cFoam", "foam"], ["cLine", "line"]]) U[k].value.set(a[n]).lerp(t.set(b[n]), e); } }
   if (!R.holdBand) { const k = clamp((p - .35) / .3, 0, 1), y0 = R.A.sea ? -1.8 : -.05, y1 = R.B.sea ? -1.8 : -.05; R.farBand.position.y = lerp(y0, y1, k * k * (3 - 2 * k)); }   // (the far land sinking under the sea, or coming up out of it)
   for (const s of R.slots) { s.x -= R.v * dt; if (s.g) s.g.position.x = s.x;
     if (s.x < R.cx - R.span) { s.x += 2 * R.span; if (s.row === "dash") { s.g.position.x = s.x; continue; } rideFill(R, s, R.rng() < p ? R.B : R.A); } }   // (round again: the next world's, more and more)
@@ -7673,7 +7686,7 @@ function goWorldDoor(w, ns) {                        // in at a door: at its wor
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd(); palsStay();
     worldStack.push({ w: world, trail: trail.slice(), bossDown });
     setWorld(w); wstReset(); runStart = ns; trail = [ns]; newStay(); bossDown = true; if (story) { story.entry = { w, s: ns }; story.check = null; }
-    const lf = !!STAGES[ns].exitLeft; roomsSeen.add(ns); entrySide = lf ? "left" : "right"; entryHi = false; dayClock = 0; clockEnter(ns); rollSad(); setScreen(ns);
+    const lf = !!STAGES[ns].exitLeft; roomsSeen.add(ns); entrySide = lf ? "left" : "right"; entryHi = false; dayClock = nextDay(); clockEnter(ns); rollSad(); setScreen(ns);
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
     palsPut({ x: lf ? 0 : WORLD, y: gy, vx: lf ? 120 : -120, vy: 0, onGround: true, plat: null, pounce: null });
@@ -7693,7 +7706,7 @@ function goWorldNow(w) {                             // on into the next world: 
     $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd(); palsStay();   // (she stays in the world she joined you in; your pets and buddies come along)
     worldStack.push({ w: world, trail: trail.slice(), bossDown });   // (walk back off this world's first room and you're back where you left the last one, its boss still beaten)
-    setWorld(w); wstReset(); runStart = 0; trail = [0]; newStay(); if (story) { story.entry = { w, s: 0 }; story.check = null; } roomsSeen.add(0); entrySide = "left"; entryHi = false; dayClock = 0; clockEnter(0); rollSad(); setScreen(0);   // (through a world's way in: a new day, at midday (the user, 2026-10-20; Kesh's garden: its own first hour, night); the beach's morning doesn't carry on into it)
+    setWorld(w); wstReset(); runStart = 0; trail = [0]; newStay(); if (story) { story.entry = { w, s: 0 }; story.check = null; } roomsSeen.add(0); entrySide = "left"; entryHi = false; dayClock = nextDay(); clockEnter(0); rollSad(); setScreen(0);   // (through a world's way in: the next step of the day (2026-10-26; it was a new day at midday (the user, 2026-10-20; Kesh's garden: its own first hour, night); the beach's morning doesn't carry on into it)
     const gy = groundAt(40) ?? GROUND;
     Object.assign(player, { x: 40, y: gy, vx: 120, vy: 0, face: 1, onGround: true, plat: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, climb: null, safe: { x: 40, y: gy, plat: null } });
     palsPut({ x: 0, y: gy, vx: 120, vy: 0, onGround: true, plat: null, pounce: null });
@@ -7719,7 +7732,7 @@ function goWorldBack() {                             // off the left of a world'
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd(); palsStay();
     setWorld(P0.w); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown || !!(story && (story.beat || []).includes(P0.w)); entryHi = false;   // (its boss isn't back: the user, 2026-10-20; nor after a load, the way back not remembered)
-    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; bossNotAt = bossDown ? -1 : ns; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
+    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; bossNotAt = bossDown ? -1 : ns; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; dayClock = nextDay(); clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
     player.sunk = false; const dv = STAGES[ns].dive; if (dv) { const f = dv[0] > 380 ? -1 : 1, x0 = f < 0 ? dv[0] + 40 : dv[1] - 40, dx = f < 0 ? dv[0] - 90 : dv[1] + 90; Object.assign(player, { x: x0, y: SINK - 10, vx: f * 320, vy: -1150, onGround: false, face: f, carry: .6, carryDir: f, safe: { x: dx, y: groundAt(dx) ?? GROUND, plat: null } }); splash(player.x, 1.4); }   // (up out of the deep's pool, onto its bank)
@@ -7871,6 +7884,11 @@ function lookGrab() {                               // the light as it is (to ea
   return { fog: FOG.clone(), near: scene.fog.near, far: scene.fog.far, sun: [sun.color.clone(), sun.intensity], sun2: [sun2.color.clone(), sun2.intensity],
     hemi: [hemi.color.clone(), hemi.groundColor.clone(), hemi.intensity], hemi2: [hemi2.color.clone(), hemi2.groundColor.clone(), hemi2.intensity],
     tint: U.tintC.value.clone(), tintAmt: U.tintAmt.value, warm: U.warm.value, dim: !hideout && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : U.dim.value };
+}
+function lookFrom(L) {                               // (an hour's look, as lookGrab has the light: La Guagua's road eases from one to the other)
+  const C = c => new THREE.Color(c);
+  return { fog: C(L.bg), near: L.fog[0], far: L.fog[1], sun: [C(L.sun[0]), L.sun[1]], sun2: [C(L.sun2[0]), L.sun2[1]], hemi: [C(L.hemi[0]), C(L.hemi[1]), L.hemi[2]], hemi2: [C(L.hemi2[0]), C(L.hemi2[1]), L.hemi2[2]],
+    tint: new THREE.Vector3(L.grade[0], L.grade[1], L.grade[2]), tintAmt: L.grade[3], warm: L.warm, dim: 0 };
 }
 function lookLerp(a, b, e) {
   const U = gradeMat.uniforms; FOG.copy(a.fog).lerp(b.fog, e); scene.fog.color.copy(FOG); scene.fog.near = lerp(a.near, b.near, e); scene.fog.far = lerp(a.far, b.far, e);
@@ -8689,6 +8707,7 @@ function updatePlayer(dt) {
   p.dizzy = Math.max(0, (p.dizzy || 0) - dt);
   const ax = ((held.right ? 1 : 0) - (held.left ? 1 : 0)) * (p.dizzy > 0 ? -1 : 1);   // (dizzy: left and right swapped)
   p.inv = Math.max(0, p.inv - dt); p.safeT = Math.max(0, (p.safeT || 0) - dt); p.stompGrace = Math.max(0, p.stompGrace - dt);
+  if (p.slideOn) { if (p.atkT >= 0 && (p.atkKind === "slide" || p.atkKind === "cardslash")) p.safeT = Math.max(p.safeT, SLIDE_SAFE); else p.slideOn = false; }   // (the slide: untouchable all the way, and a moment after)
   p.hurtT = Math.max(0, p.hurtT - dt);
   jumpBuf -= dt; atkBuf -= dt;
   p.calmT = Math.max(0, (p.calmT || 0) - dt); p.ladderCd = Math.max(0, (p.ladderCd || 0) - dt);
@@ -8771,7 +8790,7 @@ function updatePlayer(dt) {
     if (atkBuf > 0 && control && !p.combo && !p.block) {
       if (p.atkT < 0 && !sw && (p.floatB || (!p.onGround && held.down)) && KIT.CAT_DOWN) { atkBuf = 0; p.floatB = false; p.bigJ = 0; startCatMove(p, KIT.CAT_DOWN); }   // floating in the bubble: straight down
       else if (p.atkT < 0 && upAtk && KIT.CAT_UP) { atkBuf = 0; upPend = -1; p.upUsed = true; if (upFresh() && !p.onGround) p.vy = 0; startCatMove(p, KIT.CAT_UP); p.solo = true; }
-      else if (p.atkT < 0 && p.onGround && held.down && KIT.CAT_MOVES.cardslash) { atkBuf = 0; startCatMove(p, "cardslash"); }   // (his slide: the card slash)
+      else if (p.atkT < 0 && p.onGround && held.down && KIT.CAT_MOVES.cardslash) { atkBuf = 0; startCatMove(p, "cardslash"); p.slideOn = true; }   // (his slide: the card slash)
       else if (p.atkT < 0 && p.onGround && !sw && p.sprint && Math.abs(p.vx) > 300 && KIT.CAT_MOVES.carddash) { atkBuf = 0; startCatMove(p, "carddash"); p.solo = true; }   // (at a sprint: his card dash)
       else if (p.atkT < 0) { atkBuf = 0; const L = p.onGround || sw ? KIT.CAT_GROUND : KIT.CAT_AIR, second = time - (p.lastStrikeT ?? -9) < .3; startCatMove(p, L[second ? 1 : 0], second ? 1 : 0); }
       else if (p.atkKind && p.atkIdx === 0 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; }
@@ -8783,7 +8802,7 @@ function updatePlayer(dt) {
       else if (p.atkT < 0 && upAtk && SET.up) { atkBuf = 0; jumpBuf = 0; upPend = -1; p.upUsed = true; const fresh = upFresh(), air = !p.onGround, hop = KIT.STRIKES[SET.up].hop;
         if (air || !SET.upChain) { p.chain = null; startStrike(p, air ? SET.up : GROUND_UP[SET.up] || SET.up); p.solo = true; if (air) { p.vy = fresh ? hop : Math.min(p.vy, hop * .85); } }   // (in the air it lifts you too)
         else { p.chain = { kind: "up", list: SET.upChain, needHit: true }; startStrike(p, SET.upChain[0], 0); } }   // on the ground: the launcher, the first of three
-      else if (p.atkT < 0 && p.onGround && held.down) { atkBuf = 0; p.chain = null; startStrike(p, "slide"); }   // ↓ then attack: the slide
+      else if (p.atkT < 0 && p.onGround && held.down) { atkBuf = 0; p.chain = null; startStrike(p, "slide"); p.slideOn = true; }   // ↓ then attack: the slide
       else if (p.atkT < 0 && p.onGround && !sw && p.sprint && Math.abs(p.vx) > 300) { atkBuf = 0; p.chain = null; const k = runAtkOf(p.rig.spec); startStrike(p, k); p.solo = true; runAttack(p, k); }   // at a sprint: the running attack
       else if (p.atkT < 0) { atkBuf = 0; const fwd = !!(held.left || held.right), air = !p.onGround && !sw, kind = air ? (fwd ? "air2" : "air1") : (fwd ? "B" : "A");
         const L = (air ? (fwd ? SET.air2 : SET.air1) : (fwd ? SET.groundB : SET.ground)) || list, again = p.chain && p.chain.kind === kind && time - (p.lastStrikeT ?? -9) < .3 && (!p.chain.needHit || p.chainHit);
@@ -19327,6 +19346,7 @@ function tryClash(p, T, hb, pb) {
   slashFlair(cx, cy, false); sparks(cx, cy, 14); hitstop = Math.max(hitstop, .11); shake = Math.max(shake, 6); SFX.clash(); popText(cx, cy - 50, "CLASH!");
   return true;
 }
+const SLIDE_SAFE = .5;                               // (the slide (↓ + attack): untouchable while it runs and this long after, so a baddy back on its feet can't punish it. The user, 2026-10-26: "the character slide gets them hurt after the enemy recovers so they need a little more invincibility frames")
 const SAFE_AFTER_HIT = .45;                          // (a landed tackle or charged combo: this long untouchable after its last hit lands, to step back out of the enemy)
 function combat() {
   const p = player, L = [];
