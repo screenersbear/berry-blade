@@ -376,12 +376,12 @@ const PRESETS = [
     move: { set: "boxer" } }),                                  // (moves exactly like Chase)
   merge0(HUMAN_DEFAULT, { id: "rose", name: "ROSE",       // (was Lydia; the user, 2026-10-20) from the approved mockup: June's outfit and June's hairstyle (in Rose's own
     body: { build: "tall", torso: .9 },                          //   brown), her headphones (magenta cups), Chase's face and eyes (brown), no mask, no tail; on her feet,
-    head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },     //   June's sword. Her body and head exactly June's (the user, 2026-10-22: "make rose the same proportions
-    face: { style: "chase", chin: .1, ears: 1.1, earY: -.11 },   //   as june and poses and everything"): the same pose then sits the same on both
-    hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "lowtail", tie: true,
-      tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },
-        { yaw: -92, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },
-    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#f6b2a2", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },
+    head: { width: 1, height: 1.16, jaw: .99, chinLen: .04, cheeks: .1 },   //   June's sword. Her body June's (the user, 2026-10-22: "make rose the same proportions as june and poses
+    face: { style: "chase", chin: 0, ears: 1.1, earY: -.11, eyeSize: 1.09, eyeGap: 1.06, eyeTilt: .1, iris: 1.01, lookY: -.36, mouthCurve: .99, pupil: .93 },   //   and everything");
+    hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "hightail", tie: true, length: .87, flow: .71, thick: 1.8, wave: .28,   // her own face,
+      tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },   // hair and stance since 2026-10-25 (the user's
+        { yaw: -93, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },   // editor file: "I made several changes to rose's model and pose")
+    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#aa7942", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },
     outfit: { top: "#13d5ff", torsoProf: [[0, .2], [.15, .21], [.35, .17], [.5, .18], [.72, .2], [.9, .16], [1, .1]],
       torso: [{ kind: "band", y0: 384, y1: 512, col: "#dd1355" }, { kind: "panel", w: 110, y0: 40, y1: 200, col: "#a0effe" },
         { kind: "buttons", dx: 30, y: 70, gap: 70, rows: 2, r: 13, col: "#fffc01" }, { kind: "poly", pts: [-80, 280, -40, 265, -36, 277, -76, 292], mirror: true, col: "#fffc01" }],
@@ -395,7 +395,7 @@ const PRESETS = [
       headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
       headphones: { on: true, col: "#1d1d1d", cup: "#ed145b" },
       prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", size: 1 } },
-    move: { set: "sword" } }),                                  // (moves exactly like June: the user, 2026-10-20, no floating)
+    move: { set: "sword", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 } } }),   // (June's moves, no floating; her own standing pose, 2026-10-25)
   merge0(HUMAN_DEFAULT, { id: "evil-june", name: "EVIL JUNE",   // the crashing waves' night boss, from the user's art: June gone bad. Navy beanie with a red band, lightning brows,
     body: { build: "tall", torso: .9 },                           //   buck teeth, a cyan jumpsuit with white leg bands and yellow buttons, a red collar, a long navy scarf; her own dark sword
     head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },
