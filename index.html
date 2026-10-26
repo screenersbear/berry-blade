@@ -17508,9 +17508,11 @@ const pickOf = L => L[Math.floor(Math.random() * L.length)], bbCol = () => pickO
 
 // the hatch, out on the map
 function clearTrap() { if (!trap) return; actors.remove(trap.g); trap.g.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); trap.q.forEach(disposeBaddy); trap = null; }
+let trapShut = null, QMARK_MAT = null;              // (the night they saw you coming: its hatch stays shut till the night's over)
 function maybeTrapdoor(back) {                     // its fixed room, every blue hour and night: the hatch stands open
   const sp = shIn(world);
   if (!sp || stronghold || freedNow() || stage !== sp.s || !shOpenNow()) return;
+  if (trapShut && trapShut.w === world && dayClock - trapShut.clock < 2 * DAY_ROOMS) return;   // (seen this night: try another)
   let x = sp.x; for (let k = 0; k < 40 && !(solidAt(x - 80) && solidAt(x) && solidAt(x + 80)); k++) x = clamp(sp.x + (k % 2 ? 1 : -1) * 40 * (k + 1), 400, WORLD - 200);   // (on firm ground)
   spawnTrapdoor(x);
 }
@@ -17546,23 +17548,34 @@ function updateTrap(dt) {
     return; }
   T.q.forEach((b, i) => {
     if (b.hopIn) {                                   // up, over the rim and down the hole
-      const H = b.hopIn; H.t += dt; const u = Math.min(1, H.t / .6);
+      const H = b.hopIn; H.t += dt; const u = clamp(H.t / .6, 0, 1);   // (seen: each from where it stood, one after another)
       b.x = lerp(H.x0, T.x, u); b.y = lerp(H.y0, T.y + 46, u) - Math.sin(u * Math.PI) * 62; b.z = lerp(.25, .1, u); b.onGround = false; b.vx = 0;
       if (u >= 1) b.goneIn = true; spring(b, dt); return;
     }
     const want = T.x - 66 - i * 52, dx = want - b.x;                                   // shuffling up in line behind the hatch
-    b.vx = Math.abs(dx) < 2 ? 0 : clamp(dx * 4, -150, 150); b.x += b.vx * dt; b.y = groundAt(b.x) ?? b.y; b.onGround = true; b.dir = 1;
+    b.vx = Math.abs(dx) < 2 ? 0 : clamp(dx * 5, -230, 230); b.x += b.vx * dt; b.y = groundAt(b.x) ?? b.y; b.onGround = true; b.dir = 1;   // (a quick shuffle: no long wait)
     if (b.vx) b.phase += dt * Math.abs(b.vx) * bbStep(b);
     b.yaw = lerp(b.yaw, -Math.PI / 2 + .62, 1 - Math.exp(-dt * 9)); spring(b, dt);
   });
   const f = T.q[0];
-  if (f && !f.hopIn && Math.abs(f.x - (T.x - 66)) < 8 && (T.hopT -= dt) <= 0) { f.hopIn = { t: 0, x0: f.x, y0: f.y }; T.hopT = rand(1.1, 1.9); f.sq = -.25; f.sqv = 0; SFX.chirp(); }
+  if (f && !f.hopIn && Math.abs(f.x - (T.x - 66)) < 8 && (T.hopT -= dt) <= 0) { f.hopIn = { t: 0, x0: f.x, y0: f.y }; T.hopT = rand(.6, 1); f.sq = -.25; f.sqv = 0; SFX.chirp(); }   // (four of them, not a long wait: the user, 2026-10-26 "just 4 is okay and then you can go in and follow them")
   T.q.filter(b => b.goneIn).forEach(b => { disposeBaddy(b); T.sent++; }); T.q = T.q.filter(b => !b.goneIn);
-  if (T.sent + T.q.length < 12 && T.q.length < 4 && (T.moreT -= dt) <= 0) { T.moreT = rand(1.5, 3); addSneak(T.x - 760); }   // more come along to join the line
-  // you: jump in after them (land in it), or stand on it and press down
-  if (!p.auto && !p.dead && !transit && !patrolLock && Math.abs(p.x - T.x) < 46 && p.onGround && !p.plat && (p.landV > 120 || held.down)) {
+  const all = !T.q.length;                          // (all in: your turn)
+  if (T.closing) { if (T.shut < 1) { const was = T.shut; T.shut = Math.min(1, T.shut + dt * 2.6); T.lid.rotation.x = -1.95 * (1 - T.shut * T.shut); T.glow.material.opacity *= 1 - T.shut;   // seen: the lid slams shut behind the last of them
+      if (was < 1 && T.shut >= 1) { SFX.land(); shake = Math.max(shake, 3); dust(T.x, T.y, 8); toast("THE HATCH IS SHUT · TRY AGAIN ANOTHER NIGHT", 3600); } } else T.glow.material.opacity = 0; return; }
+  if (!all && !T.seen) {                            // seen? (lenient: "the player may be running by them and not notice right away"): only lingering close builds it, and a "?" first
+    let near = 1e9, nb = null; for (const b of T.q) { if (b.hopIn) continue; const d = Math.abs(b.x - p.x); if (d < near && Math.abs(b.y - p.y) < 160) { near = d; nb = b; } }
+    if (!p.dead && near < 230) T.sus = (T.sus || 0) + dt; else T.sus = Math.max(0, (T.sus || 0) - dt * .6);
+    if (T.sus > .75 && !T.huh && nb) { T.huh = true; glyph(QMARK_MAT || (QMARK_MAT = glyphMat("?", "#ffd203")), X(nb.x), Y(nb.y - nb.h - 14), .4, V(0, 1.1, 0), .9, .6); SFX.tick(); }
+    if (T.sus < .3) T.huh = false;
+    if (T.sus > 1.8) { T.seen = true; T.q.forEach((b, i) => { if (b.hopIn) return; b.hopIn = { t: -i * .14, x0: b.x, y0: b.y }; glyph(BANG_MAT || (BANG_MAT = glyphMat("!", "#ffd203")), X(b.x), Y(b.y - b.h - 14), .4, V(0, 1.1, 0), .9, .7); });
+      SFX.startle && SFX.startle(); toast("THEY SAW YOU! THEY'RE SHUTTING THE HATCH", 2600); } }
+  if (T.seen && all) { T.closing = true; T.shut = 0; trapShut = { w: world, clock: dayClock }; return; }
+  // you: once they're all in, jump in after them (land in it), or stand on it and press down
+  if (all && !T.seen && !p.auto && !p.dead && !transit && !patrolLock && Math.abs(p.x - T.x) < 46 && p.onGround && !p.plat && (p.landV > 120 || held.down)) {
     p.auto = { kind: "trap", phase: "drop", t: 0, x: T.x }; p.atkT = -1; p.combo = null; p.tackle = null; p.block = false; SFX.dash(); }
-  if (!T.hint && Math.abs(p.x - T.x) < 380) { T.hint = true; toast("AN OPEN HATCH… JUMP IN AFTER THEM (OR STAND ON IT AND PRESS ↓)", 4200); }
+  if (!T.hint && !all && Math.abs(p.x - T.x) < 760) { T.hint = true; toast("SHH… BADDIES SLIPPING INTO THEIR KEEP. KEEP AWAY TILL THEY'RE ALL IN, OR THEY'LL SHUT THE HATCH", 4600); }   // (the user, 2026-10-26: "announce to the player to keep away")
+  if (all && !T.seen && !T.hint2) { T.hint2 = true; toast("THEY'RE ALL IN · JUMP IN AFTER THEM (OR STAND ON IT AND PRESS ↓)", 4200); }
 }
 function syncTrap(dt) { trap.q.forEach(b => syncBaddy(b, dt)); }
 
