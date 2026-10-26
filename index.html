@@ -71,7 +71,7 @@
   #toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--s); color: var(--y); z-index: 60;
     font: 600 12px "Jost", sans-serif; letter-spacing: .24em; padding: 9px 18px; opacity: 0; transition: opacity .4s; pointer-events: none; white-space: nowrap; }
   #toast.show { opacity: 1; }
-  #teamMnu { z-index: 66; } #teamBtns button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 150px; } #teamBtns small { margin: 0; font-size: 9px; letter-spacing: .2em; opacity: .8; }
+  #teamMnu, #rideAsk { z-index: 66; } #teamBtns button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 150px; } #teamBtns small { margin: 0; font-size: 9px; letter-spacing: .2em; opacity: .8; }
   #voCap { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 8px); width: max-content; max-width: min(84vw, 760px); z-index: 58; pointer-events: none;
     background: var(--y); color: var(--s); border: 3px solid var(--s); box-shadow: 5px 5px 0 var(--s); font: 15px/1.3 "Bungee", sans-serif; text-transform: uppercase;
     text-align: center; padding: 8px 14px 6px; opacity: 0; transition: opacity .3s, transform .3s; }
@@ -296,7 +296,7 @@
   #fade { position: fixed; inset: 0; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .45s; z-index: 45; }
   #fade.on { opacity: 1; }
   #proBlack { position: fixed; inset: 0; background: #000; z-index: 46; display: none; pointer-events: none; }   /* (the prologue's black: over the game and the fade, under the voice's words and the story) */
-  body.riding #weapon, body.riding #life, body.riding #mini, body.riding #hud, body.riding #hint, body.riding #coinHud, body.riding #team, body.riding #catHud, body.riding #bepLife, body.riding #bepArrow, body.riding #exitCue { visibility: hidden !important; }   /* (on La Guagua between worlds: no HUD) */
+  body.riding:not(.ridePlay) #weapon, body.riding:not(.ridePlay) #life, body.riding #mini, body.riding #hud, body.riding #hint, body.riding #coinHud, body.riding #team, body.riding #catHud, body.riding #bepLife, body.riding #bepArrow, body.riding #exitCue { visibility: hidden !important; }   /* (on La Guagua between worlds: no HUD) */
   #proBlack.show { display: block; } #proTitle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .9s; } #proTitle.on { opacity: 1; }
   #skipHint.pro { z-index: 60; }
   #wstats { position: fixed; inset: 0; z-index: 47; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .6s; display: flex; align-items: center; justify-content: center; }
@@ -649,9 +649,13 @@
 <audio id="bgm" loop preload="none"></audio>
 <div id="toast"></div>
 <div id="teamMnu" class="mnu"><div class="panel">
-  <div class="lockup"><div class="blk">ONE TOO MANY</div><div class="bar">TWO PARTNERS AT A TIME · WHO GOES HOME?</div></div>
+  <div class="lockup"><div class="blk">ONE TOO MANY</div><div class="bar">THREE PARTNERS AT A TIME · WHO GOES HOME?</div></div>
   <div class="btns" id="teamBtns"></div>
   <small data-pad="← → to choose &middot; {j} to send them home">← → to choose &middot; Enter to send them home</small>
+</div></div>
+<div id="rideAsk" class="mnu"><div class="panel">
+  <div class="lockup"><div class="blk">WHAT A VIEW</div><div class="bar">PULL OVER FOR A WHILE?</div></div>
+  <div class="btns" id="raBtns"><button data-a="yes">PULL OVER</button><button data-a="no">DRIVE ON</button></div>
 </div></div>
 <div id="voCap" aria-live="polite"></div>
 <div id="pop">PARRY!</div>
@@ -4609,7 +4613,8 @@ addEventListener("keydown", e => {
   if (e.code === "Slash" && !e.repeat && mode === "play" && openItems()) { e.preventDefault(); return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
   if (comicUp) { if (!e.repeat) { e.preventDefault(); if (tale && ["Escape", "Enter"].includes(e.code)) taleSkip(); else comicNext(); } return; }     // the bep's comic page: any key (the story's: Esc / Enter skips it)
-  if (rideS && rideS.ph !== "lift") { e.preventDefault(); if (!e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) rideSkip(); return; }   // (on La Guagua: only skipping)
+  if (rideS && rideS.play && !e.repeat && e.code === "Enter") { e.preventDefault(); rideSkip(); return; }   // (stopped by the road: Enter, back in La Guagua; the rest as ever)
+  if (rideS && rideS.ph !== "lift" && !rideS.play) { e.preventDefault(); if (!e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) rideSkip(); return; }   // (on La Guagua: only skipping)
   if (opening && !e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) { e.preventDefault(); skipOpening(); return; }   // (the opening can be skipped)
   if (mode === "select") {
     if (e.repeat) return;
@@ -4726,7 +4731,8 @@ function pollPad() {
       padPrev = { ...pad }; return; }
     if (!modalOpen) modalWas = false; }
   if (comicUp) { if (tale && pad.st && !padPrev.st) taleSkip(); else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
-  if (rideS && rideS.ph !== "lift") { if ((pad.st && !padPrev.st) || (pad.j && !padPrev.j)) rideSkip(); padPrev = { ...pad }; return; }
+  if (rideS && rideS.play && !menuUp && pad.st && !padPrev.st) { rideSkip(); padPrev = { ...pad }; return; }
+  if (rideS && rideS.ph !== "lift" && !rideS.play && !menuUp) { if ((pad.st && !padPrev.st) || (pad.j && !padPrev.j)) rideSkip(); padPrev = { ...pad }; return; }
   if (opening && ((pad.st && !padPrev.st) || (pad.j && !padPrev.j))) { skipOpening(); padPrev = { ...pad }; return; }
   if (menuUp && !titleUp) { const pr = k => pad[k] && !padPrev[k];
     menuNav(pr("l") || pr("u") ? -1 : pr("r") || pr("d") ? 1 : 0, pr("j") || pr("a"), pr("bl") || pr("st"), pr("u") || pr("d")); padPrev = { ...pad }; return; }
@@ -5937,6 +5943,7 @@ function markMenu() {
   if (menuUp === "vlog") { const B = [...$("vlList").querySelectorAll("button"), $("vlBack")]; B.forEach((b, i) => b.classList.toggle("on", i === vlogSel)); if (B[vlogSel]) B[vlogSel].scrollIntoView({ block: "nearest" }); }
   if (menuUp === "slots") { [...$("slList").children].forEach((b, i) => b.classList.toggle("on", i === slotSel)); $("slots").querySelector("[data-s=back]").classList.toggle("on", slotSel === 3); $("slDel").classList.toggle("on", slotSel === 4); $("slList").querySelectorAll(".ask i").forEach((b, i) => b.classList.toggle("on", i === (askSel ? 1 : 0))); }
   if (menuUp === "team" && teamAsk) [...$("teamBtns").children].forEach((b, i) => b.classList.toggle("on", i === teamAsk.sel));
+  if (menuUp === "rideask") [...$("raBtns").children].forEach((b, i) => b.classList.toggle("on", i === rideAskSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
 function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ or ↓)
@@ -5944,6 +5951,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   if (achOpen) { if (ok || back) closeAch(); return; }   // (the achievements over a menu: a controller's pick or back closes them, not the menu under them)
   if (menuUp === "mappath") { if ((ok || back) && mapAnim && performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; }   // (the way being drawn: a press once it's there goes on)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
+  if (M === "rideask") { if (d) { rideAskSel = 1 - rideAskSel; SFX.tick(); markMenu(); } if (ok) rideAnswer(rideAskSel === 0); if (back) rideAnswer(false); return; }
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
     if (d) { do mainSel = step(mainSel, B.length); while (B[mainSel].classList.contains("off")); SFX.tick(); markMenu(); }
@@ -6551,10 +6559,13 @@ function startRide(from, to, then) {                 // (statsGo: the first time
   rideS = { from, to, then, ph: "out", t: 0, a: 0 }; document.body.classList.add("riding"); const B = $("proBlack"); B.style.opacity = 0; B.classList.add("show"); $("proTitle").classList.remove("on");
   for (const k in keys) keys[k] = false; guaguaLoad();
 }
-function rideSkip() { const P = rideS; if (!P || !["in", "drive"].includes(P.ph)) return; SFX.tick(); P.ph = "end"; P.t = 0; $("skipHint").classList.remove("show"); }   // (Enter / Esc / Start, or SKIP: on into the world)
-function rideSeats() {                               // who's in La Guagua and where (the user, 2026-10-26): with a buddy, the buddy drives and the girls are in the back; on your own, Camila drives and Rose is in
+function rideSkip() { const P = rideS; if (!P || !["in", "drive"].includes(P.ph)) return; const E = P.road && P.road.ev;
+  if (E && ["inA", "play"].includes(E.ph)) { SFX.tick(); E.ph = "outB"; E.t = 0; return; }   // (stopped by the road: back in La Guagua and on)
+  if (E && ["outA", "outB", "inB"].includes(E.ph)) return; if (rideAskCb) rideAnswer(false);
+  SFX.tick(); P.ph = "end"; P.t = 0; $("skipHint").classList.remove("show"); }   // (Enter / Esc / Start, or SKIP: on into the world)
+function rideSeats(oth0) {                           // who's in La Guagua and where (the user, 2026-10-26): with a buddy, the buddy drives and the girls are in the back; on your own, Camila drives and Rose is in
   const me = story.char || "camila", other = me === "rose" ? "camila" : "rose", R = [], mine = { st: player, r: rig };   // the back; with three, one drives and the other two look out of the windows on your side, one in the passenger seat, one
-  const oR = roster.find(q => q.id === other), oth = oR ? { st: makeState(0, oR), r: oR } : null, girl = id => id === me ? mine : oth;   // in the back seat. The pets ride in the bed with the girls
+  const oR = roster.find(q => q.id === other), oth = oth0 || (oR ? { st: makeState(0, oR), r: oR } : null), girl = id => id === me ? mine : oth;   // in the back seat. The pets ride in the bed with the girls
   const people = []; allies.forEach(a => [a, ...(a.crew || [])].forEach(m => people.push({ st: m.st, r: m.r })));
   const seat = (c, o) => { if (c) R.push({ ...c, ...o }); };
   if (people.length) { seat(people[0], { slot: "drive", look: true, sit: 1 }); seat(people[1], { slot: "pass", look: true, sit: 1 }); seat(people[2], { slot: "back", look: true, sit: 1 }); people.slice(3).forEach((c, i) => seat(c, { slot: "bed" + i, sit: 1 }));
@@ -6568,7 +6579,12 @@ function rideBuild() {                               // behind the black: the ro
   if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; }
   level.objs.forEach(o => { o.visible = false; }); (level.fg || []).forEach(o => { o.visible = false; });
   const night = RIDE_KIT[P.from].night || RIDE_KIT[P.to].night; if (night) setLook(6);
-  P.road = buildRide(P.from, P.to, night ? 6 : Math.min(6, hour)); const R = P.road, S = rideSeats(); R.riders = S.R; R.oth = S.oth;
+  P.road = buildRide(P.from, P.to, night ? 6 : Math.min(6, hour)); const R = P.road, S2 = rideSeats(); R.riders = S2.R; R.oth = S2.oth;
+  R.ev = { kind: rideRollEv(), ph: "wait", at: RIDE_T * .4, t: 0 };   // (a stop on the way, or none: see RIDE_EV)
+  rideSeat(R); proCam = rideCam(R);
+}
+const rideCam = R => ({ x: R.busX + .3, y: 5.5, z: 24, tx: R.busX + .3, ty: 4.2, tz: 0 });   // (La Guagua in the middle, the world going by round it)
+function rideSeat(R) {                               // everyone into their places in La Guagua (at the start, and back in after a stop)
   const U = R.bus.userData, A0 = ALLIES.find(a => a.id === "elpico"), H0 = A0 ? allyRig(A0).heightPx : 120, inCab = r => 1.53 + .72 * (H0 - r.heightPx) / 48;   // (sat in the cab: a first guess, then moved so the head's in the window, below)
   const SL = { drive: [U.cx1 - .92, null, -.62, -.2], pass: [U.cx1 - .92, null, .5, -Math.PI / 2 + .35], back: [U.cx1 - 2.4, null, .55, -Math.PI / 2 + .25],
     camila: [U.bx1 - .42, U.by + .3, .45, -Math.PI + .95], rose: [U.bx1 - 1.42, U.by + .08, -.5, -.62], pet0: [U.bx1 - 1.15, U.by + .08, .3, -Math.PI / 2 - .3], pet1: [U.bx1 - 1.85, U.by + .62, .75, -Math.PI / 2 + .35],
@@ -6579,7 +6595,6 @@ function rideBuild() {                               // behind the black: the ro
   for (let i = 0; i < 24; i++) rideRoadTick(R, 1 / 30);   // (all sat down: then each one in the cab up or down till its head's in the window, whatever its size or its legs)
   const hv = new THREE.Vector3(); R.riders.forEach(c => { if (!["drive", "pass", "back"].includes(c.slot) || !c.r.head) return; c.r.root.updateMatrixWorld(true); c.r.head.getWorldPosition(hv); c.ly += 2.84 - hv.y / BUS_K; });
   rideRoadTick(R, 0);
-  proCam = { x: R.busX + .3, y: 5.5, z: 24, tx: R.busX + .3, ty: 4.2, tz: 0 };   // (La Guagua in the middle, the world going by round it)
 }
 function buildRide(from, to, sky) {                  // the road between two worlds: the highway, its verges, the far land or the sea, and what goes by: from's at first, more and more to's
   const cx = X(WORLD / 2), G = group(scene, 0, 0, 0), A = RIDE_KIT[from], B = RIDE_KIT[to], rng = rngF(700 + from * 31 + to * 7), R = { G, cx, span: 46, slots: [], v: ROAD_V, t: 0, p: 0, busX: cx - 1.2, busZ: .25, A, B, rng };
@@ -6607,12 +6622,12 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
   R.t += dt; if (R.seaM) R.seaM.uniforms.uT.value = R.t;
   const p = R.p, e = p * p * (3 - 2 * p), cB = R._cB || (R._cB = [new THREE.Color(R.B.ground), new THREE.Color(R.B.verge), new THREE.Color(R.B.far || R.B.ground)]);
   R.mG.color.set(R.A.ground).lerp(cB[0], e); R.mV.color.set(R.A.verge).lerp(cB[1], e); R.mF.color.set(R.A.far || R.A.ground).lerp(cB[2], e);
-  { const k = clamp((p - .35) / .3, 0, 1), y0 = R.A.sea ? -1.8 : -.05, y1 = R.B.sea ? -1.8 : -.05; R.farBand.position.y = lerp(y0, y1, k * k * (3 - 2 * k)); }   // (the far land sinking under the sea, or coming up out of it)
+  if (!R.holdBand) { const k = clamp((p - .35) / .3, 0, 1), y0 = R.A.sea ? -1.8 : -.05, y1 = R.B.sea ? -1.8 : -.05; R.farBand.position.y = lerp(y0, y1, k * k * (3 - 2 * k)); }   // (the far land sinking under the sea, or coming up out of it)
   for (const s of R.slots) { s.x -= R.v * dt; if (s.g) s.g.position.x = s.x;
     if (s.x < R.cx - R.span) { s.x += 2 * R.span; if (s.row === "dash") { s.g.position.x = s.x; continue; } rideFill(R, s, R.rng() < p ? R.B : R.A); } }   // (round again: the next world's, more and more)
-  const U = R.bus.userData, bob = .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1); U.B.position.y = bob; U.B.rotation.x = .007 * Math.sin(R.t * 3.3); R.bus.position.x = R.busX;
+  const U = R.bus.userData, bob = R.v > .5 ? .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1) : 0; U.B.position.y = bob; U.B.rotation.x = R.v > .5 ? .007 * Math.sin(R.t * 3.3) : 0; if (!R.out) R.bus.position.x = R.busX;
   U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
-  for (const c of R.riders) { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.vy = 0; s.onGround = true;
+  if (!R.out) for (const c of R.riders) { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.vy = 0; s.onGround = true;
     s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .75 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
     s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
     if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }   // (a hand up on the roll bar)
@@ -6624,13 +6639,16 @@ function rideTick(dt) {                              // (every frame, paused or 
   const P = rideS, Bl = $("proBlack"); P.t += dt; const fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); };
   if (P.ph === "out") { fade(1, .8); if (P.a >= 1 && P.t > .9) { rideBuild(); P.ph = "in"; P.t = 0; $("skipHint").classList.add("pro", "show"); } }
   else if (P.ph === "in") { fade(0, 1.4); if (P.a <= 0) { P.ph = "drive"; P.t = 0; } }
-  else if (P.ph === "drive") { if (P.t > RIDE_T) { P.ph = "end"; P.t = 0; } }
+  else if (P.ph === "drive") { const E = P.road && P.road.ev;
+    if (E && E.kind !== "none" && E.ph !== "wait" && E.ph !== "done") rideEvTick(P, P.road, E, dt);   // (a stop: the drive's clock waits for it)
+    else { P.dv = (P.dv || 0) + dt; if (E && E.ph === "wait" && E.kind !== "none" && P.dv > E.at) { E.ph = "lead"; E.t = 0; } if (P.dv > RIDE_T) { P.ph = "end"; P.t = 0; } } }
   else if (P.ph === "end") { fade(1, 1); if (P.a >= 1 && P.t > 1.05) return rideEnd(); }
   else if (P.ph === "title") { if (!P.named && P.t > .5) { P.named = true; $("proTitle").classList.add("on"); } if (P.t > 2.7 && !transit) { $("proTitle").classList.remove("on"); P.ph = "lift"; P.t = 0; document.body.classList.remove("riding"); } }   // (the new world's name on the black, as the woods' after the prologue)
   else if (P.ph === "lift") { fade(0, 1.2); if (P.a <= 0) rideDone(); }
-  if (P.road) { const R = P.road; if (P.ph === "drive") R.p = clamp(P.t / RIDE_T, 0, 1); else if (P.ph === "end") R.p = Math.min(1, R.p + dt * .5); rideRoadTick(R, dt); }
+  if (P.road) { const R = P.road; if (P.ph === "drive") R.p = clamp((P.dv || 0) / RIDE_T, 0, 1); else if (P.ph === "end") R.p = Math.min(1, R.p + dt * .5); rideRoadTick(R, dt); }
 }
 function rideClear(R) {                              // (the road and the bus gone; whoever rode, off the bus)
+  const E = R.ev; rideEvClear(E); if (E && R.out) { if (E.sv) { STAGES.splice(0, STAGES.length, ...E.sv.st); stage = E.sv.s; } clearBaddies(); bossIn = false; clearHz(); if (npcUp) closeNpc(); npcs.forEach(disposeBaddy); npcs = []; allies = allies.filter(a => !a.A.temp); document.body.classList.remove("ridePlay"); R.out = false; }
   scene.remove(R.G); actors.remove(R.bus); [R.G, R.bus].forEach(G => G.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); })); R.mats.forEach(m => m.dispose()); if (R.seaM) R.seaM.dispose();
   if (R.oth) R.oth.r.root.visible = R.oth.r.shadow.visible = false; (R.riders || []).forEach(c => { c.st.sit = 0; c.st.z = 0; c.st.bus = false; });
 }
@@ -6640,6 +6658,223 @@ function rideEnd() {                                 // under the black: off the
 }
 function rideDone() { rideS = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("proTitle").firstElementChild.textContent = "BERRY WOODS"; document.body.classList.remove("riding"); }   // (the prologue's title back as it was)
 function rideAbort() { const P = rideS; if (!P) return; proCam = null; if (P.road) rideClear(P.road); rideDone(); $("skipHint").classList.remove("pro", "show"); }   // (off to the title in the middle of it)
+// stops on the way (the user, 2026-10-26: "we'll also have different events that can happen in between worlds at random: a. nothing happens. b. two berry baddy cars pull up next to
+// them and then one forces them to brake by suddenly getting in front of la guaga. they all step out and you fight about 6 berries before getting back in the car and riding to the next
+// world. c. they stop at a food stand with a berry selling items. d. they get asked to stop by kid berries and they play a game of soccer with them. camila and one berry kid versus rose
+// and another berry kid. set up simple goals on either side of the screen, right on the side of the road, and the player plays against the CPU and they try to push the ball just by moving
+// into it into the other goal. one goal and they go back to driving. e. the player is asked to stop for the scenery and the characters step out and appreciate it, like a bep hideout moment")
+const RIDE_EVS = [["none", 28], ["ambush", 20], ["stand", 18], ["soccer", 18], ["view", 16]];   // (how often each comes up)
+const rideRollEv = () => { if (window.__rideEv) return window.__rideEv; let r = Math.random() * 100; for (const [k, w] of RIDE_EVS) if ((r -= w) < 0) return k; return "none"; };
+const ROAD_STAGE = { cell: "", h: 0 };               // (stopped by the road: a room with nothing in it but the road)
+const rideEase = k => { k = clamp(k, 0, 1); return k * k * (3 - 2 * k); };
+function rideCamEv(R) { return { x: R.cx, y: 4.3, z: 21, tx: R.cx, ty: 2.6, tz: 0 }; }   // (stopped: a little in, the whole stop on the screen)
+function rideArena(cam) {                            // (what that camera sees of the road, px, a margin in from each side)
+  const half = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * (cam.z - 0) * camera.aspect / S, cx = cam.x / S;
+  return [cx - half + 70, cx + half - 70];
+}
+function rideEvTick(P, R, E, dt) {                   // (the stop's own steps, every frame: on the way in, braking, out under the black, back in, and off again)
+  E.t += dt; const Bl = $("proBlack"), fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); }, D = RIDE_EV[E.kind];
+  if (E.ph === "lead") { if (D.lead(P, R, E, dt)) { E.ph = "brake"; E.t = 0; } }
+  else if (E.ph === "brake") { R.v = Math.max(0, R.v - E.dec * dt); if (D.brake) D.brake(P, R, E, dt); if (R.v <= 0) { R.v = 0; E.ph = "outA"; E.t = 0; } }
+  else if (E.ph === "outA") { fade(1, .45); if (P.a >= 1 && E.t > .5) { rideOut(P, R, E); E.ph = "inA"; E.t = 0; } }
+  else if (E.ph === "inA") { fade(0, .6); if (P.a <= 0) { E.ph = "play"; E.t = 0; } }
+  else if (E.ph === "outB") { fade(1, .45); if (P.a >= 1 && E.t > .5) { rideIn(P, R, E); E.ph = "inB"; E.t = 0; } }
+  else if (E.ph === "inB") { fade(0, .7); R.v = Math.min(ROAD_V, R.v + 5 * dt); if (P.a <= 0) E.ph = "go"; }
+  else if (E.ph === "go") { R.v = Math.min(ROAD_V, R.v + 5 * dt); if (R.v >= ROAD_V) E.ph = "done"; }
+  if (E.leave) [E.G, E.GA].forEach(G => { if (G) G.position.x -= R.v * dt; });   // (back on the road: the stop goes by behind)
+}
+function rideOut(P, R, E) {                          // under the black: La Guagua pulled over onto the far side, everyone out on the road
+  E.sv = { st: STAGES.slice(), s: stage }; STAGES.splice(0, STAGES.length, ROAD_STAGE); stage = 0; level.s = -2; R.out = true;   // (the room you left let go: just the road now, flat, nothing in it)
+  PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0; FLOOR_LOW = GROUND; SINK = WATER;
+  R.bus.position.z = -2.3; (E.parked || []).forEach(o => { o.position.z = -2.3; });
+  E.cam = E.cam || rideCamEv(R); E.arena = rideArena(E.cam); proCam = { ...E.cam };
+  const cx = R.cx / S, gy = GROUND, A = E.arena; P.play = true; document.body.classList.add("ridePlay");
+  for (const c of R.riders) { Object.assign(c.st, { sit: 0, bus: false, z: 0, vx: 0, vy: 0, onGround: true, plat: null, y: gy }); if (c.r.root) c.r.root.visible = c.r.shadow.visible = true; }
+  Object.assign(player, { x: cx + 40, y: gy, vx: 0, vy: 0, face: 1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, block: false, sunk: false, safe: { x: cx, y: gy, plat: null } });
+  palsPut({ x: cx - 40, y: gy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null, sit: 0, z: 0 });
+  allies.forEach((a, k) => { a.away = false; allyPlace(cx - 150 - k * 75, gy, 1, a); allyShow(a); });
+  if (R.oth) { Object.assign(R.oth.st, { x: cx - 90, y: gy, face: 1, yaw: -.6 }); E.oth = R.oth; }
+  E.player0 = player; RIDE_EV[E.kind].out(P, R, E);
+  A[0] = Math.min(A[0], player.x); A[1] = Math.max(A[1], player.x);
+}
+function rideIn(P, R, E) {                           // under the black: everyone back in, and on down the road
+  const D = RIDE_EV[E.kind]; if (D.in) D.in(P, R, E);
+  clearBaddies(); bossIn = false; clearHz(); clearLoot(); strayClear(); if (npcUp) closeNpc(); npcs.forEach(disposeBaddy); npcs = []; npcNear = null; $("npcTip").classList.add("hidden");
+  allies = allies.filter(a => !a.A.temp); E.temp = null;
+  STAGES.splice(0, STAGES.length, ...E.sv.st); stage = E.sv.s;   // (the room you left, as it was, for the way on into the next world)
+  if (player.dead) Object.assign(player, { dead: false, deadT: 0, hp: maxHp(), inv: 1.5, hurtT: 0, catsGone: false }); updateHearts(false);   // (knocked out by the road: up again in the back)
+  R.bus.position.z = R.busZ; R.bus.position.x = R.busX; P.play = false; R.out = false; document.body.classList.remove("ridePlay"); E.leave = true;
+  R.riders = rideSeats(R.oth).R; rideSeat(R); proCam = rideCam(R); E.ph = "inB";   // (seated again from who's left: one out of hearts has gone)
+}
+function rideTempPal(E) {                            // the other one, out of La Guagua with you: at your side for the stop (the user, 2026-10-26: "they all step out")
+  const o = E.oth; if (!o || allies.some(a => a.st === o.st)) return; const id = o.r.spec.id;
+  const a = { A: { id, name: o.r.name || id.toUpperCase(), w: world, reach: 110, hit: id === "rose" ? "slash" : "punch", temp: true }, r: o.r, st: o.st, t: 0, atkCd: 1, hopT: 0, waveT: 0, at: allyRoomKey(), pl: player, n: 0, crew: [] };
+  o.st.php = 99; o.st.pinv = 0; allies.push(a); E.temp = a;
+}
+function rideProp(R, E, act) { if (act) return E.GA || (E.GA = group(actors, 0, 0, 0)); return E.G || (E.G = group(R.G, 0, 0, 0)); }   // (act: drawn with the characters, so one can stand behind it)
+function rideBep(size, col, x, z) { const b = makeFriend(size, col, x); Object.assign(b, { y: GROUND, onGround: true, z, popAt: 0, hold: true, dir: 1 }); b.r.root.visible = b.r.shadow.visible = true; return b; }
+function bepStep(b, dt, vx) {                        // (a bep of the stop's on its feet: walking, hopping, the springs)
+  b.vx = vx; b.vy = Math.min((b.vy || 0) + 2000 * dt, 1000); moveBody(b, dt, b.hw); if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
+  if (Math.abs(vx) > 20) b.dir = Math.sign(vx); spring(b, dt); b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9)); syncBaddy(b, dt);   // (not one of the room's: drawn here)
+}
+function heroStep(s, dt, vx, jump) {                 // (the other one's own feet, for the soccer)
+  s.vx = approach(s.vx, vx, 2200 * dt); if (jump && s.onGround) { s.vy = -780; s.onGround = false; s.plat = null; SFX.jump(); }
+  s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); if (Math.abs(s.vx) > 25) s.face = Math.sign(s.vx); s.sprint = Math.abs(s.vx) > 300;
+  s.yaw = lerp(s.yaw, s.face > 0 ? -.55 : -Math.PI + .55, 1 - Math.exp(-dt * 10)); s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
+}
+function sitStill(s, dt, yaw) { s.sit = 1; s.vx = 0; if (yaw !== undefined) s.yaw = lerp(s.yaw, yaw, 1 - Math.exp(-dt * 6)); s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt); }
+function babyCar(col) {                              // a berry baddy car: a squat purple coupe, the colonisers' spikes on its roof, a bumper like a grin
+  const g = new THREE.Group(), body = toon(col), dark = toon("#2c2338"), M = (geo, m) => mk(geo, null, { mat: m, ol: .02 });
+  g.add(at(M(new RoundedBoxGeometry(4.2, 1.1, 2.3, 4, .3), body), 0, 1.05, 0)); g.add(at(M(new RoundedBoxGeometry(2.4, .9, 2.0, 4, .3), body), -.3, 1.95, 0));
+  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(2.0, .6, 2.05), toon("#3b2f4a", { transparent: true, opacity: .7 })), -.3, 1.98, 0));
+  for (let i = 0; i < 4; i++) g.add(at(M(new THREE.ConeGeometry(.16, .5, 5), toon("#c9c2d6")), -1.2 + i * .6, 2.6, 0));
+  g.add(at(M(new RoundedBoxGeometry(.25, .35, 2.2, 3, .1), dark), 2.15, .75, 0)); g.add(at(M(new RoundedBoxGeometry(.25, .35, 2.2, 3, .1), dark), -2.15, .75, 0));
+  for (const s of [-1, 1]) g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.18, .18, .1, 12).rotateZ(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#ffd66a" })), 2.12, 1.1, s * .7));
+  const wheels = []; for (const wx of [1.35, -1.35]) for (const s of [-1, 1]) { const w = group(g, wx, .5, s * 1.05); w.rotation.x = Math.PI / 2; const sp = group(w, 0, 0, 0); sp.add(M(new THREE.CylinderGeometry(.5, .5, .36, 18), dark)); sp.add(M(new THREE.CylinderGeometry(.24, .24, .38, 10), toon("#c9c2d6"))); wheels.push(sp); }
+  g.userData.wheels = wheels; g.scale.setScalar(BUS_K * .9); return g;
+}
+const RIDE_EV = {
+  ambush: {                                          // b. two baddy cars: one alongside, one cuts in, everyone out, about six berries
+    lead(P, R, E, dt) {
+      const G = rideProp(R, E); if (!E.cars) { E.cars = [babyCar("#6b3f8f"), babyCar("#8f3f6b")].map((c, i) => { G.add(c); c.position.set(R.busX - 15 - i * 7, 0, 3.4); return c; }); E.parked = E.cars; SFX.trumpet(); }
+      const [c1, c2] = E.cars, t = E.t, k1 = rideEase(t / 2.2), k2 = rideEase((t - 2.2) / .7), kz = rideEase((t - 2.75) / .55), k3 = rideEase(t / 2.6);
+      c1.position.x = t < 2.2 ? lerp(R.busX - 15, R.busX + .6, k1) : lerp(R.busX + .6, R.busX + 7.6, k2); c1.position.z = lerp(3.4, R.busZ, kz); c1.rotation.y = kz > 0 && kz < 1 ? -.3 * Math.sin(Math.PI * kz) : 0;   // (alongside, then on ahead, and swerving in across the front once it's clear)
+      c2.position.x = lerp(R.busX - 22, R.busX - 7.2, k3);
+      E.cars.forEach(c => c.userData.wheels.forEach(w => { w.rotation.y += ((R.v + 4) / .5) * dt; }));
+      if (t > 2.4 && !E.honk) { E.honk = true; SFX.whoosh(); }
+      if (t >= 3.3) { E.dec = 16; SFX.thud(); shake = Math.max(shake, 4); return true; }   // (cut off: on the brakes, hard)
+      return false;
+    },
+    out(P, R, E) {                                  // the berries out of the cars, three each, round them; the other one at your side
+      rideTempPal(E); const all = []; for (const L of BB_ROSTER) for (const q of L || []) { const T = BB_TYPES[q[0]]; if (T && !["float", "breach"].includes(T.move) && !T.swim) all.push(q); }
+      const pick = () => all.length ? all[Math.floor(Math.random() * all.length)] : ["chomp", "red"], A = E.arena;
+      E.cars.forEach((c, i) => { const cxp = c.position.x / S; for (let k = 0; k < 3; k++) { const [type, col] = pick(), x = clamp(cxp + (i ? 1 : -1) * (30 + k * 55) * (i ? -1 : 1), A[0] + 20, A[1] - 20);
+        const b = makeBaddy(type, col, x, GROUND); tierUp(b); Object.assign(b, { home: clamp(cxp + (i ? 120 : -120), A[0] + 60, A[1] - 60), dir: i ? 1 : -1, z: 0 }); baddies.push(b); } });   // (each lot keeps to its own car's end of the road)
+      bossIn = false; bossCue = 0;
+    },
+    tick(P, R, E, dt) {
+      if (player.dead) { if ((E.koT = (E.koT || 0) + dt) > 1.5 && E.ph === "play") { toast("THE BADDIES DRIVE OFF · BACK IN LA GUAGUA", 2600); E.ph = "outB"; E.t = 0; } return; }   // (knocked out by the road: they leave you be)
+      if (!E.won && baddies.every(b => b.gone || b.sad || b.flee)) { E.won = true; E.wonT = 0; SFX.fanfare(); }
+      if (E.won && (E.wonT += dt) > 1.6 && E.ph === "play") { E.ph = "outB"; E.t = 0; }
+    },
+  },
+  stand: {                                           // c. a food stand by the road, a berry behind it with things to sell
+    lead(P, R, E, dt) {
+      const G = rideProp(R, E, true); if (!E.st) { E.st = standProp(); G.add(E.st); E.st.position.set(R.busX + 36, 0, -3.4); E.stop = R.busX + 9; }
+      E.st.position.x -= R.v * dt; if (!E.called && E.st.position.x < R.busX + 15) { E.called = true; popText(E.st.position.x / S, GROUND - 180, "FRESH FRUIT! PULL IN!"); SFX.chirp(); }
+      const d = E.st.position.x - E.stop; if (d <= 12) { E.dec = R.v * R.v / (2 * Math.max(1, d)); return true; } return false;
+    },
+    brake(P, R, E, dt) { E.st.position.x -= R.v * dt; },
+    out(P, R, E) { rideTempPal(E); const x = E.st.position.x / S, f = makeNpc("seller", world, x); Object.assign(f, { y: GROUND, z: -4.45, road: true, home: x }); npcs.push(f); E.f = f; },   // (behind the counter)
+    tick(P, R, E, dt) { if (npcUp || (E.f && E.f.talked)) E.shopped = true; if (E.shopped && !npcUp && (E.byeT = (E.byeT || 0) + dt) > .9 && E.ph === "play") { E.ph = "outB"; E.t = 0; } },   // (bought what you wanted and said goodbye: on again)
+  },
+  soccer: {                                          // d. kid berries wave you down: a game by the road, first goal wins
+    lead(P, R, E, dt) {
+      if (!E.kids) { E.kids = [rideBep("S", "#ff7a3a", (R.busX + 30) / S, 3.6), rideBep("S", "#3ab0ff", (R.busX + 31.4) / S, 3.6)]; E.stop = R.busX + 4.5; }
+      E.kids.forEach((b, i) => { b.x -= R.v * dt / S; if (b.onGround && Math.random() < dt * 2.4) { b.vy = -420; b.onGround = false; } bepStep(b, dt, 0); b.dir = -1; });   // (hopping up and down, waving you over)
+      const kx = E.kids[0].x * S; if (!E.called && kx < R.busX + 16) { E.called = true; popText(E.kids[0].x, GROUND - 130, "HEY! STOP! PLAY WITH US!"); SFX.chirp(); }
+      const d = kx - E.stop; if (d <= 11) { E.dec = R.v * R.v / (2 * Math.max(1, d)); return true; } return false;
+    },
+    brake(P, R, E, dt) { E.kids.forEach(b => { b.x -= R.v * dt / S; bepStep(b, dt, 0); }); },
+    out(P, R, E) {
+      const A = E.arena, cx = (A[0] + A[1]) / 2, me = story.char || "camila"; E.goalL = A[0] + 10; E.goalR = A[1] - 10; A[0] -= 40; A[1] += 40;
+      const G = rideProp(R, E); E.goals = [E.goalL, E.goalR].map((gx, i) => { const g = goalProp(i ? -1 : 1); g.position.set(gx * S, 0, 0); G.add(g); return g; });
+      E.ball = { x: cx, y: GROUND - 18, vx: 0, vy: 0, r: 18, m: soccerBall() }; actors.add(E.ball.m);
+      Object.assign(player, { x: cx - 120, face: 1 }); if (E.oth) Object.assign(E.oth.st, { x: cx + 120, face: -1, php: 99 });
+      const [kA, kB] = E.kids; Object.assign(kA, { x: E.goalL + 70, z: 0, y: GROUND, vy: 0 }); Object.assign(kB, { x: E.goalR - 70, z: 0, y: GROUND, vy: 0 });
+      E.side = { [me]: 1 };                          // (you and your kid at the right-hand goal; the other one and hers at the left)
+      E.cpu = [{ s: kA, d: 1, kid: true, keep: true }, { s: kB, d: -1, kid: true, keep: true }, ...(E.oth ? [{ s: E.oth.st, d: -1, kid: false }] : [])];
+      E.watch = [...palsAll(), ...allyStates()]; E.watch.forEach((s, i) => Object.assign(s, { x: R.busX / S - 120 + i * 70, y: GROUND, z: -1.1, vx: 0, sit: 1, face: 1 }));   // (your partners watch from the side of the road)
+      popText(cx, GROUND - 160, "FIRST GOAL WINS!");
+    },
+    tick(P, R, E, dt) {
+      const B = E.ball, A = E.arena; if (!B) return;
+      E.watch.forEach(s => sitStill(s, dt, -Math.PI / 2 + .3));
+      E.kick = (E.kick || 0) + dt; const go = E.kick > 1.1;   // (a moment to get ready, everyone on their marks, then off they all go together)
+      if (!go) { player.x = E.px0 ?? (E.px0 = player.x); player.vx = 0; } else if (!E.went) { E.went = true; popText(B.x, GROUND - 160, "GO!"); SFX.whoosh(); }
+      for (const c of E.cpu) {                       // the others: the kids keep goal, the other one goes for the ball (a beat slow, so it can be beaten)
+        const s = c.s, own = c.d > 0 ? E.goalL : E.goalR, sp = !go ? 0 : c.kid ? 230 : 290;
+        let tx = c.keep ? clamp(B.x - c.d * 60, Math.min(own, own + c.d * 40), Math.max(own, own + c.d * 170)) : B.x + c.d * 50;   // (a keeper: between the ball and its goal; the other: on through the ball)
+        const behind = (B.x - s.x) * c.d > 0, near = Math.abs(B.x - s.x) < 80, jump = !behind && near && !c.keep && s.onGround && Math.random() < dt * 4;
+        if (!behind && !c.keep) tx = B.x - c.d * 90;
+        c.react = (c.react || 0) - dt; if (c.react <= 0) { c.react = rand(.12, .3); c.want = clamp((tx - s.x) * 4, -sp, sp); }
+        if (c.kid) bepStep(s, dt, Math.abs(tx - s.x) < 8 ? 0 : c.want); else heroStep(s, dt, Math.abs(tx - s.x) < 8 ? 0 : c.want, jump);
+      }
+      if (E.oth) E.oth.r.sync(E.oth.st, E.oth.r, dt);
+      if (!E.scored) {                               // the ball: rolled along by whoever runs into it, bounced off the posts' backs
+        B.vy = Math.min(B.vy + 1900 * dt, 1200); B.x += B.vx * dt; B.y += B.vy * dt;
+        if (B.y > GROUND - B.r) { B.y = GROUND - B.r; if (B.vy > 120) B.vy = -B.vy * .4; else B.vy = 0; B.vx *= Math.exp(-1.6 * dt); }
+        const touch = [];                            // (who's touching it, from which side)
+        for (const q of [player, ...E.cpu.map(c => c.s)]) { const hw = q.hw || 22, h = q.h || (q.rig && q.rig.heightPx) || 100;
+          if (Math.abs(B.x - q.x) < hw + B.r && B.y > q.y - h && B.y - B.r < q.y) touch.push({ q, hw, d: Math.sign(B.x - q.x) || q.face || q.dir || 1 }); }
+        if (touch.some(t => t.d > 0) && touch.some(t => t.d < 0)) { if (B.vy >= 0) { B.vy = -380; B.vx = (Math.random() < .5 ? -1 : 1) * 140; SFX.thud(); } }   // (squeezed between two: it pops up out from between them)
+        else for (const { q, hw, d } of touch) { B.x = q.x + d * (hw + B.r); const push = Math.abs(q.vx || 0), into = Math.sign(q.vx || 0) === d && push > 30;
+          B.vx = into ? d * Math.max(push * (q === player ? 1.45 : 1.3) + 150, Math.abs(B.vx) * .5) : d * Math.max(120, Math.abs(B.vx) * .4); if (into && B.vy >= 0 && push > 260) B.vy = -Math.min(200, push * .3);   // (run into it and it goes; walk into it and it rolls)
+          if (!E.tapT || time - E.tapT > .2) { E.tapT = time; SFX.thud(); } }
+        B.x = clamp(B.x, A[0] - 30, A[1] + 30);
+        if (B.x < E.goalL || B.x > E.goalR) { E.scored = B.x > E.goalR ? 1 : -1; E.scoreT = 0; SFX.cheer(); SFX.fanfare(); popText(B.x, GROUND - 170, E.scored > 0 ? "GOAL!" : "THEIR GOAL!"); shake = Math.max(shake, 3); E.kids.forEach(k => { k.vy = -520; k.onGround = false; }); } }
+      else if ((E.scoreT += dt) > 2.2 && E.ph === "play") { E.ph = "outB"; E.t = 0; }   // (one goal: back to the driving)
+      B.m.position.set(X(B.x), Y(B.y), .1); B.m.rotation.z -= B.vx * dt / B.r;
+    },
+    in(P, R, E) { if (E.ball) { actors.remove(E.ball.m); E.ball.m.geometry.dispose(); E.ball = null; } (E.goals || []).forEach(g => g.visible = false); (E.kids || []).forEach(disposeBaddy); E.kids = []; (E.watch || []).forEach(s => { s.sit = 0; s.z = 0; }); },
+  },
+  view: {                                            // e. a view worth stopping for: out, sat down at the side of the road, and a while just looking at it
+    lead(P, R, E, dt) {
+      if (!E.asked) { E.asked = true; rideAsk(yes => { E.ans = yes ? "yes" : "no"; }); }
+      if (E.ans === "no") { E.ph = "done"; return false; }
+      if (E.ans === "yes") { E.dec = R.v * R.v / (2 * 9); return true; }   // (a gentle stop)
+      return false;
+    },
+    out(P, R, E) {
+      R.bus.position.x = R.busX - 10; const cx = R.cx / S + 60, row = [player, ...(E.oth ? [E.oth.st] : []), ...palsAll(), ...allyStates()];
+      row.forEach((s, i) => Object.assign(s, { x: cx + (i - (row.length - 1) / 2) * 64 + (i % 2 ? 10 : -6), y: GROUND, z: -1.75 + (i % 2) * .25, vx: 0, sit: 1, face: 1, yaw: Math.PI / 2 }));
+      E.row = row; E.cine = true; E.camA = { x: R.cx + 1.6, y: 2.8, z: 10, tx: R.cx + 1.6, ty: 3.1, tz: -30 }; E.camB = { x: R.cx + 1.1, y: 3.9, z: 12.5, tx: R.cx + 1.1, ty: 4.1, tz: -40 }; proCam = { ...E.camA };
+      E.hid = R.slots.filter(q => (q.row === "mid" || q.row === "curb") && q.g && q.g.visible && Math.abs(q.x - R.cx) < 15); E.hid.forEach(q => { q.g.visible = false; });   // (nothing in the way of it)
+      if (R.seaM) { R.holdBand = true; R.farBand.position.y = -1.8; }   // (and the sea, if there's sea anywhere along this road)
+      allies.forEach(a => { a.at = allyRoomKey(); a.pl = player; });
+    },
+    tick(P, R, E, dt) {                              // (no fighting, no walking: just them, the road behind, and the view)
+      E.row.forEach((s, i) => sitStill(s, dt, Math.PI / 2 + Math.sin(time * .4 + i) * .12));
+      if (E.oth) E.oth.r.sync(E.oth.st, E.oth.r, dt);
+      const k = rideEase(E.t / 9); for (const q in E.camA) proCam[q] = lerp(E.camA[q], E.camB[q], k);
+      if (E.t > 9.5 && E.ph === "play") { E.ph = "outB"; E.t = 0; }
+    },
+    in(P, R, E) { (E.row || []).forEach(s => { s.sit = 0; s.z = 0; }); E.cine = false; (E.hid || []).forEach(q => { if (q.g) q.g.visible = true; }); R.holdBand = false; },
+  },
+};
+function standProp() {                               // the stand: a counter under a striped awning, baskets of fruit, a sign
+  const g = new THREE.Group(), M = (geo, c) => mk(geo, null, { mat: rMat(c), ol: .02 });
+  g.add(at(M(new THREE.BoxGeometry(3.2, 1.2, 1.2), "#b07a4a"), 0, .6, 0)); g.add(at(M(new THREE.BoxGeometry(3.4, .12, 1.4), "#d8a46a"), 0, 1.26, 0));
+  [-1.5, 1.5].forEach(x => g.add(at(M(new THREE.CylinderGeometry(.07, .07, 2.6, 6), "#7a5236"), x, 1.3, -.5)));
+  for (let i = 0; i < 6; i++) g.add(at(M(new THREE.BoxGeometry(.6, .1, 1.7), i % 2 ? "#ffffff" : "#e5484d"), -1.5 + i * .6, 2.65, -.1).rotateX(.25));   // (the awning, its stripes)
+  [["#ff9a2e", -1], ["#ffd203", 0], ["#e8245a", 1]].forEach(([c, i]) => { for (let k = 0; k < 4; k++) g.add(at(M(new THREE.IcosahedronGeometry(.17, 0), c), i * .95 + (k % 2) * .2 - .1, 1.44 + (k > 1 ? .15 : 0), .15 + (k % 2) * .2)); });
+  return g;
+}
+function goalProp(face) {                            // a little goal: two posts and a bar, a net behind (face: the way it opens)
+  const g = new THREE.Group(), W = rMat("#ffffff"), net = new THREE.MeshBasicMaterial({ color: "#ffffff", transparent: true, opacity: .28, depthWrite: false, side: THREE.DoubleSide });
+  [-.9, .9].forEach(z => g.add(at(mk(new THREE.CylinderGeometry(.06, .06, 1.9, 8), null, { mat: W, ol: .02 }), 0, .95, z)));
+  g.add(at(mk(new THREE.CylinderGeometry(.06, .06, 1.9, 8).rotateX(Math.PI / 2), null, { mat: W, ol: .02 }), 0, 1.9, 0));
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(1.9, 1.9).rotateY(Math.PI / 2), net); at(back, -face * .8, .95, 0); g.add(back);
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(.8, 1.9).rotateX(-Math.PI / 2), net); at(top, -face * .4, 1.9, 0); g.add(top);
+  return g;
+}
+function soccerBall() { const t = tex(256, 128, (g, w, h) => { g.fillStyle = "#ffffff"; g.fillRect(0, 0, w, h); g.fillStyle = "#24303a"; for (let i = 0; i < 10; i++) { const x = (i % 5) * 52 + 26 + (i > 4 ? 26 : 0), y = i > 4 ? 92 : 36; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2 - Math.PI / 2; g.lineTo(x + Math.cos(a) * 13, y + Math.sin(a) * 13); } g.fill(); } });
+  return new THREE.Mesh(new THREE.SphereGeometry(.45, 20, 14), toon("#ffffff", { map: t })); }
+let rideAskCb = null, rideAskSel = 0;
+function rideAsk(cb) { rideAskCb = cb; rideAskSel = 0; menuUp = "rideask"; SFX.confirm(); $("rideAsk").classList.add("show"); markMenu(); }   // ("asked to stop for the scenery": yes, or drive on)
+function rideAnswer(yes) { const f = rideAskCb; rideAskCb = null; if (menuUp === "rideask") menuUp = null; $("rideAsk").classList.remove("show"); SFX.confirm(); if (f) f(yes); }
+function roadUpdate(dt) {                            // stopped by the road (rideOut till rideIn): only what a stop needs runs: you, your partners, an ambush's berries, the stand's seller, the soccer
+  const P = rideS, E = P.road.ev, A = E.arena;
+  if (!E.cine) { if (player.auto) autoPlayer(dt); else updatePlayer(dt); }
+  if (E.kind === "ambush" || E.kind === "stand") { updateAlly(dt); updatePal(dt); partnerTick(dt); }
+  updateBaddies(dt); updateHazards(dt); updateNpcs(dt); updateLoot(dt);
+  const cl = s => { if (s) s.x = clamp(s.x, A[0], A[1]); }; cl(player); if (E.kind !== "soccer" && E.kind !== "view") { palsAll().forEach(cl); allyStates().forEach(cl); } baddies.forEach(cl);
+  const D = RIDE_EV[E.kind]; if (D.tick) D.tick(P, P.road, E, dt);
+  shake = Math.max(0, shake - dt * 40); camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;
+}
+function rideEvClear(E) {                            // (the ride over in the middle of a stop: what of it isn't the road's own)
+  if (!E) return; if (E.GA) { actors.remove(E.GA); E.GA.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); E.GA = null; } if (E.ball) { actors.remove(E.ball.m); E.ball = null; } (E.kids || []).forEach(disposeBaddy); E.kids = []; if (rideAskCb) rideAnswer(false);
+}
 // the end of the third room: a bep comes hopping out to them, and the page turns into a comic: it points the way Glos went, into the
 // forest, and gives them the berry sword and the gauntlet; they put them on, and after him
 let gift = null, comicUp = false, comicCam = null;
@@ -8991,6 +9226,7 @@ function teamPick(i) {                             // that one goes home; everyo
   const T = teamAsk; if (!T) return; const m = T.L[i]; teamAsk = null; menuUp = null; $("teamMnu").classList.remove("show"); SFX.confirm();
   const nc = T.L[T.L.length - 1]; m.home(); if (m !== nc && nc.keep) nc.keep();
 }
+$("raBtns").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b && rideAskCb) rideAnswer(b.dataset.a === "yes"); });
 $("teamBtns").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if (b && teamAsk) teamPick(+b.dataset.t); });
 function catsOnKO() { }                            // knocked out: your pet stays with you (the user, 2026-10-20); one you were chasing stays in its room (2026-10-22)
 function updateStrays(dt) {
@@ -9363,7 +9599,7 @@ function crewStep(Q, dt, waiting) {                // each of the rest of a crew
     ejLook(s, dt);
   });
 }
-const shoreX = x => { const SW = STAGES[stage] && STAGES[stage].swim; return SW && x > SW[0] - 60 && x < SW[1] + 80 ? SW[1] + 80 : x; };   // (the cove's water: a buddy waits at its edge, never in it or walking on it. The user, 2026-10-25)
+const shoreX = x => { const SW = !(rideS && rideS.play) && STAGES[stage] && STAGES[stage].swim; return SW && x > SW[0] - 60 && x < SW[1] + 80 ? SW[1] + 80 : x; };   // (the cove's water: a buddy waits at its edge, never in it or walking on it. The user, 2026-10-25)
 const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" : "") + (arena ? ":ar" : "");
 const allyHide = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); };
 const allyShow = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = true; }); };
@@ -16116,13 +16352,13 @@ function updateNpcs(dt) {
 }
 // the talk: a box along the bottom with their name, what they say, and the choices
 function openNpc(f) {
-  npcUp = { f, sel: 0, rows: [], msg: "" }; menuUp = "npc"; document.body.classList.add("talking"); jumpBuf = atkBuf = 0; SFX.confirm(); drawNpc(); $("npc").classList.remove("hidden");
+  npcUp = { f, sel: 0, rows: [], msg: "" }; f.talked = true; menuUp = "npc"; document.body.classList.add("talking"); jumpBuf = atkBuf = 0; SFX.confirm(); drawNpc(); $("npc").classList.remove("hidden");
 }
 function closeNpc() { npcUp = null; document.body.classList.remove("talking"); if (menuUp === "npc") menuUp = null; $("npc").classList.add("hidden"); jumpBuf = atkBuf = 0; npcBlockPrev = true; if (player) { player.block = false; player.blockHold = 0; } SFX.tick(); }
 function npcRows() {                                 // [label, sub, action]
   const U = npcUp, role = U.f.npc, B = bag();
   if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]),
-    [`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap], ["<b>LEAVE</b>", "", closeNpc]];
+    ...(U.f.road ? [] : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
   if (role === "caller") { const C = [...petsCaught("cat").map(w => ["cat", w]), ...petsCaught("dog").map(w => ["dog", w])];
     return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]), ["<b>LEAVE</b>", "", closeNpc]]; }
   const other = otherHero();
@@ -16131,7 +16367,7 @@ function npcRows() {                                 // [label, sub, action]
 function npcSays() {
   const U = npcUp, role = U.f.npc;
   if (U.msg) return U.msg;
-  if (role === "seller") return "WARES FOR THE ROAD! PAY IN P COINS. YOU'VE GOT " + bag().coins + ".";
+  if (role === "seller") return (U.f.road ? "FRESH FROM THE STAND, FOR THE ROAD AHEAD! " : "WARES FOR THE ROAD! ") + "PAY IN P COINS. YOU'VE GOT " + bag().coins + ".";
   if (role === "caller") return petsCaught("cat").length + petsCaught("dog").length ? "ONE RING OF THIS BELL AND A CAT OR DOG YOU'VE MADE FRIENDS WITH COMES RUNNING. WHO SHALL I CALL?" : "NO CATS OR DOGS TO CALL YET. CATCH ONE, AND I'LL RING IT TO YOU ANYWHERE YOU MEET ME.";
   return `GREETINGS, ${rig.name.toUpperCase()}. A WORD IN THE RIGHT EAR AND ${otherHero().name.toUpperCase()} TAKES OVER FROM YOU. SHALL I?`;
 }
@@ -18828,6 +19064,7 @@ function update(dt) {
   if (mode === "select") { updateSelect(dt); return; }
   if (mode === "opp") { updateOpp(dt); return; }
   if (mode === "world") { updateWorldSel(dt); return; }
+  if (rideS && rideS.play) { roadUpdate(dt); return; }   // (stopped by the road on La Guagua: its own little stage)
   wstTick(dt);
   if (mode === "play" && STAGES[stage] && STAGES[stage].bep && hideFound(world, stage) && !hideout && !stronghold && !bepEv && !transit && !patrolLock && player && !player.auto && !player.dead) {   // at the hideout's way in: ↑ and in you go
     const B = STAGES[stage].bep, near = player.onGround && Math.abs(player.x - B.zone) < 70, up = !!(keys.ArrowUp || keys.KeyW || pad.u);
@@ -18952,7 +19189,7 @@ function frame(now) {                              // (the next frame is asked f
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || proFrozen() || (!!rideS && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? .35 : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt);   // (the last kill's slow motion)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
