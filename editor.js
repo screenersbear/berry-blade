@@ -78,7 +78,7 @@ function resize() {
 new ResizeObserver(resize).observe(stageEl); resize();
 
 // ───────────────────────────── the cast ─────────────────────────────
-const PRESETS = G.shippedSpecs();
+const PRESETS = (G.gameSpecs || G.shippedSpecs)();   // (the cast as the game plays it: its own keyed moves and jumps on, so what you see here is what plays, 2026-10-26)
 const presetOf = id => PRESETS.find(p => p.id === id);
 // villains: inside Berry Blade the bosses are in the cast too. Evil June is a character like any other (her spec says villain);
 // the others are the game's own models: the editor shows them and recolours / resizes them part by part (a LOOK tab), nothing more
