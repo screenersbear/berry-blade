@@ -171,13 +171,19 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   palm: "palm strike", spinkick: "spin kick", flykick: "flying kick", flipaxe: "flip axe kick", chop2: "double chop", sweep: "sweep", tornado: "tornado kick",
   sw_c1: "thrust", sw_c2: "whirlwind", sw_c3: "crash", bx_c1: "rush", bx_c2: "backfist", bx_c3: "rocket uppercut", nj_c1: "dash palm", nj_c2: "hurricane kick", nj_c3: "rising knee",
   kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
-  clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave" };   // (the heroes' own: Camila's from the Move Maker)
+  clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave",
+  cpunch: "punch", ccross: "cross", csmash: "smash", upperhook: "uppercut + hook", gu_fist: "rising swipe", up_fist: "rising uppercut", gu_sword: "rising swipe", up_sword: "rising cut",
+  tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick" };   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every keyframed move this character has, in play order
   if (sp.base === "cat") return [...KIT.CAT_GROUND.map((k, i) => [k, `Ground ${i + 1}`]), ...KIT.CAT_AIR.map((k, i) => [k, `Air ${i + 1}`]), ...KIT.CAT_CHARGE.map((k, i) => [k, `Charge ${i + 1}`])];
-  const S = setFor(sp), out = [];
-  S.ground.forEach((k, i) => out.push([k, `Ground ${i + 1}`])); S.air.forEach((k, i) => out.push([k, `Air ${i + 1}`])); (S.charge || []).forEach((k, i) => out.push([k, `Charge ${i + 1}`]));
-  return out.filter(([k]) => KIT.STRIKES[k] && KIT.STRIKES[k].keys);
+  const S = setFor(sp), out = [], seen = new Set(), add = (k, lab) => { if (!seen.has(k) && KIT.STRIKES[k] && KIT.STRIKES[k].keys) { seen.add(k); out.push([k, lab]); } };   // (each move once, where it first comes)
+  S.ground.forEach((k, i) => add(k, `Ground ${i + 1}`)); (S.groundB || []).forEach((k, i) => add(k, `Forward combo ${i + 1}`));
+  S.air.forEach((k, i) => add(k, `Air ${i + 1}`)); (S.air1 || []).forEach((k, i) => add(k, `Air combo ${i + 1}`)); (S.air2 || []).forEach((k, i) => add(k, `Air combo, forward ${i + 1}`));
+  (S.upChain || []).forEach((k, i) => add(k, `Up ${i + 1}`)); (S.charge || []).forEach((k, i) => add(k, `Charge ${i + 1}`));
+  const TK = KIT.TK_CHARGE || {}; ((((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other) || []).forEach((k, i) => add(k, `Charged tackle ${i + 1}`));
+  add("slide", "Slide (down + attack)");
+  return out;
 }
 function driveMove(p, dt) {
   KIT.time += dt;
