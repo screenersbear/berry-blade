@@ -1687,6 +1687,11 @@ function climbPose(p, cat) {
   if (cat) Object.assign(T, { tailBase: 1.1, tailCurl: .12, tailSwish: .25 * s, hatTilt: -.1 });
   return T;
 }
+function zipPose(p) {                              // hanging from the zipline's trolley (the waves, 2026-10-25): both hands up on its bar, legs swinging a little under you
+  const s = Math.sin(p.zipPh || 0);
+  return { lean: -.06 + .05 * s, arch: .05, bodyY: -.02, headRot: .2, armF: 2.95, elbF: .22, armB: 2.95, elbB: .22, spF: .16, spB: .16,
+    fNx: .16 + .06 * s, fNy: .16, fFx: .02 + .06 * s, fFy: .1, fP: -.3 };
+}
 function swimPose(p, t) {                          // swimming (the deep, 2026-10-24): arms pulling in turn (up over the head as you go faster), legs kicking; treading water when still
   const sp = clamp((Math.abs(p.vx) + Math.abs(p.vy)) / 220, 0, 1), s = Math.sin(t * (4 + 5 * sp)), s2 = Math.sin(t * 2.6), c2 = Math.cos(t * 2.6);
   return { lean: .05, arch: .1 * sp, bodyY: 0, headRot: -.35 * sp, armF: 1.1 + 1.6 * sp + .7 * s2, elbF: .35 + .3 * c2, armB: 1.1 + 1.6 * sp - .7 * s2, elbB: .35 - .3 * c2,
@@ -2059,6 +2064,7 @@ function updatePoseHuman(p, dt) {
   p.sprintK = approach(p.sprintK || 0, D.run && p.onGround ? clamp(((p.runK || 1) - 1) / .45, 0, 1) : p.sprintK || 0, dt * 3); const sk = p.sprintK * (1 - wk);   // sprinting: how far into it (0 at a run)
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
+  else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
