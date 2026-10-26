@@ -185,7 +185,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
-  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
   const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
@@ -195,6 +195,7 @@ function movesFor(sp) {                                          // every move t
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
     add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Tackle (attack + block)", "tackle", "", C);
     add("Charged tackle (hold attack + block)", "tkdig", "", C); list("Charged tackle (hold attack + block)", TK.cat, C); add("Back-step (block + back)", "backstep", "", C);
+    add("Attack while running at full speed", "carddash", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
   const bsp = (KIT.BUDDY_SP || {})[sp.id];                       // (a berry buddy's special, every couple of plain hits: work.html updateAllyOne)
@@ -205,6 +206,7 @@ function movesFor(sp) {                                          // every move t
   add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
   list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
+  add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   add("As a berry buddy: special", bsp, "", T);
   return out;
 }

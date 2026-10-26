@@ -537,7 +537,7 @@
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
-<script src="sfx.js?v=20261020a" defer></script>
+<script src="sfx.js?v=20261026b" defer></script>
 <script src="voices.js?v=20261023g" defer></script>
 <script type="importmap">
 { "imports": {
@@ -699,7 +699,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261026c"></script>
+<script src="editor.js?v=20261026d"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -826,7 +826,7 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
 const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !bossDown) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
 const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || bossDown) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
-const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen());   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
+const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen());   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock;   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
@@ -839,7 +839,7 @@ const PROFILE = [];                       // the ground's shape: [x, dy] points 
 let WATER = GROUND + 46;                  // the sea's surface: just under the ground on row C, far below on the clifftops (row A)
 let FLOOR_LOW = GROUND, SINK = WATER;     // this room's lowest floor, and the line below which you've fallen in (WATER, or under a floor that dips below it: the lakebed's)
 const ROW_RISE = 240;
-const CEILS = [];                         // overhead: the underside of the land above, [x0, x1, y] (you bump your head on it)
+const CEILS = []; let ceilsLive = false;   // (ceilsLive: hardCeils, below, is ready: the first room's set up before it's defined)                         // overhead: the underside of the land above, [x0, x1, y] (you bump your head on it)
 const LADDERS = [];                       // the clearing's ladders: { face (the cliff face's x), wall (which side the cliff is: -1 left, 1 right), x (where you climb), top, bot (px) }                     // px of climb from one row of the map to the next
 const overGap = x => { for (const g of GAPS) if (x > g[0] && x < g[1]) return true; return false; };
 function groundAt(x) {                    // the ground's height at x (px), or null over open water
@@ -855,7 +855,7 @@ function setPlatforms(s) {
   (S.gaps || []).forEach(g => GAPS.push(g));
   let d = 0; (S.steps || []).forEach(([x, dy]) => { PROFILE.push([x, d], [x, dy]); d = dy; });   // steps: [x, dy] → a sheer step at x
   (S.ground || []).forEach(q => PROFILE.push(q)); PROFILE.sort((a, b) => a[0] - b[0]);
-  CEILS.length = 0; (S.ceils || []).forEach(c => CEILS.push(c));
+  CEILS.length = 0; (S.ceils || []).forEach(c => CEILS.push(c)); if (!stronghold && ceilsLive) CEILS.push(...hardCeils(s));
   LADDERS.length = 0; (S.ladders || []).forEach(([face, wall]) => LADDERS.push({ face, wall, x: face - wall * 15, top: groundAt(face + wall * 20) ?? GROUND, bot: groundAt(face - wall * 30) ?? GROUND }));   // ladders: [the cliff face's x, its side]
   (S.poles || []).forEach(([x, top]) => LADDERS.push({ face: x, wall: 0, x, top, bot: groundAt(x) ?? GROUND, pole: true }));   // ladders up to a platform: [x, the platform's top] (the forest's bridge)
   if (S.upX !== undefined) { const g = S.upY ?? groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - 360, bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
@@ -994,9 +994,8 @@ const gradeMat = new THREE.ShaderMaterial({
       c = mix(c, c * tintC, tintAmt);                  // the hour's colour: golden, orange, blue, night
       c = pow(c, vec3(.95));                           // slightly brighter midtones
       c = (c - .5) * 1.07 + .5;                        // a little contrast back, so it doesn't read as haze
-      if (dim > 0.0) { vec2 d0 = vUv - .5; c *= mix(vec3(1.0), vec3(.56, .64, .6), dim); c *= 1.0 - dim * .5 * smoothstep(.18, .8, dot(d0, d0) * 2.4); }   // under the forest's canopy: darker, greener, dark at the edges
-      if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin;   // the land at war: washed out, sooty, darker
-        vec2 d = vUv - .5; c *= 1.0 - ruin * .55 * smoothstep(.25, .75, dot(d, d) * 2.2); }                                                           // ... and dark at the edges
+      if (dim > 0.0) c *= mix(vec3(1.0), vec3(.56, .64, .6), dim);   // under the forest's canopy: darker, greener (no dark edges: the user, 2026-10-26 "do not add an extra dark vignette around the screen")
+      if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin; }   // the land at war: washed out, sooty, darker (its dark edges gone too, 2026-10-26)
       if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l3), c, 1.0 + .3 * bloom); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter
       if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
@@ -1522,6 +1521,7 @@ const GEST = {
   flex: { T: 1.5, f: (o, u) => { const k = Math.sin(Math.PI * Math.min(1, u * 1.3)); o.ax[0] = o.ax[1] = 1 * k; o.az[0] = o.az[1] = .2 * k; o.el[0] = o.el[1] = 1.9 * k; o.lean = -.1 * k; o.hz = .12 * k; o.by = .03 * k; } },
   wag: { T: 1.3, f: (o, u, t, N) => { o.az[N] = 1.85; o.el[N] = .35 + .3 * Math.sin(t * 15); o.hy = .14 * Math.sin(t * 7.5); o.hz = .05; } },   // tsk, tsk
   preen: { T: 1.6, f: (o, u, t, N, F) => { o.az[F] = 2.5; o.el[F] = 1.6 + .2 * Math.sin(t * 4); o.ax[F] = .2; o.hx = .12; o.roll = .04; } },
+  proud: { T: 2.2, f: (o, u, t, N) => { o.ax[0] = o.ax[1] = .6; o.az[0] = o.az[1] = -.25; o.el[0] = o.el[1] = 1.7; o.roll = .05; o.lean = -.06; o.hx = -.18; o.kn[1 - N] = .25; } },   // both hands on her hips, chin up (Glos's statue: never picked at random)
   hip: { T: 2.2, f: (o, u, t, N) => { o.ax[N] = .6; o.az[N] = -.25; o.el[N] = 1.7; o.roll = .07; o.by = -.02; o.hx = -.1; o.kn[1 - N] = .25; } },   // a hand on the hip, the weight on one leg
   flap: { T: 1, f: (o, u, t) => { const k = .55 + .5 * Math.sin(t * 22); o.ax[0] = o.ax[1] = k; o.el[0] = o.el[1] = .3; o.by = .025 * Math.abs(Math.sin(t * 11)); o.hz = .1; } },
   laugh: { T: 1.3, f: (o, u, t) => { o.by = .03 * Math.sin(t * 15); o.hz = .28; o.lean = -.08; o.az[0] = o.az[1] = .35; o.el[0] = o.el[1] = 1.3; o.ax[0] = o.ax[1] = -.1; } },
@@ -2045,7 +2045,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     }
     tropBromeliad(scene, M, cx - w / 2 + .35, top, -.95, rng, .8); if (w > 3.5) tropGroundFern(scene, M, cx + w / 2 - .45, top, -.95, rng, .6);   // a bromeliad and a fern at the back corners
   }
-  for (const [c0, c1, cy] of CEILS) {               // the land above, overhead: earth with roots and vines hanging from its underside, a ragged edge
+  for (const [c0, c1, cy, hard] of CEILS) { if (hard) continue;   // the land above, overhead: earth with roots and vines hanging from its underside, a ragged edge (the hard roofs are drawn by their own)
     const x0 = X(Math.max(c0, -900)), x1 = X(c1), len = x1 - x0, uy = Y(cy);
     scene.add(at(mk(new THREE.BoxGeometry(len, 16, 13.6), null, { mat: mDirt, ol: .04 }), (x0 + x1) / 2, uy + 8, -2.4));
     for (let z = -8.6; z < 4.2; z += R(.8, 1.5)) { const r = R(.5, 1); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .04 }), x1 + R(-.3, .2), uy + R(.2, 2.5), z)); }
@@ -2070,7 +2070,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     const x = R(-14, WX + 14), z = -R(3.5, 34);
     if (Math.abs(x - WX / 2) < 5 && z > -14) continue;     // keep the sunlit clearing open
     if (bgY < -.5 && z > -10.5) continue;              // (up high there's nothing behind us but the drop)
-    if (CEILS.some(([c0, c1]) => x > X(c0) - 1 && x < X(c1) + 1) && z > -9.5) continue;   // under the overhang: no trees through it
+    if (CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1) && z > -9.5) continue;   // under the overhang: no trees through it
     const ol = z > -14 ? .06 : 0, by = z < -9.5 ? bgY : gAt(x), roll = rng();
     if (roll < .3) { const n = rng() < .5 ? 3 : 2; for (let j = 0; j < n; j++) tropPalm(scene, M, x + R(-1.2, 1.2), by, z + R(-.8, .8), rng, { h: R(6.5, 10.5), lean: R(-.28, .28), ol }); }
     else if (roll < .5) tropTreeFern(scene, M, x, by, z, rng, { h: R(4.5, 7.5), ol });
@@ -2081,7 +2081,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   }
   { const x = WX * R(.2, .8), z = -R(15, 21); tropCeiba(scene, M, x, bgY > .5 || bgY < -.5 ? bgY : gAt(x), z, rng, { h: R(12, 14), ol: .04 }); }   // the great ceiba
   if (!(bgY < -.5)) for (let i = 0; i < Math.round(14 * WS); i++) { const x = R(-10, WX + 10), z = -R(5, 12);   // lianas hanging out of the canopy
-    if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1]) => x > X(c0) - 1 && x < X(c1) + 1)) continue; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); }
+    if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) continue; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); }
   for (let x = -30; x < WX + 30; x += R(14, 24)) tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22));   // the mogotes far off
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
     petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
@@ -3084,7 +3084,8 @@ const ROW_TONE = {
   C: { sun: .95, hemi: .97, fogF: .95 },
   D: { sun: .54, hemi: .66, fog: .5, fogN: .66, fogF: .74, sky: .48, dim: .58 },        // the bottom: denser, darker, closer in
   dim: { sun: .48, hemi: .6, fog: .42, fogN: .66, fogF: .76, sky: .34, dim: .7 } };
-const ROW_TONE_W = { 1: { D: { sun: .86, hemi: .9, fog: .9, fogN: .9, fogF: .92, sky: .9, dim: .14 } }, 5: { A: { sun: 1.25, hemi: 1.18, fogN: 1.2, fogF: 1.4 }, D: { sun: .8, hemi: .86, fog: .78, fogN: .82, fogF: .86, sky: .72, dim: .26 } } };   // (Kesh's garden: a night garden already; its top row moonlit, its bottom only a little darker)
+const ROW_TONE_W = { 1: { D: { sun: .86, hemi: .9, fog: .9, fogN: .9, fogF: .92, sky: .9, dim: .14 } }, 7: { D: { sun: .84, hemi: .9, fog: .92, fogN: .94, fogF: .96, sky: .92, dim: .12 }, A: { sun: 1.2, hemi: 1.12, fogN: 1.35, fogF: 1.8, air: .4 } },   // (Crux's street, out in the day; its rooftops up in the clear)
+  5: { A: { sun: 1.25, hemi: 1.18, fogN: 1.2, fogF: 1.4 }, D: { sun: .8, hemi: .86, fog: .78, fogN: .82, fogF: .86, sky: .72, dim: .26 } } };   // (Kesh's garden: a night garden already; its top row moonlit, its bottom only a little darker)
 function rowTone(s, w) {
   if (w !== world || s === undefined || s < 0 || hideout || stronghold || arena) return null; const q = STAGES[s]; if (!q || !q.cell) return null;
   const r = String(q.cell)[0]; return q.tone ? ROW_TONE[q.tone] || null : (ROW_TONE_W[w] || {})[r] || ROW_TONE[r] || null;
@@ -3156,6 +3157,22 @@ const ROW_DRESS = {
   12: { D: { kind: "dungeon", c1: "#6e604a", c2: "#857559", c3: "#4e4434", torch: "#ffb030", chain: "#4a4a4a" }, A: { birds: "#2a2a2e", flags: ["#c8102e", "#ffd84a"], crenel: "#cdb98a" } },
 };
 const rowOf = q => String((q && q.cell) || "")[0];
+// the roofs you bump your head on beyond a room's own ceils (the user, 2026-10-26: "you shouldnt be able to jump into the ceilings where there is no opening" and
+// "not allow enemies to be launched into hard ceilings either"): the ceiling strip under the room above (buildHoleCeil), broken at its holes; a bottom row's hard
+// roof (buildRowDress's slabs: a sea cave, a basement, a cellar, the elevated road, the bank, the vault, the dungeon). [x0, x1, y, 1]: the 1 marks it as one
+// the forest doesn't draw itself
+const DRESS_CEIL = { cave: 102, basement: 126, cellar: 134, subway: 134, bank: 94, vault: 102, dungeon: 94 };   // (each one's underside, px: its slab's height)
+function holesAbove(s) { const up = STAGES.findIndex(q => q && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)); return up < 0 ? null : STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]); }
+function ceilSpans(gaps) { const spans = []; let x = -600; for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]); return spans; }
+const holeCeilOn = S0 => !(!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.authored && world === 1) || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy"));
+function hardCeils(s) {
+  const S0 = STAGES[s], out = []; if (!S0) return out; const gaps = holesAbove(s);
+  if (gaps && holeCeilOn(S0) && holeHidden(S0, gaps)) ceilSpans(gaps).forEach(([a, b]) => out.push([a, b, 120, 1]));   // the strip (buildHoleCeil's)
+  const r = rowOf(S0), D = world !== 0 && (ROW_DRESS[world] || {})[r], dy = D && r === "D" && !S0.arena && !S0.cove && !S0.deep && !S0.noDress ? DRESS_CEIL[D.kind] : undefined;
+  if (dy !== undefined) ceilSpans(gaps || []).forEach(([a, b]) => out.push([a, b, dy, 1]));   // a bottom row's roof (buildRowDress's)
+  return out;
+}
+ceilsLive = true;
 function holeHidden(S0, gaps) {                    // is the way up through the room above's hole(s) one you'd not see? Not when platforms stack up toward it
   const P = (S0.plats || []).filter(p => p[3] !== "jut" && p[3] !== "upper"), cs = gaps.map(([a, b]) => (a + b) / 2);   // (three or more near it, two heights at least, the highest 170 px up), nor
   const near = P.filter(p => cs.some(c => Math.abs(p[0] + p[2] / 2 - c) < 650)), hs = new Set(near.map(p => Math.round((GROUND - p[1]) / 20)));   // when a wall of ledges climbs up beside it
@@ -3171,6 +3188,12 @@ function buildHoleCeil(s) {                       // where a hole in the room ab
   if (!holeHidden(S0, gaps)) return g;                // (a way up you can see already: no ceiling. The user, 2026-10-25: "make sure the ceiling fix applies ... where ... it isn't a situation where there's an obvious path")
   for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]);
   const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], wd = world === 0, R = rngF(777 + s * 31 + world * 101), RR = (a, b) => a + R() * (b - a), yb = Y(120), H = 6;
+  if (world === 7) { const mC = toon(CX.light), mB = toon(CX.dark), mK = toon(CX.black);   // (Crux's city: the floor above's concrete seen from under it, its steel beams, a lamp or two)
+    for (const [a, b] of spans) { const xa = X(a), xb = X(b), w = xb - xa; if (w <= .2) continue; g.add(at(mk(new THREE.BoxGeometry(w, H, 16), null, { mat: mC, ol: .04 }), (xa + xb) / 2, yb + H / 2, -4.2));
+      g.add(at(mk(new THREE.BoxGeometry(w, .14, .2), null, { mat: mK, ol: 0 }), (xa + xb) / 2, yb + .07, 3.75));
+      for (let x = xa + .8; x < xb - .4; x += 2.4) g.add(at(mk(new THREE.BoxGeometry(.35, .45, 15), null, { mat: mB, ol: .02 }), x, yb - .2, -4.2));
+      for (let x = xa + RR(2, 5); x < xb - 1; x += RR(7, 11)) { g.add(at(mk(cyl(.02, .02, .9, 4), null, { mat: mK, ol: 0 }), x, yb - .45, -1.5)); g.add(at(mk(ball(.16, 8, 6), null, { mat: toon(CX.white), ol: .02 }), x, yb - .95, -1.5)); } }
+    return g; }
   const mE = toon(wd ? "#5a4030" : c0), mE2 = toon(wd ? "#3e2c20" : new THREE.Color(c0).multiplyScalar(.72).getStyle()), mR = toon(wd ? "#4a3426" : c1), mMoss = toon("#4f7a34");
   for (const [a, b] of spans) { const xa = X(a), xb = X(b), w = xb - xa; if (w <= .2) continue;
     g.add(at(mk(new THREE.BoxGeometry(w, H, 16), null, { mat: mE, ol: .04 }), (xa + xb) / 2, yb + H / 2, -4.2));
@@ -3498,7 +3521,7 @@ function syncRest() {                             // the fire flickering; walk u
   C.flames.forEach((m, i) => { const f = 1 + .14 * Math.sin(time * (11 + i * 3) + i) + .08 * Math.sin(time * 23 + i * 2); m.scale.set(1 / f, f, 1 / f); m.rotation.y = time * (1 + i); });
   C.glow.material.opacity = .45 + .1 * Math.sin(time * 9) + .05 * Math.sin(time * 17); C.flag.rotation.y = Math.sin(time * 2.2) * .35;
   const p = player; if (C.healed || !p || p.dead || mode !== "play" || Math.abs(p.x - C.x) > 150) return;
-  C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");
+  C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); partnerList().forEach(P => { if ((P.q.php ?? PARTNER_HP) < PARTNER_HP) { P.q.php = PARTNER_HP; P.q.heartT = 2.2; } }); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");   // (your partners too: the user, 2026-10-26)
 }
 const CAMP_SPOT = { pal: [-66, -.1], pal2: [-24, .3], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85], ally1: [166, -.55], ally2: [-196, -.72] };   // where each one sits: [px from the fire, depth (3D)]
 function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
@@ -3933,13 +3956,13 @@ function authorForest() {
   if (bepI >= 0) delete S0[bepI].bep;                // (the beps' way in: to C4, where the user put it)
   const cutRoom = i => { S0[i].cut = true; delete S0[i].cell; delete S0[i].toWorld; delete S0[i].boss; R0[i] = []; };   // (no way out left in it: A8 was one)
   // the way in from the beach is C1 now (the world's first room, stage 0, was B1: B1 is solid earth); B4 is solid dirt (the tan block)
-  const oC1 = C.C1; S0[0].cell = "C1"; S0[0].elev = S0[oC1].elev; cutRoom(oC1); C.C1 = 0; cutRoom(C.B4);
+  const oC1 = C.C1; S0[0].cell = "C1"; S0[0].elev = S0[oC1].elev; cutRoom(oC1); C.C1 = 0;   // (B4, the tan block: a hollow in it now, Glos's statue: below)
   cutRoom(C.C8);                                     // (C8: solid ground, the user's map, 2026-10-25)
   S0.forEach(q => { if (q.hub) { delete q.hub; if (!q.rest) delete q.peace; } });   // (the hub's D5 now)
   // the hidden cove (behind Camila's rocks in A1): one room on the shore, water to the left to swim in, a mango, and Burr, who lives there
   const COVE = S0.length; S0.push({ h: S0[C.A1].h, col: 999, name: "THE HIDDEN COVE", elev: 0, foe: 0, authored: true, cove: true, ground: [[0, 110], [640, 110], [790, 0]], swim: [-200, 720, GROUND + 6],
     plats: [], next: C.A1, noLeft: true, peace: true, items: [["fruit", 1650]], set: [{ k: "pool", x0: -300, x1: 760, y: GROUND + 6 }, { k: "coveRocks", x: 2560 }] });
-  R0[COVE] = []; W.fixedBuddies = { ...(W.fixedBuddies || {}), burr: COVE };
+  R0[COVE] = []; W.buddySpots = [COVE, C.D4];        // (the berry buddies' spots: the cove, and D4. The user, 2026-10-26)
 
   // ── row A
   // A1: Camila's rocks at the left (the cove behind them); the bridge's ladder at the right, the bridge on from there; the edge where her climb
@@ -3981,7 +4004,10 @@ function authorForest() {
     set: [{ k: "ceiba", x: 820, crown: false, back: true, h: 40, scale: 1.3, z: -5 }, { k: "earth", side: 1, col: TAN, col2: TAN2 }, { k: "camTop", x: 1180, h: 140 }, { k: "camRock", x: 2380 }] },   // (her rock's top up out of the floor, a ledge to climb over: the user, 2026-10-25)
     [["leafy", "leaf", 430], ["pinecone", "rust", 1950]]);
   // B5: under the ground of A5 (dark, low); land at the left (a mango, two baddies), a hole down into C5, a patch of land past it on to B6
-  room("B5", { dark: true, ground: [[0, 0]], gaps: [[1680, 1980]], below: C.C5, noLeft: true, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 260]],
+  // B4: a hollow in the tan earth, in from B5's left: Glos's statue, gold, up on its base (the user, 2026-10-26)
+  room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, 130]], statue: { x: 1500 },
+    set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 900], ["leafy", "leaf", 2100]]);
+  room("B5", { dark: true, ground: [[0, 0]], gaps: [[2100, 2400]], below: C.C5, prev: C.B4, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 260]],
     set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 650], ["leafy", "leaf", 1250]]);
   // B6: the giant tree's trunk in front of you, dark under the canopy
   room("B6", { dark: true, ground: [[0, 0]], prev: C.B5, next: C.B7, set: [{ k: "giant", part: "trunk", x: TX, fg: true }, { k: "canopy" }] }, [["leafy", "leaf", 550], ["stumpy", "olive", 2200]]);   // (two baddies: the user, 2026-10-24)
@@ -4008,7 +4034,7 @@ function authorForest() {
     ceils: [[-600, 3200, 100]] }, [["thornball", "purple", 2100]]);   // (the ceiling: the woods' own, drawn for its ceils; a second one on top of it flickered, 2026-10-24)
   // C5: the other side of the grass (the same grass: cut once, cut for good, from either side); stairs up to the hole from B5 (jump up it: on
   // to B6 that way); 3 baddies; the wall at the far end (C6 is beyond it)
-  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopY: -170, plats: [[1700, 0, 260, "slab"]],   // (one more up: a slab near the top under B5's hole; only from up there do you reach it. The user, 2026-10-24)
+  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopY: 60, ceils: [[-600, 2100, -40], [2400, 3200, -40]],   // (up the steps; over the top one, the gap in the land overhead: B5's hole, straight up. Was a slab at the very top under it, and a strip of ceiling that looked like a ledge: the user, 2026-10-26)
     secret: { who: "rose", x: -20, side: -1, door: true, tall: true, key: "grass:C4C5" }, set: [{ k: "earth", side: 1, col: EARTH }] },
     [["leafy", "leaf", 700], ["acorn", "rust", 1150], ["twiggy", "olive", 1650]]); nm(c5, "STAIRS");
   // C6: in front of the giant tree; a ledge with a baddie, a mango up on a small platform, two baddies; the hole the tree's ledges climb up
@@ -4028,7 +4054,7 @@ function authorForest() {
   room("D2", { ground: [[0, 0]], gaps: [[300, 2160]], plats: [[420, 380, 280, "shroom"], [880, 300, 240, "shroom"], [1300, 200, 260, "shroom"], [1720, 320, 260, "shroom"]],
     items: [["power", 1430, 200]], prev: C.D1, next: C.D3, set: [{ k: "pond" }, { k: "undergrowth" }] }, []);
   // D3: a mini boss, a high platform
-  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], items: [["fruit", 1880, 170]], prev: C.D2, next: C.D4 }, [["bramble", "purple", 900, "mini"], ["acorn", "rust", { plat: 0, x: 1640 }]]);   // (a baddie and a mango up on the platform: the user, 2026-10-24)
+  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], items: [["fruit", 1880, 170]], prev: C.D2, next: C.D4, ceils: [[-600, 3200, 110]] }, [["bramble", "purple", 900, "mini"], ["acorn", "rust", { plat: 0, x: 1640 }]]);   // (a baddie and a mango up on the platform: the user, 2026-10-24; underground, the land overhead, no way up: 2026-10-26)
   // D4: 3 baddies; two platforms up to the hole in C4 (jump up it)
   room("D4", { ground: [[0, 0]], plats: [[1300, 330, 300, "slab"], [880, 190, 300, "slab"]], prev: C.D3, next: C.D5 }, [["leafy", "leaf", 330], ["twiggy", "olive", 1750], ["acorn", "rust", 2200], ["pinecone", "rust", { plat: 1, x: 1030 }]]);   // (one up on the high platform too: the user, 2026-10-24)
   // D5: the hub (a checkpoint too); C5's pale green pillars hanging down into it
@@ -4147,8 +4173,78 @@ function authorWaves() {
     { row: "C", x0: CX(6) + 1700, x1: CX(6) + 2900, top: 20, z: -4.6, cave: 2300, home: "C6", salt: 119 },
     { row: "D", x0: CX(1) - 400, x1: CX(1) + 2900, top: -40, z: -7, salt: 121 }, { row: "D", x0: CX(2) - 400, x1: CX(2) + 1500, top: -60, z: -5, salt: 123 },
     { row: "D", x0: CX(4) + 550, x1: CX(5) + 300, top: -300, z: -4.3, salt: 125 }, { row: "D", x0: CX(5) - 200, x1: CX(8) + 2150, top: -300, z: -5.2, salt: 127 } ];
-  W.fixedBuddies = { ...(W.fixedBuddies || {}), stilt: C.A3 };   // (the sheet's berry buddies: Stilt in the crow's nest, always; the sheet's second, in B8's cave, waits for a buddy of its own. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward")
+  W.buddySpots = [C.A3, C.B8];                       // (the sheet's berry buddies' spots: the crow's nest and B8's cave. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward"; who's there picked each stay, 2026-10-26)
   W.authored = true; W.rosterThin = null; mapGridC.delete(1);
+}
+// ── Crux's city, rebuilt (the user, 2026-10-26: "rebuild Crux's world to start on the bottom level but it escalates to sky scrapers up in row b and A being
+// rooftops of sky scrapers mostly. but it should all feel very high"). In at the bottom, the street (D1, the hub; the city's on a mesa, the clouds far under
+// it); up the fire escapes onto the terraces (row C), the skyscrapers' upper floors and their girders (row B), and on top, the rooftops (row A). Its three ways
+// out: along the street to the lakebed (D8), up on the rooftops to King P's (A8), and the long way back along them, west, to Kesh's garden (A1). Crux at each
+const CRUX_ELEV = { A: 5.5, B: 3.67, C: 1.83, D: 0 };     // (a row's height over the one under it, as Cuss' Waves: the cloud sea, the far city one place seen from every row)
+function authorCrux() {
+  const w = 7, W = WORLDS[w], S0 = W.stages, R0 = W.roster, at = c => S0.findIndex(q => q.cell === c && !q.arena && !q.cut);
+  const C = {}; for (const r of "ABCD") for (let c = 1; c <= 8; c++) C[r + c] = at(r + c);
+  if (Object.values(C).some(i => i < 0)) { console.warn("crux: a room's missing", C); return; }
+  const WEST = S0[C.D1].toWorld ?? 5, NORTH = S0[C.B8].toWorld ?? 12, EAST = S0[C.C8].toWorld ?? 8, foe0 = (S0.find(q => q.boss && !q.arena) || {}).foe ?? 0;
+  if (S0[0].cell !== "D1") { const i1 = C.D1, c0 = S0[0].cell; S0[0].cell = "D1"; S0[i1].cell = c0; C[c0] = i1; C.D1 = 0; }   // (the way in is D1, the street, room 0)
+  const KEEPK = new Set(["h", "col", "foe", "gen", "like", "deepNew", "cell", "name"]);
+  const room = (c, o, roster) => { const q = S0[C[c]]; Object.keys(q).forEach(k => { if (!KEEPK.has(k)) delete q[k]; });
+    Object.assign(q, { authored: true, noDress: true, elev: CRUX_ELEV[c[0]], plats: [], ground: [[0, 0]] }, o); R0[C[c]] = roster || []; return q; };
+  const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
+  const lad = (u, l, x) => { const U = S0[C[u]], L = S0[C[l]]; U.gaps = [...(U.gaps || []), [x, x + 140]].sort((a, b) => a[0] - b[0]); Object.assign(U, { below: C[l], down: C[l], downX: x, downWall: -1 }); Object.assign(L, { up: C[u], upX: x + 15 }); };   // (a hatch in u's floor, the ladder up out of l through it)
+  const drop = (u, l, a, b) => { const U = S0[C[u]]; U.gaps = [...(U.gaps || []), [a, b]].sort((p, q) => p[0] - q[0]); U.below = C[l]; };   // (a gap down into the room under it)
+  const T = "toon", e = (k, col, x, mini) => mini ? [T + k, col, x, "mini"] : [T + k, col, x];
+  // ── row D: the street, the bottom of the city. The hub, the café, the beps' door, the avenue on east to the lakebed
+  nm(room("D1", { hub: 1, peace: true, next: C.D2, plats: [[1500, 330, 220, "ledge"]], set: [{ k: "plaza" }] }), "HUB");
+  nm(room("D2", { hub: 2, peace: true, prev: C.D1, next: C.D3, plats: [[800, 320, 220, "ledge"], [1700, 300, 200, "sign"]] }), "HUB");
+  room("D3", { prev: C.D2, next: C.D4, plats: [[420, 330, 200, "sign"], [1050, 300, 240, "ledge"]] }, [e("pip", "smoke", 700), e("hat", "ink", 1350), e("spring", "ash", 2250)]);
+  nm(room("D4", { rest: true, peace: true, restX: 1300, prev: C.D3, next: C.D5, plats: [[600, 320, 200, "ledge"]], set: [{ k: "cafe", x: 1900 }] }), "REST STOP");
+  room("D5", { prev: C.D4, next: C.D6, plats: [[400, 330, 200, "sign"], [1450, 290, 240, "ledge"], [2150, 330, 160, "sign"]] },
+    [e("hose", "ink", 800), e("big", "ash", 1700, true), e("prop", "smoke", { plat: 1, x: 1570 })]);
+  room("D6", { prev: C.D5, next: C.D7, bep: { trail: 760, zone: 230, left: 20, kind: "door" }, plats: [[1500, 300, 220, "ledge"], [2050, 320, 180, "sign"]] },
+    [e("dizzy", "snow", 1700), e("pip", "ink", 2300)]);
+  room("D7", { prev: C.D6, next: C.D8, plats: [[420, 320, 220, "ledge"], [1850, 300, 220, "sign"]], items: [["fruit", 2350]] }, [e("swap", "smoke", 750), e("hat", "snow", 1550), e("prop", "ash", 2200)]);
+  room("D8", { prev: C.D7, boss: true, bossX: 1900, toWorld: EAST, foe: foe0, plats: [[500, 330, 220, "ledge"]] });
+  // ── row C: the terraces, a block's height up: walkways along the towers, their fire escapes, the window cleaners' cradles
+  room("C1", { noLeft: true, next: C.C2, plats: [[700, 320, 200, "fire"], [1500, 300, 220, "fire"]], items: [["gum", 600]], set: [{ k: "tower", side: -1 }] }, [e("pip", "snow", 1200), e("hose", "smoke", 2100)]);
+  room("C2", { prev: C.C1, next: C.C3, plats: [[550, 320, 200, "fire"], [1160, 300, 180, "cradle"], [1850, 310, 200, "sign"]] },
+    [e("hat", "ash", 750), e("prop", "ink", { plat: 1, x: 1250 }), e("spring", "smoke", 2200)]);
+  room("C3", { prev: C.C2, next: C.C4, plats: [[450, 330, 200, "fire"], [1050, 290, 240, "sign"]] }, [e("dizzy", "ink", 800), e("pip", "ash", 1350), e("hose", "snow", 2300)]);
+  room("C4", { prev: C.C3, noRight: true, plats: [[1400, 320, 200, "fire"], [2000, 290, 200, "cradle"]], set: [{ k: "tower", side: 1 }] },   // (a tower in the way at its end: up to the girders, or back)
+    [e("swap", "smoke", 1300), e("hat", "ink", 1800), e("pip", "snow", { plat: 1, x: 2100 })]);
+  room("C5", { noLeft: true, next: C.C6, plats: [[700, 320, 200, "cradle"], [1350, 300, 220, "fire"]], set: [{ k: "tower", side: -1 }] }, [e("spring", "ink", 1000), e("hose", "ash", 2100)]);
+  room("C6", { prev: C.C5, next: C.C7, bep: { trail: 760, zone: 230, left: 20, kind: "door" }, plats: [[1500, 300, 200, "sign"], [2100, 320, 180, "fire"]] }, [e("prop", "smoke", 1750), e("dizzy", "ash", 2300)]);
+  room("C7", { prev: C.C6, next: C.C8, plats: [[450, 320, 200, "fire"], [1850, 300, 200, "cradle"]] }, [e("hat", "smoke", 700), e("pip", "ink", 1600), e("swap", "snow", 2350)]);
+  room("C8", { prev: C.C7, noRight: true, secret: { who: "camila", x: SECRET_X }, set: [{ k: "tower", side: 1 }], plats: [[550, 320, 200, "fire"], [1100, 290, 200, "sign"]] }, [e("big", "ink", 800), e("pip", "smoke", 1400)]);
+  // ── row B: the skyscrapers' upper floors, half built: steel decks and girders, the cranes, a sky bridge, the clouds under them
+  room("B1", { noLeft: true, next: C.B2, plats: [[700, 310, 220, "girder"], [1500, 290, 200, "girder"]], set: [{ k: "tower", side: -1 }] }, [e("hat", "ash", 1100), e("spring", "ink", 2000)]);
+  nm(room("B2", { rest: true, peace: true, restX: 1300, prev: C.B1, next: C.B3, set: [{ k: "crane", x: 2000 }] }), "REST STOP");
+  room("B3", { prev: C.B2, next: C.B4, plats: [[450, 320, 200, "girder"], [1100, 280, 160, "skiff"], [1850, 310, 200, "girder"]] },
+    [e("pip", "snow", 700), e("prop", "smoke", { plat: 1, x: 1180 }), e("hose", "ink", 2200)]);
+  room("B4", { prev: C.B3, next: C.B5, plats: [[1500, 300, 220, "girder"], [2100, 320, 180, "girder"]] }, [e("dizzy", "smoke", 600), e("swap", "ink", 1650), e("hat", "snow", 2300)]);
+  room("B5", { prev: C.B4, next: C.B6, plats: [[500, 310, 200, "girder"], [1640, 290, 140, "skiff"], [2200, 320, 180, "girder"]] },
+    [e("big", "smoke", 1000, true), e("prop", "ink", { plat: 1, x: 1700 }), e("pip", "ash", 2350)]);
+  room("B6", { prev: C.B5, next: C.B7, plats: [[450, 320, 200, "girder"], [2000, 300, 220, "girder"]], set: [{ k: "crane", x: 1000 }] }, [e("spring", "smoke", 700), e("hat", "ink", 1900), e("hose", "snow", 2350)]);
+  room("B7", { prev: C.B6, next: C.B8, plats: [[600, 300, 220, "girder"], [1450, 270, 200, "sign"]], items: [["power", 1550, 270]] }, [e("swap", "ash", 850), e("dizzy", "ink", 1650), e("pip", "smoke", 2350)]);
+  room("B8", { prev: C.B7, noRight: true, secret: { who: "rose", x: SECRET_X }, set: [{ k: "tower", side: 1 }], plats: [[600, 310, 200, "girder"], [1150, 280, 220, "girder"]] }, [e("hat", "smoke", 850), e("prop", "snow", 1450)]);
+  // ── row A: the rooftops, up over everything: water tanks, bulkheads, the aerials; the cloud sea a long way down. Kesh's garden west, King P's north
+  room("A1", { exitLeft: true, boss: true, bossX: 420, bossLeft: true, toWorld: WEST, foe: foe0, next: C.A2, plats: [[1500, 320, 220, "roof"]] });
+  room("A2", { prev: C.A1, next: C.A3, plats: [[600, 300, 200, "roof"], [1900, 310, 220, "sign"]], items: [["fruit", 700, 300]] }, [e("pip", "ink", 900), e("hose", "smoke", 1650), e("spring", "ash", 2300)]);
+  room("A3", { prev: C.A2, next: C.A4, plats: [[650, 280, 220, "tank"], [1550, 320, 200, "roof"]] }, [e("hat", "smoke", 1100), e("prop", "ink", { plat: 0, x: 760 }), e("dizzy", "snow", 2150)]);
+  room("A4", { prev: C.A3, next: C.A5, plats: [[500, 310, 200, "roof"], [1180, 300, 140, "skiff"], [2000, 290, 220, "tank"]] }, [e("swap", "smoke", 800), e("pip", "ash", { plat: 1, x: 1250 }), e("hose", "ink", 2350)]);
+  room("A5", { prev: C.A4, next: C.A6, plats: [[700, 300, 220, "tank"], [1600, 320, 200, "roof"]], items: [["gum", 1700, 320]] }, [e("big", "ink", 1200, true), e("spring", "snow", 2200)]);
+  room("A6", { prev: C.A5, next: C.A7, plats: [[500, 320, 200, "roof"], [2050, 300, 200, "sign"]] }, [e("hat", "ink", 800), e("prop", "smoke", 1900), e("pip", "snow", 2350)]);
+  nm(room("A7", { rest: true, peace: true, restX: 1200, prev: C.A6, next: C.A8, plats: [[1800, 300, 220, "tank"]] }), "REST STOP");
+  room("A8", { prev: C.A7, boss: true, bossX: 1300, toWorld: NORTH, foe: foe0, plats: [[500, 320, 220, "roof"], [2000, 310, 200, "roof"]], set: [{ k: "helipad", x: 1300 }] });
+  // ── the ways up and down: ladders up the fire escapes and the towers' faces, through hatches; gaps down between the buildings
+  lad("C3", "D3", 1700); lad("C7", "D7", 1200);          // (up the fire escapes, off the street)
+  lad("B4", "C4", 900);                                  // (up the tower in C4's way, onto the girders)
+  lad("A6", "B6", 1400);                                 // (and up onto the rooftops)
+  drop("C2", "D2", 1100, 1300); drop("B3", "C3", 1000, 1220); drop("B5", "C5", 1600, 1800); drop("B7", "C7", 2000, 2200); drop("A2", "B2", 1300, 1500); drop("A4", "B4", 1100, 1300);
+  CRATE_AT[w] = [[C.D3, 1900], [C.D7, 1300], [C.C2, 1900], [C.C6, 1250], [C.B4, 1100], [C.B7, 2000], [C.A3, 1300], [C.A5, 2300]];
+  S0.forEach(q => { if (q.arena) Object.assign(q, { back: C.A8, elev: CRUX_ELEV.A, noDress: true }); });   // (the final showdown: up on the rooftops, back out to King P's door)
+  W.buddySpots = [C.B1, C.C7];                           // (the berry buddies' spots: the girders' west end, the terraces east. My pick, the user 2026-10-26 "for the other worlds, you decide")
+  W.authored = true; W.rosterThin = null; mapGridC.delete(w);
 }
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
@@ -4923,6 +5019,32 @@ Object.assign(KIT.STRIKES, {
       bodyY: [[0, -.2], [.16, -.12], [.22, -.36], [.36, -.33], [.6, -.1]], fNx: [[0, .2], [.16, .2], [.22, .12], [.44, .12], [.6, .37]], fFx: [[0, -.54], [.16, -.54], [.22, -.66], [.44, -.62], [.6, -.4]],
       hF: [[0, .6], [.2, .9], [.46, .7], [.6, .5]] } },
 });
+// the running attack (the user, 2026-10-26: "add an attack that all player-controlled characters do if you press the attack button when they are running at full
+// speed. for camila, have her do a lunge forward with her fist where she jumps off the ground and goes straight at an opponent. for rose have her jump and drop down a
+// slash on the opponent in front of her"): at a sprint, attack. The fists: up off the ground, flat out, fist first into them (run_lunge); a sword: up, and down onto
+// them blade first (run_drop); Tocsin his card dash. Aimed at the nearest thing ahead (runAttack)
+const RUN_ATK = { sword: "run_drop" }, runAtkOf = sp => sp.base === "cat" ? "carddash" : RUN_ATK[sp.move.set] || "run_lunge";
+Object.assign(KIT.STRIKES, {
+  run_lunge: { dur: .62, step: 700, hop: -480, slide: .38, sq: -.12, sfx: "whoosh", hits: [{ t0: .08, t1: .4, reach: 95, back: -8, y0: 130, y1: 40, kind: "haymaker" }],   // Camila: a flying punch, the gauntlet out in front
+    keys: { lean: [[0, .3], [.06, .95], [.36, 1.0], [.46, .45], [.62, .25]], arch: [[0, 0], [.06, -.2], [.36, -.2], [.46, .1], [.62, 0]], bodyY: [[0, -.1], [.06, 0], [.4, 0], [.48, -.32], [.62, -.1]],
+      armF: [[0, .5], [.06, 1.55], [.36, 1.55], [.46, 1.1], [.62, .55]], elbF: [[0, 1.3], [.06, 0], [.36, 0], [.46, .8], [.62, 1.3]], aS: [[0, 0], [.06, .2], [.32, .2], [.42, 0]], gF: [[0, 0], [.06, .35], [.34, .3], [.46, 0]],
+      armB: [[0, .6], [.06, -.9], [.36, -.9], [.46, .3], [.62, .7]], elbB: [[0, 1.3], [.06, .6], [.36, .6], [.62, 1.3]], headRot: [[0, 0], [.06, -.3], [.36, -.3], [.46, 0]],
+      fNx: [[0, .3], [.06, -.2], [.36, -.25], [.46, .35], [.62, .3]], fNy: [[0, 0], [.06, .35], [.36, .35], [.46, 0], [.62, 0]], fFx: [[0, -.3], [.06, -.6], [.36, -.62], [.46, -.35], [.62, -.3]], fFy: [[0, 0], [.06, .5], [.36, .5], [.46, 0], [.62, 0]],
+      fP: [[0, 0], [.06, .6], [.36, .6], [.46, 0]] } },
+  run_drop: { dur: .74, step: 360, hop: -640, dive: [.3, 900], slide: .22, sq: .12, sfx: "slash", sfx2: [.32, "whoosh"],   // Rose: up off the run, blade high over her head, and down onto them
+    hits: [{ t0: .28, t1: .46, reach: 110, back: 20, y0: 160, y1: -40, kind: "smash" }, { t0: .46, t1: .56, reach: 125, back: 60, y0: 60, y1: -10, kind: "cleave", wide: true }],
+    keys: { armF: [[0, .6], [.1, 2.9], [.26, 3.05], [.34, .5], [.4, .3], [.6, .45], [.74, .35]], elbF: [[0, .8], [.1, .4], [.26, .3], [.34, .1], [.6, .3], [.74, 1.15]],
+      blade: [[0, .9], [.1, 2.6], [.26, 2.9], [.34, -.7], [.4, -.9], [.6, -.8], [.74, .95]], grip: [[0, .2], [.06, 1], [.62, 1], [.74, .3]],
+      armB: [[0, 1.0], [.1, 2.8], [.26, 2.95], [.34, .6], [.6, .5], [.74, 1.3]], elbB: [[0, .5], [.1, .5], [.34, .2], [.74, .45]],
+      lean: [[0, .3], [.1, -.15], [.26, -.2], [.34, .9], [.4, .75], [.6, .7], [.74, .26]], arch: [[0, 0], [.1, -.25], [.26, -.3], [.34, .3], [.74, 0]],
+      bodyY: [[0, -.1], [.1, 0], [.34, 0], [.4, -.38], [.6, -.36], [.74, -.08]], fNx: [[0, .24], [.1, .1], [.34, .1], [.4, .34], [.6, .34], [.74, .24]], fFx: [[0, -.2], [.1, -.05], [.34, -.1], [.4, -.32], [.6, -.32], [.74, -.2]],
+      fNy: [[0, 0], [.1, .3], [.34, .25], [.4, 0], [.74, 0]], fFy: [[0, 0], [.1, .26], [.34, .2], [.4, 0], [.74, 0]], fP: [[0, 0], [.1, -.5], [.34, -.3], [.4, .3], [.6, .3], [.74, 0]] } },
+});
+function runAttack(p, kind) {                       // at it: the lunge (or the jump) carries you to the nearest thing ahead, at your height, if there's one in reach
+  const S = KIT.STRIKES[kind] || KIT.CAT_MOVES[kind] || {}, T = foesAlive().filter(e => Math.sign(e.x - p.x) === p.face && !walled(e.x, p.x) && Math.abs(e.x - p.x) < 540 && Math.abs(e.y - p.y) < 140).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
+  if (!T || !S.hop) return; const air = 2 * -S.hop / (GRAV * WEIGHT), d = Math.abs(T.x - p.x) - 50;   // (its time in the air)
+  p.vx = p.face * clamp(d / Math.max(.2, kind === "run_drop" ? air * .55 : air), kind === "run_drop" ? 180 : 420, 980);
+}
 const OWN_SETS = { camila: { ground: ["cpunch", "ccross", "csmash"] }, rose: { ground: ["rslash", "rrise", "rcleave"] } };   // their own combos on the ground: Camila jab, hook, haymaker (2026-10-24: her Move Maker keeps, the lunge hook one-two and the haymaker-and-hook, in place of the jab and hook); Rose slash, rising cut, cleave (the user, 2026-10-20)
 Object.assign(KIT.STRIKES, {
   slide: { dur: .52, step: 600, slide: .3, sq: -.12, sfx: "whoosh", hits: [{ t0: .03, t1: .34, reach: 72, back: -10, y0: 62, y1: -10, kind: "sweep", wide: true }],   // ↓ then attack: a slide, feet first, low under them
@@ -5023,7 +5145,7 @@ function hideFoe(f) { f.rig.root.visible = f.rig.shadow.visible = false; if (f.r
 function showFoe(f) { f.rig.root.visible = f.rig.shadow.visible = true; if (f.rig.groundGlow) f.rig.groundGlow.visible = true; }
 FOES.forEach(hideFoe);
 function makeFoeState(def, x, z = 0) {
-  const hp = (def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + (world === 9 ? 0 : ENEMY_HP_UP);   // (Noro and Doir on the beach: without the +4, 2026-10-23)   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
+  const hp = ((def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + (world === 9 ? 0 : ENEMY_HP_UP)) * HP_X;   // (Noro and Doir on the beach: without the +4, 2026-10-23)   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
   return { def, x, z, y: GROUND, vx: 0, vy: 0, dir: -1, onGround: true, hp, maxHp: hp, inv: 0, flash: 0, sq: 0, sqv: 0, yaw: -Math.PI + .5,
     phase: 0, think: 1.4, windup: 0, jumpVx: 0, jumpVy: 0, plat: null, edge: null, hurtT: 0, dead: false, deathT: 0, gone: false, puffT: 1,
     atk: null, atkTm: 0, atkCd: 3, emitT: 0, emitN: 0, actT: 0, chains: {} };
@@ -5336,7 +5458,8 @@ window.BerryGame = { store, shippedSpecs, toast, THREE, setOf, KIT,
         if (sid === id && !(A && A.kit)) ALLY_RIGS[k].spec.move = { ...ALLY_RIGS[k].spec.move, anims: anims ? JSON.parse(JSON.stringify(anims)) : undefined }; }
       return true; },
   },
-  buddySpecial: id => KIT.BUDDY_SP[id] || null,     // (a hero's spec id too: Doir's, a buddy at the castle)
+  buddySpecial: id => KIT.BUDDY_SP[id] || null,
+  runAttackOf: sp => runAtkOf(sp),                   // (the running attack: a hero's, by their move set)     // (a hero's spec id too: Doir's, a buddy at the castle)
   villains: {                                     // for the character editor
     list() { const F = WORLDS.flatMap(W => W.foes()).filter(f => !f.kit); F.forEach(applyVillainLook);
       return F.map(f => ({ id: f.id, name: f.name, h: f.h0 || f.h, cols: f.rig.mats0.slice() })); },
@@ -5520,7 +5643,7 @@ function castBerry(q) {
       if (a === "pop" && b.deathT > .3) { r.root.visible = r.shadow.visible = false; if (r.segRoot) r.segRoot.visible = false; }   // (popped: gone, then back again)
     },
     facts: () => npc ? [["WHAT", q.sub]] :
-      [["SIZE", { S: "SMALL", M: "MEDIUM", B: "BIG", G: "GIANT" }[T.size] || T.size], ["HIT POINTS", Z.hp + ENEMY_HP_UP + BB_HP_MORE], ["SPEED", T.speed], ["MOVES", castName(mv)], ["ATTACK", T.atk ? castName(T.atk) : "NONE"],
+      [["SIZE", { S: "SMALL", M: "MEDIUM", B: "BIG", G: "GIANT" }[T.size] || T.size], ["HIT POINTS", (Z.hp + ENEMY_HP_UP + BB_HP_MORE) * HP_X], ["SPEED", T.speed], ["MOVES", castName(mv)], ["ATTACK", T.atk ? castName(T.atk) : "NONE"],
        ["COLOUR", q.sub], ["ROOMS", q.rooms.size + " IN THIS WORLD"]],
     dispose() { castRelease(); if (b) disposeBaddy(b); b = null; },
   };
@@ -5715,7 +5838,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
 function writeSave() {
   if (pro || (rideS && rideS.road)) return;          // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -5831,7 +5954,7 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true, cells = null) 
   if (marks) WORLDS[w].stages.forEach((qh, hs) => { if (!qh.bep || !hideFound(w, hs)) return; const a = M.at[hs];   // the beps' hideouts, found: their signs
     if (a && seen.has(hs)) { const B = WORLDS[w].stages[hs].bep, sx = X(a[0], B.zone), sy = Y(a[1], (stageGround(WORLDS[w].stages[hs], B.zone) ?? GROUND) - 30), z = 4.5 * k;
       mapSign(g, sx, sy, z, k); drawn.add("sign"); } });
-  if (marks) ALLIES.filter(AL => AL.w === w).forEach(AL => { const rm = buddyAt.w === w ? buddyAt.rooms[AL.id] ?? -1 : -1, a = rm >= 0 && M.at[rm];   // this world's berry buddies, where they are now (in rooms you've been in)
+  if (marks) ALLIES.forEach(AL => { const rm = buddyAt.w === w ? buddyAt.rooms[AL.id] ?? -1 : -1, a = rm >= 0 && M.at[rm];   // this world's berry buddies, where they are now (in rooms you've been in)
     if (a && seen.has(rm) && !allyWith(AL)) { const sx = X(a[0], WORLD / 2), sy = Y(a[1], (stageGround(WORLDS[w].stages[rm], WORLD / 2) ?? GROUND) - 40), z = 4.2 * k;
       mapBuddy(g, sx, sy, z, k, AL.col); drawn.add("buddy"); } });
   return drawn;
@@ -5994,11 +6117,13 @@ function menuKey(e) {
 }
 function slotBack() { SFX.tick(); if (slotKind === "del") showSlots(slotFrom); else showMainMenu(); }   // (out of DELETE A FILE: back to the files it came from)
 function storyNew(slot, id) { tamed = tamed2 = null; alliesOff(); mapSeen = {}; story = { slot, char: id, t: 0, visited: new Set([0]), uprise: {} }; storyRun(0, 0, true); }
-const LAYOUT = 14;                                  // the worlds' layout a save was made on (8 columns since 2026-10-24, 12 the day before; the forest hand-made): an older one's rooms aren't where they were
-function storyLoad(slot, q) { if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
+const LAYOUT = 15;                                  // the worlds' layout a save was made on (8 columns since 2026-10-24, 12 the day before; the forest hand-made): an older one's rooms aren't where they were · 15: Crux's city rebuilt (2026-10-26)
+function storyLoad(slot, q) { if (q.layout === 14) { const dw = o => { const r = { ...(o || {}) }; delete r[7]; return r; };   // (14 to 15: only Crux's city changed, its own rooms anew)
+    q = { ...q, layout: LAYOUT, s: q.w === 7 ? 0 : q.s, rests: dw(q.rests), hubs: dw(q.hubs), lastDoor: dw(q.lastDoor), seen: dw(q.seen), hideouts: dw(q.hideouts), check: q.check && q.check.w === 7 ? null : q.check }; }
+  if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -6483,6 +6608,7 @@ function buildRoad() {                               // the coast road at sunset
   return R;
 }
 function roadTick(R, dt) {                           // (every frame: the coast going by, the wheels turning, the body on its springs, them riding)
+  if (dt > 0) guaguaSound(R);                       // (its hum and its brakes: the prologue's ride too)
   R.t += dt; R.seaM.uniforms.uT.value = R.t;
   if (R.zoomIn && R.zk < 1) { R.zk = approach(R.zk, 1, dt / 1.8); const e = R.zk * R.zk * (3 - 2 * R.zk); for (const k in R.camW) proCam[k] = lerp(R.camW[k], R.camC[k], e); }   // (the camera easing in)
   for (const o of R.scroll) { o.position.x -= ROAD_V * dt; if (o.position.x < R.cx - R.span) o.position.x += 2 * R.span; }
@@ -6577,7 +6703,7 @@ function rideSkip() { const P = rideS; if (!P || !["in", "drive"].includes(P.ph)
   if (E && ["outA", "outB", "inB"].includes(E.ph)) return; if (rideAskCb) rideAnswer(false);
   SFX.tick(); P.ph = "end"; P.t = 0; $("skipHint").classList.remove("show"); }   // (Enter / Esc / Start, or SKIP: on into the world)
 function rideSeats(oth0) {                           // who's in La Guagua and where (the user, 2026-10-26): with a buddy, the buddy drives; on your own, Camila drives. The pets ride in the bed
-  const me = story.char || "camila", other = me === "rose" ? "camila" : "rose", R = [], mine = { st: player, r: rig };
+  const me = (story && story.char) || "camila", other = me === "rose" ? "camila" : "rose", R = [], mine = { st: player, r: rig };   // (free play: Camila)
   const oR = roster.find(q => q.id === other), oth = oth0 || (oR ? { st: makeState(0, oR), r: oR } : null), girl = id => id === me ? mine : oth;
   const people = []; allies.forEach(a => [a, ...(a.crew || [])].forEach(m => people.push({ st: m.st, r: m.r })));
   const seat = (c, o) => { if (c) R.push({ ...c, ...o }); }, CAB = { look: true, sit: 1 }, SPOT = { pass: CAB, back: CAB, camila: { sit: 1 }, rose: { hold: true }, bed0: { sit: 1 }, bed1: { sit: 1 } };
@@ -6636,8 +6762,24 @@ function rideFill(R, s, K) {                         // a slot's piece: one of t
   const L = K[s.row] || []; if (!L.length) return; const g = rPick(R.rng, L)(R.rng); if (!g) return;
   R.G.add(g); g.position.set(s.x, s.row === "back" ? -.4 : 0, s.z); g.rotation.y += (R.rng() - .5) * .6; if (s.row === "mid") g.scale.multiplyScalar(.85 + R.rng() * .3); s.g = g;
 }
+// La Guagua's sound (the user, 2026-10-26: "find a license free car driving hum sound to play whenever it is on screen and moving. also have a sound for when it's
+// breaking, either to be attacked or to park somewhere"): sfx.js's engine loop (CC0), pitched down to a van's hum, under the road while it moves, deeper and quieter
+// slow; its brakes (CC0) as it slows to a stop. guaHumTick lets it die away once the road's not going by
+const guaHum = { src: null, g: null, want: 0, rate: .55, seen: -9 };
+function guaHumTick(dt) {
+  if (performance.now() - guaHum.seen > 250) guaHum.want = 0;
+  if (!guaHum.src) { if (guaHum.want <= 0 || !live() || smp.state !== "ready" || !smp.bank.engine) { if (guaHum.want > 0 && smp.state === "idle") smpInit(); return; }
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); src.buffer = smp.bank.engine[0]; src.loop = true; src.playbackRate.value = guaHum.rate;
+    f.type = "lowpass"; f.frequency.value = 1100; g.gain.value = 0; src.connect(f); f.connect(g); g.connect(sfxBus); src.start(); Object.assign(guaHum, { src, g }); }
+  const G = guaHum.g.gain; G.value = approach(G.value, guaHum.want, dt * .35); guaHum.src.playbackRate.value = approach(guaHum.src.playbackRate.value, guaHum.rate, dt * .6);
+  if (guaHum.want <= 0 && G.value <= .001) { try { guaHum.src.stop(); } catch (e) { } guaHum.src = guaHum.g = null; }
+}
+function guaguaSound(R) {                          // (from the road's tick: its speed now)
+  const k = clamp(R.v / ROAD_V, 0, 1); guaHum.want = R.v > .4 ? .045 + .085 * k : 0; guaHum.rate = .5 + .32 * k; guaHum.seen = performance.now();
+  const pv = R.pv ?? R.v; if (R.v < pv - 1e-4 && pv > ROAD_V * .55 && !R.braking) { R.braking = true; smpPlay("brake", .2, { rate: .95 }); } else if (R.v >= pv) R.braking = false; R.pv = R.v;   // (pulling up: a stop on the way, an ambush, the end of the road)
+}
 function rideRoadTick(R, dt) {                       // (every frame: the road going by, from one world's look into the next's; La Guagua, and everyone in it)
-  R.t += dt; if (R.seaM) R.seaM.uniforms.uT.value = R.t;
+  R.t += dt; if (R.seaM) R.seaM.uniforms.uT.value = R.t; if (dt > 0) guaguaSound(R);
   const p = R.p, e = p * p * (3 - 2 * p), cB = R._cB || (R._cB = [new THREE.Color(R.B.ground), new THREE.Color(R.B.verge), new THREE.Color(R.B.far || R.B.ground)]);
   R.mG.color.set(R.A.ground).lerp(cB[0], e); R.mV.color.set(R.A.verge).lerp(cB[1], e); R.mF.color.set(R.A.far || R.A.ground).lerp(cB[2], e);
   if (!R.holdBand) { const k = clamp((p - .35) / .3, 0, 1), y0 = R.A.sea ? -1.8 : -.05, y1 = R.B.sea ? -1.8 : -.05; R.farBand.position.y = lerp(y0, y1, k * k * (3 - 2 * k)); }   // (the far land sinking under the sea, or coming up out of it)
@@ -7803,10 +7945,10 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
     if (back) trail.pop(); else trail.push(ns);
     entrySide = "top"; entryHi = false; clockEnter(ns); setScreen(ns);
     let x = clamp(fx, 60, WORLD - 60);                                              // straight down: onto the ledge under where you fell (or the ground, or the nearest there is)
-    const ledge = PLATFORMS.filter(q => fx > q.x - 420 && fx < q.x + q.w + 420 && q.y < (groundAt(q.x + q.w / 2) ?? GROUND) - 60 && !CEILS.some(([c0, c1]) => q.x < c1 && q.x + q.w > c0))
+    const ledge = PLATFORMS.filter(q => fx > q.x - 420 && fx < q.x + q.w + 420 && q.y < (groundAt(q.x + q.w / 2) ?? GROUND) - 60 && !CEILS.some(([c0, c1, , hd]) => !hd && q.x < c1 && q.x + q.w > c0))
       .sort((a, b) => Math.abs(a.x + a.w / 2 - fx) - Math.abs(b.x + b.w / 2 - fx))[0];
     if (world === 1 && STAGES[ns].authored) x = clamp(fx, 60, WORLD - 60); else if (ledge) x = clamp(fx, ledge.x + 24, ledge.x + ledge.w - 24); else
-    for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null) && !CEILS.some(([c0, c1]) => v > c0 - 50 && v < c1 + 50)); if (c !== undefined) { x = c; break; } }
+    for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null) && !CEILS.some(([c0, c1, , hd]) => !hd && v > c0 - 50 && v < c1 + 50)); if (c !== undefined) { x = c; break; } }
     const gy = groundAt(x) ?? GROUND, dp = !!STAGES[ns].deep;
     if (dp) x = clamp(fx, 60, WORLD - 60);                                          // (the deep: straight on down through the water, where you were)
     Object.assign(player, { x, y: dp ? DEEP_TOP + 40 : rs === 1 ? Math.min(fy - ROW_H, gy - 60) : gy - 430, vx: 0, vy: dp ? Math.min(vy, 240) : vy,   /* (stitched: on down from where you were, a row's height up the room below) */ face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, sunkT: 0, sunk: false, hurtT: 0,
@@ -7985,9 +8127,9 @@ function updateEJ(dt) {                              // the partner: at your sid
     if (ej.tgt && !ej.hit && s.atkT >= (h ? h.t0 : .1)) { ej.hit = true; const b = ej.tgt;
       const D2 = duo && duo.find(d => d.e === b); if (D2) { if (!b.dead && !b.gone && Math.abs(b.x - s.x) < 130) withBoss(D2, () => hitEnemy(s.face, "punch")); } else if (!b.dead && !b.gone && !walled(b.x, s.x) && Math.abs(b.x - s.x) < 110 && Math.abs(b.y - s.y) < 120) { b.inv = 0; hitBaddy(b, s.face, "slash"); sparks(b.x - s.face * b.hw * .5, b.y - b.h * .55, 6); } }
     s.vx = approach(s.vx, 0, 1400 * dt);
-    if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ej.tgt = null; ej.atkCd = rand(.9, 1.5); }
+    if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ej.tgt = null; ej.atkCd = rand(1.7, 2.5); }
   } else {
-    const tgt = ej.atkCd <= 0 && !p.dead && s.wave <= 0 ? [...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && !walled(b.x, s.x) && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
+    const tgt = ej.atkCd <= 0 && !p.dead && s.wave <= 0 && youFight() ? [...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && !walled(b.x, s.x) && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
     if (tgt) {                                       // one of the room's baddies close by: at it
       s.face = Math.sign(tgt.x - s.x) || s.face; s.sprint = true;
       if (Math.abs(tgt.x - s.x) < 66 && s.onGround) { s.sprint = false; ej.tgt = tgt; ej.hit = false; startStrike(s, first); }
@@ -8292,8 +8434,9 @@ function spawnCrates() {
   const tb = STAGES[stage].berry, tid = world + ":" + stage + ":tree"; if (tb && !healTaken.has(tid)) spawnHealBerry(tb[0], tb[1], tid, false);   // (a berry up a tree)
   spawnRoomItems();                                  // (and the world's items lying about, if one's here)
   spawnSecret();                                     // (and a hero's wall, in one of their rooms)
+  spawnStatue();                                     // (and Glos's statue, in the woods' B4)
 }
-function clearCrates() { clearLoot(); const drop = g => { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }; crates.forEach(c => drop(c.g)); healBerries.forEach(b => drop(b.g)); crates = []; healBerries = []; }   // (their geometry freed too)
+function clearCrates() { clearLoot(); clearStatue(); const drop = g => { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }; crates.forEach(c => drop(c.g)); healBerries.forEach(b => drop(b.g)); crates = []; healBerries = []; }   // (their geometry freed too)
 function spawnHealBerry(x, y, id, pop) {             // a fat red berry with a green crown, bobbing; it hops out of a broken container
   const g = group(actors); g.add(mk(new THREE.IcosahedronGeometry(.24, 2), null, { mat: HEAL_M[0], ol: .03 }));
   for (let i = 0; i < 4; i++) { const lf = mk(new THREE.ConeGeometry(.06, .2, 4), null, { mat: HEAL_M[1], ol: .015 }); at(lf, Math.cos(i * 1.57) * .07, .25, Math.sin(i * 1.57) * .07); lf.rotation.z = Math.cos(i * 1.57) * -.6; lf.rotation.x = Math.sin(i * 1.57) * .6; g.add(lf); }
@@ -8308,8 +8451,72 @@ function hitCrate(c, d) {
     parts.push({ m, v: V(rand(-6, 6) + d * 2, rand(4, 10), rand(-3, 3)), life: rand(.6, 1), t: 0, size: rand(.7, 1.3), g: 24, spin: 10, drag: .3, kind: "drop" }); }
   spawnHealBerry(c.x, c.y, c.id, true); return true;
 }
+// ── Glos's statue, in the woods' B4 (the user, 2026-10-26: "in berry woods, in b4, have a statue of glos, modeled just like her but in a confident pose and all gold
+// colored ... dont give a note that you can do it but make it breakable by the player and it stays as rubble on the ground. whenever you come back, it has been rebuilt,
+// but every time it's a little less perfect than the last time. if you've broken it 5 times, they just build the bottom of it that she stands on and its plaque. so it
+// should be a square base with a plaque and the statue stands on top of it"): her own model, all gold, her hands on her hips (GEST.proud), up on a square base with
+// a plaque. Six blows and down she comes, her pieces left lying round the base; each time you're back it's been put up again, a little worse: duller, patches of bare
+// stone, bits missing, crooked, cracks in the base. After five, the base and its plaque alone
+const STATUE_HP = 6, STATUE_MAX = 5, STATUE_K = 1.15;
+let statue = null, statueFree = 0;                     // (free play's own count)
+const statueBroke = () => story ? story.glos || 0 : statueFree;
+function plaqueTex() {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 96; const g = c.getContext("2d"); { g.fillStyle = "#5a3e1c"; g.fillRect(0, 0, 256, 96); g.fillStyle = "#8a6430"; g.fillRect(6, 6, 244, 84); g.strokeStyle = "#e8c070"; g.lineWidth = 4; g.strokeRect(12, 12, 232, 72);
+    g.fillStyle = "#ffe6a0"; g.textAlign = "center"; g.font = "bold 34px sans-serif"; g.fillText("GLOS", 128, 52); g.font = "bold 14px sans-serif"; g.fillText("OUR GLORIOUS LEADER", 128, 74); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+function statuePose(r) {                             // hands on her hips: each arm out to the side, turned in, the elbow bent back to the hip
+  r.arms.forEach((A, i) => { const sz = A.position.z >= 0 ? 1 : -1, F = r.fores && r.fores[i]; A.rotation.set(-sz * .9, sz * 1.4, -.1); if (F) F.rotation.z = 2.1; });
+}
+function clearStatue() { if (!statue) return; actors.remove(statue.g); statue.rubble.forEach(q => actors.remove(q.m)); statue = null; }
+function spawnStatue() {
+  clearStatue(); const S0 = STAGES[stage]; if (world !== 0 || !S0 || !S0.statue || stronghold || hideout) return;
+  const n = Math.min(STATUE_MAX, statueBroke()), x = S0.statue.x, gy = groundAt(x) ?? GROUND, g = group(actors), R = rngF(4400 + n * 17);
+  g.position.set(X(x), Y(gy), -1.9);
+  const stone = toon("#8a7c62"), stone2 = toon("#6e6250"), gold = toon(new THREE.Color("#e8b84a").lerp(new THREE.Color("#a8842e"), .14 * n).getStyle(), { emissive: new THREE.Color("#5a4010").multiplyScalar(1 - .17 * n) }), bare = toon("#9b9486"), ink = toon("#2a2218");
+  g.add(at(mk(new THREE.BoxGeometry(2.9, .2, 2.9), null, { mat: stone2, ol: .03 }), 0, .1, 0));   // the base: a foot, the block, a gold-edged top
+  g.add(at(mk(new THREE.BoxGeometry(2.5, 1.2, 2.5), null, { mat: stone, ol: .04 }), 0, .8, 0));
+  g.add(at(mk(new THREE.BoxGeometry(2.8, .22, 2.8), null, { mat: gold, ol: .03 }), 0, 1.5, 0));
+  const pm = toon("#ffffff"); pm.map = plaqueTex(); g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(1.7, .64), pm), 0, .82, 1.26));   // its plaque
+  for (let i = 0; i < n; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.04, .5 + R() * .4, .02), ink); c.rotation.z = (R() - .5) * 1.4; at(c, -1 + R() * 2, .5 + R() * .7, 1.262); g.add(c); }   // (cracks, more every time)
+  const S = { g, x, gy, n, hp: STATUE_HP, inv: 0, wob: 0, up: n < STATUE_MAX, rubble: [], fig: null, meshes: [] };
+  if (S.up) {
+    const f = woodFoes().find(q => q.id === "glos"), r = VILLAIN_BUILD.glos(), e = makeFoeState({ ...f, rig: r }, 0, 0); e.yaw = -Math.PI / 2 + .3; r.gest = { n: "proud", t: 1.1, rel: -1 }; r.gCd = 99;   // (her hands on her hips, chin up, the weight on one leg)
+    f.sync(e, r, 0); statuePose(r); r.root.updateMatrixWorld(true); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
+    const fig = group(g, 0, 1.61, 0); fig.add(r.root); r.root.position.set(0, 0, 0); r.root.scale.multiplyScalar(STATUE_K);
+    const meshes = []; r.root.traverse(o => { if (o.isMesh && o.material && o.material.side !== THREE.BackSide) meshes.push(o); });
+    meshes.forEach(o => { o.material = R() < .1 * n ? bare : gold; });   // all gold; bare stone where the paint's not covered it
+    if (n >= 2) { const small = meshes.slice().sort((a, b) => (a.geometry.boundingSphere || (a.geometry.computeBoundingSphere(), a.geometry.boundingSphere)).radius - (b.geometry.boundingSphere || (b.geometry.computeBoundingSphere(), b.geometry.boundingSphere)).radius).slice(0, Math.ceil(meshes.length * .5));
+      for (let k = 0; k < n - 1; k++) { const m = small[Math.floor(R() * small.length)]; m.visible = false; } }   // (bits of her missing)
+    if (n >= 3) for (let k = 0; k < n - 2; k++) { const m = meshes[Math.floor(R() * meshes.length)], v = new THREE.Vector3(); m.getWorldPosition(v); fig.worldToLocal(v);
+      const pt = mk(new THREE.BoxGeometry(.3 + R() * .3, .2 + R() * .3, .3), null, { mat: bare, ol: .02 }); at(pt, v.x, v.y, v.z + .1); pt.rotation.z = R(); fig.add(pt); meshes.push(pt); }   // (lumps of mortar where she was patched up)
+    fig.rotation.z = (n % 2 ? 1 : -1) * .035 * n; if (n >= 4) fig.scale.set(1.05, .92, 1.05);   // (crooked, then squat)
+    S.fig = fig; S.meshes = meshes;
+  }
+  statue = S;
+}
+function hitStatue(d) {
+  const T = statue; if (!T || !T.up || T.inv > 0) return false; T.inv = .15; T.wob = 1;
+  sparks(T.x - d * 30, T.gy - 160, 6); SFX.clash();
+  if (--T.hp > 0) return true;
+  T.up = false; SFX.crack(); SFX.impact(true); shake = Math.max(shake, 7); puffs(T.x, T.gy - 140, 8, 60, 160);   // down she comes
+  if (story) { story.glos = (story.glos || 0) + 1; writeSave(); } else statueFree++;
+  const big = T.meshes.filter(m => m.visible).sort((a, b) => b.geometry.boundingSphere.radius - a.geometry.boundingSphere.radius).slice(0, 10), v = new THREE.Vector3(), qt = new THREE.Quaternion(), sc = new THREE.Vector3();
+  big.forEach(m => { m.updateMatrixWorld(true); m.matrixWorld.decompose(v, qt, sc); const c = new THREE.Mesh(m.geometry, m.material); c.position.copy(v); c.quaternion.copy(qt); c.scale.copy(sc); actors.add(c);
+    T.rubble.push({ m: c, v: V(rand(-4, 4) + d * 2, rand(2, 7), rand(-1.5, 2.5)), spin: V(rand(-6, 6), rand(-6, 6), rand(-6, 6)), r: m.geometry.boundingSphere.radius * sc.x, rest: false }); });   // her pieces, flying
+  const gm = T.meshes[0] ? T.meshes[0].material : toon("#e8b84a");
+  for (let i = 0; i < 18; i++) { const c = mk(new THREE.DodecahedronGeometry(rand(.08, .2), 0), null, { mat: gm, ol: .02 }); c.position.set(X(T.x) + rand(-.6, .6), Y(T.gy) + rand(2, 4.5), -1.9 + rand(-.4, .4)); actors.add(c);
+    T.rubble.push({ m: c, v: V(rand(-5, 5), rand(2, 8), rand(-2, 2)), spin: V(rand(-8, 8), rand(-8, 8), rand(-8, 8)), r: .12, rest: false }); }   // and chips of her
+  if (T.fig) T.fig.visible = false;
+  return true;
+}
+function updateStatue(dt) {
+  const T = statue; if (!T) return; T.inv = Math.max(0, T.inv - dt); T.wob = Math.max(0, T.wob - dt * 3); if (T.fig) T.fig.rotation.x = Math.sin(T.wob * 30) * .04 * T.wob;
+  for (const q of T.rubble) { if (q.rest) continue; const m = q.m; q.v.y -= 20 * dt; m.position.addScaledVector(q.v, dt); m.rotation.x += q.spin.x * dt; m.rotation.y += q.spin.y * dt; m.rotation.z += q.spin.z * dt;
+    const fy = Y(groundAt(m.position.x / S) ?? GROUND) + q.r * .6; if (m.position.y <= fy && q.v.y < 0) { m.position.y = fy; if (Math.abs(q.v.y) < 2.5) { q.rest = true; } else { q.v.y *= -.3; q.v.x *= .5; q.v.z *= .5; q.spin.multiplyScalar(.4); } } }   // (on the ground, to stay)
+}
 function updateCrates(dt) {
-  const p = player;
+  const p = player; updateStatue(dt);
   crates.forEach(c => { c.inv = Math.max(0, (c.inv || 0) - dt); c.wob = Math.max(0, c.wob - dt * 3); c.g.rotation.z = Math.sin(c.wob * 30) * .12 * c.wob; });
   crates = crates.filter(c => !c.gone);
   for (const b of healBerries) {
@@ -8342,6 +8549,7 @@ function musicRestart() {                            // (the user, 2026-10-17: a
   const S = window.BerryScore; syncMusic(0); if (S && S.restart) S.restart(); try { orig.currentTime = 0; } catch (e) { }
 }
 function resetTrial() {
+  const ko = !!(player && player.dead), petHp = [pal, pal2].map(q => q ? q.php ?? PARTNER_HP : PARTNER_HP);   // (knocked out: your partners don't start over full as you do, each loses a heart: the user, 2026-10-26)
   if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; bossIn = false; }   // (knocked out by Noro and Doir: the room starts over)
   endCameo(); if (ej && ej.phase !== "partner") ejEnd(); exitOpen = false; transit = false; $("exitCue").classList.add("hidden"); $("fade").classList.remove("on");   // (knocked out by Evil June: she's gone)
   if (player && player.bubble) { actors.remove(player.bubble.m); player.bubble.m.geometry.dispose(); player.bubble = null; }   // (the old body's bubble goes with it, no ghost left behind)
@@ -8357,6 +8565,8 @@ function resetTrial() {
   $("banner").classList.remove("show");
   updateHearts(false); { const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect; camX = clamp(X(rx), halfW - 1, X(WORLD) - halfW + 1); }
   jumpBuf = atkBuf = 0; renderer.domElement.focus();
+  [pal, pal2].forEach((q, i) => { if (q) q.php = petHp[i]; });   // (a pet's state is a new one: its hearts as they were)
+  if (ko) { const L = partnerList(); L.forEach(P => { P.q.php = (P.q.php ?? PARTNER_HP) - 1; P.q.heartT = 2.2; }); L.forEach(P => { if (P.q.php <= 0) partnerRest(P); }); }
 }
 
 // ───────────────────────────── physics ─────────────────────────────
@@ -8518,6 +8728,7 @@ function updatePlayer(dt) {
       if (p.atkT < 0 && !sw && (p.floatB || (!p.onGround && held.down)) && KIT.CAT_DOWN) { atkBuf = 0; p.floatB = false; p.bigJ = 0; startCatMove(p, KIT.CAT_DOWN); }   // floating in the bubble: straight down
       else if (p.atkT < 0 && upAtk && KIT.CAT_UP) { atkBuf = 0; upPend = -1; p.upUsed = true; if (upFresh() && !p.onGround) p.vy = 0; startCatMove(p, KIT.CAT_UP); p.solo = true; }
       else if (p.atkT < 0 && p.onGround && held.down && KIT.CAT_MOVES.cardslash) { atkBuf = 0; startCatMove(p, "cardslash"); }   // (his slide: the card slash)
+      else if (p.atkT < 0 && p.onGround && !sw && p.sprint && Math.abs(p.vx) > 300 && KIT.CAT_MOVES.carddash) { atkBuf = 0; startCatMove(p, "carddash"); p.solo = true; }   // (at a sprint: his card dash)
       else if (p.atkT < 0) { atkBuf = 0; const L = p.onGround || sw ? KIT.CAT_GROUND : KIT.CAT_AIR, second = time - (p.lastStrikeT ?? -9) < .3; startCatMove(p, L[second ? 1 : 0], second ? 1 : 0); }
       else if (p.atkKind && p.atkIdx === 0 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; }
     }
@@ -8529,6 +8740,7 @@ function updatePlayer(dt) {
         if (air || !SET.upChain) { p.chain = null; startStrike(p, air ? SET.up : GROUND_UP[SET.up] || SET.up); p.solo = true; if (air) { p.vy = fresh ? hop : Math.min(p.vy, hop * .85); } }   // (in the air it lifts you too)
         else { p.chain = { kind: "up", list: SET.upChain, needHit: true }; startStrike(p, SET.upChain[0], 0); } }   // on the ground: the launcher, the first of three
       else if (p.atkT < 0 && p.onGround && held.down) { atkBuf = 0; p.chain = null; startStrike(p, "slide"); }   // ↓ then attack: the slide
+      else if (p.atkT < 0 && p.onGround && !sw && p.sprint && Math.abs(p.vx) > 300) { atkBuf = 0; p.chain = null; const k = runAtkOf(p.rig.spec); startStrike(p, k); p.solo = true; runAttack(p, k); }   // at a sprint: the running attack
       else if (p.atkT < 0) { atkBuf = 0; const fwd = !!(held.left || held.right), air = !p.onGround && !sw, kind = air ? (fwd ? "air2" : "air1") : (fwd ? "B" : "A");
         const L = (air ? (fwd ? SET.air2 : SET.air1) : (fwd ? SET.groundB : SET.ground)) || list, again = p.chain && p.chain.kind === kind && time - (p.lastStrikeT ?? -9) < .3 && (!p.chain.needHit || p.chainHit);
         const nx = again && (p.lastIdx ?? 0) + 1 < L.length ? (p.lastIdx ?? 0) + 1 : 0;
@@ -8754,6 +8966,7 @@ function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ cli
   else if (jumpBuf > 0 && (JUMP_KEYS.some(k => keys[k]) || pad.j) && !transit) {   // jump: let go and hop off, anywhere on it (the user, 2026-10-20: "so they dont have to climb all the way up or down"; 2026-10-25 "in general, allow the player to jump off ladder": first, so near a rope's ends too)
     const hd = (held.right ? 1 : 0) - (held.left ? 1 : 0), d = hd || (L.wall ? -L.wall : p.face || 1);
     p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.vy = -460; p.vx = d * 260; p.face = d; p.airJumps = 1; p.ladderCd = .45; SFX.jump(); }
+  else if (L.shOut && !transit && p.y <= L.top + 70) { if (exitOpen && stronghold && stronghold.key) { p.climb = null; p.climbAuto = 0; shNext(); } else p.y = L.top + 70; }   // the stronghold's ladder: out through the hatch at the top (with its key), else it holds you there
   else if (L.rope && !transit && (L.rope === "up" ? p.y <= L.top + 60 : p.y >= L.bot - 60) && !p.climbAuto) { if (ropeOpen(L)) goRoomV(L.to, L.rope === "up"); else p.y = L.rope === "up" ? L.top + 60 : L.bot - 60; }   // a rope ladder: off the top (or the bottom) into the room above (or below)
   else if (p.y <= L.top) { p.climb = null; p.climbAuto = 0; jumpBuf = 0; p.y = L.top; p.x = L.face + L.wall * 24; p.face = L.wall || p.face || 1; p.vy = 0; p.onGround = true; p.plat = L.pole || L.ledge || L.onPlat ? PLATFORMS.find(q => L.x >= q.x && L.x <= q.x + q.w && Math.abs(q.y - L.top) < 6) || null : null; p.sq = -.15; p.sqv = 0; if (L.ledge) { p.x = L.x; dust(p.x, p.y, 4); SFX.land(); } }   // (over the ledge: up on its top)
   else if (p.y >= L.bot) { p.climb = null; p.climbAuto = 0; p.y = L.bot; p.vy = 0; p.onGround = true; p.plat = PLATFORMS.find(q => L.x >= q.x && L.x <= q.x + q.w && Math.abs(q.y - L.bot) < 6) || null; }   // (the foot of a rope that stands on a platform: onto it)
@@ -8846,8 +9059,12 @@ const airCh = p => { const ch = p.chain && !p.combo ? p.chain.kind : null, S = K
 function airHold(p, ch) { p.hangT = Math.max(p.hangT || 0, ((KIT.STRIKES[p.atkKind] || {}).dur || .4) - Math.max(0, p.atkT) + .06); p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, a little lift; the forward combo drifts on)
 function airLanded(p) { if (p.strikeLanded) return; p.strikeLanded = true; const ch = airCh(p); if (ch && (p.airN = (p.airN || 0) + 1) <= AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) airHold(p, ch); }   // an air combo's blow just landed: held there
 const SWING_SILENT = new Set(["punch", "kick", "slash"]);
+// your partners only fight while you do (the user, 2026-10-26: "let's go back to any allies only attacking if you are attacking, but also they should attack at
+// less frequency than enemies do"): swinging, in a combo or a tackle, charging up, or a moment after your last swing
+const ALLY_FIGHT = 1.4;
+const youFight = () => { const p = player; return !!p && !p.dead && (p.atkT >= 0 || !!p.combo || !!p.tackle || p.chargeT > .15 || time - (p.atkAt ?? -9) < ALLY_FIGHT); };
 function startStrike(p, kind, idx = 0) {
-  const S = KIT.STRIKES[kind];
+  const S = KIT.STRIKES[kind]; if (p === player) p.atkAt = time;
   p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.atkHits = []; p.queued = false; p.bounceT = -1; p.solo = false; if (!idx) p.chainHit = false;
   if (!SWING_SILENT.has(S.sfx || "punch")) (SFX[S.sfx] || SFX.punch)();   // (the plain swings make no sound of their own now: the user, 2026-10-24, "sounds like theyre flipping switches"; the hit still lands with its sound)
   if (idx >= 1) p.lastStrikeT = -9;
@@ -8930,16 +9147,16 @@ function palDefend(q, dt) {                       // while you charge up, she gu
   const p = player; q.defT = Math.max(0, (q.defT || 0) - dt);
   if (!(p.chargeT > .15) || p.combo || p.dead || q.pounce || !q.onGround || q.defT > 0) return;
   const tgt = foesAlive().filter(e => !walled(e.x, p.x) && Math.abs(e.x - p.x) < 230 && Math.abs(e.y - p.y) < 150).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0];
-  if (tgt) { palLeap(q, tgt, .38); q.defT = 1; }
+  if (tgt) { palLeap(q, tgt, .38); q.defT = 2.6; }
 }
 // on its own too (the user, 2026-10-26: "they should all attack even if you're not attacking. have them be more engaged though not super aggressive so they
 // beat the game for you"): now and then, a pounce at a baddy near it and you (not one asleep, or off duty)
 function palHunt(q, dt) {
   const p = player; q.huntT = (q.huntT ?? 1.2) - dt;
-  if (q.huntT > 0 || p.dead || q.pounce || !q.onGround || p.combo || p.chargeT > .15) return;
+  if (q.huntT > 0 || p.dead || q.pounce || !q.onGround || p.combo || p.chargeT > .15 || !youFight()) return;
   const tgt = foesAlive().filter(e => !e.sleep && !e.calm && !walled(e.x, q.x) && Math.abs(e.x - q.x) < 380 && Math.abs(e.x - p.x) < 460 && Math.abs(e.y - q.y) < 150).sort((a, b) => Math.abs(a.x - q.x) - Math.abs(b.x - q.x))[0];
   if (!tgt) { q.huntT = .25; return; }            // (nothing near: a look again in a moment)
-  q.huntT = rand(1.8, 2.8); palLeap(q, tgt, .42);
+  q.huntT = rand(2.4, 3.4); palLeap(q, tgt, .42);
 }
 const petOf = q => petSp(q === pal2 ? tamed2 : tamed);   // (a cat, a dog, an axolotl)
 const PET_FOLLOW = { cat: [470, 580], dog: [340, 470] };   // trotting after you, catching up (the user, 2026-10-26: "when running, the cat should be faster than the dog so they don't overlap"; both were 370, 500)
@@ -8963,7 +9180,7 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
   const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = palSlot(q, i), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && k === 1 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
   if (!q.pounce && q.atkKind) { q.atkKind = null; q.atkT = -1; }   // (its special's pose, done with)
   if (campSit(q, i ? "pal2" : "pal", dt) || hideSit(q, i ? "pal2" : "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
-  if (player.combo && player.combo[mk] !== player.combo.idx) { player.combo[mk] = player.combo.idx; palPounce(q); }   // each move of the combo
+  if (player.combo && player.combo[mk] !== player.combo.idx) { player.combo[mk] = player.combo.idx; if ((q.huntT ?? 0) <= 0) { q.huntT = rand(2.4, 3.4); palPounce(q); } }   // a move of the combo (every few seconds at most)
   palDefend(q, dt); palHunt(q, dt);
   if (deepWetAt(q.y) && !q.pounce) {             // in the deep's water: it swims after you, up and down too
     const want = p.x - p.face * (75 + k * 55), wy = p.y - 20 - k * 30, ddx = want - q.x, ddy = wy - q.y, d = Math.hypot(ddx, ddy), spd = d > 260 ? 470 : 330;
@@ -9123,10 +9340,12 @@ function wildRig(w, sp = "cat") {                  // (a cat or a dog: a chibi b
 }
 const hideCatRigs = () => Object.values(WILD_RIGS).forEach(r => { r.root.visible = r.shadow.visible = false; });
 const catRoomOK = (s, sp, S = STAGES) => { const S0 = S[s]; return !S0.boss && !S0.duo && !S0.gift && !S0.bep && (!isAxo(sp) || !!S0.deep); };   // (an axolotl: only in the water)   // (not with a boss, Noro and Doir, the bep's gift, or the beps' way in)
+const PET_CHANCE = .6;                               // (how often each of a world's pets is out, a stay)
 function catStay() {                               // a new stay in this world: which hour its cat (and its dog) are out at (none of the one that's with you)
   wildClear(); catHud(false); petRuns = [];
   if (world === 9) return; const here = [...new Set(KIND_AT(world))];
   for (const sp of Object.keys(PET_DEFS)) { if (!petDef(sp, world) || [tamed, tamed2].some(t => t && t.w === world && petSp(t) === sp)) continue;
+    if (Math.random() > PET_CHANCE) continue;      // (not every stay: the user, 2026-10-26, "because we will have a fixed buddy now, let's tone down the frequency of pets a little")
     let kinds = PET_HOURS[sp].filter(k => here.includes(k)); if (!kinds.length) kinds = here;   // (a world without those hours: whenever)
     petRuns.push({ sp, w: world, kind: kinds[Math.floor(Math.random() * kinds.length)], phase: "wait", rooms: 0 }); wildRig(world, sp); }   // (built now, under the fade)
 }
@@ -9263,7 +9482,7 @@ function partnerTick(dt) {
 function teamMembers() {
   const L = [];
   [tamed, tamed2].forEach(t => { if (t) L.push({ name: petDef(petSp(t), t.w).name, kind: petNoun(petSp(t)), sort: "pet", home: () => catLeave("% HEADS HOME", t) }); });
-  allies.forEach(a => L.push({ name: a.A.name, kind: a.A.crew ? "BERRY BUDDIES" : "BERRY BUDDY", sort: "ally", home: () => { if (a.A.w === world && buddyAt.w === world) buddyAt.rooms[a.A.id] = stage; allyLeave("% HEADS HOME", a); } }));   // (sent home: it waits here for next time, as a swapped one did)
+  allies.forEach(a => L.push({ name: a.A.name, kind: a.A.crew ? "BERRY BUDDIES" : "BERRY BUDDY", sort: "ally", home: () => { if (buddyAt.w === world) { buddyAt.rooms[a.A.id] = stage; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true; } allyLeave("% HEADS HOME", a); } }));   // (sent home: it waits here for next time, as a swapped one did)
   if (ejPal() && !(teamAsk && teamAsk.noroNew)) { const nm = (EJ_DEF || {}).name || "NORO"; L.push({ name: nm, kind: "RIVAL", home: () => { ejEnd(); toast(nm + " HEADS OFF · TILL NEXT TIME", 2600); } }); }
   return L;
 }
@@ -9311,11 +9530,25 @@ let allies = [], allyHere = null, allyBring = null;   // the ones with you (two 
 const allyWith = A => allies.some(a => a.A === A), allyStates = () => allies.flatMap(a => [a.st, ...(a.crew || []).map(m => m.st)]), allyKey = k => k ? "ally" + k : "ally";   // (k: a buddy's place among them: its own stump by the fire)
 let buddyAt = { w: -1, rooms: {} };                  // where this world's berry buddies are, this stay (by id)
 const buddyOK = s => { const q = STAGES[s]; return !!q && !!q.cell && !q.boss && !q.arena && !q.duo && !q.bep; };   // (anywhere but a boss's room, the hideout's way in, Noro and Doir's)
-function allyStay() {                              // a new stay in this world: its berry buddies are each somewhere new (never two in one room)
-  buddyAt = { w: world, rooms: {} };
-  ALLIES.filter(a => a.w === world && !allyWith(a)).forEach(A => { const taken = Object.values(buddyAt.rooms), hm = (WORLDS[world].buddyHomes || {})[A.id], fx = (WORLDS[world].fixedBuddies || {})[A.id] ?? (hm ? hm[Math.floor(Math.random() * hm.length)] : undefined);
-    if (fx !== undefined) { buddyAt.rooms[A.id] = fx; (buddyAt.stay = buddyAt.stay || {})[A.id] = true; return; }   // (one with a home: always there, never wandering off. The user, 2026-10-24)
-    });   // (and no other: only the buddies the map sheets place are out, the rest wait for their world's sheet. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward. only pets will be randomly placed")
+// where the berry buddies wait (the user, 2026-10-26: "have all the non-pet buddies be placed specifically in maps, but we'll randomize which ones show up for now ...
+// so the spot is predetermined but who is there will change ... except the one that looks like vinella should be only in his factory"): each world's spots (the
+// forest's hidden cove and D4, the waves' crow's nest and B8's cave: "in berry forest we will have the one buddy that appears in the hidden beach area and the 2nd
+// buddy should be waiting in d4. in cuss' waves, we have their spots. for the other worlds, you decide for now"), and who's at each picked afresh every stay from
+// all of them. Vinnie only ever at Vinella's factory (its first spot), Doir only at King P's castle
+const BUDDY_ONLY = { vinnie: 6, doir: 12 }, SPOT_CELLS = ["C3", "B6", "C4", "B5", "C2", "B7", "D3", "A4", "C6", "B3"];
+function buddySpots() {                            // this world's spots: its own (the map's), else two of its rooms (none on the beach, or in the deep)
+  const W0 = WORLDS[world]; if (W0.buddySpots) return W0.buddySpots; if (world === 9 || world === 13) return [];
+  const out = []; for (const c of SPOT_CELLS) { if (out.length >= 2) break; const i = STAGES.findIndex(q => q && q.cell === c && !q.arena); if (i >= 0 && buddyOK(i) && !out.includes(i)) out.push(i); }
+  return out;
+}
+function allyStay() {                              // a new stay in this world: who's waiting at each of its spots this time
+  buddyAt = { w: world, rooms: {}, stay: {}, spot: {} };
+  const pool = ALLIES.filter(A => !allyWith(A) && !(A.id in BUDDY_ONLY));
+  buddySpots().forEach((sp, k) => {
+    const own = k === 0 && ALLIES.find(A => BUDDY_ONLY[A.id] === world && !allyWith(A)), L = pool.filter(A => !(A.id in buddyAt.rooms));
+    const A = own || (L.length ? L[Math.floor(Math.random() * L.length)] : null);
+    if (A) { buddyAt.rooms[A.id] = sp; buddyAt.stay[A.id] = true; buddyAt.spot[A.id] = sp; }   // (waiting there: it doesn't wander off)
+  });
 }
 function allyWander() {                            // now and then, as you go from room to room, each wanders on next door (never into your room, or another's)
   if (buddyAt.w !== world) return;
@@ -9663,7 +9896,7 @@ function alliesOff() { allies.forEach(allyHide); allyHide(allyHere); allies = []
 function allyRoom() {                              // into a room: this world's ally, if this is where it waits (and it isn't with you already)
   npcRoom(); coinHud(); patrolClear();               // (and the hub's beps, if it's one of the hub's rooms; last room's patrol gone)
   if (allyHere && !allies.some(a => a.r === allyHere.r)) allyHide(allyHere); allyHere = null;
-  const A = ALLIES.find(a => a.w === world && buddyAt.w === world && buddyAt.rooms[a.id] === stage && !allyWith(a)); if (!A || stronghold || hideout || arena || mode !== "play" || !player) return;
+  const A = ALLIES.find(a => buddyAt.w === world && buddyAt.rooms[a.id] === stage && !allyWith(a)); if (!A || stronghold || hideout || arena || mode !== "play" || !player) return;
   const r = allyRig(A); let x = Math.abs(player.x - 600) > Math.abs(player.x - (WORLD - 600)) ? rand(500, 1100) : rand(WORLD - 1100, WORLD - 500);   // (somewhere along the room, away from where you came in)
   for (let k = 0; k < 60 && (!solidAt(x) || shoreX(x) !== x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on dry ground: not the cove's water)
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: Math.sign(player.x - x) || -1 });
@@ -9677,7 +9910,7 @@ function allyJoin(A, r, st, quiet, crew) {         // it's with you now
   if (story) writeSave();
 }
 function allyToCheck(a = allies[0]) {               // a full party and someone else joins: your ally goes to wait at the last rest stop you were at in this world
-  if (!a) return; if (a.A.w !== world) { allyLeave("% HEADS HOME", a); return; }   // (the user, 2026-10-21: "send the non cat party member to a checkpoint you were at"); none yet, it heads home (and one from another world heads home)
+  if (!a) return;                                   // (the user, 2026-10-21: "send the non cat party member to a checkpoint you were at"); none yet, it heads home
   const R = story && story.rests && story.rests[world], ck = story && story.check && story.check.w === world ? story.check.s : R && R.length ? R[R.length - 1] : null;
   if (ck === null || ck === undefined || buddyAt.w !== world) { allyLeave("% HEADS HOME", a); return; }
   buddyAt.rooms[a.A.id] = ck; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true;   // (there it stays: no wandering off)
@@ -9685,7 +9918,7 @@ function allyToCheck(a = allies[0]) {               // a full party and someone 
 }
 function allyLeave(msg, a = allies[0]) {           // it heads home: off out of the picture
   if (!a) return; allies = allies.filter(q => q !== a);
-  { const fx = (WORLDS[world].fixedBuddies || {})[a.A.id]; if (fx !== undefined && buddyAt.w === world && !(buddyAt.stay && buddyAt.stay[a.A.id])) { buddyAt.rooms[a.A.id] = fx; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true; } }   // (one the map sheet places: home is its spot)
+  { const fx = buddyAt.w === world && buddyAt.spot ? buddyAt.spot[a.A.id] : undefined; if (fx !== undefined && !(buddyAt.stay && buddyAt.stay[a.A.id])) { buddyAt.rooms[a.A.id] = fx; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true; } }   // (one the map sheet places: home is its spot)
   if (msg && a.r.root.visible && mode === "play") { [a, ...(a.crew || [])].forEach(m => strays.push({ st: m.st, r: m.r, dir: a.st.x < player.x ? -1 : 1, t: 0 })); toast(msg.replace("%", a.A.name).replace(" HEADS ", a.A.crew ? " HEAD " : " HEADS "), 3200); }
   else allyHide(a);
   if (story) writeSave();
@@ -9736,10 +9969,10 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
       else if (!b.dead && !b.gone && !walled(b.x, s.x) && Math.abs(b.x - s.x) < A.reach && Math.abs(b.y - s.y) < 120) { b.inv = 0; got = hitBaddy(b, s.face, A.hit); sparks(b.x - s.face * b.hw * .5, b.y - b.h * .55, 6); }
       if (got) ally.combo = (ally.combo || 0) + 1; }   // (a plain hit landed: toward its special)
     if (!(ally.spOn && s.atkT < (S.slide || 0))) s.vx = approach(s.vx, 0, 1400 * dt);   // (a special's dash keeps its speed a while)
-    if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ally.atkCd = b === enemy ? rand(1.6, 2.4) : rand(.9, 1.5); ally.tgt = null; ally.spOn = false; }
+    if (s.atkT >= (S.dur || .45)) { s.atkT = -1; s.atkKind = null; ally.atkCd = b === enemy ? rand(2.2, 3.0) : rand(1.7, 2.5); ally.tgt = null; ally.spOn = false; }   // (were 1.6-2.4, .9-1.5: slower than a baddy's)
   } else {
     const bossT = bossIn && !duo && enemy && !enemy.dead && !enemy.gone && !enemy.chide && enemy.onGround && Math.abs(enemy.x - s.x) < 380 && Math.abs(enemy.y - s.y) < 140 ? [enemy] : [];
-    const tgt = ally.atkCd <= 0 && !p.dead && s.wave <= 0 ? [...bossT, ...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && !walled(b.x, s.x) && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
+    const tgt = ally.atkCd <= 0 && !p.dead && s.wave <= 0 && youFight() ? [...bossT, ...duoTargets().map(d => d.e).filter(e => Math.abs(e.x - s.x) < 380 && Math.abs(e.y - s.y) < 140), ...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && !b.sleep && b.happyT === undefined && !walled(b.x, s.x) && Math.abs(b.x - s.x) < 340 && Math.abs(b.y - s.y) < 110)].sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0] : null;
     if (tgt) {
       s.face = Math.sign(tgt.x - s.x) || s.face; s.sprint = true;
       if (Math.abs(tgt.x - s.x) < A.reach * .65 && s.onGround) { s.sprint = false; ally.tgt = tgt; ally.hit = false;
@@ -10771,6 +11004,7 @@ function buildFactoryFoes() {
 // They patrol, hop between platforms and come at you when you get close; pop all three and the boss drops in at the far end.
 // ATK power: every baddy you pop is +1 (up to +3), every hit you take is −1. Damage counts in half-hearts: a hit does 2 + power,
 // so the boss (10) still takes 5 hits at +0 but only 2 at +3.
+const HP_X = 2;                                     // every enemy, baddy or boss, twice the life (the user, 2026-10-26: "double all enemies points of life since when you have high power they die too easily")
 const ENEMY_HP_UP = 4;                              // every enemy, baddy or boss, 4 more life than its size gives (the user, 2026-10-23: "so that they can survive some juggling")
 const BEACH_HP_UP = 1;                              // (the beach: 1 more, not 4; the user, 2026-10-23: "make enemies on the beach a little easier, less health")
 const BB_SIZE = { S: { h: 40, hw: 17, hp: 2, wt: .7 }, M: { h: 58, hw: 24, hp: 4, wt: 1 }, B: { h: 82, hw: 34, hp: 6, wt: 1.3 }, G: { h: 118, hw: 46, hp: 8, wt: 1.6 } };
@@ -13479,9 +13713,131 @@ const INK_LINE = new THREE.LineBasicMaterial({ color: "#0c0c0c" });
 function inkEdges(scene, keep, mesh, angle = 35) {   // an old cartoon's ink line round a shape's edges (kept out of the static bake)
   mesh.updateMatrixWorld(true); const l = new THREE.LineSegments(new THREE.EdgesGeometry(mesh.geometry, angle), INK_LINE); l.matrixAutoUpdate = false; l.matrix.copy(mesh.matrixWorld); scene.add(l); keep.add(l); return l;
 }
+// ── Crux's city up off the street (the user, 2026-10-26: "it escalates to sky scrapers up in row b and A being rooftops of sky scrapers mostly. but it should all
+// feel very high"): the terraces (C) a block up, the towers' faces going on up past them; the skyscrapers' upper floors (B), their tops round about, half built;
+// the rooftops (A): the roofs of the towers round about just under you, their tanks and aerials, and past them only sky and the cloud sea a long way down
+function cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt) {
+  const R = (a, b) => a + rng() * (b - a), O = (geo, m, ol = .04) => mk(geo, null, { mat: m, ol }), tones = [mats.white, mats.light, mats.mid, mats.dark];
+  const face = (gx, w, y0, y1, z, tone, win = true) => { const h = y1 - y0, fb = O(new THREE.BoxGeometry(w, h, 2), tone, .05); at(fb, gx, y0 + h / 2, z); scene.add(fb); inkEdges(scene, keep, fb);
+    if (win) for (let r = Math.ceil((y0 - gY) / 1.4) * 1.4 + gY + .7; r < y1 - .6; r += 1.4) for (let c = -w / 2 + .6; c < w / 2 - .4; c += .9) scene.add(at(O(new THREE.BoxGeometry(.4, .7, .05), rng() < .15 ? mats.white : mats.black, 0), gx + c, r, z + 1.02));
+    return fb; };
+  const crown = (gx, w, y, z, tone) => { const c = O(new THREE.BoxGeometry(w * .7, 1.6, 1.6), tone); at(c, gx, y + .8, z); scene.add(c); inkEdges(scene, keep, c);   // a tower's top: a setback, a cornice, an aerial
+    scene.add(at(O(new THREE.BoxGeometry(w + .3, .3, 2.3), mats.dark, .03), gx, y, z)); const hh = R(2, 5); scene.add(at(O(cyl(.06, .09, hh, 6), mats.black, .01), gx + R(-.5, .5), y + 1.6 + hh / 2, z));
+    const L = new THREE.Mesh(ball(.12, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffffff" })); at(L, gx, y + 1.6 + hh, z); scene.add(L); keep.add(L); };
+  if (row === "C") {                                  // the terraces: the towers' faces close behind, on up out of sight; a gap now and then, the city past it
+    for (let x = -6; x < WX + 6;) { const w = R(3.2, 6), gx = x + w / 2; if (rng() < .22) { x += w * R(.7, 1.1); continue; }
+      face(gx, w, gY - 12, gY + R(16, 26), R(-8.4, -6.6), tones[(rng() * 4) | 0]);
+      if (rng() < .4) { const zz = -5.3, x0 = gx - w * .3; for (let j = 0; j < 4; j++) { const yy = gAt(gx) + 1.8 + j * 2.2; scene.add(at(O(new THREE.BoxGeometry(w * .6, .1, .9), mats.black, .01), gx, yy, zz));   // a fire escape up the face
+        const st = O(new THREE.BoxGeometry(2.4, .08, .5), mats.black, 0); at(st, x0 + .9, yy - 1.1, zz - .1); st.rotation.z = j % 2 ? .75 : -.75; scene.add(st); } }
+      x += w + R(0, .4); }
+    return; }
+  if (row === "B") {                                  // the skyscrapers' upper floors: faces coming up from far below, most ending about here (their tops), a few on up; one half built
+    for (let x = -6; x < WX + 6;) { const w = R(3.4, 6.4), gx = x + w / 2, z = R(-9, -6.8); if (rng() < .26) { x += w * R(.7, 1.1); continue; }
+      const top = gY + (rng() < .3 ? R(14, 24) : R(-3, 8)), tone = tones[(rng() * 4) | 0];
+      if (rng() < .2) { const y0 = gY - 14; for (const dx of [-w / 2, 0, w / 2]) scene.add(at(O(new THREE.BoxGeometry(.25, top - y0, .25), mats.black, .01), gx + dx, (y0 + top) / 2, z));   // the steel of one going up
+        for (let y = y0 + 2; y < top; y += 2.4) scene.add(at(O(new THREE.BoxGeometry(w, .22, .3), mats.black, .01), gx, y, z)); }
+      else { face(gx, w, gY - 24, top, z, tone); if (top < gY + 12) crown(gx, w, top, z, tone); }
+      x += w + R(.2, .8); }
+    for (let i = 0; i < 9; i++) { const x = R(-10, WX + 10), z = R(-22, -12), w = R(3, 5), top = gY + R(-8, 2), f = face(x, w, top - 20, top, z, tones[(rng() * 4) | 0], false); crown(x, w, top, z, mats.mid); }   // (further off: their tops, under you or about level)
+    return; }
+  // the rooftops: what's up here with you (bulkheads, a tank, aerials, vents), and the roofs round about, just under you
+  for (let x = R(-2, 4); x < WX + 4; x += R(7, 12)) { const kind = (rng() * 4) | 0, z = R(-7.5, -4.5), y0 = gAt(Math.max(.1, Math.min(WX - .1, x)));
+    if (kind === 0) { const b = O(new THREE.BoxGeometry(R(2.4, 3.4), R(2.2, 3), R(2, 2.6)), mats.light); b.geometry.computeBoundingBox(); const hh = b.geometry.boundingBox.max.y * 2; at(b, x, y0 + hh / 2, z); scene.add(b); inkEdges(scene, keep, b);   // a stair's bulkhead, its door
+      scene.add(at(O(new THREE.BoxGeometry(.8, 1.5, .05), mats.black, 0), x, y0 + .75, z + b.geometry.boundingBox.max.z + .03)); }
+    else if (kind === 1) { for (let j = 0; j < 2; j++) { const u = O(new THREE.BoxGeometry(1.3, .9, 1.1), mats.mid); at(u, x + j * 1.5, y0 + .45, z); scene.add(u);   // air-con units, their fans
+        const fan = new THREE.Mesh(new THREE.CircleGeometry(.36, 16), mats.black); at(fan, x + j * 1.5, y0 + .5, z + .56); scene.add(fan); } }
+    else if (kind === 2) { const hh = R(5, 9); scene.add(at(O(cyl(.07, .1, hh, 6), mats.black, .01), x, y0 + hh / 2, z)); for (let j = 1; j < 4; j++) scene.add(at(O(new THREE.BoxGeometry(R(.8, 1.4), .06, .06), mats.black, 0), x, y0 + hh * j / 4, z));   // an aerial, a red light
+      const L = new THREE.Mesh(ball(.14, 8, 6), new THREE.MeshBasicMaterial({ color: "#f0f0f0" })); at(L, x, y0 + hh, z); scene.add(L); keep.add(L); }
+    else { for (let j = 0; j < 3; j++) scene.add(at(O(cyl(.18, .18, .9, 10), mats.dark, .02), x + j * .6, y0 + .45, z)); scene.add(at(O(new THREE.BoxGeometry(2, .12, .5), mats.light, .01), x + .6, y0 + .95, z)); }   // vent stacks
+  }
+  for (let i = 0; i < 12; i++) { const x = -20 + i * (WX + 40) / 11 + R(-2, 2), z = R(-24, -11), w = R(4, 8), top = gY - R(1.5, 7), tone = tones[(rng() * 4) | 0];   // the roofs round about, under you
+    const f = O(new THREE.BoxGeometry(w, 30, w * .8), tone, .05); at(f, x, top - 15, z); scene.add(f); inkEdges(scene, keep, f);
+    scene.add(at(O(new THREE.BoxGeometry(w + .2, .35, w * .8 + .2), mats.dark, .02), x, top + .17, z));
+    if (rng() < .5) { const t = group(scene, x + R(-1, 1), top, z); t.add(at(O(cyl(.9, .9, 1.8, 12), mats.mid), 0, 2.2, 0)); t.add(at(O(new THREE.ConeGeometry(1.05, .6, 12), mats.dark, 0), 0, 3.4, 0));   // (a water tower on one)
+      [-1, 1].forEach(a => [-1, 1].forEach(b => t.add(at(O(cyl(.05, .05, 1.3, 5), mats.black, 0), a * .6, .65, b * .6)))); } }
+}
+let cruxCloudT = null;
+function cruxCloudTex() {                             // a heap of cartoon cloud, flat along its bottom, a thick ink line round its top
+  if (cruxCloudT) return cruxCloudT;
+  cruxCloudT = tex(512, 192, (g, W, H) => { const r2 = rngF(717), n = 6;
+    const puffs = []; for (let j = 0; j < n; j++) puffs.push([40 + j * 86 + r2() * 20, 150 - Math.sin((j + .5) / n * Math.PI) * 70 - r2() * 16, 44 + r2() * 26]);
+    g.fillStyle = "#f4f4f4"; puffs.forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }); g.fillRect(30, 140, 452, 52);
+    g.lineWidth = 7; g.strokeStyle = "#1a1a1a"; puffs.forEach(([x, y, r]) => { g.beginPath(); g.arc(x, y, r, Math.PI * 1.02, Math.PI * 1.98); g.stroke(); });
+    const gr = g.createLinearGradient(0, 150, 0, 192); gr.addColorStop(0, "rgba(244,244,244,0)"); gr.addColorStop(1, "rgba(244,244,244,1)"); });
+  return cruxCloudT;
+}
+function cruxClouds(scene, keep, rng, cloudY, k, anim) {   // the cloud sea under the city: a floor of it out to the horizon, heaps of it on top, drifting
+  const R = (a, b) => a + rng() * (b - a), dim = k >= 5 ? .55 : 1, col = new THREE.Color("#e8e8e8").multiplyScalar(dim);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(WX + 600, 132).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: col })); at(floor, WX / 2, cloudY - .6, -82); scene.add(floor); keep.add(floor);
+  const M = new THREE.MeshBasicMaterial({ map: cruxCloudTex(), transparent: true, depthWrite: false, color: new THREE.Color(1, 1, 1).multiplyScalar(dim) }), heaps = [];
+  for (let i = 0; i < 46; i++) { const z = -16 - Math.pow(rng(), .8) * 128, w = R(9, 20) * (1 + -z / 90), q = new THREE.Mesh(new THREE.PlaneGeometry(w, w * .375), M);
+    at(q, R(-60, WX + 60), cloudY + w * .12 + R(-.6, .6), z); q.renderOrder = -1; scene.add(q); keep.add(q); heaps.push([q, R(.15, .5)]); }
+  anim.push((t, dt) => heaps.forEach(([q, sp]) => { q.position.x += dt * sp; if (q.position.x > WX + 80) q.position.x = -80; }));
+}
+function cruxPlat(scene, keep, mats, kind, cx, top, w, foot, rng) {   // the city's ledges up off the street, each held up on something
+  const O = (geo, m, ol = .03) => mk(geo, null, { mat: m, ol }), H = Math.max(.2, top - foot);
+  if (kind === "fire") {                              // a fire escape's landing: a grating, its rail, posts down to the floor, a stair off one end
+    scene.add(at(O(new THREE.BoxGeometry(w, .14, 1.6), mats.black, .01), cx, top - .07, -.2));
+    for (let i = 0; i <= Math.round(w / .45); i++) scene.add(at(O(new THREE.BoxGeometry(.04, .02, 1.5), mats.dark, 0), cx - w / 2 + i * w / Math.round(w / .45), top + .005, -.2));
+    scene.add(at(O(new THREE.BoxGeometry(w, .05, .05), mats.black, 0), cx, top + .7, -.95)); for (let i = 0; i <= 4; i++) scene.add(at(O(new THREE.BoxGeometry(.04, .7, .04), mats.black, 0), cx - w / 2 + i * w / 4, top + .35, -.95));
+    [-1, 1].forEach(sd => scene.add(at(O(new THREE.BoxGeometry(.1, H, .1), mats.black, .01), cx + sd * (w / 2 - .1), foot + H / 2, -.85)));
+    const st = O(new THREE.BoxGeometry(Math.hypot(H, 1.6), .08, .6), mats.black, 0); at(st, cx + w / 2 + .7, foot + H / 2, -.85); st.rotation.z = -Math.atan2(H, 1.6); scene.add(st); return true; }
+  if (kind === "cradle") {                            // a window cleaner's cradle on its two cables, up out of sight to the roof's jib
+    scene.add(at(O(new THREE.BoxGeometry(w, .16, 1.2), mats.dark, .02), cx, top - .08, -.2)); scene.add(at(O(new THREE.BoxGeometry(w, .5, .06), mats.light, .02), cx, top - .35, .38));
+    scene.add(at(O(new THREE.BoxGeometry(w, .05, .05), mats.black, 0), cx, top + .65, -.75)); [-1, 1].forEach(sd => { scene.add(at(O(new THREE.BoxGeometry(.05, .65, .05), mats.black, 0), cx + sd * w * .45, top + .32, -.75));
+      scene.add(at(O(cyl(.025, .025, 16, 4), mats.black, 0), cx + sd * w * .45, top + 8.6, -.75)); });
+    scene.add(at(O(cyl(.16, .13, .3, 10), mats.white, .01), cx + w * .3, top + .15, -.5)); return true; }
+  if (kind === "girder") {                            // a steel girder on its columns, braced across, rivets along it
+    scene.add(at(O(new THREE.BoxGeometry(w, .36, .5), mats.dark, .02), cx, top - .18, -.2)); [0, -.36].forEach(dy => scene.add(at(O(new THREE.BoxGeometry(w, .06, .9), mats.black, 0), cx, top + dy - .03, -.2)));
+    for (let i = 0; i < Math.floor(w / .3); i++) scene.add(at(O(ball(.03, 5, 4), mats.white, 0), cx - w / 2 + .15 + i * .3, top - .18, .06));
+    const cols = [-1, 1].map(sd => cx + sd * (w / 2 - .25)); cols.forEach(x => scene.add(at(O(new THREE.BoxGeometry(.28, H, .28), mats.dark, .015), x, foot + H / 2, -.6)));
+    const br = Math.hypot(cols[1] - cols[0], H); [1, -1].forEach(sd => { const b = O(new THREE.BoxGeometry(br, .08, .08), mats.black, 0); at(b, cx, foot + H / 2, -.6); b.rotation.z = sd * Math.atan2(H, cols[1] - cols[0]); scene.add(b); });
+    return true; }
+  if (kind === "roof") {                              // the top of a bulkhead up on the roof: stand on it
+    const b = O(new THREE.BoxGeometry(w, H, 2.4), mats.light, .04); at(b, cx, foot + H / 2, -.7); scene.add(b); inkEdges(scene, keep, b);
+    scene.add(at(O(new THREE.BoxGeometry(w + .2, .18, 2.6), mats.dark, .02), cx, top - .09, -.7)); scene.add(at(O(new THREE.BoxGeometry(.8, Math.min(1.6, H - .3), .05), mats.black, 0), cx - w * .25, foot + Math.min(1.6, H - .3) / 2, .52));
+    for (let i = 0; i < 3; i++) scene.add(at(O(new THREE.BoxGeometry(.5, .08, .05), mats.black, 0), cx + w * .25, foot + H * .55 + i * .18, .52)); return true; }
+  if (kind === "tank") {                              // a water tower: its catwalk to stand on, the legs under it, the tank behind
+    scene.add(at(O(new THREE.BoxGeometry(w, .12, 1.4), mats.black, .01), cx, top - .06, -.2)); scene.add(at(O(new THREE.BoxGeometry(w, .05, .05), mats.black, 0), cx, top + .6, .45));
+    for (let i = 0; i <= 4; i++) scene.add(at(O(new THREE.BoxGeometry(.04, .6, .04), mats.black, 0), cx - w / 2 + i * w / 4, top + .3, .45));
+    [-1, 1].forEach(a => [-1.6, .2].forEach(z => scene.add(at(O(cyl(.07, .08, H, 6), mats.black, .01), cx + a * (w / 2 - .2), foot + H / 2, z))));
+    const r = Math.min(1.5, w * .4), T = O(cyl(r, r, 2.6, 16), mats.mid, .04); at(T, cx, top + 1.3, -1.7); scene.add(T); inkEdges(scene, keep, T, 50);
+    [.5, 1.3, 2.1].forEach(y => scene.add(at(O(new THREE.TorusGeometry(r + .02, .04, 4, 18).rotateX(Math.PI / 2), mats.black, 0), cx, top + y, -1.7)));
+    scene.add(at(O(new THREE.ConeGeometry(r * 1.12, .8, 16), mats.dark, .03), cx, top + 3, -1.7)); return true; }
+  return false;
+}
+function cruxSet(scene, keep, rng, mats, P, gY, gAt, anim) {   // a room's own pieces
+  const R = (a, b) => a + rng() * (b - a), O = (geo, m, ol = .04) => mk(geo, null, { mat: m, ol });
+  if (P.k === "tower") {                              // a tower in the way at that end: up out of sight, down out of sight
+    const x = P.side < 0 ? -2.2 : WX + 2.2, f = O(new THREE.BoxGeometry(4.6, 60, 14), mats.light, .06); at(f, x, gY + 10, -2.4); scene.add(f); inkEdges(scene, keep, f);
+    const fx = x - P.side * 2.31; for (let y = gY + .9; y < gY + 16; y += 1.4) for (let z = -7.5; z < 3.5; z += 1.1) { const m = O(new THREE.BoxGeometry(.05, .7, .45), rng() < .12 ? mats.white : mats.black, 0); at(m, fx, y, z); scene.add(m); }
+    for (let y = gY + .9; y < gY + 16; y += 1.4) for (let c = -2; c <= 2; c += 1) scene.add(at(O(new THREE.BoxGeometry(.4, .7, .05), mats.black, 0), x + c * .9, y, 4.62)); return; }
+  if (P.k === "crane") {                              // a tower crane: its mast up from far below, the jib out over the room, a girder slung off its hook
+    const x = X(P.x), z = -5.5, top = gY + 15, base = gY - 24, M = mats.black;
+    scene.add(at(O(new THREE.BoxGeometry(.6, top - base, .6), mats.dark, .02), x, (top + base) / 2, z)); for (let y = base + 1; y < top; y += 1.2) { const b = O(new THREE.BoxGeometry(.85, .05, .05), M, 0); at(b, x, y, z + .32); b.rotation.z = .9; scene.add(b); }
+    scene.add(at(O(new THREE.BoxGeometry(22, .45, .5), mats.dark, .02), x + 6, top + .3, z)); scene.add(at(O(new THREE.BoxGeometry(1.4, 1.2, 1.2), mats.light, .03), x, top - .6, z + .5));
+    scene.add(at(O(new THREE.BoxGeometry(2, 1.2, 1), mats.mid, .03), x - 4.5, top - .3, z)); const hx = x + 12, cl = 9;
+    scene.add(at(O(cyl(.02, .02, cl, 4), M, 0), hx, top - cl / 2, z)); scene.add(at(O(new THREE.BoxGeometry(3, .3, .3), mats.dark, .02), hx, top - cl - .2, z)); return; }
+  if (P.k === "helipad") {                            // the helipad on the roof: the ring, the H, its lights
+    const x = X(P.x), y = gAt(x) + .02, z = -2.6, pad = new THREE.Mesh(new THREE.CircleGeometry(3.2, 32).rotateX(-Math.PI / 2), mats.white); at(pad, x, y, z); scene.add(pad);
+    const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 2.9, 32).rotateX(-Math.PI / 2), mats.black); at(ring, x, y + .01, z); scene.add(ring);
+    [[-.7, 0, .25, 2.4], [.7, 0, .25, 2.4], [0, 0, 1.4, .25]].forEach(([dx, dz, w, d]) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), mats.black); at(m, x + dx, y + .02, z + dz); scene.add(m); });
+    for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, L = new THREE.Mesh(ball(.09, 6, 4), new THREE.MeshBasicMaterial({ color: "#ffffff" })); at(L, x + Math.cos(a) * 3.3, y + .08, z + Math.sin(a) * 3.3); scene.add(L); keep.add(L); } return; }
+  if (P.k === "plaza") {                              // the plaza: a fountain, a big "?" up on its plinth (nobody knows which way anything is)
+    const x = WX * .62, y = gAt(x), z = -4.2; scene.add(at(O(cyl(2.4, 2.6, .6, 24), mats.light), x, y + .3, z)); scene.add(at(new THREE.Mesh(new THREE.CircleGeometry(2.2, 24).rotateX(-Math.PI / 2), mats.mid), x, y + .58, z));
+    scene.add(at(O(cyl(.5, .6, 1.8, 12), mats.white), x, y + 1.2, z)); const q = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), QMARK()); at(q, x, y + 3, z); scene.add(q); keep.add(q);
+    anim.push(t => { q.rotation.y = t * .6; }); return; }
+  if (P.k === "cafe") {                               // the café out on the street: its awning, tables under umbrellas
+    const x = X(P.x), y = gAt(x), z = -5.4; for (let i = 0; i < 6; i++) { const a = O(new THREE.BoxGeometry(.8, .08, 1.6), i % 2 ? mats.white : mats.dark, .01); at(a, x - 2 + i * .8, y + 3, z + .6); a.rotation.x = .35; scene.add(a); }
+    for (let i = 0; i < 3; i++) { const tx = x - 2.4 + i * 2.4, tz = -2.8; scene.add(at(O(cyl(.5, .5, .06, 12), mats.white, .01), tx, y + .9, tz)); scene.add(at(O(cyl(.04, .04, .9, 5), mats.black, 0), tx, y + .45, tz));
+      scene.add(at(O(cyl(.03, .03, 1.4, 5), mats.black, 0), tx, y + 1.6, tz)); scene.add(at(O(new THREE.ConeGeometry(1, .5, 10), i % 2 ? mats.light : mats.white, .02), tx, y + 2.4, tz)); }
+    return; }
+}
 function buildCruxCity(k = 0, seed = k) {
   const before = new Set(scene.children), rng = rngF(113 + seed * 67), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
   const ST = STAGES[seed] || {}, WY = Y(WATER), gY = Y(GROUND), gAt = x => Y(groundAt(x / S) ?? GROUND);
+  const row = ST.arena ? "A" : String(ST.cell || "D")[0], alt = (ST.elev || 0) * ROW_RISE * S, SET = ST.set || [];   // (how high up: the street's at the bottom, a row a tower's storey on up)
+  const lift = { D: 0, C: 11, B: 22, A: 33 }[row] ?? 0, cloudY = gY - ({ D: 20, C: 16, B: 10, A: 6.5 }[row] ?? 20);   // (the towers round about sink a row's height each row up; the cloud sea comes into view under you, up top just under the roofs)
   const mats = Object.fromEntries(Object.entries(CX).map(([n, c]) => [n, toon(c)]));
   mats.glass = new THREE.MeshPhysicalMaterial({ color: "#ffffff", transmission: .7, roughness: .08, transparent: true, opacity: .5 });
   // the street: pale paving with ink joints, a black kerb line along the front, deep shadow under it; broken where it drops away
@@ -13490,7 +13846,7 @@ function buildCruxCity(k = 0, seed = k) {
   spans.forEach(([a, b]) => {
     const pts = [[a, groundAt(a + 1) ?? GROUND]]; PROFILE.forEach(([x, dy]) => { if (x > a && x < b) pts.push([x, GROUND + dy]); }); pts.push([b, groundAt(b - 1) ?? GROUND]);   // (the profile as it is: a sheer step drawn sheer)
     const sh = new THREE.Shape(); sh.moveTo(X(a), gY - 10); pts.forEach(([x, y]) => sh.lineTo(X(x), Y(y))); sh.lineTo(X(b), gY - 10); sh.closePath();
-    scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 12.6, bevelEnabled: false }).translate(0, 0, -8.6), mats.mid));
+    scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 12.6, bevelEnabled: false }).translate(0, 0, -8.6), { D: mats.mid, C: mats.light, B: mats.dark, A: mats.mid }[row] || mats.mid));
     const lip = new THREE.Shape(); lip.moveTo(X(a), gY - 10); pts.forEach(([x, y]) => lip.lineTo(X(x), Y(y) - .18)); lip.lineTo(X(b), gY - 10); lip.closePath();
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(lip, { depth: .3, bevelEnabled: false }).translate(0, 0, 3.95), mats.deep));
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .14, bevelEnabled: false }).translate(0, .02, 3.88), mats.black));
@@ -13498,14 +13854,15 @@ function buildCruxCity(k = 0, seed = k) {
     // black and grey as you walked, worst on a phone. The user, 2026-10-17: "crux's world was kind of glitching at the bottom")
   });
   { const N = 180, jl = new THREE.InstancedMesh(new THREE.BoxGeometry(.04, .02, 1.6), mats.mid, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();   // paving joints
-    let n = 0; for (let x = -10; x < WX + 10 && n < N; x += 1.6) for (const z of [-6, -4.2, -2.4, -.6, 1.2, 3]) { if (overGap(x / S) || n >= N) continue; m4.compose(new THREE.Vector3(x + (z % 2 ? .8 : 0), gAt(x) + .01, z), q, new THREE.Vector3(1, 1, 1)); jl.setMatrixAt(n++, m4); }
+    let n = 0; for (let x = -10; x < WX + 10 && n < N; x += row === "B" ? 1.1 : row === "A" ? 2.4 : 1.6) for (const z of row === "B" ? [-5, -1.4, 2.2] : [-6, -4.2, -2.4, -.6, 1.2, 3]) { if (overGap(x / S) || n >= N) continue; m4.compose(new THREE.Vector3(x + (z % 2 ? .8 : 0), gAt(x) + .01, z), q, new THREE.Vector3(1, 1, 1)); jl.setMatrixAt(n++, m4); }
     jl.count = n; scene.add(jl); }
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND);   // a drop between the buildings, down into haze
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(w + .1, 14, 12.4), new THREE.MeshBasicMaterial({ color: "#2a2a2a", side: THREE.BackSide })), cx, ty - 7.1, -2.4));
     const haze = new THREE.Mesh(new THREE.PlaneGeometry(w, 3), new THREE.MeshBasicMaterial({ map: tex(8, 64, g => { const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(220,220,220,1)"); g.fillStyle = gr; g.fillRect(0, 0, 8, 64); }), transparent: true, opacity: .55, depthWrite: false, fog: false }));
     at(haze, cx, ty - 1.6, 3.7); scene.add(haze); keep.add(haze); });
   // the street front: building faces close behind, arches and colonnades at the bottom, rows of windows, cornices; awnings; lamps
-  for (let x = -6; x < WX + 6;) { const w = R(2.6, 5), h = R(3, 7.5), z = R(-8.2, -6.2), gx = x + w / 2; if (overGap((gx) / S) || rng() < .28) { x += w * R(.6, 1.2); continue; } const y0 = gAt(gx), tone = [mats.white, mats.light, mats.mid, mats.dark][(rng() * 4) | 0];
+  if (row !== "D") cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt);   // (up off the street: the towers' faces, their tops, the roofs round about)
+  for (let x = -6; row === "D" && x < WX + 6;) { const tall = rng() < .3, w = tall ? R(4, 6.5) : R(2.6, 5), h = tall ? R(15, 26) : R(3, 7.5), z = R(-8.2, -6.2), gx = x + w / 2; if (overGap((gx) / S) || rng() < .28) { x += w * R(.6, 1.2); continue; } const y0 = gAt(gx), tone = [mats.white, mats.light, mats.mid, mats.dark][(rng() * 4) | 0];   // (a third of them the skyscrapers' feet, up out of sight)
     const fb = mk(new THREE.BoxGeometry(w, h, 2), null, { mat: tone, ol: .05 }); at(fb, gx, y0 + h / 2, z); scene.add(fb); inkEdges(scene, keep, fb);
     const cor = mk(new THREE.BoxGeometry(w + .3, .3, 2.3), null, { mat: mats.dark, ol: .03 }); at(cor, gx, y0 + h, z); scene.add(cor); inkEdges(scene, keep, cor);
     if (rng() < .5) { const n = Math.max(2, Math.floor(w / .9)); for (let i = 0; i < n; i++) { const cxx = gx - w / 2 + (i + .5) * w / n; scene.add(at(mk(cyl(.14, .16, 2.2, 10), null, { mat: mats.white, ol: .03 }), cxx, y0 + 1.1, z + 1.1)); } scene.add(at(mk(new THREE.BoxGeometry(w, .3, .5), null, { mat: mats.white, ol: .03 }), gx, y0 + 2.3, z + 1.1)); }
@@ -13513,30 +13870,31 @@ function buildCruxCity(k = 0, seed = k) {
     for (let r = 3; r < h - .8; r += 1.4) for (let c = -w / 2 + .6; c < w / 2 - .4; c += .9) scene.add(at(mk(new THREE.BoxGeometry(.4, .7, .05), null, { mat: rng() < .15 ? mats.white : mats.black, ol: 0 }), gx + c, y0 + r, z + 1.02));
     if (rng() < .35) { const aw = mk(new THREE.BoxGeometry(w * .7, .08, 1.2), null, { mat: mats.light, ol: .03 }); at(aw, gx, y0 + 2.8, z + 1.5); aw.rotation.x = .35; scene.add(aw); }
     x += w + R(0, .6); }
-  for (let x = R(2, 5); x < WX; x += R(6, 9)) { if (overGap(x / S)) continue; const y0 = gAt(x); scene.add(at(mk(cyl(.05, .06, 2.6, 6), null, { mat: mats.black, ol: .015 }), x, y0 + 1.3, -2.6));   // lamps
+  for (let x = R(2, 5); (row === "D" || row === "C") && x < WX; x += R(6, 9)) { if (overGap(x / S)) continue; const y0 = gAt(x); scene.add(at(mk(cyl(.05, .06, 2.6, 6), null, { mat: mats.black, ol: .015 }), x, y0 + 1.3, -2.6));   // lamps (the street's, the terraces')
     scene.add(at(mk(ball(.2, 10, 8), null, { mat: mats.white, ol: .02 }), x, y0 + 2.7, -2.6)); }
   // confusion: arrow signposts every which way, stairs to nowhere, a building hanging upside down, big "?" marks turning
   const signs = [];
   for (let i = 0; i < 3; i++) { const x = R(2, WX - 2); if (overGap(x / S)) continue; const s2 = signpost(scene, rng, mats); s2.P.position.set(x, gAt(x), R(-4.5, -3)); keep.add(s2.P); s2.P.traverse(o => keep.add(o)); signs.push(s2); }
   for (let i = 0; i < 2; i++) { const x = R(2, WX - 2); if (overGap(x / S)) continue; const y0 = gAt(x), z = R(-5.6, -5);
     for (let j = 0; j < 7; j++) scene.add(at(mk(new THREE.BoxGeometry(1.2, .3, .6), null, { mat: mats.white, ol: .03 }), x + j * .45, y0 + .15 + j * .3, z - j * .1)); }   // a stair that just stops
-  { const x = R(WX * .3, WX * .7), hb = group(scene, x, gY + 17, -14); keep.add(hb);   // hanging upside down from nowhere
+  if (row !== "A") { const x = R(WX * .3, WX * .7), hb = group(scene, x, gY + 17, -14); keep.add(hb);   // hanging upside down from nowhere
     hb.add(at(mk(new THREE.BoxGeometry(4, 6, 3), null, { mat: mats.light, ol: .05 }), 0, -3, 0)); hb.add(at(mk(new THREE.ConeGeometry(2.6, 2.4, 4).rotateY(Math.PI / 4).rotateX(Math.PI), null, { mat: mats.dark, ol: .05 }), 0, -7.2, 0));
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) hb.add(at(mk(new THREE.BoxGeometry(.6, .8, .05), null, { mat: mats.black, ol: 0 }), -1.2 + c * 1.2, -1.2 - r * 1.6, 1.52)); hb.traverse(o => keep.add(o)); }
   const qs = [];
   for (let i = 0; i < 5; i++) { const q = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), QMARK()); q.position.set(R(0, WX), gY + R(5, 11), R(-12, -9)); scene.add(q); keep.add(q); qs.push([q, R(.4, 1.2) * (rng() < .5 ? -1 : 1)]); }
   // further back: the towers, bridges between them; then the banded canyon walls; the sky
   const towers = [];
-  for (let i = 0; i < 11; i++) { const T = cruxTower(scene, rng, R(.8, 1.4), mats); const x = -10 + i * (WX + 20) / 10 + R(-2, 2), z = R(-32, -15); T.position.set(x, gY - .5, z); towers.push(T); T.updateMatrixWorld(true); T.children.slice(0, 1).forEach(m => inkEdges(scene, keep, m, 50)); }
-  for (let i = 0; i < towers.length - 1; i++) if (rng() < .6) { const a = towers[i].position, b = towers[i + 1].position, y = gY + R(6, 10), len = Math.hypot(b.x - a.x, b.z - a.z);
+  for (let i = 0; i < 11; i++) { const T = cruxTower(scene, rng, R(.8, 1.4) * 2.1, mats); const x = -10 + i * (WX + 20) / 10 + R(-2, 2), z = R(-46, -24); T.position.set(x, gY - .5 - lift, z); towers.push(T); T.updateMatrixWorld(true); T.children.slice(0, 1).forEach(m => inkEdges(scene, keep, m, 50)); }   // (out of the clouds, the street's height over them; up top you look down on them)
+  for (let i = 0; i < towers.length - 1; i++) if (rng() < .6) { const a = towers[i].position, b = towers[i + 1].position, y = gY - lift + R(15, 24), len = Math.hypot(b.x - a.x, b.z - a.z);
     const br = mk(new THREE.BoxGeometry(len, .4, .9), null, { mat: mats.white, ol: .03 }); at(br, (a.x + b.x) / 2, y, (a.z + b.z) / 2); br.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x); scene.add(br); }
-  for (let i = 0; i < 7; i++) { const x = -40 + i * (WX + 80) / 6 + R(-6, 6), z = R(-110, -70), h = R(18, 34), w = R(14, 26), cl = group(scene, x, gY - 1, z);   // canyon walls: rounded masses in bands
+  for (let i = 0; i < 7; i++) { const x = -40 + i * (WX + 80) / 6 + R(-6, 6), z = R(-110, -70), h = R(18, 34), w = R(14, 26), cl = group(scene, x, gY - 1 - lift, z);   // canyon walls: rounded masses in bands (up top, their tops down under you)
     for (let j = 0; j < 6; j++) cl.add(at(mk(new THREE.CylinderGeometry(w * (1 - j * .07), w * (1 - (j - 1) * .07), h / 6, 18).scale(1, 1, .5), null, { mat: j % 2 ? mats.light : mats.white, ol: .08 }), 0, (j + .5) * h / 6, 0)); }
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(320, 130), new THREE.MeshBasicMaterial({ map: cruxSkyTex(k), fog: false })); at(sky, WX / 2, gY + 55, -150); scene.add(sky); keep.add(sky);
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(320, 130 + alt * 1.6), new THREE.MeshBasicMaterial({ map: cruxSkyTex(k), fog: false })); at(sky, WX / 2, gY + 55 - alt * .8, -150); scene.add(sky); keep.add(sky);
+  cruxClouds(scene, keep, rng, cloudY, k, anim);       // (the cloud sea, a long way down)
   // things in the air: flying skiffs crossing, birds
-  const skiffs = [0, 1].map(i => { const f = flyingSkiff(scene, mats, R(.8, 1.1)); f.B.position.set(R(0, WX), gY + R(8, 12), R(-13, -10)); f.sp = R(.8, 1.6) * (i ? -1 : 1); f.ph = R(0, TAU); keep.add(f.B); f.B.traverse(o => keep.add(o)); return f; });
+  const skiffs = [0, 1].map(i => { const f = flyingSkiff(scene, mats, R(.8, 1.1)); f.B.position.set(R(0, WX), gY + (row === "A" ? R(-7, -3) : R(8, 12)), R(-13, -10)); f.sp = R(.8, 1.6) * (i ? -1 : 1); f.ph = R(0, TAU); keep.add(f.B); f.B.traverse(o => keep.add(o)); return f; });   // (up top, they cross under you)
   const birdM = new THREE.MeshBasicMaterial({ color: "#1c1c1c", side: THREE.DoubleSide }), birds = [];
-  for (let i = 0; i < 4; i++) { const b = group(scene, R(0, WX), gY + R(9, 14), R(-20, -12)); keep.add(b);
+  for (let i = 0; i < 4; i++) { const b = group(scene, R(0, WX), gY + (row === "A" || row === "B" ? R(-6, 4) : R(9, 14)), R(-20, -12)); keep.add(b);
     const ws = [-1, 1].map(s => { const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(-.4, s * .9); sh.lineTo(.2, s * .2); sh.closePath(); const m = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(Math.PI / 2), birdM); b.add(m); keep.add(m); return m; });
     b.add(new THREE.Mesh(ball(.12, 6, 4).scale(2.4, 1, 1), birdM)); birds.push([b, ws, R(1.5, 3), R(0, TAU)]); }
   // platforms: stone balconies on brackets (with a rail), little hovering skiffs, billboard tops
@@ -13549,6 +13907,7 @@ function buildCruxCity(k = 0, seed = k) {
         scene.add(at(mk(cyl(.13, .17, .5, 8), null, { mat: mats.black, ol: .015 }), bx2, by + .25, -.5)); scene.add(at(mk(cyl(.2, .2, .08, 8), null, { mat: mats.black, ol: 0 }), bx2, by + .52, -.5));
         const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(ex, top - .35, -.35), new THREE.Vector3((ex + bx2) / 2, Math.min(top - .35, by + .45) - .5, -.45), new THREE.Vector3(bx2, by + .45, -.5));
         scene.add(mk(new THREE.TubeGeometry(c, 12, .025, 4), null, { mat: mats.black, ol: 0 })); } }
+    else if (cruxPlat(scene, keep, mats, p.kind, cx, top, w, foot, rng)) { }
     else if (p.kind === "sign") { scene.add(at(mk(new THREE.BoxGeometry(w, 1.1, .25), null, { mat: mats.white, ol: .04 }), cx, top - .6, -.4)); scene.add(at(mk(new THREE.BoxGeometry(w, .14, 1.6), null, { mat: mats.dark, ol: .02 }), cx, top - .07, 0));
       const q = new THREE.Mesh(new THREE.PlaneGeometry(.8, .8), QMARK()); at(q, cx, top - .6, -.26); scene.add(q); keep.add(q);
       [-1, 1].forEach(s => { if (top - foot > .8) scene.add(at(mk(cyl(.07, .07, top - foot - 1.1, 6), null, { mat: mats.black, ol: .015 }), cx + s * w * .35, foot + (top - foot - 1.1) / 2, -.4)); }); }
@@ -13567,6 +13926,7 @@ function buildCruxCity(k = 0, seed = k) {
     for (let y = wy0 + 1.4; y < wy1 - .4; y += 2.2) scene.add(at(mk(new THREE.BoxGeometry(2.4, .16, 1.25), null, { mat: mats.dark, ol: 0 }), x, y, -1.05));
     const q = new THREE.Mesh(new THREE.PlaneGeometry(.9, .9), QMARK()); at(q, x, up ? Y(L.bot) + 3.6 : Y(L.top) + 1.2, -.45); scene.add(q); keep.add(q);   // (a "?" on the lift: up? down?)
   });
+  SET.forEach(P => cruxSet(scene, keep, rng, mats, P, gY, gAt, anim));   // (a tower in the way, a crane, the helipad, the plaza's fountain, the café)
   // the beps' way in: a trail of dropped buttons to a little round door at the foot of a building
   let door = null; const bep = ST.bep;
   if (bep) {
@@ -14279,7 +14639,7 @@ function buildBeach(k = 0, seed = k) {
     mSand.color.set(L.sand || Q.sand); mWet.color.copy(mSand.color).multiplyScalar(.86); }
   return { k, shafts: [], motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)), tick, relight, knock };
 }
-const ROOM_SPECIAL = new Set(["boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
+const ROOM_SPECIAL = new Set(["statue", "boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
   "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts",
   "rest", "below", "prev", "exitLeft", "wallL", "wallR", "deepNew", "gen", "like", "arena", "back", "climbUp", "arriveX", "arriveF", "hill", "gridNext"]);
 const mirrorRoom = q => {                            // the room flipped left to right (and no way up off it: a fork's upper ledge stays with the fork)
@@ -16104,6 +16464,7 @@ growWorlds(); squeezeWorlds(); addArenas(); deepenWorlds();
 WORLDS.forEach((W, w) => { if (!W.deep) return; leftExit(W, w); if (w !== 9 && !W.stages.some(q => q.climbWall && !q.arena)) placeClimbWall(W, w); joinOrphans(W, w); });   // (once every world's ways out are in: the lakebed's west one just above. A climb wall shut to make one: Camila's climb somewhere else)
 authorForest();                                      // (the forest's hand-made rooms, over what grew: the user's map, 2026-10-24)
 authorWaves();                                       // (Cuss' Waves too: the user's map, 2026-10-25)
+authorCrux();                                        // (and Crux's city, from the street up to the rooftops: the user, 2026-10-26)
 placeDive();                                         // (the deep's hidden way in, in Cuss' sea caves)
 stitchEdges();                                       // (every stitched world's screens side by side: their floors meeting at one height)
 function stitchEdges() {                             // the floors of two screens side by side meet at one height: each ramps to it over its last 260 px (the user, 2026-10-25:
@@ -16269,9 +16630,9 @@ WORLDS[0].foes().forEach(applyVillainLook);
 // L2 button over the phone's d-pad, or / on a keyboard) and everything stops for the items you're carrying: press the button on one to
 // use it. Each world has its own few lying about too: one power-up, three mangoes and two bubblegums (each one only ever there once)
 const ITEMS = [
-  { k: "fruit", name: "MANGO", price: 30, desc: "HEALS YOU FULLY", pad: "x", key: "KeyZ", kb: "Z" },
-  { k: "power", name: "POWER-UP", price: 70, desc: "FILLS YOUR POWER", pad: "o", key: "KeyX", kb: "X" },
-  { k: "gum", name: "BUBBLEGUM", price: 45, desc: "A BIG BUBBLE THAT TAKES 3 HITS", pad: "sq", key: "KeyC", kb: "C" },
+  { k: "fruit", name: "MANGO", price: 60, desc: "HEALS YOU FULLY", pad: "x", key: "KeyZ", kb: "Z" },   // (prices doubled: the user, 2026-10-26. Were 30, 70, 45)
+  { k: "power", name: "POWER-UP", price: 140, desc: "FILLS YOUR POWER", pad: "o", key: "KeyX", kb: "X" },
+  { k: "gum", name: "BUBBLEGUM", price: 90, desc: "A BIG BUBBLE THAT TAKES 3 HITS", pad: "sq", key: "KeyC", kb: "C" },
 ];
 const BAG_MAX = 9;
 const PAD_SVG = { x: '<path d="M6 6 L18 18 M18 6 L6 18"/>', o: '<circle cx="12" cy="12" r="7.5"/>', sq: '<rect x="5" y="5" width="14" height="14" rx="1"/>', tri: '<path d="M12 3.5 L21.5 19.5 L2.5 19.5 Z"/>' };   // (the PlayStation shapes, as on the phone's buttons)
@@ -16288,7 +16649,7 @@ const freePets = sp => sp === "dog" ? freeDogs : isAxo(sp) ? freeAxos[sp] : free
 // the treasure map (the user, 2026-10-22): the seller's, one per region. On your map from then on: every room of the region, and where its
 // cat, its dungeons (the beps' hideouts, the hatch down to the stronghold), its checkpoints (the rest stops) and its treasure (the gifts,
 // the crates, the items lying about, not yet taken) are
-const MAP_PRICE = 60;
+const MAP_PRICE = 120;                               // (doubled with the items: the user, 2026-10-26. Was 60)
 const mapOwned = w => story ? (story.maps || []).includes(w) : freeMaps.has(w);
 const bag = () => story ? (story.bag || (story.bag = { coins: 0, fruit: 0, gum: 0, power: 0 })) : freeBag;
 const itemGot = id => story ? (story.got || (story.got = [])).includes(id) : freeGot.has(id);
@@ -16405,7 +16766,8 @@ function useItem(k) {
   const card = $("itemRow").querySelector(`[data-it="${k}"]`);
   if (!B[k]) { SFX.nope(); if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); } return; }
   B[k]--; const H = p.rig.heightPx || 92;
-  if (k === "fruit") { const was = p.hp; p.hp = maxHp(); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, 3); SFX.heal(true); popText(p.x, p.y - H - 30, "HEARTS FULL"); }
+  if (k === "fruit") { partnerList().forEach(P => { const q = P.q; q.php = Math.min(PARTNER_HP, (q.php ?? PARTNER_HP) + 1); q.heartT = 2.2; healFx(q, 1); });   // (and a heart back for each of your partners: the user, 2026-10-26)
+    const was = p.hp; p.hp = maxHp(); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, 3); SFX.heal(true); popText(p.x, p.y - H - 30, "HEARTS FULL"); }
   else if (k === "power") { p.power = 3; sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER FULL"); }
   else { if (p.bubble) { actors.remove(p.bubble.m); p.bubble.m.geometry.dispose(); p.bubble = null; } makeBubble(p, 3); }
   startEat(p, k); drawItems(k); if (k !== "gum") voice("heal"); if (story) writeSave();
@@ -16721,7 +17083,7 @@ function makeBaddy(type, colName, x, y) {
   if (r.segs) r.hist = Array.from({ length: 80 }, (_, i) => [X(x) + i * .05, Y(y)]);   // the caterpillar starts stretched out behind its head
   jointSprings(r, [[r.tilt, "rotation", "z", 110, .42], [r.tilt, "rotation", "x", 110, .42], [r.bob, "position", "y", 300, .6],
     ...r.arms.map(A => [A, "rotation", "z", 70, .35]), ...r.legs.map(L => [L, "rotation", "z", 260, .6]), ...r.sp]);
-  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Z.hp + (world === 9 ? BEACH_HP_UP : ENEMY_HP_UP) + BB_HP_MORE, h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
+  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: (Z.hp + (world === 9 ? BEACH_HP_UP : ENEMY_HP_UP) + BB_HP_MORE) * HP_X, h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
     phase: rand(0, 6), yaw: -Math.PI / 2 - .62, atk: null, atkT: 0, atkCd: rand(1.2, 2.4), think: rand(.6, 2), hopT: rand(.2, .8), dead: false, deathT: 0, gone: false, plat: null };
 }
 function disposeBaddy(b) {
@@ -18258,6 +18620,8 @@ function buildStronghold(i, k) {
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 60, .3, .05), mStripe), cx, -.16, 5.52));
   // the back wall: brick, steel skirting, I-beam columns, a girder along the top with cross-braces; girders overhead, pipes along the wall
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 60, 16, .5), mBrick), cx, 7.6, -9.6));
+  if (i === SH_ROOMS.length - 1) { const mE = toon("#ffffff"); mE.map = brickTex().clone(); mE.map.needsUpdate = true; mE.map.repeat.set(4, 4);   // (the war room's far end: a wall, the way out is up the ladder)
+    scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.4, 16, 16), mE), WX + .7, 7.6, -1.6)); add(new THREE.BoxGeometry(.4, 16, .5), mBeam, WX - .1, 7.6, 1.4, .02); }
   add(new THREE.BoxGeometry(WX + 60, 1.6, .3), mBeam, cx, .8, -9.3);
   const cols = []; for (let x = -4; x < WX + 8; x += 8) cols.push(x);
   cols.forEach(x => { add(new THREE.BoxGeometry(.5, 16, .5), mBeam, x, 7.6, -9.1, .02); add(new THREE.BoxGeometry(.9, 16, .12), mBeam, x, 7.6, -8.82);
@@ -18379,6 +18743,7 @@ function shScreen(i, back) {
   const H = stronghold; H.screen = i;
   disposeLevel(level); PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; CEILS.length = 0; LADDERS.length = 0; WATER = GROUND + 400; FLOOR_LOW = GROUND; SINK = WATER;
   SH_ROOMS[i].plats.forEach(([x, y, w, kind]) => PLATFORMS.push({ x, y, w, kind }));
+  if (i === SH_ROOMS.length - 1) { const lx = SH_ROOMS[i].props.find(q => q[0] === "ladder")[1]; LADDERS.push({ shOut: true, face: lx, wall: 0, x: lx, top: GROUND - 440, bot: GROUND }); }   // the way out: up its ladder to the hatch, the far end a wall (the user, 2026-10-26: "make the right be wall and allow the player to walk up to leave the stronghold")
   level = buildStronghold(i, hour); level.s = -3; level.w = world; level.h = -1; setLook(hour);
   entrySide = back ? "right" : "left"; const done = shFill(), x = back ? WORLD - 40 : 60, d = back ? -1 : 1;
   Object.assign(player, { x, y: GROUND, vx: 120 * d, vy: 0, face: d, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, auto: null, safe: { x, y: GROUND, plat: null } });
@@ -18675,15 +19040,12 @@ function popBaddy(b) {                           // beaten: won back into a weap
 const CAP_G = new THREE.PlaneGeometry(1, 1), _cw = new THREE.Vector3();
 let caps = [];
 function capMat(c) { return new THREE.MeshBasicMaterial({ map: haloTex(), color: c, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }); }
-function capCol(r) {                              // the won-back light's colour: the weapon's own glow (the sword's pink fill, the gauntlet's red going gold, bare fists pink)
-  const P = r && r.spec && r.spec.outfit && r.spec.outfit.prop;
-  return !P ? "#ff5fb4" : P.kind === "sword" ? P.fill || "#f32782" : P.kind === "gauntlet" ? "#" + new THREE.Color(P.fill || "#fc0000").lerp(new THREE.Color(P.main || "#ffde00"), .38).getHexString() : "#ff5fb4";
-}
 function captureBaddy(b, by) {
-  const k = clamp(b.h / 58, .75, 2.1), col = capCol(by.r), glow = new THREE.Mesh(CAP_G, capMat(col)), core = new THREE.Mesh(CAP_G, capMat("#fff2fa"));
-  glow.renderOrder = core.renderOrder = 4; actors.add(glow); actors.add(core);
-  const motes = Array.from({ length: 10 }, (_, i) => { const m = new THREE.Mesh(CAP_G, capMat(i % 2 ? col : "#ffffff")); m.renderOrder = 4; actors.add(m); return { m, a: i / 10 * TAU, r: rand(.8, 1.25) }; });   // (the sparks crackling round it)
-  caps.push({ b, by, t: 0, k, glow, core, motes, arc: makeArc(col), arc2: makeArc(col), x: b.x, y: b.y - b.h * .5, z: b.z || 0, yaw: b.yaw });
+  const k = clamp(b.h / 58, .75, 2.1), glow = new THREE.Mesh(CAP_G, capMat("#ff5fae")), core = new THREE.Mesh(CAP_G, capMat("#fff2fa")), ring = new THREE.Mesh(CAP_G, capMat("#ffd6ec"));
+  glow.renderOrder = core.renderOrder = ring.renderOrder = 4; actors.add(glow); actors.add(core); actors.add(ring);
+  const motes = Array.from({ length: 10 }, (_, i) => { const m = new THREE.Mesh(CAP_G, capMat(i % 2 ? "#ff9ad0" : "#ffd6ec")); m.renderOrder = 4; actors.add(m); return { m, a: i / 10 * TAU, r: rand(.8, 1.25) }; });
+  const tail = Array.from({ length: CAP_TAIL }, (_, i) => { const m = new THREE.Mesh(CAP_G, capMat(i % 3 === 2 ? "#ffffff" : i % 2 ? "#ff7ac0" : "#ffb8de")); m.renderOrder = 4; actors.add(m); return m; });   // (its comet's tail)
+  caps.push({ b, by, t: 0, k, glow, core, ring, motes, tail, x: b.x, y: b.y - b.h * .5, z: b.z || 0, yaw: b.yaw });
   b.cap = true; SFX.capture();
 }
 function capWeapon(by, out) {                     // where the light goes
@@ -18693,41 +19055,45 @@ function capWeapon(by, out) {                     // where the light goes
   if (r.hands && r.hands.length) return r.hands[(by.st.face || 1) > 0 ? 1 : 0].getWorldPosition(out);
   return out.set(X(by.st.x), Y(by.st.y) + 1.4, by.st.z || 0);
 }
-function endCap(c) { [c.glow, c.core, ...c.motes.map(q => q.m)].forEach(m => { actors.remove(m); m.material.dispose(); }); arcEnd(c.arc); arcEnd(c.arc2); c.b.cap = false; }
+function endCap(c) { [c.glow, c.core, c.ring, ...c.motes.map(q => q.m), ...c.tail].forEach(m => { actors.remove(m); m.material.dispose(); }); c.b.cap = false; }
 function clearCaps() { caps.forEach(endCap); caps = []; }
-// won back, like a Poké Ball's recall (the user, 2026-10-26: "less like an orb and more like a light, almost like electric light that connects to the weapons and then
-// gets sucked into them"): T0 a crackling beam out of the weapon to it · T1 it lit up nearly white on the end of it, sparking · then squeezed down into a knot of
-// light that's pulled back along the beam (faster and faster) into the weapon by T2 · a flash there. (Was an orb it spun down into, drawn along an arc)
+// won back: T1 spinning down into the light · T2 drawn along an arc into the weapon · then a flash there. The orb again (the user, 2026-10-26: "the enemies getting
+// sucked in as an orb was actually better, but can we maybe make the effect more flashy or a bigger orb with more trailing?"): bigger, a ring of light bursting out
+// as it goes in, a comet's tail of sparkles behind it all along the arc, and a bigger flash at the weapon. (The beam of 10-26 morning is gone)
+const CAP_TAIL = 14, CAP_BIG = 1.45;
 function syncCaps(dt) {
-  const T0 = .14, T1 = .44, T2 = .78;
+  const T1 = .34, T2 = .8;
   caps = caps.filter(c => {
     const b = c.b, r = b.r; if (!r.root.parent) { endCap(c); return false; }   // (the room changed under it)
-    c.t += dt; const sx = X(c.x), sy = Y(c.y), z = c.z + .25;
-    capWeapon(c.by, _cw); const tx = _cw.x, ty = _cw.y, tz = _cw.z + .3;
-    const v = clamp((c.t - T1) / (T2 - T1), 0, 1), ev = v * v, lx = lerp(sx, tx, ev), ly = lerp(sy, ty, ev), lz = lerp(z, tz, ev);   // the light: on it till T1, then pulled home
-    const lit = clamp(c.t / T1, 0, 1), sq = clamp((c.t - T1 + .08) / .16, 0, 1);   // lit: it lighting up · sq: it squeezed into the light
-    if (sq < 1) { r.root.visible = true; r.shadow.visible = lit < .3; r.root.position.set(sx, Y(b.y) + lit * .2, c.z);
-      const w = (1 + .06 * Math.sin(c.t * 70) * lit) * (1 - sq * .92), h = (1 + .12 * lit) * (1 - sq * .6); r.root.scale.set(w, h, w);
-      FLASHC(r.mats, .5 + .7 * lit, .35 + .65 * lit, .55 + .6 * lit); }                // (lit right up, nearly white)
-    else r.root.visible = r.shadow.visible = false;
-    if (c.t < T2) {
-      const u = clamp(c.t / T0, 0, 1), e = 1 - (1 - u) * (1 - u), ex = lerp(tx, lx, e), ey = lerp(ty, ly, e), ez = lerp(tz, lz, e);   // (the beam's end: shot out to it, then riding the light home)
-      c.arc.mesh.visible = c.arc2.mesh.visible = true;
-      arcSet(c.arc, tx, ty, tz, ex, ey, ez, .24 * c.k, .18 * c.k * (1 - ev * .8), dt); arcSet(c.arc2, tx, ty, tz, ex, ey, ez, .08 * c.k, .5 * c.k * (1 - ev * .8), dt);   // (a thinner one twisting round it)
-      c.arc.mesh.material.uniforms.al.value = 1; c.arc2.mesh.material.uniforms.al.value = .85;
-      const g = c.t < T1 ? .5 + 1.3 * lit : 1.8 - 1.2 * ev, a0 = Math.min(1, c.t / T0);
-      c.glow.position.set(lx, ly, lz); c.glow.scale.setScalar(g * c.k * (1 + .1 * Math.sin(c.t * 48))); c.glow.material.opacity = .85 * a0;
-      c.core.position.set(lx, ly, lz + .01); c.core.scale.setScalar((c.t < T1 ? .3 + .4 * lit : .7 - .3 * ev) * c.k); c.core.material.opacity = a0;
-    } else {                                         // in: a flash at the weapon, and gone
-      c.arc.mesh.visible = c.arc2.mesh.visible = false;
-      if (!c.in) { c.in = true; SFX.absorb(); rumble(18, .3); }
-      const f = clamp((c.t - T2) / .22, 0, 1); c.glow.position.set(tx, ty, tz); c.glow.scale.setScalar((.6 + 1.6 * f) * c.k); c.glow.material.opacity = .9 * (1 - f);
-      c.core.position.set(tx, ty, tz + .01); c.core.scale.setScalar(.5 * c.k * (1 - f)); c.core.material.opacity = 1 - f;
+    c.t += dt; const sx = X(c.x), sy = Y(c.y), z = c.z + .25, K = c.k * CAP_BIG;
+    capWeapon(c.by, _cw); const tx = _cw.x, ty = _cw.y, tz = _cw.z + .3, mx = (sx + tx) / 2, my = Math.max(sy, ty) + 1.1 + .25 * c.k;   // (an arc, up and over)
+    const at = (u0, out) => { const e = u0 * u0 * (3 - 2 * u0), w0 = (1 - e) * (1 - e), w1 = 2 * (1 - e) * e, w2 = e * e; return out.set(w0 * sx + w1 * mx + w2 * tx, w0 * sy + w1 * my + w2 * ty, lerp(z, tz, e)); };
+    const rv = clamp(c.t / .3, 0, 1); c.ring.position.set(sx, sy, z - .02); c.ring.scale.setScalar((.6 + 3.4 * rv) * c.k); c.ring.material.opacity = .9 * (1 - rv) * (1 - rv);   // (the ring of light bursting out round it)
+    if (c.t < T1) {
+      const u = c.t / T1, e = u * u;
+      r.root.visible = true; r.shadow.visible = u < .4; r.root.position.set(sx, Y(b.y) + u * .45, c.z);
+      const s = 1 - e * .93; r.root.scale.set(s * (1 + .25 * u), s, s); c.yaw += dt * (10 + 34 * u); r.yaw.rotation.y = c.yaw;
+      FLASHC(r.mats, .45 + .55 * u, .2 + .4 * u, .5 + .45 * u);                              // (glowing pink as it goes)
+      c.glow.position.set(sx, sy, z); c.glow.scale.setScalar((.4 + 1.7 * u) * K * (1 + .08 * Math.sin(c.t * 50))); c.glow.material.opacity = .95 * u;
+      c.core.position.set(sx, sy, z + .01); c.core.scale.setScalar(.55 * u * K); c.core.material.opacity = u;
+      c.motes.forEach(q => { const a = q.a + c.t * 15, rr = (1 - e) * q.r * K * 1.15 + .08; q.m.position.set(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr * .85, z + Math.sin(a) * .3); q.m.scale.setScalar(.26 * K); q.m.material.opacity = .95; });
+      c.tail.forEach(m => { m.material.opacity = 0; });
+    } else {
+      r.root.visible = r.shadow.visible = false;
+      const u = clamp((c.t - T1) / (T2 - T1), 0, 1);
+      if (u < 1) { at(u, c.glow.position); c.glow.scale.setScalar((2.1 - 1.5 * u) * K * (1 + .14 * Math.sin(c.t * 44))); c.glow.material.opacity = .95;
+        c.core.position.copy(c.glow.position).z += .01; c.core.scale.setScalar(.62 * K * (1 - .4 * u)); c.core.material.opacity = 1; }
+      else {                                         // in: a flash at the weapon, and gone
+        if (!c.in) { c.in = true; SFX.absorb(); rumble(18, .3); sparks(c.by.st.x, c.by.st.y - (c.by.r.heightPx || 92) * .6, 12); }
+        const v = clamp((c.t - T2) / .22, 0, 1); c.glow.position.set(tx, ty, tz); c.glow.scale.setScalar((.8 + 2.4 * v) * K); c.glow.material.opacity = .95 * (1 - v);
+        c.core.position.set(tx, ty, tz + .01); c.core.scale.setScalar(.7 * K * (1 - v)); c.core.material.opacity = 1 - v;
+      }
+      c.motes.forEach((q, i) => { const uq = clamp((c.t - T1 - (i + 1) * .03) / (T2 - T1), 0, 1); at(uq, q.m.position); q.m.position.x += Math.cos(q.a + c.t * 22) * .14 * (1 - uq); q.m.position.y += Math.sin(q.a + c.t * 22) * .14 * (1 - uq);
+        q.m.scale.setScalar(.22 * K * (1 - uq * .6)); q.m.material.opacity = uq >= 1 ? 0 : .85; });
+      c.tail.forEach((m, j) => { const uj = u - (j + 1) * .045; if (uj <= 0 || u >= 1 && uj >= 1) { m.material.opacity = 0; return; }   // (the comet's tail: back along the arc behind it, smaller and fainter)
+        at(Math.min(uj, 1), m.position); const f = 1 - j / CAP_TAIL; m.position.x += Math.sin(c.t * 30 + j * 1.7) * .08 * f; m.position.y += Math.cos(c.t * 26 + j * 2.3) * .08 * f; m.position.z -= .02;
+        m.scale.setScalar((.9 * f + .15) * K * (j % 3 === 2 ? .45 : 1)); m.material.opacity = (u >= 1 ? Math.max(0, 1 - (c.t - T2) / .22) : 1) * .9 * f; });
     }
-    c.motes.forEach((q, i) => {                    // sparks crackling round the light, jumping about
-      if ((q.jt = (q.jt || 0) - dt) <= 0) { q.jt = .03 + i * .002; q.ja = vrand(0, TAU); q.jr = vrand(.35, 1) * q.r; }
-      const rr = q.jr * c.k * .9 * (c.t < T1 ? .6 + .4 * lit : 1 - ev * .8);
-      q.m.position.set(lx + Math.cos(q.ja) * rr, ly + Math.sin(q.ja) * rr * 1.1, lz + .02); q.m.scale.setScalar(.17 * c.k); q.m.material.opacity = c.t < T2 ? .9 : 0; });
     if (c.t > T2 + .25) { endCap(c); return false; }
     return true;
   });
@@ -18929,6 +19295,7 @@ function combat() {
   if (wild && wildCatchable()) { const c = wild.st, h = Math.max(c.rig.heightPx || 56, 56);   // the wild cat: any hit at all catches it
     L.push({ e: c, top: c.y - h, box: { x1: c.x - 40, x2: c.x + 40, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 46, x2: c.x + 46, y1: c.y - Math.max(h, 80), y2: c.y } }); }   // (land on it, or any hit: a little wider than it is, as it's small and quick)
   if (secret && secret.hp > 0) { const B = secret; L.push({ e: B, top: -9999, box: { x1: B.x - 10, x2: B.x + 120, y1: -9999, y2: GROUND + 400 }, hit: (d, k) => secretHit(d, k), touch: () => false }); }   // (the hero's wall: hits on it, none from it)
+  if (statue && statue.up) { const T = statue; L.push({ e: T, top: T.gy - 250, box: { x1: T.x - 60, x2: T.x + 60, y1: T.gy - 260, y2: T.gy }, hit: d => hitStatue(d), touch: () => false, hurt: { x1: T.x - 60, x2: T.x + 60, y1: T.gy - 260, y2: T.gy } }); }   // (Glos's statue)
   for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
   if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) hitsNow(p).forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
@@ -18957,14 +19324,9 @@ function combat() {
   }
   if (p.tackle && p.tackle.t >= TKL.wind * .5 && p.tackle.t < TKL.wind + TKL.lunge + .05) { const f = p.face, H = p.rig.heightPx || 92;   // the tackle: whatever's in front, each once
     strike(p.tackle.hits, { x1: Math.min(p.x - f * 6, p.x + f * 44), x2: Math.max(p.x - f * 6, p.x + f * 44), y1: p.y - H * .9, y2: p.y }, "tackle", () => f); }
-  for (const T of L) {                                               // land on one from above: stomp it and bounce off
-    if (!overlap(pb, T.box) || !(p.vy > 60 && p.prevY <= T.top + 22) || (p.stomped || []).includes(T.e)) continue;   // (once a creature till you're down again: the user, 2026-10-24 "allow a player to only bounce once a creature and then move them away so it's hard to land back on them")
-    T.hit(Math.sign(T.e.x - p.x) || 1, "stomp"); (p.stomped || (p.stomped = [])).push(T.e);
-    p.carryDir = Math.sign(p.vx) || p.face; p.carry = .55; p.vx = p.carryDir * Math.max(Math.abs(p.vx), 330);   // momentum carries them on past the enemy
-    if (T.e.hw !== undefined && !T.e.dead && !T.e.gone) { T.e.vx = -p.carryDir * 620 / Math.pow(T.e.wt || 1, .6); T.e.recoil = Math.max(T.e.recoil || 0, .6); if (T.e.onGround) { T.e.vy = -320; T.e.onGround = false; T.e.plat = null; } }   // (and it's knocked the other way, out from under where you'll come down)
-    else if (T.e === enemy && !enemy.dead) enemy.vx = -p.carryDir * 260;
-    p.vy = (held.jump ? -900 : -720) * JUMPK; p.y = T.top - 1; p.onGround = false; p.coyote = 0;
-    p.bounceT = 0; p.atkT = -1; p.combo = null; p.sq = -.3; p.sqv = 6; p.stompGrace = .2; p.airJumps = 1;   // the bounce ends any charged combo too
+  for (const T of L) {                                               // land on one from above: no bounce off it now (the user, 2026-10-26: "remove the ability to jump off of enemies"): you slide off its top to the side, unhurt
+    if (!overlap(pb, T.box) || !(p.vy > 60 && p.prevY <= T.top + 22)) continue;
+    const d = Math.sign(p.x - T.e.x) || p.face; p.carryDir = d; p.carry = .3; p.vx = d * Math.max(Math.abs(p.vx), 260); p.stompGrace = .2;   // (was a stomp: a hit, and a bounce up off it; 2026-10-24 once a creature)
     return;
   }
   if (p.combo) return;                                               // a charged combo powers through
@@ -19369,7 +19731,7 @@ function frame(now) {                              // (the next frame is asked f
     if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
