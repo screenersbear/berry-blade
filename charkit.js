@@ -1973,6 +1973,90 @@ const STRIKES = {
       fNx: [[0, .24], [.22, .3], [.32, .12], [.5, .18]], fNy: [[0, .36], [.22, .42], [.32, .12], [.5, .2]], fFx: [[0, -.2], [.22, -.24], [.32, -.16], [.5, -.2]], fFy: [[0, .22], [.22, .3], [.32, .08], [.5, .14]],
       fP: [[0, -.6], [.32, -.9], [.5, -.65]], fNz: [[0, .06], [.5, .06]], fFz: [[0, .04], [.5, .04]] } },   // (knees up as the arms go up, then the legs thrown down with the slam: 2026-10-23, they were folded up under her the whole way)
 };
+// the berry buddies' specials (the user, 2026-10-26: "one special attack per buddy, so they have a basic hit which they've been doing and one special they can
+// do every couple of hits"): one each, keyed like the heroes' moves so the editor has them. surge: [t, vx, vy] a push of its own partway in (vy: up off the
+// ground); land: the blow lands as it comes down (any time after t0); fx: what each blow throws up (work.html allyFx); shot: the light it throws (work.html
+// glowShot: a rapier dart, a fist of light, a pair of dice, a shockwave along the ground, chain lightning); trail: [t0, t1] its afterimages
+const turnKeys = (t0, t1, turns, dur) => { const K = [[0, 0]], N = Math.max(2, Math.ceil((t1 - t0) / .04)); if (t0 > 0) K.push([t0, 0]);   // a whole turn (or turns) keyed every few hundredths, as the keys hold then snap (keySnap): one long stretch would creep, then flick round at the end
+  for (let i = 1; i <= N; i++) K.push([+(t0 + (t1 - t0) * i / N).toFixed(3), +(turns * TAU * i / N).toFixed(4)]); if (dur > t1) K.push([dur, +(turns * TAU).toFixed(4)]); return K; };
+const BUDDY_SP = { burr: "burr_flurry", stilt: "stilt_stomp", coil: "coil_spin", elpico: "elpico_drop", oldvic: "oldvic_hay", boxcars: "boxcars_roll", pipe: "pipe_slam", pipelet: "pipe_slam", vinnie: "vinnie_swoop", rink: "rink_roll", doir: "doir_rise" };
+Object.assign(STRIKES, {
+  burr_flurry: { dur: .72, step: 380, slide: .14, sq: -.1, sfx: "slash", hits: [{ t0: .12, t1: .18, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" }, { t0: .26, t1: .32, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" },
+    { t0: .44, t1: .52, reach: 135, back: 0, y0: 170, y1: 50, kind: "launch", fx: "sparks", shot: "dart" }],   // Burr: a lunge, two quick rapier thrusts, and a third driven up and through
+    keys: { armF: [[0, .6], [.08, .9], [.12, 1.55], [.18, 1.55], [.22, .95], [.26, 1.6], [.32, 1.6], [.36, .9], [.4, 1.0], [.44, 2.0], [.52, 2.1], [.62, 1.0], [.72, .6]],
+      elbF: [[0, 1.2], [.08, 1.8], [.12, 0], [.18, 0], [.22, 1.6], [.26, 0], [.32, 0], [.36, 1.7], [.4, 1.8], [.44, 0], [.52, .1], [.62, .6], [.72, 1.15]],
+      blade: [[0, .9], [.08, .3], [.12, 0], [.18, 0], [.22, .2], [.26, 0], [.32, 0], [.36, .2], [.44, .3], [.52, .6], [.72, .95]], grip: [[0, 0], [.72, 0]],
+      armB: [[0, 1.3], [.1, -1.1], [.52, -1.2], [.72, 1.3]], elbB: [[0, .45], [.1, 1.3], [.6, 1.3], [.72, .45]],
+      lean: [[0, .2], [.1, .5], [.36, .5], [.44, .3], [.52, .1], [.72, .2]], bodyY: [[0, -.08], [.12, -.18], [.36, -.18], [.5, -.05], [.72, -.08]],
+      twist: [[0, 0], [.12, .25], [.18, .25], [.22, 0], [.26, .25], [.32, .25], [.36, 0], [.44, .3], [.72, 0]],
+      fNx: [[0, .24], [.12, .6], [.4, .6], [.52, .45], [.72, .24]], fFx: [[0, -.2], [.12, -.5], [.4, -.5], [.52, -.35], [.72, -.2]] } },
+  stilt_stomp: { dur: .74, step: 60, hop: -420, dive: [.26, 900], sq: .12, sfx: "jump", hits: [{ t0: .08, t1: .2, reach: 95, back: 0, y0: 160, y1: 60, kind: "upper" },
+    { t0: .26, t1: .5, reach: 180, back: 180, y0: 80, y1: -30, kind: "smash", wide: true, land: true, fx: "quake", shot: "wave" }],   // Stilt: the knee driven up into them, then down on one long leg: the ground shakes both ways
+    keys: { fNx: [[0, .2], [.08, .45], [.26, .5], [.34, .32], [.56, .32], [.74, .2]], fNy: [[0, 0], [.08, .85], [.26, .9], [.34, 0], [.74, 0]],
+      fFx: [[0, -.2], [.08, -.1], [.34, -.32], [.56, -.32], [.74, -.2]], fFy: [[0, 0], [.08, .15], [.26, .25], [.34, 0], [.74, 0]], fP: [[0, 0], [.08, -.5], [.26, -.4], [.34, .2], [.74, 0]],
+      armF: [[0, .4], [.08, 2.6], [.26, 2.9], [.34, .9], [.5, .7], [.74, .3]], elbF: [[0, .6], [.08, .4], [.34, .2], [.74, .5]],
+      armB: [[0, .2], [.08, 2.4], [.26, 2.8], [.34, -.6], [.5, -.5], [.74, .1]], elbB: [[0, .6], [.08, .4], [.34, .2], [.74, .5]],
+      lean: [[0, .05], [.08, -.25], [.26, -.3], [.34, .55], [.56, .5], [.74, .1]], arch: [[0, 0], [.08, -.2], [.26, -.25], [.34, .2], [.74, 0]],
+      bodyY: [[0, 0], [.08, .05], [.34, -.32], [.56, -.28], [.74, 0]] } },
+  coil_spin: { dur: .78, step: 200, slide: .5, sq: .06, sfx: "zap", hits: [{ t0: .12, t1: .26, reach: 120, back: 110, y0: 140, y1: 0, kind: "slash", wide: true, fx: "zap", shot: "bolt" },
+    { t0: .3, t1: .44, reach: 120, back: 110, y0: 140, y1: 0, kind: "slash", wide: true, fx: "zap" }, { t0: .48, t1: .62, reach: 125, back: 115, y0: 140, y1: 0, kind: "cleave", wide: true, fx: "zap", shot: "bolt" }],   // Coil: wound up and let go, the stun baton out flat: twice round like a spinning top, sparking
+    keys: { spin: turnKeys(.08, .64, 2, .78), armF: [[0, 1.0], [.08, 1.6], [.64, 1.6], [.78, 1.0]], elbF: [[0, .3], [.08, 0], [.78, .2]],
+      blade: [[0, .2], [.08, 0], [.64, 0], [.78, .5]], grip: [[0, 0], [.78, 0]], armB: [[0, .3], [.08, 1.5], [.64, 1.5], [.78, .4]], elbB: [[0, .5], [.08, .1], [.78, .5]],
+      lean: [[0, .2], [.08, .05], [.64, .05], [.78, .2]], bodyY: [[0, -.05], [.08, -.14], [.64, -.14], [.78, -.05]],
+      fNy: [[0, 0], [.1, .2], [.62, .2], [.78, 0]], fNx: [[0, .24], [.78, .24]], fFx: [[0, -.22], [.78, -.22]] } },
+  elpico_drop: { dur: .8, step: 430, hop: -640, slide: .5, dive: [.5, 700], trail: [.14, .5], sq: .14, sfx: "jump", hits: [{ t0: .26, t1: .46, reach: 125, back: 0, y0: 160, y1: 20, kind: "launch", fx: "sparks" }],   // El Pico: up off the ropes and both feet into them, a dropkick, laid out flat in the air
+    keys: { flip: [[0, 0], [.14, 0], [.26, -1.3], [.46, -1.3], [.64, 0], [.8, 0]],
+      fNx: [[0, .2], [.12, .1], [.2, .3], [.26, .12], [.46, .12], [.6, .3], [.8, .2]], fNy: [[0, 0], [.12, .6], [.2, .55], [.26, .05], [.46, .05], [.6, .3], [.8, 0]],
+      fFx: [[0, -.2], [.12, 0], [.2, .2], [.26, .05], [.46, .05], [.6, -.1], [.8, -.2]], fFy: [[0, 0], [.12, .5], [.2, .45], [.26, .05], [.46, .05], [.6, .2], [.8, 0]], fP: [[0, 0], [.2, -.3], [.26, .4], [.46, .4], [.64, 0]],
+      armF: [[0, .4], [.12, 2.6], [.26, -1.0], [.46, -1.0], [.62, .9], [.8, .4]], elbF: [[0, .8], [.12, .4], [.26, .3], [.62, .6], [.8, .8]],
+      armB: [[0, .3], [.12, 2.4], [.26, -1.2], [.46, -1.2], [.62, .7], [.8, .3]], elbB: [[0, .8], [.12, .4], [.26, .3], [.62, .6], [.8, .8]],
+      lean: [[0, .1], [.12, -.2], [.26, 0], [.6, .3], [.8, .1]], bodyY: [[0, 0], [.56, 0], [.66, -.22], [.8, 0]], headRot: [[0, 0], [.26, .3], [.46, .3], [.64, 0]] } },
+  oldvic_hay: { dur: .82, step: 0, surge: [.38, 520], slide: .5, sq: -.1, sfx: "huff", hits: [{ t0: .4, t1: .52, reach: 110, back: 0, y0: 150, y1: 40, kind: "haymaker", fx: "shake", shot: "fist" }],   // Old Vic: the fist wound right up over his cap, a wobble, then the haymaker of his day, the fist swelling
+    keys: { armF: [[0, .4], [.14, 2.9], [.24, 3.05], [.32, 2.95], [.4, 1.5], [.52, 1.4], [.66, 1.2], [.82, .4]], elbF: [[0, 1.2], [.14, 1.7], [.32, 1.8], [.4, 0], [.52, 0], [.66, .4], [.82, 1.1]],
+      gF: [[0, 0], [.32, .15], [.4, .7], [.54, .6], [.66, 0]], aS: [[0, 0], [.38, 0], [.42, .15], [.52, .12], [.6, 0]],
+      armB: [[0, .3], [.14, 1.4], [.32, 1.4], [.4, -.6], [.62, -.4], [.82, .3]], elbB: [[0, 1.2], [.14, .3], [.32, .3], [.4, 1.4], [.82, 1.2]],
+      twist: [[0, 0], [.14, -.5], [.32, -.6], [.4, .45], [.56, .35], [.82, 0]], lean: [[0, .1], [.14, -.25], [.32, -.3], [.4, .7], [.56, .6], [.82, .1]],
+      bodyY: [[0, 0], [.14, -.12], [.32, -.16], [.4, -.1], [.82, 0]], headRot: [[0, 0], [.14, .15], [.32, .15], [.4, -.1], [.82, 0]],
+      fNx: [[0, .24], [.14, .3], [.32, .35], [.4, .6], [.62, .55], [.82, .24]], fFx: [[0, -.2], [.32, -.3], [.4, -.45], [.62, -.42], [.82, -.2]],
+      fNy: [[0, 0], [.14, .25], [.32, .3], [.38, 0], [.82, 0]], hF: [[0, 0], [.4, .6], [.62, .5], [.82, 0]] } },
+  boxcars_roll: { dur: .76, step: 200, surge: [.4, 160, -560], sq: -.08, sfx: "punch", hits: [{ t0: .1, t1: .18, reach: 95, back: -8, y0: 130, y1: 55, kind: "hook" },
+    { t0: .4, t1: .54, reach: 95, back: 10, y0: 230, y1: 30, kind: "launch", fx: "sparks", shot: "dice" }],   // Boxcars: a hook with one die, then both dropped low and thrown up together under them, a double uppercut that carries him up after them
+    keys: { armF: [[0, .55], [.05, .75], [.1, 1.2], [.17, 1.15], [.25, .7], [.34, .15], [.42, 2.6], [.5, 2.95], [.62, 1.6], [.76, .55]],
+      elbF: [[0, 1.35], [.05, 1.55], [.1, 1.0], [.17, 1.05], [.25, 1.4], [.34, 1.7], [.42, .5], [.5, .3], [.62, 1.2], [.76, 1.35]], spF: [[0, 0], [.05, .9], [.1, .1], [.17, -.35], [.25, -.1], [.34, 0], [.76, 0]],
+      armB: [[0, .75], [.25, .8], [.34, .15], [.42, 2.6], [.5, 2.95], [.62, 1.6], [.76, .75]], elbB: [[0, 1.3], [.25, 1.4], [.34, 1.7], [.42, .5], [.5, .3], [.62, 1.2], [.76, 1.3]],
+      gF: [[0, 0], [.08, .15], [.16, .1], [.3, 0], [.42, .45], [.54, .4], [.66, 0]], gB: [[0, 0], [.3, 0], [.42, .45], [.54, .4], [.66, 0]],
+      lean: [[0, .24], [.1, .35], [.25, .3], [.34, .45], [.42, -.2], [.52, -.3], [.76, .24]], arch: [[0, 0], [.34, .1], [.44, -.3], [.54, -.28], [.76, 0]],
+      twist: [[0, 0], [.05, -.3], [.12, .35], [.25, .1], [.34, 0], [.76, 0]], bodyY: [[0, -.17], [.25, -.17], [.34, -.3], [.42, .05], [.52, .05], [.76, -.17]],
+      headRot: [[0, -.12], [.34, .1], [.44, -.25], [.76, -.12]], fNx: [[0, .37], [.76, .37]], fFx: [[0, -.4], [.76, -.4]], fNy: [[0, 0], [.4, 0], [.46, .3], [.6, .2], [.76, 0]] } },
+  pipe_slam: { dur: .95, step: 160, hop: -760, dive: [.32, 1100], sq: .14, sfx: "jump", hits: [{ t0: .3, t1: .62, reach: 160, back: 160, y0: 90, y1: -30, kind: "smash", wide: true, land: true, fx: "splash", shot: "wave" }],   // the plumbers: up, both hands clasped over the head, and down like a hammer on a stuck pipe, water bursting out both ways
+    keys: { armF: [[0, 1.2], [.12, 3.0], [.28, 3.1], [.38, .55], [.46, .3], [.78, .35], [.95, .5]], elbF: [[0, 1.0], [.12, .4], [.28, .3], [.38, 0], [.46, .05], [.78, .2], [.95, .6]],
+      armB: [[0, 1.2], [.12, 3.0], [.28, 3.1], [.38, .55], [.46, .3], [.78, .35], [.95, .5]], elbB: [[0, 1.0], [.12, .4], [.28, .3], [.38, 0], [.46, .05], [.78, .2], [.95, .6]],
+      gF: [[0, 0], [.12, .1], [.28, .15], [.38, .4], [.46, .45], [.52, -.12], [.6, .06], [.7, 0]], gB: [[0, 0], [.12, .1], [.28, .15], [.38, .4], [.46, .45], [.52, -.12], [.6, .06], [.7, 0]],
+      lean: [[0, .2], [.12, -.35], [.28, -.4], [.38, 1.0], [.46, .8], [.78, .75], [.95, .2]], arch: [[0, 0], [.12, -.3], [.28, -.35], [.38, .35], [.95, 0]],
+      bodyY: [[0, -.1], [.12, 0], [.38, 0], [.46, -.38], [.78, -.36], [.95, -.08]],
+      fNx: [[0, .24], [.12, .1], [.38, .1], [.46, .34], [.78, .34], [.95, .24]], fFx: [[0, -.2], [.12, -.05], [.38, -.1], [.46, -.32], [.78, -.32], [.95, -.2]],
+      fNy: [[0, 0], [.12, .3], [.38, .25], [.46, 0], [.95, 0]], fFy: [[0, 0], [.12, .26], [.38, .2], [.46, 0], [.95, 0]], fP: [[0, 0], [.12, -.5], [.38, -.3], [.46, .3], [.78, .3], [.95, 0]] } },
+  vinnie_swoop: { dur: .76, step: 0, surge: [.1, 900], slide: .34, trail: [.08, .42], sq: -.12, sfx: "whoosh", hits: [{ t0: .1, t1: .4, reach: 70, back: 70, y0: 150, y1: 10, kind: "cut", wide: true, fx: "puffs" },
+    { t0: .48, t1: .6, reach: 60, back: 130, y0: 150, y1: 20, kind: "sweep", wide: true }],   // Vinnie: low and fast right through them, the long arms swept back like wings, then a turn and both claws raked back across them
+    keys: { lean: [[0, .3], [.08, .95], [.4, .95], [.48, .4], [.62, .3], [.76, .3]], bodyY: [[0, -.05], [.08, -.32], [.4, -.3], [.5, -.12], [.76, -.05]],
+      armF: [[0, .4], [.08, -1.5], [.4, -1.6], [.46, 1.6], [.58, 1.5], [.76, .4]], elbF: [[0, .8], [.08, .2], [.4, .2], [.46, .1], [.6, .4], [.76, .8]],
+      armB: [[0, .2], [.08, -1.7], [.4, -1.8], [.46, 1.5], [.58, 1.4], [.76, .2]], elbB: [[0, .8], [.08, .2], [.4, .2], [.46, .1], [.6, .4], [.76, .8]],
+      spin: turnKeys(.42, .56, 1, .76), headRot: [[0, 0], [.08, -.3], [.4, -.3], [.5, 0]],
+      fNx: [[0, .2], [.08, .5], [.4, .5], [.5, .3], [.76, .2]], fFx: [[0, -.2], [.08, -.7], [.4, -.7], [.5, -.3], [.76, -.2]], fFy: [[0, 0], [.08, .25], [.4, .25], [.5, 0]] } },
+  rink_roll: { dur: .7, step: 540, hop: -260, slide: .46, trail: [.06, .48], sq: .1, sfx: "dash", hits: [{ t0: .08, t1: .46, reach: 70, back: 30, y0: 120, y1: -10, kind: "tackle", fx: "dust" }],   // Rink: tucked up into a ball and rolled right through them, twice over
+    keys: { flip: turnKeys(.06, .5, 2, .7), lean: [[0, .1], [.06, .9], [.5, .9], [.62, .2], [.7, .1]], bodyY: [[0, 0], [.06, -.2], [.5, -.2], [.62, -.1], [.7, 0]],
+      fNx: [[0, .2], [.06, .3], [.5, .3], [.62, .25], [.7, .2]], fNy: [[0, 0], [.06, .9], [.5, .9], [.62, .1], [.7, 0]], fFx: [[0, -.2], [.06, .2], [.5, .2], [.62, -.15], [.7, -.2]], fFy: [[0, 0], [.06, .9], [.5, .9], [.62, .1], [.7, 0]],
+      armF: [[0, .5], [.06, 2.0], [.5, 2.0], [.62, .8], [.7, .5]], elbF: [[0, .8], [.06, 2.2], [.5, 2.2], [.62, 1.0], [.7, .8]], armB: [[0, .4], [.06, 2.0], [.5, 2.0], [.62, .7], [.7, .4]], elbB: [[0, .8], [.06, 2.2], [.5, 2.2], [.62, 1.0], [.7, .8]],
+      headRot: [[0, 0], [.06, .5], [.5, .5], [.62, 0]] } },
+  doir_rise: { dur: .8, step: 180, hop: -820, dive: [.5, 900], sq: .12, sfx: "kick", hits: [{ t0: .06, t1: .26, reach: 95, back: 20, y0: 240, y1: 30, kind: "launch" },
+    { t0: .5, t1: .72, reach: 105, back: 15, y0: 100, y1: -50, kind: "smash", land: true, fx: "sparks", shot: "wave" }],   // Doir: a rising knife-hand that lifts them, a forward flip over the top, and a heel brought down on them
+    keys: { armF: [[0, .6], [.06, 2.9], [.22, 3.1], [.32, 2.0], [.5, .9], [.62, .5], [.8, .6]], elbF: [[0, 1.0], [.06, .1], [.22, .1], [.32, .4], [.8, 1.0]],
+      armB: [[0, .4], [.06, -.8], [.22, -.9], [.32, 2.0], [.5, .9], [.62, .3], [.8, .4]], elbB: [[0, 1.0], [.06, .5], [.32, .4], [.8, 1.0]],
+      flip: turnKeys(.22, .5, 1, .8), lean: [[0, .2], [.06, -.25], [.22, -.3], [.36, .5], [.5, .3], [.62, .2], [.8, .2]],
+      fNx: [[0, .2], [.06, .5], [.22, .5], [.36, .3], [.46, .55], [.56, .3], [.8, .2]], fNy: [[0, 0], [.06, .7], [.22, .7], [.36, .6], [.46, 1.0], [.56, .2], [.8, 0]],
+      fFx: [[0, -.2], [.06, -.1], [.36, -.1], [.8, -.2]], fFy: [[0, 0], [.06, .15], [.36, .3], [.56, .05], [.8, 0]], fP: [[0, 0], [.06, -.4], [.46, .3], [.56, .2], [.8, 0]],
+      bodyY: [[0, 0], [.58, 0], [.66, -.25], [.8, 0]] } },
+});
 // the moves the game drives itself, keyed so the editor can pose them too (the user, 2026-10-25: "every move we do and create should go in there for
 // their respective characters"): the tackle, the charged tackle's dig-in, the back-step. pose: never played as an attack; screen: their sides as seen
 // (far / near), not lead / rear, as they were drawn. Their keys start as the poses they had
@@ -2760,7 +2844,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }

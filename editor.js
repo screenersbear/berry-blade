@@ -87,6 +87,11 @@ let vprev = null;                                                // the villain 
 const villainEntries = () => VIL ? VIL.list().map((v, i) => { const look = clone(VIL.look(v.id) || {}); delete look.updated; delete look.id;
   return { id: "villain:" + v.id, villain: v, builtIn: true, created: 1000 + i, ref: null, spec: { name: v.name, base: "villain" }, look, base: clone(look), undo: [], redo: [] }; }) : [];
 const isVillainSpec = s => !!(s && s.villain && s.villain.on);
+// the berry buddies: their moves (the plain hit, the special every couple of hits), on the game's own models (the user, 2026-10-25: "every move we do and
+// create should go in there for their respective characters"). Their look stays the game's; origin: as they ship
+const BUD = (window.BerryGame && window.BerryGame.buddies) || null;
+const buddyEntries = () => BUD ? BUD.list().map((b, i) => entry(BUD.spec(b.id), { id: "buddy:" + b.id, buddy: b.id, builtIn: false, created: 900 + i, ref: null, origin: BUD.plain(b.id) })) : [];
+const B_TABS = { ANIMATE: "animate" };
 const entry = (spec, extra = {}) => ({ id: spec.id, spec: KIT.normalize(spec), origin: KIT.normalize(extra.origin || spec), builtIn: false, created: Date.now(), ref: undefined, undo: [], redo: [], ...extra, spec: KIT.normalize(spec), origin: KIT.normalize(extra.origin || spec) });
 let cast = PRESETS.map((p, i) => entry(p, { builtIn: true, created: i, ref: null }));
 let cur = cast[0];
@@ -125,6 +130,7 @@ function loadStored() {                       // the cast = what ships with the 
     if (e) e.spec = spec;
     else { e = entry(spec, { id: d.id, builtIn: false, created: d.created || Date.now(), origin: d.origin || spec }); cast.push(e); }
   }
+  cast.push(...buddyEntries());                                // the berry buddies (their moves)
   cast.forEach(e => { e.base = clone(e.spec); });
   cast.push(...villainEntries());                              // the bosses (their looks)
   let restored = 0;
@@ -152,6 +158,7 @@ let rig = KIT.build(cur.spec), st = newState(rig), anim = "idle", animT = 0, pen
 function newState(r) { const s = KIT.makeState(0, r, 0, GROUND); s.yaw = -.85; return s; }
 function applySpec(spec) {
   const was = rig;
+  if (cur.buddy) { rig.spec = spec; st.rig = rig; return; }     // (a buddy: only its moves change, the game's model stays as it is)
   rig = KIT.update(rig, spec);
   if (rig !== was) { const s = newState(rig); Object.assign(s, { pose: st.pose, out: st.out, pv: st.pv, yaw: st.yaw }); st = s; }
   else st.rig = rig;
@@ -160,7 +167,7 @@ function applySpec(spec) {
     if (k !== cardKey) { KIT.paintCards(cards, spec); cardKey = k; }
   }
 }
-function switchRig(spec) { KIT.dispose(rig); rig = KIT.build(spec); st = newState(rig); cardKey = ""; if (rig.kind === "cat") { KIT.paintCards(cards, spec); cardKey = JSON.stringify([spec.colors.cards, spec.colors.cardEdge]); } animT = 0; }
+function switchRig(spec) { KIT.dispose(rig); rig = KIT.build(spec); if (cur.buddy) BUD.dress(rig, cur.buddy); st = newState(rig); cardKey = ""; if (rig.kind === "cat") { KIT.paintCards(cards, spec); cardKey = JSON.stringify([spec.colors.cards, spec.colors.cardEdge]); } animT = 0; }
 
 // preview moves: a small copy of the game's player physics, running in place
 function spring(b, dt) { b.sqv += (-190 * b.sq - 11 * b.sqv) * dt; b.sq += b.sqv * dt; }
@@ -176,7 +183,9 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch", dn_sword: "down stab", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
-  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step" };   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step",
+  burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
+  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
   const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
@@ -187,12 +196,15 @@ function movesFor(sp) {                                          // every move t
     add("Charged tackle (hold attack + block)", "tkdig", "", C); list("Charged tackle (hold attack + block)", TK.cat, C); add("Back-step (block + back)", "backstep", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
+  const bsp = (KIT.BUDDY_SP || {})[sp.id];                       // (a berry buddy's special, every couple of plain hits: work.html updateAllyOne)
+  if (cur && cur.buddy && cur.spec === sp) { list("Attack", ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); return out; }
   list("Attack", S.ground, T); list("Forward + attack", S.groundB || S.ground, T);
   list("Attack in the air", S.air1 || S.air, T); list("Forward + attack in the air", S.air2 || S.air, T);
   list("Up + attack", S.upChain || [S.up], T); add("Up + attack in the air", S.up, "", T); add("Down + attack in the air", S.down, "", T);
   add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
   list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
+  add("As a berry buddy: special", bsp, "", T);
   return out;
 }
 function driveMove(p, dt) {
@@ -846,7 +858,7 @@ const MOVES = [["h", "Attacks"], ["s", "move.set", "Move set", KIT.MOVE_SETS, { 
   ["p", "Pick RUN, JUMP or ATTACK under the stage to watch these."]];
 let tab = "BODY";
 const V_TABS = { LOOK: "villainLook" };
-function tabsFor(s) { return s.base === "villain" ? V_TABS : s.base === "cat" ? C_TABS : H_TABS; }
+function tabsFor(s) { return cur && cur.buddy ? B_TABS : s.base === "villain" ? V_TABS : s.base === "cat" ? C_TABS : H_TABS; }
 function renderTabs() {
   const T = tabsFor(cur.spec); if (!T[tab]) tab = Object.keys(T)[0];
   $("tabs").innerHTML = Object.keys(T).map(k => `<button class="tab${k === tab ? " on" : ""}" data-t="${k}">${k}</button>`).join("");
@@ -1331,6 +1343,7 @@ function chipsOf(s) {
 function castItemHTML(e) {
   const s = e.spec;
   if (e.villain) return `<b>${s.name}</b><span class="chips">${e.villain.cols.slice(0, 4).map((c, i) => `<i style="background:${(e.look.colors || {})[i] || c}"></i>`).join("")}</span><small>VILLAIN${edited(e) ? " · EDITED" : ""}</small>`;
+  if (e.buddy) return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>BERRY BUDDY${edited(e) ? " · EDITED" : ""}</small>`;
   if (isVillainSpec(s)) return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>VILLAIN${edited(e) ? " · EDITED" : ""}</small>`;
   return `<b>${s.name}</b><span class="chips">${chipsOf(s).map(c => `<i style="background:${c}"></i>`).join("")}</span><small>${e.builtIn ? (edited(e) ? "EDITED" : "ORIGINAL") : "NEW"}</small>`;
 }
@@ -1345,16 +1358,17 @@ function renderCast() {
 function renderCastItem(e) { const b = $("cast").querySelector(`[data-id="${CSS.escape(e.id)}"]`); if (b) b.innerHTML = castItemHTML(e); }
 function updateFoot() {
   $("bUndo").disabled = !cur.undo.length; $("bRedo").disabled = !cur.redo.length;
-  $("bDel").disabled = cur.builtIn; $("bReset").disabled = !edited(cur);
+  $("bDel").disabled = cur.builtIn || !!cur.buddy; $("bReset").disabled = !edited(cur);
 }
 function renderAll() {
   renderCast(); renderTabs(); renderControls(); updateFoot();
-  $("stage").classList.toggle("villain", !!cur.villain); $("name").readOnly = !!cur.villain;
+  $("stage").classList.toggle("villain", !!cur.villain); $("name").readOnly = !!(cur.villain || cur.buddy);
   if (cur.villain) { $("name").value = cur.spec.name; $("kindBar").textContent = "VILLAIN"; $("ref").hidden = true; $("bDup").disabled = $("bDup2").disabled = true; return; }
-  $("bDup").disabled = $("bDup2").disabled = false;
+  $("bDup").disabled = $("bDup2").disabled = !!cur.buddy;
   $("name").value = cur.spec.name;
   $("kindBar").textContent = cur.spec.base === "cat" ? "CREATURE" : cur.spec.body.build === "tall" ? "HERO" : "HERO · CHIBI";
   if (isVillainSpec(cur.spec)) $("kindBar").textContent = "VILLAIN";
+  if (cur.buddy) $("kindBar").textContent = "BERRY BUDDY · MOVES";
   fillMoves(); renderKeys();
   showRef();
 }
@@ -1381,6 +1395,7 @@ function select(e, force) {
   renderAll();
 }
 $("name").addEventListener("input", () => {
+  if (cur.buddy) return;
   const v = $("name").value.toUpperCase().replace(/[^A-Z0-9 .!?'&-]/g, "");
   if (v.trim()) { const t = clone(cur.spec); t.name = v; cur.spec = KIT.normalize(t); pending = cur.spec; scheduleSave(cur); renderCastItem(cur); }
 });
@@ -1395,7 +1410,7 @@ function addEntry(spec, extra = {}) {
   renderCast(); select(e); return e;
 }
 function duplicate() {
-  if (cur.villain) return;
+  if (cur.villain || cur.buddy) return;
   const s = clone(cur.spec); s.name = (s.name.slice(0, 11) + " 2").trim();
   addEntry(s, { ref: cur.ref || null }); toast(`COPIED TO ${cur.spec.name}`);
 }
@@ -1410,7 +1425,7 @@ $("bReset").onclick = () => confirmBox("RESET?", cur.spec.name, cur.villain ? "P
   cur.undo.push(JSON.stringify(cur.spec)); cur.redo = [];
   cur.spec = KIT.normalize(cur.builtIn ? presetOf(cur.id) : cur.origin); cur.committed = JSON.stringify(cur.spec); pending = cur.spec; scheduleSave(cur); renderAll();
 });
-$("bDel").onclick = () => { if (cur.builtIn) return; confirmBox("DELETE?", cur.spec.name, "This removes the character from the game for good. Export it first if you might want it back.", async () => {
+$("bDel").onclick = () => { if (cur.builtIn || cur.buddy) return; confirmBox("DELETE?", cur.spec.name, "This removes the character from the game for good. Export it first if you might want it back.", async () => {
   const e = cur; cast = cast.filter(x => x !== e); clearTimeout(e.saveT);
   try { drafts.drop(e.id); await store.del(e.id); } catch { }
   select(cast[0]); renderCast(); toast(`DELETED ${e.spec.name}`);
@@ -1432,7 +1447,7 @@ addEventListener("keydown", e => {                // Esc closes a dialog, or the
 let expMode = "one";
 function exportData() {
   if (expMode === "one") return { name: `${cur.spec.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.character.json`, json: JSON.stringify(cur.spec, null, 2) };
-  const list = cast.filter(e => !e.villain && (!e.builtIn || edited(e))).map(e => e.spec);
+  const list = cast.filter(e => !e.villain && !e.buddy && (!e.builtIn || edited(e))).map(e => e.spec);
   return { name: "starky-cast.json", json: JSON.stringify({ format: "starky.cast", version: 1, characters: list }, null, 2), n: list.length };
 }
 function refreshExport() {
@@ -1462,7 +1477,7 @@ function importText(text) {
   if (!ok.length) throw new Error("No characters found in that file.");
   let lastE = null;
   ok.forEach(c => {
-    const s = KIT.normalize(c), have = cast.find(e => e.id === s.id || (!e.builtIn && e.spec.name === s.name) || (e.builtIn && e.id === s.id));
+    const s = KIT.normalize(c), have = cast.find(e => !e.buddy && (e.id === s.id || (!e.builtIn && e.spec.name === s.name) || (e.builtIn && e.id === s.id)));
     if (have) { have.undo.push(JSON.stringify(have.spec)); have.redo = []; have.spec = KIT.normalize({ ...s, id: have.id }); scheduleSave(have); lastE = have; }
     else { const e = entry({ ...s, id: freshId(s.name) }, { builtIn: false, created: Date.now() }); cast.push(e); scheduleSave(e); lastE = e; }
   });
@@ -1685,12 +1700,13 @@ $("bApply").onclick = async () => {
   const ch = cast.filter(changed); let bad = 0;
   for (const e of ch) { try {
     if (e.villain) { await VIL.save(e.villain.id, edited(e) ? e.look : null); e.base = clone(e.look); continue; }
+    if (e.buddy) { if (!BUD.save(e.buddy, edited(e) ? e.spec.move.anims : null)) throw 0; e.base = clone(e.spec); continue; }   // (a buddy: its moves into the game)
     if (e.builtIn && !edited(e)) await store.del(e.id); else await store.put(docOf(e)); e.base = clone(e.spec); e.isNew = false; } catch { bad++; } }
   if (bad) { toast("COULDN'T SAVE EVERYTHING · TRY SAVE AS A FILE", 4500); return; }
   drafts.clear(); toast(`APPLIED ${ch.length} CHARACTER${ch.length === 1 ? "" : "S"} TO THE GAME`); finishClose();
 };
 $("bSaveFile").onclick = async () => {
-  const ch = cast.filter(e => changed(e) && !e.villain); if (!ch.length) { toast("VILLAIN LOOKS GO STRAIGHT INTO THE GAME · USE APPLY", 4000); return; }
+  const ch = cast.filter(e => changed(e) && !e.villain && !e.buddy); if (!ch.length) { toast("VILLAIN LOOKS AND BUDDY MOVES GO STRAIGHT INTO THE GAME · USE APPLY", 4000); return; }
   const json = JSON.stringify({ format: "starky.cast", version: 1, characters: ch.map(e => e.spec) }, null, 2);
   const name = `berry-blade-edits-${new Date().toISOString().slice(0, 10)}.json`;
   if (!(await saveFile(name, json))) { toast("THE FILE WASN'T SAVED · NOTHING CHANGED", 4000); return; }
