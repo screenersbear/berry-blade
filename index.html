@@ -71,7 +71,7 @@
   #toast { position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); background: var(--s); color: var(--y); z-index: 60;
     font: 600 12px "Jost", sans-serif; letter-spacing: .24em; padding: 9px 18px; opacity: 0; transition: opacity .4s; pointer-events: none; white-space: nowrap; }
   #toast.show { opacity: 1; }
-  #teamMnu, #rideAsk { z-index: 66; } #teamBtns button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 150px; } #teamBtns small { margin: 0; font-size: 9px; letter-spacing: .2em; opacity: .8; }
+  #teamMnu, #rideAsk, #skipAsk { z-index: 66; } #skipAsk { background: transparent; } #teamBtns button { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 150px; } #teamBtns small { margin: 0; font-size: 9px; letter-spacing: .2em; opacity: .8; }
   #voCap { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 8px); width: max-content; max-width: min(84vw, 760px); z-index: 58; pointer-events: none;
     background: var(--y); color: var(--s); border: 3px solid var(--s); box-shadow: 5px 5px 0 var(--s); font: 15px/1.3 "Bungee", sans-serif; text-transform: uppercase;
     text-align: center; padding: 8px 14px 6px; opacity: 0; transition: opacity .3s, transform .3s; }
@@ -529,7 +529,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261026c"></script>
+<script src="charkit.js?v=20261026e"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261025a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -653,6 +653,11 @@
   <div class="btns" id="teamBtns"></div>
   <small data-pad="← → to choose &middot; {j} to send them home">← → to choose &middot; Enter to send them home</small>
 </div></div>
+<div id="skipAsk" class="mnu"><div class="panel">
+  <div class="lockup"><div class="blk">SKIP THE RIDE?</div><div class="bar" id="skSub"></div></div>
+  <div class="btns" id="skBtns"><button data-k="mosey">NO, LET'S MOSEY!</button><button data-k="skip">YES, SKIP AHEAD</button></div>
+  <small data-pad="← → to choose &middot; {j} to pick">← → to choose &middot; Enter to pick</small>
+</div></div>
 <div id="rideAsk" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">WHAT A VIEW</div><div class="bar">PULL OVER FOR A WHILE?</div></div>
   <div class="btns" id="raBtns"><button data-a="yes">PULL OVER</button><button data-a="no">DRIVE ON</button></div>
@@ -699,7 +704,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261026d"></script>
+<script src="editor.js?v=20261026e"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -6086,6 +6091,7 @@ function markMenu() {
   if (menuUp === "slots") { [...$("slList").children].forEach((b, i) => b.classList.toggle("on", i === slotSel)); $("slots").querySelector("[data-s=back]").classList.toggle("on", slotSel === 3); $("slDel").classList.toggle("on", slotSel === 4); $("slList").querySelectorAll(".ask i").forEach((b, i) => b.classList.toggle("on", i === (askSel ? 1 : 0))); }
   if (menuUp === "team" && teamAsk) [...$("teamBtns").children].forEach((b, i) => b.classList.toggle("on", i === teamAsk.sel));
   if (menuUp === "rideask") [...$("raBtns").children].forEach((b, i) => b.classList.toggle("on", i === rideAskSel));
+  if (menuUp === "rideskip") [...$("skBtns").children].forEach((b, i) => b.classList.toggle("on", i === skipSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
 function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ or ↓)
@@ -6094,6 +6100,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   if (menuUp === "mappath") { if ((ok || back) && mapAnim && performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; }   // (the way being drawn: a press once it's there goes on)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "rideask") { if (d) { rideAskSel = 1 - rideAskSel; SFX.tick(); markMenu(); } if (ok) rideAnswer(rideAskSel === 0); if (back) rideAnswer(false); return; }
+  if (M === "rideskip") { if (d) { skipSel = 1 - skipSel; SFX.tick(); markMenu(); } if (ok) skipAnswer(skipSel === 0); return; }   // (no going back from it: you're on your way)
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
     if (d) { do mainSel = step(mainSel, B.length); while (B[mainSel].classList.contains("off")); SFX.tick(); markMenu(); }
@@ -6209,6 +6216,20 @@ function mapPath(from, to, then) {                  // the first time out of a w
   drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); SFX.reveal && SFX.reveal();
   mapAnim.timer = setTimeout(mapPathDone, 3200);
 }
+// on to a world you've been to before, by road (the user, 2026-10-26: "when you get out to the world map through an exit you've been, it should show the world map
+// and allow the player: "skip the ride?" responses should be, "no, let's mosey!" and this will show the ride intermission; or "yes, skip ahead" and this will take
+// them to the next screen"): the island's map, where you're headed picked out on it, and the question over it. The first time into a world, La Guagua as ever
+let skipAsk = null, skipSel = 0;
+function askSkip(from, to) {
+  skipAsk = { from, to }; skipSel = 0; menuUp = "rideskip"; paused = true; mapSel = to; mapPick = null;
+  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").querySelector(":scope > .panel > small").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); $("skSub").textContent = "ON TO " + WORLDS[to].name;
+  $("skipAsk").classList.add("show"); SFX.reveal && SFX.reveal(); markMenu();
+}
+function skipAnswer(mosey) {
+  const A = skipAsk; if (!A) return; skipAsk = null; $("skipAsk").classList.remove("show"); $("map").classList.remove("show"); $("mapBtns").style.visibility = ""; $("map").querySelector(":scope > .panel > small").style.visibility = ""; menuUp = null; paused = false; SFX.confirm();
+  if (mosey) startRide(A.from, A.to, () => goWorldNow(A.to)); else goWorldNow(A.to);
+}
+$("skBtns").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b && skipAsk) skipAnswer(b.dataset.k === "mosey"); });
 function mapPathDone() {                            // (drawn: on into the world; a press once it's there skips the wait)
   const A = mapAnim; if (!A) return; clearTimeout(A.timer); mapAnim = null; $("map").classList.remove("show"); $("mapBtns").style.visibility = ""; menuUp = null; paused = false; SFX.tick(); A.then();
 }
@@ -7627,7 +7648,8 @@ function statsGo() {                                  // (not in the first momen
   if (!statsUp || statsUp.ask || performance.now() - statsUp.t0 < 900) return;
   if (statsUp.full && !statsUp.asked) { askShowdown(); return; }   // (pressed on before the bar filled: the question still comes first)
   const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
-  const go = rideTo(w) ? () => { $("wstats").classList.remove("show"); startRide(world, w, () => goWorldNow(w)); } : () => goWorldNow(w);   // (the first time into a world: La Guagua there, the user 2026-10-26)
+  const byRoad = !!story && w !== world && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (a world you've been to: the map, and the question, skip the ride?)
+  const go = rideTo(w) ? () => { $("wstats").classList.remove("show"); startRide(world, w, () => goWorldNow(w)); } : byRoad ? () => { $("wstats").classList.remove("show"); askSkip(world, w); } : () => goWorldNow(w);   // (the first time into a world: La Guagua there, the user 2026-10-26)
   if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, go); }   // (a way not yet drawn: the map first)
   go();
 }
@@ -8072,16 +8094,13 @@ function endIntro() { if (!intro) return; intro.cast.forEach(c => { c.r.root.vis
 const EJ_P = 1 / 100, EJ_BACK = 1 / 40, EJ_PITY = 120, EJ_GAP = 40;   // (rarer since 2026-10-21, the user: "make it rarer for him to appear": never within 40 rooms of the last time)
 let ejDry = (() => { try { return +localStorage.getItem("berry.ejDry") || 0; } catch { return 0; } })();
 const ejSaveDry = () => { try { localStorage.setItem("berry.ejDry", String(ejDry)); } catch { } };
-let ej = null, EJ_DEF = null, ejWho = "noro"; const EJ_DEFS = {};   // (the rival: Noro or Doir, whichever turned up this time. The user, 2026-10-25: "it can be noro OR doir who appears")                        // ej.phase: "fight" (in the boss slot) · "partner" · "chided" (startled, blushing, off)
+let ej = null, EJ_DEF = null, ejWho = "evil-june"; const EJ_DEFS = {};   // (the rival: Evil June again, as she was first (the user, 2026-10-26: "make noro and doir buddies you can find ... then replace the noro interaction with evil june like we originally had it"); Noro or Doir 10-21 to 10-26)                        // ej.phase: "fight" (in the boss slot) · "partner" · "chided" (startled, blushing, off)
 const ejFight = () => !!ej && ej.phase === "fight", ejPal = () => !!ej && ej.phase !== "fight";
-const EJ_SWORD = { noro: { main: "#eef4ff", fill: "#452f81", orb: "#ec1f1d", trim: "#fdfb0f", c1: "#fe0000", c2: "#fdfb0f", c3: "#9b7ee7" },
-  doir: { main: "#eef4ff", fill: "#1f6b2e", orb: "#34da2a", trim: "#fdfb0f", c1: "#34da2a", c2: "#fdfb0f", c3: "#9be89b" } };   // (each one's sword in his own colours)
-function ejDef(who = ejWho) {                        // the rival's own rig, apart from any world's line-up: Noro or Doir (as the kit has them), with a sword in his colours and Evil June's sword moves
+function ejDef(who = ejWho) {                        // the rival's own rig, apart from any world's line-up: Evil June, as the kit has her, her own dark sword and her sword moves
   if (EJ_DEFS[who]) return (EJ_DEF = EJ_DEFS[who]);
-  const L = rosterSpecs(), nr = L.find(q => q.id === who) || L.find(q => q.id === "noro"), ejs = L.find(q => q.id === "evil-june"), sp = JSON.parse(JSON.stringify(nr || ejs));
-  if (nr && ejs) { sp.id = who + "-rival"; sp.outfit.prop = { ...JSON.parse(JSON.stringify(ejs.outfit.prop)), ...(EJ_SWORD[who] || EJ_SWORD.noro) }; sp.move = JSON.parse(JSON.stringify(ejs.move)); }
+  const L = rosterSpecs(), sp = JSON.parse(JSON.stringify(L.find(q => q.id === "evil-june"))); sp.id = "evil-june-rival";
   const r = buildChar(sp); r.root.visible = r.shadow.visible = false;
-  return (EJ_DEF = EJ_DEFS[who] = { id: who + "-rival", kit: true, ej: true, chase: true, name: who === "doir" ? "DOIR" : "NORO", rig: r, sync: syncKitFoe, hw: 26, h: 112, hp: 20, speed: 185, jumpy: .75, atk: "waveslash", atk2: "tidedash", dmg: 2 });   // (extra deadly: tougher, quicker, two hearts a hit)
+  return (EJ_DEF = EJ_DEFS[who] = { id: "evil-june-rival", kit: true, ej: true, chase: true, name: "EVIL JUNE", rig: r, sync: syncKitFoe, hw: 26, h: 112, hp: 20, speed: 185, jumpy: .75, atk: "waveslash", atk2: "tidedash", dmg: 2 });   // (extra deadly: tougher, quicker, two hearts a hit)
 }
 function maybeEJ(force, revisit) {
   const S0 = STAGES[stage];
@@ -8090,10 +8109,10 @@ function maybeEJ(force, revisit) {
   const side = entrySide === "right" ? -1 : 1; let bx = null;                    // she drops in ahead of you, onto solid ground
   for (const d of [560, 460, 660, 360, 760, 260]) for (const sd of [side, -side]) { const x = player.x + sd * d; if (bx === null && x > 160 && x < WORLD - 160 && groundAt(x) !== null) bx = x; }
   if (bx === null) return false;
-  ejWho = Math.random() < .5 ? "noro" : "doir"; const D = ejDef(); hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };   // (one or the other, each time)
+  const D = ejDef(); hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };
   enemy = makeFoeState(D, bx); enemy.dir = Math.sign(player.x - bx) || -1; enemy.atkCd = 2.4; enemy.y = -60; enemy.vy = 200; enemy.onGround = false;
   showFoe(D); setFoeHud(); $("exitCue").classList.add("hidden"); SFX.ejSting(); ejDry = 0; ejSaveDry();
-  const b = $("banner"); b.innerHTML = `<div class="blk">${D.name}</div><div class="bar">HE'S FOUND YOU · EVERY WAY OUT IS SHUT</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${D.name}</div><div class="bar">SHE'S FOUND YOU · EVERY WAY OUT IS SHUT</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
   setTimeout(() => { if (ej) startVO("rival"); }, 2600);   // (the first time either of them turns up: Rose, then Camila, the user 2026-10-25)
   return true;
@@ -8111,7 +8130,7 @@ function ejJoin() {                                  // beaten: up she gets, and
   foe = FOES[STAGES[stage].foe] || FOES[0]; enemy = makeFoeState(foe, WORLD - 360); bossIn = false; bossCue = 0; setFoeHud();
   wayCue();
   puffs(st.x, st.y - 40, 8, 40, 160); SFX.fanfare();
-  const b = $("banner"); b.innerHTML = `<div class="blk">NORO JOINS YOU</div><div class="bar">HE'S ON YOUR SIDE · FOR NOW</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${D.name} JOINS YOU</div><div class="bar">SHE'S ON YOUR SIDE · FOR NOW</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 function ejPlace(x, y, face) { if (!ej || ej.phase !== "partner") return; x = shoreX(x); if (STAGES[stage].swim) y = groundAt(x) ?? y; Object.assign(ej.st, { x, y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 }); ej.tgt = null; }
@@ -8188,7 +8207,7 @@ function ejChided(dt) {                              // startled (a jump and a "
 }
 function ejGone() {                                  // she's off: till you meet her again
   const s = ej.st; s.blush = false; s.shy = 0; s.startle = 0; ejEnd();
-  const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">NORO'S RUN OFF · TILL NEXT TIME</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">${(EJ_DEF || {}).name || "EVIL JUNE"}'S RUN OFF · TILL NEXT TIME</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 // ── the bosses telling Evil June off: one gesture each, laid over the boss's own pose as it stands (syncFoe). t: seconds in, k: 0–1 in/out.
@@ -9472,7 +9491,7 @@ function partnerHurt(P, d) {
 function partnerRest(P) {                         // out of hearts: off to rest
   if (P.kind === "pet") catLeave("% NEEDS A REST · HEADS HOME", P.t);
   else if (P.kind === "ally") allyToCheck(P.a);
-  else { const nm = (EJ_DEF || {}).name || "NORO"; ejEnd(); toast(nm + " NEEDS A REST · TILL NEXT TIME", 2600); }
+  else { const nm = (EJ_DEF || {}).name || "EVIL JUNE"; ejEnd(); toast(nm + " NEEDS A REST · TILL NEXT TIME", 2600); }
 }
 let HEARTS3 = null; const HEART_HAS = new Set();   // (the partners with a hearts row made)
 function partnerHearts(q) {                        // three little hearts over a partner's head a moment after a hit (gone ones hollow)
@@ -9500,7 +9519,7 @@ function teamMembers() {
   const L = [];
   [tamed, tamed2].forEach(t => { if (t) L.push({ name: petDef(petSp(t), t.w).name, kind: petNoun(petSp(t)), sort: "pet", home: () => catLeave("% HEADS HOME", t) }); });
   allies.forEach(a => L.push({ name: a.A.name, kind: a.A.crew ? "BERRY BUDDIES" : "BERRY BUDDY", sort: "ally", home: () => { if (buddyAt.w === world) { buddyAt.rooms[a.A.id] = stage; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true; } allyLeave("% HEADS HOME", a); } }));   // (sent home: it waits here for next time, as a swapped one did)
-  if (ejPal() && !(teamAsk && teamAsk.noroNew)) { const nm = (EJ_DEF || {}).name || "NORO"; L.push({ name: nm, kind: "RIVAL", home: () => { ejEnd(); toast(nm + " HEADS OFF · TILL NEXT TIME", 2600); } }); }
+  if (ejPal() && !(teamAsk && teamAsk.noroNew)) { const nm = (EJ_DEF || {}).name || "EVIL JUNE"; L.push({ name: nm, kind: "RIVAL", home: () => { ejEnd(); toast(nm + " HEADS OFF · TILL NEXT TIME", 2600); } }); }
   return L;
 }
 function teamChoose(nc, only) {                    // a fourth: everything stops, and you pick who goes home (the newcomer last, picked to start with; only: just the pets, when the pets' two places are full)
@@ -9540,7 +9559,8 @@ const ALLIES = [
   { id: "vinnie", name: "VINNIE", w: 6, hi: "REVENGE IS SWEET!", hit: "punch", reach: 110, col: "#8fd6f5" },   // Vinella's vampire cousin, out for revenge on her: the candy works
   // (OCHO, the four-armed octopus in a mushroom cap, was the lakebed's: taken off the buddies, the user 2026-10-24 "i think we made the octopus boss a berry buddy in another map earlier. can you remove it as a buddy?". Its rig, buildAlly "ocho", is still there)
   { id: "rink", name: "RINK", w: 7, hi: "RUFF STUFF!", hit: "punch", reach: 100, col: "#f2ee00" },   // the punk dog: Crux's city
-  { id: "doir", name: "DOIR", w: 12, hi: "HE'S GOING DOWN!", hit: "slash", reach: 110, col: "#34da2a", kit: "doir" },   // Doir, out for revenge on King P too: his castle (the kit's own Doir, as in the duo)
+  { id: "doir", name: "DOIR", w: 12, hi: "HE'S GOING DOWN!", hit: "slash", reach: 110, col: "#34da2a", kit: "doir" },   // Doir, out for revenge on King P too (the kit's own Doir, as in the duo): found anywhere since 2026-10-26
+  { id: "noro", name: "NORO", w: 9, hi: "TOGETHER, THEN!", hit: "punch", reach: 105, col: "#452f81", kit: "noro" },   // Noro, a berry buddy now (the user, 2026-10-26: "make noro and doir buddies you can find and give them the one special move as well"): the kit's own Noro
 ];
 const ALLY_RIGS = {};
 let allies = [], allyHere = null, allyBring = null;   // the ones with you (two partners along at most, any mix: the user, 2026-10-26) · the one waiting in this room · (a loaded game: the ones to bring back)
@@ -9551,8 +9571,8 @@ const buddyOK = s => { const q = STAGES[s]; return !!q && !!q.cell && !q.boss &&
 // so the spot is predetermined but who is there will change ... except the one that looks like vinella should be only in his factory"): each world's spots (the
 // forest's hidden cove and D4, the waves' crow's nest and B8's cave: "in berry forest we will have the one buddy that appears in the hidden beach area and the 2nd
 // buddy should be waiting in d4. in cuss' waves, we have their spots. for the other worlds, you decide for now"), and who's at each picked afresh every stay from
-// all of them. Vinnie only ever at Vinella's factory (its first spot), Doir only at King P's castle
-const BUDDY_ONLY = { vinnie: 6, doir: 12 }, SPOT_CELLS = ["C3", "B6", "C4", "B5", "C2", "B7", "D3", "A4", "C6", "B3"];
+// all of them. Vinnie only ever at Vinella's factory (its first spot)
+const BUDDY_ONLY = { vinnie: 6 }, SPOT_CELLS = ["C3", "B6", "C4", "B5", "C2", "B7", "D3", "A4", "C6", "B3"];
 function buddySpots() {                            // this world's spots: its own (the map's), else two of its rooms (none on the beach, or in the deep)
   const W0 = WORLDS[world]; if (W0.buddySpots) return W0.buddySpots; if (world === 9 || world === 13) return [];
   const out = []; for (const c of SPOT_CELLS) { if (out.length >= 2) break; const i = STAGES.findIndex(q => q && q.cell === c && !q.arena); if (i >= 0 && buddyOK(i) && !out.includes(i)) out.push(i); }

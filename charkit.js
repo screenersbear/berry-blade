@@ -387,15 +387,18 @@ const PRESETS = [
         { kind: "buttons", dx: 30, y: 70, gap: 70, rows: 2, r: 13, col: "#fffc01" }, { kind: "poly", pts: [-80, 280, -40, 265, -36, 277, -76, 292], mirror: true, col: "#fffc01" }],
       arm: "#12cff5", armBands: [], armProf: [[0, .085], [.4, .085], [.62, .12], [.85, .17], [1, .2]],
       leg: "skin", legBands: [{ v0: 0, v1: .34, col: "#dd1355" }], legProf: [[0, .1], [.3, .085], [.36, .06], [.5, .05], [1, .045]],
-      hand: { style: "sleeve", col: "#12cff5", dot: "#fffc01" },
+      hand: { style: "sleeve", col: "#12cff5", cuff: "#ffffff", dot: "#fffc01", band: "#fe0000" },
       boot: { col: "#3dddff", r: .11, len: .2, wide: 1.25, shaft: true, shaftH: .2, shaftR: .1, rimCol: "#3dddff", cuff: true, cuffCol: "#13d5ff", studs: true, studsCol: "#fffc01", studsHigh: false, sole: true, soleCol: "#ffffff" },
       skirts: [{ top: .15, bottom: .34, len: .28, y: .1, col: "#13d5ff" }],
       collar: { on: true, top: .24, bottom: .11, h: .16, y: .06, col: "#ed145b", open: .9 },
       pads: { on: true, side: "right", shape: "block", col: "#ed145b", size: 1.25 },
       headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
       headphones: { on: true, col: "#1d1d1d", cup: "#ed145b" },
-      prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", size: 1 } },
-    move: { set: "sword", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 } } }),   // (June's moves, no floating; her own standing pose, 2026-10-25)
+      prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 } },
+    move: { set: "sword", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 },   // (June's moves, no floating; her own standing pose, 2026-10-25)
+      anims: { spin: {   // (her air spin's feet: the front one lifted less, the back one a little more mid-turn: the user's file, 2026-10-26 "there was one where the leg twist seemed higher so i lowered the lift on the front foot")
+        fNy: [[0, .2607869070194706], [.019, .22499999999999998], [.079, .15, 1], [.11, .15], [.1196, .15], [.1603, .15], [.2009, .15], [.22, .15], [.2415, .15, 1], [.2909, .1515625], [.33, .15421423161123826], [.3404, .155], [.3899, .1584375], [.4393, .16, 1]],
+        fFy: [[0, .25], [.11, .25], [.1215, .25], [.1815, .265], [.22, .27768591732555964], [.2415, .28, 1], [.3015, .265], [.33, .25481798881700585], [.3615, .25], [.44, .25]] } } } }),
   merge0(HUMAN_DEFAULT, { id: "evil-june", name: "EVIL JUNE",   // the crashing waves' night boss, from the user's art: June gone bad. Navy beanie with a red band, lightning brows,
     body: { build: "tall", torso: .9 },                           //   buck teeth, a cyan jumpsuit with white leg bands and yellow buttons, a red collar, a long navy scarf; her own dark sword
     head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },
@@ -1979,7 +1982,7 @@ const STRIKES = {
 // glowShot: a rapier dart, a fist of light, a pair of dice, a shockwave along the ground, chain lightning); trail: [t0, t1] its afterimages
 const turnKeys = (t0, t1, turns, dur) => { const K = [[0, 0]], N = Math.max(2, Math.ceil((t1 - t0) / .04)); if (t0 > 0) K.push([t0, 0]);   // a whole turn (or turns) keyed every few hundredths, as the keys hold then snap (keySnap): one long stretch would creep, then flick round at the end
   for (let i = 1; i <= N; i++) K.push([+(t0 + (t1 - t0) * i / N).toFixed(3), +(turns * TAU * i / N).toFixed(4)]); if (dur > t1) K.push([dur, +(turns * TAU).toFixed(4)]); return K; };
-const BUDDY_SP = { burr: "burr_flurry", stilt: "stilt_stomp", coil: "coil_spin", elpico: "elpico_drop", oldvic: "oldvic_hay", boxcars: "boxcars_roll", pipe: "pipe_slam", pipelet: "pipe_slam", vinnie: "vinnie_swoop", rink: "rink_roll", doir: "doir_rise" };
+const BUDDY_SP = { burr: "burr_flurry", stilt: "stilt_stomp", coil: "coil_spin", elpico: "elpico_drop", oldvic: "oldvic_hay", boxcars: "boxcars_roll", pipe: "pipe_slam", pipelet: "pipe_slam", vinnie: "vinnie_swoop", rink: "rink_roll", doir: "doir_rise", noro: "noro_rush" };
 Object.assign(STRIKES, {
   burr_flurry: { dur: .72, step: 380, slide: .14, sq: -.1, sfx: "slash", hits: [{ t0: .12, t1: .18, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" }, { t0: .26, t1: .32, reach: 125, back: 0, y0: 130, y1: 50, kind: "jab" },
     { t0: .44, t1: .52, reach: 135, back: 0, y0: 170, y1: 50, kind: "launch", fx: "sparks", shot: "dart" }],   // Burr: a lunge, two quick rapier thrusts, and a third driven up and through
@@ -2048,6 +2051,14 @@ Object.assign(STRIKES, {
       fNx: [[0, .2], [.06, .3], [.5, .3], [.62, .25], [.7, .2]], fNy: [[0, 0], [.06, .9], [.5, .9], [.62, .1], [.7, 0]], fFx: [[0, -.2], [.06, .2], [.5, .2], [.62, -.15], [.7, -.2]], fFy: [[0, 0], [.06, .9], [.5, .9], [.62, .1], [.7, 0]],
       armF: [[0, .5], [.06, 2.0], [.5, 2.0], [.62, .8], [.7, .5]], elbF: [[0, .8], [.06, 2.2], [.5, 2.2], [.62, 1.0], [.7, .8]], armB: [[0, .4], [.06, 2.0], [.5, 2.0], [.62, .7], [.7, .4]], elbB: [[0, .8], [.06, 2.2], [.5, 2.2], [.62, 1.0], [.7, .8]],
       headRot: [[0, 0], [.06, .5], [.5, .5], [.62, 0]] } },
+  noro_rush: { dur: .86, step: 420, slide: .2, sq: -.08, sfx: "punch", sfx2: [.5, "kick"], trail: [.06, .4],   // Noro (a berry buddy since 2026-10-26): in fast, three palm strikes, and out with a spinning kick that lifts them
+    hits: [{ t0: .1, t1: .16, reach: 95, back: -8, y0: 125, y1: 50, kind: "jab" }, { t0: .22, t1: .28, reach: 95, back: -8, y0: 125, y1: 50, kind: "jab" }, { t0: .34, t1: .4, reach: 100, back: -8, y0: 125, y1: 50, kind: "jab" },
+      { t0: .54, t1: .68, reach: 115, back: 70, y0: 130, y1: 40, kind: "launch", fx: "sparks", shot: "fist" }],
+    keys: { armF: [[0, .4], [.06, -.2], [.1, 1.55], [.16, 1.5], [.2, .2], [.3, .3], [.34, 1.6], [.4, 1.55], [.46, .6], [.86, .4]], elbF: [[0, 1.4], [.06, 2.0], [.1, 0], [.16, .1], [.2, 1.6], [.34, 0], [.4, .1], [.46, 1.2], [.86, 1.4]],
+      armB: [[0, .4], [.12, -.2], [.22, 1.55], [.28, 1.5], [.32, .2], [.46, .4], [.56, -.6], [.7, -.6], [.86, .4]], elbB: [[0, 1.4], [.12, 2.0], [.22, 0], [.28, .1], [.32, 1.6], [.56, .6], [.86, 1.4]],
+      spin: turnKeys(.46, .7, 1, .86), lean: [[0, .1], [.08, .45], [.4, .45], [.5, -.3], [.68, -.35], [.86, .1]], bodyY: [[0, -.06], [.08, -.18], [.4, -.18], [.5, -.05], [.86, -.06]],
+      fNx: [[0, .2], [.08, .4], [.4, .4], [.5, .15], [.58, .6], [.68, .6], [.78, .2], [.86, .2]], fNy: [[0, 0], [.4, 0], [.5, .15], [.58, .5], [.68, .5], [.78, .1], [.86, 0]],
+      fFx: [[0, -.2], [.08, -.35], [.4, -.35], [.86, -.2]] } },
   doir_rise: { dur: .8, step: 180, hop: -820, dive: [.5, 900], sq: .12, sfx: "kick", hits: [{ t0: .06, t1: .26, reach: 95, back: 20, y0: 240, y1: 30, kind: "launch" },
     { t0: .5, t1: .72, reach: 105, back: 15, y0: 100, y1: -50, kind: "smash", land: true, fx: "sparks", shot: "wave" }],   // Doir: a rising knife-hand that lifts them, a forward flip over the top, and a heel brought down on them
     keys: { armF: [[0, .6], [.06, 2.9], [.22, 3.1], [.32, 2.0], [.5, .9], [.62, .5], [.8, .6]], elbF: [[0, 1.0], [.06, .1], [.22, .1], [.32, .4], [.8, 1.0]],
@@ -2155,13 +2166,20 @@ const STANCE_LEGS = ["fNx", "fFx", "fNz", "fFz", "hN", "hF", "fP", "bodyY"];
 // natural leg positions"): no more both knees folded up under her (a kneel in mid-air, the boots piled together); a fighter's leap instead, the lead
 // knee driving forward and up, the other leg trailing back and down, toes pointed, the hips' width apart (on api: tuned live from a page)
 api.airLegs = (w, up) => ({ fNx: .28 + .08 * w, fNy: .38 + .06 * w + .05 * up, fFx: -.3 - .1 * w, fFy: .16 + .04 * up, fP: -.6, fNz: .06, fFz: .04, hN: 0, hF: 0 });
+// the feet's spread in the air (the user, 2026-10-26: "rose's legs get twisted in the air. i looked at the animations and most of them seemed fine though so
+// it's like something happening in game"): the editor shows every move standing, with the character's stance under it, and Rose's stance sets her feet
+// apart (fNz / fFz .34); off the ground that was dropped, her feet came in under her and both knees folded in across each other. Her stance's spread now
+// stays with her in the air too (as the move's own keys left it, or the jump's, whichever is the wider), so every move is as the editor shows it
+const AIR_SPLAY = ["fNz", "fFz"];
+function airSplay(p, T, ST) { if (!ST || p.onGround) return; const sw = leadFar(p); for (const k of AIR_SPLAY) if (k in ST) { const kk = sw ? SWAP[k] || k : k; T[kk] = Math.max(T[kk] || 0, ST[k]); } }
 function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move's leg keys are left out
   if (p.onGround) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }
-  if (airKeyed(p.atkKind)) return false;
+  if (airKeyed(p.atkKind)) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k !== "bodyY" && k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }   // (its own keys over the stance's legs, as on the ground and in the editor)
   const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
   const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
   const L = api.airLegs(w, up, p), sw = leadFar(p);   // both knees up, a little apart (the user, 2026-10-23: "rose's legs get all twisted in the air": a wide split front to back crossed them in an X once she turned toward us)
   for (const k in L) T[sw ? SWAP[k] || k : k] = L[k];   // (the lead leg forward, as the move's own keys have it: Camila's gauntlet hand, facing right, is the far one; unswapped her legs crossed, 2026-10-22)
+  airSplay(p, T, ST);                                // (and her stance's spread, if it's wider)
   return true;
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
@@ -2209,6 +2227,7 @@ function updatePoseHuman(p, dt) {
     if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .3, fNy: .4, fFx: -.26, fFy: .06, fP: -.55, fNz: .06, fFz: .04 }), layPose(T, m.rise, p);   // rising: the lead knee driven up, the other leg pushing down and back
     else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .26, fNy: .38, fFx: -.22, fFy: .22, fP: -.45, fNz: .06, fFz: .04 }), layPose(T, m.top, p);   // the top: both bent, still a stride apart
     else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .18, fNy: .12, fFx: -.16, fFy: .18, fP: -.1, fNz: .05, fFz: .04 }), layPose(T, m.fall, p);   // dropping: reaching down for the landing
+    airSplay(p, T, ST);                              // (the stance's spread, if it's wider: the user, 2026-10-26)
   } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
   else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }

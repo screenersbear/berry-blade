@@ -185,7 +185,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
-  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+  pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
   const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
@@ -578,19 +578,24 @@ function drive(p, dt) {
   p.x = 0;                                  // running in place
 }
 
-// camera: drag to turn, wheel / pinch to zoom
-let camYaw = 0, camPitch = .1, camDist = 8.4, turn = false, camLift = 0;
+// camera: drag to turn, wheel / pinch to zoom; the zoom buttons and a part to look at (the user, 2026-10-26: "add a zoom function for the animator because it's hard to see the")
+let camYaw = 0, camPitch = .1, camDist = 8.4, turn = false, camLift = 0, camFocus = "all", camFocusK = 0;
+const ZOOM_MIN = 1.2, ZOOM_MAX = 12;
+const FOCUS = { all: [0, 8.4], head: [.85, 3.4], arms: [.35, 4.4], legs: [-.45, 4.6], feet: [-.8, 3.6] };   // [where it looks, up or down from the middle (a fraction of the body), how close]
+const zoomBy = f => { camDist = clamp(camDist * f, ZOOM_MIN, ZOOM_MAX); };
+function setFocus(k) { camFocus = k; camDist = FOCUS[k][1]; [...$("zoomSeg").querySelectorAll("[data-f]")].forEach(b => b.classList.toggle("on", b.dataset.f === k)); }
 const ptrs = new Map(); let pinch0 = 0;
 canvas.addEventListener("pointerdown", e => { if (poseMode) { hdSel = null; return; } canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
 canvas.addEventListener("pointermove", e => {
   const q = ptrs.get(e.pointerId); if (!q) return;
   if (ptrs.size === 1) { camYaw -= (e.clientX - q.x) * .01; camPitch = clamp(camPitch + (e.clientY - q.y) * .005, -.12, .7); }
   q.x = e.clientX; q.y = e.clientY;
-  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch0) camDist = clamp(camDist * pinch0 / d, 3, 12); pinch0 = d; }
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y); if (pinch0) zoomBy(pinch0 / d); pinch0 = d; }
 });
 const endPtr = e => { ptrs.delete(e.pointerId); pinch0 = 0; };
 canvas.addEventListener("pointerup", endPtr); canvas.addEventListener("pointercancel", endPtr);
-canvas.addEventListener("wheel", e => { e.preventDefault(); camDist = clamp(camDist * Math.exp(e.deltaY * .001), 3, 12); }, { passive: false });
+canvas.addEventListener("wheel", e => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * .001)); }, { passive: false });
+$("zoomSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.z) zoomBy(b.dataset.z === "in" ? 1 / 1.3 : 1.3); else if (b.dataset.f) setFocus(b.dataset.f); });
 $("bTurn").onclick = () => { turn = !turn; $("bTurn").classList.toggle("on", turn); $("bTurn").setAttribute("aria-pressed", turn); };
 function setAnim(a) {
   anim = a; animT = 9; st.atkT = -1; tl.t = 0; Object.assign(st, { tackle: null, tackleK: 0, tkCharge: null, tkDig: 0, dodge: null });   // (out of a game-driven move)
@@ -729,7 +734,8 @@ function frame(now) {
   ring.scale.setScalar(sc * (1 + .04 * Math.sin(KIT.time * 4)));
   if (turn) camYaw += dt * .5;
   camLift = lerp(camLift, hgt * .55, 1 - Math.exp(-dt * 4));
-  const h = (rig.kind === "cat" ? 1.2 : 1.05) * sc + camLift, d = camDist * (.7 + .3 * sc);
+  camFocusK = lerp(camFocusK, FOCUS[camFocus][0], 1 - Math.exp(-dt * 6));
+  const h = (rig.kind === "cat" ? 1.2 : 1.05) * sc * (1 + camFocusK) + camLift, d = camDist * (.7 + .3 * sc);   // (the part looked at: up or down from the middle)
   camera.position.set(Math.sin(camYaw) * Math.cos(camPitch) * d, h + Math.sin(camPitch) * d, Math.cos(camYaw) * Math.cos(camPitch) * d);
   camera.lookAt(0, h, 0);
   sun.position.set(-7, 14, 11);
@@ -966,7 +972,8 @@ function villainFrame(dt) {                                    // the stage with
   vprev.update(tl.paused ? 0 : dt * tl.speed);
   rig.root.visible = rig.shadow.visible = false; cards.forEach(c => { c.visible = false; });
   if (turn) camYaw += dt * .5;
-  const sc = vprev.rig.size || 1, h = vprev.h * .5 * sc, d = camDist * Math.max(1, vprev.h * sc / 2.2);
+  camFocusK = lerp(camFocusK, FOCUS[camFocus][0], 1 - Math.exp(-dt * 6));
+  const sc = vprev.rig.size || 1, h = vprev.h * .5 * sc * (1 + camFocusK), d = camDist * Math.max(1, vprev.h * sc / 2.2);
   camera.position.set(Math.sin(camYaw) * Math.cos(camPitch) * d, h + Math.sin(camPitch) * d, Math.cos(camYaw) * Math.cos(camPitch) * d);
   camera.lookAt(0, h, 0); sun.position.set(-7, 14, 11);
   ring.scale.setScalar(sc * vprev.h / 2.2 * (1 + .04 * Math.sin(performance.now() / 250)));
@@ -1818,6 +1825,10 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .docktop {width: 100%; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
 #ed .dock .docktop .readout {margin-left: 14px; }
 #ed .mode {display: flex; gap: 0; box-shadow: 5px 5px 0 var(--slate); flex: none; }
+#ed .stage .zoom {position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; box-shadow: 5px 5px 0 var(--slate); z-index: 3; }   /* the zoom: a column down the stage's right */
+#ed .stage .zoom .btn {font-size: 13px; padding: 8px 9px 5px; border-width: 3px; }
+#ed .stage .zoom .btn + .btn {border-top-width: 0; }
+#ed .stage .zoom .btn.on {background: var(--slate); color: var(--mango); }
 #ed .mode .btn {display: inline-flex; align-items: center; gap: 8px; font-size: 16px; padding: 11px 16px 8px; border-width: 3px; }
 #ed .mode .btn + .btn {border-left-width: 0; }
 #ed .mode .btn.on {background: var(--slate); color: var(--mango); }
@@ -1982,6 +1993,10 @@ const ED_MARKUP = `<div class="app">
     </aside>
     <section class="stage" id="stage">
       <canvas id="view" aria-label="3D preview. Drag to turn, scroll to zoom."></canvas>
+      <div class="zoom" id="zoomSeg" role="group" aria-label="Zoom, and the part to look at">
+        <button class="btn small" data-z="in" title="Zoom in (scroll or pinch too)" aria-label="Zoom in">+</button><button class="btn small" data-z="out" title="Zoom out (scroll or pinch too)" aria-label="Zoom out">−</button>
+        <button class="btn small on" data-f="all">ALL</button><button class="btn small" data-f="head">HEAD</button><button class="btn small" data-f="arms">ARMS</button><button class="btn small" data-f="legs">LEGS</button><button class="btn small" data-f="feet">FEET</button>
+      </div>
       <div class="vf"><i></i><i></i><i></i><i></i></div>
       <div class="handles" id="handles" hidden><svg class="onion" aria-hidden="true"><g id="ghosts"></g><g id="ring" display="none"><path class="ro"/><path class="ro"/><path class="ri"/><path class="ri"/><polygon class="rh"/><polygon class="rh"/><ellipse class="ringhit"/></g></svg></div>
       <div class="plate"><input id="name" maxlength="14" aria-label="Character name" spellcheck="false"><div class="bar" id="kindBar">HERO</div></div>
