@@ -296,7 +296,7 @@ const PRESETS = [
       headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
       prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", size: 1 } },
     move: { set: "sword" } }),
-  merge0(HUMAN_DEFAULT, { id: "doir", name: "DOIR",       // from the sheet: green dress over a dark petticoat, magenta mask, crest gem, long side ponytail
+  merge0(HUMAN_DEFAULT, { id: "doir", name: "DORYS",      // (was DOIR: renamed by the user 2026-10-26, "rename doir to dorys"; the id stays "doir") from the sheet: green dress over a dark petticoat, magenta mask, crest gem, long side ponytail
     body: { build: "tall", head: 1.02, girth: 1.15, limbs: 1.3, shoulders: 1.05 },   // (fuller, closer to the sheet: the user, 2026-10-21, "less skinny")
     head: { height: 1.11, jaw: .8, chinLen: .03 },
     face: { style: "doir", chin: .14, earY: -.19, ears: .7 },
