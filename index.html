@@ -686,7 +686,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261025n"></script>
+<script src="editor.js?v=20261025o"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -4134,7 +4134,7 @@ function authorWaves() {
     { row: "C", x0: CX(6) + 1700, x1: CX(6) + 2900, top: 20, z: -4.6, cave: 2300, home: "C6", salt: 119 },
     { row: "D", x0: CX(1) - 400, x1: CX(1) + 2900, top: -40, z: -7, salt: 121 }, { row: "D", x0: CX(2) - 400, x1: CX(2) + 1500, top: -60, z: -5, salt: 123 },
     { row: "D", x0: CX(4) + 550, x1: CX(5) + 300, top: -300, z: -4.3, salt: 125 }, { row: "D", x0: CX(5) - 200, x1: CX(8) + 2150, top: -300, z: -5.2, salt: 127 } ];
-  W.buddyHomes = { stilt: [C.A3, C.B8] };              // (the sheet's two berry buddies: Stilt's home is one or the other each stay)
+  W.fixedBuddies = { ...(W.fixedBuddies || {}), stilt: C.A3 };   // (the sheet's berry buddies: Stilt in the crow's nest, always; the sheet's second, in B8's cave, waits for a buddy of its own. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward")
   W.authored = true; W.rosterThin = null; mapGridC.delete(1);
 }
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
@@ -5376,7 +5376,7 @@ function drawLvl() {                                 // first the worlds (one to
   const off = S.map((q, i) => i).filter(i => !S[i].arena && !S[i].cell);   // (rooms off the grid: a cove, a chamber)
   const top = `<div class="lvTop"><button data-back="1">‹ WORLDS</button>${b(w, "room", 0, "START OF " + W.name)}</div>`;
   const sec = `<h5>SECRETS</h5>` + (S.some(q => q.arena) ? b(w, "arena", S.findIndex(q => q.arena), "THE FINAL SHOWDOWN") : "") + homes.map(h => b(w, "bep", h, `BEP HIDEOUT (from ${S[h].cell})`)).join("") +
-    (SH_SPOT[w] ? b(w, "hatch", SH_SPOT[w].s, `STRONGHOLD HATCH · ${S[SH_SPOT[w].s].cell} AT NIGHT`) + SH_ROOMS.map((R, j) => b(w, "sh", j, `STRONGHOLD ${j + 1} · ${R.name}`)).join("") : "") +
+    (shIn(w, S) ? b(w, "hatch", shIn(w, S).s, `STRONGHOLD HATCH · ${S[shIn(w, S).s].cell} AT NIGHT`) + SH_ROOMS.map((R, j) => b(w, "sh", j, `STRONGHOLD ${j + 1} · ${R.name}`)).join("") : "") +
     (off.length ? `<h5>OFF THE MAP</h5>` + off.map(i => b(w, "room", i, S[i].name || "ROOM " + i)).join("") : "");
   L.innerHTML = top + `<h4>${W.name}</h4>` + g + sec;
   $("lvlWho").textContent = $("lvlWho").textContent.replace(/ · [^·]*$/, "") + " · " + W.name;
@@ -5387,7 +5387,7 @@ function lvlOld() {                                  // (the one-long-list versi
     const homes = S.map((q, i) => i).filter(i => S[i].bep);
     return `<div><h4>${W.name}</h4><h5>ROOMS</h5>` + S.map((q, i) => q.arena ? "" : b("room", i, `${q.cell} · ${q.name || (q.boss ? "BOSS ROOM" : "PATCH")}`)).join("") +
       `<h5>SECRETS</h5>` + (S.some(q => q.arena) ? b("arena", S.findIndex(q => q.arena), "THE FINAL SHOWDOWN") : "") + homes.map(h => b("bep", h, `BEP HIDEOUT (from ${S[h].cell})`)).join("") +
-      (SH_SPOT[w] ? b("hatch", SH_SPOT[w].s, `STRONGHOLD HATCH · ${S[SH_SPOT[w].s].cell} AT NIGHT`) + SH_ROOMS.map((R, j) => b("sh", j, `STRONGHOLD ${j + 1} · ${R.name}`)).join("") : "") + `</div>`;
+      (shIn(w, S) ? b("hatch", shIn(w, S).s, `STRONGHOLD HATCH · ${S[shIn(w, S).s].cell} AT NIGHT`) + SH_ROOMS.map((R, j) => b("sh", j, `STRONGHOLD ${j + 1} · ${R.name}`)).join("") : "") + `</div>`;
   }).join("");
 }
 function closeLvl() { lvlOpen = false; $("lvl").classList.remove("show"); $("pause").style.visibility = ""; SFX.tick(); }
@@ -5403,12 +5403,12 @@ function levelGo(w, kind, a) {
   if (!(mode === "play" || mode === "world" || mode === "opp")) { rig = roster[sel]; if (rig.kind === "cat") KIT.paintCards(cards, rig.spec); }   // (from the character screen: whoever's highlighted)
   endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; } cine = null; clearStage(); bepEv = null; clearGifts();
   setWorld(w); level.s = -2;
-  const s = kind === "room" || kind === "bep" ? a : SH_SPOT[w].s, night = kind === "hatch" || kind === "sh";
+  const s = kind === "room" || kind === "bep" ? a : shIn(w).s, night = kind === "hatch" || kind === "sh";
   oppSel = STAGES[s].foe; stage = runStart = s; foe = FOES[oppSel]; beaten = 0; cleared = 0; startTrail(); rollSad(); levelTest = true; wstReset(); cameoWorlds = new Set();
   if (night) { dayClock = 4 * DAY_ROOMS + 1; dayHeld = nightHeld(); dawnNow = false; roomsDone.add(s); }   // (the hatch only turns up at night, in a room you've cleared)
   mode = "play"; setScreen(s); beginPlay();
   if (kind === "bep") enterHideout();
-  else if (kind === "hatch") spawnTrapdoor(SH_SPOT[w].x);
+  else if (kind === "hatch") maybeTrapdoor();   // (the night's set: its hatch stands open)
   else if (kind === "sh") { enterStronghold(); if (a) shScreen(a, false); }
 }
 
@@ -5758,7 +5758,7 @@ function treasureMarks(w) {                          // the treasure map's marks
     if (run.room !== undefined && run.phase !== "done") add(run.room, run.sp); }
   S0.forEach((q, s) => { if (q.toWorld != null && mapGrid(w).at[s]) add(s, mapGrid(w).at[s][0] <= mapGrid(w).c0 ? "exitL" : "exit"); if (q.bep) add(s, "dungeon"); if (q.rest) add(s, restReached(w, s) ? "rest" : "restx"); if (q.hub === 1) add(s, "hub");   // (the ways out of the world too: the user, 2026-10-23)
     if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret && !q.secret.door && !itemGot(w + ":" + s + ":chest")) add(s, "loot"); });
-  if (SH_SPOT[w]) add(SH_SPOT[w].s, "dungeon");
+  { const si = shIn(w, WORLDS[w].stages); if (si) add(si.s, "dungeon"); }
   (CRATE_AT[w] || []).forEach(([s, x], i) => { if (!(w === world && cratesBroken.has(w + ":" + s + ":" + i))) add(s, "loot"); });
   if (w !== 9) itemPlan(w).forEach((q, i) => { if (!itemGot(w + ":" + q.s + ":" + q.k + i)) add(q.s, "loot"); });
   return out;
@@ -6827,7 +6827,7 @@ function wsUprise(S) {                            // the stats card's bar: from 
   const on = upOn(world); $("wsUp").classList.toggle("hidden", !on); $("wsAsk").classList.add("hidden"); $("wsGo").classList.remove("hidden"); if (!on) return;
   const goal = upGoal(world), now = upStore()[world] || 0, p1 = Math.min(100, now / goal * 100), p0 = Math.min(p1, Math.max(0, now - (S.up || 0)) / goal * 100);
   const F = $("wsUpFill"), pct = $("wsUpPct"); F.style.transition = "none"; F.style.width = p0 + "%"; void F.offsetWidth; F.style.transition = ""; pct.textContent = Math.floor(p0) + "%";
-  $("wsUpSub").textContent = S.caps ? `+${S.caps} WON BACK THIS RUN` : "NONE WON BACK THIS RUN";
+  $("wsUpSub").textContent = (S.caps ? `+${S.caps} WON BACK THIS RUN` : "NONE WON BACK THIS RUN") + (S.partners ? ` · +${S.partners * 10}% WITH ${S.partners > 1 ? S.partners + " PARTNERS" : "A PARTNER"}` : "");
   Object.assign(statsUp, { full: p1 >= 100, boss: S.boss || bossNameOf() });
   setTimeout(() => { if (!statsUp) return; F.style.width = p1 + "%"; const t0 = performance.now();
     const tick = () => { if (!statsUp) return; const u = Math.min(1, (performance.now() - t0) / 1300); pct.textContent = Math.floor(p0 + (p1 - p0) * (1 - (1 - u) * (1 - u))) + "%"; if (u < 1) requestAnimationFrame(tick); else if (statsUp.full && !statsUp.asked) setTimeout(() => { if (statsUp && !statsUp.asked) askShowdown(); }, 350); };
@@ -6861,6 +6861,8 @@ function goWorld(w) {
   if (S.boss) rows.push(["BEAT", S.boss]);
   $("wsList").innerHTML = rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("");
   $("wsGo").textContent = (window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON") + " TO GO ON TO " + WORLDS[w].name;
+  { const n = teamCount(); S.partners = 0; if (n && upOn(world) && !freedNow() && !S.bonusGiven) { const add = Math.ceil(upGoal(world) * .1 * n), U = upStore(); U[world] = (U[world] || 0) + add; S.up = (S.up || 0) + add; S.partners = n; S.bonusGiven = true;   // (finished it with partners along: +10% of the uprising each, the user 2026-10-25)
+    if (!story) try { localStorage.setItem(UPRISE_KEY, JSON.stringify(upFree)); } catch { } } }
   $("wstats").classList.add("show"); wsUprise(S);
 }
 function statsGo() {                                  // (not in the first moment: a button still held from the fight doesn't skip it)
@@ -7539,7 +7541,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   const done = fillRoom(); maybeSkirmish(done);                         // the berry baddies first; on a boss stage the boss drops in once they're popped
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
   const fresh = !done && !roomsSeen.has(stage); roomsSeen.add(stage);
-  if (fresh) { player.hp = maxHp(); player.safeT = 1; } updateHearts(false);
+  if (fresh) { player.hp = maxHp(); player.safeT = 1; partnerList().forEach(P => { P.q.php = PARTNER_HP; }); } updateHearts(false);
   wildRoom(fresh, back);                                              // (a wild cat: resting here, or still running on ahead of you)
   allyWander(); allyRoom();                                           // (this world's berry buddies, if one's in here; they wander now and then)
   setFoeHud();
@@ -8461,11 +8463,16 @@ let petRuns = [];                                  // this stay's wild cat and d
 let tamed = null, tamed2 = null;                  // the pets with you: { w, sp, r } (the save keeps their worlds and kinds); tamed2: the second one
 let strays = [];                                   // pets going home: off the edge of the screen and gone
 const WILD_RIGS = {};
-function wildRig(w, sp = "cat") {                  // (Luna's build, in this world's coat; a dog's ears and nose on the dogs)
+function wildRig(w, sp = "cat") {                  // (a cat or a dog: a chibi buddy, standing up; an axolotl on Luna's build, as before; each in this world's coat, a dog's ears and nose on the dogs)
   const key = sp + w; if (WILD_RIGS[key]) return WILD_RIGS[key];
-  const L = KIT.presets().find(p => p.id === "luna"), C = petDef(sp, w), s0 = JSON.parse(JSON.stringify(L)), dog = sp === "dog", axo = isAxo(sp);
+  const P = KIT.presets(), L = P.find(p => p.id === "luna"), C = petDef(sp, w), dog = sp === "dog", axo = isAxo(sp), s0 = JSON.parse(JSON.stringify(axo ? L : P.find(p => p.id === "tocsin")));
   s0.id = (dog ? "wilddog-" : axo ? "wild" + sp + "-" : "wildcat-") + w; s0.name = C.name; s0.pet = { on: false, with: "" };
-  s0.parts = { ...s0.parts, calico: false, tabby: false, belly: false, collar: false, points: false, kitty: !dog && !axo, dog, axo, tailBands: !!C.parts.tabby, ...C.parts };
+  s0.parts = { ...s0.parts, calico: false, tabby: false, belly: false, collar: false, points: false, kitty: false, dog, axo, tailBands: !!C.parts.tabby, ...C.parts };
+  if (!axo) {                                       // the chibi buddy (the user, 2026-10-25, from the mockups: "let's do the head .95 version of the pets"): Tocsin's build cut down, a short
+    Object.assign(s0.parts, { cheeks: false, forehead: false, brow: false, emblem: false, bow: false, button: false, trim: false, claws: false });   // body and a small head, Luna's face, none of Tocsin's dress
+    s0.body = { ...s0.body, scale: .9, head: .95, torso: .4, legs: .6, arms: .8, gloves: .78, feet: .85, hat: 0, pants: 0 };
+    s0.face = { ...s0.face, mouth: 0, eyeSize: 1.15, eyeY: 4, eyeH: 1.05, pupil: .9, spikes: .3 };
+    s0.move = { ...s0.move, stance: { lean: .12, arch: .08, armF: .3, elbF: .6, armB: -.15, elbB: .6 }, anims: {} }; }
   if (axo) { s0.face = { ...s0.face, ears: 0, spikes: 0, lids: .18 }; s0.body = { ...s0.body, tail: .85, tailThick: 1.5, head: (s0.body.head || 1) * 1.12, girth: (s0.body.girth || 1) * 1.6, limbs: (s0.body.limbs || 1) * 1.25, gloves: (s0.body.gloves || 1) * .72, feet: (s0.body.feet || 1) * .8, hat: 0 }; }   // (a smooth round head, sleepy eyes; a big paddle of a tail; little hands and feet)
   s0.colors = { ...s0.colors, pupil: "#15140f", outfit: C.colors.fur, ...C.colors };   // (Luna's body is her white "suit": theirs is their coat)
   if (dog) { s0.face = { ...s0.face, ears: 0, spikes: .15 }; s0.body = { ...s0.body, tail: .9, tailThick: 1.15 }; }   // (no cat's points on top; a shorter, thicker tail)
@@ -8537,7 +8544,7 @@ function catJoin() {                               // it's with you now (the tea
 function petAdd(t, st, fanfare) {                   // a pet onto the team, in the free place (st: where it already is, or none: it runs in)
   pets.forEach(q => { q.root.visible = q.shadow.visible = false; }); const second = !!tamed && !tamed2;
   if (second) tamed2 = t; else tamed = t; t.r.root.visible = t.r.shadow.visible = true;
-  const q = st || makeState(player.x, t.r); Object.assign(q, { hopT: 0, pounce: null, defT: 0, sit: 0 }); if (!st) { q.face = 1; }
+  const q = st || makeState(player.x, t.r); Object.assign(q, { hopT: 0, pounce: null, defT: 0, sit: 0, php: PARTNER_HP, pinv: 0 }); if (!st) { q.face = 1; }
   if (second) pal2 = q; else pal = q;
   const C = petDef(t.sp, t.w);
   if (fanfare) { for (let i = 0; i < 3; i++) glyph(HEART_MAT || (HEART_MAT = glyphMat("♥", "#ff7ab0")), X(q.x) + (i - 1) * .35, Y(q.y - 70 - i * 12), .5, V((i - 1) * .3, 1.2, 0), 1.1, .5);
@@ -8557,6 +8564,52 @@ function catLeave(msg, t = tamed) {                // a pet of yours goes home: 
 // choose which 2 you want to keep and who will go home"): up to two along of pets (cats, dogs), a berry buddy (or a crew of them) and Noro
 let teamAsk = null;                                // the choice up: { L: [{ name, kind, home, keep? }], sel }
 const teamCount = () => (tamed ? 1 : 0) + (tamed2 ? 1 : 0) + (ally ? 1 : 0) + (ejPal() ? 1 : 0);
+// your partners' hearts (the user, 2026-10-25: "let's create a 3 heart system for partners. make them be able to get hit as well. if each individual one gets
+// hit 3 times, they go away to rest. you can of course still bring them back"): three each, full again in a new room (as yours are) or when they rejoin. What
+// lands on a bep lands on them: a baddy's lunge, a shot, the boss's charge or blow. Out of hearts: a pet heads home (the bell calls it back), a berry buddy
+// waits at the rest stop, Noro (or Doir) heads off
+const PARTNER_HP = 3;
+function partnerList() {
+  const L = [], tOf = q => [tamed, tamed2].find(t => t && q && t.r === q.rig);
+  [pal, pal2].forEach(q => { if (q && tOf(q)) L.push({ q, kind: "pet", t: tOf(q) }); });
+  if (ally && ally.st) L.push({ q: ally.st, kind: "ally" }); if (ejPal() && ej.st) L.push({ q: ej.st, kind: "ej" });
+  return L;
+}
+const partnerBox = q => { const H = (q.rig && q.rig.heightPx) || 80; return { x1: q.x - 18, x2: q.x + 18, y1: q.y - H, y2: q.y }; };
+function partnerHurt(P, d) {
+  const q = P.q; if (!q || q.pinv > 0 || mode !== "play" || transit || stronghold) return false;
+  q.php = (q.php ?? PARTNER_HP) - 1; q.pinv = 1.1; q.heartT = 2.2; q.vx = d * 260; q.vy = -360; q.onGround = false; q.plat = null; q.hurtT = .3;
+  sparks(q.x, q.y - 40, 6); SFX.hurt(); shake = Math.max(shake, 2);
+  if (q.php <= 0) partnerRest(P);
+  return true;
+}
+function partnerRest(P) {                         // out of hearts: off to rest
+  if (P.kind === "pet") catLeave("% NEEDS A REST · HEADS HOME", P.t);
+  else if (P.kind === "ally") allyToCheck();
+  else { const nm = (EJ_DEF || {}).name || "NORO"; ejEnd(); toast(nm + " NEEDS A REST · TILL NEXT TIME", 2600); }
+}
+let HEARTS3 = null; const HEART_HAS = new Set();   // (the partners with a hearts row made)
+function partnerHearts(q) {                        // three little hearts over a partner's head a moment after a hit (gone ones hollow)
+  const show = q.heartT > 0 && q.rig && q.rig.root && q.rig.root.visible && mode === "play";
+  if (!q.heartSpr) { if (!show) return; if (!HEARTS3) HEARTS3 = [0, 1, 2, 3].map(n => tex(192, 64, (g, w, h) => { g.font = "900 52px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.lineWidth = 7; g.lineJoin = "round";
+      for (let i = 0; i < 3; i++) { const x = 32 + i * 64; g.strokeStyle = "#ffffff"; g.strokeText("♥", x, h / 2 + 2); g.fillStyle = i < n ? "#ff4a7a" : "#5a4a58"; g.fillText("♥", x, h / 2 + 2); } }));
+    q.heartSpr = new THREE.Sprite(new THREE.SpriteMaterial({ map: HEARTS3[PARTNER_HP], transparent: true, depthTest: false, depthWrite: false, fog: false })); q.heartSpr.scale.set(1.2, .4, 1); q.heartSpr.renderOrder = 6; actors.add(q.heartSpr); HEART_HAS.add(q); }
+  const S = q.heartSpr; S.visible = show; if (!show) return;
+  S.material.map = HEARTS3[clamp(q.php ?? PARTNER_HP, 0, 3)]; S.material.opacity = Math.min(1, q.heartT / .4);
+  S.position.set(X(q.x), Y(q.y - ((q.rig.heightPx || 80) + 26)), (q.z || 0) + .4);
+}
+function partnerTick(dt) {
+  const L = player && mode === "play" ? partnerList() : [];
+  const now = [pal, pal2, ally && ally.st, ej && ej.st].filter(Boolean);
+  for (const q of now) { q.pinv = Math.max(0, (q.pinv || 0) - dt); q.heartT = Math.max(0, (q.heartT || 0) - dt); if (q.hurtT > 0) q.hurtT = Math.max(0, q.hurtT - dt); partnerHearts(q); }   // (hurtT: the hit's flinch; nothing else counts theirs down)
+  for (const q of HEART_HAS) if (!now.includes(q)) { if (q.heartSpr) q.heartSpr.visible = false; q.heartT = 0; }   // (one that's gone: its hearts with it)
+  if (!L.length || transit || stronghold || cine) return;
+  for (const P of L) { const q = P.q, box = partnerBox(q); if (q.pinv > 0) continue;
+    for (const b of baddies) if (!b.dead && !b.gone && b.atk === "go" && !(b.hurtT > 0) && !b.sad && !b.calm && overlap(box, { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y })) { partnerHurt(P, Math.sign(q.x - b.x) || b.dir || 1); break; }   // (rammed: a lunge, a roll, a leap)
+    if (q.pinv > 0 || !bossIn || !enemy || enemy.dead || enemy.gone || duo) continue;
+    const e = enemy, D = e.def || foe, fast = Math.abs(e.vx) > 230 || (!e.onGround && e.vy > 260) || e.atk === "act";   // (charging, landing, mid-attack: its body hits them)
+    if (fast && overlap(box, { x1: e.x - D.hw, x2: e.x + D.hw, y1: e.y - D.h, y2: e.y })) partnerHurt(P, Math.sign(q.x - e.x) || 1); }
+}
 function teamMembers() {
   const L = [];
   [tamed, tamed2].forEach(t => { if (t) L.push({ name: petDef(petSp(t), t.w).name, kind: petNoun(petSp(t)), home: () => catLeave("% HEADS HOME", t) }); });
@@ -8610,7 +8663,7 @@ function allyStay() {                              // a new stay in this world: 
   buddyAt = { w: world, rooms: {} };
   ALLIES.filter(a => a.w === world && !(ally && ally.A === a)).forEach(A => { const taken = Object.values(buddyAt.rooms), hm = (WORLDS[world].buddyHomes || {})[A.id], fx = (WORLDS[world].fixedBuddies || {})[A.id] ?? (hm ? hm[Math.floor(Math.random() * hm.length)] : undefined);
     if (fx !== undefined) { buddyAt.rooms[A.id] = fx; (buddyAt.stay = buddyAt.stay || {})[A.id] = true; return; }   // (one with a home: always there, never wandering off. The user, 2026-10-24)
-    const ok = STAGES.map((q, i) => i).filter(i => buddyOK(i) && i !== stage && !taken.includes(i)); if (ok.length) buddyAt.rooms[A.id] = ok[Math.floor(Math.random() * ok.length)]; });
+    });   // (and no other: only the buddies the map sheets place are out, the rest wait for their world's sheet. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward. only pets will be randomly placed")
 }
 function allyWander() {                            // now and then, as you go from room to room, each wanders on next door (never into your room, or another's)
   if (buddyAt.w !== world) return;
@@ -8961,7 +9014,7 @@ function allyRoom() {                              // into a room: this world's 
 }
 function allyJoin(A, r, st, quiet, crew) {         // it's with you now
   if (buddyAt.stay) delete buddyAt.stay[A.id];     // (one that waited at a rest stop: free to wander again once it's left you)
-  ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0, crew: crew || crewOf(A, st.x, st.y) }; allyHere = null; allyShow(ally);
+  st.php = PARTNER_HP; st.pinv = 0; ally = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0, crew: crew || crewOf(A, st.x, st.y) }; allyHere = null; allyShow(ally);
   if (quiet) return;
   st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(A.crew ? A.name + ", BERRY BUDDIES, JOIN YOU!" : A.name + " THE BERRY BUDDY JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
   if (story) writeSave();
@@ -8975,6 +9028,7 @@ function allyToCheck() {                           // a full party and someone e
 }
 function allyLeave(msg) {                          // it heads home: off out of the picture
   if (!ally) return; const a = ally; ally = null;
+  { const fx = (WORLDS[world].fixedBuddies || {})[a.A.id]; if (fx !== undefined && buddyAt.w === world && !(buddyAt.stay && buddyAt.stay[a.A.id])) { buddyAt.rooms[a.A.id] = fx; (buddyAt.stay || (buddyAt.stay = {}))[a.A.id] = true; } }   // (one the map sheet places: home is its spot)
   if (msg && a.r.root.visible && mode === "play") { [a, ...(a.crew || [])].forEach(m => strays.push({ st: m.st, r: m.r, dir: a.st.x < player.x ? -1 : 1, t: 0 })); toast(msg.replace("%", a.A.name).replace(" HEADS ", a.A.crew ? " HEAD " : " HEADS "), 3200); }
   else allyHide(a);
   if (story) writeSave();
@@ -9456,6 +9510,7 @@ function updateHazards(dt) {
       continue;
     }
     if (!h.harmless && !h.grounded && h.t < h.life * .95 && !p.dead && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, pb)) hurtPlayer(Math.sign(h.vx) || Math.sign(p.x - h.x) || 1, h);
+    if (!h.harmless && !h.grounded && h.t < h.life * .95 && h.life > h.t) for (const P of partnerList()) if (!(P.q.pinv > 0) && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, partnerBox(P.q))) { partnerHurt(P, Math.sign(h.vx) || Math.sign(P.q.x - h.x) || 1); if (h.m) h.life = h.t; break; }   // (and on your partners: the user, 2026-10-25)
     if ((bepEv || skirmish) && friends.length && !h.harmless && !h.grounded && h.t < h.life * .95 && h.owner && baddies.includes(h.owner))   // (walking the beps home: the baddies' blows land on them too)
       for (const f of friends) if (bepTargetable(f) && !(f.hurtT > 0) && overlap({ x1: h.x - r, x2: h.x + r, y1: h.y - r, y2: h.y + r }, { x1: f.x - f.hw, x2: f.x + f.hw, y1: f.y - f.h, y2: f.y })) {
         bepHurt(f, Math.sign(h.vx) || Math.sign(f.x - h.x) || 1); if (h.m) h.life = h.t; break; }
@@ -16869,6 +16924,9 @@ function autoPlayer(dt) {
     const dx = A.x - p.x; p.face = Math.sign(dx) || p.face; p.vx = clamp(dx * 5, -240, 240); p.x += p.vx * dt; p.y = GROUND; p.vy = 0; p.onGround = true;
     p.yaw = lerp(p.yaw, p.face > 0 ? -.3 : -Math.PI + .3, 1 - Math.exp(-dt * 10));
     if (Math.abs(dx) < 6 || A.t > 4) { A.phase = A.kind !== "cliff" ? "in" : "leap"; A.t = 0; A.from = [p.x, p.y, p.z || 0]; }
+  } else if (A.phase === "rise") {               // up out of the stronghold's way out: a hop up through the hatch, onto the floor beside it
+    const u = Math.min(1, A.t / .55); p.vx = 0; p.x = A.x + u * 40; p.y = A.y + 70 * (1 - u) - Math.sin(u * Math.PI) * 60; p.onGround = false; p.vy = u < .5 ? -300 : 300; p.face = 1;
+    if (u >= 1) { p.y = A.y; p.onGround = true; p.vy = 0; p.auto = null; dust(p.x, p.y, 5); SFX.land(); }
   } else if (A.phase === "drop") {               // down the stronghold's hatch, after them
     p.vx = 0; p.x = approach(p.x, A.x, 260 * dt); p.y += Math.min(520, 140 + A.t * 900) * dt; p.onGround = false; p.vy = 300;
     if (A.t > .45 && !A.fade) { A.fade = true; $("fade").classList.add("on"); setTimeout(enterStronghold, 480); }
@@ -17236,9 +17294,16 @@ function buildWorkshop(k) {                       // a hidden workshop in the wo
 // steel-and-brick bunker under the map, hung with banners and posters of the world's boss. Its crew is off duty (cards, wrestling,
 // lounging about) until they spot you; then they come at you madder than usual. Clear all three for the stronghold key, and climb out
 // three rooms on from where you went in (no further than room 7). One key per world; ten worlds' worth opens the extra world (to come).
-const SH_SPOT = [{ s: 0, x: 2240 }, { s: 1, x: 2370 }, { s: 1, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 },   // per world: the room the hatch turns up in, and where in it
-  { s: 0, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 }, null, { s: 0, x: 2250 }, { s: 0, x: 2250 }];   // (every world since 2026-10-21, but the beach and King P's)
-const SH_CHANCE = .35, KEY_TOTAL = SH_SPOT.filter(Boolean).length, KEY_STORE = "berry.keys.v1";
+// (since 2026-10-25, the user: "let's make the stronghold area fixed in each map and it will be open every night, from blue hour to night time ... a big
+// hatch door open so the player can see it and jump in. they'll come out on the other side of the boat for this one, have another hatch open up but this
+// one will close. it should be day time when they player gets out. or dawn ... In berry forest, make the keep door open in d4 ... the hatchet door be metallic
+// and always look the same in every level. in berry forest, they will exit out on d6. for all the other levels, pick a spot that seems ot make sense")
+const SH_SPOT = [{ cell: "D4", x: 1250, out: { cell: "D6", x: 700 } }, { cell: "B3", x: 820, out: { cell: "B4", x: 1250 } }, { s: 1, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 },   // per world: the room the hatch is in, where in it, and (out) where you come up again
+  { s: 0, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 }, { s: 0, x: 2250 }, null, { s: 0, x: 2250 }, { s: 0, x: 2250 }];   // (every world but the beach and King P's; those not drawn yet: their old early room, out three rooms on, for now)
+const KEY_TOTAL = SH_SPOT.filter(Boolean).length, KEY_STORE = "berry.keys.v1";
+const shIn = (w, S0 = STAGES) => { const sp = SH_SPOT[w]; if (!sp) return null; const s = sp.cell ? S0.findIndex(q => q && q.cell === sp.cell && !q.cut && !q.arena) : sp.s; return s >= 0 ? { s, x: sp.x } : null; };   // (S0: that world's rooms, for a menu)
+const shOutAt = (w, path, from) => { const o = (SH_SPOT[w] || {}).out, s = o ? STAGES.findIndex(q => q && q.cell === o.cell && !q.cut && !q.arena) : path.length ? path[path.length - 1] : from; return { s: s >= 0 ? s : from, x: o ? o.x : WORLD / 2 }; };
+const shOpenNow = () => world === 11 || [3, 4].includes(dayPos());   // (the blue hour and the night; the casino's always night)
 const freeKeys = (() => { try { return JSON.parse(localStorage.getItem(KEY_STORE) || "{}") || {}; } catch { return {}; } })();
 function keysGot() { return story ? (story.keys || (story.keys = {})) : freeKeys; }   // (a story's own keys, in its save file; free play keeps its own)
 function saveKey(w) { const k = keysGot(); k[w] = Date.now(); if (story) writeSave(); else { try { localStorage.setItem(KEY_STORE, JSON.stringify(k)); } catch { } } return Object.keys(k).length; }
@@ -17251,18 +17316,18 @@ const pickOf = L => L[Math.floor(Math.random() * L.length)], bbCol = () => pickO
 
 // the hatch, out on the map
 function clearTrap() { if (!trap) return; actors.remove(trap.g); trap.g.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); trap.q.forEach(disposeBaddy); trap = null; }
-function maybeTrapdoor(back) {
-  const sp = SH_SPOT[world];
-  if (!sp || stronghold || freedNow() || stage !== sp.s || !back || !roomsDone.has(stage) || !nightNow() || keysGot()[world] || Math.random() >= SH_CHANCE) return;
+function maybeTrapdoor(back) {                     // its fixed room, every blue hour and night: the hatch stands open
+  const sp = shIn(world);
+  if (!sp || stronghold || freedNow() || stage !== sp.s || !shOpenNow()) return;
   let x = sp.x; for (let k = 0; k < 40 && !(solidAt(x - 80) && solidAt(x) && solidAt(x + 80)); k++) x = clamp(sp.x + (k % 2 ? 1 : -1) * 40 * (k + 1), 400, WORLD - 200);   // (on firm ground)
   spawnTrapdoor(x);
 }
 const TRAP_M = {};
-function spawnTrapdoor(x) {
+function spawnTrapdoor(x, out) {                   // (out: the way up out of the stronghold, in its own room: open, you come up through it, and it shuts)
   clearTrap();
   if (!TRAP_M.dark) Object.assign(TRAP_M, { dark: new THREE.MeshBasicMaterial({ color: "#0b0a10" }), steel: toon("#7d8494"), rim: toon("#4a4f5c"), stripe: (() => { const m = toon("#ffffff"); m.map = stripeTex(); return m; })(),
     glow: new THREE.MeshBasicMaterial({ map: haloTex(), color: "#ffb860", transparent: true, opacity: .55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }) });
-  const M = TRAP_M, gy = groundAt(x) ?? GROUND, g = group(actors, X(x), Y(gy), .25), W = 1.9, D = 1.3;
+  const M = TRAP_M, gy = groundAt(x) ?? GROUND, g = group(actors, X(x), Y(gy), .25), W = 2.8, D = 1.8;   // (big: seen from across the room. The same steel hatch in every world)
   g.add(at(new THREE.Mesh(new THREE.PlaneGeometry(W, D).rotateX(-Math.PI / 2), M.dark), 0, .015, 0));                       // the dark way down
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.5, D * 1.5).rotateX(-Math.PI / 2), M.glow); at(glow, 0, .03, 0); g.add(glow);   // (lamplight from below)
   [-1, 1].forEach(sd => { g.add(at(mk(new THREE.BoxGeometry(W + .32, .12, .16), null, { mat: M.rim, ol: .02 }), 0, .06, sd * (D / 2 + .08)));
@@ -17271,7 +17336,8 @@ function spawnTrapdoor(x) {
   lid.add(at(mk(new THREE.BoxGeometry(W + .1, .08, D + .1), null, { mat: M.steel, ol: .02 }), 0, 0, (D + .1) / 2));
   lid.add(at(mk(new THREE.BoxGeometry(W - .3, .02, .22), null, { mat: M.stripe, ol: 0 }), 0, .05, D * .5));
   for (let i = 0; i < 6; i++) lid.add(at(mk(ball(.035, 6, 5), null, { mat: M.rim, ol: 0 }), (i % 3 - 1) * (W * .4), .05, i < 3 ? .12 : D - .02));
-  trap = { x, y: gy, g, glow, q: [], t: 0, hopT: 1, sent: 0, moreT: 2.5, hint: false };
+  trap = { x, y: gy, g, glow, lid, q: [], t: 0, hopT: 1, sent: 0, moreT: 2.5, hint: false, out: !!out, shut: 0 };
+  if (out) return trap;
   const s1 = shTypes(["S"]); trap.types = s1.length ? s1 : shTypes(["S", "M"]);
   for (let i = 0; i < 4; i++) addSneak(x - 66 - i * 52);
 }
@@ -17281,6 +17347,11 @@ function addSneak(x) {
 }
 function updateTrap(dt) {
   const T = trap, p = player; T.t += dt; T.glow.material.opacity = .45 + .15 * Math.sin(T.t * 3);
+  if (T.out) {                                      // the way out: once you're up and off it, it shuts (and stays shut, a steel lid in the floor)
+    if (!p.auto && T.t > .6 && T.shut < 1) { const was = T.shut; T.shut = Math.min(1, T.shut + dt * 2.2); T.lid.rotation.x = -1.95 * (1 - T.shut * T.shut);
+      T.glow.material.opacity *= 1 - T.shut; if (was < 1 && T.shut >= 1) { SFX.land(); shake = Math.max(shake, 2.5); dust(T.x, T.y, 6); } }
+    else if (T.shut >= 1) T.glow.material.opacity = 0;
+    return; }
   T.q.forEach((b, i) => {
     if (b.hopIn) {                                   // up, over the rim and down the hole
       const H = b.hopIn; H.t += dt; const u = Math.min(1, H.t / .6);
@@ -17297,7 +17368,7 @@ function updateTrap(dt) {
   T.q.filter(b => b.goneIn).forEach(b => { disposeBaddy(b); T.sent++; }); T.q = T.q.filter(b => !b.goneIn);
   if (T.sent + T.q.length < 12 && T.q.length < 4 && (T.moreT -= dt) <= 0) { T.moreT = rand(1.5, 3); addSneak(T.x - 760); }   // more come along to join the line
   // you: jump in after them (land in it), or stand on it and press down
-  if (!p.auto && !p.dead && !transit && !patrolLock && Math.abs(p.x - T.x) < 30 && p.onGround && !p.plat && (p.landV > 120 || held.down)) {
+  if (!p.auto && !p.dead && !transit && !patrolLock && Math.abs(p.x - T.x) < 46 && p.onGround && !p.plat && (p.landV > 120 || held.down)) {
     p.auto = { kind: "trap", phase: "drop", t: 0, x: T.x }; p.atkT = -1; p.combo = null; p.tackle = null; p.block = false; SFX.dash(); }
   if (!T.hint && Math.abs(p.x - T.x) < 380) { T.hint = true; toast("AN OPEN HATCH… JUMP IN AFTER THEM (OR STAND ON IT AND PRESS ↓)", 4200); }
 }
@@ -17603,10 +17674,19 @@ function shNext() {
   setTimeout(() => { if (H.screen < 2) shScreen(H.screen + 1, false); else exitStronghold(); }, 480);
 }
 function shBack() { transit = true; $("fade").classList.add("on"); setTimeout(() => shScreen(stronghold.screen - 1, true), 480); }
-function exitStronghold() {                        // up the ladder and out of a manhole, three rooms on
+function exitStronghold() {                        // up the ladder and out through a hatch in its own room (the waves: the ship's deck's far end; the forest: D6), at dawn
   const H = stronghold; stronghold = null; clearBaddies(); bossIn = false; exitOpen = true;
-  H.path.slice(0, -1).forEach(s => { trail.push(s); roomsSeen.add(s); });
-  level.s = -3; goRoom(H.to, false);
+  const o = shOutAt(H.w, H.path, H.from); if (!(SH_SPOT[H.w] || {}).out) H.path.slice(0, -1).forEach(s => { trail.push(s); roomsSeen.add(s); });
+  dayClock = 5 * DAY_ROOMS;                         // (out into the dawn: coming into the room moves the clock on one, onto it)
+  level.s = -3; const ns = o.s; clearFriends(); clearGifts(); trail.push(ns); entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
+  let x = o.x; for (let k = 0; k < 40 && !(solidAt(x - 80) && solidAt(x) && solidAt(x + 80)); k++) x = clamp(o.x + (k % 2 ? 1 : -1) * 40 * (k + 1), 300, WORLD - 300);   // (on firm ground)
+  const gy = groundAt(x) ?? GROUND;
+  Object.assign(player, { x, y: gy + 70, vx: 0, vy: 0, face: 1, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, safeT: 1.5, safe: { x, y: gy, plat: null }, auto: { kind: "hatchOut", phase: "rise", t: 0, x, y: gy } });
+  palsPut({ x: x - 60, y: gy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null }); ejPlace(x - 110, gy, 1);
+  const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
+  camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); $("exitCue").classList.add("hidden");
+  enterStage(ns, false); spawnTrapdoor(x, true); SFX.door && SFX.door();
+  setTimeout(() => { $("fade").classList.remove("on"); transit = false; }, 120);
 }
 
 function updateBaddies(dt) { for (const b of baddies) if (!b.gone) updateBaddy(b, dt); }
@@ -18390,7 +18470,7 @@ function update(dt) {
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
+  updatePal(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
   if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;

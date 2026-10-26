@@ -1697,7 +1697,7 @@ $("bSaveFile").onclick = async () => {
   drafts.clear(); toast(`SAVED ${name} · THE GAME'S CHARACTERS ARE UNCHANGED`, 5000); finishClose();
 };
 $("bDiscard").onclick = () => { drafts.clear(); finishClose(); };
-$("bBack").onclick = closeEd;
+$("edBack").onclick = closeEd;   // (its own id: the game's select screen has a #bBack of its own, which this one used to get, so BACK TO GAME did nothing: the user, 2026-10-25)
 (async () => {
   const use = window.claude && window.claude.use ? n => window.claude.use(n).catch(() => null) : async () => null;
   const [smp, dl] = await Promise.all([use("sample"), use("downloads")]);
@@ -1949,7 +1949,7 @@ const ED_MARKUP = `<div class="app">
       <button class="btn cta" id="bNew">NEW FROM PICTURE</button>
       <button class="btn" id="bImport">IMPORT</button>
       <button class="btn" id="bExport">EXPORT</button>
-      <button class="btn" id="bBack">BACK TO GAME</button>
+      <button class="btn" id="edBack">BACK TO GAME</button>
     </div>
   </header>
   <main>
