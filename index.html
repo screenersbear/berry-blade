@@ -454,7 +454,7 @@
   #tale.show { display: flex; }
   #tale.sky { background: transparent; align-items: flex-start; }   /* (the prologue: the panels over the sky, La Guagua under them) */
   #tale.sky .page { width: min(98vw, 172vh); margin-top: 1.4vh; background: transparent; padding: 0; gap: 1vw; box-shadow: none; }
-  #tale.sky .cp { width: calc((100% - 3vw) / 4); } #tale.sky .skip { top: auto; bottom: 10px; right: auto; left: 18px; z-index: 3; background: rgba(47, 59, 67, .55); }   /* (the skip out from under the panels: bottom left) */ #tale.sky .cp:nth-child(even) { transform: scale(.9) rotate(1.5deg); }
+  #tale.sky .cp { width: calc((100% - 3vw) / 4); } #tale.sky .skip { top: auto; bottom: 10px; right: auto; left: 18px; z-index: 3; background: rgba(47, 59, 67, .55); } body.oneUp #tale.sky .go { display: none; }   /* (the skip out from under the panels: bottom left) */ #tale.sky .cp:nth-child(even) { transform: scale(.9) rotate(1.5deg); }
   body.oneUp #tale.sky .page { align-items: center; justify-content: flex-start; } body.oneUp #tale.sky .cp.now { width: min(52vw, calc(34vh * 4 / 3)); margin: 1.5vh 0 0 0; }
   #tale .page { position: absolute; width: min(94vw, 172vh); background: var(--y); padding: 14px; box-sizing: border-box; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 12px;
     box-shadow: 10px 10px 0 #000; transform-origin: left center; transition: transform 1s cubic-bezier(.55, 0, .35, 1), opacity .35s .65s, box-shadow 1s; }
@@ -6455,7 +6455,7 @@ function buildRoad() {                               // the coast road at sunset
   const rc = roster.find(q => q.id === "camila"), rr = roster.find(q => q.id === "rose"); R.kids = [];
   if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - 1.42, U.by + .08, -.5, 1, -.62), hold: true });
   if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });
-  const A = ALLIES.find(a => a.id === "burr"); if (A) { const r = allyRig(A); R.driver = ride("burr", r, U.cx1 - .92, 1.15, -.62, 1, -.2, { sit: 1 }); }   // (his head in the window, behind the wheel)
+  const A = ALLIES.find(a => a.id === "elpico"); if (A) { const r = allyRig(A); R.driver = { ...ride("elpico", r, U.cx1 - .92, 1.53, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (El Pico at the wheel: not green, so he stands out against the pink, the user 2026-10-26; now and then he turns to look out)   // (his head in the window, behind the wheel)
   return R;
 }
 function roadTick(R, dt) {                           // (every frame: the coast going by, the wheels turning, the body on its springs, them riding)
@@ -6465,9 +6465,11 @@ function roadTick(R, dt) {                           // (every frame: the coast 
   const U = R.bus.userData, bob = .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1), roll = .007 * Math.sin(R.t * 3.3);
   U.B.position.y = bob; U.B.rotation.x = roll; R.bus.position.x = R.busX;
   U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
-  const place = c => { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.yaw = c.yaw; s.vx = 0; s.onGround = true;
+  const place = c => { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.onGround = true;
+    s.yaw = c.look ? c.yaw - .75 * Math.pow(Math.max(0, Math.sin(R.t * .62)), 1.6) : c.yaw;   // (the driver: a look out of the window, and back to the road)
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
-    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }   // (her other hand up on the roll bar: the blade's in the first)
+    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }
+    if (c.look) s.out.headRot = (s.out.headRot || 0) + .1 * Math.sin(R.t * 2.1);   // (his head bobbing along)   // (her other hand up on the roll bar: the blade's in the first)
     c.r.sync(s, c.r, dt); };
   R.kids.forEach(place); if (R.driver) place(R.driver);
 }
@@ -6746,11 +6748,11 @@ function taleLoad() {                                // the voice (decoded once)
 }
 function startTale(then, opt = {}) {                // (opt.sky: over the sky above La Guagua, four a page across the top, the scene below: the prologue)
   taleLoad(); paused = true; comicUp = true; for (const k in keys) keys[k] = false; $("holdTip").classList.remove("show"); const P1 = opt.sky ? 4 : TALE_P1;
-  const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')"><span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span></div>`;
+  const panel = (q, i) => `<div class="cp" style="background-image: url('${q.img}')">${opt.sky ? "" : `<span class="cap${q.top ? " top" : ""}">${q.text.toUpperCase()}</span>`}</div>`;   // (the sky's: no words on them, the lines along the foot of the screen instead)
   $("tale").innerHTML = `<div class="page p2">${TALE.slice(P1).map((q, i) => panel(q, i + P1)).join("")}</div><div class="page p1">${TALE.slice(0, P1).map(panel).join("")}</div>
     <button class="skip">SKIP ${padUse ? padName("st") : window.BERRY_TOUCH ? "" : "· ESC"}</button><span class="go">${window.BERRY_TOUCH ? "TAP FOR THE NEXT ONE" : "ANY BUTTON FOR THE NEXT ONE"}</span>`;
   $("tale").classList.toggle("sky", !!opt.sky); $("tale").classList.add("show"); document.body.classList.toggle("oneUp", oneUp());
-  tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now(), p1: P1 };
+  tale = { then, i: -1, wait: 1, hold: 2.5, src: null, sayAt: -1, t0: performance.now(), p1: P1, sub: !!opt.sky };
 }
 function taleTick(dt) {                              // (every frame, paused or not: the game's paused under it)
   const T = tale; if (T.sayAt >= 0 && (T.sayAt -= dt) < 0) taleSay(T.i);
@@ -6769,13 +6771,13 @@ function taleStep() {
   const cp = k => k < T.p1 ? $("tale").querySelector(".p1").children[k] : $("tale").querySelector(".p2").children[k - T.p1];
   if (n === T.p1 && !T.turned) { T.turned = true; if (!document.body.classList.contains("oneUp")) { $("tale").querySelector(".p1").classList.add("away"); SFX.page(); T.wait = 1.15; return; } }   // the page turns over (a phone: a panel at a time, no turn)
   for (let k = 0; k < n; k++) cp(k).classList.add("past");
-  cp(n).classList.add("on"); SFX.tick(); T.i = n; $("tale").querySelectorAll(".cp").forEach(el => el.classList.toggle("now", el === cp(n)));   // (a phone shows only the one .now)
+  cp(n).classList.add("on"); SFX.tick(); T.i = n; if (T.sub) { capWho($("voCap"), TALE[n].who, TALE[n].text); $("voCap").classList.add("show"); }   // (its line as a subtitle) $("tale").querySelectorAll(".cp").forEach(el => el.classList.toggle("now", el === cp(n)));   // (a phone shows only the one .now)
   const words = TALE[n].text.split(/\s+/).length; T.wait = 1.2 + words * .36; T.sayAt = .35;   // (no voice, or none yet: time to read it)
 }
 function taleNext() { const T = tale; if (!T || performance.now() - T.t0 < 600) return; if (T.turned && T.i < T.p1) return; T.sayAt = -1; T.wait = 0; }   // (not in the first moment: a button held from the stats screen; not mid-turn)
 function taleSkip() { if (tale) endTale(); }
 function endTale() {
-  const T = tale; taleHush(); tale = null; if (story) story.tale = true;
+  const T = tale; taleHush(); tale = null; if (story) story.tale = true; if (T.sub) $("voCap").classList.remove("show");
   $("tale").querySelectorAll(".page").forEach(el => el.classList.add("out"));
   setTimeout(() => { comicUp = false; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (T.then) T.then(); }, 380);
   setTimeout(() => { if (!tale) $("tale").classList.remove("show", "sky"); }, T.then ? 380 + 520 : 380);   // (under the fade to the woods by then)
