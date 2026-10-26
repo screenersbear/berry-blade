@@ -1687,10 +1687,8 @@ function climbPose(p, cat) {
   if (cat) Object.assign(T, { tailBase: 1.1, tailCurl: .12, tailSwish: .25 * s, hatTilt: -.1 });
   return T;
 }
-function dodgePose(p) {                            // the back-step (2026-10-25): leaning back into the hop, the guard up, knees drawn up a little, the front foot trailing
-  const u = Math.min(1, (p.dodge.t || 0) / .3), s = Math.sin(u * Math.PI);
-  return { lean: -.32 * s, arch: -.12 * s, bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1,
-    fNx: .2 + .08 * s, fNy: .1 + .14 * s, fFx: -.16, fFy: .06 + .1 * s, fP: -.2 };
+function dodgePose(p) {                            // the back-step (2026-10-25): leaning back into the hop, the guard up, knees drawn up a little, the front foot trailing (its keys: STRIKES.backstep)
+  return poseKeys(p, "backstep", p.dodge.t || 0) || {};
 }
 function zipPose(p) {                              // hanging from the zipline's trolley (the waves, 2026-10-25): both hands up on its bar, legs swinging a little under you
   const s = Math.sin(p.zipPh || 0);
@@ -1715,7 +1713,7 @@ const TKDIG_H = { lean: .62, arch: -.05, bodyY: -.3, headRot: -.38, armF: .95, e
 const TKDIG_C = { lean: .95, arch: .5, bodyY: -.32, headRot: -.25, armF: 1.15, elbF: .9, armB: 1.05, elbB: 1.0, fNx: .3, fFx: -.34, tailBase: 1.8, tailCurl: .15, hatTilt: -.25 };   // (the cat: crouched to pounce, front paws planted ahead, eyes forward, tail up)
 const TACKLE_H = { lean: .7, arch: .2, bodyY: -.16, headRot: .28, armF: 1.3, elbF: 1.95, armB: 1.2, elbB: 2.0, spF: -.32, spB: -.32 };   // shoulder down, forearms braced across in front, head tucked: a running back going through
 const TACKLE_C = { lean: 1.0, arch: .3, bodyY: -.14, headRot: .26, armF: 1.45, elbF: 1.7, armB: 1.35, elbB: 1.7, tailBase: 1.55, tailCurl: -.08, hatTilt: -.4 };
-function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = cat ? TACKLE_C : TACKLE_H; for (const key in TK) o[key] = lerp(o[key] ?? 0, TK[key], k); }   // over the running legs
+function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = poseKeys(p, "tackle", p.tackle ? p.tackle.t : 9) || (cat ? TACKLE_C : TACKLE_H); for (const key in TK) o[key] = lerp(o[key] ?? 0, TK[key], k); }   // over the running legs
 function extraPoses(p, T, cat) {                  // laid over whatever pose came before
   const t = api.time;
   if (p.block || p.tpose > 0) {                   // the guard, hands drawn in close, opening out to the T as it's held
@@ -1723,7 +1721,7 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
     T.spF = (T.spF ?? 0) - .22; T.spB = (T.spB ?? 0) - .22;
     if (e > 0) for (const k in TPOSE) if (p.onGround || !LEG_CH.has(k)) T[k] = lerp(T[k] ?? 0, TPOSE[k], e);
   }
-  if (p.tkDig > 0) { const k = p.tkDig, D = cat ? TKDIG_C : TKDIG_H; for (const key in D) T[key] = lerp(T[key] ?? 0, D[key], k); T.bodyY += Math.sin(t * 38) * .008 * k; }   // (trembling with it)
+  if (p.tkDig > 0) { const k = p.tkDig, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || (cat ? TKDIG_C : TKDIG_H); for (const key in D) T[key] = lerp(T[key] ?? 0, D[key], k); T.bodyY += Math.sin(t * 38) * .008 * k; }   // (trembling with it)
   if (p.tired > 0) { Object.assign(T, cat ? TIRED_C : TIRED_H); T.bodyY += Math.sin(t * 10) * .014; T.arch += Math.sin(t * 10) * .03; }   // panting
   if (p.startle > 0) { const k = Math.min(1, p.startle * 4); T.lean = lerp(T.lean, -.28, k); T.bodyY = lerp(T.bodyY, .06, k); T.armF = lerp(T.armF, 2.5, k); T.armB = lerp(T.armB, 2.3, k); T.elbF = lerp(T.elbF, .35, k); T.elbB = lerp(T.elbB, .35, k); T.spF = lerp(T.spF ?? 0, .7, k); T.spB = lerp(T.spB ?? 0, .7, k); T.headRot = lerp(T.headRot, -.18, k); }   // startled: jumps back, hands flung up
   if (p.shy > 0) { const k = Math.min(1, p.shy * 3); T.lean = lerp(T.lean, .16, k); T.armF = lerp(T.armF, 1.75, k); T.elbF = lerp(T.elbF, 2.35, k); T.armB = lerp(T.armB, 1.6, k); T.elbB = lerp(T.elbB, 2.4, k); T.spF = lerp(T.spF ?? 0, -.25, k); T.spB = lerp(T.spB ?? 0, -.25, k); T.headRot = lerp(T.headRot, .3 + Math.sin(t * 9) * .03, k); }   // shy: head down, hands up to the face
@@ -1785,8 +1783,12 @@ const STRIKES = {
       bodyY: [[0, -.1], [.12, 0], [.4, 0], [.48, -.38], [.78, -.36], [.95, -.08]],
       fNx: [[0, .24], [.12, .1], [.4, .1], [.48, .34], [.78, .34], [.95, .24]], fFx: [[0, -.2], [.12, -.05], [.4, -.1], [.48, -.32], [.78, -.32], [.95, -.2]],
       fNy: [[0, 0], [.12, .3], [.4, .25], [.48, 0], [.95, 0]], fFy: [[0, 0], [.12, .26], [.4, .2], [.48, 0], [.95, 0]], fP: [[0, 0], [.12, -.5], [.4, -.3], [.48, .3], [.78, .3], [.95, 0]] } },
-  punch: { dur: .3, chain: .16, step: 170, sq: -.08, sfx: "punch", hits: [{ t0: .07, t1: .22, reach: 62, back: -8, y0: 104, y1: 52, kind: "punch" }] },
-  kick: { dur: .44, step: 150, sq: .12, sfx: "kick", hits: [{ t0: .12, t1: .32, reach: 74, back: -8, y0: 96, y1: 18, kind: "kick" }] },
+  punch: { dur: .3, chain: .16, step: 170, sq: -.08, sfx: "punch", hits: [{ t0: .07, t1: .22, reach: 62, back: -8, y0: 104, y1: 52, kind: "punch" }], screen: true,   // (keyed 2026-10-25 from its old drawn poses, so the editor has it: cock the fist, the straight jab, back)
+    keys: { lean: [[0, 0.04], [0.045, 0.04], [0.075, 0.38], [0.205, 0.38], [0.235, 0.12], [0.3, 0.12]], headRot: [[0, 0], [0.045, 0], [0.075, -0.05], [0.205, -0.05], [0.235, 0], [0.3, 0]], armF: [[0, -0.45], [0.045, -0.45], [0.075, 1.6], [0.205, 1.6], [0.235, 0.6], [0.3, 0.6]], elbF: [[0, 1.9], [0.045, 1.9], [0.075, 0], [0.205, 0], [0.235, 1.2], [0.3, 1.2]],
+      armB: [[0, 0.6], [0.045, 0.6], [0.075, 0.2], [0.205, 0.2], [0.235, 0.4], [0.3, 0.4]], elbB: [[0, 1.8], [0.045, 1.8], [0.075, 2.1], [0.205, 2.1], [0.235, 1.8], [0.3, 1.8]], fNx: [[0, 0.2], [0.045, 0.2], [0.075, 0.3], [0.205, 0.3], [0.235, 0.22], [0.3, 0.22]], fFx: [[0, -0.18], [0.045, -0.18], [0.075, -0.26], [0.205, -0.26], [0.235, -0.2], [0.3, -0.2]] } },
+  kick: { dur: .44, step: 150, sq: .12, sfx: "kick", hits: [{ t0: .12, t1: .32, reach: 74, back: -8, y0: 96, y1: 18, kind: "kick" }], screen: true,   // (keyed the same way: chamber the knee, the snap kick, back)
+    keys: { lean: [[0, -0.1], [0.085, -0.1], [0.115, -0.42], [0.305, -0.42], [0.335, -0.05], [0.44, -0.05]], armF: [[0, 0.7], [0.085, 0.7], [0.115, -0.75], [0.305, -0.75], [0.335, 0.4], [0.44, 0.4]], elbF: [[0, 1.4], [0.085, 1.4], [0.115, 0.6], [0.305, 0.6], [0.335, 1], [0.44, 1]], armB: [[0, -0.5], [0.085, -0.5], [0.115, 1.35], [0.305, 1.35], [0.335, 0.2], [0.44, 0.2]],
+      elbB: [[0, 0.8], [0.085, 0.8], [0.115, 0.5], [0.305, 0.5], [0.335, 0.9], [0.44, 0.9]], fNx: [[0, 0.1], [0.085, 0.1], [0.115, 0.62], [0.305, 0.62], [0.335, 0.25], [0.44, 0.25]], fNy: [[0, 0.28], [0.085, 0.28], [0.115, 0.46], [0.305, 0.46], [0.335, 0.1], [0.44, 0.1]], fFx: [[0, -0.05], [0.085, -0.05], [0.115, -0.14], [0.305, -0.14], [0.335, -0.1], [0.44, -0.1]], fP: [[0, 0.2], [0.085, 0.2], [0.115, 0.5], [0.305, 0.5], [0.335, 0], [0.44, 0]] } },
   slash: { dur: .36, chain: .2, step: 140, sq: -.06, sfx: "slash", hits: [{ t0: .1, t1: .22, reach: 105, back: 5, y0: 125, y1: 5, kind: "slash" }],   // two-handed: high over the shoulder, then one big arc down through the target
     keys: { armF: [[0, .35], [.07, 2.5], [.2, .55], [.28, .45], [.36, .45]], elbF: [[0, 1.15], [.07, 1.3], [.2, .35], [.28, .5], [.36, .8]],
       blade: [[0, .95], [.07, 2.9], [.2, -.55], [.28, -.45], [.36, .3]], grip: [[0, 0], [.04, 1], [.3, 1], [.36, .6]],
@@ -1971,7 +1973,29 @@ const STRIKES = {
       fNx: [[0, .24], [.22, .3], [.32, .12], [.5, .18]], fNy: [[0, .36], [.22, .42], [.32, .12], [.5, .2]], fFx: [[0, -.2], [.22, -.24], [.32, -.16], [.5, -.2]], fFy: [[0, .22], [.22, .3], [.32, .08], [.5, .14]],
       fP: [[0, -.6], [.32, -.9], [.5, -.65]], fNz: [[0, .06], [.5, .06]], fFz: [[0, .04], [.5, .04]] } },   // (knees up as the arms go up, then the legs thrown down with the slam: 2026-10-23, they were folded up under her the whole way)
 };
-const PUNCH_S = { dur: .3, hits: [{ t0: .06, t1: .22 }] };   // (the air punch's timing, for its legs)
+// the moves the game drives itself, keyed so the editor can pose them too (the user, 2026-10-25: "every move we do and create should go in there for
+// their respective characters"): the tackle, the charged tackle's dig-in, the back-step. pose: never played as an attack; screen: their sides as seen
+// (far / near), not lead / rear, as they were drawn. Their keys start as the poses they had
+const flatKeys = (P, dur) => Object.fromEntries(Object.entries(P).map(([k, v]) => [k, [[0, v], [dur, v]]]));
+const BACKSTEP_T = [0, .075, .15, .225, .3, .5], bkCurve = (a, b) => BACKSTEP_T.map((t, i) => [t, +(a + b * Math.sin(Math.min(1, t / .3) * Math.PI)).toFixed(4)]);   // (the hop's bend: up to the top of it at .15 s, eased back by .3)
+Object.assign(STRIKES, {
+  tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_H, .72) },   // (wind .14, lunge .4, pull up .18: the game's TKL)
+  tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_H, 1) },
+  backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1, fFx: -.16, fP: -.2 }, .5),
+    lean: bkCurve(0, -.32), arch: bkCurve(0, -.12), fNx: bkCurve(.2, .08), fNy: bkCurve(.1, .14), fFy: bkCurve(.06, .1) } },
+});
+Object.assign(CAT_MOVES, {
+  tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
+  tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_C, 1) },
+  backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.05, headRot: .12, armF: 1.3, elbF: 1.5, armB: 1.2, elbB: 1.5, tailCurl: .2, hatTilt: .12 }, .5),   // (his back-step: rocked back on his haunches, paws up, the tail up for balance)
+    lean: bkCurve(.1, -.4), arch: bkCurve(.1, -.15), tailBase: bkCurve(1.3, .5) } },
+});
+function poseKeys(p, kind, t) {                   // a game-driven move's pose at t: its keys, with the character's own laid over them
+  const S = (p.rig.kind === "cat" ? CAT_MOVES : STRIKES)[kind]; if (!S || !S.keys) return null;
+  const A = p.rig.spec.move.anims, own = A && A[kind], K = own ? { ...S.keys, ...own } : S.keys, u = clamp(t, 0, S.dur), sw = !S.screen && p.rig.kind !== "cat" && leadFar(p), o = {};
+  for (const k in K) if (k !== "blade") o[sw ? SWAP[k] || k : k] = keyvS(K[k], u) * (sw && TWISTS.has(k) ? -1 : 1);
+  return o;
+}
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
 const TWISTS = new Set(["twist", "twistU", "twistH"]);   // turns about the up axis: with the lead hand on the far side they turn the other way
 const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", wF: "wB", wB: "wF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
@@ -2074,16 +2098,7 @@ function updatePoseHuman(p, dt) {
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
-  else if (a >= 0 && p.atkKind === "punch") {
-    if (a < .06) Object.assign(T, { lean: .04, armF: -.45, elbF: 1.9, armB: .6, elbB: 1.8, fNx: .2, fFx: -.18 });                 // cock the fist
-    else if (a < .22) Object.assign(T, { lean: .38, armF: 1.6, elbF: 0, armB: .2, elbB: 2.1, fNx: .3, fFx: -.26, headRot: -.05 }); // straight jab
-    else Object.assign(T, { lean: .12, armF: .6, elbF: 1.2, armB: .4, elbB: 1.8, fNx: .22, fFx: -.2 });
-    if (!p.onGround) p.airLegs = strikeLegs(p, T, ST, PUNCH_S, a);   // (in the air: the legs tucked, not standing)
-  } else if (a >= 0 && p.atkKind === "kick") {
-    if (a < .1) Object.assign(T, { lean: -.1, armF: .7, elbF: 1.4, armB: -.5, elbB: .8, fNx: .1, fNy: .28, fFx: -.05, fP: .2 });   // chamber the knee
-    else if (a < .32) Object.assign(T, { lean: -.42, armF: -.75, elbF: .6, armB: 1.35, elbB: .5, fNx: .62, fNy: .46, fP: .5, fFx: -.14 }); // snap kick
-    else Object.assign(T, { lean: -.05, armF: .4, elbF: 1, armB: .2, elbB: .9, fNx: .25, fNy: .1, fFx: -.1 });
-  } else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
+  else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = !S.screen && leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
     for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && TWISTS.has(k) ? -1 : 1); } }
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
   else if (!p.onGround) {
@@ -2167,7 +2182,7 @@ function updatePoseHuman(p, dt) {
   o.fFx = lerp(o.fFx, sf[0], g); o.fFy = lerp(o.fFy, sf[1], g); o.pF = lerp(o.fP, sf[2], g); o.sF = 0;
   runLayer(p, o, ph / TAU, g);
   const SK = a >= 0 && STRIKES[p.atkKind];
-  if (SK && SK.keys) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
+  if (SK && SK.keys && !SK.screen) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (the punch and kick, keyed from their old drawn poses: eased in through the pose as they always were, not laid on raw)   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
     for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
       let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
       if (k === "spin" || k === "flip") v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round
@@ -2189,7 +2204,7 @@ function updatePoseHuman(p, dt) {
       o.armF = lerp(o.armF, -.55, up * .6); o.armB = lerp(o.armB, .65, up * .6); o.fNy += .07 * up * Bd.legs; }
   }
   tackleOver(p, o, false);
-  if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) o[key] = lerp(o[key], TKDIG_H[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
+  if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || TKDIG_H; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
   if (p.onGround && p.sq < 0 && a < 0 && !m.float) { o.bodyY += p.sq * .3; o.lean -= p.sq * .15; }   // landing: the knees take the weight
   if (p.rig.prop && p.rig.prop.kind === "sword") {          // a spiked sword: in a swing, the blade turns over so its spikes (the notched edge) lead the cut, into the enemy
     let want = 0;                                           // (2026-10-23: the spikes moved to the notched edge, which leads a down or over cut as it is: it turns over for the up cuts now)
@@ -2225,6 +2240,7 @@ function updatePoseCat(p, dt) {
   const T = { ...POSE0 }, t = api.time, sp = Math.abs(p.vx), m = p.rig.spec.move, Bd = p.rig.spec.body;
   if (p.sit) Object.assign(T, { lean: .05, arch: .1, bodyY: -.36, armF: .55, elbF: 1.0, armB: .45, elbB: 1.0, fNx: .3, fFx: .24, fP: .35, tailBase: .5, tailCurl: .35, tailSwish: .25, headRot: .08 });
   else if (p.climb) Object.assign(T, climbPose(p, true));   // sat down, tail curled round
+  else if (p.dodge && p.atkT < 0) Object.assign(T, poseKeys(p, "backstep", p.dodge.t || 0) || {});   // his back-step (CAT_MOVES.backstep)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.35, arch: -.2, armF: 2.6, elbF: .4, armB: 2.2, fNx: .15, fNy: .2, fFx: -.1, fFy: .1, tailBase: 1.9, tailCurl: .1, hatLift: .1, hatTilt: -.3 }), layPose(T, m.hurt, p);
   else if (p.atkT >= 0 && !(p.atkKind && CAT_MOVES[p.atkKind])) {
     const a = p.atkT;
@@ -2286,7 +2302,7 @@ function updatePoseCat(p, dt) {
   if (CM) { const a = p.atkT, w = p.keysFull ? 1 : clamp(Math.min(a / .025, (CM.dur - a) / .06), 0, 1), KK = keysOf(p, CM);
     for (const k in KK) { let v = kv(p, KK, k, a); if (k === "spin" || k === "flip") v = Math.atan2(Math.sin(v), Math.cos(v)); o[k] = lerp(o[k] ?? 0, v, w); } }
   tackleOver(p, o, true);
-  if (p.tkDig > 0 && p.atkT < 0 && g > 0) { const k = p.tkDig * g; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "tailBase", "tailCurl", "hatTilt"]) o[key] = lerp(o[key], TKDIG_C[key], k); o.bodyY -= .12 * k; }   // (stalking forward, still crouched)
+  if (p.tkDig > 0 && p.atkT < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || TKDIG_C; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "tailBase", "tailCurl", "hatTilt"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .12 * k; }   // (stalking forward, still crouched)
   if (p.onGround && p.sq < 0 && p.atkT < 0) { o.bodyY += p.sq * .35; o.arch -= p.sq * .2; }   // landing: down on his haunches a moment
   // idle tail-tip flicks
   p.flick *= Math.exp(-dt * 5);

@@ -173,23 +173,34 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
   clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave",
   cpunch: "punch", ccross: "cross", csmash: "smash", upperhook: "uppercut + hook", gu_fist: "rising swipe", up_fist: "rising uppercut", gu_sword: "rising swipe", up_sword: "rising cut",
-  tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick" };   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+  tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
+  punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch", dn_sword: "down stab", dn_kick: "down kick",
+  tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
+  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step" };   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
-function movesFor(sp) {                                          // every keyframed move this character has, in play order
-  if (sp.base === "cat") return [...KIT.CAT_GROUND.map((k, i) => [k, `Ground ${i + 1}`]), ...KIT.CAT_AIR.map((k, i) => [k, `Air ${i + 1}`]), ...KIT.CAT_CHARGE.map((k, i) => [k, `Charge ${i + 1}`])];
-  const S = setFor(sp), out = [], seen = new Set(), add = (k, lab) => { if (!seen.has(k) && KIT.STRIKES[k] && KIT.STRIKES[k].keys) { seen.add(k); out.push([k, lab]); } };   // (each move once, where it first comes)
-  S.ground.forEach((k, i) => add(k, `Ground ${i + 1}`)); (S.groundB || []).forEach((k, i) => add(k, `Forward combo ${i + 1}`));
-  S.air.forEach((k, i) => add(k, `Air ${i + 1}`)); (S.air1 || []).forEach((k, i) => add(k, `Air combo ${i + 1}`)); (S.air2 || []).forEach((k, i) => add(k, `Air combo, forward ${i + 1}`));
-  (S.upChain || []).forEach((k, i) => add(k, `Up ${i + 1}`)); (S.charge || []).forEach((k, i) => add(k, `Charge ${i + 1}`));
-  const TK = KIT.TK_CHARGE || {}; ((((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other) || []).forEach((k, i) => add(k, `Charged tackle ${i + 1}`));
-  add("slide", "Slide (down + attack)");
+function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
+  const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
+  const TK = KIT.TK_CHARGE || {};                                // (a move used in more than one place shows in each: it's the one move, edited once)
+  if (sp.base === "cat") { const C = KIT.CAT_MOVES;
+    list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
+    add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Tackle (attack + block)", "tackle", "", C);
+    add("Charged tackle (hold attack + block)", "tkdig", "", C); list("Charged tackle (hold attack + block)", TK.cat, C); add("Back-step (block + back)", "backstep", "", C);
+    return out; }
+  const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
+  list("Attack", S.ground, T); list("Forward + attack", S.groundB || S.ground, T);
+  list("Attack in the air", S.air1 || S.air, T); list("Forward + attack in the air", S.air2 || S.air, T);
+  list("Up + attack", S.upChain || [S.up], T); add("Up + attack in the air", S.up, "", T); add("Down + attack in the air", S.down, "", T);
+  add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
+  add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
+  list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
   return out;
 }
 function driveMove(p, dt) {
   KIT.time += dt;
   const kind = moveKind(), S = moveDef(kind); if (!S) return;
   tl.t += dt; if (tl.t > S.dur + .45) tl.t = 0;                 // a short rest between loops
-  Object.assign(p, { keysFull: true, atkKind: kind, atkIdx: 0, atkT: tl.t <= S.dur ? tl.t : -1, onGround: true, y: GROUND, vx: 0, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false });
+  const u = tl.t <= S.dur ? tl.t : -1;
+  Object.assign(p, { keysFull: true, atkIdx: 0, y: GROUND, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false }, moveAt(kind, S, u));
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   p.prof = approach(p.prof || 0, 1, dt * 10); p.bodyYaw = lerp(.85, .3, p.prof); p.yaw = lerp(p.yaw, -p.bodyYaw, 1 - Math.exp(-dt * 16));
   KIT.updatePose(p, dt); p.x = 0;
@@ -246,9 +257,16 @@ function syncHandles() {
 // along the same thread"): hollow = where each dot was at your last key (or the move's start), solid = where it gets to at your next key (or the end);
 // the dotted line = the picked dot's whole path through the move
 let onion = null, onionOn = true;
+function moveAt(kind, S, u) {                                    // the state that plays a move at u (-1: between loops). The tackle, the dig-in and the back-step are
+  const pm = S.pose && u >= 0 ? kind : null;                     // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
+  const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
+  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep", vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
+    tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null };
+}
 function handlesAt(times) {                                      // every dot's place (in the world) at other moments of the picked move; the pose is put back after
-  const keep = { atkT: st.atkT, pose: { ...st.pose }, pv: { ...st.pv }, out: { ...st.out } }, M = rig.body.matrixWorld;
-  const res = times.map(t => { st.atkT = t; KIT.updatePose(st, 0); rig.sync(st, rig, 0); rig.root.updateMatrixWorld(true); const o = {}; KIT.poseHandles(st, rig).forEach(H => { o[H.id] = H.pos.clone().applyMatrix4(M); }); return o; });
+  const kind = isMove() ? moveKind() : st.atkKind, S = kind && moveDef(kind), M = rig.body.matrixWorld;
+  const keep = { atkT: st.atkT, atkKind: st.atkKind, onGround: st.onGround, vx: st.vx, tackle: st.tackle, tackleK: st.tackleK, tkCharge: st.tkCharge, tkDig: st.tkDig, dodge: st.dodge, pose: { ...st.pose }, pv: { ...st.pv }, out: { ...st.out } };
+  const res = times.map(t => { if (S && S.pose) Object.assign(st, moveAt(kind, S, t)); else st.atkT = t; KIT.updatePose(st, 0); rig.sync(st, rig, 0); rig.root.updateMatrixWorld(true); const o = {}; KIT.poseHandles(st, rig).forEach(H => { o[H.id] = H.pos.clone().applyMatrix4(M); }); return o; });
   Object.assign(st, keep);
   return res;
 }
@@ -430,9 +448,9 @@ function applyVals(vals) {                                       // a dot or a r
   if (tgt.type === "pose") {                                     // standing / block / jump / hurt: the character's own pose
     for (const ch in vals) { const sc = KIT.chanFor(st, ch), R = KIT.POSE_CH[sc]; if (!R) continue; m[tgt.key][sc] = clamp(vals[ch] - (ch === "lean" && tgt.key !== "hurt" ? cur.spec.move.lean : 0), R[0], R[1]); }
   } else if (tgt.type === "keys") {                             // a keyframed move, at this moment: your key there
-    const { kind, S, t } = tgt, base = S.keys || {}, A = m.anims[kind] = m.anims[kind] || {}, sw = KIT.leadFar(st);
+    const { kind, S, t } = tgt, base = S.keys || {}, A = m.anims[kind] = m.anims[kind] || {}, sw = !S.screen && KIT.leadFar(st);   // (screen: a move keyed by the sides as seen, far / near)
     for (const ch in vals) {
-      const sc = KIT.chanFor(st, ch), R = KIT.ANIM_CH[sc]; if (!R) continue;
+      const sc = S.screen ? ch : KIT.chanFor(st, ch), R = KIT.ANIM_CH[sc]; if (!R) continue;
       const sg = sw && KIT.TWISTS.has(sc) ? -1 : 1;              // (with the lead hand on the far side a move's twists turn the other way)
       if (!(sc in hdrag.starts)) { const own0 = (cur.spec.move.anims[kind] || {})[sc]; hdrag.starts[sc] = own0 ? clone(own0) : null; hdrag.rest[sc] = base[sc] ? null : restOf(kind, sc) ?? (own0 ? own0[0][1] : (st.out[ch] ?? 0) * sg); }
       if (!base[sc]) (m.rests[kind] = m.rests[kind] || {})[sc] = hdrag.rest[sc];
@@ -560,7 +578,7 @@ canvas.addEventListener("pointerup", endPtr); canvas.addEventListener("pointerca
 canvas.addEventListener("wheel", e => { e.preventDefault(); camDist = clamp(camDist * Math.exp(e.deltaY * .001), 3, 12); }, { passive: false });
 $("bTurn").onclick = () => { turn = !turn; $("bTurn").classList.toggle("on", turn); $("bTurn").setAttribute("aria-pressed", turn); };
 function setAnim(a) {
-  anim = a; animT = 9; st.atkT = -1; tl.t = 0;
+  anim = a; animT = 9; st.atkT = -1; tl.t = 0; Object.assign(st, { tackle: null, tackleK: 0, tkCharge: null, tkDig: 0, dodge: null });   // (out of a game-driven move)
   [...$("anim").querySelectorAll("[data-a]")].forEach(x => x.classList.toggle("on", x.dataset.a === a));
   $("tlMove").value = isMove() ? moveKind() : ""; renderKeys();
   if (tab === "ANIMATE") renderControls();
@@ -568,8 +586,10 @@ function setAnim(a) {
 $("anim").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b) setAnim(b.dataset.a); });
 // ── timeline controls
 function fillMoves() {
-  const ms = movesFor(cur.spec), sel = $("tlMove");
-  sel.innerHTML = `<option value="">Pick a move to edit…</option>` + ms.map(([k, lab]) => `<option value="${k}">${lab} · ${MOVE_NAMES[k] || k}</option>`).join("");
+  const ms = movesFor(cur.spec), sel = $("tlMove"), n = {}, groups = [];
+  ms.forEach(([k, , g]) => { n[k] = (n[k] || 0) + 1; if (!groups.includes(g)) groups.push(g); });
+  const opt = ([k, lab]) => `<option value="${k}">${lab ? lab + " · " : ""}${MOVE_NAMES[k] || k}${n[k] > 1 ? " (shared)" : ""}</option>`;   // (shared: the same move plays in another combo too)
+  sel.innerHTML = `<option value="">Pick a move to edit…</option>` + groups.map(g => `<optgroup label="${g}">${ms.filter(m => m[2] === g).map(opt).join("")}</optgroup>`).join("");
   if (isMove() && !ms.some(([k]) => k === moveKind())) setAnim("idle"); else sel.value = isMove() ? moveKind() : "";
 }
 $("tlMove").onchange = () => setAnim($("tlMove").value ? "move:" + $("tlMove").value : "idle");
