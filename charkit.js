@@ -381,7 +381,7 @@ const PRESETS = [
     hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "hightail", tie: true, length: .87, flow: .71, thick: 1.8, wave: .28,   // her own face,
       tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },   // hair and stance since 2026-10-25 (the user's
         { yaw: -93, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },   // editor file: "I made several changes to rose's model and pose")
-    colors: { skin: "#d59e72", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#aa7942", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },   // (skin: Camila's since 2026-10-26, swapped with hers; Rose's was #ebc3a6)
+    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#aa7942", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },   // (skin: the same as Camila's, the user 2026-10-26: "actually make them both the same skin tone as camila"; swapped to #d59e72 for a moment before that)
     outfit: { top: "#13d5ff", torsoProf: [[0, .2], [.15, .21], [.35, .17], [.5, .18], [.72, .2], [.9, .16], [1, .1]],
       torso: [{ kind: "band", y0: 384, y1: 512, col: "#dd1355" }, { kind: "panel", w: 110, y0: 40, y1: 200, col: "#a0effe" },
         { kind: "buttons", dx: 30, y: 70, gap: 70, rows: 2, r: 13, col: "#fffc01" }, { kind: "poly", pts: [-80, 280, -40, 265, -36, 277, -76, 292], mirror: true, col: "#fffc01" }],
