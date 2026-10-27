@@ -210,8 +210,9 @@
   #lvlList.worlds { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
   #lvlList.worlds button { margin: 0; padding: 10px 12px 7px; font: 15px "Bungee", sans-serif; }
   #lvlList.rooms { display: block; }
-  #lvlList.worlds button:not(:hover):not(.on), #lvlList .lvGrid button:not(:hover):not(.on), #lvlList .lvTop button:not(:hover):not(.on) { border-color: rgba(47, 59, 67, .3); }   /* (tiles you can see without a mouse over them: a phone has none) */
+  #lvlList.worlds button:not(:hover):not(.on), #lvlList .lvGrid button:not(:hover):not(.on), #lvlList .lvTop button:not(:hover):not(.on), #lvlList .lvWho button:not(:hover):not(.on) { border-color: rgba(47, 59, 67, .3); }   /* (tiles you can see without a mouse over them: a phone has none) */
   #lvlList .lvTop { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; } #lvlList .lvTop button { width: auto; margin: 0; font: 13px "Bungee", sans-serif; padding: 7px 12px 4px; }
+  #lvlList .lvWho { display: flex; flex-wrap: wrap; gap: 12px; margin: 4px 0 8px; } #lvlList .lvWho button { width: auto; min-width: 200px; margin: 0; text-align: center; font: 22px "Bungee", sans-serif; padding: 18px 26px 13px; }   /* (who's going: Camila or Rose) */
   #lvlList .lvGrid { display: grid; grid-template-columns: 26px repeat(var(--cols, 8), minmax(0, 1fr)); gap: 4px; align-items: stretch; }
   #lvlList .lvGrid i { font: 13px "Bungee", sans-serif; font-style: normal; display: flex; align-items: center; justify-content: center; opacity: .7; }
   #lvlList .lvGrid button { margin: 0; padding: 6px 4px 4px; text-align: center; font: 13px "Bungee", sans-serif; min-height: 40px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; }
@@ -706,7 +707,7 @@
 <div id="lvl"><div class="panel">
   <div class="lockup"><div class="blk">LEVEL SELECT</div><div class="bar" id="lvlWho">FOR TESTING</div></div>
   <div id="lvlList"></div>
-  <small data-pad="← → ↑ ↓ to choose &nbsp;·&nbsp; {j} to pick a world, then a room to go straight there (test runs don't unlock achievements or save keys) &nbsp;·&nbsp; {sq} to go back">Tap a world, then a room to go straight there (test runs don't unlock achievements or save keys) &nbsp;·&nbsp; tap outside to close</small>
+  <small data-pad="← → ↑ ↓ to choose &nbsp;·&nbsp; {j} to pick a world, then a room, then who's going (test runs don't unlock achievements or save keys) &nbsp;·&nbsp; {sq} to go back">Tap a world, then a room, then who's going (test runs don't unlock achievements or save keys) &nbsp;·&nbsp; tap outside to close</small>
 </div></div>
 <div id="castView">
   <div id="castStage" title="Drag to turn it round · the wheel to come closer"></div>
@@ -4868,7 +4869,7 @@ function padMarks() {                                // the pick on a screen tha
   const MB = [...$("modal").querySelectorAll(".btns button")]; MB.forEach(b => b.classList.toggle("on", padUse && modalOpen && b === MB.filter(q => q.offsetParent !== null)[modalSel]));
   const LB = [...$("lvlList").querySelectorAll("button")]; LB.forEach((b, i) => b.classList.toggle("on", (padUse || lvlKey) && lvlOpen && i === lvlSel));
 }
-function lvlBack() { if (lvlW >= 0) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was; padMarks(); SFX.tick(); } else closeLvl(); }   // (out of a world's rooms: back to the worlds; from there, closed)
+function lvlBack() { if (lvlAsk) { lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; } if (lvlW >= 0) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was; padMarks(); SFX.tick(); } else closeLvl(); }   // (out of a world's rooms: back to the worlds; from there, closed)
 let lvlKey = false;                                  // (the arrow keys in the level select: its pick marked, as on a pad. The user, 2026-10-25: "you cant use your arrows to make selectiosn")
 function lvlPad(pr) {                                // the level select: ← → ↑ ↓ through it (as laid out), ✕ to go there, □ back a step
   lvlMove(pr("l") ? -1 : pr("r") ? 1 : 0, padRep("u") ? -1 : padRep("d") ? 1 : 0);
@@ -5608,12 +5609,15 @@ function holdTipSoon(wait = 5000) {
 // Test runs don't unlock achievements or save stronghold keys
 let lvlOpen = false, levelTest = false;
 let lvlW = -1;                                       // (the level select's second step: this world's rooms; -1 = the worlds)
+let lvlAsk = null;                                   // (its last step: who's going, Camila or Rose, to the room picked { w, kind, a }. The user, 2026-10-27: "When doing stage select, ask for whether the player wants to be camila or rose")
+let lvlHero = "camila";                              // (who went last time: the one picked first next time)
 function showLvl() {
   const who = mode === "play" || mode === "world" || mode === "opp" ? rig : roster[sel];
-  $("lvlWho").textContent = "FOR TESTING · PLAYING AS " + who.name; lvlW = -1; drawLvl();
+  if (who && GEAR_HEROES.includes(who.id)) lvlHero = who.id; $("lvlWho").textContent = "FOR TESTING"; lvlW = -1; lvlAsk = null; drawLvl();
   lvlOpen = true; lvlSel = 0; $("lvl").classList.add("show"); $("pause").style.visibility = "hidden"; padMarks(); SFX.tick();   // (over the pause menu: that steps aside till it's closed)
 }
-function drawLvl() {                                 // first the worlds (one to start in); then a world's rooms laid out as its map, and its secrets
+function drawLvl() {                                 // first the worlds (one to start in); then a world's rooms laid out as its map, and its secrets; then who's going
+  if (lvlAsk) return drawLvlWho();
   const L = $("lvlList"), b = (w, kind, arg, label, sub) => `<button data-w="${w}" data-k="${kind}" data-a="${arg}">${label}${sub ? `<small>${sub}</small>` : ""}</button>`;
   L.classList.toggle("worlds", lvlW < 0); L.classList.toggle("rooms", lvlW >= 0); L.scrollTop = 0;
   if (lvlW < 0) { L.innerHTML = WORLDS.map((W, w) => `<button data-pick="${w}">${W.name}</button>`).join(""); $("lvlWho").textContent = $("lvlWho").textContent.replace(/ · [^·]*$/, "") + " · PICK A WORLD"; return; }
@@ -5630,6 +5634,11 @@ function drawLvl() {                                 // first the worlds (one to
   L.innerHTML = top + `<h4>${W.name}</h4>` + g + sec;
   $("lvlWho").textContent = $("lvlWho").textContent.replace(/ · [^·]*$/, "") + " · " + W.name;
 }
+function drawLvlWho() {                              // (the last step: CAMILA or ROSE, the one who went last time picked first)
+  const L = $("lvlList"); L.classList.remove("worlds"); L.classList.add("rooms"); L.scrollTop = 0;
+  L.innerHTML = `<div class="lvTop"><button data-back="2">‹ ${WORLDS[lvlAsk.w].name}</button></div><h4>WHO'S GOING?</h4><div class="lvWho">` + GEAR_HEROES.map(h => `<button data-hero="${h}">${(roster.find(q => q.id === h) || { name: h }).name.toUpperCase()}</button>`).join("") + `</div>`;
+  $("lvlWho").textContent = "FOR TESTING · " + WORLDS[lvlAsk.w].name + " · WHO'S GOING?";
+}
 function lvlOld() {                                  // (the one-long-list version, before the two steps: unused)
   return WORLDS.map((W, w) => {
     const S = W.stages, b = (kind, arg, label) => `<button data-w="${w}" data-k="${kind}" data-a="${arg}">${label}</button>`;
@@ -5641,13 +5650,18 @@ function lvlOld() {                                  // (the one-long-list versi
 }
 function closeLvl() { lvlOpen = false; $("lvl").classList.remove("show"); $("pause").style.visibility = ""; SFX.tick(); }
 $("lvlList").addEventListener("click", e => { const p = e.target.closest("[data-pick]"), bk = e.target.closest("[data-back]"), t = e.target.closest("[data-k]");
-  if (p) { lvlW = +p.dataset.pick; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); } else if (bk) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = Math.max(0, was); padMarks(); SFX.tick(); } else if (t) levelGo(+t.dataset.w, t.dataset.k, +t.dataset.a); });
+  const hb = e.target.closest("[data-hero]");
+  if (hb && lvlAsk) { const A = lvlAsk; lvlAsk = null; lvlHero = hb.dataset.hero; levelGo(A.w, A.kind, A.a, lvlHero); return; }   // (who's going: picked, off they go)
+  if (bk && bk.dataset.back === "2") { lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; }   // (back from who's going to the world's rooms)
+  if (p) { lvlW = +p.dataset.pick; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); } else if (bk) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = Math.max(0, was); padMarks(); SFX.tick(); }
+  else if (t) { lvlAsk = { w: +t.dataset.w, kind: t.dataset.k, a: +t.dataset.a }; drawLvl(); lvlSel = 1 + Math.max(0, GEAR_HEROES.indexOf(lvlHero)); padMarks(); SFX.tick(); } });   // (a room picked: then who's going)
 $("lvl").addEventListener("click", e => { if (e.target.id === "lvl") closeLvl(); });
 $("bLvl").addEventListener("click", () => { if (mode === "select") showLvl(); });
 $("bBack").addEventListener("click", () => { if (mode === "select" && !lookPick) selectBack(); });
 function selectBack() { SFX.tick(); showMainMenu(); showDev(); }   // (out of the developer's character select: back to the developer menu. The user, 2026-10-25: "you cant hit esc or exit out of that menu in any way")
-function levelGo(w, kind, a) {
+function levelGo(w, kind, a, hero) {
   closeMenus(); story = null; tamed = tamed2 = null; hideCatRigs(); alliesOff(); closeLvl(); if (paused) closePause(); SFX.confirm();
+  { const r = hero && roster.find(q => q.id === hero); if (r) { if (rig && rig !== r && rig.root) rig.root.visible = rig.shadow.visible = false; rig = r; sel = roster.indexOf(r); } }   // (who the level select asked for)
   if (kind === "arena") return startShowdown(w);
   if (!(mode === "play" || mode === "world" || mode === "opp")) { rig = roster[sel]; if (rig.kind === "cat") KIT.paintCards(cards, rig.spec); }   // (from the character screen: whoever's highlighted)
   endIntro(); endCameo(); clearTrap(); if (stronghold) { stronghold = null; } cine = null; clearStage(); bepEv = null; clearGifts();
