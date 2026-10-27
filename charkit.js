@@ -360,7 +360,7 @@ const PRESETS = [
     hair: { mode: "sculpt", shell: .24, taper: -.25, fringe: "oval", fringeDrop: -.04, sides: 1.05, back: 1.15, curl: 0, curlFront: 0, style: "wavy", length: 1.45, flow: 1.2, thick: 1.7, wave: 1, tie: false,
       tufts: [{ yaw: -30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: 30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: -95, pitch: 0, len: .1, width: .6, sharp: 1 },
         { yaw: 95, pitch: 0, len: .1, width: .6, sharp: 1 }, { yaw: 180, pitch: 5, len: .08, width: .8, sharp: 1 }] },
-    colors: { skin: "#d59e72", hair: "#7a4a2a", eyes: "#70421f", lips: "#b8645a", lash: "#1b1b1b", brows: "#3a2416", ring: "#f4fbff" },
+    colors: { skin: "#ebc3a6", hair: "#7a4a2a", eyes: "#70421f", lips: "#b8645a", lash: "#1b1b1b", brows: "#3a2416", ring: "#f4fbff" },   // (skin: Rose's and Camila's swapped, the user 2026-10-26: "can you swap the skin tones on rose and camila"; hers was #d59e72)
     outfit: { top: "#2d383c", torsoProf: [[0, .2], [.15, .21], [.35, .16], [.5, .17], [.72, .19], [.9, .15], [1, .1]],
       torso: [{ kind: "band", y0: 0, y1: 210, col: "#ec1c24" }, { kind: "poly", pts: [-40, 0, 40, 0, 0, 200], mirror: false, col: "#2d383c" },
         { kind: "buttons", dx: 52, y: 70, gap: 70, rows: 2, r: 15, col: "#fef200" }, { kind: "poly", pts: [-70, 300, -38, 280, -32, 290, -64, 310], mirror: true, col: "#fef200" }],
@@ -381,7 +381,7 @@ const PRESETS = [
     hair: { mode: "sculpt", shell: .2, taper: .45, fringe: "june", fringeDrop: .07, sides: .4, back: .78, curl: 0, curlFront: 0, style: "hightail", tie: true, length: .87, flow: .71, thick: 1.8, wave: .28,   // her own face,
       tufts: [{ yaw: -80, pitch: 20, len: .17, width: .55, sharp: 1.3 }, { yaw: 80, pitch: 20, len: .17, width: .55, sharp: 1.3 },   // hair and stance since 2026-10-25 (the user's
         { yaw: -93, pitch: 4, len: .32, width: .5, sharp: 2.2 }, { yaw: 92, pitch: 4, len: .32, width: .5, sharp: 2.2 }] },   // editor file: "I made several changes to rose's model and pose")
-    colors: { skin: "#ebc3a6", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#aa7942", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },
+    colors: { skin: "#d59e72", hair: "#8a4a1f", eyes: "#7a4a22", lips: "#aa7942", lash: "#1b1b1b", brows: "#683810", ring: "#f4fbff", tie: "#ed145b" },   // (skin: Camila's since 2026-10-26, swapped with hers; Rose's was #ebc3a6)
     outfit: { top: "#13d5ff", torsoProf: [[0, .2], [.15, .21], [.35, .17], [.5, .18], [.72, .2], [.9, .16], [1, .1]],
       torso: [{ kind: "band", y0: 384, y1: 512, col: "#dd1355" }, { kind: "panel", w: 110, y0: 40, y1: 200, col: "#a0effe" },
         { kind: "buttons", dx: 30, y: 70, gap: 70, rows: 2, r: 13, col: "#fffc01" }, { kind: "poly", pts: [-80, 280, -40, 265, -36, 277, -76, 292], mirror: true, col: "#fffc01" }],
