@@ -369,6 +369,59 @@ window.BerryScore = (() => {
     { lead: "keys", pad: .016, bass: "long", drums: "brush", arp: .016, verb: .42, gain: .82 },                          // EASE (7)
     { serene: true, lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .55, gain: .64 },   // SERENE (8): the beps' grotto
   ];
+  // the cassettes' songs (2026-10-26: "casettes they can find to play new songs"): five of my own, ORIGINAL, for the headphones. One take each, whatever the hour
+  // GUAGUA GROOVE (14): La Guagua's own, a bouncing C major on the road, 132 bpm: a skipping figure up the chord and a B section that climbs to a high D and home
+  const MEL_T1 = [[0,2,72],[2,2,76],[4,2,79],[6,2,76],[8,4,79],[12,2,81],[14,2,79],[16,2,77],[18,2,81],[20,4,84],[24,2,81],[26,2,77],[28,4,76],
+    [32,2,74],[34,2,79],[36,2,83],[38,2,79],[40,4,77],[44,4,74],[48,6,76],[54,2,74],[56,8,72],
+    [64,2,76],[66,2,72],[68,2,69],[70,2,72],[72,4,76],[76,4,81],[80,2,81],[82,2,79],[84,2,77],[86,2,76],[88,8,77],
+    [96,2,79],[98,2,77],[100,2,76],[102,2,74],[104,4,79],[108,4,83],[112,8,84],[120,4,79],[124,4,74],
+    [128,4,81],[132,2,79],[134,2,77],[136,4,81],[140,4,84],[144,6,86],[150,2,84],[152,4,83],[156,4,79],
+    [160,2,79],[162,2,83],[164,4,88],[168,2,86],[170,2,83],[172,4,79],[176,6,81],[182,2,79],[184,8,76],
+    [192,2,77],[194,2,81],[196,4,86],[200,2,84],[202,2,81],[204,4,77],[208,4,79],[212,2,83],[214,2,86],[216,8,83],
+    [224,4,84],[228,4,79],[232,4,81],[236,4,76],[240,4,77],[244,2,74],[246,2,77],[248,4,79],[252,4,74]];
+  const CH_T1 = ["C","C","F","F","G","G","C","C","Am","Am","F","F","G","G","C","G","F","F","G","G","Em","Em","Am","Am","Dm","Dm","G","G","C","Am","Dm","G"];
+  const VOICE_T1 = { C: [52, 55, 60, 64], F: [53, 57, 60, 65], G: [50, 55, 59, 62], Am: [52, 57, 60, 64], Em: [52, 55, 59, 64], Dm: [50, 53, 57, 62] };
+  const ROOT_T1 = { C: 36, F: 41, G: 43, Am: 45, Em: 40, Dm: 38 };
+  // LARIMAR LULLABY (15): slow and kind in F major, 76 bpm, long notes over a harp, no drums
+  const MEL_T2 = [[0,4,72],[4,4,77],[8,8,81],[16,4,82],[20,4,81],[24,8,77],[32,4,76],[36,4,77],[40,4,79],[44,4,81],[48,12,79],[60,4,76],
+    [64,4,77],[68,4,81],[72,8,86],[80,4,84],[84,4,82],[88,8,77],[96,4,79],[100,4,82],[104,4,81],[108,4,79],[112,16,77],
+    [128,4,74],[132,4,77],[136,8,82],[144,4,84],[148,4,82],[152,8,79],[160,4,81],[164,4,76],[168,8,72],[176,4,74],[180,4,77],[184,8,81],
+    [192,4,82],[196,4,79],[200,8,74],[208,4,76],[212,4,79],[216,8,84],[224,8,81],[232,8,77],[240,8,79],[248,8,76]];
+  const CH_T2 = ["F","F","Bb","Bb","F","F","C","C","Dm","Dm","Bb","Bb","Gm","C","F","F","Bb","Bb","C","C","Am","Am","Dm","Dm","Gm","Gm","C","C","F","Dm","Gm","C"];
+  const VOICE_T2 = { F: [53, 57, 60, 65], Bb: [50, 53, 58, 62], C: [52, 55, 60, 64], Dm: [50, 53, 57, 62], Gm: [50, 55, 58, 62], Am: [52, 57, 60, 64] };
+  const ROOT_T2 = { F: 41, Bb: 46, C: 36, Dm: 38, Gm: 43, Am: 45 };
+  // BEP BOUNCE (16): a bouncy D major, 120 bpm, short hopping notes up the chord and a B section that leaps up an octave
+  const MEL_T3 = [[0,1,74],[2,1,78],[4,1,81],[6,2,86],[8,1,85],[10,1,83],[12,2,81],[14,2,78],[16,1,76],[18,1,81],[20,1,85],[22,2,88],[24,2,85],[26,2,81],[28,4,76],
+    [32,1,78],[34,1,83],[36,1,86],[38,2,90],[40,2,88],[42,2,86],[44,4,83],[48,2,79],[50,2,83],[52,2,86],[54,2,83],[56,8,79],
+    [64,1,81],[66,1,81],[68,2,78],[70,2,81],[72,2,86],[74,2,81],[76,4,78],[80,1,76],[82,1,76],[84,2,73],[86,2,76],[88,2,81],[90,2,76],[92,4,73],
+    [96,2,74],[98,2,79],[100,2,83],[102,2,79],[104,2,76],[106,2,81],[108,4,85],[112,4,86],[116,2,81],[118,2,78],[120,8,74],
+    [128,2,83],[130,2,86],[132,4,91],[136,2,90],[138,2,88],[140,4,86],[144,2,85],[146,2,88],[148,4,93],[152,2,91],[154,2,90],[156,4,88],
+    [160,2,85],[162,2,81],[164,2,78],[166,2,81],[168,4,85],[172,4,90],[176,6,86],[182,2,85],[184,8,83],
+    [192,2,79],[194,2,83],[196,2,88],[198,2,83],[200,4,79],[204,4,76],[208,2,81],[210,2,85],[212,2,88],[214,2,85],[216,8,81],
+    [224,2,86],[226,2,90],[228,4,93],[232,4,90],[236,4,86],[240,4,88],[244,4,85],[248,4,81],[252,4,76]];
+  const CH_T3 = ["D","D","A","A","Bm","Bm","G","G","D","D","A","A","G","A","D","D","G","G","A","A","F#m","F#m","Bm","Bm","Em","Em","A","A","D","Bm","Em","A"];
+  const VOICE_T3 = { D: [50, 54, 57, 62], A: [49, 52, 57, 61], Bm: [50, 54, 59, 62], G: [50, 55, 59, 62], "F#m": [49, 54, 57, 61], Em: [52, 55, 59, 64] };
+  const ROOT_T3 = { D: 38, A: 45, Bm: 47, G: 43, "F#m": 42, Em: 40 };
+  // NIGHT BUS HOME (17): a late, easy A minor, 88 bpm, sevenths, a walking bass and brushes, the tune falling home at the end
+  const MEL_T4 = [[0,3,76],[3,1,74],[4,4,72],[8,4,79],[12,4,76],[16,3,77],[19,1,76],[20,4,74],[24,8,81],[32,3,79],[35,1,77],[36,4,74],[40,4,71],[44,4,77],
+    [48,8,76],[56,4,79],[60,4,83],[64,4,84],[68,4,81],[72,4,77],[76,4,76],[80,4,74],[84,4,77],[88,4,80],[92,4,83],[96,12,81],[108,4,76],
+    [112,4,80],[116,4,76],[120,4,74],[124,4,71],[128,4,74],[132,4,77],[136,4,81],[140,4,84],[144,6,83],[150,2,81],[152,8,77],
+    [160,4,79],[164,4,83],[168,4,84],[172,4,88],[176,8,84],[184,4,81],[188,4,79],[192,4,77],[196,4,81],[200,8,86],[208,4,83],[212,4,80],[216,8,76],
+    [224,8,81],[232,4,77],[236,4,76],[240,4,74],[244,4,71],[248,8,68]];
+  const CH_T4 = ["Am7","Am7","Dm7","Dm7","G7","G7","Cmaj7","Cmaj7","Fmaj7","Fmaj7","Bm7b5","E7","Am7","Am7","E7","E7","Dm7","Dm7","G7","G7","Cmaj7","Cmaj7","Am7","Am7","Dm7","Dm7","E7","E7","Am7","Fmaj7","Bm7b5","E7"];
+  const VOICE_T4 = { Am7: [52, 55, 57, 60], Dm7: [53, 57, 60, 62], G7: [53, 55, 59, 62], Cmaj7: [52, 55, 59, 60], Fmaj7: [52, 57, 60, 64], Bm7b5: [50, 53, 57, 59], E7: [50, 52, 56, 59] };
+  const ROOT_T4 = { Am7: 45, Dm7: 38, G7: 43, Cmaj7: 36, Fmaj7: 41, Bm7b5: 47, E7: 40 };
+  // SPARKS FLY (18): a driving E minor, 140 bpm, quick runs and a B section up over the B major turn
+  const MEL_T5 = [[0,2,76],[2,2,79],[4,2,83],[6,2,79],[8,2,88],[10,2,86],[12,2,83],[14,2,79],[16,2,76],[18,2,79],[20,2,84],[22,2,79],[24,4,88],[28,4,84],
+    [32,2,74],[34,2,78],[36,2,81],[38,2,78],[40,2,86],[42,2,84],[44,2,81],[46,2,78],[48,6,79],[54,2,78],[56,8,76],
+    [64,1,88],[65,1,86],[66,2,83],[68,1,88],[69,1,86],[70,2,83],[72,4,91],[76,4,88],[80,1,88],[81,1,84],[82,2,79],[84,1,88],[85,1,84],[86,2,79],[88,8,84],
+    [96,2,86],[98,2,81],[100,2,78],[102,2,81],[104,4,86],[108,4,90],[112,8,87],[120,4,83],[124,4,78],
+    [128,4,81],[132,2,84],[134,2,88],[136,8,93],[144,4,91],[148,4,88],[152,8,83],[160,2,84],[162,2,88],[164,4,91],[168,2,88],[170,2,84],[172,4,79],
+    [176,4,81],[180,4,86],[184,8,90],[192,2,93],[194,2,91],[196,2,88],[198,2,84],[200,4,81],[204,4,84],[208,4,87],[212,4,90],[216,8,93],
+    [224,4,91],[228,4,88],[232,4,84],[236,4,88],[240,4,86],[244,4,83],[248,8,87]];
+  const CH_T5 = ["Em","Em","C","C","D","D","Em","Em","Em","Em","C","C","D","D","B","B","Am","Am","Em","Em","C","C","D","D","Am","Am","B","B","Em","C","D","B"];
+  const VOICE_T5 = { Em: [52, 55, 59, 64], C: [52, 55, 60, 64], D: [50, 54, 57, 62], B: [51, 54, 59, 63], Am: [52, 57, 60, 64] };
+  const ROOT_T5 = { Em: 40, C: 36, D: 38, B: 47, Am: 45 };
   const SONGS = [
     { MEL, CH, VOICE, ROOT, DARK, STYLES, bars: 16, bpm: 100, drone: 43, darkLead: { 11: -1, 4: -1, 1: -1 }, clipVar: null },
     { MEL: MEL2, CH: CH2, VOICE: VOICE2, ROOT: ROOT2, DARK: { G: "Gm", Em: "Edim", E: "E7b5" }, STYLES: STYLES2, bars: 16, bpm: 84, drone: 45, darkLead: { 11: -1, 6: -1 }, clipVar: null },
@@ -384,6 +437,11 @@ window.BerryScore = (() => {
     { MEL: MEL12, CH: CH12, VOICE: VOICE12, ROOT: ROOT12, DARK: {}, STYLES: STYLES12, bars: 16, bpm: 112, drone: 45, darkLead: {}, clipVar: null },   // 11: Master No's casino (original)
     { MEL: MEL13, CH: CH13, VOICE: VOICE13, ROOT: ROOT13, DARK: {}, STYLES: STYLES13, bars: 16, bpm: 104, drone: 34, darkLead: {}, clipVar: null },   // 12: King P's castle (original)
     { MEL: MEL14, CH: CH14, VOICE: VOICE14, ROOT: ROOT14, DARK: {}, STYLES: STYLES14, bars: 16, bpm: 73, drone: 40, darkLead: {}, clipVar: null },   // 13: the deep (original)
+    { MEL: MEL_T1, CH: CH_T1, VOICE: VOICE_T1, ROOT: ROOT_T1, DARK: {}, STYLES: [{ lead: "bright", pad: .012, bass: "groove", drums: "full", arp: .02, verb: .14, gain: .92 }], bars: 16, bpm: 132, drone: 36, darkLead: {}, clipVar: null },   // 14: GUAGUA GROOVE (a cassette)
+    { MEL: MEL_T2, CH: CH_T2, VOICE: VOICE_T2, ROOT: ROOT_T2, DARK: {}, STYLES: [{ lead: "lull", pad: .02, softPad: true, bass: "long", drums: null, arp: .014, harp: true, verb: .5, gain: .72 }], bars: 16, bpm: 76, drone: 41, darkLead: {}, clipVar: null },   // 15: LARIMAR LULLABY (a cassette)
+    { MEL: MEL_T3, CH: CH_T3, VOICE: VOICE_T3, ROOT: ROOT_T3, DARK: {}, STYLES: [{ lead: "bright", pad: .012, bass: "pump", drums: "light", arp: .03, verb: .12, gain: .88 }], bars: 16, bpm: 120, drone: 38, darkLead: {}, clipVar: null },   // 16: BEP BOUNCE (a cassette)
+    { MEL: MEL_T4, CH: CH_T4, VOICE: VOICE_T4, ROOT: ROOT_T4, DARK: {}, STYLES: [{ lead: "keys", pad: .016, bass: "walk", drums: "brush", arp: 0, verb: .3, gain: .84 }], bars: 16, bpm: 88, drone: 45, darkLead: {}, clipVar: null },   // 17: NIGHT BUS HOME (a cassette)
+    { MEL: MEL_T5, CH: CH_T5, VOICE: VOICE_T5, ROOT: ROOT_T5, DARK: {}, STYLES: [{ lead: "volt", pad: .012, bass: "pump", drums: "machine", arp: .025, verb: .12, gain: .88 }], bars: 16, bpm: 140, drone: 40, darkLead: {}, clipVar: null },   // 18: SPARKS FLY (a cassette)
   ];
   const HUB = 9;                                 // HUB (9): a world's hub, its own take on the tune (2026-10-22; out here, not by EASE: the PC score swaps the woods' part above out)
   SONGS.forEach(S => { if (S.STYLES.length >= 9 && !S.STYLES[HUB]) S.STYLES[HUB] = { ...S.STYLES[3], hub: true, lead: "pluck", harp: true, arp: .022, verb: .22, gain: (S.STYLES[3].gain || .9) * .95, dark: false, drone: false, key: 0, orig: undefined, bpm: undefined }; });   // the hub's: the world's own drums and bass at golden hour, a mallet lead and the harp (the user, 2026-10-22: "another variation of the level's music for each hub")
