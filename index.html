@@ -182,6 +182,10 @@
   #npcRows .pr { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; } #npcRows .pr svg { width: 18px; height: 18px; }
   #npcRows i { font: 600 10px "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 2px; }
   #npcCoins { position: absolute; right: 12px; top: 12px; } #npcCoins:empty { display: none; }
+  .npcMain { display: flex; gap: 12px; align-items: flex-start; } .npcMain #npcRows { flex: 1; min-width: 0; }
+  #npcTry { flex: none; border: 3px solid var(--s); background: rgba(47, 59, 67, .06); padding: 3px 3px 2px; pointer-events: none; }   /* (trying it on: the hero in what's picked, beside the rows) */
+  #npcTry.hidden { display: none; } #npcTryCv canvas { display: block; }
+  #npcTryWho { display: block; text-align: center; font: 600 10px "Jost", sans-serif; letter-spacing: .2em; color: var(--s); margin-top: 1px; }
   .npcHint { display: block; margin-top: 8px; font: 600 10px "Jost", sans-serif; letter-spacing: .2em; color: var(--s2); }
   #npcTip { position: fixed; left: 50%; bottom: 84px; transform: translateX(-50%); z-index: 40; display: flex; align-items: center; gap: 8px; background: var(--s); color: var(--y); padding: 6px 14px 4px 10px; font: 13px "Bungee", sans-serif; pointer-events: none; }
   #npcTip.hidden { display: none; } #npcTip .pgw { display: flex; align-items: center; gap: 4px; } #npcTip .pg { width: 22px; height: 22px; } #npcTip .pg * { stroke: var(--y); }
@@ -544,7 +548,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261026h"></script>
+<script src="charkit.js?v=20261026i"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -670,7 +674,7 @@
 <div id="hint" class="hidden"></div>
 <div id="coinHud" class="hidden"><span class="cn"></span><b id="coinN"></b></div>
 <div id="items" class="hidden"><div class="itHead"><span class="itT">ITEMS</span><span id="itemCoins" class="itCoins"></span></div><div id="itemRow"></div><div class="itFoot">LET GO TO CARRY ON</div></div>
-<div id="npc" class="hidden"><div class="npcBox"><div class="lockup"><div class="blk" id="npcName"></div><div class="bar" id="npcRole"></div></div><span id="npcCoins"></span><p id="npcText"></p><div id="npcRows"></div><small class="npcHint" id="npcHint"></small></div></div>
+<div id="npc" class="hidden"><div class="npcBox"><div class="lockup"><div class="blk" id="npcName"></div><div class="bar" id="npcRole"></div></div><span id="npcCoins"></span><p id="npcText"></p><div class="npcMain"><div id="npcRows"></div><div id="npcTry" class="hidden"><div id="npcTryCv"></div><small id="npcTryWho"></small></div></div><small class="npcHint" id="npcHint"></small></div></div>
 <div id="npcTip" class="hidden"></div>
 <audio id="bgm" loop preload="none"></audio>
 <div id="toast"></div>
@@ -8755,7 +8759,7 @@ function moveBody(b, dt, halfW) {
   }
   return prevY;
 }
-function spring(b, dt) { b.sqv += (-190 * b.sq - 11 * b.sqv) * dt; b.sq += b.sqv * dt; }
+function spring(b, dt) { b.sqv += (-420 * b.sq - 30 * b.sqv) * dt; b.sq += b.sqv * dt; }   // (a squash snaps back: stiffer and damped, no jelly wobble. Was 190 / 11 till 2026-10-26: the user, "the sort of spacey, doughy feel")
 function groundBelow(b) {
   let y = groundAt(b.x) ?? WATER;
   for (const p of PLATFORMS) if (b.x > p.x - 6 && b.x < p.x + p.w + 6 && p.y >= b.y - 1 && p.y < y) y = p.y;
@@ -8966,7 +8970,7 @@ function updatePlayer(dt) {
   if (p.vy < 0 && !held.jump && p.bounceT < 0 && !p.fullJump) g *= 2.1;
   if (p.vy > 0) g *= 1.4;                // coming down faster than going up
   if (MV && !p.onGround) g *= MV.grav ?? .55;
-  if (p.onGround) p.hangLeft = HANG_AIR; else if (p.hangT > 0 && p.atkT >= 0 && (p.hangLeft ?? HANG_AIR) > 0) { g *= .08; p.hangLeft = (p.hangLeft ?? HANG_AIR) - dt; p.vy = Math.min(p.vy, 120); }   // (an air combo's blow: nearly frozen there, up to HANG_AIR a jump)
+  if (p.onGround) p.hangLeft = HANG_AIR; else if (p.hangT > 0 && p.atkT >= 0 && (p.hangLeft ?? HANG_AIR) > 0) { g *= .3; p.hangLeft = (p.hangLeft ?? HANG_AIR) - dt; p.vy = Math.min(p.vy, 160); }   // (an air combo's blow: nearly frozen there, up to HANG_AIR a jump)
   p.hangT = Math.max(0, (p.hangT || 0) - dt);
   p.vy = Math.min(p.vy + (p.swim || p.dive ? 0 : g) * dt, MV && MV.dive ? 1300 : 1150);   // (swimming: the water holds you up)
   p.floatB = !!p.bubble && (p.bigJ || 0) > .2 && p.vy > 0 && !p.onGround && p.atkT < 0 && !p.climb;   // a big jump in the bubble: it drifts you down gently (the user: so you notice you've got it)
@@ -9204,11 +9208,12 @@ function syncSwingTrail() {
     if (on && time - (T.hot ?? -9) < .035) trailPush(T, _tc, null); });   // (a beat on past the fastest of it, so the head isn't cut off)
   swingTr.forEach((T, i) => { if (i >= need) { T.S.length = 0; T.mesh.visible = false; } else trailDraw(T); });
 }
-const HANG_AIR = 1.6;                                // how long an air combo can hold you up there, a jump (then you come down as ever)
+const HANG_AIR = 1.1;                                // how long an air combo can hold you up there, a jump (then you come down as ever): 1.6 at .08 gravity till 2026-10-26, now 1.1 at .3 (not floating)
 const AIR_HITS = 3;                                  // one air combo a jump (or a launch): only its blows that land hold you up, three at most; after it, no more air combos till you're down (the user, 2026-10-23)
 const airCh = p => { const ch = p.chain && !p.combo ? p.chain.kind : null, S = KIT.STRIKES[p.atkKind] || {}; return !p.onGround && (ch === "air1" || ch === "air2") && !S.dive && !S.slamLand ? ch : null; };
-function airHold(p, ch) { p.hangT = Math.max(p.hangT || 0, ((KIT.STRIKES[p.atkKind] || {}).dur || .4) - Math.max(0, p.atkT) + .06); p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, a little lift; the forward combo drifts on)
-function airLanded(p) { if (p.strikeLanded) return; p.strikeLanded = true; const ch = airCh(p); if (ch && (p.airN = (p.airN || 0) + 1) <= AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) airHold(p, ch); }   // an air combo's blow just landed: held there
+function airHold(p, ch) { p.hangT = Math.max(p.hangT || 0, Math.min(.24, ((KIT.STRIKES[p.atkKind] || {}).dur || .4) - Math.max(0, p.atkT) + .06)); p.vy = -40; p.vx = ch === "air1" ? p.vx * .2 : p.face * 160; }   // (stopped dead, rising or falling, a little lift; the forward combo drifts on)   // (each blow holds you .24 s at most, then down you both come: the user, 2026-10-26 "very floaty")
+function airLanded(p) { if (p.strikeLanded) return; p.strikeLanded = true; const ch = airCh(p), last = !!p.chain && p.atkIdx >= p.chain.list.length - 1;
+  if (ch && (p.airN = (p.airN || 0) + 1) <= AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0 && !last) airHold(p, ch); else if (ch && last) { p.hangT = 0; p.hangLeft = 0; } }   // (the combo's last blow: no hanging on after it, down you come with them: 2026-10-26)   // an air combo's blow just landed: held there
 const SWING_SILENT = new Set(["punch", "kick", "slash"]);
 // your partners only fight while you do (the user, 2026-10-26: "let's go back to any allies only attacking if you are attacking, but also they should attack at
 // less frequency than enemies do"): swinging, in a combo or a tackle, charging up, or a moment after your last swing
@@ -9223,7 +9228,7 @@ function startStrike(p, kind, idx = 0) {
   if (p === player && !p.combo && p.chain) voice("attack", idx === p.chain.list.length - 1 ? .9 : idx === 0 ? .45 : .15);   // (the finisher nearly always; now and then otherwise)
   if (ch === "up" && idx === 1 && !p.onGround) p.vy = -800;                                          // (the launch's second hit: a full jump up after them)
   const landed = !!p.strikeLanded; p.strikeLanded = false;
-  if (idx > 0 && landed && airCh(p) && (p.airN || 0) < AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) airHold(p, airCh(p));   // an air combo's next blow, the last one landed: still held up there (the user, 2026-10-23, after Odin Sphere; a miss and you drop)
+  if (idx > 0 && landed && airCh(p) && (p.airN || 0) < AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) { airHold(p, airCh(p)); if (p === player) baddies.forEach(b => { if (b.carryVx != null && b.juggleT > 0 && !b.onGround && Math.abs(b.x - p.x) < 160) b.vy = Math.min(b.vy, p.vy + 30); }); }   // (and the one you're hitting caught with you, not dropping away under the next blow: 2026-10-26)   // an air combo's next blow, the last one landed: still held up there (the user, 2026-10-23, after Odin Sphere; a miss and you drop)
   else if (!p.onGround && ch === "up" && idx >= 2) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // the launch's last hit: on forward with them
   if (p.onGround) { p.vx = p.face * S.step; if (S.hop) { p.vy = p.chain && p.chain.kind === "up" && idx === 1 && !p.combo ? -800 : S.hop; p.onGround = false; } }   // small step, no skating (the launch's second hit: a full jump up after them)
   else if (p.dive && !p.combo) { p.vx = p.face * (S.step || 120) * .75; p.vy *= .4; }   // (in the water: a little surge into the swing, no hop)
@@ -17043,7 +17048,8 @@ const ACC = {
   // both a bracelet for either girl's right hand, and a pair of earrings as well. then make the straw hat"): from their photos
   charm_tambora: { slot: "weapon", prop: "sword", name: "TAMBORA CHARM", price: 35, desc: "FOR ROSE: A LITTLE TAMBORA ON A KEY RING OFF HER HILT" },
   charm_guiro: { slot: "weapon", prop: "sword", name: "GÜIRO CHARM", price: 35, desc: "FOR ROSE: A LITTLE GÜIRO ON A KEY RING OFF HER HILT" },
-  larimar_wrist: { slot: "wrist", name: "LARIMAR BRACELET", price: 70, desc: "SKY-BLUE LARIMAR IN SILVER, ON HER RIGHT WRIST" },
+  larimar_wrist: { slot: "wrist", hero: "camila", name: "LARIMAR BRACELET", price: 70, desc: "FOR CAMILA: SKY-BLUE LARIMAR IN SILVER, ON HER RIGHT WRIST" },   // (Camila's alone since 2026-10-26, the user: "the larimar one is only for camila. it's okay for some things to be only caharacter specific")
+  ruby_wrist: { slot: "wrist", hero: "rose", name: "RUBY BRACELET", price: 70, desc: "FOR ROSE: BIG RUBIES IN GOLD, ROUND HER SLEEVE'S CUFF" },   // (the user, 2026-10-26: "for the one on rose's sleeve, maybe call it like a ruby bracelet or something that stands out on her")
   larimar_ears: { slot: "ears", pl: true, name: "LARIMAR EARRINGS", price: 70, desc: "LARIMAR DROPS IN SILVER" },
   hat_straw: { slot: "hat", name: "STRAW HAT", price: 50, desc: "A WOVEN BEACH HAT, ITS BRIM ALL FRAYED" },
   phones: { slot: "ears", pl: true, name: "HEADPHONES", price: 60, desc: "PUT THEM ON, THEN PICK A SONG: PAUSE MENU, SONGS" },   // (the user, 2026-10-26: "we will make headphones an item you can buy as well")
@@ -17054,10 +17060,10 @@ const wearBlank = () => Object.fromEntries(GEAR_SLOTS.map(k => [k, null]));
 const gearBlank = () => ({ own: [], wear: { camila: wearBlank(), rose: wearBlank() } });
 let freeGear = null;                                 // (free play: every sample, to try)
 function gearState() {
-  if (story) { const G = story.gear || (story.gear = gearBlank()); for (const id of GEAR_HEROES) G.wear[id] = { ...wearBlank(), ...(G.wear[id] || {}) }; return G; }   // (an older file's: the new spots, empty)
+  if (story) { const G = story.gear || (story.gear = gearBlank()); for (const id of GEAR_HEROES) { const Wd = G.wear[id] = { ...wearBlank(), ...(G.wear[id] || {}) }; for (const k of GEAR_SLOTS) if (Wd[k] && !gearFits(Wd[k], id)) Wd[k] = null; } return G; }   // (an older file's: the new spots, empty; and off her if it's the other one's now, Rose's larimar bracelet say: still yours)
   return freeGear || (freeGear = { ...gearBlank(), own: Object.keys(ACC) });
 }
-const gearFits = (id, hero) => { const A = ACC[id]; return !!A && (A.slot !== "weapon" || A.prop === (hero === "rose" ? "sword" : "gauntlet")); };
+const gearFits = (id, hero) => { const A = ACC[id]; return !!A && (!A.hero || A.hero === hero) && (A.slot !== "weapon" || A.prop === (hero === "rose" ? "sword" : "gauntlet")); };   // (A.hero: one girl's own)
 const gearOwned = id => gearState().own.includes(id);
 const ACC_SVG = {                                    // (the stand's and the menu's little pictures)
   head: '<svg viewBox="0 0 40 40"><path d="M4 16 H36 M6 16 Q6 27 14 27 Q19 27 19 18 M21 18 Q21 27 26 27 Q34 27 34 16" fill="#3a1d52" stroke="#2f3b43" stroke-width="2.6" stroke-linejoin="round"/><path d="M9 19 L12 22" stroke="#fff" stroke-width="2"/></svg>',
@@ -17067,6 +17073,7 @@ const ACC_SVG = {                                    // (the stand's and the men
 const ACC_TINT = { shades_star: ["#3a1d52", "#ff4fa3"], shades_round: ["#1c3550", "#ffc81e"], mask_lucha: ["#2a5bd6", "#ffd21a"], mask_berry: ["#e8242f", "#3db04a"], band_red: ["#e8242f"], band_teal: ["#17b3a6"], charm_star: ["#ffd21a"], charm_berry: ["#e8242f"] };
 const ACC_SVG2 = {                                   // (the second set's own pictures)
   phones: '<svg viewBox="0 0 40 40"><path d="M8 24 Q8 6 20 6 Q32 6 32 24" fill="none" stroke="#1d1d1d" stroke-width="4"/><rect x="4" y="20" width="9" height="14" rx="4" fill="#ed145b" stroke="#2f3b43" stroke-width="2"/><rect x="27" y="20" width="9" height="14" rx="4" fill="#ed145b" stroke="#2f3b43" stroke-width="2"/></svg>',
+  ruby_wrist: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="15" ry="9" fill="none" stroke="#e6b400" stroke-width="5"/><path d="M20 21 L26 27 L20 35 L14 27 Z" fill="#d4142e" stroke="#2f3b43" stroke-width="2" stroke-linejoin="round"/><path d="M8 17 L12 21 L8 26 L4 21 Z M32 17 L36 21 L32 26 L28 21 Z" fill="#d4142e" stroke="#2f3b43" stroke-width="1.6" stroke-linejoin="round"/><circle cx="18" cy="26" r="1.6" fill="#ffd9de"/></svg>',
   hat_straw: '<svg viewBox="0 0 40 40"><path d="M2 25 Q20 34 38 25 Q30 20 20 21 Q10 20 2 25 Z" fill="#c9a35f" stroke="#2f3b43" stroke-width="2"/><path d="M11 23 Q11 10 20 10 Q29 10 29 23" fill="#d8b46a" stroke="#2f3b43" stroke-width="2"/><path d="M1 27 L-1 30 M6 29 L4 33 M34 29 L37 32 M39 26 L41 28" stroke="#b38a47" stroke-width="2"/></svg>',
   larimar_wrist: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="15" ry="9" fill="none" stroke="#c7cfd6" stroke-width="4"/><ellipse cx="20" cy="27" rx="6" ry="5" fill="#7fd3ea" stroke="#2f3b43" stroke-width="2"/><path d="M17 26 Q20 24 23 28" stroke="#fff" stroke-width="1.4" fill="none"/></svg>',
   larimar_ears: '<svg viewBox="0 0 40 40"><path d="M11 4 Q15 4 13 9 M27 4 Q31 4 29 9" fill="none" stroke="#c7cfd6" stroke-width="2.4"/><path d="M12 10 Q19 20 12 27 Q5 20 12 10 Z M28 10 Q35 20 28 27 Q21 20 28 10 Z" fill="#7fd3ea" stroke="#2f3b43" stroke-width="2"/></svg>',
@@ -17227,47 +17234,86 @@ function buildBracelet(rad) {                        // round her right wrist: a
   for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, st = larimarStone(.05, .04, .022); st.position.set(Math.cos(a) * (rad + .012), 0, Math.sin(a) * (rad + .012)); st.rotation.y = Math.PI / 2 - a; g.add(st); }
   return g;
 }
+function buildRuby(rad) {                           // RUBY BRACELET (Rose's): a chunky gold band round her sleeve's cuff, big cut rubies set all round it, each in its gold cup
+  const g = new THREE.Group(), gold = toon("#ffcf1f"), ruby = toon("#d4142e"), shine = new THREE.MeshBasicMaterial({ color: "#ffd9de" });
+  g.add(new THREE.Mesh(new THREE.TorusGeometry(rad, .03, 8, 32).rotateX(Math.PI / 2), gold));
+  for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, gem = new THREE.Group(); gem.position.set(Math.cos(a) * (rad + .022), 0, Math.sin(a) * (rad + .022)); gem.rotation.y = Math.PI / 2 - a; g.add(gem);   // (its face out)
+    gem.add(new THREE.Mesh(new THREE.CylinderGeometry(.05, .05, .024, 12).rotateX(Math.PI / 2), gold));
+    const st = new THREE.Mesh(new THREE.OctahedronGeometry(.056, 0).scale(1, 1.2, .6), ruby); st.position.z = .022; gem.add(st);   // (the stone: a cut gem, a point standing out)
+    gem.add(at(new THREE.Mesh(new THREE.SphereGeometry(.012, 6, 5), shine), -.016, .02, .05)); }   // (a glint on it)
+  return g;
+}
+// fitting things round her head: her head's own meshes (hair, face, ears; what she's wearing too if asked; nothing hidden) and the first of them a ray from outside meets (head space)
+function headMeshes(r, withGear) {
+  r.root.updateMatrixWorld(true); const G = r.__gear ? r.__gear.nodes : [], M = [];
+  r.head.traverse(o => { if (!o.isMesh) return; for (let p = o; p && p !== r.head.parent; p = p.parent) { if (!p.visible) return; if (!withGear && G.includes(p)) return; } M.push(o); });
+  return M;
+}
+const _hray = new THREE.Raycaster();
+function headHit(r, M, from, dir) {
+  const o = r.head.localToWorld(from.clone()), d = r.head.localToWorld(from.clone().add(dir)).sub(o).normalize(); _hray.set(o, d);
+  const h = _hray.intersectObjects(M, false)[0]; return h ? r.head.worldToLocal(h.point.clone()) : null;
+}
 function strawArt() {                                // a weave: tan, darker crossing strands
   return tex(256, 256, (c, W, H) => { c.fillStyle = "#cfaa66"; c.fillRect(0, 0, W, H); for (let y = 0; y < H; y += 12) for (let x = 0; x < W; x += 12) { const o = (x / 12 + y / 12) % 2; c.fillStyle = o ? "#b8924f" : "#ddbb77"; c.fillRect(x + (o ? 1 : 0), y + (o ? 0 : 1), o ? 10 : 11, o ? 11 : 10); }
     c.strokeStyle = "rgba(90,60,25,.35)"; c.lineWidth = 1; for (let i = 0; i < W; i += 12) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i, H); c.stroke(); c.beginPath(); c.moveTo(0, i); c.lineTo(W, i); c.stroke(); } });
 }
-function buildHat(top) {                             // a woven straw beach hat: a dome, a wide brim drooping a little, its edge frayed into loose strands all round (the user's photo)
-  const g = new THREE.Group(), map = strawArt(), m = toon("#ffffff", { map, side: THREE.DoubleSide }), R = rngF(17), strand = [toon("#c9a35f"), toon("#b38a47"), toon("#dcbc7a")];
-  g.add(at(new THREE.Mesh(new THREE.SphereGeometry(.3, 22, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .78, 1), m), 0, 0, 0));
-  const brim = new THREE.RingGeometry(.27, .6, 36, 3).rotateX(-Math.PI / 2), P = brim.attributes.position;
-  for (let i = 0; i < P.count; i++) { const x = P.getX(i), z = P.getZ(i), rr = Math.hypot(x, z); P.setY(i, -Math.pow(Math.max(0, rr - .27) / .33, 1.6) * .07 + .02 * Math.sin(Math.atan2(z, x) * 5)); }
+function hatFit(r) {                                 // the straw hat's size, from her own head (head space): its brim's line a little over her eyes, and an egg-shaped crown over the top that
+  const M = headMeshes(r, true), F = gearFace(r), yb = (F ? F.y : -.1) + .25, pts = [], below = [];   //   everything above that line fits inside: hair, headband, the headphones' band
+  for (let e = 0; e <= 7; e++) for (let a = 0; a < 20; a++) { const el = e / 7 * Math.PI / 2 * .97, az = a / 20 * Math.PI * 2, d = new THREE.Vector3(Math.cos(el) * Math.cos(az), Math.sin(el), Math.cos(el) * Math.sin(az));
+    const h = headHit(r, M, new THREE.Vector3(-.05, yb, 0).addScaledVector(d, 3), d.clone().negate()); if (h && h.y >= yb - .005) pts.push(h); }
+  for (const dy of [.03, .1, .18, .26]) for (let a = 0; a < 20; a++) { const az = a / 20 * Math.PI * 2, d = new THREE.Vector3(Math.cos(az), 0, Math.sin(az)), h = headHit(r, M, new THREE.Vector3(-.05, yb - dy, 0).addScaledVector(d, 3), d.clone().negate()); if (h) below.push(h); }   // (under the brim's line: how far her hair stands out, so the brim clears it)
+  if (pts.length < 8) return null;
+  let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9, top = yb; for (const p of pts) { if (p.y < yb + .08) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); } top = Math.max(top, p.y); }
+  const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2, rx = Math.max(.2, (x1 - x0) / 2), rz = Math.max(.2, (z1 - z0) / 2), h = Math.max(.15, top - yb); let k = 1;
+  for (const p of pts) k = Math.max(k, Math.hypot((p.x - cx) / rx, (p.y - yb) / h, (p.z - cz) / rz));   // (scaled up till the last of it's inside)
+  k = k * 1.03; const C = { cx, cz, yb, rx: rx * k + .015, rz: rz * k + .015, h: h * k + .02, out: [] };
+  for (let a = 0; a < 20; a++) { const az = a / 20 * Math.PI * 2, c = Math.cos(az), sn = Math.sin(az); let m = 0;   // (per way round: her hair's reach under it, past the crown's edge)
+    for (const p of below) { const dx = p.x - cx, dz = p.z - cz, L = Math.hypot(dx, dz); if (L > 1e-3 && (dx * c + dz * sn) / L > .97) m = Math.max(m, L); } C.out.push(m); }
+  return C;
+}
+function buildHat(r) {                               // a woven straw beach hat: a dome, a wide brim drooping a little, its edge frayed into loose strands all round (the user's photo). Fitted since
+  const C = hatFit(r) || { cx: -.03, cz: 0, yb: .3, rx: .42, rz: .42, h: .32, out: [] };   // 2026-10-26 (the user: "it should be bigger and actually fit around the top of their head"): the crown sized to go down over the top of
+  const g = new THREE.Group(), map = strawArt(), m = toon("#ffffff", { map, side: THREE.DoubleSide }), R = rngF(17), strand = [toon("#c9a35f"), toon("#b38a47"), toon("#dcbc7a")];   // her head, the brim wider, flat out
+  g.add(at(new THREE.Mesh(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2).scale(C.rx, C.h, C.rz), m), C.cx, C.yb, C.cz));   //   over her hair before it droops
+  const BW = .44, brim = new THREE.RingGeometry(1, 2, 60, 4), P = brim.attributes.position, NA = C.out.length;
+  for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i), ph = Math.atan2(y, x), t = Math.hypot(x, y) - 1, c = Math.cos(ph), sn = Math.sin(ph);
+    const e = 1 / Math.hypot(c / C.rx, sn / C.rz), rr = e + t * BW, ai = ((Math.round(-ph / (Math.PI * 2) * NA) % NA) + NA) % NA, clear = Math.max(e, (NA ? C.out[ai] : 0) + .03);   // (the ring's own angle runs the other way round from the head's z)
+    const dr = Math.max(0, rr - clear) / Math.max(.05, e + BW - clear); P.setXYZ(i, C.cx + c * rr, C.yb - Math.pow(dr, 1.6) * .09 + .022 * Math.sin(ph * 5) * Math.min(1, t * 3), C.cz - sn * rr); }
   brim.computeVertexNormals(); g.add(new THREE.Mesh(brim, m));
-  for (let i = 0; i < 64; i++) { const a = i / 64 * Math.PI * 2 + (R() - .5) * .08, L = .07 + R() * .15, s2 = new THREE.Mesh(new THREE.BoxGeometry(L, .006, .014).translate(L / 2, 0, 0), strand[i % 3]);
-    s2.position.set(Math.cos(a) * .57, -.06, Math.sin(a) * .57); s2.rotation.set(0, -a + (R() - .5) * .5, -.25 - R() * .5); g.add(s2); }   // (the fray: straw sticking out every which way)
-  g.position.set(-.03, top - .14, 0); g.rotation.z = .14; return g;   // (down onto her hair a little, its crown over it)
+  const NS = 84; for (let i = 0; i < NS; i++) { const a = i / NS * Math.PI * 2 + (R() - .5) * .06, L = .07 + R() * .16, e = 1 / Math.hypot(Math.cos(a) / C.rx, Math.sin(a) / C.rz) + BW - .03, s2 = new THREE.Mesh(new THREE.BoxGeometry(L, .006, .014).translate(L / 2, 0, 0), strand[i % 3]);
+    s2.position.set(C.cx + Math.cos(a) * e, C.yb - .075, C.cz + Math.sin(a) * e); s2.rotation.set(0, -a + (R() - .5) * .5, -.25 - R() * .5); g.add(s2); }   // (the fray: straw sticking out every which way)
+  g.userData.yb = C.yb; return g;
 }
-function buildPhones(r) {                            // HEADPHONES: the pair Rose used to wear, a black band over her hair and a magenta cup on each ear
-  const g = new THREE.Group(), mB = toon("#1d1d1d"), mC = toon("#ed145b"), E = r.ears.map(e => e.position);
-  const cx = (E[0].x + E[1].x) / 2 - .02, cy = (E[0].y + E[1].y) / 2 + .02, a = Math.max(...E.map(p => Math.abs(p.z))) + .05, b = clamp(phonesCrown(r, cx) + .035 - cy, .2, .8), pts = [];
-  for (let i = 0; i <= 16; i++) { const th = -Math.PI / 2 + Math.PI * i / 16; pts.push(new THREE.Vector3(cx, cy + Math.cos(th) * b, Math.sin(th) * a)); }
-  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, .026, 8), mB));
-  E.forEach(p => { const s = Math.sign(p.z) || 1, cup = new THREE.Group(); cup.position.set(cx, cy, s * (a - .01)); g.add(cup);
-    cup.add(new THREE.Mesh(new THREE.CylinderGeometry(.115, .115, .085, 22).rotateX(Math.PI / 2), mC)); cup.add(at(new THREE.Mesh(new THREE.TorusGeometry(.112, .02, 8, 24), mB), 0, 0, s * .044)); });
+function buildPhones(r) {                            // HEADPHONES: the pair Rose used to wear, a black band over her hair and a magenta cup on each ear. Bigger since 2026-10-26 (the user:
+  const g = new THREE.Group(), mB = toon("#1d1d1d"), mC = toon("#ed145b"), mP = toon("#2e2e2e"), E = r.ears.map(e => e.position), M = headMeshes(r);   // "the headphones shohuld be bigger and it's okay for the band ...
+  const cx = (E[0].x + E[1].x) / 2 - .01, cy = (E[0].y + E[1].y) / 2 + .01, CR = .17, CD = .12, cz = {};   //   to sit over their heads and look big so long as you can see the whole thing. their ears should not be peaking through"): each
+  for (const s of [-1, 1]) { let z = Math.max(...E.map(p => Math.abs(p.z))) + .03;   //   cup set out clear of whatever's under it (her ears are off, under them), the band an arch over the outside of her hair
+    for (let k = 0; k <= 12; k++) { const a = k / 12 * Math.PI * 2, rr = k === 12 ? 0 : CR * .92, h = headHit(r, M, new THREE.Vector3(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr, s * 3), new THREE.Vector3(0, 0, -s)); if (h) z = Math.max(z, Math.abs(h.z)); }
+    cz[s] = z + .012 + CD / 2; }
+  const O = new THREE.Vector3(cx, cy, 0), N = 28, a = Math.max(cz[-1], cz[1]); let b = .3;   // (the band: an arch from cup to cup, as low over her hair as it can be and clear of it everywhere)
+  for (let i = 0; i <= N; i++) { const t = i / N * Math.PI, d = new THREE.Vector3(0, Math.sin(t), -Math.cos(t)); let m = 0;
+    for (const dx of [-.06, 0, .06]) { const h = headHit(r, M, O.clone().add(new THREE.Vector3(dx, 0, 0)).addScaledVector(d, 3), d.clone().negate()); if (h) m = Math.max(m, Math.hypot(h.y - cy, h.z)); }
+    const z = (m + .045) * Math.cos(t), y = (m + .045) * Math.sin(t), q = 1 - (z / a) * (z / a); if (y > 0) b = Math.max(b, q > .05 ? y / Math.sqrt(q) : y * 4.5); }
+  const t0 = Math.asin(Math.min(.95, CR * .72 / b)), pts = [];
+  for (let i = 0; i <= N; i++) { const t = t0 + (Math.PI - 2 * t0) * i / N; pts.push(new THREE.Vector3(cx, cy + Math.sin(t) * b, -Math.cos(t) * a)); }
+  const curve = new THREE.CatmullRomCurve3(pts); g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 64, .036, 10), mB));   // (the band: thick, black, the whole of it outside her hair)
+  const pad = curve.getPoints(64).slice(20, 45).map(p => p.clone().add(new THREE.Vector3(0, cy - p.y, -p.z).normalize().multiplyScalar(.018)));   // (a padded cushion under its top)
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pad), 32, .04, 10), mP));
+  for (const s of [-1, 1]) { const cup = new THREE.Group(); cup.position.set(cx, cy, s * cz[s]); g.add(cup);
+    cup.add(new THREE.Mesh(new THREE.CylinderGeometry(CR, CR, CD, 28).rotateX(Math.PI / 2), mC));   // (the cup, magenta)
+    cup.add(at(new THREE.Mesh(new THREE.TorusGeometry(CR - .012, .028, 8, 30), mB), 0, 0, s * CD / 2));   // (its outer rim, black)
+    cup.add(at(new THREE.Mesh(new THREE.TorusGeometry(CR * .8, .045, 8, 28), mP), 0, 0, -s * CD / 2));   // (the cushion against her head)
+    cup.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.03, .03, CR * .7, 8), mB), 0, CR * .72, 0)); }   // (the yoke up to the band)
   return g;
-}
-function phonesCrown(r, x) {                         // (the headphones' band: how high her hair is straight over her ears, not a ponytail up behind: a ray down onto it, head space)
-  r.root.updateMatrixWorld(true); const G = r.__gear ? r.__gear.nodes : [], M = [];
-  r.head.traverse(o => { if (!o.isMesh || !o.visible) return; for (let p = o; p; p = p.parent) if (G.includes(p)) return; M.push(o); });
-  const o0 = r.head.localToWorld(new THREE.Vector3(x, 2, 0)), o1 = r.head.localToWorld(new THREE.Vector3(x, -1, 0)), dir = o1.sub(o0).normalize();
-  const hit = new THREE.Raycaster(o0, dir).intersectObjects(M, false)[0]; return hit ? r.head.worldToLocal(hit.point.clone()).y : gearTop(r);
-}
-function gearTop(r) {                                // the top of her hair over her head (head space), for the hat to sit on
-  if (r.__hairTop !== undefined) return r.__hairTop; r.root.updateMatrixWorld(true); const inv = r.head.matrixWorld.clone().invert(), G = r.__gear ? r.__gear.nodes : []; let top = .35;
-  r.head.traverse(o => { if (!o.isMesh || !o.geometry) return; for (let p = o; p; p = p.parent) if (G.includes(p)) return; o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).applyMatrix4(inv); if (Math.abs((b.min.x + b.max.x) / 2) < .4) top = Math.max(top, b.max.y); });
-  return (r.__hairTop = Math.min(top, .75));
 }
 // on and off a rig: dressGear(r, wear) puts on what's listed for her (what was on before comes off). The pieces' materials join r.mats (they flash with her when she's hit)
 function undressGear(r) {
-  const G = r.__gear; if (!G) return; G.nodes.forEach(o => { if (o.parent) o.parent.remove(o); o.traverse(m => { if (m.isMesh) { m.geometry.dispose(); const mm = m.material; if (mm.map) mm.map.dispose(); mm.dispose(); } }); });
+  const G = r.__gear; if (!G) return; (G.hid || []).forEach(o => { o.visible = true; }); G.nodes.forEach(o => { if (o.parent) o.parent.remove(o); o.traverse(m => { if (m.isMesh) { m.geometry.dispose(); const mm = m.material; if (mm.map) mm.map.dispose(); mm.dispose(); } }); });
   if (r.mats) r.mats = r.mats.filter(m => !G.mats.includes(m)); r.__gear = null;
 }
 function dressGear(r, wear) {
-  undressGear(r); const G = { nodes: [], mats: [], bands: [], hangs: [] }; r.__gear = G; r.__gearKey = JSON.stringify(wear || {}); if (!wear) return;
+  undressGear(r); const G = { nodes: [], mats: [], bands: [], hangs: [], hid: [] }; r.__gear = G; r.__gearKey = JSON.stringify(wear || {}); if (!wear) return;
   const hang = piv => G.hangs.push({ piv, dir: new THREE.Vector3(0, -1, 0), dv: new THREE.Vector3(), prev: null, vel: new THREE.Vector3() });   // (the charm, the earrings: hanging and swinging)
   const put = (parent, o) => { parent.add(o); G.nodes.push(o); o.traverse(m => { if (m.isMesh && !(m.material instanceof THREE.MeshBasicMaterial)) G.mats.push(m.material); }); };
   if (wear.head && ACC[wear.head] && r.head) { const E = gearFace(r); if (E) put(r.head, wear.head.startsWith("mask") ? buildMask(E, wear.head) : buildShades(E, wear.head)); }
@@ -17278,11 +17324,15 @@ function dressGear(r, wear) {
       r.root.updateMatrixWorld(true); const pw = pr.group.getWorldPosition(new THREE.Vector3()), hi = r.hands.length > 1 && r.hands[0].getWorldPosition(new THREE.Vector3()).distanceTo(pw) < r.hands[1].getWorldPosition(new THREE.Vector3()).distanceTo(pw) ? 1 : 0;
       const H = r.hands[hi], rad = gearArmR(r, hi) / (H.scale.x || 1), B2 = buildBand(wear.weapon, rad, 1.7); B2.g.position.set(0, .22 / (H.scale.x || 1), 0); put(H, B2.g); G.bands.push(B2); }
     else if (pr.kind === "sword" && pr.inner) { const piv = buildCharm(wear.weapon); piv.position.set(-.17, 0, 0); put(pr.inner, piv); hang(piv); } }
-  if (wear.hat && ACC[wear.hat] && r.head) put(r.head, buildHat(gearTop(r)));
-  if (wear.ears === "phones" && r.head && r.ears) put(r.head, buildPhones(r));   // (the headphones: over her hair, a cup on each ear)
+  if (wear.ears === "phones" && r.head && r.ears) { r.ears.forEach(e => { if (e.visible) { e.visible = false; G.hid.push(e); } }); put(r.head, buildPhones(r)); }   // (the headphones: over her hair, a cup over each ear, the ears off under them)
   else if (wear.ears && ACC[wear.ears] && r.head && r.ears) { const hp = r.spec.outfit.headphones && r.spec.outfit.headphones.on;   // (from each ear: under the headphones' cups if she's got them on)
     r.ears.forEach(e => { const s = Math.sign(e.position.z) || 1, piv = buildEarring(); piv.position.set(e.position.x + .01, e.position.y - (hp ? .1 : .05), e.position.z + s * .015); put(r.head, piv); hang(piv); }); }
-  if (wear.wrist && ACC[wear.wrist] && r.hands && r.hands[1]) { const H = r.hands[1], t = r.arms && r.arms[1], rad = (t && t.prof ? Math.min(.11, Math.max(.062, t.prof(.93) * 1.05 + .012)) : .075) / (H.scale.x || 1), B = buildBracelet(rad); B.position.y = .03; put(H, B); }   // (her right hand: hands[1])
+  if (wear.wrist && ACC[wear.wrist] && r.hands && r.hands[1]) { const H = r.hands[1], t = r.arms && r.arms[1], hs = H.scale.x || 1;   // (her right hand: hands[1])
+    if (wear.wrist === "ruby_wrist") { const cuff = H.children.find(o => o.isMesh && o.geometry.type === "CylinderGeometry"), cp = cuff && cuff.geometry.parameters;   // (round her sleeve's cuff, just under the bell of the sleeve, where it shows)
+      const rad = cp ? Math.max(cp.radiusTop, cp.radiusBottom) * (cuff.scale.x || 1) + .026 : (t && t.prof ? t.prof(.9) + .03 : .18) / hs, B = buildRuby(rad); B.position.y = cp ? cuff.position.y - cp.height * (cuff.scale.y || 1) / 2 + .045 : 0; put(H, B); }
+    else { const rad = (t && t.prof ? Math.min(.11, Math.max(.062, t.prof(.93) * 1.05 + .012)) : .075) / hs, B = buildBracelet(rad); B.position.y = .03; put(H, B); } }
+  if (wear.hat && ACC[wear.hat] && r.head) { const hat = buildHat(r), yb = hat.userData.yb; put(r.head, hat);   // (last: over everything else on her head, the headphones' band under its crown)
+    (r.chains || []).forEach(c => { if (c.parent === "head" && c.anchor[1] > yb - .02 && c.tube && c.tube.mesh.visible) { c.tube.mesh.visible = false; G.hid.push(c.tube.mesh); } }); }   // (locks growing from under the crown, Camila's parting: tucked in under it)
   if (r.mats) r.mats.push(...G.mats);
 }
 function gearArmR(r, i) {                            // the forearm's radius a little up from the wrist (the arm's own tube), for the bandana round it
@@ -17305,9 +17355,25 @@ function hangSync(C, dt) {                           // (a charm or an earring: 
   const down = C.dir, yA = _gx.copy(down).negate(), zA = _gz.set(0, 0, 1).addScaledVector(yA, -yA.z).normalize(), xA = new THREE.Vector3().crossVectors(yA, zA);   // (hanging, its face to the camera)
   _gq.setFromRotationMatrix(_gm.makeBasis(xA, yA, zA)); C.piv.parent.getWorldQuaternion(_gq2); C.piv.quaternion.copy(_gq2.invert().multiply(_gq));
 }
-function gearCheck() {                               // (every frame: the heroes' rigs in what's listed for them, once it changes or a rig's new)
+// how her hair's done under what she's wearing (the user, 2026-10-26: "change camila's hairstyle in a way that's similar to rose's so her ears can show whenever she
+// wears ears. also for the straw hats, maybe it needs a new model for their heads"): something in Camila's ears, her hair goes up in a tail like Rose's, the sides
+// off her ears; a hat on either, a tail's tied low at the nape instead, under the brim (Camila's own long hair just hangs under one)
+const HAIR_UP = { camila: { hair: { sides: .4, back: .8, style: "hightail", tie: true, length: 1, flow: .8, wave: .6,
+  tufts: [{ yaw: -30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: 30, pitch: 60, len: .07, width: .5, sharp: 1.2 }] }, colors: { tie: "#ec1c24" } } };
+function hairDo(id, W) { W = W || {}; const up = !!(HAIR_UP[id] && W.ears && ACC[W.ears]), hat = !!(W.hat && ACC[W.hat]), sp = !up && hat ? playableSpecs().find(q => q.id === id) : null;
+  const tail = up ? HAIR_UP[id].hair.style : sp && sp.hair ? sp.hair.style : ""; return (up ? "up" : "") + (hat && (tail === "hightail" || tail === "ponytail") ? "low" : ""); }
+function heroLook(id, W) { const sp = playableSpecs().find(q => q.id === id); if (!sp) return null; const k = hairDo(id, W); let s = lookOf(sp); if (!k) return s;
+  if (k.includes("up")) s = KIT.merge0(s, HAIR_UP[id]); if (k.includes("low")) s = KIT.merge0(s, { hair: { style: "lowtail" } }); return KIT.normalize(s); }
+function rigRestyle(r, sp) {                         // the same rig object, built over again in another look: everything holding it (you, a partner, the select line) keeps hold of it
+  const par = r.root.parent, sPar = r.shadow.parent, vis = r.root.visible, sVis = r.shadow.visible; undressGear(r);
+  const nr = buildChar(sp); KIT.dispose(r); for (const k of Object.keys(r)) delete r[k]; Object.assign(r, nr);
+  Object.defineProperty(nr, "spec", { get: () => r.spec, set: v => { r.spec = v; }, configurable: true });   // (the build's own closures read the spec off the new one: kept the same as hers)
+  if (par && r.root.parent !== par) par.add(r.root); if (sPar && r.shadow.parent !== sPar) sPar.add(r.shadow); r.root.visible = vis; r.shadow.visible = sVis;
+}
+function gearCheck() {                               // (every frame: the heroes' rigs in what's listed for them, once it changes or a rig's new; her hair done to suit it first)
   const G = gearState();
-  for (const id of GEAR_HEROES) { const r = roster.find(q => q.id === id); if (!r) continue; const W = G.wear[id] || {}, key = JSON.stringify(W); if (r.__gearKey !== key) dressGear(r, W); }
+  for (const id of GEAR_HEROES) { const r = roster.find(q => q.id === id); if (!r) continue; const W = G.wear[id] || {}, key = JSON.stringify(W); if (r.__gearKey === key) continue;
+    const hk = hairDo(id, W); if ((r.__hairDo || "") !== hk) { const sp = heroLook(id, W); if (sp) { rigRestyle(r, sp); r.__hairDo = hk; } } dressGear(r, W); }
 }
 // the seller by the road: three of them on the counter, the ones you haven't got first
 function wearStock(f) {
@@ -17318,7 +17384,7 @@ function buyAcc(id) {
   if (gearOwned(id)) { SFX.tick(); U.msg = `YOU'VE GOT THE ${A.name} ALREADY. PUT ${A.pl ? "THEM" : "IT"} ON FROM THE PAUSE MENU: ACCESSORIES.`; drawNpc(); return; }
   if (B.coins < A.price) { SFX.nope(); U.msg = `THAT'S ${A.price} COINS, FRIEND. YOU'VE ONLY GOT ${B.coins}.`; drawNpc(); return; }
   B.coins -= A.price; G.own.push(id); coinHud(true); SFX.buy();
-  const who = A.slot !== "weapon" ? ((story && story.char) || "camila") : A.prop === "sword" ? "rose" : "camila", W = G.wear[who]; let on = false; if (W && !W[A.slot]) { W[A.slot] = id; on = true; }   // (on straight away if that spot's free)
+  const who = A.hero || (A.slot !== "weapon" ? ((story && story.char) || "camila") : A.prop === "sword" ? "rose" : "camila"), W = G.wear[who]; let on = false; if (W && !W[A.slot]) { W[A.slot] = id; on = true; }   // (on straight away if that spot's free)
   U.msg = `THE ${A.name}! ${on ? (who === "rose" ? "ROSE" : "CAMILA") + "'S GOT " + (A.pl ? "THEM" : "IT") + " ON. " : ""}CHANGE WHAT THEY WEAR FROM THE PAUSE MENU: ACCESSORIES.`; drawNpc(); if (story) writeSave();
 }
 // the look of them, under the map in the pause menu and bigger in ACCESSORIES: a little renderer of its own, the two of them side by side in what they've got on
@@ -17389,6 +17455,37 @@ function wearNav(d, ok, back, vert) {
   if (d && vert) { wearSel = (wearSel + d + WN) % WN; SFX.tick(); markMenu(); return; }
   if (d && wearSel < WN - 1) { wearCycle(wearSel, d); return; }
   if (ok) { if (wearSel >= WN - 1) closeWear(); else wearCycle(wearSel, 1); }
+}
+// trying it on at the stand (the user, 2026-10-26: "when buying these, make sure the charafcter model is visible and we can see how each accessory would appear on
+// them before you buy them"): over the talk box, the one picked on whoever'd wear it (both girls when either can), in the rest of what she's got on, hair done to
+// suit, turning a little, close on where it goes
+let tryPv = null;
+const E0head = h => tryPv.rigs[h].r.head.getWorldPosition(new THREE.Vector3());
+function tryOnTick(dt) {
+  const U = menuUp === "npc" ? npcUp : null, row = U && U.rows[U.sel], id0 = row && row[3], id = id0 && ACC[id0] ? id0 : null, box = $("npcTry"); if (!box) return;
+  if (!U || !U.f.road) { if (!box.classList.contains("hidden")) box.classList.add("hidden"); return; }   // (the stand by the road: there the whole talk, so the rows don't jump about; on something else, her as she is)
+  if (!tryPv) { const R3 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R3.outputColorSpace = renderer.outputColorSpace; R3.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d); const d2 = new THREE.DirectionalLight("#ffffff", .8); d2.position.set(-5, 3, -2); sc.add(d2);
+    tryPv = { R3, sc, cam: new THREE.PerspectiveCamera(26, 1, .05, 60), rigs: {}, t: 0 }; $("npcTryCv").appendChild(R3.domElement); }
+  const cur = rig && GEAR_HEROES.includes(rig.id) ? rig.id : (story && story.char) || "camila";
+  const V = tryPv, A = id ? ACC[id] : { slot: "head" }, heroes = id ? GEAR_HEROES.filter(h => gearFits(id, h)) : [cur], G = gearState();
+  box.classList.remove("hidden"); const who = id ? "ON " + heroes.map(h => h === "rose" ? "ROSE" : "CAMILA").join(" AND ") : "PICK ONE TO TRY IT ON"; if ($("npcTryWho").textContent !== who) $("npcTryWho").textContent = who;
+  const rh = $("npcRows").offsetHeight, hgt = Math.round(clamp(rh - 22, 84, 210)), wid = Math.round(Math.min(hgt * (heroes.length > 1 ? 1.5 : 1.05), $("npc").offsetWidth * .42));   // (as tall as the rows beside it)
+  if (V.w !== wid || V.h !== hgt) { V.w = wid; V.h = hgt; V.R3.setSize(wid, hgt); V.cam.aspect = wid / hgt; V.cam.updateProjectionMatrix(); }
+  V.t += dt; const turn = Math.sin(V.t * .8) * .3, tgt = new THREE.Vector3(); let n = 0;
+  for (const h of GEAR_HEROES) { let E = V.rigs[h]; const k = heroes.indexOf(h);
+    if (k < 0) { if (E) E.r.root.visible = false; continue; }
+    const Wh = id ? { ...(G.wear[h] || {}), [A.slot]: id } : { ...(G.wear[h] || {}) }, look = hairDo(h, Wh), src = roster.find(q => q.id === h);
+    if (!E || E.look !== look || E.src !== src || E.base !== (src && src.spec)) { if (E) { undressGear(E.r); KIT.dispose(E.r); } const sp = heroLook(h, Wh); if (!sp) continue;
+      const r = buildChar(sp); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow); const st = makeState(0, r); st.onGround = true; E = V.rigs[h] = { r, st, look, src, base: src && src.spec }; }
+    if (E.r.__gearKey !== JSON.stringify(Wh)) dressGear(E.r, Wh);
+    E.r.root.visible = true; const st = E.st; st.face = 1; st.yaw = -Math.PI / 2 + (h === "rose" ? .55 : .3) + turn; KIT.updatePose(st, dt); E.r.sync(st, E.r, dt);   // (each a little to her left: Rose's sword hand back, off her face)
+    E.r.root.position.set(heroes.length > 1 ? (k ? .82 : -.82) : 0, 0, 0); E.r.root.updateMatrixWorld(true);
+    const at2 = A.slot === "wrist" ? E.r.hands[1] : A.slot === "weapon" ? (E.r.prop && E.r.prop.group) || E.r.hands[0] : E.r.head; tgt.add(at2.getWorldPosition(new THREE.Vector3())); n++; }
+  if (!n) return; tgt.divideScalar(n); if (A.slot === "head" || A.slot === "ears") tgt.y -= .18; if (A.slot === "weapon" && A.prop === "sword") tgt.y -= .15;   // (her face and shoulders in it too, not just the piece)
+  if (A.slot === "wrist") tgt.lerp(heroes.length > 1 ? tgt : E0head(heroes[0]), .35);   // (her hand and her face both)
+  const dist = ({ head: 2.9, hat: 3.5, ears: 3, wrist: 3.4, weapon: 3.4 }[A.slot] || 3) * (heroes.length > 1 ? 1.45 * Math.max(1, 1.5 / (wid / hgt)) : 1);   // (the two of them: back far enough that both are in, however narrow it is)
+  V.cam.position.set(tgt.x, tgt.y + .22, tgt.z + dist); V.cam.lookAt(tgt); V.R3.render(V.sc, V.cam);
 }
 function wearTick(dt) {                              // (the big preview breathing while ACCESSORIES is up: the charm and the bandanas move)
   if (menuUp !== "wear" || !wearPv) return; wearPv.t = (wearPv.t || 0) + dt; if (wearPv.t < 1 / 30) return; const s = wearPv.t; wearPv.t = 0;
@@ -17661,7 +17758,7 @@ function closeNpc() { npcUp = null; document.body.classList.remove("talking"); i
 function npcRows() {                                 // [label, sub, action]
   const U = npcUp, role = U.f.npc, B = bag();
   if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]),
-    ...(U.f.road ? wearStock(U.f).map(id => [`${accSvg(id)}<b>${ACC[id].name}</b><span class="pr">${ITEM_SVG.coin}${ACC[id].price}</span>`, gearOwned(id) ? "YOU'VE GOT THIS ONE" : ACC[id].desc, () => buyAcc(id)]) : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
+    ...(U.f.road ? wearStock(U.f).map(id => [`${accSvg(id)}<b>${ACC[id].name}</b><span class="pr">${ITEM_SVG.coin}${ACC[id].price}</span>`, gearOwned(id) ? "YOU'VE GOT THIS ONE" : ACC[id].desc, () => buyAcc(id), id]) : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
   if (role === "caller") { const C = ["cat", "dog", "axo", "axo2"].flatMap(sp => petsCaught(sp).map(w => [sp, w]));   // (the deep's axolotls too: they travel with you, so the bell calls them anywhere. The user, 2026-10-26: "make the axilotl travel")
     return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]), ["<b>LEAVE</b>", "", closeNpc]]; }
   const other = otherHero();
@@ -19718,7 +19815,7 @@ function updateBaddy(b, dt) {
         else { b.vy = -380; b.vx = b.dir * T.speed; b.onGround = false; b.sq = .15; b.sqv = 0; }
       }
     }
-  } else if (b.onGround) b.vx = approach(b.vx, 0, 900 * dt);
+  } else if (b.onGround) b.vx = approach(b.vx, 0, (b.hurtT > 0 ? 2000 : 900) * dt);   // (knocked back: it digs in and stops, no sliding on: 2026-10-26)
   if (GAPS.length && !fly && !T.swim && b.vx && !b.dead && b.hurtT <= 0 && !(b.recoil > 0) && b.y >= (groundAt(b.x) ?? GROUND) - 70 && !(b.atk === "go" && A && A.land)) {
     const ahead = b.x + Math.sign(b.vx) * b.hw * .4 + b.vx * dt * 2;
     if (overGap(ahead)) b.vx = 0;                   // brakes at the water's edge (only a knock sends it in)
@@ -19727,7 +19824,7 @@ function updateBaddy(b, dt) {
     const chase = STAGES[stage] && STAGES[stage].deep && !p.dead && Math.abs(p.x - b.x) < 700;   // (the deep: one that's seen you swims up and down after you, not holding its height)
     const hy = chase ? clamp(p.y - 40 + Math.sin(time * 1.7 + b.phase) * 12, DEEP_TOP + 40, (groundAt(b.x) ?? GROUND) - 10) : (b.homeY ?? (b.homeY = b.y)) - T.hover + Math.sin(time * 1.7 + b.phase) * 9;
     b.vy = approach(b.vy, clamp((hy - b.y) * (chase ? 1.6 : 3.2), chase ? -150 : -240, chase ? 150 : 240), (chase ? 600 : 1100) * dt);
-  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (b.juggleT > 0 ? .28 : 1), 1000); }   // (juggled: lighter a moment, floating there for the follow-up: .42 till 2026-10-23)
+  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (b.juggleT > 0 ? (b.carryVx != null ? (player.hangT > 0 && !player.onGround ? .3 : 1) : .6) : 1), 1000); if (!b.onGround && b.hurtT > 0) { if (b.juggleT > 0 && b.carryVx != null) b.vx = b.carryVx + (b.vx - b.carryVx) * Math.exp(-4 * dt); else if (!(b.juggleT > 0)) b.vx *= Math.exp(-2.5 * dt); } }   // (carried on an air combo: eased in to a fist's length off the hero, then along with her, and held while she's held, falling when she falls)   // (juggled: a little lighter for a moment, not floating: .28 till 2026-10-26, the user "the enemy just floats in the air" · knocked flying, the air slows it)   // (juggled: lighter a moment, floating there for the follow-up: .42 till 2026-10-23)
   moveBody(b, dt, b.hw);
   if (p !== player && friends.includes(p) && b.atk === "go" && !b.dead && Math.abs(p.x - b.x) < p.hw + b.hw && p.y - p.h < b.y && b.y - b.h < p.y) bepHurt(p, Math.sign(p.x - b.x) || b.dir);   // (rammed: a lunge, a roll, a leap)
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
@@ -19784,12 +19881,14 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
   SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1);   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
-  if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { b.vx = dir * 260 / Math.sqrt(b.wt); b.vy = Math.min(b.vy, -260 / Math.sqrt(b.wt)); b.juggleT = .85; }   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
+  const PS = KIT.STRIKES[player.atkKind] || {}, airLast = !!player.chain && !player.combo && (player.chain.kind === "air1" || player.chain.kind === "air2") && player.atkIdx >= player.chain.list.length - 1;
+  if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float" && (airLast || PS.dive || PS.slamLand)) { b.vx = dir * 120 / Math.sqrt(b.wt); b.vy = 640 / Math.sqrt(b.wt); b.juggleT = 0; b.carryVx = null; }   // (an air combo's last blow: down they go, hard. The user, 2026-10-26: "the air ones in particular feel very floaty")
+  else if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { const fwd = player.chain && player.chain.kind === "air2", pvx = fwd ? player.face * 160 : player.vx * .2; b.carryVx = pvx; b.vx = pvx + clamp((player.x + dir * 52 - b.x) * 4, -170, 170); b.vy = Math.min(-60, Math.max(player.vy, -40) - 30) / Math.sqrt(b.wt); b.juggleT = .5; }   // (the hero's about to be held there by the blow, rising or not: so is it, not shot up past her on her jump; and kept a fist's length in front of her, not knocked out of reach of the next: 2026-10-26)   // juggled: up there already, hit from the air: carried on the blows at your height, falling with you, not floating off (was 260 up, hung .85 s)   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
   else { b.vx = dir * KB[0] * 1.2 * knockK / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
-    if ((kind === "upper" || kind === "launch") && knockK >= 1) { b.vy = -440 / Math.sqrt(b.wt); b.juggleT = .9; }   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
+    if ((kind === "upper" || kind === "launch") && knockK >= 1) { b.vy = -440 / Math.sqrt(b.wt); b.vx = dir * 45 / Math.sqrt(b.wt); b.juggleT = .4; b.carryVx = null; }   // (straight up, a touch on: there over you to jump after, not knocked off out of reach: 2026-10-26)   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
     if (knockK < 1 && kind !== "stomp") b.vy = Math.max(b.vy, -220 / Math.sqrt(b.wt)); }   // (a forward combo's blow before its last: a little pop, not up out of reach of the next)
   b.onGround = false;
-  b.sq = kind === "stomp" ? -.45 : .22; b.sqv = 0;
+  b.sq = kind === "stomp" ? -.45 : .12; b.sqv = 0;   // (.22 till 2026-10-26: less give)
   hitFeel(b, dir, kind, false);
   sparks(kind === "stomp" ? player.x : b.x - dir * b.hw * .6, b.y - b.h * (kind === "stomp" ? 1 : .55), 7);
   if (b.hp <= 0) { b.dead = true; b.deathT = 0; b.vx *= .4; if (player.combo) impactFrame(b.x, b.y - b.h * .5, false); else hitstop = Math.max(hitstop, .09); lastKill(b); }   // (the freeze only for a combo's finishing blow)
@@ -20450,7 +20549,7 @@ function hatchHero() {                             // the user, 2026-10-25: "the
   camera.layers.set(3); renderer.render(actors, camera); camera.layers.set(0); return hm;
 }
 function render(dt) {
-  syncMini(); hourEaseTick(dt); peekTick(); gearCheck(); wearTick(dt);
+  syncMini(); hourEaseTick(dt); peekTick(); gearCheck(); wearTick(dt); tryOnTick(dt);
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);

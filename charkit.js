@@ -2228,17 +2228,17 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
-  const k = 1 - Math.exp(-dt * 16);
+  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0;   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
   for (const key in T) {
     if (p.pose[key] === undefined) p.pose[key] = T[key];
     if (SPRUNG.has(key)) {
-      const v = (p.pv[key] || 0) + ((T[key] - p.pose[key]) * 260 - (p.pv[key] || 0) * 22) * dt;
+      const v = (p.pv[key] || 0) + ((T[key] - p.pose[key]) * (hit ? 900 : 260) - (p.pv[key] || 0) * (hit ? 52 : 22)) * dt;
       p.pv[key] = v; p.pose[key] += v * dt;
     } else if (key === "spin" || key === "flip") {
       p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU);   // a finished turn settles forward, never unwinds back through the turn
       p.pose[key] = lerp(p.pose[key], T[key], k);
     } else {                                             // critically damped: eases out of the old pose and into the new one (no snap at the start, no overshoot at the end)
-      const w = POSE_W[key] || 26, x = p.pose[key] - T[key], v = p.pv[key] || 0, e = Math.exp(-w * dt), c = v + w * x;
+      const w = (POSE_W[key] || 26) * (hit ? 1.8 : 1), x = p.pose[key] - T[key], v = p.pv[key] || 0, e = Math.exp(-w * dt), c = v + w * x;
       p.pose[key] = T[key] + (x + c * dt) * e; p.pv[key] = (v - w * c * dt) * e;
     }
   }
