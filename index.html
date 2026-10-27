@@ -5442,7 +5442,6 @@ const PAUSE_LABEL = { songs: "SONGS", resume: "RETURN TO GAME", map: "WORLD MAP"
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "wear", "ach", "vlog", "quit"] : ["resume", "wear", "ach", "vlog", "lvl", "home"];   // (GAME LOG: the stats and the narration)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
   if (phonesOn()) PAUSE_OPTS.splice(PAUSE_OPTS.indexOf("wear") + 1, 0, "songs");   // (the headphones on: what they play)
-  if (rideS) PAUSE_OPTS = PAUSE_OPTS.filter(q => q !== "map" && q !== "debug");   // (stopped by the road on La Guagua: no going off to another room or world from here)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
 function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); drawPauseWear(); syncMini(); drawPauseMap(); }
@@ -5458,10 +5457,11 @@ function dbgMove(dx, dy) {
   if (best >= 0) { dbgPick.sel = best; SFX.tick(); drawPauseMap(); }
 }
 function dbgGo() {
-  const s = dbgPick.sel; dbgPick = null; closePause(); SFX.confirm();
+  const s = dbgPick.sel; dbgPick = null; closePause(); SFX.confirm(); rideAbort();   // (stopped by the road on La Guagua: off it, then there. The user, 2026-10-27: WORLD MAP and DEBUG in the pause menu there too)
   if (story) storyRun(world, s, false); else levelGo(world, "room", s);
 }
 function debugResetRoom() {
+  if (rideS && rideS.play) return rideRestart();      // (stopped by the road: the stop itself back to new)
   const k = world + ":" + stage + ":", drop = S => [...S].forEach(id => { if (String(id).startsWith(k)) S.delete(id); });
   roomsDone.delete(stage); drop(giftsTaken); drop(cratesBroken); drop(healTaken); freeGot.forEach(id => { if (id.startsWith(k)) freeGot.delete(id); });
   if (story && story.got) story.got = story.got.filter(id => !id.startsWith(k));
@@ -6382,7 +6382,7 @@ function mapGo(w, s) {
   const R = (((story && story.rests) || {})[w] || []).filter(r => (WORLDS[w].stages[r] || {}).rest), SD = !!story && upOn(w) && upPct(w) >= 100 && !(story.freed || {})[w];   // (at 100% and not yet free: the final showdown from here too)
   const HS = WORLDS[w].stages.map((q, i) => i).filter(i => WORLDS[w].stages[i].bep && hideFound(w, i)), HF = HS.length > 0;   // (only rest stops that still are: the grid moved them, 2026-10-21)
   if (s === undefined) { mapPick = { w, sel: 0, opts: [["FROM THE START", 0], ...restsOf(w).filter(r => R.includes(r)).map(r => [restLabel(w, r), r]), ...(hubOf(w) >= 0 ? [["THE HUB", hubOf(w)]] : []), ...HS.map((i, k) => [HS.length > 1 ? (k ? "THE BEPS' OTHER HIDEOUT" : "THE BEPS' HIDEOUT") : "THE BEPS' HIDEOUT", "hide" + i]), ...(SD ? [["THE FINAL SHOWDOWN", "arena"]] : [])] }; SFX.tick(); drawMapPick(); return; }
-  SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null;
+  SFX.confirm(); mapPick = null; drawMapPick(); $("map").classList.remove("show"); $("pause").style.visibility = ""; menuUp = null; rideAbort();   // (from a stop on La Guagua: off the road first)
   if (w !== world) palsStay();                      // (another world from the map: your pets and buddies come along)
   if (s === "arena") startShowdown(w); else if (typeof s === "string" && s.startsWith("hide")) { hideNext = true; storyRun(w, +s.slice(4) || WORLDS[w].stages.findIndex(q => q.bep), false); } else storyRun(w, s || 0, false);
 }
@@ -6998,6 +6998,10 @@ function rideEnd() {                                 // under the black: off the
   if (P.road) rideClear(P.road); P.road = null; $("proTitle").firstElementChild.textContent = WORLDS[P.to].name; P.ph = "title"; P.t = 0; P.then();
 }
 function rideDone() { rideS = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("proTitle").firstElementChild.textContent = "BERRY WOODS"; document.body.classList.remove("riding"); }   // (the prologue's title back as it was)
+function rideRestart() {                            // (DEBUG's RESET THIS ROOM, stopped by the road: the same stop again on the same road, from just before it, under the black)
+  const P = rideS, k = P.road && P.road.ev.kind; rideAbort(); rideForce = k || null; startRide(P.from, P.to, P.then);
+  Object.assign(rideS, { a: 1, dv: RIDE_T * .4 - .5 }); $("proBlack").style.opacity = 1; toast("DEBUG: THIS STOP'S BACK TO NEW", 2400);
+}
 function rideAbort() { const P = rideS; if (!P) return; proCam = null; if (P.road) rideClear(P.road); rideDone(); $("skipHint").classList.remove("pro", "show"); }   // (off to the title in the middle of it)
 // stops on the way (the user, 2026-10-26: "we'll also have different events that can happen in between worlds at random: a. nothing happens. b. two berry baddy cars pull up next to
 // them and then one forces them to brake by suddenly getting in front of la guaga. they all step out and you fight about 6 berries before getting back in the car and riding to the next
