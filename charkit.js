@@ -393,7 +393,7 @@ const PRESETS = [
       collar: { on: true, top: .24, bottom: .11, h: .16, y: .06, col: "#ed145b", open: .9 },
       pads: { on: true, side: "right", shape: "block", col: "#ed145b", size: 1.25 },
       headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
-      headphones: { on: true, col: "#1d1d1d", cup: "#ed145b" },
+      headphones: { on: false, col: "#1d1d1d", cup: "#ed145b" },   // (off: the user, 2026-10-26 "let's change lydia's design to NOT have headphones"; they're an accessory now, either girl's)
       prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 } },
     move: { set: "sword", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 },   // (June's moves, no floating; her own standing pose, 2026-10-25)
       anims: { spin: {   // (her air spin's feet: the front one lifted less, the back one a little more mid-turn: the user's file, 2026-10-26 "there was one where the leg twist seemed higher so i lowered the lift on the front foot")

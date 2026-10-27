@@ -274,6 +274,9 @@
   #pwRows { display: flex; gap: 18px; font: 600 11px/1.3 "Jost", sans-serif; letter-spacing: .1em; } .pwHero { display: flex; flex-direction: column; gap: 2px; } .pwHero b { font: 13px/1.1 "Bungee", sans-serif; letter-spacing: .04em; }
   #wearCv canvas { display: block; width: min(480px, 80vw); height: auto; aspect-ratio: 2 / 1; margin: 0 auto 6px; background: rgba(47, 59, 67, .08); }
   #wearRows { flex-direction: column; align-items: stretch; min-width: min(440px, 84vw); }
+  #songRows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; min-width: min(420px, 84vw); max-height: 56vh; overflow-y: auto; }   /* SONGS: the headphones' songs, scrolling */
+  #songRows button { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex: 0 0 auto; } #songRows .sgv { min-width: 1em; text-align: right; }
+  @media (max-height: 560px) { #songs .lockup .bar, #songs small { display: none; } #songs .panel .blk { font-size: 22px; } #songRows button { padding-top: 4px; padding-bottom: 3px; font-size: 11px; min-height: 0; } #songRows { gap: 3px; max-height: 62vh; } }
   #wearRows button { display: flex; justify-content: space-between; align-items: center; gap: 18px; } #wearRows .wHero { border-bottom: 3px solid var(--s); margin-bottom: 4px; } #wearRows .wv { display: inline-flex; align-items: center; gap: 6px; } #wearRows .wv svg { width: 24px; height: 24px; }
   @media (max-height: 560px) { #wearCv canvas { width: 250px; margin-bottom: 2px; } #wear .lockup .bar, #wear small { display: none; } #wear .panel .blk { font-size: 22px; } #wearRows button { padding-top: 4px; padding-bottom: 3px; font-size: 11px; min-height: 0; } #wearRows { gap: 3px; } }   /* (a phone on its side: ACCESSORIES all on the screen) */
   @media (max-height: 560px) { #pwCv { display: none; } #pWear { padding: 4px 12px; } #pWear .pwH { display: none; } #pwRows { font-size: 10px; } }   /* (a phone on its side: the words only, the map keeps its room) */
@@ -538,9 +541,9 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261026g"></script>
+<script src="charkit.js?v=20261026h"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="score.js?v=20261025a"></script>
+<script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="story.js?v=20261018a"></script>
@@ -603,6 +606,11 @@
   <div id="wearCv"></div>
   <div class="btns" id="wearRows"></div>
   <small data-pad="↑ ↓ to choose &middot; ← → to change &middot; {sq} to go back">↑ ↓ to choose &middot; ← → to change &middot; Esc to go back</small>
+</div></div>
+<div id="songs" class="mnu"><div class="panel">
+  <div class="lockup"><div class="blk">SONGS</div><div class="bar" id="songSub">ON THE HEADPHONES</div></div>
+  <div class="btns" id="songRows"></div>
+  <small data-pad="↑ ↓ to choose &middot; {j} to play &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to play &middot; Esc to go back</small>
 </div></div>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
@@ -4395,7 +4403,35 @@ const bgm = {
   pause() { musicOn = false; orig.pause(); orig.volume = 0; if (window.BerryScore) window.BerryScore.stop(); },
 };
 let musicHub = false, musicQuick = 0;
+// the headphones (the user, 2026-10-26: "when either character puts them on, the music stops and they can go into the menu to change the song. it can play any
+// song from stages they've been through, and also we'll have casettes they can find to play new songs as well" · "the music will just replace whatever the stage
+// music is. however, the music will not change for the time of day as they just have headphones on"): on the hero you're playing, the stage's music goes; SONGS
+// (the pause menu) picks what plays instead: each world you've been to (its midday take; on the PC page its recording, where midday has one) and the cassettes found
+let freePhones = null;                               // (free play's pick)
+const phonesOn = () => mode === "play" && !!player && !!rig && GEAR_HEROES.includes(rig.id) && (gearState().wear[rig.id] || {}).ears === "phones";
+function phoneSongs() {
+  const out = [{ id: "off", name: "NO MUSIC" }], seen = new Set();
+  WORLDS.forEach((Wd, w) => { if (story && !story.visited.has(w)) return; const sg = Wd.song ?? w; if (seen.has(sg)) return; seen.add(sg);
+    const R = PC_REC[w], rec = window.BERRY_PC && R && R.hours.includes(0) ? R.src : null;
+    out.push({ id: "w" + w, name: Wd.name, song: sg, tempo: (Wd.screens && Wd.screens[0] && Wd.screens[0].tempo) || 1, rec }); });
+  TAPES.forEach(T => { if (tapeGot(T.id)) out.push({ id: T.id, name: T.name, song: T.song, tempo: 1, tape: true }); });
+  return out;
+}
+const phoneSong = () => { const id = story ? story.phones : freePhones, L = phoneSongs(); return L.find(q => q.id === id) || L[0]; };
+function phonesMusic(dt, P) {                        // (syncMusic, the headphones on: their song only, its one take, never the hour's)
+  const S = window.BerryScore, on = musicOn && !bgm.dataset.muted, rec = P.rec || null;
+  voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5); sfxMuffle(on && P.id !== "off");
+  if (rec && orig.getAttribute("src") !== rec && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = rec; }
+  const ov = on && rec && orig.getAttribute("src") === rec ? MUSIC_VOL * voDuck : 0;
+  if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / 1.2); orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);
+  if (ov > 0 && orig.paused) orig.play().catch(() => {}); if (ov === 0 && orig.volume < .003 && !orig.paused) orig.pause();
+  if (!S) return;
+  if (on && !rec && P.song !== undefined) { if (S.setGloom) S.setGloom(false); S.setSong(P.song); S.setHour(0, P.tempo || 1); S.tick(); if (ac && ac.state === "running") S.start(ac, MUSIC_VOL * voDuck); }
+  else if (S.state.playing) S.stop(1.2);
+}
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
+  if (phonesOn() && !pro && !tale) return phonesMusic(dt, phoneSong());   // (the headphones on: their song, not the stage's)
+  sfxMuffle(false);
   const pcPro = !!pro && !!window.BERRY_PC && !!PC_REC.prologue;   // (the PC page: the prologue's own song, all the way through it)
   const pcTale = !pcPro && !!tale && !!window.BERRY_PC && !!PC_REC.tale;   // (the PC page: the story so far over its own song, low under the voice)
   const glosWait = !pro && !!window.BERRY_PC && !!PC_REC[9] && world === 9 && !!opening && opening.t < 2.4;   // (the PC page: the beach's song comes in as Glos drops)
@@ -4440,7 +4476,7 @@ function reportSound() {
 }
 
 // ── sound effects: synthesized on the fly from tones and filtered noise, except the hits and swords, which are recordings (sfx.js, below)
-let ac = null, sfxBus = null, noiseBuf = null, sfxOn = true;
+let ac = null, sfxBus = null, noiseBuf = null, sfxOn = true, sfxLP = null, sfxMuf = false;   // (sfxLP: the effects' low-pass, wide open, closed down under the headphones' song)
 if (new URLSearchParams(location.search).has("mute")) { bgm.dataset.muted = "1"; sfxOn = false; }   // index.html?mute: silent from the first frame (for testing)
 try { const g0 = JSON.parse(localStorage.getItem("berry.settings.v1") || "{}"); if (!new URLSearchParams(location.search).has("mute")) { if (g0.sfx === false) sfxOn = false; if (g0.music === false) bgm.dataset.muted = "1"; } } catch { }   // (GAME SETTINGS: music, sound effects)
 function audio() {
@@ -4449,7 +4485,7 @@ function audio() {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null;
     ac = new AC(); sfxBus = ac.createGain(); sfxBus.gain.value = 3.4;                 // the effects were ~18 dB under the music; a limiter keeps the louder mix clean
     const lim = ac.createDynamicsCompressor(); lim.threshold.value = -10; lim.knee.value = 6; lim.ratio.value = 10; lim.attack.value = .002; lim.release.value = .14;
-    sfxBus.connect(lim); lim.connect(ac.destination);
+    sfxLP = ac.createBiquadFilter(); sfxLP.type = "lowpass"; sfxLP.frequency.value = 20000; sfxLP.Q.value = .5; sfxBus.connect(sfxLP); sfxLP.connect(lim); lim.connect(ac.destination); sfxMuf = false;
     const b = ac.createBuffer(1, 1, 22050), src = ac.createBufferSource(); src.buffer = b; src.connect(ac.destination); src.start(0);   // silent blip unlocks Safari
     noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -4459,6 +4495,10 @@ function audio() {
   return ac;
 }
 const live = () => sfxOn && ac && ac.state === "running";
+function sfxMuffle(on) {                             // (the user, 2026-10-26: "when the music is playing, all sound effects will play muzzled so it sounds like the music is blocking out the sound")
+  if (!ac || !sfxLP || sfxMuf === on) return; sfxMuf = on; const t = ac.currentTime;
+  sfxLP.frequency.cancelScheduledValues(t); sfxLP.frequency.setTargetAtTime(on ? 620 : 20000, t, .12); sfxBus.gain.cancelScheduledValues(t); sfxBus.gain.setTargetAtTime(on ? 3.4 * .62 : 3.4, t, .12);
+}
 // the sound coming back (the user, 2026-10-24: "sometimes the sound just goes off on the mobile version and we have to quit out"): a call, a
 // notification, another app or the screen going off leaves a phone's audio "interrupted", and the game never woke it from that. Now any tap
 // or key wakes it (a tap's end and a click count as a gesture on an iPhone; a pointer going down doesn't), coming back to the game tries
@@ -4515,7 +4555,7 @@ function syncBugs() {
   if (!ac || ac.state !== "running") return;
   if (bugs.state === "idle") bugsInit();
   if (bugs.state !== "ready") return;
-  const on = sfxOn && (mode === "play" || mode === "opp") && !tale, lv = on ? SCREENS[hour].bugs.map(v => v * (vo && vo.src ? .5 : 1)) : [0, 0], t = ac.currentTime;
+  const on = sfxOn && (mode === "play" || mode === "opp") && !tale, lv = on ? SCREENS[hour].bugs.map(v => v * (vo && vo.src ? .5 : 1) * (sfxMuf ? .3 : 1)) : [0, 0], t = ac.currentTime;   // (under the headphones' song: far off)
   lv.forEach((v, i) => { if (v !== bugs.lvl[i]) { bugs.layers[i].gain.setTargetAtTime(v * [.3, .45][i], t, 1.4); bugs.lvl[i] = v; } });   // the cicadas sit at −22 dB rms, the coquís at −25 (so 3 dB more here); this lands them under the music
 }
 // ── the coast: a surf loop under everything and sea birds calling now and then (shore.js: real recordings, none needing credit).
@@ -4534,7 +4574,7 @@ function syncShore(dt) {
   if (shore.state === "idle") shoreInit();
   if (shore.state !== "ready") return;
   const on = sfxOn && !tale && (world === 1 || world === 9 || (world === 2 && STAGES[stage] && STAGES[stage].outside)) && (mode === "play" || mode === "opp" || mode === "world"), L = on ? (SCREENS[hour].shore || [0, 0]) : [0, 0];
-  if (L[0] !== shore.lvl) { shore.surfG.gain.setTargetAtTime(L[0] * .42, ac.currentTime, 1.4); shore.lvl = L[0]; }
+  if (L[0] * (sfxMuf ? .3 : 1) !== shore.lvl) { shore.lvl = L[0] * (sfxMuf ? .3 : 1); shore.surfG.gain.setTargetAtTime(shore.lvl * .42, ac.currentTime, 1.4); }   // (under the headphones' song: far off)
   if (L[1] > 0 && (shore.next -= dt) <= 0) {
     shore.next = rand(6, 14) / Math.sqrt(L[1]);
     const src = ac.createBufferSource(), g = ac.createGain(), pan = ac.createStereoPanner();
@@ -5382,9 +5422,10 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+const PAUSE_LABEL = { songs: "SONGS", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "wear", "ach", "vlog", "quit"] : ["resume", "wear", "ach", "vlog", "lvl", "home"];   // (GAME LOG: the stats and the narration)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
+  if (phonesOn()) PAUSE_OPTS.splice(PAUSE_OPTS.indexOf("wear") + 1, 0, "songs");   // (the headphones on: what they play)
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
 function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); drawPauseWear(); syncMini(); drawPauseMap(); }
@@ -5429,6 +5470,7 @@ function pauseChoose(what) {
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
   if (what === "vlog") { SFX.confirm(); showVlog("pause"); return; }
   if (what === "wear") { SFX.confirm(); openWear(); return; }   // (what Camila and Rose wear: the user, 2026-10-26)
+  if (what === "songs") { SFX.confirm(); openSongs(); return; }   // (the headphones' songs)
   if (what === "lvl") { SFX.confirm(); showLvl(); return; }
   if (what === "map") { SFX.confirm(); openMap(); return; }
   closePause(); SFX.confirm();
@@ -5437,6 +5479,7 @@ function pauseChoose(what) {
 }
 $("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) pauseChoose(b.dataset.p); });
+$("songRows").addEventListener("click", e => { const b = e.target.closest("[data-sg]"); if (!b || menuUp !== "songs") return; if (b.dataset.sg === "done") return closeSongs(); songSel = +b.dataset.sg; songPick(songSel); markMenu(); });
 $("pWear").addEventListener("click", () => { if (paused && !menuUp && PAUSE_OPTS.includes("wear")) { SFX.confirm(); openWear(); } });
 $("wearRows").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (!b || menuUp !== "wear") return; if (b.dataset.w === "done") return closeWear();
   const i = +b.dataset.w, r = b.getBoundingClientRect(); wearSel = i; wearCycle(i, e.clientX < r.left + r.width * .55 ? -1 : 1); });
@@ -5880,7 +5923,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
 function writeSave() {
   if (pro || (rideS && rideS.road)) return;          // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, phones: story.phones || null, tapes: story.tapes || [], cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -6123,6 +6166,7 @@ function markMenu() {
   if (menuUp === "team" && teamAsk) [...$("teamBtns").children].forEach((b, i) => b.classList.toggle("on", i === teamAsk.sel));
   if (menuUp === "rideask") [...$("raBtns").children].forEach((b, i) => b.classList.toggle("on", i === rideAskSel));
   if (menuUp === "wear") wearMark();
+  if (menuUp === "songs") [...$("songRows").children].forEach((b, i) => { b.classList.toggle("on", i === songSel); if (i === songSel) b.scrollIntoView({ block: "nearest", behavior: "instant" }); });
   if (menuUp === "rideskip") [...$("skBtns").children].forEach((b, i) => b.classList.toggle("on", i === skipSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
@@ -6133,6 +6177,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "rideask") { if (d) { rideAskSel = 1 - rideAskSel; SFX.tick(); markMenu(); } if (ok) rideAnswer(rideAskSel === 0); if (back) rideAnswer(false); return; }
   if (M === "wear") { wearNav(d, ok, back, vert); return; }
+  if (M === "songs") { songsNav(d, ok, back, vert); return; }
   if (M === "rideskip") { if (d) { skipSel = 1 - skipSel; SFX.tick(); markMenu(); } if (ok) skipAnswer(skipSel === 0); return; }   // (no going back from it: you're on your way)
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
@@ -6169,7 +6214,7 @@ function storyLoad(slot, q) { if (q.layout === 14) { const dw = o => { const r =
   if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null, phones: q.phones || null, tapes: q.tapes || [] }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -16981,6 +17026,7 @@ const ACC = {
   larimar_wrist: { slot: "wrist", name: "LARIMAR BRACELET", price: 70, desc: "SKY-BLUE LARIMAR IN SILVER, ON HER RIGHT WRIST" },
   larimar_ears: { slot: "ears", pl: true, name: "LARIMAR EARRINGS", price: 70, desc: "LARIMAR DROPS IN SILVER" },
   hat_straw: { slot: "hat", name: "STRAW HAT", price: 50, desc: "A WOVEN BEACH HAT, ITS BRIM ALL FRAYED" },
+  phones: { slot: "ears", pl: true, name: "HEADPHONES", price: 60, desc: "PUT THEM ON, THEN PICK A SONG: PAUSE MENU, SONGS" },   // (the user, 2026-10-26: "we will make headphones an item you can buy as well")
 };
 const GEAR_HEROES = ["camila", "rose"], GEAR_WPN = { camila: "GAUNTLET", rose: "HILT" }, GEAR_SLOTS = ["head", "hat", "ears", "wrist", "weapon"], SLOT_NAME = { head: "FACE", hat: "HAT", ears: "EARS", wrist: "WRIST" };
 const slotName = (hero, slot) => SLOT_NAME[slot] || GEAR_WPN[hero];
@@ -17000,6 +17046,7 @@ const ACC_SVG = {                                    // (the stand's and the men
   charm: '<svg viewBox="0 0 40 40"><path d="M20 3 V13" stroke="#ff4fa3" stroke-width="2.6"/><path d="M20 13 L23 21 L32 21 L25 26 L28 35 L20 30 L12 35 L15 26 L8 21 L17 21 Z" fill="#e8a400" stroke="#2f3b43" stroke-width="2.2" stroke-linejoin="round"/></svg>' };
 const ACC_TINT = { shades_star: ["#3a1d52", "#ff4fa3"], shades_round: ["#1c3550", "#ffc81e"], mask_lucha: ["#2a5bd6", "#ffd21a"], mask_berry: ["#e8242f", "#3db04a"], band_red: ["#e8242f"], band_teal: ["#17b3a6"], charm_star: ["#ffd21a"], charm_berry: ["#e8242f"] };
 const ACC_SVG2 = {                                   // (the second set's own pictures)
+  phones: '<svg viewBox="0 0 40 40"><path d="M8 24 Q8 6 20 6 Q32 6 32 24" fill="none" stroke="#1d1d1d" stroke-width="4"/><rect x="4" y="20" width="9" height="14" rx="4" fill="#ed145b" stroke="#2f3b43" stroke-width="2"/><rect x="27" y="20" width="9" height="14" rx="4" fill="#ed145b" stroke="#2f3b43" stroke-width="2"/></svg>',
   hat_straw: '<svg viewBox="0 0 40 40"><path d="M2 25 Q20 34 38 25 Q30 20 20 21 Q10 20 2 25 Z" fill="#c9a35f" stroke="#2f3b43" stroke-width="2"/><path d="M11 23 Q11 10 20 10 Q29 10 29 23" fill="#d8b46a" stroke="#2f3b43" stroke-width="2"/><path d="M1 27 L-1 30 M6 29 L4 33 M34 29 L37 32 M39 26 L41 28" stroke="#b38a47" stroke-width="2"/></svg>',
   larimar_wrist: '<svg viewBox="0 0 40 40"><ellipse cx="20" cy="20" rx="15" ry="9" fill="none" stroke="#c7cfd6" stroke-width="4"/><ellipse cx="20" cy="27" rx="6" ry="5" fill="#7fd3ea" stroke="#2f3b43" stroke-width="2"/><path d="M17 26 Q20 24 23 28" stroke="#fff" stroke-width="1.4" fill="none"/></svg>',
   larimar_ears: '<svg viewBox="0 0 40 40"><path d="M11 4 Q15 4 13 9 M27 4 Q31 4 29 9" fill="none" stroke="#c7cfd6" stroke-width="2.4"/><path d="M12 10 Q19 20 12 27 Q5 20 12 10 Z M28 10 Q35 20 28 27 Q21 20 28 10 Z" fill="#7fd3ea" stroke="#2f3b43" stroke-width="2"/></svg>',
@@ -17174,6 +17221,21 @@ function buildHat(top) {                             // a woven straw beach hat:
     s2.position.set(Math.cos(a) * .57, -.06, Math.sin(a) * .57); s2.rotation.set(0, -a + (R() - .5) * .5, -.25 - R() * .5); g.add(s2); }   // (the fray: straw sticking out every which way)
   g.position.set(-.03, top - .14, 0); g.rotation.z = .14; return g;   // (down onto her hair a little, its crown over it)
 }
+function buildPhones(r) {                            // HEADPHONES: the pair Rose used to wear, a black band over her hair and a magenta cup on each ear
+  const g = new THREE.Group(), mB = toon("#1d1d1d"), mC = toon("#ed145b"), E = r.ears.map(e => e.position);
+  const cx = (E[0].x + E[1].x) / 2 - .02, cy = (E[0].y + E[1].y) / 2 + .02, a = Math.max(...E.map(p => Math.abs(p.z))) + .05, b = clamp(phonesCrown(r, cx) + .035 - cy, .2, .8), pts = [];
+  for (let i = 0; i <= 16; i++) { const th = -Math.PI / 2 + Math.PI * i / 16; pts.push(new THREE.Vector3(cx, cy + Math.cos(th) * b, Math.sin(th) * a)); }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, .026, 8), mB));
+  E.forEach(p => { const s = Math.sign(p.z) || 1, cup = new THREE.Group(); cup.position.set(cx, cy, s * (a - .01)); g.add(cup);
+    cup.add(new THREE.Mesh(new THREE.CylinderGeometry(.115, .115, .085, 22).rotateX(Math.PI / 2), mC)); cup.add(at(new THREE.Mesh(new THREE.TorusGeometry(.112, .02, 8, 24), mB), 0, 0, s * .044)); });
+  return g;
+}
+function phonesCrown(r, x) {                         // (the headphones' band: how high her hair is straight over her ears, not a ponytail up behind: a ray down onto it, head space)
+  r.root.updateMatrixWorld(true); const G = r.__gear ? r.__gear.nodes : [], M = [];
+  r.head.traverse(o => { if (!o.isMesh || !o.visible) return; for (let p = o; p; p = p.parent) if (G.includes(p)) return; M.push(o); });
+  const o0 = r.head.localToWorld(new THREE.Vector3(x, 2, 0)), o1 = r.head.localToWorld(new THREE.Vector3(x, -1, 0)), dir = o1.sub(o0).normalize();
+  const hit = new THREE.Raycaster(o0, dir).intersectObjects(M, false)[0]; return hit ? r.head.worldToLocal(hit.point.clone()).y : gearTop(r);
+}
 function gearTop(r) {                                // the top of her hair over her head (head space), for the hat to sit on
   if (r.__hairTop !== undefined) return r.__hairTop; r.root.updateMatrixWorld(true); const inv = r.head.matrixWorld.clone().invert(), G = r.__gear ? r.__gear.nodes : []; let top = .35;
   r.head.traverse(o => { if (!o.isMesh || !o.geometry) return; for (let p = o; p; p = p.parent) if (G.includes(p)) return; o.geometry.computeBoundingBox(); const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld).applyMatrix4(inv); if (Math.abs((b.min.x + b.max.x) / 2) < .4) top = Math.max(top, b.max.y); });
@@ -17197,7 +17259,8 @@ function dressGear(r, wear) {
       const H = r.hands[hi], rad = gearArmR(r, hi) / (H.scale.x || 1), B2 = buildBand(wear.weapon, rad, 1.7); B2.g.position.set(0, .22 / (H.scale.x || 1), 0); put(H, B2.g); G.bands.push(B2); }
     else if (pr.kind === "sword" && pr.inner) { const piv = buildCharm(wear.weapon); piv.position.set(-.17, 0, 0); put(pr.inner, piv); hang(piv); } }
   if (wear.hat && ACC[wear.hat] && r.head) put(r.head, buildHat(gearTop(r)));
-  if (wear.ears && ACC[wear.ears] && r.head && r.ears) { const hp = r.spec.outfit.headphones && r.spec.outfit.headphones.on;   // (from each ear: under the headphones' cups if she's got them on)
+  if (wear.ears === "phones" && r.head && r.ears) put(r.head, buildPhones(r));   // (the headphones: over her hair, a cup on each ear)
+  else if (wear.ears && ACC[wear.ears] && r.head && r.ears) { const hp = r.spec.outfit.headphones && r.spec.outfit.headphones.on;   // (from each ear: under the headphones' cups if she's got them on)
     r.ears.forEach(e => { const s = Math.sign(e.position.z) || 1, piv = buildEarring(); piv.position.set(e.position.x + .01, e.position.y - (hp ? .1 : .05), e.position.z + s * .015); put(r.head, piv); hang(piv); }); }
   if (wear.wrist && ACC[wear.wrist] && r.hands && r.hands[1]) { const H = r.hands[1], t = r.arms && r.arms[1], rad = (t && t.prof ? Math.min(.11, Math.max(.062, t.prof(.93) * 1.05 + .012)) : .075) / (H.scale.x || 1), B = buildBracelet(rad); B.position.y = .03; put(H, B); }   // (her right hand: hands[1])
   if (r.mats) r.mats.push(...G.mats);
@@ -17268,6 +17331,21 @@ function drawPauseWear() {
 let wearSel = 0, wearHero = "camila";               // (the rows: 0 whose (CAMILA or ROSE), 1-5 her spots, 6 DONE)
 const WN = GEAR_SLOTS.length + 2;
 function openWear() { menuUp = "wear"; wearSel = 0; wearHero = (story && story.char) || (rig && GEAR_HEROES.includes(rig.id) ? rig.id : "camila"); $("pause").style.visibility = "hidden"; $("wear").classList.add("show"); drawWear(); markMenu(); }
+let songSel = 0;                                     // (SONGS: the rows are the songs, then DONE)
+function openSongs() { menuUp = "songs"; const L = phoneSongs(), cur = phoneSong(); songSel = Math.max(0, L.findIndex(q => q.id === cur.id)); $("pause").style.visibility = "hidden"; $("songs").classList.add("show"); drawSongs(); markMenu(); }
+function closeSongs() { $("songs").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); pauseButtons(); setPauseSel(Math.max(0, PAUSE_OPTS.indexOf("songs"))); }
+function drawSongs() {
+  const L = phoneSongs(), cur = phoneSong(), tp = TAPES.filter(T => tapeGot(T.id)).length;
+  $("songSub").textContent = `ON THE HEADPHONES · NOW: ${cur.name} · ${tp} OF ${TAPES.length} CASSETTES`;
+  $("songRows").innerHTML = L.map((q, i) => `<button data-sg="${i}" class="${q.id === cur.id ? "cur" : ""}"><span>${q.tape ? "▣ " : ""}${q.name}</span><span class="sgv">${q.id === cur.id ? "♪" : ""}</span></button>`).join("") + `<button data-sg="done">DONE</button>`;
+  markMenu();
+}
+function songPick(i) { const q = phoneSongs()[i]; if (!q) return; if (story) { story.phones = q.id; writeSave(); } else freePhones = q.id; SFX.tick(); drawSongs(); }
+function songsNav(d, ok, back, vert) {
+  const n = phoneSongs().length + 1; if (back) { closeSongs(); return; }
+  if (d) { songSel = (songSel + d + n) % n; SFX.tick(); markMenu(); return; }
+  if (ok) { if (songSel >= n - 1) closeSongs(); else songPick(songSel); }
+}
 function closeWear() { $("wear").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); drawPauseWear(); }
 function wearChoices(hero, slot) { const G = gearState(); return [null, ...Object.keys(ACC).filter(id => ACC[id].slot === slot && G.own.includes(id) && gearFits(id, hero))]; }
 function wearCycle(i, d) {
@@ -17331,6 +17409,13 @@ function lootRig(kind) {
   if (kind === "coin") { g.add(new THREE.Mesh(COIN_GEO, COIN_MATS)); return g; }
   if (kind === "fruit") { g.add(mk(ball(.24, 18, 14).scale(1.15, .9, .85), null, { mat: LOOT_M.mango, ol: .03 })); g.add(at(mk(ball(.12, 12, 10).scale(1, .8, .6), null, { mat: LOOT_M.blush, ol: 0 }), -.12, .08, .12));
     const lf = mk(ball(.1, 10, 8).scale(1.6, .3, .7), null, { mat: LOOT_M.leaf, ol: .015 }); at(lf, .12, .24, 0); lf.rotation.z = .5; g.add(lf); return g; }
+  if (kind === "tape") {                             // a cassette: slate shell, a yellow label with a pink band, two reels in the window
+    g.add(mk(new RoundedBoxGeometry(.5, .32, .07, 2, .03), null, { mat: toon("#2f3b43"), ol: .02 }));
+    [1, -1].forEach(sd => { const lb = new THREE.Mesh(new THREE.PlaneGeometry(.4, .17), toon("#ffd203")); lb.position.set(0, .04, sd * .037); if (sd < 0) lb.rotation.y = Math.PI; g.add(lb);
+      const bd = new THREE.Mesh(new THREE.PlaneGeometry(.4, .035), toon("#ed145b")); bd.position.set(0, .095, sd * .038); if (sd < 0) bd.rotation.y = Math.PI; g.add(bd);
+      const wn = new THREE.Mesh(new THREE.PlaneGeometry(.2, .06), toon("#1d1d1d")); wn.position.set(0, .02, sd * .039); if (sd < 0) wn.rotation.y = Math.PI; g.add(wn);
+      [-1, 1].forEach(k => { const rl = new THREE.Mesh(new THREE.CircleGeometry(.03, 12), toon("#f4f4f4")); rl.position.set(k * .07, .02, sd * .04); if (sd < 0) rl.rotation.y = Math.PI; g.add(rl); }); });
+    g.scale.setScalar(1.15); return g; }
   if (kind === "gum") { g.add(mk(ball(.2, 18, 14), null, { mat: LOOT_M.gum, ol: .03 })); [-1, 1].forEach(s => { const w = mk(new THREE.ConeGeometry(.12, .2, 4).rotateZ(s * Math.PI / 2), null, { mat: LOOT_M.wrap, ol: .015 }); at(w, s * .27, 0, 0); g.add(w); });
     g.add(at(new THREE.Mesh(ball(.05, 8, 6), BB_GLINT), -.07, .08, .14)); return g; }
   const sh = new THREE.Shape([[0, .3], [-.15, 0], [-.02, 0], [-.08, -.3], [.15, .06], [.02, .06], [.08, .3]].map(([x, y]) => new THREE.Vector2(x, y)));   // the power-up: a gold disc, a lightning bolt on it
@@ -17371,6 +17456,7 @@ function updateLoot(dt) {
 function takeLoot(q) {
   q.got = true; const B = bag();
   if (q.kind === "coin") { B.coins++; coinHud(true); SFX.coin(); return; }
+  if (q.kind === "tape") { if (q.id) markGot(q.id); gotTape(TAPES.find(t => "tape:" + t.id === q.id), q); return; }   // (a cassette: not for the bag, a song for the headphones)
   if (q.id) markGot(q.id);
   const it = ITEMS.find(i => i.k === q.kind); if (B[q.kind] >= BAG_MAX) { SFX.nope(); popText(q.x, q.y - 50, "BAG FULL"); q.got = false; q.y -= 1; return; }
   B[q.kind]++; SFX.gift(); sparks(q.x, q.y - 20, 10); popText(q.x, q.y - 60, it.name + "!");
@@ -17390,12 +17476,31 @@ function itemPlan(w) {
     if (best !== null) picked.push({ s: best, k, x: 500 + Math.floor(R() * 15) * 100 }); }
   return (ITEM_PLAN[w] = picked);
 }
+// the cassettes (the user, 2026-10-26: "we'll have casettes they can find to play new songs as well"): one in each of five worlds, lying about in a room of
+// its own (the same one every time, not one with an item in it). Each is a song for the headphones (SONGS in the pause menu): my own tunes, score.js 14-18
+const TAPES = [{ id: "tape1", name: "GUAGUA GROOVE", song: 14, w: 0 }, { id: "tape2", name: "LARIMAR LULLABY", song: 15, w: 1 }, { id: "tape3", name: "BEP BOUNCE", song: 16, w: 3 },
+  { id: "tape4", name: "NIGHT BUS HOME", song: 17, w: 7 }, { id: "tape5", name: "SPARKS FLY", song: 18, w: 10 }];
+const tapeGot = id => story ? (story.tapes || []).includes(id) : true;   // (free play: every song to try)
+const TAPE_PLAN = {};
+function tapePlan(w) {
+  if (TAPE_PLAN[w] !== undefined) return TAPE_PLAN[w];
+  const S0 = WORLDS[w].stages, R = rngF(9001 + w * 31), used = itemPlan(w).map(q => q.s);
+  const ok = S0.map((q, i) => i).filter(i => i > 0 && S0[i].cell && !S0[i].arena && !S0[i].boss && !S0[i].peace && !S0[i].bep && !S0[i].gift && !S0[i].duo && !S0[i].hub && !used.includes(i) && !(S0[i].deep && S0[i].gaps));
+  return (TAPE_PLAN[w] = ok.length ? { s: ok[Math.floor(R() * ok.length)], x: 500 + Math.floor(R() * 15) * 100 } : null);
+}
+function gotTape(T, q) {
+  if (!T) return; if (story) { const L = story.tapes || (story.tapes = []); if (!L.includes(T.id)) L.push(T.id); }
+  SFX.gift(); sparks(q.x, q.y - 20, 12); popText(q.x, q.y - 60, "A CASSETTE!"); toast(`A CASSETTE: ${T.name} · WEAR HEADPHONES, THEN PAUSE: SONGS`, 4600); if (story) writeSave();
+}
 function spawnRoomItems() {
   if (!WORLDS[world] || world === 9 || stronghold || hideout || arena) return;
   (STAGES[stage].items || []).forEach(([k, x, y], i) => { const id = world + ":" + stage + ":fix" + i; if (itemGot(id)) return;   // (the room's own, in their places: [kind, x, y on a platform])
     spawnLoot(k, x, y ?? groundAt(x) ?? GROUND, false, id); if (y !== undefined) { const q = loot[loot.length - 1]; q.y = q.gy = y; } });
   itemPlan(world).forEach((q, i) => { if (q.s !== stage) return; const id = world + ":" + q.s + ":" + q.k + i; if (itemGot(id)) return;
     const x = crateSpot(q.x); if (x !== null) spawnLoot(q.k, x, groundAt(x) ?? GROUND, false, id); });
+  const T = TAPES.find(t => t.w === world), tp = T && tapePlan(world);   // (this world's cassette, in its room, till it's found)
+  if (tp && tp.s === stage && story && !tapeGot(T.id)) { let x = null; for (const c of [tp.x, 800, 1300, 1700, 600, 2000, 400]) { x = crateSpot(c); if (x !== null) break; }   // (its spot, or the next good one: always there to find)
+    if (x !== null) spawnLoot("tape", x, groundAt(x) ?? GROUND, false, "tape:" + T.id); }
 }
 
 // ── the items: hold the left trigger and the game stops while you pick one (the screen stays as it is, not darkened)
