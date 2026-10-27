@@ -17,6 +17,8 @@
 <style>
   :root { --y: #ffd203; --s: #2f3b43; --s2: #56646d; }
   html, body { margin: 0; height: 100%; background: var(--s); overflow: hidden; }
+  html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }   /* (a phone on its side: its browser left to itself blows the text up, every menu with it: the user, 2026-10-26 "almost everything is too big and not fitting the screen") */
+  .mnu, #ach, #lvl, #modal { box-sizing: border-box; padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }   /* (clear of a phone's notch and its home bar) */
   body { font-family: "Jost", "Avenir Next", "Futura", sans-serif; color: var(--s); user-select: none; }
   canvas { display: block; outline: none; }
   .hidden { display: none !important; }
@@ -274,13 +276,14 @@
   #pwRows { display: flex; gap: 18px; font: 600 11px/1.3 "Jost", sans-serif; letter-spacing: .1em; } .pwHero { display: flex; flex-direction: column; gap: 2px; } .pwHero b { font: 13px/1.1 "Bungee", sans-serif; letter-spacing: .04em; }
   #wearCv canvas { display: block; width: min(480px, 80vw); height: auto; aspect-ratio: 2 / 1; margin: 0 auto 6px; background: rgba(47, 59, 67, .08); }
   #wearRows { flex-direction: column; align-items: stretch; min-width: min(440px, 84vw); }
-  #songRows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; min-width: min(420px, 84vw); max-height: 56vh; overflow-y: auto; }   /* SONGS: the headphones' songs, scrolling */
+  #songRows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; min-width: min(420px, 84vw); max-height: 56vh; overflow-y: auto; }   /* SONGS: the headphones' songs, scrolling */
   #songRows button { display: flex; justify-content: space-between; align-items: center; gap: 18px; flex: 0 0 auto; } #songRows .sgv { min-width: 1em; text-align: right; }
   @media (max-height: 560px) { #songs .lockup .bar, #songs small { display: none; } #songs .panel .blk { font-size: 22px; } #songRows button { padding-top: 4px; padding-bottom: 3px; font-size: 11px; min-height: 0; } #songRows { gap: 3px; max-height: 62vh; } }
   #wearRows button { display: flex; justify-content: space-between; align-items: center; gap: 18px; } #wearRows .wHero { border-bottom: 3px solid var(--s); margin-bottom: 4px; } #wearRows .wv { display: inline-flex; align-items: center; gap: 6px; } #wearRows .wv svg { width: 24px; height: 24px; }
   @media (max-height: 560px) { #wearCv canvas { width: 250px; margin-bottom: 2px; } #wear .lockup .bar, #wear small { display: none; } #wear .panel .blk { font-size: 22px; } #wearRows button { padding-top: 4px; padding-bottom: 3px; font-size: 11px; min-height: 0; } #wearRows { gap: 3px; } }   /* (a phone on its side: ACCESSORIES all on the screen) */
   @media (max-height: 560px) { #pwCv { display: none; } #pWear { padding: 4px 12px; } #pWear .pwH { display: none; } #pwRows { font-size: 10px; } }   /* (a phone on its side: the words only, the map keeps its room) */
   #pause .panel { max-width: none; padding: 14px 20px 12px; }
+  #pause .pwrap { padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(18px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }   /* (clear of a phone's notch) */
   #pause .btns { justify-content: center; }
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
   #pAsk.hidden { display: none; }
@@ -6081,6 +6084,23 @@ function drawPauseMap() {                            // the whole world on the p
     g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
 }
 addEventListener("resize", () => { if (paused && $("pause").classList.contains("show")) drawPauseMap(); });
+// every menu fits the screen (the user, 2026-10-26: "please check all menus the load in mobile. almost everything is too big and not fitting the screen"): each open
+// panel shrunk, as a whole, to what's really showing (a phone's browser bars and notch taken off), never grown. Looked at a few times a second, and on a turn
+const FIT_SEL = ".mnu.show > .panel, #ach.show > .panel, #lvl.show > .panel, #modal.show > .panel, #pause.show .panel, #wstats.show > .wsIn";
+let fitProbe = null;
+function safeInsets() {
+  if (!fitProbe) { fitProbe = document.createElement("div"); fitProbe.style.cssText = "position:fixed;left:0;top:0;width:0;height:0;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)"; document.body.appendChild(fitProbe); }
+  const c = getComputedStyle(fitProbe); return [c.paddingTop, c.paddingRight, c.paddingBottom, c.paddingLeft].map(v => parseFloat(v) || 0);
+}
+function fitMenus() {
+  const vv = window.visualViewport, Wd = vv ? vv.width : innerWidth, Ht = vv ? vv.height : innerHeight, [t, r, b, l] = safeInsets(), aw = Wd - l - r - 12, ah = Ht - t - b - 10;
+  document.querySelectorAll(FIT_SEL).forEach(el => {
+    if (!el.offsetParent) return; const z0 = el.style.zoom; el.style.zoom = ""; const w = el.offsetWidth, h = el.offsetHeight;
+    if (!w || !h) { el.style.zoom = z0; return; }
+    const inPause = !!el.closest("#pause"), room = inPause ? ah * .62 : ah;   // (the pause menu's buttons: under the map, which shrinks to make room for them)
+    const f = Math.min(1, aw / w, room / h); el.style.zoom = f < .985 ? f.toFixed(3) : ""; });
+}
+setInterval(fitMenus, 250); addEventListener("resize", fitMenus); addEventListener("orientationchange", () => setTimeout(fitMenus, 300)); if (window.visualViewport) visualViewport.addEventListener("resize", fitMenus);
 function closeMenus() { vlogHush(); ["menu", "dev", "settings", "slots", "hero", "map", "vlog"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); menuUp = null; }
 function showMainMenu() {                            // over the bep crowd: NEW GAME, LOAD GAME, and the gear
   closeMenus(); story = null; mapSeen = {};
