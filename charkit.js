@@ -2553,12 +2553,26 @@ function turnSolve(p, r, id, th, o0, L0) {
 }
 const chanFor = (p, ch) => leadFar(p) ? SWAP[ch] || ch : ch;     // p.out channel → the spec's (lead / rear) name
 const _ku = new THREE.Vector3(), _kw = new THREE.Vector3();
-function kneeIK(H, Hk, out, l1, l2) {             // 2-bone IK in 3D, knee bends forward (+x)
-  _ku.subVectors(Hk, H); const d = Math.min(Math.max(_ku.length(), 1e-4), (l1 + l2) * .999); _ku.normalize();
-  const a = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1));
-  _kw.set(1, 0, 0).addScaledVector(_ku, -_ku.x); if (_kw.lengthSq() < 1e-8) _kw.set(0, 0, 1); _kw.normalize();   // forward, square to the leg
-  return out.copy(H).addScaledVector(_ku, Math.cos(a) * l1).addScaledVector(_kw, Math.sin(a) * l1);
+const _kf = new THREE.Vector3();
+function kneeIK(H, Hk, out, l1, l2) {             // 2-bone IK in 3D, knee bends to the leg's front (+x when the leg hangs down)
+  _ku.subVectors(Hk, H); const d0 = Math.max(_ku.length(), 1e-4), d = Math.min(d0, (l1 + l2) * .999), k = d0 / d; _ku.normalize();   // k: out of reach, thigh and shin stretch together (it was all in the shin)
+  const a = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1)), ux = _ku.x, uy = _ku.y, uz = _ku.z, c = 1 / Math.max(1e-3, 1 - uy);
+  _kw.set(1, 0, 0).addScaledVector(_ku, -ux).normalize();   // forward, square to the leg (as before)
+  _kf.set(-uy + uz * uz * c, ux, -ux * uz * c).normalize();   // the leg's front turned with the leg: up on a leg raised in front, down on one swung back
+  _kw.lerp(_kf, clamp((uy + .5) / .35, 0, 1)).normalize();   // (the same when the foot's below the hip; past hip height the old one flipped over and broke the knee backwards, the user 2026-10-27)
+  return out.copy(H).addScaledVector(_ku, Math.cos(a) * l1 * k).addScaledVector(_kw, Math.sin(a) * l1 * k);
 }
+const _kr = new THREE.Vector3();
+function legReach(H, F, Hk, ankle, R, r0) {       // a foot keyed further than the leg reaches comes in to it: along the ground if it's planted, else toward the hip
+  const dx = Hk.x - H.x, dy = Hk.y - H.y, dz = Hk.z - H.z, d = Math.hypot(dx, dy, dz);
+  if (d < r0) { _kr.set(dx, dy - (r0 - d), dz).setLength(r0); F.set(H.x + _kr.x, Math.max(0, H.y + _kr.y - ankle), H.z + _kr.z); Hk.set(F.x, F.y + ankle, F.z); return; }   // one keyed into the hip is held out at the leg's fold, below it (it was folded flat, the knee whipping round as the foot passed the hip: Camila's uppercut crouch)
+  if (d <= R) return;
+  const h2 = dy * dy + dz * dz;
+  if (F.y < .001 && h2 < R * R * .98) F.x = H.x + Math.sign(dx) * Math.sqrt(R * R - h2);
+  else { const s = R / d; F.x = H.x + dx * s; F.y = Math.max(0, H.y + dy * s - ankle); F.z = H.z + dz * s; }
+  Hk.set(F.x, F.y + ankle, F.z);
+}
+const LEG_STRETCH = 1.1, LEG_FOLD = .25;         // how far past its length a leg may stretch (squash and stretch) before the foot comes in; how near the hip a fully bent leg brings the ankle (of the leg's length)
 function syncCat(p, r, dt = 0) {
   const o = p.out, Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
   const HIPY = .6 * Bd.legs, L_TH = .3 * Bd.legs, L_SH = .3 * Bd.legs, L_MT = .17 * Bd.legs, SPINE_L = .23 * Bd.torso,
@@ -2782,7 +2796,7 @@ function syncHuman(p, r, dt = 0) {
     const isNear = s === near, fx = isNear ? o.fNx : o.fFx, fy = isNear ? o.fNy : o.fFy; let pitch = isNear ? o.pN : o.pF;
     _H.set(_P[1].x, _P[1].y - .05, s * D.legW * gw);
     _F.set(_H.x + fx * ds, Math.max(0, fy * ds), s * (D.footW * gw + (isNear ? o.fNz || 0 : o.fFz || 0) * .5 * Bd.legs));   // spread: 1 = half a unit out
-    _Hk.set(_F.x, _F.y + D.ankle, _F.z);
+    _Hk.set(_F.x, _F.y + D.ankle, _F.z); legReach(_H, _F, _Hk, D.ankle, (H_TH + H_SH) * LEG_STRETCH, (H_TH + H_SH) * LEG_FOLD);
     kneeIK(_H, _Hk, _K, H_TH, H_SH);
     const heel = (isNear ? o.hN : o.hF) || 0;
     if (heel > .001 && fy < .02) {                                    // up on the ball of the foot (heel raised, toe still down), the leg reaching just as far so the knee doesn't fold more
