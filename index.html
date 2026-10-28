@@ -560,7 +560,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261027b"></script>
+<script src="charkit.js?v=20261027c"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -747,7 +747,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261027a"></script>
+<script src="editor.js?v=20261027b"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -867,7 +867,8 @@ function koShow() {                                 // knocked out in the story:
   $("koSub").textContent = lost > 0 ? `THE UPRISING DROPS TO ${Math.max(0, Math.floor(upPct(world)))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");   // (one number, never a minus: "it shows two numbers", the user, 2026-10-23)
   if (story) writeSave();
 }
-function newStay() { koStay = 0; bossDown = false; bossNotAt = -1; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); }
+let crumbleGone = new Set(), dropNext = false, heroNext = false;   // (dropNext: a new stay in a world, its drops to pick once the room's set up: dropPick)                         // (the breakable platforms broken this stay: spawnCrumbles)
+function newStay() { crumbleGone = new Set(); dropNext = true; heroNext = true; heroSaid = new Set(); koStay = 0; bossDown = false; bossNotAt = -1; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); }
 const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a way out of the world, the room to the left, back the way you came, or the world before
   if (S0.exitLeft && S0.toWorld !== undefined) return "out";
   if (S0.prev !== undefined) return S0.prev;
@@ -901,7 +902,7 @@ function groundAt(x) {                    // the ground's height at x (px), or n
 const stepXs = () => PROFILE.filter((q, i) => i && PROFILE[i - 1][0] === q[0]).map(q => q[0]);   // where the sheer steps are
 function setPlatforms(s) {
   PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; const S = STAGES[s];
-  (S.plats || SCREENS[S.h][S.boss ? "plats" : "plats2"]).forEach(([x, y, w, kind]) => PLATFORMS.push({ x, y, w, kind }));
+  (S.plats || SCREENS[S.h][S.boss ? "plats" : "plats2"]).forEach(([x, y, w, kind], i) => { if (S.crumble && crumbleGone.has(world + ":" + s + ":" + i)) return; PLATFORMS.push(S.crumble ? { x, y, w, kind, crumble: i } : { x, y, w, kind }); });   // (a room's breakable platforms: the broken ones gone till you're back in the world)
   (S.gaps || []).forEach(g => GAPS.push(g));
   let d = 0; (S.steps || []).forEach(([x, dy]) => { PROFILE.push([x, d], [x, dy]); d = dy; });   // steps: [x, dy] → a sheer step at x
   (S.ground || []).forEach(q => PROFILE.push(q)); PROFILE.sort((a, b) => a[0] - b[0]);
@@ -1752,7 +1753,7 @@ function syncFoe(e, r, dt = 0) {
   settleJoints(r, e, dt);
   if (r.flip) r.tilt.rotation.z += ez(r.flip) * TAU;   // (the back flip over the spring's pose: a whole turn, so landing out of it is seamless)
   if (r.chains.length) { r.root.updateMatrixWorld(true); updateChains(r, e, dt); }
-  FLASHSET(r.mats, e.flash > 0 || (e.dead && Math.floor(e.deathT * 16) % 2 === 0) ? .95 : 0);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0);
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -2034,7 +2035,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   // platforms: a limestone slab with a mossy cap, drips and vines (and giant malanga leaves, a shelf of moss and bromeliads on a ceiba, fallen palm trunks, the land above jutting out)
   const barkM = toon("#6b5040"), ringM = toon("#c9a77a"), shelfEdgeM = toon("#5f4c3a");
   for (const p of PLATFORMS) {
-    if (p.kind === "bridge" || p.kind === "camTop") continue;   // (a bridge, the top of Camila's rock: buildSet's)
+    if (p.kind === "bridge" || p.kind === "camTop" || p.crumble !== undefined) continue;   // (a bridge, the top of Camila's rock: buildSet's · a breakable one: crumbleRig's)
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
     if (p.kind === "shroom") {                      // a giant malanga (yautía) leaf held out flat on its long stalk, a clump of smaller ones at its foot: stand on it
       const sc = (w + 1.7) / 2.1, nx = cx - .55 * sc, x0 = (cx - w / 2 - nx) / sc, x1 = (cx + w / 2 - nx) / sc, lg = new THREE.ExtrudeGeometry(heartShape(), { depth: .16, bevelEnabled: false, curveSegments: 2 }).rotateX(Math.PI / 2);
@@ -3554,32 +3555,63 @@ function syncBloom() {
   const a = F.geo.attributes.position, camL = camX - 22; F.seeds.forEach(([x, p, z, ph], i) => { const u = (p + time * .03) % 1; a.setXYZ(i, camL + ((X(x) - camL) % 44 + 44) % 44 + Math.sin(time * .7 + ph) * .5, Y(GROUND) + .4 + u * 6, z); }); a.needsUpdate = true;
 }
 let restCamp = null;
+// the white plastic chair (the user's photo, 2026-10-27: "for the checkpoints and hubs that have the fire, let's add these white plastic chairs"): a monobloc,
+// its seat 1 unit up (scaled to whoever sits in it), a shell back curving round with four slots in it, the arms sweeping down into the front legs, the legs splayed
+let CHAIR_TEX = null;
+function buildChair() {
+  const g = new THREE.Group(), m = toon("#f3f2ec"), mS = toon("#dcdbd3");
+  if (!CHAIR_TEX) CHAIR_TEX = tex(128, 64, (c, w, h) => { c.fillStyle = "#ffffff"; c.fillRect(0, 0, w, h); c.globalCompositeOperation = "destination-out";   // (the back's four slots, fanning out)
+    for (let i = 0; i < 4; i++) { const x = w * (.26 + i * .16); c.beginPath(); c.ellipse(x, h * .52, w * .028, h * .3, (i - 1.5) * .12, 0, TAU); c.fill(); } });
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(.92, .1, .84), m); seat.position.set(0, .97, .02); g.add(seat);   // the seat, its front edge rolled
+  const lip = new THREE.Mesh(new THREE.CylinderGeometry(.06, .06, .92, 10).rotateZ(Math.PI / 2), m); lip.position.set(0, .94, .44); g.add(lip);
+  const back = new THREE.Mesh(new THREE.CylinderGeometry(.56, .5, .78, 20, 1, true, Math.PI * .72, Math.PI * .56), toon("#f3f2ec", { map: CHAIR_TEX, alphaTest: .5, side: THREE.DoubleSide }));
+  back.position.set(0, 1.42, .2); g.add(back);   // the shell back, curving round behind the seat
+  const rimPts = []; for (let i = 0; i <= 16; i++) { const th = Math.PI * (.72 + .56 * i / 16); rimPts.push(new THREE.Vector3(.56 * Math.sin(th), 1.81, .2 + .56 * Math.cos(th))); }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(rimPts), 24, .045, 6), m));   // (its rolled top edge)
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(s * .43, 1.52, -.16), new THREE.Vector3(s * .52, 1.36, .22), new THREE.Vector3(s * .5, 1.3, .42), new THREE.Vector3(s * .47, 1.05, .46)]), 12, .045, 6), m); g.add(arm);   // an arm, down into the front leg
+    for (const z of [-1, 1]) { const L = new THREE.Mesh(new THREE.BoxGeometry(.1, 1.0, .12), z > 0 ? m : mS); L.position.set(s * .5, .48, z * .36); L.rotation.set(z * .14, 0, -s * .12); g.add(L); } }   // the legs, splayed out
+  return g;
+}
 function buildRestCamp(s) {                       // a campfire on a ring of stones, a log to sit on, a little pennant: the rest stop
   const x0 = (STAGES[s] || {}).restX ?? 1280; let x = x0; for (const d of [0, 80, -80, 160, -160, 240, -240, 320, -320]) { const q = x0 + d; if (groundAt(q) !== null && groundAt(q - 120) !== null && groundAt(q + 120) !== null && !PLATFORMS.some(p => q > p.x - 40 && q < p.x + p.w + 40 && p.y > GROUND - 140)) { x = q; break; } }   // (restX: where the user's map has the flame, the forest's B7)
   const y = groundAt(x) ?? GROUND, g = new THREE.Group(); g.position.set(X(x), Y(y), -.6); actors.add(g);
   const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
   for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .62, 6), i % 2 ? wood : woodD); m.rotation.set(Math.PI / 2 - .35, i / 3 * TAU, 0); m.position.y = .14; g.add(m); }
-  const bench = new THREE.Mesh(new THREE.CylinderGeometry(.17, .17, 1.3, 9).rotateZ(Math.PI / 2), wood); bench.position.set(1.05, .17, .25); g.add(bench);
+  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.5); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.7, 6), woodD); pole.position.set(-1.0, .85, -.1); g.add(pole);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(.62, .36), new THREE.MeshBasicMaterial({ color: "#ffd203", side: THREE.DoubleSide })); flag.position.set(-.68, 1.5, -.1); g.add(flag);
   const fl = (c, s, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.17 * s, .62 * s, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .2 + .31 * s; g.add(m); return m; };
   const flames = [fl("#ff7a1a", 1.25, .85), fl("#ffc23a", .95, .9), fl("#fff1b0", .55, .95)];
   const glow = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 3.4), new THREE.MeshBasicMaterial({ map: haloTex(), color: "#ffb35c", transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false })); glow.position.set(0, .55, .05); g.add(glow);
-  return { g, x, flames, glow, flag, healed: false };
+  return { g, x, flames, glow, flag, healed: false, chairs, sitT: 0 };
 }
-function syncRest() {                             // the fire flickering; walk up to it and you're healed in full
+const CHAIR_AT = [[108, 0, -.45], [-104, .1, .45], [-188, -.3, .3]];   // [px from the fire, depth (3D), turn]: yours on its right, the two partners' on its left
+const seatH = r => { const D = r.D, B = r.spec.body; return (D.hip * B.legs - .3 * D.step) * B.scale - .03; };   // (how high a chair's seat is for this one: sat up in it, p.chair, higher than a stump)
+function chairFit(C, k, r) { const c = C.chairs[k]; if (!c || !r) return; const h = seatH(r); if (h > .2) c.g.scale.setScalar(h); }   // (the chair made for them: its seat at their sitting height)
+function syncRest() {                             // the fire flickering; sit down in your chair by it and you're healed in full
   const C = restCamp; if (!C) return;
   C.flames.forEach((m, i) => { const f = 1 + .14 * Math.sin(time * (11 + i * 3) + i) + .08 * Math.sin(time * 23 + i * 2); m.scale.set(1 / f, f, 1 / f); m.rotation.y = time * (1 + i); });
   C.glow.material.opacity = .45 + .1 * Math.sin(time * 9) + .05 * Math.sin(time * 17); C.flag.rotation.y = Math.sin(time * 2.2) * .35;
-  const p = player; if (C.healed || !p || p.dead || mode !== "play" || Math.abs(p.x - C.x) > 150) return;
+  const p = player, dt = clamp(time - (C.lastT ?? time), 0, .1); C.lastT = time; if (!p || p.dead || mode !== "play" || p.auto) return;
+  if (!C.fit) { C.fit = true; chairFit(C, 0, p.rig); }   // (yours, sized to you)
+  const cx = C.chairs[0].x;
+  if (!p.sit) { if (Math.abs(p.x - cx) > 70) C.offSeat = true;   // (the user, 2026-10-27: "the player has to sit down to regain their health"): stand still at your chair and down you sit
+    if (!C.told && !C.healed && Math.abs(p.x - C.x) < 260) { C.told = true; toast("SIT IN YOUR CHAIR BY THE FIRE TO REST", 3200); }
+    const still = !held.left && !held.right && p.onGround && Math.abs(p.vx) < 20 && Math.abs(p.x - cx) < 30 && C.offSeat !== false;
+    C.sitIdle = still ? (C.sitIdle || 0) + dt : 0;
+    if (C.sitIdle > .35) { p.sit = 1; p.chair = true; p.x = cx; p.vx = 0; atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
+    return; }
+  p.x = cx; C.sitT += dt; if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); partnerList().forEach(P => { if ((P.q.php ?? PARTNER_HP) < PARTNER_HP) { P.q.php = PARTNER_HP; P.q.heartT = 2.2; } }); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");   // (your partners too: the user, 2026-10-26)
 }
 const CAMP_SPOT = { pal: [-66, -.1], pal2: [-24, .3], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85], ally1: [166, -.55], ally2: [-196, -.72] };   // where each one sits: [px from the fire, depth (3D)]
 function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
   const C = restCamp;
-  if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } return false; }
-  const [dx0, dz] = CAMP_SPOT[key], tx = C.x + dx0;
+  if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } s.chairK = undefined; s.chair = false; return false; }
+  if (r && C.chairs && s.chairK === undefined) { const k = [1, 2].find(i => !C.chairs[i].by); if (k !== undefined && seatH(r) > .2) { C.chairs[k].by = key; s.chairK = k; chairFit(C, k, r); } else s.chairK = -1; }   // (a chair if one's free: the first two to sit get them)
+  const ch = s.chairK > 0 ? C.chairs[s.chairK] : null, [dx0, dz] = ch ? [ch.x - C.x, ch.dz] : CAMP_SPOT[key], tx = C.x + dx0;
   if (s.sitAt !== C) {
     const dx = tx - s.x; s.campT = (s.campT || 0) + dt;
     if ((Math.abs(dx) > 10 || !s.onGround) && s.campT < 4 && s.y < WATER) {   // on its way over (down off a ledge first)
@@ -3593,10 +3625,10 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
     s.sitAt = C; s.campT = 0; s.x = tx; s.y = groundAt(tx) ?? s.y; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
     if (r) {                                       // a stump of its own, as high as it sits (low enough, it sits on the ground; legs too short to sit at all, it stands)
       const D = r.D, B = r.spec.body, h = (D.hip * B.legs - .42 * D.step) * B.scale - .03, gy = groundAt(tx) ?? GROUND, S2 = C.stumps || (C.stumps = {}); s.noSit = h < -.06;
-      if (h > .2 && !S2[key]) { S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); S2[key].position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(S2[key]); }
+      if (h > .2 && !S2[key] && !ch) { S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); S2[key].position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(S2[key]); }   // (in a chair: no stump)
     }
   }
-  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.chair = !!ch; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
   return true;
 }
 const HIDE_SIT = { pal: [-88, .3], pal2: [-132, .45], ej: [98, .05], ally: [-172, -.25], crew0: [-246, -.5], crew1: [176, -.55], ally1: [240, -.4], ally2: [-306, -.35] };   // sat beside you in a hideout: [px from the seat, depth (3D)]
@@ -3834,6 +3866,11 @@ function buildSet(s) {
       const sh = new THREE.Mesh(new THREE.CircleGeometry(1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d1a10", transparent: true, opacity: .32, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));   // its shade, over the camp
       sh.scale.set(P.spread ?? 7.5, 1, 4.2); at(sh, X(P.x), Y(gy) + .04, .2); g.add(sh); }
     if (P.k === "giant") giantTree(g, P.part || "trunk", X(P.x), Y(groundAt(P.x) ?? GROUND), P.z ?? 4.4, rng);
+    if (P.k === "earthBack") {                      // a stretch of the earth's wall at the back (the forest's B4: what its ledges jut out of), floor to ceiling, strata in it
+      const xa = X(P.x0), xb = X(P.x1), gy = Y(GROUND), mE = toon(P.col || "#7a5236"), mE2 = toon(P.col2 || "#5e3f29");
+      g.add(at(mk(new THREE.BoxGeometry(xb - xa, 16, 2), null, { mat: mE, ol: .04 }), (xa + xb) / 2, gy + 8, -4.2));
+      for (let y = gy + .6; y < gy + 15; y += R(.7, 1.4)) g.add(at(mk(new THREE.BoxGeometry(xb - xa + .05, R(.06, .14), .1), null, { mat: mE2, ol: 0 }), (xa + xb) / 2, y, -3.17));
+      for (let i = 0; i < 14; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.2, .45), 0), null, { mat: rng() < .5 ? mE2 : mE, ol: .03 }), R(xa, xb), gy + R(0, 14), -3.1)); }
     if (P.k === "earth") {                          // solid ground where the map has no room (the forest's B1, B4): a wall of earth at that end, strata and roots in it
       const sd = P.side, ex = sd < 0 ? 0 : X(WORLD), gy = Y(GROUND), mE = toon(P.col || "#7a5236"), mE2 = toon(P.col2 || "#5e3f29"), barkM = toon("#4a3426");
       const D = P.door, DH = 5, inD = (y, z) => D && y < gy + DH + .3 && z > -3.2;   // (door: a tunnel's mouth through it, low at the front: B5's, into B4)
@@ -3990,6 +4027,20 @@ function buildSet(s) {
         m.scale.set(R(.8, 1.6), len, 1); m.position.set(x + R(-.4, .4), top + .1, R(-6, -1.2)); m.rotation.set(R(-.1, .1), R(0, TAU), R(-.08, .08)); g.add(m); }
       for (let x = X(280); x < W0 + 6; x += R(1.2, 2.2)) g.add(at(mk(new THREE.IcosahedronGeometry(R(.8, 1.5), 0).scale(1.5, .55, 1), null, { mat: lv[Math.floor(R(0, 4))], ol: 0 }), x, top - R(0, .3), R(-6.5, -1.2)));   // (leaves bunched along its edge)
       for (let i = 0; i < 14; i++) tropLiana(g, M, X(R(400, WORLD)), top, R(-5, -1.2), R(2, 5.5), rng); }
+    if (P.k === "maga") {                           // a maga tree at the back (the forest's D3: "put a maga flower tree in the background of d3": the user, 2026-10-27): a grey-brown trunk forking low, a dense round crown of dark glossy leaves, the big crimson flowers all over it and fallen at its foot
+      const x = X(P.x), z = P.z ?? -6.4, gy = Y(groundAt(P.x) ?? GROUND), h = P.h ?? 4.2, bark = toon("#6e5a4a"), bark2 = toon("#5a4a3d"), D = { side: THREE.DoubleSide }, lv = ["#2e5f2c", "#376d32", "#24502a", "#417a36"].map(c => toon(c, D));
+      g.add(at(mk(new THREE.CylinderGeometry(.26, .4, h, 8), null, { mat: bark, ol: .03 }), x, gy + h / 2, z));
+      for (let i = 0; i < 5; i++) { const a = R(0, TAU), l = R(.5, .9), rt = mk(new THREE.CylinderGeometry(.06, .2, l, 5), null, { mat: bark2, ol: .02 }); rt.rotation.set(Math.sin(a) * 1.1, 0, Math.cos(a) * 1.1); g.add(at(rt, x + Math.cos(a) * l * .4, gy + .12, z + Math.sin(a) * l * .3)); }   // (its foot spreading)
+      const tips = [[-1.5, 1.7], [1.4, 1.9], [-.2, 2.5], [.8, 1.2], [-.9, 1.1]].map(([dx, dy]) => { const bx = x + dx, by = gy + h + dy, mx = x + dx * .15, my = gy + h - .9, L = Math.hypot(bx - mx, by - my), b = mk(new THREE.CylinderGeometry(.08, .17, L, 6), null, { mat: bark, ol: .02 });
+        b.position.set((bx + mx) / 2, (by + my) / 2, z); b.rotation.z = -Math.atan2(bx - mx, by - my); g.add(b); return [bx, by]; });   // (the limbs, forking up out of the trunk)
+      const crown = [];
+      for (let i = 0; i < 26; i++) { const [tx, ty] = tips[i % tips.length], rr = R(.9, 1.5), c = mk(new THREE.IcosahedronGeometry(rr, 0).scale(1.2, .85, 1), null, { mat: lv[i % 4], ol: .02 });
+        c.rotation.set(R(0, 3), R(0, 3), R(0, 3)); const cx = tx + R(-.9, .9), cy = ty + R(-.5, .7), cz = z + R(-.7, .9); g.add(at(c, cx, cy, cz)); crown.push([cx, cy, cz, rr]); }   // (a dense round crown: clumps over the limbs' ends)
+      const heart = new THREE.Shape(); heart.moveTo(0, 0); heart.bezierCurveTo(.5, .25, .55, .8, .28, .95); heart.bezierCurveTo(.12, 1.02, 0, .9, 0, .82); heart.bezierCurveTo(0, .9, -.12, 1.02, -.28, .95); heart.bezierCurveTo(-.55, .8, -.5, .25, 0, 0);
+      const hg = new THREE.ShapeGeometry(heart, 6);   // (its leaves: heart-shaped, out round the crown's edge, tip down)
+      for (let i = 0; i < 70; i++) { const [cx, cy, cz, rr] = crown[i % crown.length], a = R(0, TAU), m = new THREE.Mesh(hg, lv[(i + 1) % 4]); m.scale.setScalar(R(.42, .62)); m.position.set(cx + Math.cos(a) * rr * 1.05, cy + Math.sin(a) * rr * .85, cz + R(.1, .6)); m.rotation.set(R(-.4, .4), R(-.5, .5), a + Math.PI / 2 + R(-.4, .4) + Math.PI); g.add(m); }
+      for (let i = 0; i < 24; i++) { const [cx, cy, cz, rr] = crown[(i * 7) % crown.length], a = R(-.3, Math.PI + .3), F = buildMaga(false); F.scale.setScalar(R(2.4, 3.2)); F.position.set(cx + Math.cos(a) * rr * R(.5, .95), cy + Math.sin(a) * rr * R(.3, .8), cz + rr * .75); F.rotation.set(R(-.5, .2), R(-.5, .5), R(0, TAU)); g.add(F); }   // (in flower: crimson cups facing out of it)
+      for (let i = 0; i < 6; i++) { const F = buildMaga(false); F.scale.setScalar(R(2.2, 2.8)); F.position.set(x + R(-2.6, 2.6), gy + .05, z + R(-.6, 1.4)); F.rotation.set(-Math.PI / 2 + R(-.25, .25), 0, R(0, TAU)); g.add(F); } }   // (fallen ones at its foot)
     if (P.fg) { mergeLocal(g); g.traverse(o => o.layers.set(1)); }
     if (P.fg && P.k === "giant") { g.traverse(o => { if (o.isMesh) o.material = o.material.clone(); }); fgSee.push({ g, x: X(P.x), r: 2.7, z: P.z ?? 4.4 }); }   // (its own materials: it fades, fgSeeThru)
   }
@@ -4005,7 +4056,7 @@ function authorForest() {
   const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"].forEach(c => { C[c] = at(c); });
   if (Object.values(C).some(i => i < 0) || S0[0].cell !== "B1") { console.warn("forest: a room's missing", C, S0[0].cell); return; }
   const KEYS = ["plats", "plats2", "ground", "gaps", "ceils", "ladders", "poles", "below", "up", "upX", "down", "downX", "downWall", "downCam", "climbUp", "climbWall", "climbTip", "noClimbFace", "arriveX", "arriveF",
-    "camTop", "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "restX", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "prev", "next"];
+    "camTop", "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "restX", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "crumble", "wetBack", "prev", "next"];
   const room = (c, o, roster) => { const q = S0[C[c]]; KEYS.forEach(k => delete q[k]); Object.assign(q, { authored: true, plats: [] }, o);   // (only the platforms listed: none of the hour's own)
   if (roster) R0[C[c]] = roster; return q; };
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
@@ -4020,7 +4071,7 @@ function authorForest() {
   // the hidden cove (behind Camila's rocks in A1): one room on the shore, water to the left to swim in, a mango, and Burr, who lives there
   const COVE = S0.length; S0.push({ h: S0[C.A1].h, col: 999, name: "THE HIDDEN COVE", elev: 0, foe: 0, authored: true, cove: true, ground: [[0, 110], [640, 110], [790, 0]], swim: [-200, 720, GROUND + 6],
     plats: [], next: C.A1, noLeft: true, peace: true, items: [["fruit", 1650]], set: [{ k: "pool", x0: -300, x1: 760, y: GROUND + 6 }, { k: "coveRocks", x: 2560 }] });
-  R0[COVE] = []; W.buddySpots = [COVE, C.D4];        // (the berry buddies' spots: the cove, and D4. The user, 2026-10-26)
+  R0[COVE] = []; W.buddySpots = [COVE, C.D4, C.B6]; W.buddyPos = { [C.B6]: 330 };   // (the berry buddies' spots: the cove, and D4. The user, 2026-10-26; B6 too, at its far left a few steps in, 2026-10-27 "add a buddy in b6 at the very left of the screen a few spaces away from when the player enters")
 
   // ── row A
   // A1: Camila's rocks at the left (the cove behind them); the bridge's ladder at the right, the bridge on from there; the edge where her climb
@@ -4065,8 +4116,9 @@ function authorForest() {
   // B5: under the ground of A5 (dark, low); land at the left (a mango, two baddies), a hole down into C5, a patch of land past it on to B6
   // B4: a hollow in the tan earth, in from B5's left, through a heap of rock only Camila can smash (the user, 2026-10-26: "now that b4 is there, can you add the
   // breakble rock outside of it in b5 where there is already a wall there. and then camila can open it to get in?"); a power-up at the back of it
-  room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, 130]], items: [["power", 1500]],
-    set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 900], ["leafy", "leaf", 2100]]);
+  room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, -40]], items: [["power", 1500], ["tape", 1010, 110, "tape1"]],
+    plats: [[560, 380, 220, "slab"], [900, 290, 220, "slab"], [560, 200, 220, "slab"], [900, 110, 220, "slab"]], crumble: { t: .7, look: "ledge" },
+    set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "earthBack", x0: 470, x1: 1210, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 1750], ["leafy", "leaf", 2250]]);   // (four ledges up the back wall, zigzagging, each giving way a moment after you land: a cassette on the top one. The user, 2026-10-27: "the platforms break and they have to do it quickly")
   room("B5", { dark: true, ground: [[0, 0]], gaps: FOREST_HOLE_B5, below: C.C5, prev: C.B4, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 360]],
     secret: { who: "camila", x: 60, side: -1, door: true }, set: [{ k: "earth", side: -1, col: TAN, col2: TAN2, door: true }, { k: "canopy" }] }, [["acorn", "rust", 650], ["leafy", "leaf", 1250]]);
   // B6: the giant tree's trunk in front of you, dark under the canopy
@@ -4111,10 +4163,10 @@ function authorForest() {
   // D1: GLOS, at the world's surprise quick way out (to Cuss' Waves, the easiest of its three); three platforms
   room("D1", { ground: [[0, 0]], plats: [[160, 140, 480, "slab"], [960, 230, 600, "slab"], [1780, 330, 460, "slab"]], boss: true, bossX: 1900, toWorld: westTo, exitLeft: true, next: C.D2 }, []);
   // D2: thick undergrowth round a pool; malanga leaves to cross it on, the attack power-up on the high one
-  room("D2", { ground: [[0, 0]], gaps: [[300, 2160]], plats: [[420, 380, 280, "shroom"], [880, 300, 240, "shroom"], [1300, 200, 260, "shroom"], [1720, 320, 260, "shroom"]],
-    items: [["power", 1430, 200]], prev: C.D1, next: C.D3, set: [{ k: "pond" }, { k: "undergrowth" }] }, []);
+  room("D2", { ground: [[0, 0]], gaps: [[300, 1880]], plats: [[470, 350, 240, "shroom"], [900, 240, 240, "shroom"], [1360, 330, 240, "shroom"]], crumble: { steps: 3, look: "leaf" }, wetBack: 200,
+    items: [["power", 1020, 240]], prev: C.D1, next: C.D3, set: [{ k: "pond" }, { k: "undergrowth" }] }, []);   // (three leaves, staggered, each giving way on your third step; the power-up on the high one; in the water: back on the left bank. The user, 2026-10-27)
   // D3: a mini boss, a high platform
-  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], items: [["fruit", 1880, 170]], prev: C.D2, next: C.D4, ceils: [[-600, 3200, 110]] }, [["bramble", "purple", 900, "mini"], ["acorn", "rust", { plat: 0, x: 1640 }]]);   // (a baddie and a mango up on the platform: the user, 2026-10-24; underground, the land overhead, no way up: 2026-10-26)
+  room("D3", { ground: [[0, 0]], plats: [[1500, 170, 500, "slab"]], items: [["fruit", 1880, 170]], prev: C.D2, next: C.D4, ceils: [[-600, 3200, 110]], set: [{ k: "maga", x: 1080 }] }, [["bramble", "purple", 900, "mini"], ["acorn", "rust", { plat: 0, x: 1640 }]]);   // (a baddie and a mango up on the platform: the user, 2026-10-24; underground, the land overhead, no way up: 2026-10-26)
   // D4: 3 baddies; two platforms up to the hole in C4 (jump up it)
   room("D4", { ground: [[0, 0]], plats: [[1300, 330, 300, "slab"], [880, 190, 300, "slab"]], prev: C.D3, next: C.D5 }, [["leafy", "leaf", 330], ["twiggy", "olive", 1750], ["acorn", "rust", 2200], ["pinecone", "rust", { plat: 1, x: 1030 }]]);   // (one up on the high platform too: the user, 2026-10-24)
   // D5: the hub (a checkpoint too); C5's pale green pillars hanging down into it
@@ -4182,7 +4234,7 @@ function authorWaves() {
   room("B8", { dark: true, ground: [[0, 0]], prev: C.B7, noRight: true, items: [["fruit", 1900]], set: [{ k: "cave", x1: 2500, shafts: true }] });   // (the dark cave behind it, light coming in; a berry buddy's home)
 
   // ── row C: the rock path, the ledges in front of the hull, the hub's rock, the platform on two ladders, the beps' cave, the open clifftop
-  room("C1", { ground: [[0, 0]], gaps: [[2400, 2760]], below: C.D1, plats: [[2200, 320, 400, "rock"]], upX: 170, up: C.B1, noLeft: true, next: C.C2, bepNoRight: true },   // (the rock path; C2's rock comes in at its right end, so you see the way here and the ladder up to B1. The user, 2026-10-25)
+  room("C1", { ground: [[0, 0]], gaps: [[2400, 2760]], below: C.D1, plats: [[2200, 320, 400, "rock"]], upX: 170, up: C.B1, noLeft: true, next: C.C2, bepNoRight: true, rockfall: { ladder: 170 } },   // (the rock path; C2's rock comes in at its right end, so you see the way here and the ladder up to B1. The user, 2026-10-25)
     [["inkling", "red", 700], ["crab", "orange", 1150], ["starfish", "purple", 1650]]);
   room("C2", { open: true, gaps: [[-200, 2760]], below: C.D2, rise: true, plats: [[-40, 320, 1340, "rock"], [1420, 450, 1180, "scaf"]], prev: C.C1, next: C.C3, bepNoRight: true,   // (the dock's stack comes in from C3 at the right: off its end onto the rock formation, which runs on into C1. The user, 2026-10-25)
     set: [{ k: "ship" }] }, [["octo", "purple", { plat: 0, x: 450 }], ["crab", "blue", { plat: 0, x: 950 }]]);
@@ -4192,7 +4244,7 @@ function authorWaves() {
   const c4 = room("C4", { ground: [[0, -140]], gaps: [[-200, 1400]], below: C.D4, plats: [[-40, 250, 740, "scaf"], [950, 300, 230, "rock"]], prev: C.C3, next: C.C5,   // (the hub: the npcs on the rock platform)
     hub: 1, peace: true, hubSpots: [1650, 1980, 2300], set: [{ k: "ship" }] }); nm(c4, "HUB");
   room("C5", { ground: [[0, -140]], gaps: [[700, 2760]], below: C.D5, rise: true, plats: [[850, 240, 220, "rock"], [1250, 130, 450, "rock"], [1000, 420, 1560, "scaf"]],   // (in at the top from the hub: up the ledges and into B5, or down onto the platform or D5's shelf)
-    downX: 1700, downY: 420, down: C.D5, prev: C.C4, next: C.C6, riseX: 1475 }, [["starfish", "orange", { plat: 1, x: 1500 }], ["crab", "orange", { plat: 2, x: 1350 }]]);
+    downX: 1700, downY: 420, down: C.D5, prev: C.C4, next: C.C6, riseX: 1475, rockfall: true }, [["starfish", "orange", { plat: 1, x: 1500 }], ["crab", "orange", { plat: 2, x: 1350 }]]);
   room("C6", { ground: [[0, 0], [1550, 0], [1550, -160]], gaps: [[-200, 1550]], below: C.D6, rise: true, plats: [[0, 420, 1250, "scaf"]], downX: 900, downY: 420, down: C.D6,   // (the platform's right end; over to the rock, the beps' cave in it)
     bep: { trail: 1750, zone: 2300, left: 2540, kind: "cave" }, prev: C.C5, next: C.C7 },
     [["inkling", "green", { plat: 0, x: 700 }], ["crab", "red", 2000]]);
@@ -4202,17 +4254,17 @@ function authorWaves() {
     items: [["power", 1765, 140]], prev: C.C7, noRight: true }, [["seahorse", "aqua", { plat: 0, x: 350 }]]);   // (the star: a power-up; off the ledge's end down to Cuss)
 
   // ── row D: the dock over the waves, the stacked platforms, Rose's jump, the shelf and the underground scaffolding, Cuss at the water
-  room("D1", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], next: C.D2 },   // (the way in from the woods, at its left: the dock)
+  room("D1", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], next: C.D2, rockfall: true },   // (the way in from the woods, at its left: the dock)
     [["crab", "orange", 1400]]);
-  room("D2", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 2050, plats: [[1350, 350, 400, "scaf"], [1850, 230, 710, "scaf"]], prev: C.D1, next: C.D3,   // (the stack raised from the dock begins: up it and into C2 / C3)
+  room("D2", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 2050, plats: [[1350, 350, 400, "scaf"], [1850, 230, 710, "scaf"]], prev: C.D1, next: C.D3, rockfall: true,   // (the stack raised from the dock begins: up it and into C2 / C3)
     set: [{ k: "ship" }] }, [["inkling", "red", 600], ["seahorse", "aqua", 1450], ["crab", "blue", 2150]]);
   room("D3", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 625, plats: [[-40, 265, 340, "scaf"], [400, 185, 450, "scaf"], [1100, 230, 400, "scaf"], [1650, 350, 420, "scaf"]], prev: C.D2, next: C.D4,   // (the stack's top: jump up off it into C3)
     set: [{ k: "ship" }] }, [["crab", "purple", 420], ["inkling", "orange", 1350], ["squidlet", "pink", { plat: 3, x: 1800 }]]);
-  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2120, 182, 440, "rock"]], prev: C.D3, next: C.D5, set: [{ k: "ship" }] },   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
+  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2120, 182, 440, "rock"]], prev: C.D3, next: C.D5, rockfall: true, set: [{ k: "ship" }] },   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
     [["octo", "purple", 750], ["crab", "orange", 1450]]);
-  room("D5", { ground: [[0, 0]], gaps: [[-200, 650]], plats: [[-40, 250, 2600, "shelf"]], poles: [[720, 250]], upX: 1700, upY: 250, up: C.C5, prev: C.D4, next: C.D6, bepNoLeft: true,   // (the shelf, and under it the underground scaffolding)
+  room("D5", { ground: [[0, 0]], gaps: [[-200, 650]], plats: [[-40, 250, 2600, "shelf"]], poles: [[720, 250]], upX: 1700, upY: 250, up: C.C5, prev: C.D4, next: C.D6, bepNoLeft: true, rockfall: { shelf: true },   // (the shelf, and under it the underground scaffolding)
     set: [{ k: "under", x0: 650, x1: 2800 }] }, [["starfish", "red", { plat: 0, x: 1200 }], ["crab", "orange", 1100], ["inkling", "purple", 1900]]);
-  room("D6", { ground: [[0, 0]], plats: [[-40, 250, 2190, "shelf"]], poles: [[2100, 250]], upX: 900, upY: 250, up: C.C6, prev: C.D5, next: C.D7, set: [{ k: "under", x0: -200, x1: 2150 }] },
+  room("D6", { ground: [[0, 0]], plats: [[-40, 250, 2190, "shelf"]], poles: [[2100, 250]], upX: 900, upY: 250, up: C.C6, prev: C.D5, next: C.D7, rockfall: { shelf: true }, set: [{ k: "under", x0: -200, x1: 2150 }] },
     [["crab", "purple", { plat: 0, x: 500 }], ["inkling", "orange", { plat: 0, x: 1350 }], ["seahorse", "teal", { plat: 0, x: 1800 }], ["clam", "purple", 900, "mini"], ["urchin", "red", 1700]]);
   room("D7", { ground: [[0, 0]], prev: C.D6, next: C.D8, set: [{ k: "posts", x0: 0, x1: 2560 }] });   // (under C7's ledge, its posts)
   room("D8", { ground: [[0, 0]], gaps: [[2150, 2760]], dive: [2150, 2760], diveTo: DEEP, diveBoss: true, prev: C.D7, noRight: true, boss: true, bossX: 1500, toWorld: DEEP,   // (Cuss at the water's edge; past him, down into the deep)
@@ -4233,7 +4285,7 @@ function authorWaves() {
     { row: "C", x0: CX(6) + 1700, x1: CX(6) + 2900, top: 20, z: -4.6, cave: 2300, home: "C6", salt: 119 },
     { row: "D", x0: CX(1) - 400, x1: CX(1) + 2900, top: -40, z: -7, salt: 121 }, { row: "D", x0: CX(2) - 400, x1: CX(2) + 1500, top: -60, z: -5, salt: 123 },
     { row: "D", x0: CX(4) + 550, x1: CX(5) + 300, top: -300, z: -4.3, salt: 125 }, { row: "D", x0: CX(5) - 200, x1: CX(8) + 2150, top: -300, z: -5.2, salt: 127 } ];
-  W.buddySpots = [C.A3, C.B8];                       // (the sheet's berry buddies' spots: the crow's nest and B8's cave. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward"; who's there picked each stay, 2026-10-26)
+  W.buddySpots = [C.A3, C.B8, C.B4]; W.buddyPos = { [C.B4]: 1420 };   // (B4's: at the deck's end, the user 2026-10-27 "add a buddy on b4, at the edge of the platform")   // (the sheet's berry buddies' spots: the crow's nest and B8's cave. The user, 2026-10-25: "berry buddies will be placed intentionally moving forward"; who's there picked each stay, 2026-10-26)
   W.authored = true; W.rosterThin = null; mapGridC.delete(1);
 }
 // ── Crux's city, rebuilt (the user, 2026-10-26: "rebuild Crux's world to start on the bottom level but it escalates to sky scrapers up in row b and A being
@@ -4437,7 +4489,7 @@ function phoneSongs() {
   WORLDS.forEach((Wd, w) => { if (story && !story.visited.has(w)) return; const sg = Wd.song ?? w; if (seen.has(sg)) return; seen.add(sg);
     const R = PC_REC[w], rec = window.BERRY_PC && R && R.hours.includes(0) ? R.src : null;
     out.push({ id: "w" + w, name: Wd.name, song: sg, tempo: (Wd.screens && Wd.screens[0] && Wd.screens[0].tempo) || 1, rec }); });
-  TAPES.forEach(T => { if (tapeGot(T.id)) out.push({ id: T.id, name: T.name, song: T.song, tempo: 1, tape: true }); });
+  TAPES.forEach(T => { if (tapeGot(T.id)) out.push({ id: T.id, name: T.name, song: T.song, tempo: 1, tape: true, hour: T.hour || 0 }); });
   return out;
 }
 const phoneSong = () => { const id = story ? story.phones : freePhones, L = phoneSongs(); return L.find(q => q.id === id) || L[0]; };
@@ -4449,7 +4501,7 @@ function phonesMusic(dt, P) {                        // (syncMusic, the headphon
   if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / 1.2); orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);
   if (ov > 0 && orig.paused) orig.play().catch(() => {}); if (ov === 0 && orig.volume < .003 && !orig.paused) orig.pause();
   if (!S) return;
-  if (on && !rec && P.song !== undefined) { if (S.setGloom) S.setGloom(false); S.setSong(P.song); S.setHour(0, P.tempo || 1); S.tick(); if (ac && ac.state === "running") S.start(ac, MUSIC_VOL * voDuck); }
+  if (on && !rec && P.song !== undefined) { if (S.setGloom) S.setGloom(false); S.setSong(P.song); S.setHour(P.hour || 0, P.tempo || 1); S.tick(); if (ac && ac.state === "running") S.start(ac, MUSIC_VOL * voDuck); }
   else if (S.state.playing) S.stop(1.2);
 }
 function syncMusic(dt) {                         // every frame: the right music for this clearing, crossfaded over ~2.4 s when it changes
@@ -5247,11 +5299,11 @@ const FOES = [
 ];
 const RETIRED_FOES = FOES.slice();                 // (the woods' first seven bosses: the user is moving them to worlds of their own)
 let foe = FOES[0], oppSel = 0, oppView = null;
-function hideFoe(f) { f.rig.root.visible = f.rig.shadow.visible = false; if (f.rig.groundGlow) f.rig.groundGlow.visible = false; }
+function hideFoe(f) { f.rig.root.visible = f.rig.shadow.visible = false; if (f.rig.groundGlow) f.rig.groundGlow.visible = false; if (f.post && leafStream) leafStream.G.visible = false; }
 function showFoe(f) { f.rig.root.visible = f.rig.shadow.visible = true; if (f.rig.groundGlow) f.rig.groundGlow.visible = true; }
 FOES.forEach(hideFoe);
 function makeFoeState(def, x, z = 0) {
-  const hp = Math.max(2, ((def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + (world === 9 ? 0 : ENEMY_HP_UP)) * HP_X - HP_LESS);   // (Noro and Doir on the beach: without the +4, 2026-10-23)   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
+  const hp = Math.max(2, ((def.hp ?? (world ? 16 : 10) + 2 * Math.max(0, FOES.indexOf(def))) + 5 + (world === 9 ? 0 : ENEMY_HP_UP)) * HP_X - HP_LESS) + upHp();   // (Noro and Doir on the beach: without the +4, 2026-10-23)   // (+5 for every boss: the user, 2026-10-16; +4 more, 10-23)   // each boss of the day is tougher: 10, 12, 14 … 22 (the waves' three: 16, 18, 20)
   return { def, x, z, y: GROUND, vx: 0, vy: 0, dir: -1, onGround: true, hp, maxHp: hp, inv: 0, flash: 0, sq: 0, sqv: 0, yaw: -Math.PI + .5,
     phase: 0, think: 1.4, windup: 0, jumpVx: 0, jumpVy: 0, plat: null, edge: null, hurtT: 0, dead: false, deathT: 0, gone: false, puffT: 1,
     atk: null, atkTm: 0, atkCd: 3, emitT: 0, emitN: 0, actT: 0, chains: {} };
@@ -5726,7 +5778,7 @@ function castWorld(w) {                              // a world's entries, in th
     const q = seen.get(k) || { g: "BERRY BADDIES", kind: "baddy", w, id: "baddy:" + k, type: en[0], col: en[1], name: castName(en[0]), sub: castName(en[1]), rooms: new Set() };
     q.rooms.add(row); seen.set(k, q); }));
   out.push(...[...seen.values()].sort((a, b) => a.type.localeCompare(b.type) || String(a.col).localeCompare(String(b.col))));
-  if (WILD_CATS[w]) out.push({ g: "FRIENDS", kind: "cat", sp: "cat", w, id: "cat:" + w, name: WILD_CATS[w].name, sub: "WILD CAT · " + WILD_CATS[w].coat });
+  if (WILD_CATS[w]) out.push({ g: "FRIENDS", kind: "cat", sp: "cat", w, id: "cat:" + w, name: WILD_CATS[w].name, sub: "WILD CAT · " + WILD_CATS[w].coat.replace(/ CAT$/, "") });   // (Noche's "BLACK CAT", Coco's "WHITE CAT": not "cat" twice, the user 2026-10-27)
   if (WILD_DOGS[w]) out.push({ g: "FRIENDS", kind: "cat", sp: "dog", w, id: "dog:" + w, name: WILD_DOGS[w].name, sub: "WILD DOG · " + WILD_DOGS[w].coat });
   ["axo", "axo2"].forEach(sp => { const A = petDef(sp, w); if (A) out.push({ g: "FRIENDS", kind: "cat", sp, w, id: sp + ":" + w, name: A.name, sub: "WILD AXOLOTL · " + A.coat }); });
   ALLIES.filter(A => A.w === w).forEach(A => { out.push({ g: "FRIENDS", kind: "ally", w, id: "ally:" + A.id, name: A.name, sub: "BERRY BUDDY", A });
@@ -5793,11 +5845,11 @@ function castBerry(q) {
 }
 // ── a boss (its own body and its two attacks, as the fight runs them: the attack's move plays, what it throws isn't made)
 function castBoss(q) {
-  const D = q.D, r = D.rig, A1 = ATTACKS[D.atk], A2 = ATTACKS[D.atk2];
+  const D = q.D, r = D.rig, A1 = ATTACKS[D.atk], A2 = ATTACKS[D.atk2], MORE = [...(D.more || []), ...(D.near ? [D.near] : [])].filter(m => ATTACKS[m]);
   const anims = [["idle", "IDLE"], ["walk", "WALK"], ["run", "RUN & SKID"], ["jump", "JUMP"]];
-  if (A1) anims.push(["atk1", "ATTACK 1"]); if (A2) anims.push(["atk2", "ATTACK 2"]); anims.push(["hurt", "HURT"], ["down", "BEATEN"]);
+  if (A1) anims.push(["atk1", "ATTACK 1"]); if (A2) anims.push(["atk2", "ATTACK 2"]); MORE.forEach((m, i) => anims.push(["atk" + (i + 3), "ATTACK " + (i + 3)])); anims.push(["hurt", "HURT"], ["down", "BEATEN"]);
   castAdopt([r.root, r.shadow]); let e = null;
-  const AT = a => a === "atk1" ? [D.atk, A1] : a === "atk2" ? [D.atk2, A2] : [null, null];
+  const AT = a => a === "atk1" ? [D.atk, A1] : a === "atk2" ? [D.atk2, A2] : /^atk\d+$/.test(a) && MORE[+a.slice(3) - 3] ? [MORE[+a.slice(3) - 3], ATTACKS[MORE[+a.slice(3) - 3]]] : [null, null];
   const sub = {
     anims, H: (D.h || 150) * S, cx: () => e ? e.x : CAST_X, cy: () => e ? e.y : GROUND,
     len: a => a === "run" ? 2.3 : a === "jump" ? 1.7 : a === "hurt" ? 1.3 : a === "down" ? 2.6 : AT(a)[1] ? AT(a)[1].charge + AT(a)[1].act + .9 : 0,
@@ -5832,7 +5884,7 @@ function castBoss(q) {
       castFall(e, dt); e.hurtT = Math.max(0, e.hurtT - dt); e.flash = Math.max(0, e.flash - dt);
       sub.pose(dt);
     },
-    facts: () => [["HIT POINTS", makeFoeState(D, 0).hp], ["SPEED", D.speed || "—"], ["ATTACK 1", (A1 ? castName(D.atk) + (A1.desc ? ": " + A1.desc : "") : "NONE")], ["ATTACK 2", (A2 ? castName(D.atk2) + (A2.desc ? ": " + A2.desc : "") : "NONE")]],
+    facts: () => [["HIT POINTS", makeFoeState(D, 0).hp], ["SPEED", D.speed || "—"], ["ATTACK 1", (A1 ? castName(D.atk) + (A1.desc ? ": " + A1.desc : "") : "NONE")], ["ATTACK 2", (A2 ? castName(D.atk2) + (A2.desc ? ": " + A2.desc : "") : "NONE")], ...MORE.map((m, i) => ["ATTACK " + (i + 3), castName(m) + (ATTACKS[m].desc ? ": " + ATTACKS[m].desc : "")])],
     dispose() { castRelease(); },
   };
   return sub;
@@ -7792,7 +7844,8 @@ let upOverride = null;                            // (the gear menu's preview: p
 const upNow = () => upOverride ?? (upOn(world) ? upPct(world) : 0);
 let freedOverride = null;                         // (the gear menu's preview: pretend this world's been set free)
 const freedNow = () => freedOverride ?? !!(story && story.freed && story.freed[world]);
-const upTier = () => { if (freedNow()) return 0; const p = upNow(); return p >= 75 ? 3 : p >= 50 ? 2 : p >= 25 ? 1 : 0; };   // (set free: no more fighting the land)
+const upTier = () => { if (freedNow()) return 0; const p = upNow(); return p >= 75 ? 3 : p >= 50 ? 2 : p >= 25 ? 1 : 0; };
+const upHp = () => { if (mode !== "play" || world === 9 || freedNow()) return 0; const p = upNow(); return 4 * [25, 50, 75, 100].filter(k => p >= k).length; };   // (4 more life for every one of this world's enemies at each step of its uprising: the user, 2026-10-27)   // (set free: no more fighting the land)
 const UP_PREVIEW = [["AS PLAYED", null, null], ["25%", 25, false], ["50%", 50, false], ["75%", 75, false], ["100%", 100, false], ["SET FREE", 100, true]];
 let upPrev = 0;
 const bossNameOf = () => { const q = STAGES.find(s => s.boss); return (q && FOES[q.foe] && FOES[q.foe].name) || "THE BOSS"; };
@@ -8226,6 +8279,7 @@ function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out
 }
 function fillRoom() {                                // a new room fills up with baddies and you clear it to go on; back in one you've cleared, they're all back but the way out's already open
   if (stronghold) return shFill();
+  if (dropNext) { dropNext = false; dropPick(); }  // (new in this world: who carries what this time)
   seenOf(world).add(stage);                          // (on the map from now on: walked in, or started here)
   const S0 = STAGES[stage];
   if (world !== 9 && freedNow()) {                 // set free: no baddies, no boss; beps wandering about, every way out open
@@ -8348,7 +8402,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   if (stronghold || cine) { r.root.visible = r.shadow.visible = false; ej.away = true; return; }   // (she waits outside the stronghold)
   if (ej.away) { ej.away = false; ejPlace(p.x - p.face * 90, p.y, p.face); r.root.visible = r.shadow.visible = true; }
   if (ej.phase === "chided") { ejChided(dt); return; }
-  if (campSit(s, "ej", dt)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on the log by the fire)
+  if (campSit(s, "ej", dt, ej && ej.r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on the log by the fire)
   if (s.wave > 0 && (ej.waveT -= dt) <= 0) s.wave = 0;
   ej.atkCd -= dt; ej.hopT -= dt;
   const SET = KIT.MOVESETS[r.spec.move.set] || KIT.MOVESETS.sword, first = SET.ground[0];
@@ -8552,9 +8606,88 @@ function spawnGifts() {
     const lf = mk(new THREE.ConeGeometry(.1, .26, 4), null, { mat: GIFT_M[1], ol: .02 }); at(lf, .06, .3, 0); lf.rotation.z = -.5; g.add(lf);
     g.add(new THREE.Mesh(new THREE.SphereGeometry(.55, 12, 8), GIFT_M[2]));
     gifts.push({ g, x, y, id, t: Math.random() * 6 }); });
-  spawnCrates();
+  spawnCrates(); spawnCrumbles(); spawnRockfall();
 }
-function clearGifts() { gifts.forEach(q => actors.remove(q.g)); gifts = []; clearCrates(); clearSecret(); }
+function clearGifts() { gifts.forEach(q => actors.remove(q.g)); gifts = []; clearCrates(); clearSecret(); clearCrumbles(); clearRockfall(); }
+// breakable platforms (the user, 2026-10-27): the forest's D2, "make the platforms collapsable if a player takes 3 steps on them"; its B4, "4 ascending platforms
+// aligned in an alternating fashion ... the platforms break and they have to do it quickly, otherwise they won't be able to get it until they return to the map".
+// room.crumble: { steps: n } gives way on your nth step on it, { t: s } that long after you first land; look "leaf" (a malanga leaf up out of the water on its
+// stalk) or "ledge" (a slab of the tan earth jutting out of the back wall). Broken: gone till you come back to the world (crumbleGone, newStay)
+let crumbles = [];
+function crumbleRig(p, look) {
+  const g = group(actors), w = p.w * S;
+  if (look === "leaf") { const lf = toon("#3f8a3c"), vn = toon("#8cc46a"), st = toon("#6e9e48"), sc = (w + 1.7) / 2.1, nx = -.55 * sc, x0 = (-w / 2 - nx) / sc, x1 = (w / 2 - nx) / sc;
+    const lg = new THREE.ExtrudeGeometry(heartShape(), { depth: .16, bevelEnabled: false, curveSegments: 2 }).rotateX(Math.PI / 2), P = lg.attributes.position;
+    for (let i = 0; i < P.count; i++) { const lx = P.getX(i), o = lx > x1 ? lx - x1 : lx < x0 ? x0 - lx : 0; P.setY(i, P.getY(i) - o * o * 4 - o * .5); }   // (flat where you stand, its tip and lobes drooping: the forest's own leaf)
+    lg.computeVertexNormals(); const L = mk(lg, null, { mat: lf, ol: .04 }); L.scale.set(sc, 1, Math.min(sc, 1.6)); at(L, nx, 0, 0); g.add(L);
+    g.add(at(mk(new THREE.BoxGeometry(w - .1, .03, .07), null, { mat: vn, ol: 0 }), 0, .012, 0));
+    g.add(mk(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(nx - .2, -7, -1.4), new THREE.Vector3(nx - .45, -.5, -1.4), new THREE.Vector3(nx + .15, -.12, -.15)), 8, .13, 6), null, { mat: st, ol: .03, smooth: true })); }   // (its stalk, up out of the water)
+  else { const rk = toon("#c9a46a"), rk2 = toon("#a8844e"), cr = new THREE.MeshBasicMaterial({ color: "#5a4128" });
+    g.add(at(mk(new THREE.BoxGeometry(w, .42, 3.4), null, { mat: rk, ol: .04 }), 0, -.21, -1.5));   // the ledge, out of the earth behind: held up by the wall it's part of
+    for (let i = 0; i < 9; i++) g.add(at(mk(new THREE.DodecahedronGeometry(.2 + (i % 3) * .07, 0), null, { mat: i % 2 ? rk2 : rk, ol: .03 }), -w / 2 + .2 + i * (w - .4) / 8, -.32, .16 + (i % 2) * .08));   // (its rough front edge)
+    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.03, .3, .03), cr); c.position.set(-w / 2 + .4 + i * (w - .8) / 3, -.2, .2); c.rotation.z = (i % 2 ? .4 : -.3); g.add(c); } }   // (cracks: it won't hold long)
+  g.position.set(X(p.x + p.w / 2), Y(p.y), 0); return g;
+}
+function spawnCrumbles() { clearCrumbles(); const C = STAGES[stage].crumble; if (!C || stronghold || hideout || arena) return; PLATFORMS.filter(p => p.crumble !== undefined).forEach(p => crumbles.push({ p, g: crumbleRig(p, C.look), steps: 0, t: -1, was: false, gph: 0, dip: 0, fall: null, y0: Y(p.y) })); }
+function clearCrumbles() { crumbles.forEach(c => { actors.remove(c.g); c.g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }); crumbles = []; }
+function crumbleGo(c) {                              // it gives way: out from under whoever's on it, down it goes
+  const i = PLATFORMS.indexOf(c.p); if (i >= 0) PLATFORMS.splice(i, 1); crumbleGone.add(world + ":" + stage + ":" + c.p.crumble);
+  for (const b of [player, ...palsAll(), ...allyStates(), ...baddies]) if (b && b.plat === c.p) { b.plat = null; b.onGround = false; b.vy = Math.max(b.vy || 0, 40); }
+  loot.forEach(q => { if (q.plat === c.p) { q.gone = true; puffs(q.x, q.y - 20, 4, 20, 90); } });   // (what was lying on it goes with it: B4's cassette, if you didn't get to it in time)
+  c.fall = { t: 0, vy: 0 }; SFX.crack(); shake = Math.max(shake, 3); puffs(c.p.x + c.p.w / 2, c.p.y + 6, 6, c.p.w * .4, 120);
+}
+function updateCrumbles(dt) {
+  const C = STAGES[stage].crumble, p = player; if (!C || !p) return;
+  for (const c of crumbles) {
+    if (c.fall) { const F = c.fall; F.t += dt; F.vy += 26 * dt; c.g.position.y -= F.vy * dt; c.g.rotation.z += dt * (c.p.crumble % 2 ? .9 : -.9); c.g.rotation.x += dt * .4;
+      if (!F.splash && C.look === "leaf" && c.g.position.y < Y(WATER) + .3) { F.splash = true; fallFx(c.p.x + c.p.w / 2, .8); }
+      if (F.t > 2.2) c.g.visible = false; continue; }
+    const on = p.plat === c.p && p.onGround && !p.dead, g = Math.floor((p.gaitPh || 0) / Math.PI);
+    if (on && !c.was) { c.steps++; c.gph = g; c.dip = 1; SFX.land(); }   // (landing on it: a step)
+    else if (on && g !== c.gph && Math.abs(p.vx) > 30) { c.gph = g; c.steps++; c.dip = .6; }   // (each footfall as you walk on it)
+    c.was = on;
+    if (c.t < 0 && ((C.steps && c.steps >= C.steps) || (C.t && c.steps > 0))) { c.t = C.steps ? .3 : C.t; SFX.crack(); }   // (its last step: a creak, a moment, and it goes · a ledge: a moment after you land)
+    c.dip = Math.max(0, c.dip - dt * 5); const wob = c.t >= 0 ? Math.sin(time * 46) * .035 : 0;
+    c.g.position.y = c.y0 - c.dip * .07 - (c.t >= 0 ? .02 : 0); c.g.rotation.z = wob;
+    if (c.t >= 0 && (c.t -= dt) <= 0) crumbleGo(c);
+  }
+}
+// falling rocks (Cuss' Waves; the user, 2026-10-27: "add falling rocks intermittently, not too quick, by the cliffs behind the player on d1, d2, d4, c5, the top layer of d5, d6,
+// and c1 (not when on the ladder, just to the right of it if you're on the standing part)"). room.rockfall: true, or { shelf: true } (only up on the shelf: under it you're
+// covered), { ladder: x } (never onto the ladder: at its foot, just to its right). A trickle of grit and a shadow where you stand first, then the rock, off the cliff behind
+let rockfall = null;
+const RF_WARN = 1, RF_DROP = 560, RF_GEO = [new THREE.DodecahedronGeometry(.13, 0), new THREE.DodecahedronGeometry(.22, 0)];
+function spawnRockfall() { clearRockfall(); const q = STAGES[stage].rockfall; if (!q || stronghold || hideout || arena || mode !== "play") return; rockfall = { q, t: 2.2 + Math.random() * 1.6, warn: null, sh: null }; }
+function clearRockfall() { if (rockfall && rockfall.sh) actors.remove(rockfall.sh); rockfall = null; }
+function rockfallMat() { return (level.mats && level.mats.rockM) || toon("#7d746a"); }
+function dropRock(x, ty) {                           // the rock: off the cliff behind (it comes forward as it falls), tumbling; it lands where the shadow was (through what's over you) and breaks up
+  const m = mk(jag(new THREE.DodecahedronGeometry(.62, 0), Math.random, .2), null, { mat: rockfallMat(), ol: .04 }), y0 = ty - RF_DROP;
+  addHz({ x, y: y0, vy: 260, r: 24, life: 3, m, z: -1.8, nob: true, owner: null,
+    tick: (h, dt) => { h.vy += 1800 * dt; if (h.y + h.r >= ty && !h.done) { h.done = true; h.y = ty - h.r; h.life = h.t; rockBreak(h.x, ty); } },
+    sync: h => { const k = clamp((h.y - y0) / (ty - y0), 0, 1); h.m.position.z = -1.8 + 2.15 * k; h.m.rotation.set(h.t * 5.2, h.t * 3.1, h.t * 4); } });
+}
+function rockBreak(x, y) {
+  const R = rockfall; if (R && R.sh) R.sh.visible = false;
+  SFX.crack(); SFX.thud(); shake = Math.max(shake, 3); puffs(x, y - 8, 6, 30, 120);
+  for (let i = 0; i < 5; i++) { const m = mk(RF_GEO[1], null, { mat: rockfallMat(), ol: .03 }); addHz({ x: x + (i - 2) * 9, y: y - 14, vx: (i - 2) * 85 + (Math.random() - .5) * 60, vy: -260 - Math.random() * 160, g: 1800, r: 6, bounce: .3, life: .8, harmless: true, m, z: .35, sync: h => h.m.rotation.set(h.t * 7, h.t * 5, 0) }); }
+}
+function updateRockfall(dt) {
+  const R = rockfall, p = player; if (!R || !p) return;
+  const q = R.q, ok = !p.dead && !p.climb && !cine && !(intro && intro.lock) && (!q.shelf || (p.onGround && p.plat && p.plat.kind === "shelf"));
+  if (R.warn) { const W = R.warn; W.t += dt;
+    if (W.t - W.g > .11) { W.g = W.t; const m = mk(RF_GEO[0], null, { mat: rockfallMat(), ol: 0 }); addHz({ x: W.x + (Math.random() - .5) * 34, y: W.y - RF_DROP, vy: 320, r: 4, life: .95, harmless: true, m, z: -1.2, tick: (h, dt) => { h.vy += 1500 * dt; if (h.y + h.r >= W.y) { h.y = W.y - h.r; h.vy = 0; } } }); }   // (grit trickling down first, onto where you stand)
+    const k = clamp(W.t / RF_WARN, 0, 1); R.sh.scale.setScalar(.45 + .55 * k); R.sh.material.opacity = .12 + .33 * k;
+    if (W.t >= RF_WARN) { dropRock(W.x, W.y); R.warn = null; R.t = 3.4 + Math.random() * 2.6; }
+    return; }
+  if (!ok) return;
+  if ((R.t -= dt) > 0) return;
+  let x = p.x + clamp(p.vx, -320, 320) * .7 + (Math.random() - .5) * 110;
+  if (q.ladder !== undefined && Math.abs(x - q.ladder) < 80) x = q.ladder + 95;   // (never onto the ladder: just to its right)
+  x = clamp(x, 40, WORLD - 40); const y = groundBelow({ x, y: p.onGround ? p.y - 2 : p.y });
+  if (y >= WATER - 2) { R.t = .6; return; }        // (nothing under it there: not this time)
+  if (!R.sh) { R.sh = new THREE.Mesh(new THREE.CircleGeometry(.75, 20).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0d0b0a", transparent: true, opacity: .2, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })); actors.add(R.sh); }
+  R.sh.visible = true; R.sh.position.set(X(x), Y(y) + .03, .2); R.warn = { x, y, t: 0, g: -1 }; SFX.thud();
+}
 let secret = null;                                   // this room's hero wall: { who, x, hp, g, chest, said }
 const SECRET_M = { rock: toon("#8d8478"), rock2: toon("#6f675d"), crack: new THREE.MeshBasicMaterial({ color: "#2b2622" }), grass: toon("#4f9a3a"), grass2: toon("#3c7f2d"), stake: toon("#7a5634"), wood: toon("#9a6a3c"), band: toon("#d8a636") };
 function clearSecret() { if (!secret) return; [secret.g, secret.chest && secret.chest.g].forEach(g => { if (g) { actors.remove(g); g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); } }); secret = null; }
@@ -8661,6 +8794,83 @@ function crateRig(w) {                              // returns [group, debris co
   return [g, ["#e6e6e6", "#1a1a1a", "#8a8a8a"]];
 }
 const HEAL_M = [toon("#e8283c"), toon("#3fc24a")];
+// each hero's own (the user, 2026-10-27): "build patches of grass throughout berry woods that rose can cut through and have a small chance of finding health inside
+// of it. for camila, randomly place pineapple crates throughout the world. one about 5 screens away in any direction from the other ... sometimes have money,
+// sometimes health. the crates can be in every world, but for rose, find something appropriate to other maps (in cuss' waves ... wooden signs, in volt's keep ...
+// power cords attached to machines that stretch taught)". Laid out afresh each stay in a world (heroPlan): Camila's crates at least five rooms apart, Rose's things
+// in about two rooms in five; a hit from the other girl just glances off
+const HERO_CUT_HEAL = .18, HERO_CRATE_GAP = 4;   // (gap: rooms apart, across plus up and down: "about 5 screens away")
+let heroPlan = [];                                   // [{ s, x, who, loot: "heal" | "coins" | null, id }]
+function heroThingsPick() {
+  heroPlan = []; if (!WORLDS[world] || world === 9) return;
+  const pos = q => { const m = /^([A-D])(\d+)$/.exec(q.cell || ""); return m ? [GRID_ROWS.indexOf(m[1]), +m[2]] : null; };
+  const rooms = STAGES.map((q, k) => k).filter(k => { const q = STAGES[k]; return pos(q) && !q.cut && !q.arena && !q.peace && !q.hub && !q.rest && !q.boss && !(q.deep && q.gaps); });
+  for (let i = rooms.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [rooms[i], rooms[j]] = [rooms[j], rooms[i]]; }
+  const got = []; for (const k of rooms) { const P = pos(STAGES[k]); if (got.some(Q => Math.abs(Q[0] - P[0]) + Math.abs(Q[1] - P[1]) < HERO_CRATE_GAP)) continue; got.push(P);
+    heroPlan.push({ s: k, x: 400 + Math.random() * (WORLD - 800), who: "camila", loot: Math.random() < .5 ? "coins" : "heal" }); }
+  for (const k of rooms) if (Math.random() < .42) heroPlan.push({ s: k, x: 400 + Math.random() * (WORLD - 800), who: "rose", loot: Math.random() < HERO_CUT_HEAL ? "heal" : null });
+  heroPlan.forEach((q, i) => { q.id = "h:" + world + ":" + q.s + ":" + i; });
+}
+function pineTex() {                                 // the pineapple stencilled on a crate's side
+  return tex(128, 128, (c, W, H) => { c.fillStyle = "#c79a5a"; c.fillRect(0, 0, W, H); c.fillStyle = "#a77a40"; for (let y = 0; y < H; y += 32) c.fillRect(0, y, W, 3);
+    c.fillStyle = "#2f9a3a"; for (let i = -2; i <= 2; i++) { c.beginPath(); c.moveTo(64 + i * 5, 52); c.lineTo(64 + i * 13, 14 + Math.abs(i) * 7); c.lineTo(64 + i * 5 + 7, 52); c.fill(); }
+    c.fillStyle = "#ffc81e"; c.beginPath(); c.ellipse(64, 80, 25, 32, 0, 0, 7); c.fill(); c.strokeStyle = "#c98a00"; c.lineWidth = 3;
+    for (let k = -3; k <= 3; k++) { c.beginPath(); c.moveTo(44, 60 + k * 10); c.lineTo(84, 90 + k * 10); c.stroke(); c.beginPath(); c.moveTo(84, 60 + k * 10); c.lineTo(44, 90 + k * 10); c.stroke(); }
+    c.strokeStyle = "#5a3d1e"; c.lineWidth = 5; c.strokeRect(3, 3, W - 6, H - 6); });
+}
+let PINE_TEX = null;
+function pineCrateRig() {                            // Camila's: a slatted wooden crate, a pineapple stencilled on its sides, bound at the corners
+  const g = group(actors), w = toon("#c79a5a"), d = toon("#7a5230"), O = (geo, m, ol = .025) => mk(geo, null, { mat: m, ol });
+  PINE_TEX = PINE_TEX || pineTex(); const face = toon("#ffffff", { map: PINE_TEX });
+  g.add(at(O(new THREE.BoxGeometry(.86, .8, .8), w), 0, .4, 0));
+  [.41, -.41].forEach(z => { const f = new THREE.Mesh(new THREE.PlaneGeometry(.8, .74), face); f.position.set(0, .4, z + Math.sign(z) * .006); if (z < 0) f.rotation.y = Math.PI; g.add(f); });
+  [-1, 1].forEach(a => [-1, 1].forEach(b => g.add(at(O(new THREE.BoxGeometry(.08, .84, .08), d, 0), a * .41, .4, b * .38))));
+  [.03, .77].forEach(y => g.add(at(O(new THREE.BoxGeometry(.9, .07, .84), d, 0), 0, y, 0)));
+  return [g, ["#c79a5a", "#7a5230", "#ffc81e"]];
+}
+function cutRig(w) {                                 // Rose's, each world's own: something a blade goes through (returns [group, debris colours])
+  const g = group(actors), T = c => toon(c), T2 = c => toon(c, { side: THREE.DoubleSide }), O = (geo, m, ol = .02) => mk(geo, null, { mat: m, ol }), R = rngF(4242 + w * 7), Rr = (a, b) => a + R() * (b - a);
+  const put = (o, x, y, z = 0, rz = 0) => { o.position.set(x, y, z); o.rotation.z = rz; g.add(o); return o; };
+  const rope = (a, b, r, m) => { const v = new THREE.Vector3().subVectors(b, a), L = v.length(), o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 6), m); o.position.copy(a).addScaledVector(v, .5); o.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v.normalize()); g.add(o); return o; };
+  if (w === 1) { const wd = T("#b07a46"), dk = T("#7a4e28"); put(O(new THREE.BoxGeometry(.14, 1.3, .14), dk), 0, .65); put(O(new THREE.BoxGeometry(1.05, .52, .08), wd), 0, 1.02, .08);   // a wooden sign on its post, an arrow painted on
+    [.88, 1.16].forEach(y => put(new THREE.Mesh(new THREE.BoxGeometry(1.03, .02, .01), dk), 0, y, .125)); put(new THREE.Mesh(new THREE.BoxGeometry(.5, .08, .01), T("#ffffff")), -.05, 1.02, .13); put(new THREE.Mesh(new THREE.ConeGeometry(.1, .16, 3), T("#ffffff")), .27, 1.02, .13, -Math.PI / 2);
+    return [g, ["#b07a46", "#7a4e28", "#ffffff"]]; }
+  if (w === 2) { const mt = T("#8e98ac"), y = T("#ffd21f"), k = T("#26262c"); put(O(new THREE.BoxGeometry(.6, .62, .55), mt), -.55, .31); put(new THREE.Mesh(new THREE.BoxGeometry(.62, .1, .57), y), -.55, .5);   // a machine and a pole, the power cords stretched taut between them
+    put(O(new THREE.CylinderGeometry(.06, .07, 1.5, 8), mt), .7, .75); put(O(new THREE.BoxGeometry(.2, .14, .14), y), .7, 1.38);
+    [[.5, .02], [.38, -.06], [.26, .05]].forEach(([yy, z]) => rope(new THREE.Vector3(-.26, yy, z), new THREE.Vector3(.66, 1.36 - (.5 - yy) * .6, z), .025, k));
+    put(new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), new THREE.MeshBasicMaterial({ color: "#7ff6ff" })), -.55, .68); return [g, ["#26262c", "#ffd21f", "#7ff6ff"]]; }
+  if (w === 3) { const st = T("#7a4e28"), s2 = T("#f2efe4"); put(O(new THREE.CylinderGeometry(.04, .05, .5, 6), st), 0, .25);   // balloons on their strings, tied to a stake
+    [["#ff5fa8", -.25, 1.3], ["#ffd21f", .18, 1.45], ["#3ac0d8", .3, 1.15]].forEach(([c, x, y]) => { put(O(new THREE.SphereGeometry(.2, 14, 10).scale(1, 1.2, 1), T(c)), x, y); rope(new THREE.Vector3(0, .5, 0), new THREE.Vector3(x, y - .24, 0), .008, s2); });
+    return [g, ["#ff5fa8", "#ffd21f", "#3ac0d8"]]; }
+  if (w === 4) { const gr = T("#4f9a4a"), pk = T("#e8507a"); put(O(new THREE.SphereGeometry(.32, 12, 8).scale(1, 1.2, .35), gr), 0, .38); put(O(new THREE.SphereGeometry(.24, 12, 8).scale(1, 1.2, .35), gr), -.3, .85, 0, .5);   // a prickly pear: its paddles, fruit on top
+    put(O(new THREE.SphereGeometry(.22, 12, 8).scale(1, 1.2, .35), gr), .28, .9, 0, -.45); [[-.42, 1.1], [.4, 1.16], [.08, .78]].forEach(([x, y]) => put(O(new THREE.SphereGeometry(.07, 8, 6), pk, .01), x, y, .05));
+    return [g, ["#4f9a4a", "#3c7a38", "#e8507a"]]; }
+  if (w === 5) { const lf = T("#3f8a46"), tr = T("#7a5236"); put(O(new THREE.CylinderGeometry(.06, .08, .5, 8), tr), 0, .25); put(O(new THREE.IcosahedronGeometry(.5, 1), lf), 0, .85); put(O(new THREE.IcosahedronGeometry(.3, 1), lf), 0, 1.4);   // a clipped topiary
+    return [g, ["#3f8a46", "#2e6e36", "#7a5236"]]; }
+  if (w === 6) { const r = T("#e8242f"), wt = T("#ffffff"); for (let i = 0; i < 8; i++) put(O(new THREE.CylinderGeometry(.09, .09, .15, 12), i % 2 ? wt : r, .01), 0, .075 + i * .15);   // a big candy cane, stuck in the floor
+    const hk = O(new THREE.TorusGeometry(.2, .09, 10, 16, Math.PI), r, .01); put(hk, -.2, 1.2); return [g, ["#e8242f", "#ffffff", "#ffb0c0"]]; }
+  if (w === 7 || w === 11) { const post = T(w === 7 ? "#ff7a1a" : "#d8b040"), tape = T2(w === 7 ? "#ffd21f" : "#b01030");   // the city: caution tape between two cones · the casino: a red rope between brass posts
+    [-.6, .6].forEach(x => { if (w === 7) { put(O(new THREE.ConeGeometry(.2, .7, 12), post), x, .35); put(new THREE.Mesh(new THREE.CylinderGeometry(.13, .15, .1, 12), T("#ffffff")), x, .4); }
+      else { put(O(new THREE.CylinderGeometry(.05, .05, .9, 10), post), x, .45); put(O(new THREE.CylinderGeometry(.2, .22, .06, 14), post), x, .03); put(O(new THREE.SphereGeometry(.08, 10, 8), post), x, .92); } });
+    if (w === 7) { const t = put(new THREE.Mesh(new THREE.PlaneGeometry(1.2, .1), tape), 0, .62); for (let i = 0; i < 6; i++) put(new THREE.Mesh(new THREE.PlaneGeometry(.06, .1), T2("#1d1d1d")), -.5 + i * .2, .62, .002, .5); t.rotation.z = .02; }
+    else { const c = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-.6, .85, 0), new THREE.Vector3(0, .55, 0), new THREE.Vector3(.6, .85, 0)); g.add(new THREE.Mesh(new THREE.TubeGeometry(c, 12, .04, 6), tape)); }
+    return [g, w === 7 ? ["#ffd21f", "#1d1d1d", "#ff7a1a"] : ["#b01030", "#d8b040", "#7a0a20"]]; }
+  if (w === 8 || w === 13) { const st = T(w === 8 ? "#6e8a3a" : "#4a7a3a"), hd = T(w === 8 ? "#6a4224" : "#7a8a2a");   // the lakebed: cattails · the deep: kelp
+    for (let i = 0; i < 9; i++) { const x = Rr(-.5, .5), h = Rr(.9, 1.5), z = Rr(-.15, .15);
+      if (w === 8) { put(O(new THREE.CylinderGeometry(.018, .022, h, 5), st, .008), x, h / 2, z, Rr(-.08, .08)); put(O(new THREE.CylinderGeometry(.045, .045, .2, 8), hd, .01), x, h - .05, z); }
+      else { const k = put(O(new THREE.BoxGeometry(.12, h, .02), T2(i % 2 ? "#4a7a3a" : "#5e8f3a"), .008), x, h / 2, z, Rr(-.15, .15)); k.rotation.y = Rr(0, 3); } }
+    return [g, w === 8 ? ["#6e8a3a", "#6a4224", "#9ab05a"] : ["#4a7a3a", "#5e8f3a", "#7a8a2a"]]; }
+  if (w === 10) { const pl = T("#7a5236"); [-.6, .6].forEach(x => put(O(new THREE.CylinderGeometry(.04, .05, 1.5, 8), pl), x, .75)); rope(new THREE.Vector3(-.6, 1.42, 0), new THREE.Vector3(.6, 1.42, 0), .012, T("#e8d8a8"));   // a rug hung over a line between two poles
+    const rug = tex(128, 128, (c, W, H) => { c.fillStyle = "#b8282e"; c.fillRect(0, 0, W, H); c.fillStyle = "#ffcf3a"; c.fillRect(8, 8, W - 16, 6); c.fillRect(8, H - 14, W - 16, 6); c.fillStyle = "#1f4fa0"; for (let i = 0; i < 4; i++) { c.beginPath(); c.moveTo(64, 26 + i * 22); c.lineTo(84, 37 + i * 22); c.lineTo(64, 48 + i * 22); c.lineTo(44, 37 + i * 22); c.fill(); } });
+    put(new THREE.Mesh(new THREE.PlaneGeometry(1.0, 1.0), toon("#ffffff", { map: rug, side: THREE.DoubleSide })), 0, .92); return [g, ["#b8282e", "#ffcf3a", "#1f4fa0"]]; }
+  if (w === 12) { const wd = T("#7a5236"), str = T("#d8b86a"); put(O(new THREE.CylinderGeometry(.05, .06, 1.3, 8), wd), 0, .65); put(O(new THREE.CylinderGeometry(.03, .03, .9, 6).rotateZ(Math.PI / 2), wd), 0, 1.0);   // a straw training dummy
+    put(O(new THREE.CylinderGeometry(.24, .2, .6, 12), str), 0, .85); put(O(new THREE.SphereGeometry(.17, 12, 10), str), 0, 1.33); [.68, 1.02].forEach(y => put(new THREE.Mesh(new THREE.TorusGeometry(.225, .02, 5, 16).rotateX(Math.PI / 2), T("#a8442a")), 0, y));
+    return [g, ["#d8b86a", "#b8984a", "#7a5236"]]; }
+  const G = [T("#9ac23f"), T("#7fa83a"), T("#b5cf55")];   // the woods: a clump of tall wild grass, paler than the undergrowth so it stands out, a few seed heads
+  for (let i = 0; i < 18; i++) { const h = Rr(.8, 1.45), x = Rr(-.6, .6), z = Rr(-.3, .3); const b = put(O(new THREE.ConeGeometry(Rr(.05, .09), h, 4), G[i % 3], .012), x, h / 2, z, Rr(-.25, .25));
+    if (i % 5 === 0) put(O(new THREE.CylinderGeometry(.03, .02, .14, 5), T("#c8b46a"), .006), x + Math.sin(b.rotation.z) * -h / 2, h, z); }
+  return [g, ["#9ac23f", "#7fa83a", "#c8b46a"]];
+}
 function spawnCrates() {
   clearCrates(); if (stronghold || hideout) return;
   (CRATE_AT[world] || []).forEach(([si, x0], i) => { if (si !== stage) return; const id = world + ":" + stage + ":" + i;
@@ -8668,6 +8878,10 @@ function spawnCrates() {
     const x = crateSpot(x0); if (x === null) return; const y = groundAt(x) ?? GROUND;
     if (cratesBroken.has(id)) { spawnHealBerry(x, y, id, false); return; }
     const [g, cols] = crateRig(world); g.position.set(X(x), Y(y), 0); crates.push({ g, x, y, id, hp: 2, cols, wob: 0 }); });
+  if (heroNext) { heroNext = false; heroThingsPick(); }
+  heroPlan.forEach(q => { if (q.s !== stage) return; if (cratesBroken.has(q.id)) { if (q.loot === "heal" && !healTaken.has(q.id)) { const x = q.at ?? crateSpot(q.x); if (x !== null) spawnHealBerry(x, groundAt(x) ?? GROUND, q.id, false); } return; }   // (broken: what was in it, if it's still lying there)
+    let x = crateSpot(q.x); if (x !== null && crates.some(c => Math.abs(c.x - x) < 170)) x = crateSpot(x + 260); if (x === null) return; q.at = x; const y = groundAt(x) ?? GROUND;
+    const [g, cols] = q.who === "camila" ? pineCrateRig() : cutRig(world); g.position.set(X(x), Y(y), q.who === "camila" ? 0 : -.3); crates.push({ g, x, y, id: q.id, hp: q.who === "camila" ? 2 : 1, cols, wob: 0, who: q.who, loot: q.loot }); });
   const tb = STAGES[stage].berry, tid = world + ":" + stage + ":tree"; if (tb && !healTaken.has(tid)) spawnHealBerry(tb[0], tb[1], tid, false);   // (a berry up a tree)
   spawnRoomItems();                                  // (and the world's items lying about, if one's here)
   spawnSecret();                                     // (and a hero's wall, in one of their rooms)
@@ -8680,13 +8894,18 @@ function spawnHealBerry(x, y, id, pop) {             // a fat red berry with a g
   g.add(at(new THREE.Mesh(ball(.06, 8, 6), BB_GLINT), .14, .1, .12));
   healBerries.push({ g, x, y: pop ? y - 30 : y, gy: y, vy: pop ? -520 : 0, vx: pop ? rand(-60, 60) : 0, id, t: Math.random() * 6 });
 }
+let heroSaid = new Set();                            // (the "only Camila / only Rose" word: once each a stay)
 function hitCrate(c, d) {
   if (c.gone || (c.inv || 0) > 0) return false; c.inv = .18;
+  if (c.who && player.rig.id !== c.who) { c.wob = .4; SFX.block(); sparks(c.x - d * 20, c.y - 30, 4);   // (the other girl's: it glances off)
+    if (!heroSaid.has(c.who)) { heroSaid.add(c.who); toast(c.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THIS CRATE" : "ONLY A SWORD COULD CUT THROUGH THIS", 2400); } return true; }
   if (--c.hp > 0) { c.wob = 1; SFX.thud(); sparks(c.x - d * 20, c.y - 30, 5); return true; }
-  c.gone = true; actors.remove(c.g); cratesBroken.add(c.id); SFX.crack(); shake = Math.max(shake, 4); puffs(c.x, c.y - 26, 4, 30, 160);
+  c.gone = true; actors.remove(c.g); cratesBroken.add(c.id); SFX[c.who === "rose" ? "slash" : "crack"](); shake = Math.max(shake, c.who === "rose" ? 2 : 4); puffs(c.x, c.y - 26, 4, 30, 160);
   for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.12, .08, .1), toon(c.cols[i % c.cols.length])); m.position.set(X(c.x) + rand(-.3, .3), Y(c.y) + rand(.2, .8), rand(-.2, .3)); actors.add(m);
     parts.push({ m, v: V(rand(-6, 6) + d * 2, rand(4, 10), rand(-3, 3)), life: rand(.6, 1), t: 0, size: rand(.7, 1.3), g: 24, spin: 10, drag: .3, kind: "drop" }); }
-  spawnHealBerry(c.x, c.y, c.id, true); return true;
+  if (c.who && c.loot === "coins") dropLoot(c.x, c.y - 40, 5 + Math.floor(Math.random() * 4), true);   // (a pineapple crate's coins)
+  else if (!c.who || c.loot === "heal") spawnHealBerry(c.x, c.y, c.id, true);
+  return true;
 }
 // ── Glos's statue, in the woods' B4 (the user, 2026-10-26: "in berry woods, in b4, have a statue of glos, modeled just like her but in a confident pose and all gold
 // colored ... dont give a note that you can do it but make it breakable by the player and it stays as rubble on the ground. whenever you come back, it has been rebuilt,
@@ -8935,12 +9154,16 @@ function updatePlayer(dt) {
   // the guard starts with the hands drawn in close and opens out as you hold it (still blocking all the while), arms wide to a T,
   // and at the end of it a pink bubble pops up round you that takes one hit for you. With the bubble up you can't block: try, and you're just tired
   p.tired = Math.max(0, (p.tired || 0) - dt);
-  if (p.bubble) { if (held.block && !p.blockBtn && control && !p.tackle && !p.tackleLock) { p.tired = .85; SFX.huff(); puffs(p.x + p.face * 14, p.y - (p.rig.heightPx || 92) * .72, 2, 6, 60); } p.block = false; p.blockHold = 0; p.tpose = approach(p.tpose || 0, 0, dt * 5); }
-  else if (held.block && control && p.atkT < 0 && !p.combo && p.onGround && !(p.chargeT > 0) && !p.tackle && !p.tackleLock) {   // (not while an attack's charging)
+  // in the bubble, hold block to pop it from inside, as long as it took to make (the user, 2026-10-27): Rose pushes her sword slowly out through it, Camila goes up on tiptoe and pushes up at it (charkit: popB, popSword)
+  if (!held.block) p.popLock = false;
+  if (p.bubble) { if (held.block && control && !p.tackle && !p.tackleLock && p.atkT < 0 && !p.combo && !p.climb) { if (!p.popHold) SFX.huff(); p.popHold = (p.popHold || 0) + dt; if (p.popHold >= BUBBLE_HOLD) { p.popHold = 0; popBubble(p); p.popLock = true; } }
+    else p.popHold = Math.max(0, (p.popHold || 0) - dt * 3);
+    p.block = false; p.blockHold = 0; p.tpose = approach(p.tpose || 0, 0, dt * 5); }
+  else if (held.block && control && p.atkT < 0 && !p.combo && p.onGround && !(p.chargeT > 0) && !p.tackle && !p.tackleLock && !p.popLock) {   // (not while an attack's charging; nor straight on from popping one: let go first)
     p.blockHold = (p.blockHold || 0) + dt; p.tpose = Math.min(1, p.blockHold / 1.4);
-    if (p.blockHold > 1.55) { p.block = false; makeBubble(p); }                // the T done: the bubble
+    if (p.blockHold > BUBBLE_HOLD) { p.block = false; makeBubble(p); }        // the T done: the bubble
   } else { p.blockHold = 0; p.tpose = approach(p.tpose || 0, 0, dt * 5); }
-  p.blockBtn = held.block;
+  p.blockBtn = held.block; if (!p.bubble) p.popHold = 0; p.popB = p.bubble ? (p.popHold || 0) / BUBBLE_HOLD : 0; p.popSword = p.popB > 0 && !!(p.rig.spec && p.rig.spec.move && p.rig.spec.move.set === "sword");
   // the back-step (the user, 2026-10-25: "when they block and press back, away from where they are facing, they'll do a swift jump backwards a few
   // step. this is a sort of dodge/defensive measure. if you're holding block and press back, it should work, but also ... simultaneously hit back and
   // block"): back pressed with the guard up, or back and block within a moment of each other, whichever first
@@ -9229,6 +9452,7 @@ const SHIELD_M = new THREE.ShaderMaterial({ transparent: true, depthWrite: false
   fragmentShader: `uniform float uT; varying vec3 vN; varying vec3 vV; void main() { float f = 1.0 - abs(dot(vN, vV)); float rim = pow(f, 2.4);
     float hue = .5 + .5 * sin(f * 9.0 + uT * 2.0); vec3 c = mix(vec3(1.0, .45, .78), vec3(1.0, .72, .92), hue); float shine = smoothstep(.93, .99, dot(vN, normalize(vec3(-.45, .6, .65))));
     gl_FragColor = vec4(mix(c, vec3(1.0), rim * .5 + shine), .13 + rim * .62 + shine * .7); }` });
+const BUBBLE_HOLD = 1.55;                           // how long block's held to make the bubble (the guard opening out to the T), and to pop it again from inside
 const GUM_GROW = .22;                               // each hit the bubblegum's bubble has left: this much bigger (3 hits: 1.44× the plain bubble)
 function makeBubble(p, hits = 1) {                  // (hits: the bubblegum's takes three, a bit bigger at first, shrinking back with each)
   if (p.bubble) return;
@@ -9246,7 +9470,24 @@ function syncBubble(dt) {
   const p = player, B = p && p.bubble; SHIELD_M.uniforms.uT.value = time; if (!B) return;
   B.t += dt; const H = (p.rig.heightPx || 92) * S, u = Math.min(1, B.t / .4), pop = u < 1 ? 1 + Math.sin(u * Math.PI) * .25 - (1 - u) * (1 - u) * .9 : 1;
   B.k += ((B.hits || 1) - (B.k || 1)) * (1 - Math.exp(-dt * 9)); const big = 1 + ((B.k || 1) - 1) * GUM_GROW, r = H * .64 * pop * big, w = Math.sin(time * 5.5) * .035;   // (the bubblegum's: a bit bigger than the plain one, not three times: the user 2026-10-22)
-  B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1), p.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r * (1 + w * .5)); B.m.visible = !p.sunk;   // (sits on the ground like the plain one, not sunk into it. This line's scale had slipped into the comment, 10-22: both bubbles stuck small)
+  const pk = p.popB || 0, e = pk * pk * (3 - 2 * pk), pw = pk * .035 * Math.sin(time * 23), sq = p.popSword ? 1 : 1 - .15 * e;   // (pushed at from inside: trembling as it gives; pressed up at, it sags onto her hands, its foot still on the ground)
+  B.m.position.set(X(p.x), Y(p.y) + H * .5 + H * .64 * (big - 1) - (1 - sq) * r, p.z || 0); B.m.scale.set(r * (1 + w + pw) / Math.sqrt(sq), r * (1 - w - pw) * sq, r * (1 + w * .5) / Math.sqrt(sq)); B.m.visible = !p.sunk;
+  bubbleDent(p, B, pk);   // (sits on the ground like the plain one, not sunk into it. This line's scale had slipped into the comment, 10-22: both bubbles stuck small)
+}
+const _bq = new THREE.Vector3(), _bInv = new THREE.Matrix4(), BUB_FIST = [[0, -.1], [0, -.22], [0, -.32], [-.1, -.22], [.1, -.22], [-.1, -.32], [.1, -.32]];
+function bubbleDent(p, B, pk) {                     // its skin stretched out over what's pushing at it from inside (the sword's point; her fists), a tent of it up to each, till it pops
+  const G = B.m.geometry, P = G.attributes.position, A = P.array; if (!B.base) B.base = A.slice();
+  if (pk <= 0 && !B.dent) return; B.dent = pk > 0;
+  const r = p.rig, T = [];
+  if (pk > 0 && r) { B.m.updateMatrixWorld(true); _bInv.copy(B.m.matrixWorld).invert();
+    const add = q => { q.applyMatrix4(_bInv); const L = q.length(); if (L + .07 > 1) T.push({ x: q.x / L, y: q.y / L, z: q.z / L, ext: L + .07 }); };
+    if (r.prop && r.prop.kind === "sword" && r.prop.inner) { r.prop.inner.updateWorldMatrix(true, false); add(r.prop.inner.localToWorld(_bq.set(1.2, 0, 0))); }
+    else (r.hands || []).forEach(h => { h.updateWorldMatrix(true, false); for (const [fx, fy] of BUB_FIST) add(h.localToWorld(_bq.set(fx, fy, 0))); }); }   // (across the fist, out to its knuckles (a gauntlet's big): trails take -.07 for its middle)
+  const B0 = B.base, TH0 = .62;                      // (the tent's foot: ~35° round the point)
+  for (let i = 0; i < A.length; i += 3) { const bx = B0[i], by = B0[i + 1], bz = B0[i + 2]; let k = 1;
+    for (const o of T) { const a = bx * o.x + by * o.y + bz * o.z; if (a <= .81) continue; const u = 1 - Math.acos(Math.min(1, a)) / TH0; if (u > 0) k = Math.max(k, 1 + (o.ext - 1) * Math.pow(u, 1.4)); }
+    A[i] = bx * k; A[i + 1] = by * k; A[i + 2] = bz * k; }
+  P.needsUpdate = true; G.computeVertexNormals();
 }
 // swing trails (the user, 2026-10-23, after Odin Sphere: "a visual trail of the sword ... have the punches have the trail too for camila"): a
 // ribbon swept out behind the blade (hilt to tip) or the punching fist through each blow, bright at its head and gone in a moment. On game
@@ -10336,8 +10577,8 @@ function allyRoom() {                              // into a room: this world's 
   npcRoom(); coinHud(); patrolClear();               // (and the hub's beps, if it's one of the hub's rooms; last room's patrol gone)
   if (allyHere && !allies.some(a => a.r === allyHere.r)) allyHide(allyHere); allyHere = null;
   const A = ALLIES.find(a => buddyAt.w === world && buddyAt.rooms[a.id] === stage && !allyWith(a)); if (!A || stronghold || hideout || arena || mode !== "play" || !player) return;
-  const r = allyRig(A); let x = Math.abs(player.x - 600) > Math.abs(player.x - (WORLD - 600)) ? rand(500, 1100) : rand(WORLD - 1100, WORLD - 500);   // (somewhere along the room, away from where you came in)
-  for (let k = 0; k < 60 && (!solidAt(x) || shoreX(x) !== x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on dry ground: not the cove's water)
+  const r = allyRig(A), at = (WORLDS[world].buddyPos || {})[stage]; let x = at ?? (Math.abs(player.x - 600) > Math.abs(player.x - (WORLD - 600)) ? rand(500, 1100) : rand(WORLD - 1100, WORLD - 500));   // (somewhere along the room, away from where you came in; or the map's own place for it)
+  for (let k = 0; k < 60 && at === undefined && (!solidAt(x) || shoreX(x) !== x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on dry ground: not the cove's water)
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: Math.sign(player.x - x) || -1 });
   allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0, crew: crewOf(A, x, st.y) }; r.root.visible = r.shadow.visible = true;
 }
@@ -10813,7 +11054,9 @@ function bossFeel(e, dt) {                           // the heroines' weight for
   e.windup0 = e.windup > 0 ? Math.max(e.windup0 || 0, e.windup) : 0;   // (how deep into a jump's wind-up)
   e.landT = (e.landT ?? 9) + dt;
 }
-function bossPlan(e, D) { const last = e.lastMoves || []; return !D.atk2 ? D.atk : last.length >= 2 && last[0] === last[1] ? (last[0] === D.atk ? D.atk2 : D.atk) : Math.random() < .5 ? D.atk2 : D.atk; }   // never the same move three times running
+function bossPlan(e, D) { const last = e.lastMoves || [];
+  if (D.more && D.more.length) { const L = [D.atk, D.atk2, ...D.more].filter(Boolean), ok = last.length >= 2 && last[0] === last[1] ? L.filter(m => m !== last[0]) : L; return ok[Math.floor(Math.random() * ok.length)]; }   // (more: a boss's further moves, in the turn)
+  return !D.atk2 ? D.atk : last.length >= 2 && last[0] === last[1] ? (last[0] === D.atk ? D.atk2 : D.atk) : Math.random() < .5 ? D.atk2 : D.atk; }   // never the same move three times running
 function bossJumpTo(e, tx, ty, wind = .14) {         // a jump worked out to come down at (tx, ty): up past it a little, then down onto it
   const h = Math.max(40, e.y - ty + 45), vy = -Math.sqrt(2 * 2000 * h), T = -vy / 2000 + Math.sqrt(2 * Math.max(10, h - (e.y - ty)) / 2000);
   e.jumpVy = vy; e.jumpVx = clamp((tx - e.x) / T, -520, 520); e.windup = wind; e.sq = -.25; e.sqv = 0; e.steer = false;
@@ -10876,8 +11119,10 @@ function bossMove(e, p, D, dt) {
   e.braking = (tv === 0 || turning) && Math.abs(e.vx) > 150;                                 // (syncFoe: a skid, heels dug in)
   if (turning && Math.abs(e.vx) > 120 && Math.random() < dt * 12) dust(e.x, e.y, 2, -Math.sign(tv));
   e.atkCd -= dt;
-  if (e.atkCd <= 0 && !p.dead) { const pick = e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];
-    if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
+  if (D.leaf && (e.leafCd = (e.leafCd ?? 2.5) - dt) <= 0 && adx < 240 && Math.random() < dt * 1.3 && glosLeafGo(e, p)) return;   // (Glos: off as leaves, away from you)
+  if (D.under && (e.underCd = (e.underCd ?? 4) - dt) <= 0 && Math.random() < dt * .9 && glosUnderGo(e, p)) return;            // (and up under a ledge, after you from there)
+  if (e.atkCd <= 0 && !p.dead) { const near = !!D.near && adx < ATTACKS[D.near].range && Math.abs(p.y - e.y) < 90, pick = near ? D.near : e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];   // (near: a close-in move of its own, when you're right there)
+    if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); if (!near) e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
 }
 function foeOffGaps() {                           // a boss never walks (or lands) into a drop: back onto the near edge (rooms with drops, 2026-10-20)
   if (!GAPS.length || !enemy || enemy.dead || enemy.gone || !overGap(enemy.x) || (!enemy.onGround && enemy.y < GROUND - 10)) return;
@@ -10890,6 +11135,9 @@ function updateEnemy(dt) {
   if (!e.dead && e.y > SINK + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
+  if (e.under && (e.dead || e.chide)) glosUnderOff(e, 1);
+  if (!e.dead && !e.chide && (e.leaf || e.under)) { if (e.leaf) glosLeafStep(e, dt); else glosUnderStep(e, p, dt);   // (Glos as leaves, or under her ledge: these move her themselves)
+    if (e.leaf || e.under) { bossFeel(e, dt); spring(e, dt); const yT = e.dir > 0 ? -.5 : -Math.PI + .5; e.yaw = lerp(e.yaw, yT, 1 - Math.exp(-dt * 9)); return; } }
   e.braking = false; if (e.recoil > 0 || e.hurtT > 0 || e.atk || !e.onGround || e.dead) e.dashT = 0;   // (a dash is only ever on its own feet)
   if (e.chide) chideStep(e, dt);                      // telling Evil June off before the fight
   else if (e.dead) {
@@ -11292,7 +11540,7 @@ function syncKitFoe(e, r, dt) {                // a boss built on a character ri
   k.rot = e.dead ? approach(k.rot, -.6, dt * 3) : 0;
   if (dt > 0) KIT.updatePose(k, dt);
   r.sync(k, r, dt);
-  FLASHSET(r.mats, e.flash > 0 || (e.dead && Math.floor(e.deathT * 16) % 2 === 0) ? .95 : 0);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0);
 }
 // ── their attacks
 const crescentG = new THREE.TorusGeometry(.62, .13, 8, 28, Math.PI * .95).rotateZ(-Math.PI * .475);
@@ -12054,6 +12302,13 @@ function buildGlos() {
     if (e.move === "swirlseeds" && ch) { r.arms[0].rotation.z = 2.7; r.arms[0].rotation.x = -.3; }               // a hand raised, the seeds spinning up
     if (e.move === "swirlseeds" && act) { r.arms[0].rotation.z = lerp(2.7, 1.1, clamp(e.actT / .18, 0, 1)); }    // and flung
     if (e.move === "thornroots" && (ch || act)) { r.arms.forEach((A, i) => { A.rotation.z = ch ? 2.4 : .3; A.rotation.x = (i ? -1 : 1) * .3; }); }
+    if (e.move === "branches" && ch) r.arms.forEach((A, i) => { const a = t * 8 + i * Math.PI; A.rotation.z = 2.55 + Math.sin(a) * .45; A.rotation.x = Math.cos(a) * .55; });   // arms up, waving round in a swirl
+    if (e.move === "branches" && act) r.arms.forEach((A, i) => { const k = (e.actT % .5) / .5, u = clamp(k / .12, 0, 1); A.rotation.z = lerp(2.6, .9, u); A.rotation.x = (i ? -1 : 1) * .25; });   // and thrown down and out, each branch
+    const nearOf = L => L && L.length > 1 ? L[(L[0].position.z >= 0) === (e.dir > 0) ? 0 : 1] : L && L[0], nA = nearOf(r.arms), nL = nearOf(r.legs);   // (the arm and leg on your side of her, whichever way she faces)
+    if (e.move === "glosCombo" && ch) { nA.rotation.z = -.45; nA.rotation.x = .2; }
+    if (e.move === "glosCombo" && act) { const a = e.actT; if (a < .3) nA.rotation.z = lerp(-.45, 1.65, clamp(a / .08, 0, 1));   // the punch out...
+      else if (nL) { const u = clamp((a - .3) / .08, 0, 1) * (1 - clamp((a - .52) / .14, 0, 1)); nL.rotation.z = lerp(nL.rotation.z, 1.45, u); } }   // ...and the kick
+    if (e.move === "underswipe" && e.under) { const u = e.under.t; nA.rotation.z = u < .24 ? lerp(.3, -.6, u / .24) : lerp(-.6, 2.4, clamp((u - .24) / .1, 0, 1)); }   // (hung upside down: a swipe down at you)
   };
   return r;
 }
@@ -12089,8 +12344,120 @@ Object.assign(ATTACKS, {
     tick(e) { if (e.emitN === 0 && e.actT >= .2) { SFX.slam(); shake = Math.max(shake, 5); }
       while (e.emitN < 7 && e.actT >= .2 + e.emitN * .1) { spawnThornWarn(e, e.emitN); e.emitN++; } } },
 });
+// ── Glos's own moves (the user, 2026-10-27: "for the glos fight, let's do her actual moves"):
+// 1. "when she wants to move far from the player ... a stream of leaves that bounces on the floor like a slinky and then materializes into her full self again after three
+//    hops that way. she is impervious to damage when she does this": glosLeafGo / glosLeafStep, the leaves in glosPost
+// 2. "she should be able to crawl under any of the platforms there and swipe at the player. she can get hit there and if she gets hit 3 times she falls off. if she gets hit
+//    twice but not the third, she will do a rushing crawl off of the platform and jump off to the other side. she can hit the player while doing this": up under a ledge,
+//    hanging from it upside down (crouched small under a low one), creeping along after you and swiping down; glosUnderGo / glosUnderStep
+// 3. "she will extend her arms up, wave them in a swirly kind of pattern and make three long branches extend across the map from either the ceiling or floor ... in quick
+//    succession but with a hint of ground rumbling on the bottom before they come out": ATTACKS.branches (low out of the floor: jump it; down out of the canopy, at head
+//    height and over: stay down)
+// 4. "a basic 2 hit combo she does punching and kicking when she gets close enough to the player": ATTACKS.glosCombo
+const LEAF_N = 26, LEAF_LAG = .022, LEAF_HOP = .3, LEAF_GO = .15;
+let leafStream = null;
+function leafMeshes() {
+  if (leafStream && leafStream.G.parent) return leafStream;
+  const G = group(actors), sh = new THREE.Shape(); sh.moveTo(0, -.16); sh.bezierCurveTo(.12, -.06, .1, .1, 0, .16); sh.bezierCurveTo(-.1, .1, -.12, -.06, 0, -.16);
+  const geo = new THREE.ShapeGeometry(sh, 6), M = ["#4fdc1e", "#3fb81a", "#8fe85a", "#2e9a18", "#f6fbf0"].map(c => toon(c, { side: THREE.DoubleSide }));
+  const L = []; for (let k = 0; k < LEAF_N; k++) { const m = new THREE.Mesh(geo, M[k % 5]); m.scale.setScalar(2.3 + (k % 3) * .6); G.add(m); L.push(m); }   // (each about a third of her head's size: a stream you can see)
+  G.visible = false; return (leafStream = { G, L });
+}
+function glosLeafGo(e, p) {                          // off as a stream of leaves, to somewhere a good way from you
+  if (e.leaf || e.under || e.dead) return false;
+  const away = Math.sign(e.x - p.x) || -e.dir, lo = arena ? arena.l + 160 : 160, hi = arena ? arena.r - 160 : WORLD - 160; let tx = null;
+  for (const d of [away, -away]) { for (const L of [680, 540, 420]) { const x = clamp(p.x + d * L, lo, hi); if (Math.abs(x - p.x) > 300 && Math.abs(x - e.x) > 260 && groundAt(x) !== null) { tx = x; break; } } if (tx !== null) break; }
+  if (tx === null) return false;
+  e.leaf = { t: 0, x0: e.x, y0: e.y, x1: tx, y1: groundAt(tx) ?? GROUND, hop: -1 }; e.atk = null; e.windup = 0; e.vx = e.vy = 0; e.dashT = 0; e.leafCd = rand(5, 8);
+  SFX.whoosh(); puffs(e.x, e.y - 90, 5, 40, 140); return true;
+}
+const leafPath = (L, t) => { const T = clamp(t / LEAF_HOP, 0, 3), k = Math.min(2, Math.floor(T)), u = T - k;   // the head's way: three hops, each up a little and down again, a slinky's
+  return [lerp(L.x0, L.x1, (k + u) / 3), lerp(L.y0, L.y1, (k + u) / 3) - Math.sin(u * Math.PI) * 130]; };
+const leafEnd = () => LEAF_GO + 3 * LEAF_HOP + LEAF_N * LEAF_LAG;   // (the tail in)
+function glosLeafStep(e, dt) {
+  const L = e.leaf; L.t += dt; e.inv = Math.max(e.inv, .5); e.vx = e.vy = 0; e.onGround = true; e.plat = null;   // (nothing touches her meanwhile, and she touches nothing)
+  const [hx] = leafPath(L, L.t - LEAF_GO); e.x = hx; e.y = groundAt(e.x) ?? e.y;
+  const hop = Math.floor((L.t - LEAF_GO) / LEAF_HOP); if (hop > L.hop && hop >= 1 && hop <= 3) { L.hop = hop; const [lx] = leafPath(L, hop * LEAF_HOP); dust(lx, groundAt(lx) ?? GROUND, 4); SFX.blop(); }   // (each landing)
+  if (L.t >= leafEnd() + .22) { e.leaf = null; e.x = L.x1; e.y = L.y1; e.onGround = true; e.inv = .25; e.atkCd = Math.min(e.atkCd, .7); e.brainT = 0; e.sq = -.3; e.sqv = 0; puffs(e.x, e.y - 90, 6, 40, 160); SFX.whoosh(); }   // herself again
+}
+function glosUnderSpot(e, p) {                       // a ledge to hang from: room to stand under it, near you
+  let best = null;
+  for (const q of PLATFORMS) { if (q.crumble !== undefined || q.w < 220) continue; const gy = groundAt(q.x + q.w / 2); if (gy === null) continue; const clr = gy - q.y;
+    if (clr < 215 || clr > 460 || p.x < q.x - 240 || p.x > q.x + q.w + 240) continue; const d = Math.abs(q.x + q.w / 2 - e.x); if (!best || d < best.d) best = { q, d, clr }; }
+  return best;
+}
+function glosUnderGo(e, p) {
+  if (e.leaf || e.under || e.dead || !e.onGround) return false; const B = glosUnderSpot(e, p); if (!B) return false;
+  const q = B.q, top = q.y + 14, h = clamp(B.clr - 14 - 118, 100, e.def.h);   // (hanging, her head out of your way: as low as a hero's height, and a little)
+  e.under = { q, phase: "up", t: 0, x0: e.x, y0: e.y, x: clamp(e.x, q.x + 50, q.x + q.w - 50), hits: 0, hitT: -9, top, h, cd: .8, far: 0 }; e.atk = null; e.windup = 0; e.vx = e.vy = 0; e.dashT = 0; e.underCd = rand(7, 10);
+  SFX.jump(); dust(e.x, e.y, 4); return true;
+}
+function glosUnderOff(e, how) {                      // 0: lets go, down she drops · 1: knocked off, down hard and dazed a moment · 2: the leap off the ledge's end, to the far side
+  const U = e.under; if (!U) return; e.under = null; e.onGround = false; e.plat = null; e.move = null; e.atk = null;
+  const gy = groundAt(e.x) ?? GROUND; e.y = Math.min(U.top + U.h, gy - 10); puffs(e.x, U.top + U.h * .5, 5, 30, 140);   // (over and the right way up, in a burst of leaves, from where she hung)
+  if (how === 2) { e.vx = U.dir * 560; e.vy = -260; e.dir = U.dir; e.sq = .3; e.sqv = 0; SFX.jump(); return; }
+  e.vx = 0; e.vy = how === 1 ? 260 : 80;
+  if (how === 1) { e.hurtT = .9; e.flash = .14; shake = Math.max(shake, 5); SFX.thud(); puffs(e.x, U.top + 30, 6, 40, 180); e.atkCd = Math.max(e.atkCd, 1.4); }
+}
+function glosUnderStep(e, p, dt) {
+  const U = e.under, q = U.q, D = e.def; U.t += dt; e.vy = 0; e.onGround = true; e.plat = null;
+  if (!PLATFORMS.includes(q)) { glosUnderOff(e, 0); return; }
+  const bottom = U.top + U.h;                        // (where her head hangs to: e.y, the bottom of her box)
+  if (U.phase === "up") { const u = clamp(U.t / .38, 0, 1); e.x = lerp(U.x0, U.x, u); e.y = lerp(U.y0, Math.min(U.y0, U.top + D.h), u) - Math.sin(u * Math.PI) * 70; e.vx = 0;   // (up till her head meets its underside: then she's over, hanging from it)
+    if (u >= 1) { U.phase = "crawl"; U.t = 0; puffs(e.x, U.top + 10, 4, 30, 120); SFX.thud(); } return; }
+  e.y = bottom;
+  if (U.hits >= 3) { glosUnderOff(e, 1); return; }                 // three blows: off she comes
+  if (U.hits === 2 && U.phase !== "rush" && time - U.hitT > .6) { U.phase = "rush"; U.t = 0; U.dir = Math.sign(p.x - e.x) || e.dir; SFX.whoosh(); }   // two, and no third: a rush for the end of it
+  if (U.phase === "rush") { e.dir = U.dir; e.vx = U.dir * 560; e.x += e.vx * dt; e.phase += dt * 560 * bossStep(D.rig);
+    if (Math.random() < dt * 30) puffs(e.x, U.top + 8, 1, 10, 80);
+    if (e.x <= q.x + 16 || e.x >= q.x + q.w - 16) glosUnderOff(e, 2); return; }   // ...and off its end, over to the far side
+  if (U.phase === "swipe") { e.vx = 0; e.move = "underswipe";
+    if (!U.hit && U.t >= .24) { U.hit = true; SFX.whoosh(); hzOwner = e; addHz({ x: e.x + e.dir * 34, y: bottom + 18, r: 48, life: .12 }); hzOwner = null; }   // (a swipe down at you: block it)
+    if (U.t >= .58) { U.phase = "crawl"; U.t = 0; U.cd = rand(.7, 1.2); U.hit = false; e.move = null; } return; }
+  const tx = clamp(p.x, q.x + 40, q.x + q.w - 40), d = tx - e.x, sp = 175; e.dir = Math.sign(p.x - e.x) || e.dir;   // creeping along it after you
+  e.vx = Math.abs(d) < 6 ? 0 : Math.sign(d) * Math.min(sp, Math.abs(d) * 6); e.x += e.vx * dt; e.phase += dt * Math.abs(e.vx) * bossStep(D.rig);
+  U.cd -= dt; if (U.cd <= 0 && !p.dead && Math.abs(p.x - e.x) < 100 && p.y > U.top + 20) { U.phase = "swipe"; U.t = 0; SFX.charge(); }
+  U.far = Math.abs(p.x - (q.x + q.w / 2)) > q.w / 2 + 420 ? U.far + dt : 0; if (U.far > 1.4 || U.t > 9) glosUnderOff(e, 0);   // (you've gone off: so does she)
+}
+function glosPost(e, r) {                            // after syncFoe: hung upside down under her ledge; or gone to leaves, the stream of them
+  const S = leafMeshes(), U = e.under, L = e.leaf;
+  if (U && U.phase !== "up") { const k = U.h / e.def.h; r.root.position.y = Y(U.top); r.root.scale.set(r.root.scale.x * (1 + (1 - k) * .3), -Math.abs(r.root.scale.y) * k, r.root.scale.z * (1 + (1 - k) * .3)); }   // (her feet to its underside, the rest of her hanging; crouched small under a low one)
+  if (!L) { if (S.G.visible) S.G.visible = false; if (r.__leafHid) { r.__leafHid = false; if (!e.gone) { r.root.visible = true; if (r.shadow) r.shadow.visible = true; } } return; }   // (herself again, however the leaves ended)
+  const end = leafEnd(), vis = !(L.t > .08 && L.t < end + .16); r.root.visible = vis; if (r.shadow) r.shadow.visible = vis; r.__leafHid = !vis;
+  S.G.visible = true;
+  S.L.forEach((m, k) => { const tk = L.t - LEAF_GO - k * LEAF_LAG; let x, y;
+    if (tk < 0) { const f = clamp(L.t / LEAF_GO, 0, 1); x = L.x0 + Math.sin(k * 2.3) * 22 * (1 - f); y = L.y0 - 20 - (k / LEAF_N) * 160 * (1 - f); }   // (her body coming apart into them)
+    else if (tk > 3 * LEAF_HOP) { const f = clamp((tk - 3 * LEAF_HOP) / .2, 0, 1); x = L.x1 + Math.sin(k * 2.3) * 22 * f; y = L.y1 - 20 - (k / LEAF_N) * 160 * f; }   // (and back into her)
+    else [x, y] = leafPath(L, tk);
+    m.position.set(X(x), Y(y) + .1, .35 + Math.sin(k * 1.7) * .25); m.rotation.set(L.t * 7 + k, L.t * 5 + k * .7, k * .9); m.visible = tk < 3 * LEAF_HOP + .3; });
+}
+function spawnBranch(e, fromTop) {                   // one long branch: a rumble along where it'll come (bits down from the canopy, for one from above), then out it shoots, right across
+  const d = e.dir, gy = groundAt(e.x) ?? GROUND, x0 = e.x + d * 46, x1 = d > 0 ? WORLD + 80 : -80, len = Math.abs(x1 - x0), yRun = gy - (fromTop ? 150 : 34);
+  addHz({ x: x0, y: gy, life: .36, harmless: true, tick: (h, dt) => { shake = Math.max(shake, 1.4); if (Math.random() < dt * 34) { const xx = x0 + d * Math.random() * Math.min(len, 1100), yy = groundAt(xx) ?? gy;
+      if (fromTop) spawn("puff", X(xx), Y(yRun - 260), rand(-.2, .2), V(0, -6, 0), .5, .2, { g: 20 }); else dust(xx, yy, 1); } },
+    onEnd: () => { if (!bossIn || !enemy || enemy.dead) return;
+      const g = new THREE.Group(), bark = toonT("#5a3a22"), bark2 = toonT("#6e4a2a"), leafM = toonT("#4fdc1e"), L = len * S, RT = fromTop ? 7 : .9;
+      const pts = []; for (let i = 0; i <= 40; i++) { const u = i / 40; pts.push(new THREE.Vector3(d * u * L, Math.sin(u * L * .45) * .22 * Math.min(1, u * 6), 0)); }   // (a branch, not a pole: bending a little as it goes)
+      const run = mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, .26, 8), null, { mat: bark, ol: .03, smooth: true }); g.add(run);
+      const riser = mk(new THREE.CylinderGeometry(.3, .4, RT, 8).translate(0, fromTop ? RT / 2 : -RT / 2, 0), null, { mat: bark2, ol: .03, smooth: true }); g.add(riser);   // (where it comes out of the floor, or down out of the canopy)
+      const LS = leafMeshes().L[0].geometry;
+      for (let s2 = .7, k = 0; s2 < L; s2 += .75, k++) { const up = k % 2 ? 1 : -1, yb = Math.sin(s2 * .45) * .22;
+        const th = mk(new THREE.ConeGeometry(.09, .42, 5), null, { mat: bark2, ol: .015 }); th.position.set(d * s2, yb + up * .3, .08); th.rotation.z = (up > 0 ? 0 : Math.PI) + d * .45; g.add(th);   // (a thorn)
+        if (k % 2 === 0) { const lf = new THREE.Mesh(LS, leafMeshes().L[k % 4].material); lf.scale.setScalar(3.2); lf.position.set(d * (s2 + .3), yb - up * .42, .12); lf.rotation.set(.3, 0, (up > 0 ? Math.PI : 0) + d * .6); g.add(lf); } }   // (and its leaves)
+      SFX.slam(); shake = Math.max(shake, 5); dust(x0, gy, 6); hzOwner = enemy;
+      addHz({ m: g, x: x0, y: yRun, life: .62, harmless: true, z: .1, sync: h => { const u = h.t / h.life, k = u < .25 ? u / .25 : u > .75 ? (1 - u) / .25 : 1; h.m.scale.set(Math.max(.001, k), 1, 1); } });   // (out across in a flash, held, back)
+      for (let s2 = 26; s2 < len; s2 += 34) addHz({ x: x0 + d * s2, y: yRun, r: 18, life: .62, harmless: true, nob: true, tick: h => { const u = h.t / h.life, reach = (u < .25 ? u / .25 : 1) * len; h.harmless = !(s2 <= reach && u < .72); } });
+      hzOwner = null; } });
+}
+Object.assign(ATTACKS, {
+  branches: { charge: 1.0, act: 1.75, cd: [4.2, 6], range: 1300, desc: "Arms up, waving round in a swirl: then three long branches shoot right across the room, one after another, low out of the floor (jump it) or down out of the canopy (stay down). A rumble comes first.",
+    tick(e) { while (e.emitN < 3 && e.actT >= e.emitN * .5) { if (e.emitN === 0) e.brPat = Math.random() < .5; spawnBranch(e, (e.emitN === 1) !== !e.brPat ? true : false); e.emitN++; } } },
+  glosCombo: { charge: .22, act: .66, cd: [1.6, 2.6], range: 150, desc: "Close in: a quick punch, then a kick.",
+    tick(e) { if (e.emitN === 0 && e.actT >= .08) { e.emitN = 1; SFX.whoosh(); e.vx = e.dir * 160; addHz({ x: e.x + e.dir * 72, y: e.y - 122, r: 38, life: .1 }); }
+      if (e.emitN === 1 && e.actT >= .36) { e.emitN = 2; SFX.whoosh(); e.vx = e.dir * 180; addHz({ x: e.x + e.dir * 84, y: e.y - 62, r: 42, life: .12 }); } } },
+});
 let WOOD_FOES = null;
-const woodFoes = () => WOOD_FOES || (WOOD_FOES = [{ id: "glos", name: "GLOS", rig: buildGlos(), sync: syncFoe, hw: 34, h: 188, hp: 18, speed: 95, jumpy: .35, atk: "swirlseeds", atk2: "thornroots", portraitY: .7 }]);
+const woodFoes = () => WOOD_FOES || (WOOD_FOES = [{ id: "glos", name: "GLOS", rig: buildGlos(), sync: syncFoe, post: glosPost, hw: 34, h: 188, hp: 18, speed: 95, jumpy: .35, atk: "swirlseeds", atk2: "thornroots", more: ["branches"], near: "glosCombo", leaf: true, under: true, portraitY: .7 }]);
 
 // ── the woods' baddies: leafy, thorny, wooden. Built like the berries (the same kit: eyes, brows, mouths, feet), so sad faces, sleeping
 // and everything else works on them too
@@ -17161,6 +17528,23 @@ const ACC = {
   shoes_chunky: { slot: "shoes", pl: true, name: "CHUNKY SNEAKERS", price: 60, desc: "BIG THICK SOLES, IN HER OWN COLOURS" },
   sandals: { slot: "shoes", pl: true, name: "SANDALS", price: 40, desc: "STRAPPY SANDALS IN HER OWN COLOURS, TOES OUT" },
 };
+// the drops (the user, 2026-10-27: "two enemies will each drop a charm for each character that cannot be bought elsewhere"): in every world one for Camila (off her
+// wrist) and one for Rose (off her hilt), each on the key ring, never on a seller's counter (drop: its world). Who carries them: dropPick
+const DROP_CHARMS = [
+  [0, "camila", "coqui", "COQUÍ CHARM", "THE LITTLE TREE FROG THAT SINGS ALL NIGHT"], [0, "rose", "acorn", "ACORN CHARM", "AN ACORN FROM THE BERRY WOODS"],
+  [1, "camila", "shell", "SHELL CHARM", "A CORAL-PINK SCALLOP SHELL"], [1, "rose", "anchor", "ANCHOR CHARM", "A LITTLE SILVER ANCHOR"],
+  [2, "camila", "bolt", "BOLT CHARM", "A LIGHTNING BOLT FROM VOLT KEEP"], [2, "rose", "cog", "COG CHARM", "A BRASS COG, ITS TEETH ALL ROUND"],
+  [3, "camila", "cloud", "CLOUD CHARM", "A PUFF OF LOOF'S SKY"], [3, "rose", "feather", "FEATHER CHARM", "A SKY-BLUE FEATHER"],
+  [4, "camila", "cactus", "CACTUS CHARM", "A CACTUS IN FLOWER, FROM THE DUNES"], [4, "rose", "sun", "SUN CHARM", "THE DESERT SUN, ALL ITS RAYS"],
+  [5, "camila", "sunflower", "SUNFLOWER CHARM", "A SUNFLOWER FROM KESH'S GARDEN"], [5, "rose", "ladybug", "LADYBUG CHARM", "RED, SPOTTED, OUT OF THE HEDGES"],
+  [6, "camila", "lolly", "LOLLIPOP CHARM", "A PINK SWIRL ON A STICK"], [6, "rose", "bonbon", "BONBON CHARM", "A WRAPPED CANDY, TWISTED AT BOTH ENDS"],
+  [7, "camila", "query", "QUESTION CHARM", "WHICH WAY? NOBODY IN CRUX'S CITY KNOWS"], [7, "rose", "key", "KEY CHARM", "A GOLD KEY TO SOMEWHERE IN THE CITY"],
+  [8, "camila", "turtle", "TURTLE CHARM", "A LITTLE TURTLE FROM THE LAKEBED"], [8, "rose", "lily", "LILY PAD CHARM", "A LILY PAD IN FLOWER"],
+  [10, "camila", "trumpet", "TRUMPET CHARM", "A GOLD TRUMPET FROM THE BAZAAR"], [10, "rose", "lantern", "LANTERN CHARM", "A BAZAAR LANTERN, LIT"],
+  [11, "camila", "dice", "DICE CHARM", "A LUCKY DIE FROM THE CASINO"], [11, "rose", "chip", "CHIP CHARM", "A RED CASINO CHIP"],
+  [12, "camila", "crown", "CROWN CHARM", "A GOLD CROWN, RED STONES IN IT"], [12, "rose", "crest", "CREST CHARM", "KING P'S BLUE SHIELD, GOLD ROUND IT"],
+  [13, "camila", "pearl", "PEARL CHARM", "A PEARL IN ITS SHELL, FROM THE DEEP"], [13, "rose", "starfish", "STARFISH CHARM", "AN ORANGE STARFISH FROM THE DEEP"]];
+DROP_CHARMS.forEach(([w, hero, shape, name, desc]) => { ACC["dc_" + shape] = { slot: "weapon", prop: "any", hero, name, price: 0, desc: `${desc}: FOR ${hero.toUpperCase()}, OFF HER ${hero === "rose" ? "HILT" : "WRIST"}`, drop: w, shape }; });
 const GEAR_HEROES = ["camila", "rose"], GEAR_WPN = { camila: "GAUNTLET", rose: "HILT" }, GEAR_SLOTS = ["head", "hat", "hair", "ears", "wrist", "weapon", "legs", "socks", "shoes"], SLOT_NAME = { head: "FACE", hat: "HAT", hair: "HAIR", ears: "EARS", wrist: "WRIST", legs: "LEGS", socks: "SOCKS", shoes: "SHOES" };   // (legs, socks, shoes: 2026-10-27)
 const slotName = (hero, slot) => SLOT_NAME[slot] || GEAR_WPN[hero];
 const wearBlank = () => Object.fromEntries(GEAR_SLOTS.map(k => [k, null]));
@@ -17200,7 +17584,35 @@ const ACC_SVG2 = {                                   // (the second set's own pi
   larimar_ears: '<svg viewBox="0 0 40 40"><path d="M11 4 Q15 4 13 9 M27 4 Q31 4 29 9" fill="none" stroke="#c7cfd6" stroke-width="2.4"/><path d="M12 10 Q19 20 12 27 Q5 20 12 10 Z M28 10 Q35 20 28 27 Q21 20 28 10 Z" fill="#7fd3ea" stroke="#2f3b43" stroke-width="2"/></svg>',
   charm_tambora: '<svg viewBox="0 0 40 40"><circle cx="20" cy="5" r="4" fill="none" stroke="#c7cfd6" stroke-width="2"/><path d="M20 9 V14" stroke="#c7cfd6" stroke-width="2"/><rect x="8" y="14" width="8" height="20" fill="#e8242f"/><rect x="16" y="14" width="8" height="20" fill="#fff"/><rect x="24" y="14" width="8" height="20" fill="#2a5bd6"/><rect x="8" y="14" width="24" height="20" fill="none" stroke="#2f3b43" stroke-width="2"/><path d="M8 14 L14 34 L20 14 L26 34 L32 14" stroke="#eee" stroke-width="1.2" fill="none"/></svg>',
   charm_guiro: '<svg viewBox="0 0 40 40"><circle cx="18" cy="5" r="4" fill="none" stroke="#c7cfd6" stroke-width="2"/><path d="M18 9 V12" stroke="#c7cfd6" stroke-width="2"/><rect x="11" y="12" width="14" height="25" rx="3" fill="#cfd6dc" stroke="#2f3b43" stroke-width="2"/><path d="M25 17 H31 V32 H25" fill="none" stroke="#9aa3aa" stroke-width="2"/><path d="M14 16 h8 M14 20 h8 M14 24 h8 M14 28 h8 M14 32 h8" stroke="#8a939a" stroke-width="1.6" stroke-dasharray="1.6 1.6"/></svg>' };
-const accSvg = (id, hero) => { if (SHOE_SVG[id]) { const bt = shoeCols(hero); return `<svg viewBox="0 0 40 40">${SHOE_SVG[id].replaceAll('"C"', `"${bt.col}"`).replaceAll('"A"', `"${bt.studsCol}"`).replaceAll('"S"', `"${bt.soleCol}"`)}</svg>`; } if (ACC_SVG2[id]) return ACC_SVG2[id]; let v = ACC_SVG[id.startsWith("mask") ? "mask" : id.startsWith("band") ? "band" : id.startsWith("charm") ? "charm" : "head"]; const T = ACC_TINT[id] || [];   // (each one's own colours)
+const DC_SVG = {                                     // (the drop charms' pictures: on the key ring, like the tambora's)
+  coqui: '<ellipse cx="20" cy="27" rx="10" ry="8" fill="#b8783e"/><ellipse cx="20" cy="20" rx="8" ry="6" fill="#c8884a"/><circle cx="16" cy="18" r="2.6" fill="#1d1d1d"/><circle cx="24" cy="18" r="2.6" fill="#1d1d1d"/><circle cx="9" cy="34" r="2" fill="#d9a066"/><circle cx="31" cy="34" r="2" fill="#d9a066"/>',
+  acorn: '<ellipse cx="20" cy="27" rx="8" ry="9.5" fill="#c98a3c" stroke="#2f3b43" stroke-width="1.6"/><path d="M10 21 Q20 11 30 21 Z" fill="#7a5236" stroke="#2f3b43" stroke-width="1.6"/><path d="M20 13 V16" stroke="#5a3d26" stroke-width="2"/>',
+  shell: '<path d="M20 14 L8 32 Q20 38 32 32 Z" fill="#ff9f8a" stroke="#2f3b43" stroke-width="1.6" stroke-linejoin="round"/><path d="M20 14 L13 33 M20 14 L20 35 M20 14 L27 33" stroke="#e0705e" stroke-width="1.4"/>',
+  anchor: '<circle cx="20" cy="15" r="2.6" fill="none" stroke="#9aa3aa" stroke-width="2"/><path d="M20 17 V35 M14 21 H26 M10 29 Q20 40 30 29" fill="none" stroke="#9aa3aa" stroke-width="2.6"/>',
+  bolt: '<path d="M22 13 L13 26 H19 L16 37 L27 23 H21 L24 13 Z" fill="#ffd21a" stroke="#2f3b43" stroke-width="1.6" stroke-linejoin="round"/>',
+  cog: '<circle cx="20" cy="25" r="9" fill="#c9a227" stroke="#2f3b43" stroke-width="1.6"/><path d="M20 13 V16 M20 34 V37 M8 25 H11 M29 25 H32 M12 17 L14 19 M26 31 L28 33 M28 17 L26 19 M12 33 L14 31" stroke="#c9a227" stroke-width="3.4"/><circle cx="20" cy="25" r="3" fill="#6e5a2a"/>',
+  cloud: '<path d="M11 32 Q6 32 7 27 Q8 23 13 24 Q14 17 21 18 Q28 18 28 24 Q34 23 34 28 Q34 32 29 32 Z" fill="#ffffff" stroke="#2f3b43" stroke-width="1.6"/>',
+  feather: '<path d="M20 13 Q30 22 20 38 Q10 22 20 13 Z" fill="#7fc8ff" stroke="#2f3b43" stroke-width="1.6"/><path d="M20 15 V38" stroke="#ffffff" stroke-width="1.6"/>',
+  cactus: '<rect x="16" y="15" width="8" height="19" rx="4" fill="#3f9a4a" stroke="#2f3b43" stroke-width="1.4"/><path d="M16 26 H11 V20 M24 24 H29 V18" fill="none" stroke="#3f9a4a" stroke-width="3.4"/><circle cx="20" cy="14" r="2.4" fill="#ff5fa8"/><rect x="13" y="33" width="14" height="4" fill="#c96a3c"/>',
+  sun: '<circle cx="20" cy="25" r="7" fill="#ffb020" stroke="#2f3b43" stroke-width="1.4"/><path d="M20 13 V16 M20 34 V37 M8 25 H11 M29 25 H32 M12 17 L14 19 M26 31 L28 33 M28 17 L26 19 M12 33 L14 31" stroke="#ffd21a" stroke-width="2.6"/>',
+  sunflower: '<g fill="#ffd21a" stroke="#2f3b43" stroke-width="1"><ellipse cx="20" cy="16" rx="3" ry="5"/><ellipse cx="20" cy="34" rx="3" ry="5"/><ellipse cx="11" cy="25" rx="5" ry="3"/><ellipse cx="29" cy="25" rx="5" ry="3"/><ellipse cx="14" cy="19" rx="3" ry="5" transform="rotate(-45 14 19)"/><ellipse cx="26" cy="31" rx="3" ry="5" transform="rotate(-45 26 31)"/><ellipse cx="26" cy="19" rx="3" ry="5" transform="rotate(45 26 19)"/><ellipse cx="14" cy="31" rx="3" ry="5" transform="rotate(45 14 31)"/></g><circle cx="20" cy="25" r="5" fill="#6e4022"/>',
+  ladybug: '<circle cx="20" cy="15" r="4" fill="#1d1d1d"/><ellipse cx="20" cy="26" rx="10" ry="10" fill="#e8242f" stroke="#2f3b43" stroke-width="1.4"/><path d="M20 16 V36" stroke="#1d1d1d" stroke-width="1.4"/><g fill="#1d1d1d"><circle cx="15" cy="23" r="2"/><circle cx="25" cy="23" r="2"/><circle cx="14" cy="30" r="2"/><circle cx="26" cy="30" r="2"/></g>',
+  lolly: '<path d="M20 11 V18" stroke="#ffffff" stroke-width="2"/><circle cx="20" cy="27" r="10" fill="#ff5fa8" stroke="#2f3b43" stroke-width="1.4"/><circle cx="20" cy="27" r="6.5" fill="none" stroke="#fff" stroke-width="1.6"/><circle cx="20" cy="27" r="3" fill="none" stroke="#fff" stroke-width="1.6"/>',
+  bonbon: '<ellipse cx="20" cy="26" rx="8" ry="6" fill="#8a4fd6" stroke="#2f3b43" stroke-width="1.4"/><path d="M12 26 L5 21 V31 Z M28 26 L35 21 V31 Z" fill="#c9a2ff" stroke="#2f3b43" stroke-width="1.2" stroke-linejoin="round"/>',
+  query: '<path d="M14 19 Q14 12 20 12 Q27 12 27 18 Q27 22 21 25 V29" fill="none" stroke="#ffd21a" stroke-width="3.6" stroke-linecap="round"/><circle cx="21" cy="35" r="2.4" fill="#ffd21a"/>',
+  key: '<circle cx="20" cy="16" r="4" fill="none" stroke="#ffcf1f" stroke-width="2.6"/><path d="M20 20 V37 M20 35 H25 M20 31 H24" stroke="#ffcf1f" stroke-width="2.6"/>',
+  turtle: '<circle cx="20" cy="14" r="3" fill="#9ccf6a"/><ellipse cx="20" cy="26" rx="9" ry="10" fill="#3c8a5a" stroke="#2f3b43" stroke-width="1.4"/><g fill="#9ccf6a"><ellipse cx="10" cy="19" rx="3.4" ry="2"/><ellipse cx="30" cy="19" rx="3.4" ry="2"/><ellipse cx="11" cy="33" rx="3.4" ry="2"/><ellipse cx="29" cy="33" rx="3.4" ry="2"/></g><circle cx="20" cy="26" r="3" fill="#2a6a42"/>',
+  lily: '<path d="M20 27 L17 17 A11 11 0 1 0 23 17 Z" fill="#4f9a3a" stroke="#2f3b43" stroke-width="1.4"/><path d="M20 25 L15 19 L18 22 L20 16 L22 22 L25 19 Z" fill="#ff8fc4" stroke="#2f3b43" stroke-width="1"/>',
+  trumpet: '<path d="M8 25 H26 L33 19 V31 L26 25" fill="#ffcf1f" stroke="#2f3b43" stroke-width="1.4" stroke-linejoin="round"/><path d="M12 25 V20 M16 25 V20 M20 25 V20 M9 29 H24" stroke="#ffcf1f" stroke-width="2.2"/>',
+  lantern: '<path d="M14 18 L20 13 L26 18 Z M14 32 L20 37 L26 32 Z" fill="#c9a227" stroke="#2f3b43" stroke-width="1.2"/><rect x="14" y="18" width="12" height="14" fill="#ff9a3d" stroke="#2f3b43" stroke-width="1.2"/>',
+  dice: '<rect x="11" y="16" width="18" height="18" rx="3" fill="#ffffff" stroke="#2f3b43" stroke-width="1.6"/><g fill="#1d1d1d"><circle cx="15.5" cy="20.5" r="1.8"/><circle cx="20" cy="25" r="1.8"/><circle cx="24.5" cy="29.5" r="1.8"/></g>',
+  chip: '<circle cx="20" cy="26" r="10" fill="#d4142e" stroke="#2f3b43" stroke-width="1.4"/><circle cx="20" cy="26" r="5" fill="none" stroke="#fff" stroke-width="2"/><path d="M20 16 V19 M20 33 V36 M10 26 H13 M27 26 H30" stroke="#fff" stroke-width="2.4"/>',
+  crown: '<path d="M10 33 V20 L15 26 L20 17 L25 26 L30 20 V33 Z" fill="#ffcf1f" stroke="#2f3b43" stroke-width="1.4" stroke-linejoin="round"/><circle cx="15" cy="30" r="1.8" fill="#d4142e"/><circle cx="20" cy="30" r="1.8" fill="#d4142e"/><circle cx="25" cy="30" r="1.8" fill="#d4142e"/>',
+  crest: '<path d="M11 14 H29 V25 L20 37 L11 25 Z" fill="#ffcf1f" stroke="#2f3b43" stroke-width="1.4" stroke-linejoin="round"/><path d="M13.5 16.5 H26.5 V24.5 L20 33.5 L13.5 24.5 Z" fill="#2a5bd6"/><ellipse cx="20" cy="25" rx="2.4" ry="3.2" fill="#ffd21a"/>',
+  pearl: '<path d="M8 28 Q20 40 32 28 Z" fill="#e9d6f2" stroke="#2f3b43" stroke-width="1.4"/><path d="M9 24 Q20 12 31 24 Z" fill="#e9d6f2" stroke="#2f3b43" stroke-width="1.4"/><circle cx="20" cy="26" r="4" fill="#fbf7f0" stroke="#2f3b43" stroke-width="1"/>',
+  starfish: '<path d="M20 13 L23 22 L32 22 L25 28 L28 37 L20 31 L12 37 L15 28 L8 22 L17 22 Z" fill="#ff8a3d" stroke="#2f3b43" stroke-width="1.4" stroke-linejoin="round"/>' };
+const dcSvg = id => `<svg viewBox="0 0 40 40"><circle cx="20" cy="5" r="3.4" fill="none" stroke="#c7cfd6" stroke-width="2"/><path d="M20 8.4 V13" stroke="#c7cfd6" stroke-width="2"/>${DC_SVG[ACC[id].shape] || ""}</svg>`;
+const accSvg = (id, hero) => { if (ACC[id] && ACC[id].shape) return dcSvg(id); if (SHOE_SVG[id]) { const bt = shoeCols(hero); return `<svg viewBox="0 0 40 40">${SHOE_SVG[id].replaceAll('"C"', `"${bt.col}"`).replaceAll('"A"', `"${bt.studsCol}"`).replaceAll('"S"', `"${bt.soleCol}"`)}</svg>`; } if (ACC_SVG2[id]) return ACC_SVG2[id]; let v = ACC_SVG[id.startsWith("mask") ? "mask" : id.startsWith("band") ? "band" : id.startsWith("charm") ? "charm" : "head"]; const T = ACC_TINT[id] || [];   // (each one's own colours)
   if (id.startsWith("shades")) v = v.replace('fill="#3a1d52"', `fill="${T[0]}"`).replace('stroke="#2f3b43" stroke-width="2.6"', `stroke="${T[1]}" stroke-width="2.6"`); else if (id.startsWith("mask")) v = v.replace('fill="#2a5bd6"', `fill="${T[0]}"`).replaceAll('fill="#ffd21a"', `fill="${T[1]}"`);
   else if (id.startsWith("band")) v = v.replaceAll("#e8242f", T[0]); else if (id === "charm_berry") v = v.replace('<path d="M20 13 L23 21', '<path fill-rule="evenodd" d="M20 13 L23 21').replace('fill="#e8a400" stroke="#2f3b43" stroke-width="2.2"', 'fill="#e8242f" stroke="#2f3b43" stroke-width="2.2"'); return v; };
 
@@ -17314,6 +17726,7 @@ function guiroArt() {                                // its tin: rows of punched
   return tex(256, 128, (c, W, H) => { c.fillStyle = "#c9d0d6"; c.fillRect(0, 0, W, H); for (let y = 6; y < H; y += 9) for (let x = (y / 9 % 2) * 5 + 3; x < W * .78; x += 10) { c.fillStyle = "#8d969d"; c.beginPath(); c.arc(x, y, 2.6, 0, 7); c.fill(); c.fillStyle = "#f4f7f9"; c.beginPath(); c.arc(x - .8, y - .9, 1.1, 0, 7); c.fill(); } });
 }
 function buildCharm(kind) {                          // off the pommel on a cord: the pivot's -y hangs down, set every frame (gearSync)
+  if (ACC[kind] && ACC[kind].shape) { const piv = new THREE.Group(), y0 = keychain(piv), c = group(piv, 0, y0, 0); dropCharmArt(c, ACC[kind].shape); return piv; }   // (the drops: on the key ring)
   if (kind === "charm_tambora" || kind === "charm_guiro") {   // (the second set: on a key ring)
     const piv = new THREE.Group(), y0 = keychain(piv), c = group(piv, 0, y0, 0);
     if (kind === "charm_tambora") { const body = new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, .14, 22, 1, true).rotateZ(Math.PI / 2), toon("#ffffff", { map: tamboraArt(), side: THREE.DoubleSide })); body.position.y = -.09; c.add(body);
@@ -17334,6 +17747,58 @@ function buildCharm(kind) {                          // off the pommel on a cord
     const seed = toon("#ffe14d"); for (let i = 0; i < 14; i++) { const a = i * 2.4, yy = -.06 - (i % 5) * .03, rr = .1 * Math.sqrt(Math.max(0, 1 - Math.pow((yy + .12) / .118, 2))); c.add(at(new THREE.Mesh(new THREE.SphereGeometry(.012, 6, 5), seed), Math.cos(a) * rr * .98, yy, Math.sin(a) * rr * .98)); }
     const leaf = toon("#3db04a"); c.add(at(new THREE.Mesh(new THREE.ExtrudeGeometry(starShape(.075, .03, 5), { depth: .015, bevelEnabled: false }).rotateX(Math.PI / 2), leaf), 0, -.01, 0)); }
   return piv;
+}
+// the drop charms' own shapes (DROP_CHARMS): each about .17 across, hanging from c (the key ring's end) down to about -.2
+function dropCharmArt(c, shape) {
+  const M = col => toon(col), B = (w, h, d) => new THREE.BoxGeometry(w, h, d), Sp = (r, a = 14, b = 10) => new THREE.SphereGeometry(r, a, b), Cy = (a, b, h, n = 16) => new THREE.CylinderGeometry(a, b, h, n);
+  const add = (geo, col, x = 0, y = -.1, z = 0, rx = 0, ry = 0, rz = 0) => { const m = new THREE.Mesh(geo, typeof col === "string" ? M(col) : col); m.position.set(x, y, z); m.rotation.set(rx, ry, rz); c.add(m); return m; };
+  const ext = (sh, d = .03, col = "#fff", y = -.1, bev = .008) => { const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: bev > 0, bevelSize: bev, bevelThickness: bev, bevelSegments: 2, curveSegments: 10 }).translate(0, 0, -d / 2); return add(g, col, 0, y); };
+  const shp = pts => new THREE.Shape(pts.map(([x, y]) => new THREE.Vector2(x, y))), eye = new THREE.MeshBasicMaterial({ color: "#1d1d1d" }), wht = new THREE.MeshBasicMaterial({ color: "#ffffff" });
+  const ring = (n, f) => { for (let i = 0; i < n; i++) f(i / n * TAU, i); };
+  if (shape === "coqui") { add(Sp(.07).scale(1.05, .8, .85), "#b8783e", 0, -.1); add(Sp(.05).scale(1.1, .8, .9), "#c8884a", 0, -.05, .02);   // a coquí: round body, big head, big dark eyes, the toe pads
+    [-1, 1].forEach(s => { add(Sp(.018), eye, s * .03, -.03, .05); add(Sp(.006), wht, s * .03 - .004, -.026, .066); add(Sp(.035).scale(.6, 1.3, .6), "#a86a32", s * .06, -.14, .01, 0, 0, s * .5);
+      for (let k = 0; k < 3; k++) add(Sp(.011), "#d9a066", s * (.07 + k * .016), -.185, .02); }); }
+  else if (shape === "acorn") { add(Sp(.062).scale(1, 1.25, 1), "#c98a3c", 0, -.13); add(new THREE.SphereGeometry(.07, 16, 8, 0, TAU, 0, Math.PI / 2), "#7a5236", 0, -.095); add(Cy(.009, .011, .04, 6), "#5a3d26", 0, -.06); }
+  else if (shape === "shell") { const s = new THREE.Shape(); s.moveTo(0, 0); for (let i = 0; i <= 10; i++) { const a = -Math.PI * .15 - i / 10 * Math.PI * .7, r = .1 + (i % 2 ? -.008 : .006); s.lineTo(Math.cos(a) * r, Math.sin(a) * r); } s.lineTo(0, 0);
+    ext(s, .025, "#ff9f8a", -.02); for (let i = 0; i < 6; i++) { const a = -Math.PI * .2 - i / 5 * Math.PI * .6; add(B(.007, .09, .01), "#e0705e", Math.cos(a) * .05, -.02 + Math.sin(a) * .05, .016, 0, 0, a + Math.PI / 2); }
+    add(B(.05, .02, .03), "#ff9f8a", 0, -.012); }
+  else if (shape === "anchor") { const m = toon(SILVER); add(new THREE.TorusGeometry(.018, .006, 6, 14), m, 0, -.02); add(B(.016, .15, .016), m, 0, -.1); add(B(.08, .014, .014), m, 0, -.05);
+    add(new THREE.TorusGeometry(.058, .008, 6, 18, Math.PI), m, 0, -.13, 0, 0, 0, Math.PI); [-1, 1].forEach(s => add(new THREE.ConeGeometry(.016, .04, 4), m, s * .058, -.125, 0, 0, 0, s * .4)); }
+  else if (shape === "bolt") ext(shp([[.02, .0], [-.05, -.1], [-.005, -.1], [-.03, -.2], [.055, -.08], [.01, -.08], [.04, 0]]), .03, "#ffd21a", 0);
+  else if (shape === "cog") { const m = M("#c9a227"); add(Cy(.065, .065, .03, 20).rotateX(Math.PI / 2), m, 0, -.1); ring(8, a => add(B(.03, .03, .03), m, Math.cos(a) * .075, -.1 + Math.sin(a) * .075, 0, 0, 0, a)); add(Cy(.022, .022, .034, 12).rotateX(Math.PI / 2), "#6e5a2a", 0, -.1); }
+  else if (shape === "cloud") { [[0, -.08, .05], [-.05, -.11, .04], [.05, -.11, .042], [-.02, -.12, .045], [.025, -.125, .04]].forEach(([x, y, r]) => add(Sp(r), "#ffffff", x, y)); add(Sp(.03), "#dbe9ff", -.07, -.125); }
+  else if (shape === "feather") { const s = new THREE.Shape(); s.moveTo(0, 0); s.bezierCurveTo(.06, -.04, .05, -.15, 0, -.21); s.bezierCurveTo(-.05, -.15, -.06, -.04, 0, 0); ext(s, .012, "#7fc8ff", -.01, .004);
+    add(Cy(.005, .007, .22, 6), "#ffffff", 0, -.11, .01); for (let k = 0; k < 5; k++) add(B(.05, .004, .004), "#5aa8e6", 0, -.04 - k * .03, .012, 0, 0, .5 - (k % 2)); }
+  else if (shape === "cactus") { const g = M("#3f9a4a"); add(Cy(.03, .03, .13, 12), g, 0, -.11); add(Sp(.03), g, 0, -.045); [-1, 1].forEach(s => { add(Cy(.016, .016, .05, 8), g, s * .05, -.1); add(Cy(.014, .014, .04, 8), g, s * .03, -.12, 0, 0, 0, Math.PI / 2); add(Sp(.016), g, s * .05, -.075); });
+    ring(5, a => add(Sp(.012), "#ff5fa8", Math.cos(a) * .012, -.018, Math.sin(a) * .012)); add(B(.08, .03, .05), "#c96a3c", 0, -.19); }
+  else if (shape === "sun") { add(Cy(.05, .05, .03, 20).rotateX(Math.PI / 2), "#ffb020", 0, -.1); ring(8, a => add(new THREE.ConeGeometry(.016, .045, 4), "#ffd21a", Math.cos(a) * .07, -.1 + Math.sin(a) * .07, 0, 0, 0, a - Math.PI / 2));
+    [-1, 1].forEach(s => add(Sp(.007), eye, s * .017, -.092, .018)); add(new THREE.TorusGeometry(.016, .004, 4, 10, Math.PI), eye, 0, -.108, .018, 0, 0, Math.PI); }
+  else if (shape === "sunflower") { ring(10, a => add(Sp(.026).scale(1, .45, .3), "#ffd21a", Math.cos(a) * .05, -.1 + Math.sin(a) * .05, 0, 0, 0, a)); add(Cy(.032, .032, .025, 16).rotateX(Math.PI / 2), "#6e4022", 0, -.1, .008); }
+  else if (shape === "ladybug") { add(new THREE.SphereGeometry(.065, 16, 8, 0, TAU, 0, Math.PI / 2).rotateX(Math.PI / 2), "#e8242f", 0, -.12); add(Sp(.03), "#1d1d1d", 0, -.05); add(B(.004, .12, .004), "#1d1d1d", 0, -.12, .066);
+    [[-.03, -.1], [.03, -.1], [-.035, -.145], [.035, -.145], [0, -.17]].forEach(([x, y]) => add(Sp(.012), "#1d1d1d", x, y, .055)); }
+  else if (shape === "lolly") { add(Cy(.006, .006, .09, 6), "#ffffff", 0, -.03); add(Cy(.065, .065, .025, 20).rotateX(Math.PI / 2), "#ff5fa8", 0, -.13); [.045, .025].forEach(r => add(new THREE.TorusGeometry(r, .007, 6, 20), "#ffffff", 0, -.13, .014)); }
+  else if (shape === "bonbon") { add(Sp(.05).scale(1.25, 1, 1), "#8a4fd6", 0, -.1); [-1, 1].forEach(sd => add(new THREE.ConeGeometry(.04, .06, 6).rotateZ(sd * Math.PI / 2), "#c9a2ff", sd * .085, -.1)); add(B(.01, .1, .01), "#ffd21a", 0, -.1, .045); }
+  else if (shape === "query") { const m = M("#ffd21a"); add(new THREE.TorusGeometry(.04, .014, 8, 18, Math.PI * 1.4), m, 0, -.07, 0, 0, 0, -Math.PI * .4); add(Cy(.014, .014, .04, 8), m, 0, -.13); add(Sp(.017), m, 0, -.185); }
+  else if (shape === "key") { const m = M("#ffcf1f"); add(new THREE.TorusGeometry(.03, .01, 6, 16), m, 0, -.04); add(B(.016, .13, .012), m, 0, -.135); add(B(.03, .014, .012), m, .018, -.18); add(B(.022, .014, .012), m, .014, -.15); }
+  else if (shape === "turtle") { add(new THREE.SphereGeometry(.06, 14, 8, 0, TAU, 0, Math.PI / 2).rotateX(Math.PI / 2).scale(1, 1.15, 1), "#3c8a5a", 0, -.11); add(Sp(.022), "#9ccf6a", 0, -.035);
+    [[-.06, -.07], [.06, -.07], [-.055, -.16], [.055, -.16]].forEach(([x, y]) => add(Sp(.02).scale(1.4, .7, .5), "#9ccf6a", x, y, 0, 0, 0, x * y > 0 ? -.6 : .6)); [[0, -.11], [-.026, -.085], [.026, -.085], [-.026, -.135], [.026, -.135]].forEach(([x, y]) => add(Cy(.014, .014, .01, 6).rotateX(Math.PI / 2), "#2a6a42", x, y, .052)); }
+  else if (shape === "lily") { const s = new THREE.Shape(); s.moveTo(0, 0); s.absarc(0, 0, .075, Math.PI / 2 + .35, Math.PI / 2 - .35 + TAU, false); s.lineTo(0, 0); const pad = ext(s, .012, "#4f9a3a", -.11, .003); pad.rotation.x = -.5;
+    ring(6, a => add(new THREE.ConeGeometry(.014, .04, 4), "#ff8fc4", Math.cos(a) * .012, -.09, .02 + Math.sin(a) * .012, Math.sin(a) * .5, 0, -Math.cos(a) * .5)); add(Sp(.01), "#ffd21a", 0, -.085, .022); }
+  else if (shape === "trumpet") { const m = M("#ffcf1f"); add(new THREE.ConeGeometry(.048, .075, 16, 1, true).rotateZ(Math.PI / 2), m, .07, -.1, 0, 0, 0, 0); add(new THREE.TorusGeometry(.046, .006, 6, 18).rotateY(Math.PI / 2), m, .107, -.1);   // (its bell opening out to the right, a rolled rim) add(Cy(.01, .01, .13, 8).rotateZ(Math.PI / 2), m, -.01, -.1); add(Cy(.01, .01, .07, 8).rotateZ(Math.PI / 2), m, -.01, -.13);
+    [-.04, -.01, .02].forEach(x => add(Cy(.008, .008, .04, 6), m, x, -.085)); }
+  else if (shape === "lantern") { const g = M("#c9a227"); add(new THREE.ConeGeometry(.04, .035, 8), g, 0, -.035); add(Cy(.035, .035, .08, 8), new THREE.MeshBasicMaterial({ color: "#ff9a3d" }), 0, -.1); add(new THREE.ConeGeometry(.04, .035, 8).rotateX(Math.PI), g, 0, -.16);
+    ring(4, a => add(Cy(.004, .004, .085, 4), g, Math.cos(a) * .036, -.1, Math.sin(a) * .036)); }
+  else if (shape === "dice") { add(new RoundedBoxGeometry(.1, .1, .1, 2, .018), "#ffffff", 0, -.1, 0, .35, .55, 0); const D = new THREE.Group(); D.position.set(0, -.1, 0); D.rotation.set(.35, .55, 0); c.add(D);
+    [[0, 0]].forEach(([x, y]) => D.add(at(new THREE.Mesh(Sp(.011), eye), x, y, .051))); [[-.025, .025], [.025, -.025]].forEach(([x, y]) => D.add(at(new THREE.Mesh(Sp(.011), eye), .051, x, y))); [[-.025, -.025], [0, 0], [.025, .025]].forEach(([x, z]) => D.add(at(new THREE.Mesh(Sp(.011), eye), x, .051, z))); }
+  else if (shape === "chip") { add(Cy(.07, .07, .02, 24).rotateX(Math.PI / 2), "#d4142e", 0, -.1); ring(8, a => add(B(.026, .012, .022), "#ffffff", Math.cos(a) * .062, -.1 + Math.sin(a) * .062, 0, 0, 0, a + Math.PI / 2)); add(Cy(.035, .035, .024, 20).rotateX(Math.PI / 2), "#ffffff", 0, -.1); add(Cy(.025, .025, .026, 20).rotateX(Math.PI / 2), "#d4142e", 0, -.1); }
+  else if (shape === "crown") { const m = M("#ffcf1f"); add(Cy(.06, .06, .05, 18, 1, true), m, 0, -.15); ring(5, a => add(new THREE.ConeGeometry(.018, .05, 4), m, Math.cos(a) * .06, -.105, Math.sin(a) * .06)); ring(5, a => add(Sp(.011), "#d4142e", Math.cos(a + .63) * .062, -.15, Math.sin(a + .63) * .062)); }
+  else if (shape === "crest") { const s = shp([[-.065, 0], [.065, 0], [.065, -.09], [0, -.17], [-.065, -.09]]); ext(s, .02, "#ffcf1f", -.03); const s2 = shp([[-.05, -.012], [.05, -.012], [.05, -.085], [0, -.15], [-.05, -.085]]); const i = ext(s2, .024, "#2a5bd6", -.03, .002); i.position.z = .006;
+    add(Sp(.02).scale(1, 1.3, .6), "#ffd21a", 0, -.105, .02); add(new THREE.ConeGeometry(.012, .03, 5), "#3db04a", 0, -.07, .02); }
+  else if (shape === "pearl") { const sh = toon("#c9a6e0", { side: THREE.DoubleSide }), hemi = () => new THREE.SphereGeometry(.07, 16, 8, 0, TAU, 0, Math.PI / 2).scale(1, .4, 1);   // a clam open: its bowl, its lid tipped back, the pearl sat in it
+    add(hemi(), sh, 0, -.16, 0, Math.PI, 0, 0); add(hemi(), sh, 0, -.15, -.035, -1.1, 0, 0); for (let i = -2; i <= 2; i++) add(B(.004, .004, .07), "#a884c4", i * .022, -.19, .03, .3, i * .25, 0);
+    add(Sp(.03, 16, 12), "#ffffff", 0, -.14, .02); add(Sp(.008), wht, -.01, -.128, .046); }
+  else if (shape === "starfish") { const s = new THREE.Shape(); for (let i = 0; i <= 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? .03 : .075; i ? s.lineTo(Math.cos(a) * q, Math.sin(a) * q - .1) : s.moveTo(Math.cos(a) * q, Math.sin(a) * q - .1); } ext(s, .024, "#ff8a3d", 0, .012);
+    ring(5, a => add(Sp(.008), "#ffd9b0", Math.cos(a + Math.PI / 2) * .04, -.1 + Math.sin(a + Math.PI / 2) * .04, .02)); }
 }
 function larimarArt() {                             // sky-blue, milky, white veins running through it (the user's photo)
   return tex(128, 128, (c, W, H) => { c.fillStyle = "#86d6ec"; c.fillRect(0, 0, W, H); const R = rngF(9);
@@ -17356,15 +17821,15 @@ function buildBracelet(rad) {                        // round her right wrist: a
   for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2, st = larimarStone(.05, .04, .022); st.position.set(Math.cos(a) * (rad + .012), 0, Math.sin(a) * (rad + .012)); st.rotation.y = Math.PI / 2 - a; g.add(st); }
   return g;
 }
-function buildMaga() {                              // FLOR DE MAGA (Puerto Rico's flower): five broad crimson-pink petals overlapping in a shallow cup, a dark heart, the long staminal column out of it
-  const g = new THREE.Group(), pet = toon("#d9224f", { side: THREE.DoubleSide }), dark = toon("#8f0f2e"), col = toon("#f05a7e"), pol = toon("#ffd23a"), pin = toon("#c9a227");   //   tipped with yellow pollen; on a gold hair pin. Its face +z
+function buildMaga(pin = true) {                    // FLOR DE MAGA (Puerto Rico's flower): five broad crimson-pink petals overlapping in a shallow cup, a dark heart, the long staminal column out of it
+  const g = new THREE.Group(), pet = toon("#d9224f", { side: THREE.DoubleSide }), dark = toon("#8f0f2e"), col = toon("#f05a7e"), pol = toon("#ffd23a"), pinM = toon("#c9a227");   //   tipped with yellow pollen; on a gold hair pin. Its face +z
   const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.bezierCurveTo(.3, .16, .64, .55, .5, .86); sh.bezierCurveTo(.38, 1.06, -.38, 1.06, -.5, .86); sh.bezierCurveTo(-.64, .55, -.3, .16, 0, 0);
   const pg = new THREE.ShapeGeometry(sh, 12), P = pg.attributes.position; for (let i = 0; i < P.count; i++) { const x = P.getX(i), y = P.getY(i); P.setZ(i, .2 * y * y + .12 * x * x); } pg.computeVertexNormals();   // (each one cupped)
   for (let k = 0; k < 5; k++) { const p = new THREE.Mesh(pg, pet), q = new THREE.Group(); q.rotation.z = k / 5 * Math.PI * 2 + .3; p.rotation.y = .22; p.position.z = k * .004; p.scale.setScalar(.14); q.add(p); g.add(q); }   // (overlapping round, a little twisted, as they grow)
   g.add(at(new THREE.Mesh(new THREE.CircleGeometry(.032, 14), dark), 0, 0, .026));
   const cl = new THREE.Mesh(new THREE.CylinderGeometry(.008, .011, .13, 8).rotateX(Math.PI / 2), col); cl.position.set(.012, .02, .085); cl.rotation.y = .18; g.add(cl);
   for (let i = 0; i < 9; i++) { const a = i * 2.4, z = .11 + (i % 3) * .016; g.add(at(new THREE.Mesh(new THREE.SphereGeometry(.009, 6, 5), pol), .022 + Math.cos(a) * .012, .03 + Math.sin(a) * .012, z)); }   // (its pollen, up the tip)
-  g.add(at(new THREE.Mesh(new THREE.BoxGeometry(.2, .014, .01), pin), -.05, -.02, -.01));   // (the pin through her hair behind it)
+  if (pin) g.add(at(new THREE.Mesh(new THREE.BoxGeometry(.2, .014, .01), pinM), -.05, -.02, -.01));   // (the pin through her hair behind it; none on the tree's: the forest's D3)
   return g;
 }
 function buildRuby(rad) {                           // RUBY BRACELET (Rose's): a chunky gold band round her sleeve's cuff, big cut rubies set all round it, each in its gold cup
@@ -17591,7 +18056,7 @@ function gearCheck() {                               // (every frame: the heroes
 }
 // the seller by the road: three of them on the counter, the ones you haven't got first
 function wearStock(f) {
-  if (f.stock) return f.stock; const L = Object.keys(ACC).sort(() => Math.random() - .5); return (f.stock = [...L.filter(id => !gearOwned(id)), ...L.filter(gearOwned)].slice(0, 3));
+  if (f.stock) return f.stock; const L = Object.keys(ACC).filter(id => ACC[id].drop === undefined).sort(() => Math.random() - .5);   // (never a charm only a berry drops) return (f.stock = [...L.filter(id => !gearOwned(id)), ...L.filter(gearOwned)].slice(0, 3));
 }
 function buyAcc(id) {
   const A = ACC[id], B = bag(), U = npcUp, G = gearState();
@@ -17736,8 +18201,9 @@ function drawCoinTex() { const g = COIN_CV.getContext("2d"); g.clearRect(0, 0, 9
 drawCoinTex(); if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawCoinTex);
 const COIN_GEO = new THREE.CylinderGeometry(.2, .2, .05, 22).rotateX(Math.PI / 2), COIN_MATS = [toon("#d8952a"), new THREE.MeshBasicMaterial({ map: COIN_TEX }), new THREE.MeshBasicMaterial({ map: COIN_TEX })];
 const LOOT_M = { mango: toon("#ffb02e"), blush: toon("#ff7a2e"), leaf: toon("#3fc24a"), gum: toon("#ff6ab8"), wrap: toon("#ff9ad8"), gold: toon("#ffd203"), bolt: toon("#ff6a3d") };
-function lootRig(kind) {
+function lootRig(kind, id) {
   const g = group(actors);
+  if (kind === "charm") { const piv = buildCharm(String(id || "").slice(6)); piv.scale.setScalar(2.6); piv.position.y = .9; g.add(piv); return g; }   // (a drop charm: itself, big, on its key ring)
   if (kind === "coin") { g.add(new THREE.Mesh(COIN_GEO, COIN_MATS)); return g; }
   if (kind === "fruit") { g.add(mk(ball(.24, 18, 14).scale(1.15, .9, .85), null, { mat: LOOT_M.mango, ol: .03 })); g.add(at(mk(ball(.12, 12, 10).scale(1, .8, .6), null, { mat: LOOT_M.blush, ol: 0 }), -.12, .08, .12));
     const lf = mk(ball(.1, 10, 8).scale(1.6, .3, .7), null, { mat: LOOT_M.leaf, ol: .015 }); at(lf, .12, .24, 0); lf.rotation.z = .5; g.add(lf); return g; }
@@ -17758,7 +18224,7 @@ function lootRig(kind) {
 let loot = [];
 function spawnLoot(kind, x, y, pop, id) {            // pop: it bursts out (of a beaten berry), otherwise it lies there bobbing
   if (pop && !solidAt(x)) x = firmNear(clamp(x, 80, WORLD - 80), x < WORLD / 2 ? 1 : -1);
-  const g = lootRig(kind), gy = groundAt(x) ?? GROUND;
+  const g = lootRig(kind, id), gy = groundAt(x) ?? GROUND;
   loot.push({ kind, g, x, y: pop ? y : gy, gy, vy: pop ? rand(-760, -520) : 0, vx: pop ? rand(-110, 110) : 0, t: Math.random() * 6, id, age: 0, plat: null });
 }
 function clearLoot() { loot.forEach(q => { actors.remove(q.g); }); loot = []; }
@@ -17781,7 +18247,7 @@ function updateLoot(dt) {
       if (q.y > GROUND + 900) q.gone = true; }                                            // (down a hole: gone)
     const spin = q.kind === "coin" ? q.t * 4.5 : q.t * 1.6, bob = q.vy || q.mag ? 0 : Math.sin(q.t * 3) * .07;
     q.g.position.set(X(q.x), Y(q.y) + (q.kind === "coin" ? .24 : .32) + bob, 0); q.g.rotation.y = spin;
-    if (!p.dead && Math.abs(p.x - q.x) < (q.kind === "coin" ? 30 : 36) && q.y > p.y - (p.rig.heightPx || 92) - 20 && q.y < p.y + 40) takeLoot(q);
+    if (!p.dead && Math.abs(p.x - q.x) < (q.kind === "coin" ? 30 : 36) && q.y > p.y - (p.rig.heightPx || 92) - 20 && q.y < p.y + 40 && (q.kind === "coin" || !q.plat || p.y <= q.plat.y + 12)) takeLoot(q);   // (one lying up on a platform: from on it, not by jumping up under it: B4's cassette, 2026-10-27)
   }
   loot = loot.filter(q => { if (q.got || q.gone) { actors.remove(q.g); return false; } return true; });
 }
@@ -17789,6 +18255,8 @@ function takeLoot(q) {
   q.got = true; const B = bag();
   if (q.kind === "coin") { B.coins++; coinHud(true); SFX.coin(); return; }
   if (q.kind === "tape") { if (q.id) markGot(q.id); gotTape(TAPES.find(t => "tape:" + t.id === q.id), q); return; }   // (a cassette: not for the bag, a song for the headphones)
+  if (q.kind === "charm") { const id = q.id.slice(6), A = ACC[id], G = gearState(); if (A && !G.own.includes(id)) G.own.push(id);   // (a drop charm: hers to wear)
+    SFX.gift(); sparks(q.x, q.y - 20, 14); popText(q.x, q.y - 60, "A CHARM!"); if (A) toast(`THE ${A.name}: FOR ${A.hero.toUpperCase()} · PAUSE, ACCESSORIES TO PUT IT ON`, 4600); if (story) writeSave(); return; }
   if (q.id) markGot(q.id);
   const it = ITEMS.find(i => i.k === q.kind); if (B[q.kind] >= BAG_MAX) { SFX.nope(); popText(q.x, q.y - 50, "BAG FULL"); q.got = false; q.y -= 1; return; }
   B[q.kind]++; SFX.gift(); sparks(q.x, q.y - 20, 10); popText(q.x, q.y - 60, it.name + "!");
@@ -17810,8 +18278,11 @@ function itemPlan(w) {
 }
 // the cassettes (the user, 2026-10-26: "we'll have casettes they can find to play new songs as well"): one in each of five worlds, lying about in a room of
 // its own (the same one every time, not one with an item in it). Each is a song for the headphones (SONGS in the pause menu): my own tunes, score.js 14-18
-const TAPES = [{ id: "tape1", name: "GUAGUA GROOVE", song: 14, w: 0 }, { id: "tape2", name: "LARIMAR LULLABY", song: 15, w: 1 }, { id: "tape3", name: "BEP BOUNCE", song: 16, w: 3 },
-  { id: "tape4", name: "NIGHT BUS HOME", song: 17, w: 7 }, { id: "tape5", name: "SPARKS FLY", song: 18, w: 10 }];
+// Since 2026-10-27 (the user: "make a random enemy in each level drop: 1) a casette for the headphones feature"): one in every world, carried by a berry (dropPick),
+// the forest's B4 one aside (fixed: up its breaking ledges). Worlds with no tune of their own: their own song as it plays at night (hour: the score's night take, 6)
+const TAPES = [{ id: "tape1", name: "GUAGUA GROOVE", song: 14, w: 0, fixed: true }, { id: "tape2", name: "LARIMAR LULLABY", song: 15, w: 1 }, { id: "tape3", name: "BEP BOUNCE", song: 16, w: 3 },
+  { id: "tape4", name: "NIGHT BUS HOME", song: 17, w: 7 }, { id: "tape5", name: "SPARKS FLY", song: 18, w: 10 },
+  ...[0, 2, 4, 5, 6, 8, 11, 12, 13].map(w => ({ id: "tape_n" + w, hour: 6, w, get name() { return ((WORLDS[w] || {}).name || "") + " AFTER DARK"; }, get song() { return (WORLDS[w] || {}).song ?? w; } }))];   // (getters: the later worlds are added after this)
 const tapeGot = id => story ? (story.tapes || []).includes(id) : true;   // (free play: every song to try)
 const TAPE_PLAN = {};
 function tapePlan(w) {
@@ -17826,13 +18297,27 @@ function gotTape(T, q) {
 }
 function spawnRoomItems() {
   if (!WORLDS[world] || world === 9 || stronghold || hideout || arena) return;
-  (STAGES[stage].items || []).forEach(([k, x, y], i) => { const id = world + ":" + stage + ":fix" + i; if (itemGot(id)) return;   // (the room's own, in their places: [kind, x, y on a platform])
+  (STAGES[stage].items || []).forEach(([k, x, y, tid], i) => { const id = k === "tape" ? "tape:" + tid : world + ":" + stage + ":fix" + i; if (itemGot(id) || (k === "tape" && (!story || tapeGot(tid)))) return;   // (the room's own, in their places: [kind, x, y on a platform] · a cassette: [.., its id])
     spawnLoot(k, x, y ?? groundAt(x) ?? GROUND, false, id); if (y !== undefined) { const q = loot[loot.length - 1]; q.y = q.gy = y; } });
   itemPlan(world).forEach((q, i) => { if (q.s !== stage) return; const id = world + ":" + q.s + ":" + q.k + i; if (itemGot(id)) return;
     const x = crateSpot(q.x); if (x !== null) spawnLoot(q.k, x, groundAt(x) ?? GROUND, false, id); });
-  const T = TAPES.find(t => t.w === world), tp = T && tapePlan(world);   // (this world's cassette, in its room, till it's found)
-  if (tp && tp.s === stage && story && !tapeGot(T.id)) { let x = null; for (const c of [tp.x, 800, 1300, 1700, 600, 2000, 400]) { x = crateSpot(c); if (x !== null) break; }   // (its spot, or the next good one: always there to find)
-    if (x !== null) spawnLoot("tape", x, groundAt(x) ?? GROUND, false, "tape:" + T.id); }
+}   // (the worlds' own cassettes: carried by a berry now, dropPick)
+// the drops (the user, 2026-10-27): each time you come into a world, a berry somewhere in it picked at random for each of its three things you haven't got (its
+// cassette, Camila's charm, Rose's), a different one each; beat it and, one time in four, out it comes. Only the once: missed, and it's the next time you're here
+let dropPlan = new Map();                            // spot (room:roster index) → { kind: "tape" | "charm", id }
+const DROP_CHANCE = .25;
+function dropPick() {
+  dropPlan = new Map(); if (!story || !WORLDS[world] || world === 9) return;
+  const want = [], T = TAPES.find(t => t.w === world && !t.fixed); if (T && !tapeGot(T.id)) want.push({ kind: "tape", id: T.id });
+  for (const id in ACC) if (ACC[id].drop === world && !gearOwned(id)) want.push({ kind: "charm", id });
+  if (!want.length) return;
+  const spots = []; STAGES.forEach((q, k) => { if (q.cut || q.peace || q.arena || !q.cell) return; (BB_ROSTER[k] || []).forEach((e, i) => { if (BB_TYPES[e[0]]) spots.push(k + ":" + i); }); });
+  for (const it of want) { if (!spots.length) break; const j = Math.floor(Math.random() * spots.length); dropPlan.set(spots[j], it); spots.splice(j, 1); }
+}
+function dropFrom(b) {                               // a carrier beaten: the one chance
+  const it = b.spot && dropPlan.get(b.spot); if (!it) return; dropPlan.delete(b.spot);
+  if (Math.random() >= DROP_CHANCE) return;
+  spawnLoot(it.kind, b.x, b.y - (b.h || 60) * .6, true, it.kind + ":" + it.id);
 }
 
 // ── the items: hold the left trigger and the game stops while you pick one (the screen stays as it is, not darkened)
@@ -17975,7 +18460,7 @@ function npcRows() {                                 // [label, sub, action]
   if (role === "seller") return [...ITEMS.map(it => [`${ITEM_SVG[it.k]}<b>${it.name}</b><span class="pr">${ITEM_SVG.coin}${it.price}</span>`, `${it.desc} · YOU HAVE ${B[it.k]}`, () => buy(it)]),
     ...(U.f.road ? wearStock(U.f).map(id => [`${accSvg(id)}<b>${ACC[id].name}</b><span class="pr">${ITEM_SVG.coin}${ACC[id].price}</span>`, gearOwned(id) ? "YOU'VE GOT THIS ONE" : ACC[id].desc, () => buyAcc(id), id]) : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>LEAVE</b>", "", closeNpc]];   // (by the road: no region's map)
   if (role === "caller") { const C = ["cat", "dog", "axo", "axo2"].flatMap(sp => petsCaught(sp).map(w => [sp, w]));   // (the deep's axolotls too: they travel with you, so the bell calls them anywhere. The user, 2026-10-26: "make the axilotl travel")
-    return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]), ["<b>LEAVE</b>", "", closeNpc]]; }
+    return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) || / CAT$/.test(petDef(sp, w).coat) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]), ["<b>LEAVE</b>", "", closeNpc]]; }
   const other = otherHero();
   return [[`<b>SWITCH TO ${other.name.toUpperCase()}</b>`, "", () => swapHero(other)], [`<b>STAY AS ${rig.name.toUpperCase()}</b>`, "", closeNpc]];
 }
@@ -18171,7 +18656,7 @@ function makeBaddy(type, colName, x, y) {
   if (r.segs) r.hist = Array.from({ length: 80 }, (_, i) => [X(x) + i * .05, Y(y)]);   // the caterpillar starts stretched out behind its head
   jointSprings(r, [[r.tilt, "rotation", "z", 110, .42], [r.tilt, "rotation", "x", 110, .42], [r.bob, "position", "y", 300, .6],
     ...r.arms.map(A => [A, "rotation", "z", 70, .35]), ...r.legs.map(L => [L, "rotation", "z", 260, .6]), ...r.sp]);
-  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Math.max(2, (Z.hp + (world === 9 ? BEACH_HP_UP : ENEMY_HP_UP) + BB_HP_MORE) * HP_X - HP_LESS), h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
+  return { T, r, type, x, y, z: 0, vx: 0, vy: 0, dir: -1, onGround: true, hp: Math.max(2, (Z.hp + (world === 9 ? BEACH_HP_UP : ENEMY_HP_UP) + BB_HP_MORE) * HP_X - HP_LESS) + upHp(), h, hw, wt: Z.wt, inv: 0, flash: 0, hurtT: 0, sq: 0, sqv: 0,
     phase: rand(0, 6), yaw: -Math.PI / 2 - .62, atk: null, atkT: 0, atkCd: rand(1.2, 2.4), think: rand(.6, 2), hopT: rand(.2, .8), dead: false, deathT: 0, gone: false, plat: null };
 }
 function disposeBaddy(b) {
@@ -18975,11 +19460,13 @@ function startBeps() {                            // the room's clear: was the s
 function bepRoute() {                              // the way on from this room toward the hideout, by the shortest way through the rooms: { kind (right, left, up, down: a rope; drop: a hole; climb), x, side (which side of it you are), R (a rope), a, b (a hole's edges) }
   const home = bepHome(); if (home < 0 || home === stage) return null;
   const S = STAGES, prev = new Map([[stage, null]]), Q = [stage];
+  const cam = rig && rig.id === "camila";            // (never through a hero's wall that's still standing, nor up or down Camila's rock unless you're her: the user, 2026-10-27 "the beps were trying to take camila through leaves that only rose could cut")
   const hops = s => { const q = S[s], L = [], add = (n, k) => { if (n !== undefined && n !== null && n >= 0 && n < S.length && !S[n].arena) L.push([n, k]); };
-    if (q.toWorld === undefined || q.exitLeft) { if (!q.noRight && !q.bepNoRight) add(q.next, "right"); add(q.nextHi, "right"); }
-    add(q.up, "up"); add(q.down, "down"); if ((q.gaps || []).some(([g0, g1]) => g1 > 0 && g0 < WORLD)) add(q.below, "drop"); if (q.climbUp) add(q.climbUp.to, "climb");
+    const shut = side => { const W = q.secret; return !!W && (W.side || 1) === side && !itemGot(world + ":" + (W.key || s) + ":wall"); };
+    if ((q.toWorld === undefined || q.exitLeft) && !shut(1)) { if (!q.noRight && !q.bepNoRight) add(q.next, "right"); add(q.nextHi, "right"); }
+    add(q.up, "up"); if (!q.downCam || cam) add(q.down, "down"); if ((q.gaps || []).some(([g0, g1]) => g1 > 0 && g0 < WORLD)) add(q.below, "drop"); if (q.climbUp && (!q.climbWall || cam)) add(q.climbUp.to, "climb");
     if (q.riseX !== undefined) add(S.findIndex(o => o && o.below === s && o.rise && !o.cut), "rise");   // (the hand-made waves: jumped up from a ledge into the open room above)   // (a drop only where there's a hole to drop down)
-    if (!q.noLeft && !q.exitLeft && !q.bepNoLeft) { add(q.prev, "left"); S.forEach((o, i) => { if (o.next === s || o.nextHi === s) add(i, "left"); }); }
+    if (!q.noLeft && !q.exitLeft && !q.bepNoLeft && !shut(-1)) { add(q.prev, "left"); S.forEach((o, i) => { if (o.next === s || o.nextHi === s) add(i, "left"); }); }
     return L; };
   while (Q.length) { const a = Q.shift(); if (a === home) break; for (const [n, k] of hops(a)) if (!prev.has(n)) { prev.set(n, [a, k]); Q.push(n); } }
   if (!prev.has(home)) return null;
@@ -19263,7 +19750,7 @@ function sitPlayer(dt) {                          // sitting: face out at the vi
   const p = player, any = held.atk || held.jump || held.block || held.down || held.left || held.right || keys.ArrowUp || keys.KeyW || pad.u;
   p.vx = 0; p.yaw = lerp(p.yaw, -Math.PI / 2, 1 - Math.exp(-dt * 6)); p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   spring(p, dt); updatePose(p, dt);
-  if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.vy = -260; p.onGround = false; p.face = 1; hideout.sitIdle = 0; hideout.offSeat = false; }
+  if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.chair = false; p.vy = -260; p.onGround = false; p.face = 1; const H = hideout || restCamp; if (H) { H.sitIdle = 0; H.offSeat = false; } }   // (a hideout's seat, or your chair by a rest stop's fire)
   p.sitHeld = any;
 }
 function syncHideoutBeps(dt) {
@@ -20093,6 +20580,28 @@ function rumble(ms, k) {                          // a buzz in your hands: a con
     else if (window.BERRY_TOUCH && navigator.vibrate) navigator.vibrate(Math.round(ms));
   } catch (e) { }
 }
+// their defence (the user, 2026-10-27: "the enemies need a little defense on them so you can't just pound them ... the bosses especially should be able to take only
+// like 3 hits depending on what they're doing before they either jump back or deflect an attack or push you off. the regular berries also. if you hit them when they
+// initiate an attack and you interrupt, allow the player to combo, but if the player just hits them open, let them get maybe the two button combo off and the berry can
+// defend itself somehow"). A string of blows (none more than STRING_GAP apart): caught winding up or swinging, or still reeling, it takes the lot; caught open on its
+// feet, two get through (a boss's three; six if you caught it attacking) and the next it meets: turned aside on its guard (and a moment more of guard), a hop back out
+// of reach, or a shove that sends you off. No harm to either. A charged combo, a tackle and a stomp go through all the same
+const STRING_GAP = .9, DEF_GUARD = .5;
+function defends(e, boss, dir, kind) {
+  const p = player; if (e.inv > 0 || e.dead || e.gone || kind === "stomp" || p.combo || p.tackle || e.sad || e.calm || e.sleep || e.npc || e.under || e.leaf) return false;   // (your own blows only: combat's targets, not a partner's)
+  const H = boss ? (e.def ? e.def.h : 120) : e.h, hw = boss ? (e.def ? e.def.hw : 40) : e.hw, wt = boss ? 2 : e.wt || 1;
+  const turn = () => { SFX.block(); sparks(e.x - dir * hw * .7, e.y - H * .55, 9); e.sq = -.12; e.sqv = 0; p.vx = -dir * 240; p.atkT = -1; p.atkKind = null; p.chain = null; p.deflectT = time; hitstop = Math.max(hitstop, .05); shake = Math.max(shake, 2); freezeReset(); };
+  if (e.guardT > 0 && time < e.guardT) { turn(); return true; }   // (still on its guard)
+  if (time - (e.strT ?? -9) > STRING_GAP) { e.strN = 0; e.strOpen = !e.atk && !(e.windup > 0) && !(e.hurtT > 0) && !(e.juggleT > 0); }   // (open: not winding up or swinging, not still reeling or up in the air from a blow: a hop of its own counts as open)
+  e.strT = time; e.strN = (e.strN || 0) + 1;
+  if (e.strN <= (boss ? (e.strOpen ? 3 : 6) : e.strOpen ? 2 : 99)) return false;
+  e.strN = 0; const r = Math.random();
+  if (r < .4) { e.guardT = time + DEF_GUARD; turn(); }                     // its guard: the blow turned aside
+  else if (r < .75 || !p.onGround) { const k = 1 / Math.sqrt(wt); e.vx = dir * (boss ? 560 : 440) * k; e.vy = -(boss ? 520 : 420) * k; e.onGround = false; e.inv = .4; e.sq = -.3; e.sqv = 0; SFX.whoosh(); puffs(e.x, e.y, 3, 20, 90); p.deflectT = time; freezeReset(); }   // a hop back, out of reach
+  else { e.vx = -dir * 90; e.sq = .25; e.sqv = 0; p.vx = -dir * 460; p.vy = -260; p.onGround = false; p.plat = null; p.atkT = -1; p.atkKind = null; p.chain = null; p.deflectT = time; SFX.thud(); shake = Math.max(shake, 3); puffs(p.x, p.y - 40, 3, 20, 120); freezeReset(); }   // a shove: off you go
+  if (e.atkCd !== undefined) e.atkCd = Math.min(e.atkCd, boss ? .45 : .35);   // (and it's straight back at you)
+  return true;
+}
 function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon's own: a bounce on a head does the plain 2, the user 2026-10-22)
   if (b.inv > 0 || b.dead || b.gone) return false;
   if (b.calm) surprise(b.calm.gid);                                    // (caught napping: the whole lot of them are up)
@@ -20120,7 +20629,7 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   return true;
 }
 function popBaddy(b) {                           // beaten: won back into a weapon (captureBaddy); the player's ATK power goes up one
-  if (!b.npc && b.type !== "friend" && !hideout) dropLoot(b.x, b.y - (b.h || 60) * .6, b.T.size === "B" || b.T.size === "G" ? 2 : 1);   // (its coins: one, a big one two)
+  if (!b.npc && b.type !== "friend" && !hideout) { dropLoot(b.x, b.y - (b.h || 60) * .6, b.T.size === "B" || b.T.size === "G" ? 2 : 1); dropFrom(b); }   // (its coins: one, a big one two · and what it carries, perhaps)
   if (b.spot && sadSpots.has(b.spot)) sadFate[sadHome.get(b.spot)] = "killed";   // (the sad one: no beps from that hideout this time)
   if (b.r.segs) { b.r.segRoot.visible = false; b.r.segs.forEach(g => puffs(g.position.x / S, GROUND - g.position.y / S, 1, 10, 120)); }
   const i = baddies.indexOf(b), pip = pipsEl.children[i];
@@ -20270,7 +20779,7 @@ function syncBaddy(b, dt) {
     });
   }
   settleJoints(r, b, dt);
-  FLASHSET(r.mats, b.flash > 0 || (b.dead && b.deathT > .06) ? .9 : 0);
+  hitTint(r.mats, b.flash, .12, b.dead && b.deathT > .06 ? .9 : 0);
   const gy = Y(groundBelow(b)), ss = clamp(1 - (Y(b.y) - gy) / 6, .3, 1);
   r.shadow.position.set(X(b.x), gy + .02, b.z); r.shadow.scale.setScalar(r.shadowR * ss);
 }
@@ -20278,12 +20787,14 @@ function syncBaddy(b, dt) {
 function hitEnemy(dir, kind) {
   const e = enemy;
   if (e.inv > 0 || e.dead) return false;
+  if (e.leaf) return false;   // (as leaves: nothing touches her)
+  if (e.under && e.under.phase !== "up") { e.under.hits++; e.under.hitT = time; }   // (under her ledge: three and off she comes)
   e.hitT = time; e.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
   if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
   SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15);   // (on the boss's body: heavier)
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
-  e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; e.windup = 0;
+  if (!e.under) { e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; } e.windup = 0;
   e.sq = kind === "stomp" ? -.45 : .2; e.sqv = 0;
   hitFeel(e, dir, kind, true);
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
@@ -20401,16 +20912,17 @@ function combat() {
   const p = player, L = [];
   if (p.dead) return;
   for (const B of duo ? duoTargets() : bossIn && !enemy.dead && !enemy.gone ? [{ e: enemy, D: foe }] : []) { const e = B.e, D = e.def;   // (Noro and Doir: both of them)
-    const bh = e.tuck ? 66 : D.h;
-    L.push({ e, foe: true, top: e.y - bh, box: { x1: e.x - D.hw, x2: e.x + D.hw, y1: e.y - bh, y2: e.y - 4 }, hit: (d, k) => duo ? withBoss(B, () => hitEnemy(d, k)) : hitEnemy(d, k), touch: () => e.inv < .3 && !since(e.hitT, TOUCH_GRACE), solid: true }); }
+    const bh = e.under ? e.under.h : e.tuck ? 66 : D.h;
+    L.push({ e, foe: true, top: e.y - bh, box: { x1: e.x - D.hw, x2: e.x + D.hw, y1: e.y - bh, y2: e.y - 4 }, hit: (d, k) => duo ? withBoss(B, () => defends(e, true, d, k) || hitEnemy(d, k)) : defends(e, true, d, k) || hitEnemy(d, k), touch: () => e.inv < .3 && !since(e.hitT, TOUCH_GRACE), solid: true }); }
   for (const b of baddies) if (!b.dead && !b.gone && !b.under && !b.flee && b.happyT === undefined)
-    L.push({ e: b, foe: true, top: b.y - b.h, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y - 2 }, hit: (d, k) => hitBaddy(b, d, k), touch: () => b.hurtT <= 0 && !b.sad && !b.sleep && !b.calm && !since(b.hitT, TOUCH_GRACE), solid: !b.sad && !b.sleep,
+    L.push({ e: b, foe: true, top: b.y - b.h, box: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y - 2 }, hit: (d, k) => defends(b, false, d, k) || hitBaddy(b, d, k), touch: () => b.hurtT <= 0 && !b.sad && !b.sleep && !b.calm && !since(b.hitT, TOUCH_GRACE), solid: !b.sad && !b.sleep,
       hurt: { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - Math.max(b.h, 66), y2: b.y - 2 } });   // the little ones can still be punched (as if punching down at them)
   if (wild && wildCatchable()) { const c = wild.st, h = Math.max(c.rig.heightPx || 56, 56);   // the wild cat: any hit at all catches it
     L.push({ e: c, top: c.y - h, box: { x1: c.x - 40, x2: c.x + 40, y1: c.y - h, y2: c.y }, hit: d => catchCat(d), touch: () => false, hurt: { x1: c.x - 46, x2: c.x + 46, y1: c.y - Math.max(h, 80), y2: c.y } }); }   // (land on it, or any hit: a little wider than it is, as it's small and quick)
   if (secret && secret.hp > 0) { const B = secret; L.push({ e: B, top: -9999, box: { x1: B.x - 10, x2: B.x + 120, y1: -9999, y2: GROUND + 400 }, hit: (d, k) => secretHit(d, k), touch: () => false }); }   // (the hero's wall: hits on it, none from it)
   if (statue && statue.up) { const T = statue; L.push({ e: T, top: T.gy - 250, box: { x1: T.x - 60, x2: T.x + 60, y1: T.gy - 260, y2: T.gy }, hit: d => hitStatue(d), touch: () => false, hurt: { x1: T.x - 60, x2: T.x + 60, y1: T.gy - 260, y2: T.gy } }); }   // (Glos's statue)
-  for (const c of crates) if (!c.gone) L.push({ e: c, top: c.y - 34, box: { x1: c.x - 22, x2: c.x + 22, y1: c.y - 36, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - 24, x2: c.x + 24, y1: c.y - 66, y2: c.y } });   // (breakable containers)
+  for (const c of crates) if (!c.gone) { const wd = c.who === "rose" ? 30 : 22, ht = c.who === "rose" ? 50 : 36;   // (breakable containers · Rose's things a little taller)
+    L.push({ e: c, top: c.y - ht, box: { x1: c.x - wd, x2: c.x + wd, y1: c.y - ht, y2: c.y }, hit: d => hitCrate(c, d), touch: () => false, hurt: { x1: c.x - wd - 2, x2: c.x + wd + 2, y1: c.y - Math.max(66, ht + 20), y2: c.y } }); }
   if (p.rig.kind === "human" && p.atkT >= 0 && KIT.STRIKES[p.atkKind]) hitsNow(p).forEach((h, i) => {   // (Chase's spectral fist goes out whether or not anything's there)
     const gh = ghostHand(p, h, i); if (!gh || p.atkT < h.t0 || p.atkT > h.t1) return; const got = (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set()); if (!got.ghost) { got.ghost = true; ghostFist(p, gh, h.kind === "launch"); } });
   if (!L.length) return;
@@ -20419,7 +20931,7 @@ function combat() {
   let clashed = false;
   const strike = (got, hb, kind, dirOf, lead) => { for (const T of L) { if (clashed) return; if (got.has(T.e) || (T.e !== secret && walled(T.e.x, p.x))) continue;   // each window hits each target once (none through a hero's wall)
     if (!p.combo && tryClash(p, T, hb, pb)) { clashed = true; got.add(T.e); return; }   // both attacks at once: a clash instead
-    if (!lead && overlap(hb, T.hurt || T.box) && hitK(T, dirOf(T), kind)) { got.add(T.e); p.landT = time; if (T.foe) comboFreeze(); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) { p.chainHit = true; airLanded(p); }
+    if (!lead && overlap(hb, T.hurt || T.box) && hitK(T, dirOf(T), kind)) { got.add(T.e); if (p.deflectT === time) continue; p.landT = time; if (T.foe) comboFreeze(); if (p.tackle || p.combo) p.safeT = Math.max(p.safeT || 0, SAFE_AFTER_HIT); if (p.atkT >= 0) { p.chainHit = true; airLanded(p); }
       if (kind === "tackle" && p.tackle && p.tackle.t < TKL.wind + TKL.lunge) { p.tackle.t = TKL.wind + TKL.lunge; p.vx *= .3; } } } };   // (the tackle that lands stops driving: it doesn't run on into what it knocked away, the user 2026-10-22)   // (a tackle or charged combo that's landed: not hurt for a moment after, the user 2026-10-22: still open while winding up)   // (lead: the swing's not landed yet, so only a clash)
   const hitsOf = i => (p.atkHits || (p.atkHits = []))[i] || (p.atkHits[i] = new Set());
   const CM = p.rig.kind === "cat" && p.atkT >= 0 && p.atkKind && KIT.CAT_MOVES[p.atkKind];
@@ -20472,7 +20984,7 @@ function fallFx(x, k = 1) {                           // something's gone in: a 
   else if (world === 7) { puffs(x, WATER - 10, Math.round(6 * k), 40 * k, 160); SFX.whoosh(); }
   else if (world === 8) { dust(x, WATER - 6, Math.round(12 * k)); SFX.blop(); SFX.thud(); } else { splash(x, k); SFX.splash(); } }
 function resurface(p) {
-  let s = p.safe || { x: 130, y: GROUND, plat: null }; if (!(s.plat && PLATFORMS.includes(s.plat)) && groundAt(s.x) === null) s = safeNear(s.x);   // (never back up over the water)
+  const wb = (STAGES[stage] || {}).wetBack; let s = wb !== undefined && !stronghold && !hideout ? { x: wb, y: groundAt(wb) ?? GROUND, plat: null } : p.safe || { x: 130, y: GROUND, plat: null };   // (wetBack: the forest's D2, back on its left bank where you came in: the user, 2026-10-27) if (!(s.plat && PLATFORMS.includes(s.plat)) && groundAt(s.x) === null) s = safeNear(s.x);   // (never back up over the water)
   Object.assign(p, { x: s.x, y: s.y, vx: 0, vy: 0, onGround: true, plat: s.plat && PLATFORMS.includes(s.plat) ? s.plat : null, carry: 0, hurtT: 0, inv: 1.6, sunkT: 0, sunk: false, bounceT: -1, sq: -.25, sqv: 0, airJumps: 1 });
   if (!p.plat) p.y = groundAt(p.x) ?? GROUND;
   puffs(p.x, p.y - 30, 4, 30, 120); SFX.land();
@@ -20535,6 +21047,10 @@ function finishSync(p, r) {
 }
 function FLASHC(mats, r, g, b) { mats.forEach(m => { const e = m.userData.glowE; m.emissive.setRGB(r + (e ? e[0] : 0), g + (e ? e[1] : 0), b + (e ? e[2] : 0)); }); }   // keeps a glowing sword / gauntlet lit
 function FLASHSET(mats, f) { FLASHC(mats, f, f * .97, f * .9); }
+// a hit landing on an enemy (the user, 2026-10-27: "would it make sense to have enemies flash a faded color briefly to show when hits are connecting and maybe make
+// it feel more tangible that way?"): a soft rosy glow that fades as its flash runs out, instead of a flat white on and off
+const HIT_TINT = [1, .62, .68];
+function hitTint(mats, flash, f0, dead) { if (dead) return FLASHSET(mats, dead); const k = clamp(flash / f0, 0, 1), e = k * k * (3 - 2 * k) * .85; FLASHC(mats, HIT_TINT[0] * e, HIT_TINT[1] * e, HIT_TINT[2] * e); }
 const CHARGE_COL = ["#fff3a6", "#ffd203", "#ff8a1f", "#ff3d9a"].map(c => new THREE.Color(c)), WHITE_C = new THREE.Color("#ffffff");
 const aura = (() => {
   const add = op => new THREE.MeshBasicMaterial({ color: "#ffd203", transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -20639,7 +21155,7 @@ function syncFurnace(e, r, dt = 0) {
   r.flames.forEach((f, i) => { f.scale.setScalar(blaze); f.scale.y = (.75 + Math.abs(Math.sin(time * 18 + i * 1.7)) * .5) * blaze; });
   r.glow.intensity = (5 + Math.sin(time * 23) * 1.5 + Math.sin(time * 9) * 1) * (e.atk ? 2.6 : 1);
   r.groundGlow.intensity = r.glow.intensity; r.glow.getWorldPosition(r.groundGlow.position);
-  FLASHSET(r.mats, e.flash > 0 || (e.dead && Math.floor(e.deathT * 16) % 2 === 0) ? .95 : 0);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0);
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -20748,7 +21264,7 @@ function update(dt) {
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else updatePlayer(dt);
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
+  updatePal(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
   if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
@@ -20802,7 +21318,7 @@ function render(dt) {
     rig.sync(player, rig, dt); syncEat(player, dt); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
-    if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) foe.sync(enemy, foe.rig, dt); baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
+    if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) { foe.sync(enemy, foe.rig, dt); if (foe.post) foe.post(enemy, foe.rig, dt); } baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
   syncCards(); syncHazards(); syncBubble(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAura(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }

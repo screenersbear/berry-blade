@@ -1732,6 +1732,11 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
   if (p.wave > 0) { T.armF = 2.85; T.spF = .55; T.elbF = .45 + .45 * Math.sin(t * 15); T.headRot = .05; }   // the near hand up, waving
   if (p.eat > 0) { const b = p.eatB ?? Math.max(0, Math.sin(t * 2.4)) ** 2, A = p.eatFar ? ["armB", "elbB", "spB"] : ["armF", "elbF", "spF"];   // eating: the near hand lifts the fruit to the mouth now and then (Berry Blade's opening, 2026-10-18)
     T[A[0]] = 1.25 + .5 * b; T[A[1]] = 1.7 + .65 * b; T[A[2]] = .32; T.headRot = .02 + .07 * b; }   // (an item from your bag: eatB, the game's bites; eatFar, the far hand: the near one has your weapon)
+  if (p.popB > 0) {                               // in the bubble, block held to pop it from inside: its keys (STRIKES / CAT_MOVES pop_sword, pop_reach), trembling with the effort as it gives
+    const kind = p.popSword && !cat ? "pop_sword" : "pop_reach", M = (cat ? CAT_MOVES : STRIKES)[kind], k = Math.min(1, p.popB), u = k * M.dur, w = Math.min(1, k * 5), sh = Math.sin(t * 31) * .025 * k;
+    const P = poseKeys(p, kind, u) || {}, own = p.rig.spec.move.anims && p.rig.spec.move.anims[kind], bl = (own && own.blade) || M.keys.blade; if (bl) P.blade = keyvS(bl, u);   // (poseKeys leaves the blade out)
+    if (P.armF !== undefined) P.armF += sh; if (P.armB !== undefined) P.armB -= sh;
+    for (const key in P) if (p.onGround || !LEG_CH.has(key)) T[key] = lerp(T[key] ?? 0, P[key], w); }
   if (p.jcharge > 0 && p.onGround) { const k = Math.min(1, p.jcharge * 1.6); T.bodyY -= .2 * k; T.lean += .22 * k; T.armF = lerp(T.armF, -.7, k); T.armB = lerp(T.armB, -.8, k); T.fNx = lerp(T.fNx, .22, k); T.fFx = lerp(T.fFx, -.2, k); }   // crouching down to spring
 }
 const CAT_BLOCK = { lean: .45, arch: .35, bodyY: -.05, armF: 1.7, elbF: 1.4, armB: 1.5, elbB: 1.5, fNx: .16, fFx: -.14, fNy: 0, fFy: 0, tailBase: 1.6, tailCurl: .1, hatTilt: -.15 };
@@ -2152,6 +2157,13 @@ Object.assign(STRIKES, {
     lean: [[0, .2], [.13, .17], [.24, .29], [.4, .21], [1, .2]], arch: [[0, .08], [.24, .14], [.4, .08], [1, .08]], bodyY: [[0, -.04], [.24, -.02], [.5, -.04], [.74, -.03], [1, -.04]],
     headRot: [[0, -.1], [.2, -.16], [.32, -.08], [1, -.1]], fNx: [[0, .14], [1, .14]], fFx: [[0, .1], [1, .1]], fP: [[0, -.22], [1, -.22]],
     fNy: [[0, .1], [.24, .03], [.5, .04], [.76, .23], [1, .1]], fFy: [[0, .1], [.26, .23], [.5, .04], [.76, .03], [1, .1]] } },
+  // in the bubble, block held to pop it from inside (the user, 2026-10-27: "rose slowly pushes her sword through and camila tiptoes and stretches her arms up"), over the
+  // hold (the game's BUBBLE_HOLD, 1.55 s): pop_sword drawn in to her chest, point up and out, both hands on the hilt, the arms slowly straightening with it; pop_reach up
+  // on tiptoe, arms stretched up, pressing at its top (everyone without a sword). F is the weapon hand. The work.html side stretches the bubble's skin over the point / fists
+  pop_sword: { dur: 1.55, pose: true, keys: { ...flatKeys({ arch: .06, bodyY: -.06, blade: 0, grip: 1, spF: .05, spB: .1, fNx: .27, fFx: -.25 }, 1.55),
+    lean: [[0, .1], [1.55, .16]], headRot: [[0, -.18], [1.55, -.28]], armF: [[0, .5], [1.55, 2.0]], elbF: [[0, 2.0], [1.55, .3]], armB: [[0, .45], [1.55, 1.9]], elbB: [[0, 2.05], [1.55, .4]] } },
+  pop_reach: { dur: 1.55, pose: true, keys: { ...flatKeys({ lean: -.06, arch: -.22, headRot: -.45, armF: 2.9, armB: 2.85, spF: .2, spB: .2, fNx: .06, fFx: -.06, fNy: .02, fFy: .02 }, 1.55),
+    bodyY: [[0, 0], [1.55, .06]], elbF: [[0, .24], [1.55, .14]], elbB: [[0, .26], [1.55, .16]], fP: [[0, .3], [1.55, .65]] } },
 });
 const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
@@ -2159,6 +2171,7 @@ Object.assign(CAT_MOVES, {
   tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_C, 1) },
   backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.05, headRot: .12, armF: 1.3, elbF: 1.5, armB: 1.2, elbB: 1.5, tailCurl: .2, hatTilt: .12 }, .5),   // (his back-step: rocked back on his haunches, paws up, the tail up for balance)
     lean: bkCurve(.1, -.4), arch: bkCurve(.1, -.15), tailBase: bkCurve(1.3, .5) } },
+  pop_reach: { dur: 1.55, pose: true, keys: { ...flatKeys({ lean: -.1, arch: -.25, headRot: -.4, armF: 2.6, armB: 2.5, elbF: .3, elbB: .3, tailBase: 1.7, tailCurl: .2, hatTilt: .2 }, 1.55), bodyY: [[0, 0], [1.55, .08]] } },   // (up on his hind legs, paws up at it)
 });
 function poseKeys(p, kind, t) {                   // a game-driven move's pose at t: its keys, with the character's own laid over them
   const S = (p.rig.kind === "cat" ? CAT_MOVES : STRIKES)[kind]; if (!S || !S.keys) return null;
@@ -2270,6 +2283,7 @@ function updatePoseHuman(p, dt) {
   p.sprintK = approach(p.sprintK || 0, D.run && p.onGround ? clamp(((p.runK || 1) - 1) / .45, 0, 1) : p.sprintK || 0, dt * 3); const sk = p.sprintK * (1 - wk);   // sprinting: how far into it (0 at a run)
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
+  if (p.sit && p.chair) Object.assign(T, { bodyY: -.3, fNx: .3, fFx: .25 });   // (in a chair, 2026-10-27: sat up higher than on a log, the feet under the knees)
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view

@@ -183,7 +183,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch", dn_sword: "down stab", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
-  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb",
+  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
@@ -195,6 +195,7 @@ function movesFor(sp) {                                          // every move t
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
     add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Tackle (attack + block)", "tackle", "", C);
     add("Charged tackle (hold attack + block)", "tkdig", "", C); list("Charged tackle (hold attack + block)", TK.cat, C); add("Back-step (block + back)", "backstep", "", C);
+    add("In the bubble: hold block to pop it", "pop_reach", "", C);
     add("Attack while running at full speed", "carddash", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
@@ -206,6 +207,7 @@ function movesFor(sp) {                                          // every move t
   add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
   list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
+  add("In the bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
   add("As a berry buddy: special", bsp, "", T);
@@ -278,11 +280,12 @@ function moveAt(kind, S, u) {                                    // the state th
   const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
   return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb", vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
     tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,
-    climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0 };   // (the climb: up her rock, as the game plays it)
+    climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0,   // (the climb: up her rock, as the game plays it)
+    popB: pm === "pop_sword" || pm === "pop_reach" ? Math.max(.001, u / S.dur) : 0, popSword: pm === "pop_sword" };   // (popping the bubble: the hold so far, as the game sets it)
 }
 function handlesAt(times) {                                      // every dot's place (in the world) at other moments of the picked move; the pose is put back after
   const kind = isMove() ? moveKind() : st.atkKind, S = kind && moveDef(kind), M = rig.body.matrixWorld;
-  const keep = { atkT: st.atkT, atkKind: st.atkKind, onGround: st.onGround, vx: st.vx, tackle: st.tackle, tackleK: st.tackleK, tkCharge: st.tkCharge, tkDig: st.tkDig, dodge: st.dodge, pose: { ...st.pose }, pv: { ...st.pv }, out: { ...st.out } };
+  const keep = { atkT: st.atkT, atkKind: st.atkKind, onGround: st.onGround, vx: st.vx, tackle: st.tackle, tackleK: st.tackleK, tkCharge: st.tkCharge, tkDig: st.tkDig, dodge: st.dodge, popB: st.popB, popSword: st.popSword, pose: { ...st.pose }, pv: { ...st.pv }, out: { ...st.out } };
   const res = times.map(t => { if (S && S.pose) Object.assign(st, moveAt(kind, S, t)); else st.atkT = t; KIT.updatePose(st, 0); rig.sync(st, rig, 0); rig.root.updateMatrixWorld(true); const o = {}; KIT.poseHandles(st, rig).forEach(H => { o[H.id] = H.pos.clone().applyMatrix4(M); }); return o; });
   Object.assign(st, keep);
   return res;
