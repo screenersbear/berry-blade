@@ -286,7 +286,12 @@
   #wearCv canvas { display: block; width: 220px; height: 300px; background: rgba(47, 59, 67, .08); }
   @media (max-width: 640px) and (orientation: portrait) { #wear .panel { grid-template-columns: auto; grid-template-areas: "lk" "cv" "rows" "sm"; } #wearCv canvas { width: 150px; height: 204px; margin: 0 auto 6px; } }
   #wearRows { flex-direction: column; align-items: stretch; min-width: min(440px, 84vw); }
-  #songRows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; min-width: min(420px, 84vw); max-height: 56vh; overflow-y: auto; }   /* SONGS: the headphones' songs, scrolling */
+  #songRows { flex-direction: column; flex-wrap: nowrap; align-items: stretch; justify-content: flex-start; min-width: min(380px, 56vw); max-height: 56vh; overflow-y: auto; }   /* HEADPHONES: on or off, then their songs (the cassettes), scrolling */
+  #songBody { display: flex; gap: clamp(10px, 2.4vw, 26px); align-items: flex-start; justify-content: center; } #songHead { display: flex; flex-direction: column; align-items: center; gap: 6px; width: clamp(130px, 22vw, 210px); }
+  #songCv canvas { width: clamp(130px, 22vw, 210px); height: clamp(130px, 22vw, 210px); display: block; border-radius: 50%; background: rgba(47, 59, 67, .12); }
+  #songNote { margin: 0; font: 600 10px "Jost", sans-serif; letter-spacing: .1em; text-transform: uppercase; text-align: center; line-height: 1.45; opacity: .85; }
+  #songRows button.dim { opacity: .45; } #songRows .none { font: 600 11px "Jost", sans-serif; letter-spacing: .1em; text-transform: uppercase; opacity: .7; padding: 6px 16px; }
+  @media (max-width: 640px), (max-height: 520px) { #songCv canvas { width: 110px; height: 110px; } #songHead { width: 120px; } #songNote { font-size: 9px; } #songRows { max-height: 52vh; } }
   #bgRow { display: flex; align-items: center; justify-content: center; gap: clamp(8px, 2.4vw, 28px); margin: 2px 0 6px; }   /* BERRY GEARS: Rose's sword one side, Camila's gauntlet the other */
   .bgSide { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; transition: opacity .15s; } .bgSide b { font-size: 14px; letter-spacing: .06em; } .bgSide.off { opacity: .35; }
   .bgBins { display: flex; flex-direction: column; gap: 2px; align-items: stretch; }   /* each weapon's LIFE and POWER: the gears on it, and the room left */
@@ -652,9 +657,9 @@
   <small id="bgHelp"></small>
 </div></div>
 <div id="songs" class="mnu"><div class="panel">
-  <div class="lockup"><div class="blk">SONGS</div><div class="bar" id="songSub">ON THE HEADPHONES</div></div>
-  <div class="btns" id="songRows"></div>
-  <small data-pad="↑ ↓ to choose &middot; {j} to play &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to play &middot; Esc to go back</small>
+  <div class="lockup"><div class="blk">HEADPHONES</div><div class="bar" id="songSub">ON THE HEADPHONES</div></div>
+  <div id="songBody"><div id="songHead"><div id="songCv"></div><p id="songNote"></p></div><div class="btns" id="songRows"></div></div>
+  <small data-pad="↑ ↓ to choose &middot; {j} to pick &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to pick &middot; Esc to go back</small>
 </div></div>
 <div id="settings" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
@@ -4777,15 +4782,13 @@ let musicHub = false, musicQuick = 0;
 // (the pause menu) picks what plays instead: each world you've been to (its midday take; on the PC page its recording, where midday has one) and the cassettes found
 let freePhones = null;                               // (free play's pick)
 const phonesOn = () => mode === "play" && !!player && !!rig && GEAR_HEROES.includes(rig.id) && (gearState().wear[rig.id] || {}).ears === "phones";
-function phoneSongs() {
-  const out = [{ id: "off", name: "NO MUSIC" }], seen = new Set();
-  WORLDS.forEach((Wd, w) => { if (story && !story.visited.has(w)) return; const sg = Wd.song ?? w; if (seen.has(sg)) return; seen.add(sg);
-    const R = PC_REC[w], rec = window.BERRY_PC && R && R.hours.includes(0) ? R.src : null;
-    out.push({ id: "w" + w, name: Wd.name, song: sg, tempo: (Wd.screens && Wd.screens[0] && Wd.screens[0].tempo) || 1, rec }); });
+const phonesHave = () => mode === "play" && !!player && !!rig && GEAR_HEROES.includes(rig.id) && gearOwned("phones");   // (bought: the pause menu's HEADPHONES)
+function phoneSongs() {                             // the cassettes you've got (the user, 2026-10-28: "for songs, only show casettes, do not show stage songs"), and none at all
+  const out = [{ id: "off", name: "NO MUSIC" }];
   tapesHere().forEach(T => { if (tapeGot(T.id)) out.push({ id: T.id, name: T.name, song: T.song, tempo: 1, tape: true, hour: T.hour || 0, rec: tapeRec(T) }); });
   return out;
 }
-const phoneSong = () => { const id = story ? story.phones : freePhones, L = phoneSongs(); return L.find(q => q.id === id) || L[0]; };
+const phoneSong = () => { const id = story ? story.phones : freePhones, L = phoneSongs(); return L.find(q => q.id === id) || L[1] || L[0]; };   // (none picked, or a world's song from before: the first cassette)
 function phonesMusic(dt, P) {                        // (syncMusic, the headphones on: their song only, its one take, never the hour's)
   const S = window.BerryScore, on = musicOn && !bgm.dataset.muted, rec = P.rec || null;
   voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5); sfxMuffle(on && P.id !== "off");
@@ -5863,10 +5866,10 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { songs: "SONGS", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
 function pauseButtons() { PAUSE_OPTS = story ? ["resume", "map", "wear", "ach", "vlog", "quit"] : ["resume", "wear", "ach", "vlog", "lvl", "home"];   // (GAME LOG: the stats and the narration)   // (a story run: no testing tools here, they're under the gear; free play's HOME SCREEN is the way out)
   if (!stronghold && !hideout && !arena) PAUSE_OPTS.splice(PAUSE_OPTS.length - 1, 0, "debug");   // (debug: in the pause menu itself, not the game settings; the user, 2026-10-22)
-  if (phonesOn()) PAUSE_OPTS.splice(PAUSE_OPTS.indexOf("wear") + 1, 0, "songs");   // (the headphones on: what they play)
+  if (phonesHave()) PAUSE_OPTS.splice(PAUSE_OPTS.indexOf("wear") + 1, 0, "songs");   // (HEADPHONES, once you've got them: on or off, and what they play. The user, 2026-10-28: "once you have the headphones, make it its own category in the menu, like it says songs now. change that to headphones")
   $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "quit" && story ? "SAVE &amp; QUIT" : PAUSE_LABEL[q]}</button>`).join(""); }
 function setPauseSel(i) { pauseSel = (i + PAUSE_OPTS.length) % PAUSE_OPTS.length; [...$("pbtns").children].forEach((b, j) => b.classList.toggle("on", j === pauseSel)); SFX.tick(); }
 function openPause() { if (paused || opening || comicUp || koScr || (gift && gift.phase === "in")) return; $("holdTip").classList.remove("show"); $("pAsk").classList.add("hidden"); paused = true; for (const k in keys) keys[k] = false; pauseButtons(); $("pause").classList.add("show"); setPauseSel(0); drawPauseWear(); syncMini(); drawPauseMap(); }
@@ -5924,7 +5927,7 @@ function pauseChoose(what) {
 }
 $("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const b = e.target.closest("[data-p]"); if (b) pauseChoose(b.dataset.p); });
-$("songRows").addEventListener("click", e => { const b = e.target.closest("[data-sg]"); if (!b || menuUp !== "songs") return; if (b.dataset.sg === "done") return closeSongs(); songSel = +b.dataset.sg; songPick(songSel); markMenu(); });
+$("songRows").addEventListener("click", e => { const b = e.target.closest("[data-sg]"); if (!b || menuUp !== "songs") return; if (b.dataset.sg === "done") return closeSongs(); songSel = +b.dataset.sg; songPick(songSel); markMenu(); });   // (0: on / off; 1..: the songs)
 $("pWear").addEventListener("click", () => { if (paused && !menuUp && PAUSE_OPTS.includes("wear")) { SFX.confirm(); openWear(); } });
 $("wearRows").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (!b || menuUp !== "wear") return; if (b.dataset.w === "done") return closeWear();
   const i = +b.dataset.w, r = b.getBoundingClientRect(); wearSel = i; wearCycle(i, e.clientX < r.left + r.width * .55 ? -1 : 1); });
@@ -6656,7 +6659,7 @@ function markMenu() {
   if (menuUp === "team" && teamAsk) [...$("teamBtns").children].forEach((b, i) => b.classList.toggle("on", i === teamAsk.sel));
   if (menuUp === "rideask") [...$("raBtns").children].forEach((b, i) => b.classList.toggle("on", i === rideAskSel));
   if (menuUp === "wear") wearMark();
-  if (menuUp === "songs") [...$("songRows").children].forEach((b, i) => { b.classList.toggle("on", i === songSel); if (i === songSel) b.scrollIntoView({ block: "nearest", behavior: "instant" }); });
+  if (menuUp === "songs") [...$("songRows").querySelectorAll("button")].forEach((b, i) => { b.classList.toggle("on", i === songSel); if (i === songSel) b.scrollIntoView({ block: "nearest", behavior: "instant" }); });
   if (menuUp === "rideskip") [...$("skBtns").children].forEach((b, i) => b.classList.toggle("on", i === skipSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
@@ -18150,7 +18153,7 @@ const ACC = {
   // MISC spot, and went again the same day: the user, "let's remove the cat cat tail from the game"; a file that bought it gets its price back, gearState)
   tody: { slot: "hat", perch: true, name: "BROAD-BILLED TODY", price: 80, desc: "HISPANIOLA'S LITTLE GREEN BIRD: IT PERCHES ON HER HEAD AND CHIRPS" },
   flor_maga: { slot: "hair", name: "FLOR DE MAGA", price: 55, desc: "PUERTO RICO'S FLOWER: HER HAIR DOWN, PINNED BACK ON ONE SIDE" },   // (the user, 2026-10-26: "also add a flor de maga as a hair accessory")
-  phones: { slot: "ears", pl: true, name: "HEADPHONES", price: 60, desc: "PUT THEM ON, THEN PICK A SONG: PAUSE MENU, SONGS" },   // (the user, 2026-10-26: "we will make headphones an item you can buy as well")
+  phones: { slot: "ears", pl: true, name: "HEADPHONES", price: 60, desc: "PAUSE MENU: HEADPHONES, TO PUT THEM ON AND PICK A CASSETTE" },   // (the user, 2026-10-26: "we will make headphones an item you can buy as well")
   // the legs set (the user, 2026-10-27: "create socks as accessories and pants/leggings. also different sneaker shapes that keep the same color ways. also a sandals option"):
   // the shoes in each girl's own boot colours (the colour, the studs', the sole's)
   leggings_black: { slot: "legs", pl: true, name: "BLACK LEGGINGS", price: 45, desc: "BLACK, A PINK STRIPE DOWN EACH SIDE" },
@@ -18748,7 +18751,7 @@ function buyAcc(id) {
 // the look of them, under the map in the pause menu and bigger in ACCESSORIES: a little renderer of its own, the two of them side by side in what they've got on
 let wearPv = null;
 const curHero = () => rig && GEAR_HEROES.includes(rig.id) ? rig.id : (story && story.char) || "camila";   // (whoever you're playing)
-function wearPreview(into, w, h, only = GEAR_HEROES) {   // (only: the ones shown. Just one since 2026-10-27, the user: "only show the character you're currently playing as")
+function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body") {   // (only: the ones shown. Just one since 2026-10-27, the user: "only show the character you're currently playing as" · frame "head": up close, HEADPHONES)
   if (!wearPv) {
     const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
     const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d);
@@ -18757,7 +18760,8 @@ function wearPreview(into, w, h, only = GEAR_HEROES) {   // (only: the ones show
   for (const id of GEAR_HEROES) { const k = id === "rose" ? 1 : 0;
     let E = V.rigs[id]; const src = roster.find(q => q.id === id); if (!src) continue;
     if (!E || E.spec !== src.spec) { if (E) V.sc.remove(E.r.root); const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
-      const st = makeState(0, r); st.onGround = true; E = V.rigs[id] = { r, st, spec: src.spec, fresh: true }; }
+      const st = makeState(0, r); st.onGround = true; E = V.rigs[id] = { r, st, spec: src.spec, fresh: true };
+      if (r.head) { r.root.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(r.head), sz = bb.getSize(new THREE.Vector3()); E.hc = r.head.worldToLocal(bb.getCenter(new THREE.Vector3())); E.hs = Math.max(sz.x, sz.y, sz.z); } }   // (her bare head's middle and size, before anything's on it: HEADPHONES frames on it)
     const W = G.wear[id] || {}; if (E.r.__gearKey !== JSON.stringify(W)) dressGear(E.r, W);
     const st = E.st; E.yaw = k ? -Math.PI / 2 - .3 : -Math.PI / 2 + .3; st.face = 1; for (let i = 0, n = E.fresh ? 60 : 3; i < n; i++) { st.yaw = E.yaw; KIT.updatePose(st, 1 / 60); E.r.sync(st, E.r, 1 / 60); } E.fresh = false;   // (built new, a hair look's own rig: settled into her stance first, not half up out of a T, the user 2026-10-28 "rose will stand up straight")
     E.x = only.length > 1 ? (k ? .95 : -.95) : 0; E.r.root.position.set(E.x, 0, 0); E.r.root.visible = only.includes(id); }
@@ -18765,6 +18769,8 @@ function wearPreview(into, w, h, only = GEAR_HEROES) {   // (only: the ones show
   if (w && h && (V.w !== w || V.h !== h)) { V.w = w; V.h = h; V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
   const tn = Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)), d = Math.max(1.4 / tn, (only.length > 1 ? 2.1 : 1.05) / (tn * V.cam.aspect));   // (all of her, head to toe: what's on her feet and legs too, 2026-10-27)
   V.cam.position.set(0, 1.3, d); V.cam.lookAt(0, 1.17, 0);
+  if (frame === "head") { const E = V.rigs[only[0]]; if (E && E.r.head && E.hc) { E.r.root.updateMatrixWorld(true);   // (her head, three-quarters on, an ear and its cup to you; room above it for a hat or the tody)
+    const hc = E.r.head.localToWorld(E.hc.clone()), dd = E.hs * 3.4; V.cam.position.set(hc.x + dd * .3, hc.y + dd * .06, hc.z + dd); V.cam.lookAt(hc.x, hc.y + E.hs * .02, hc.z); } }
   V.R2.render(V.sc, V.cam);
 }
 // the box under the map (the pause menu): whoever you're playing, in what she's got on; no words (the user, 2026-10-27: "dont show any text. just show the character
@@ -18776,18 +18782,39 @@ function drawPauseWear() {
 let wearSel = 0, wearHero = "camila";               // (the rows: 0 whose (CAMILA or ROSE), 1-5 her spots, 6 DONE)
 const WN = GEAR_SLOTS.length + 2;
 function openWear() { menuUp = "wear"; wearSel = 0; wearHero = (story && story.char) || (rig && GEAR_HEROES.includes(rig.id) ? rig.id : "camila"); $("pause").style.visibility = "hidden"; $("wear").classList.add("show"); drawWear(); markMenu(); }
-let songSel = 0;                                     // (SONGS: the rows are the songs, then DONE)
-function openSongs() { menuUp = "songs"; const L = phoneSongs(), cur = phoneSong(); songSel = Math.max(0, L.findIndex(q => q.id === cur.id)); $("pause").style.visibility = "hidden"; $("songs").classList.add("show"); drawSongs(); markMenu(); }
-function closeSongs() { $("songs").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); pauseButtons(); setPauseSel(Math.max(0, PAUSE_OPTS.indexOf("songs"))); }
+// HEADPHONES (the user, 2026-10-28: "when the player hits that, it shows the characters head and they can put the head phones on or off. then pick a song. let them
+// know that it goes over an ear/head accessories so they can't have some at the same time. but maybe some work? like the bird?"): her head up close in what she's
+// got on; the rows: ON / OFF, then NO MUSIC and the cassettes you've got, then DONE. They take the EARS spot (the earrings come off, back on when they do); her hat,
+// the tody, the flower and a mask all stay on with them (dressGear fits each round the band and the cups)
+let songSel = 0;                                     // (the rows: 0 ON / OFF, 1.. the songs, then DONE)
+const phonesWas = {};                                // (what was on her ears before the headphones: back on when they come off)
+function phonesSet(on) {
+  const h = curHero(), G = gearState(), W = G.wear[h] || (G.wear[h] = wearBlank());
+  if (on && W.ears !== "phones") { phonesWas[h] = W.ears || null; W.ears = "phones"; }
+  else if (!on && W.ears === "phones") { const was = phonesWas[h]; W.ears = was && gearOwned(was) && gearFits(was, h) ? was : null; }
+  if (story) writeSave();                            // (the game's own rig dresses itself to match: gearCheck)
+}
+function openSongs() { menuUp = "songs"; const L = phoneSongs(), cur = phoneSong(); songSel = phonesOn() ? Math.max(1, 1 + L.findIndex(q => q.id === cur.id)) : 0; $("pause").style.visibility = "hidden"; $("songs").classList.add("show"); drawSongs(); markMenu(); }
+function closeSongs() { $("songs").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); pauseButtons(); setPauseSel(Math.max(0, PAUSE_OPTS.indexOf("songs"))); drawPauseWear(); }
 function drawSongs() {
-  const L = phoneSongs(), cur = phoneSong(), C = tapesHere(), tp = C.filter(T => tapeGot(T.id)).length;
-  $("songSub").textContent = `ON THE HEADPHONES · NOW: ${cur.name} · ${tp} OF ${C.length} CASSETTES`;
-  $("songRows").innerHTML = L.map((q, i) => `<button data-sg="${i}" class="${q.id === cur.id ? "cur" : ""}"><span>${q.tape ? "▣ " : ""}${q.name}</span><span class="sgv">${q.id === cur.id ? "♪" : ""}</span></button>`).join("") + `<button data-sg="done">DONE</button>`;
+  const L = phoneSongs(), cur = phoneSong(), on = phonesOn(), C = tapesHere(), tp = C.filter(T => tapeGot(T.id)).length, W = gearState().wear[curHero()] || {};
+  $("songSub").textContent = on ? `ON · ${cur.name} · ${tp} OF ${C.length} CASSETTES` : `OFF · THE WORLD'S OWN MUSIC · ${tp} OF ${C.length} CASSETTES`;
+  const ear = phonesWas[curHero()] && ACC[phonesWas[curHero()]];
+  $("songNote").textContent = on ? `OVER HER EARS: NO EARRINGS WITH THEM${ear ? " (HER " + ear.name + " BACK ON WHEN THEY COME OFF)" : ""} · HATS, THE TODY, THE FLOWER AND MASKS ALL STAY ON`
+    : `THEY GO OVER HER EARS: EARRINGS COME OFF${W.ears && ACC[W.ears] ? " (HER " + ACC[W.ears].name + ")" : ""} · HATS, THE TODY, THE FLOWER AND MASKS STAY ON`;
+  $("songRows").innerHTML = `<button data-sg="0"><span>HEADPHONES</span><span class="sgv">${on ? "ON" : "OFF"}</span></button>`
+    + L.map((q, i) => `<button data-sg="${i + 1}" class="${on && q.id === cur.id ? "cur" : ""}${on ? "" : " dim"}"><span>${q.tape ? "▣ " : ""}${q.name}</span><span class="sgv">${on && q.id === cur.id ? "♪" : ""}</span></button>`).join("")
+    + (L.length < 2 ? `<span class="none">NO CASSETTES YET: FIND THEM OUT IN THE WORLDS, OR BUY ONE AT A HUB</span>` : "") + `<button data-sg="done">DONE</button>`;
+  try { wearPreview($("songCv"), 210, 210, [curHero()], "head"); } catch (e) { console.warn("head preview", e); }
   markMenu();
 }
-function songPick(i) { const q = phoneSongs()[i]; if (!q) return; if (story) { story.phones = q.id; writeSave(); } else freePhones = q.id; SFX.tick(); drawSongs(); }
+function songPick(i) {                               // (0: on / off; a song: on, and that one)
+  if (i === 0) { phonesSet(!phonesOn()); SFX.tick(); drawSongs(); return; }
+  const q = phoneSongs()[i - 1]; if (!q) return; if (!phonesOn()) phonesSet(true);
+  if (story) { story.phones = q.id; writeSave(); } else freePhones = q.id; SFX.tick(); drawSongs();
+}
 function songsNav(d, ok, back, vert) {
-  const n = phoneSongs().length + 1; if (back) { closeSongs(); return; }
+  const n = phoneSongs().length + 2; if (back) { closeSongs(); return; }
   if (d) { songSel = (songSel + d + n) % n; SFX.tick(); markMenu(); return; }
   if (ok) { if (songSel >= n - 1) closeSongs(); else songPick(songSel); }
 }
@@ -19079,7 +19106,7 @@ function tapePlan(w) {
 }
 function gotTape(T, q) {
   if (!T) return; if (story) { const L = story.tapes || (story.tapes = []); if (!L.includes(T.id)) L.push(T.id); }
-  SFX.gift(); sparks(q.x, q.y - 20, 12); popText(q.x, q.y - 60, "A CASSETTE!"); toast(`A CASSETTE: ${T.name} · WEAR HEADPHONES, THEN PAUSE: SONGS`, 4600); if (story) writeSave();
+  SFX.gift(); sparks(q.x, q.y - 20, 12); popText(q.x, q.y - 60, "A CASSETTE!"); toast(`A CASSETTE: ${T.name} · PAUSE, HEADPHONES TO PLAY IT`, 4600); if (story) writeSave();
 }
 function spawnRoomItems() {
   if (!WORLDS[world] || world === 9 || stronghold || hideout || arena) return;
@@ -19283,10 +19310,10 @@ function buy(it) {
 }
 function buyTape(T) {
   const B = bag(), U = npcUp;
-  if (tapeGot(T.id)) { SFX.tick(); U.msg = `YOU'VE GOT ${T.name} ALREADY. WEAR HEADPHONES, THEN PAUSE: SONGS.`; drawNpc(); return; }
+  if (tapeGot(T.id)) { SFX.tick(); U.msg = `YOU'VE GOT ${T.name} ALREADY. PAUSE, HEADPHONES TO PLAY IT.`; drawNpc(); return; }
   if (B.coins < T.sell) { SFX.nope(); U.msg = `THAT'S ${T.sell} COINS, FRIEND. YOU'VE ONLY GOT ${B.coins}.`; drawNpc(); return; }
   B.coins -= T.sell; const L = story.tapes || (story.tapes = []); L.push(T.id); coinHud(true); SFX.buy();
-  U.msg = `A CASSETTE: ${T.name}! WEAR HEADPHONES, THEN PAUSE: SONGS.`; drawNpc(); writeSave();
+  U.msg = `A CASSETTE: ${T.name}! PAUSE, HEADPHONES TO PLAY IT.`; drawNpc(); writeSave();
 }
 function buyMap() {
   const B = bag(), U = npcUp;
