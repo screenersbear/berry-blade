@@ -3579,7 +3579,7 @@ function buildRestCamp(s) {                       // a campfire on a ring of sto
   const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
   for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .62, 6), i % 2 ? wood : woodD); m.rotation.set(Math.PI / 2 - .35, i / 3 * TAU, 0); m.position.y = .14; g.add(m); }
-  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.5); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
+  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.name = "campChair"; c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.5); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.7, 6), woodD); pole.position.set(-1.0, .85, -.1); g.add(pole);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(.62, .36), new THREE.MeshBasicMaterial({ color: "#ffd203", side: THREE.DoubleSide })); flag.position.set(-.68, 1.5, -.1); g.add(flag);
   const fl = (c, s, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.17 * s, .62 * s, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .2 + .31 * s; g.add(m); return m; };
@@ -8660,8 +8660,9 @@ const RF_WARN = 1, RF_DROP = 560, RF_GEO = [new THREE.DodecahedronGeometry(.13, 
 function spawnRockfall() { clearRockfall(); const q = STAGES[stage].rockfall; if (!q || stronghold || hideout || arena || mode !== "play") return; rockfall = { q, t: 2.2 + Math.random() * 1.6, warn: null, sh: null }; }
 function clearRockfall() { if (rockfall && rockfall.sh) actors.remove(rockfall.sh); rockfall = null; }
 function rockfallMat() { return (level.mats && level.mats.rockM) || toon("#7d746a"); }
+function rockfallRig(rng = Math.random) { return mk(jag(new THREE.DodecahedronGeometry(.62, 0), rng, .2), null, { mat: rockfallMat(), ol: .04 }); }   // (exported for the 3DS too: pickups.js)
 function dropRock(x, ty) {                           // the rock: off the cliff behind (it comes forward as it falls), tumbling; it lands where the shadow was (through what's over you) and breaks up
-  const m = mk(jag(new THREE.DodecahedronGeometry(.62, 0), Math.random, .2), null, { mat: rockfallMat(), ol: .04 }), y0 = ty - RF_DROP;
+  const m = rockfallRig(), y0 = ty - RF_DROP;
   addHz({ x, y: y0, vy: 260, r: 24, life: 3, m, z: -1.8, nob: true, owner: null,
     tick: (h, dt) => { h.vy += 1800 * dt; if (h.y + h.r >= ty && !h.done) { h.done = true; h.y = ty - h.r; h.life = h.t; rockBreak(h.x, ty); } },
     sync: h => { const k = clamp((h.y - y0) / (ty - y0), 0, 1); h.m.position.z = -1.8 + 2.15 * k; h.m.rotation.set(h.t * 5.2, h.t * 3.1, h.t * 4); } });
@@ -12436,6 +12437,13 @@ function spawnBranch(e, fromTop) {                   // one long branch: a rumbl
   addHz({ x: x0, y: gy, life: .36, harmless: true, tick: (h, dt) => { shake = Math.max(shake, 1.4); if (Math.random() < dt * 34) { const xx = x0 + d * Math.random() * Math.min(len, 1100), yy = groundAt(xx) ?? gy;
       if (fromTop) spawn("puff", X(xx), Y(yRun - 260), rand(-.2, .2), V(0, -6, 0), .5, .2, { g: 20 }); else dust(xx, yy, 1); } },
     onEnd: () => { if (!bossIn || !enemy || enemy.dead) return;
+      const g = branchMesh(d, len, fromTop);
+      SFX.slam(); shake = Math.max(shake, 5); dust(x0, gy, 6); hzOwner = enemy;
+      addHz({ m: g, x: x0, y: yRun, life: .62, harmless: true, z: .1, sync: h => { const u = h.t / h.life, k = u < .25 ? u / .25 : u > .75 ? (1 - u) / .25 : 1; h.m.scale.set(Math.max(.001, k), 1, 1); } });   // (out across in a flash, held, back)
+      for (let s2 = 26; s2 < len; s2 += 34) addHz({ x: x0 + d * s2, y: yRun, r: 18, life: .62, harmless: true, nob: true, tick: h => { const u = h.t / h.life, reach = (u < .25 ? u / .25 : 1) * len; h.harmless = !(s2 <= reach && u < .72); } });
+      hzOwner = null; } });
+}
+function branchMesh(d, len, fromTop) {               // the branch itself, from where it comes out (0) along d for len px (built here and exported for the 3DS: pickups.js)
       const g = new THREE.Group(), bark = toonT("#5a3a22"), bark2 = toonT("#6e4a2a"), leafM = toonT("#4fdc1e"), L = len * S, RT = fromTop ? 7 : .9;
       const pts = []; for (let i = 0; i <= 40; i++) { const u = i / 40; pts.push(new THREE.Vector3(d * u * L, Math.sin(u * L * .45) * .22 * Math.min(1, u * 6), 0)); }   // (a branch, not a pole: bending a little as it goes)
       const run = mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 120, .26, 8), null, { mat: bark, ol: .03, smooth: true }); g.add(run);
@@ -12444,10 +12452,7 @@ function spawnBranch(e, fromTop) {                   // one long branch: a rumbl
       for (let s2 = .7, k = 0; s2 < L; s2 += .75, k++) { const up = k % 2 ? 1 : -1, yb = Math.sin(s2 * .45) * .22;
         const th = mk(new THREE.ConeGeometry(.09, .42, 5), null, { mat: bark2, ol: .015 }); th.position.set(d * s2, yb + up * .3, .08); th.rotation.z = (up > 0 ? 0 : Math.PI) + d * .45; g.add(th);   // (a thorn)
         if (k % 2 === 0) { const lf = new THREE.Mesh(LS, leafMeshes().L[k % 4].material); lf.scale.setScalar(3.2); lf.position.set(d * (s2 + .3), yb - up * .42, .12); lf.rotation.set(.3, 0, (up > 0 ? Math.PI : 0) + d * .6); g.add(lf); } }   // (and its leaves)
-      SFX.slam(); shake = Math.max(shake, 5); dust(x0, gy, 6); hzOwner = enemy;
-      addHz({ m: g, x: x0, y: yRun, life: .62, harmless: true, z: .1, sync: h => { const u = h.t / h.life, k = u < .25 ? u / .25 : u > .75 ? (1 - u) / .25 : 1; h.m.scale.set(Math.max(.001, k), 1, 1); } });   // (out across in a flash, held, back)
-      for (let s2 = 26; s2 < len; s2 += 34) addHz({ x: x0 + d * s2, y: yRun, r: 18, life: .62, harmless: true, nob: true, tick: h => { const u = h.t / h.life, reach = (u < .25 ? u / .25 : 1) * len; h.harmless = !(s2 <= reach && u < .72); } });
-      hzOwner = null; } });
+      return g;
 }
 Object.assign(ATTACKS, {
   branches: { charge: 1.0, act: 1.75, cd: [4.2, 6], range: 1300, desc: "Arms up, waving round in a swirl: then three long branches shoot right across the room, one after another, low out of the floor (jump it) or down out of the canopy (stay down). A rumble comes first.",
