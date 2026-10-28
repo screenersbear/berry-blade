@@ -1254,20 +1254,21 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   });
   const teeth = [notches[2], notches[1], notches[0]];      // (the order they come in: the tip's first)
   // berry gear teeth (the user, 2026-10-28: "improving the power will add teeth to it. one gear is half a tooth, a second makes a whole tooth. this is for the
-  // max level of the weapon"): two smaller pink ones, between the tip's notch and the middle's, then the middle's and the hilt's; each in two halves (a gear each,
-  // the tip's side first), only out once the three are
+  // max level of the weapon"; then "not of the teeth being half and then full, but half OUT ... sticks out half way and is smaller than the rest. then when you add
+  // the second gear, it extends out all the way and gets the white circle in side of it"): two smaller pink ones, between the tip's notch and the middle's, then the
+  // middle's and the hilt's, only out once the three are; one gear: half out (sync, TOOTH_HALF), two: all the way, its white studs showing
   const teethX = [.715, .465].map(u => {
-    const k = .72, h = .072 * k, d = .13 * k, half = (a, b, dd) => { const t = new THREE.Shape(); t.moveTo(a, 0); t.lineTo(b, 0); t.lineTo(0, -dd); t.closePath(); return t; };
-    const g = group(inner, u * LK, -W / 2 + .012, 0), mT = M(GEAR_PINK), mR = M("#2f3b43");
-    const hv = [[0, h], [-h, 0]].map(([a, b]) => { const q = group(g); q.add(P(slab(half(a, b, d), .04, .006), mT)); q.add(at(P(slab(half(a * 1.22, b * 1.22, d * 1.2), .03, .004), mR), 0, .006, 0)); return q; });
-    g.scale.setScalar(0); g.visible = false; return { g, hv };
+    const k = .72, tri = (h, d) => { const t = new THREE.Shape(); t.moveTo(-h, 0); t.lineTo(h, 0); t.lineTo(0, -d); t.closePath(); return t; };
+    const g = group(inner, u * LK, -W / 2 + .012, 0); g.add(P(slab(tri(.072 * k, .13 * k), .04, .006), M(GEAR_PINK))); g.add(at(P(slab(tri(.088 * k, .158 * k), .03, .004), M("#2f3b43")), 0, .006, 0));
+    const stud = group(g); [-1, 1].forEach(z => stud.add(at(P(new THREE.SphereGeometry(.016, 10, 8), M("#ffffff")), 0, -.04, z * .026)));
+    g.scale.setScalar(0); g.visible = false; return { g, stud };
   });
   const gc = glowCol(Q.fill), glow = [halo(slab(roundRect(L + .08, W + .08, .1, .06, -(W + .08) / 2), .08, .02), gc, .55),
     halo(slab(roundRect(L + .24, W + .26, .17, -.02, -(W + .26) / 2), .05, .05), gc, .22), halo(new THREE.SphereGeometry(.16, 18, 12), gc, .5)];
   glow.forEach(m => inner.add(m));
   return { kind: "sword", group: outer, inner, chunks, teeth, teethX, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02], P, L, W, lifeKey: "fff" };
 }
-const GEAR_PINK = "#ff66aa";                       // (the berry gear's own pink: its teeth on the weapons)
+const GEAR_PINK = "#ff66aa", TOOTH_HALF = .55;     // (the berry gear's own pink: its teeth on the weapons · how far out one gear brings its tooth)
 const GAUNT_UP = .1, GAUNT_CUFF = .62;              // (the user, 2026-10-22: "make camila's gauntlet a little shorter ... dont change the fist or the rings": the whole thing slid this far back up the forearm, the gold cuff this much of its old length)
 function propLife(pr, g) {                         // the weapon's life rebuilt for its berry gears, when they change: the sword's chunks, the gauntlet's rings
   const rows = lifeLayout(pr.kind, pr.kind === "sword" ? 3 : pr.ringN, g), key = rows.map(r => r.split ? (r.slot ? "h" : "s") : "f").join(""); pr.life = rows;
@@ -1314,29 +1315,17 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     const nl = P(new THREE.SphereGeometry(1, 12, 8).scale(.014, .026, .042), mGold); nl.rotation.x = -ts * .45; t.add(at(nl, .104, -.142, ts * .03));   // gold thumbnail
     return t;
   });
-  // ATK power (the user, 2026-10-20: "3 colored spikes on the knuckles … the way rose's sword has the teeth"): up to three spikes grow out of the
-  // knuckles of the first three fingers, the one by the thumb first, out over the top of the fist (seen side on in a guard) and fanned a little. The thumb's side is picked at run time: they move with it (spikeAim)
-  const SR = [.056, .062, .062], SZ = [.102, .034, -.034], ka = Math.PI * 1.22, sa = Math.PI * 1.12, spikeAim = [];
-  const teeth = SR.map((R, i) => {
-    const sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), SZ[i]), aim = group(sp);
-    aim.add(at(P(new THREE.ConeGeometry(.048, .25, 12), M([Q.c3, Q.c4 || Q.c2, Q.c1][i])), 0, .115, 0));   // (the middle one the sleeve's purple, not red: the user 2026-10-22; bigger since 10-23e)
-    aim.add(at(P(new THREE.CylinderGeometry(.056, .06, .03, 14), M("#2f3b43")), 0, .005, 0));               // (a dark collar at its foot: it stands out of the knuckle)
-    const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * SZ[i] * 2.2).normalize()));
-    aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: SZ[i], q }); sp.scale.setScalar(0); sp.visible = false; return sp;
-  });
-  // berry gear teeth (the user, 2026-10-28, as on the sword): a pink spike off the fourth knuckle, then one off the thumb, each split down its length (a gear a half)
-  const halfCone = (r, h, m) => { const q = new THREE.Group();
-    [0, Math.PI].forEach((t0, j) => { const c = new THREE.Group(); c.add(P(new THREE.ConeGeometry(r, h, 10, 1, false, t0, Math.PI), m));
-      const cap = new THREE.Shape(); cap.moveTo(-r, -h / 2); cap.lineTo(r, -h / 2); cap.lineTo(0, h / 2); cap.closePath(); c.add(P(new THREE.ShapeGeometry(cap).rotateY(Math.PI / 2), m)); q.add(c); });
-    return q; };
-  const mGT = M(GEAR_PINK, { side: THREE.DoubleSide }), teethX = [];
-  { const R = .056, sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), -.102), aim = group(sp), hc = halfCone(.044, .22, mGT);
-    aim.add(at(hc, 0, .1, 0)); aim.add(at(P(new THREE.CylinderGeometry(.05, .054, .028, 14), M("#2f3b43")), 0, .005, 0));
-    const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * -.102 * 2.2).normalize()));
-    aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: -.102, q }); sp.scale.setScalar(0); sp.visible = false; teethX.push({ g: sp, hv: hc.children }); }
-  { const sp = new THREE.Group(), hs = thumbs.map(t => { const a = group(t, .02, -.1, 0), hc = halfCone(.036, .17, mGT); a.userData.ts = t; hc.position.y = .085; a.add(hc); a.add(at(P(new THREE.CylinderGeometry(.04, .044, .024, 12), M("#2f3b43")), 0, .004, 0)); return { a, hc }; });
-    thumbs.forEach((t, i) => { const ts = i ? 1 : -1; hs[i].a.position.set(.02, -.1, ts * .13); hs[i].a.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-.55, -.15, ts).normalize()); });
-    sp.scale.setScalar(0); teethX.push({ g: sp, hv: [0, 1].map(j => ({ set visible(v) { hs.forEach(H => { H.hc.children[j].visible = v; }); } })), thumb: hs }); }
+  // ATK power, redone (the user, 2026-10-28: "for camila, instead of them coming our of the knuckles, make them come out around the berry orb on the back of her hand.
+  // have the first one come out of her center of her hand above the orb and close to her fingers and then the rest come out on either side, making a circle around the
+  // orb. also make them smaller"): up to three small spikes out of the back of the fist, in a ring round the orb, the first between it and the knuckles, then one each
+  // side; her berry gears' two (pink) on round the ring, each half out at one gear and all the way at two. The thumb's side is picked at run time: they move with it (spikeAim)
+  const RING = { x: -.084, y: -.075, r: .064 }, RING_A = [0, 1.05, -1.05, 2.1, -2.1], spikeAim = [];
+  const ringSpike = (k, mat, rad, len) => { const a = RING_A[k], z = RING.r * Math.sin(a), sp = group(fist, RING.x, RING.y - RING.r * Math.cos(a), z), aim = group(sp);
+    aim.add(at(P(new THREE.ConeGeometry(rad, len, 10), mat), 0, len / 2 - .004, 0)); aim.add(at(P(new THREE.CylinderGeometry(rad * 1.2, rad * 1.28, .016, 12), M("#2f3b43")), 0, .004, 0));   // (a dark collar at its foot)
+    const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(-1, -Math.cos(a) * .5, s * Math.sin(a) * .5).normalize()));   // (out of the back of the hand, leaning out from the orb)
+    aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z, q }); sp.scale.setScalar(0); sp.visible = false; return sp; };
+  const teeth = [0, 1, 2].map(k => ringSpike(k, M([Q.c3, Q.c4 || Q.c2, Q.c1][k]), .024, .115));   // (the middle one the sleeve's purple, not red: the user 2026-10-22)
+  const teethX = [3, 4].map(k => ({ g: ringSpike(k, M(GEAR_PINK), .022, .105) }));
   fist.add(at(P(new THREE.SphereGeometry(1, 20, 14).scale(.036, .056, .056), mOrb), -.108, -.075, 0));    // the orb, set in the back of the hand
   fist.add(at(P(new THREE.TorusGeometry(.06, .012, 8, 24).rotateY(Math.PI / 2), mGold), -.106, -.075, 0));
   fist.add(at(P(new THREE.TorusGeometry(.03, .007, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.138, -.068, .006));
@@ -2888,12 +2877,11 @@ function syncHuman(p, r, dt = 0) {
       if (s.x < 0) { s.x = 0; s.v = 0; }
       g.scale.setScalar(s.x); g.visible = s.x > .01;
     });
-    if (pr.teethX) { const pg = p.powG || 0, TX = r.teethXS || (r.teethXS = pr.teethX.map(() => ({ x: 0, v: 0 })));   // (the berry gears' teeth: only at full power, a half a gear)
-      pr.teethX.forEach((X, i) => { const s = TX[i], want = n >= 3 && pg > i * 2 ? 1 : 0;
+    if (pr.teethX) { const pg = p.powG || 0, TX = r.teethXS || (r.teethXS = pr.teethX.map(() => ({ x: 0, v: 0 })));   // (the berry gears' teeth: only at full power; a gear: half out, two: all the way)
+      pr.teethX.forEach((X, i) => { const s = TX[i], want = n >= 3 && pg > i * 2 ? (pg >= i * 2 + 2 ? 1 : TOOTH_HALF) : 0;
         for (let k = 0, m = Math.ceil(h * 120); k < m; k++) { s.v += (260 * (want - s.x) - 14 * s.v) * h / m; s.x += s.v * h / m; }
         if (s.x < 0) { s.x = 0; s.v = 0; }
-        X.hv[0].visible = true; X.hv[1].visible = pg >= i * 2 + 2;
-        if (X.thumb) X.thumb.forEach(H => { H.a.scale.setScalar(s.x); H.a.visible = s.x > .01; }); else { X.g.scale.setScalar(s.x); X.g.visible = s.x > .01; } }); }
+        if (X.stud) X.stud.visible = pg >= i * 2 + 2; X.g.scale.setScalar(s.x); X.g.visible = s.x > .01; }); }
   }
   if (pr && pr.glow) {                                                // full health: the sword / gauntlet glows; a hit puts it out
     const want = hp >= 3 && !p.dead ? 1 : 0;
@@ -3050,7 +3038,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  lifeLayout, lifeMax, propLife, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
