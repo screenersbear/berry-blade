@@ -1217,6 +1217,22 @@ function halo(geo, col, a) {                    // additive glow shell (not a to
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
   m.userData.a = a; m.renderOrder = 3; m.visible = false; return m;
 }
+// berry gears (the user, 2026-10-28: "each gear gives half an extra life, so two make a whole life ... one gear will divide the 3 pieces in the sword into 4, and the top
+// one will be split in half, one side with life and the other just white. when you get the second gear, the white side at the top of the sword will become the life color
+// too ... the 3rd gear will then divide the middle life bar in half. the fourth will divide the last one in half ... for camila, she'll have her rings divided, in half"):
+// the life on a weapon as rows from the hilt (the cuff) up, each one whole or split in two side by side, a gear's half-strip each; one hit takes one piece. slot: the
+// split row's second half not yours yet (white). Rose: 3 rows; the 1st gear a new top row half yours, the 2nd the rest of it, the 3rd splits the one under it, the 4th
+// the bottom one (7 pieces). Camila: her 4 rings, split from the top down (8)
+function lifeLayout(kind, base, g) {
+  g = Math.max(0, Math.min(4, g | 0));
+  if (kind === "sword") { const n = base + (g ? 1 : 0), rows = Array.from({ length: n }, () => ({ split: false, slot: false }));
+    if (g >= 1) { rows[n - 1].split = true; rows[n - 1].slot = g === 1; }
+    if (g >= 3) rows[n - 2].split = true;
+    if (g >= 4) rows[0].split = true;
+    return rows; }
+  const rows = Array.from({ length: base }, () => ({ split: false, slot: false })); for (let i = 0; i < g && i < base; i++) rows[base - 1 - i].split = true; return rows;
+}
+const lifeMax = rows => rows.reduce((a, r) => a + (r.split ? (r.slot ? 1 : 2) : 1), 0);
 function buildSword(parent, M, P, Q) {          // hand frame: origin at the wrist, −y runs down the fist; the blade runs along +x of `inner`
   const outer = group(parent), inner = group(outer, 0, -.085, 0), L = 1.14, LK = L / .95, W = .17, mBlade = M(Q.main); inner.rotation.order = "ZYX";   // z = the wrist; x = turning the blade over (which edge leads)   (L was .95: the user asked for it a little longer, 2026-10-16)
   inner.add(P(slab(roundRect(L, W, .07, .1, -W / 2), .03, .012), mBlade));
@@ -1245,9 +1261,22 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   const gc = glowCol(Q.fill), glow = [halo(slab(roundRect(L + .08, W + .08, .1, .06, -(W + .08) / 2), .08, .02), gc, .55),
     halo(slab(roundRect(L + .24, W + .26, .17, -.02, -(W + .26) / 2), .05, .05), gc, .22), halo(new THREE.SphereGeometry(.16, 18, 12), gc, .5)];
   glow.forEach(m => inner.add(m));
-  return { kind: "sword", group: outer, inner, chunks, teeth, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02] };
+  return { kind: "sword", group: outer, inner, chunks, teeth, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02], P, L, W, lifeKey: "fff" };
 }
 const GAUNT_UP = .1, GAUNT_CUFF = .62;              // (the user, 2026-10-22: "make camila's gauntlet a little shorter ... dont change the fist or the rings": the whole thing slid this far back up the forearm, the gold cuff this much of its old length)
+function propLife(pr, g) {                         // the weapon's life rebuilt for its berry gears, when they change: the sword's chunks, the gauntlet's rings
+  const rows = lifeLayout(pr.kind, pr.kind === "sword" ? 3 : pr.ringN, g), key = rows.map(r => r.split ? (r.slot ? "h" : "s") : "f").join(""); pr.life = rows;
+  if (pr.lifeKey === key) return; pr.lifeKey = key;
+  if (pr.kind === "sword") { pr.chunks.forEach(m => { if (m.parent) m.parent.remove(m); m.geometry.dispose(); }); pr.chunks = [];
+    const n = rows.length, len = (pr.L - .12) / n - .02, W = pr.W;
+    rows.forEach((r, i) => { const x0 = .16 + i * (len + .02), add = (w, y0, slot) => { const m = pr.P(slab(roundRect(len, w, .035, x0, y0), .055, .006), pr.mFull); m.userData.slot = slot; pr.inner.add(m); pr.chunks.push(m); };
+      if (!r.split) add(W * .48, -W * .24, false); else { add(W * .22, -W * .24, false); add(W * .22, W * .02, r.slot); } });
+    pr.chunkX = [.16, len + .02]; return; }
+  pr.rings.forEach(m => { if (m.parent) m.parent.remove(m); m.geometry.dispose(); }); pr.rings = [];   // (the gauntlet: a split ring, two thin ones side by side up the arm)
+  const Q = pr.Q, extra = pr.ringX;
+  rows.forEach((r, i) => { const col = i < extra ? Q.c4 : [Q.c1, Q.c2, Q.c3][i - extra], y = -.035 - (i - extra) * .045, ring = (tube, dy) => { const m = pr.P(new THREE.TorusGeometry(.08, tube, 10, 28).rotateX(Math.PI / 2), pr.M(col)); at(m, 0, y + dy, 0); m.userData.col0 = col; pr.ringG.add(m); pr.rings.push(m); };
+    if (!r.split) ring(.022, 0); else { ring(.011, .0115); ring(.011, -.0115); } });
+}
 function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff runs back up the forearm (+y)
   const outer = group(parent), g = group(outer, 0, GAUNT_UP, 0), [cv, x] = cv2(64, 8);
   x.fillStyle = Q.main; x.fillRect(0, 0, 64, 8); x.fillStyle = Q.trim; for (let i = 0; i < 8; i++) x.fillRect(i * 8, 0, 3, 8);
@@ -1297,7 +1326,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     halo(new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x + .085, v.y)), 28), gc, .2), halo(new THREE.SphereGeometry(.2, 20, 14), gc, .5), halo(new THREE.SphereGeometry(.26, 20, 14), gc, .2)];
   glow[0].material.side = glow[1].material.side = THREE.DoubleSide; g.add(glow[0], glow[1]);
   glow[2].material.side = glow[3].material.side = THREE.BackSide; fist.add(at(glow[2], 0, -.13, 0), at(glow[3], 0, -.13, 0));   // (round the fist, not over it: the fingers stay clear)
-  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc };
+  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc, P, M, ringG: g, ringN: n, ringX: extra, Q, lifeKey: "f".repeat(n) };
 }
 
 function buildHuman(R) {
@@ -1702,6 +1731,9 @@ function swimPose(p, t) {                          // swimming (the deep, 2026-1
   const sp = clamp((Math.abs(p.vx) + Math.abs(p.vy)) / 220, 0, 1), s = Math.sin(t * (4 + 5 * sp)), s2 = Math.sin(t * 2.6), c2 = Math.cos(t * 2.6);
   return { lean: .05, arch: .1 * sp, bodyY: 0, headRot: -.35 * sp, armF: 1.1 + 1.6 * sp + .7 * s2, elbF: .35 + .3 * c2, armB: 1.1 + 1.6 * sp - .7 * s2, elbB: .35 - .3 * c2,
     spF: .3, spB: .3, fNx: -.04, fNy: .12 + .1 * s, fFx: -.1, fFy: .12 - .1 * s, fP: -.6 };
+}
+function crawlPose(p) {                            // on hands and knees through a low hole (STRIKES.crawl; crawlPh: the distance crawled, the game's)
+  return poseKeys(p, "crawl", ((((p.crawlPh || 0) / TAU) % 1) + 1) % 1 * STRIKES.crawl.dur) || {};
 }
 function wallPose(p) {                             // up a bare wall: its keys (STRIKES.wallclimb, 2026-10-27), else as it was (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
   const K = STRIKES.wallclimb; if (K && K.keys) { const P = poseKeys(p, "wallclimb", ((((p.climbPh || 0) / TAU) % 1) + 1) % 1 * K.dur); if (P) return P; }
@@ -2165,6 +2197,17 @@ Object.assign(STRIKES, {
   pop_reach: { dur: 1.55, pose: true, keys: { ...flatKeys({ lean: -.06, arch: -.22, headRot: -.45, armF: 2.9, armB: 2.85, spF: .2, spB: .2, fNx: .06, fFx: -.06, fNy: .02, fFy: .02 }, 1.55),
     bodyY: [[0, 0], [1.55, .06]], elbF: [[0, .24], [1.55, .14]], elbB: [[0, .26], [1.55, .16]], fP: [[0, .3], [1.55, .65]] } },
 });
+// on hands and knees (the user, 2026-10-28: "we're going to add a crawling animation and the first implementation will be in c7": the hole in its wall into C8):
+// one cycle of crawlPh, the game's distance crawled. The torso level, the head up to see ahead; a hand reaching forward as the knee on the other side comes
+// up under her, then the other pair: the shins along the ground behind, the toes trailing
+STRIKES.crawl = { dur: 1, pose: true, keys: {
+  lean: [[0, 1.3], [.25, 1.25], [.5, 1.3], [.75, 1.25], [1, 1.3]], arch: [[0, -.12], [1, -.12]], bodyY: [[0, -.3], [.25, -.27], [.5, -.3], [.75, -.27], [1, -.3]],
+  headRot: [[0, -1.0], [.25, -.95], [.5, -1.0], [.75, -.95], [1, -1.0]],
+  armF: [[0, 1.05], [.25, 1.3], [.5, 1.6], [.75, 1.3], [1, 1.05]], elbF: [[0, .12], [.25, .45], [.5, .1], [.75, .25], [1, .12]],
+  armB: [[0, 1.6], [.25, 1.3], [.5, 1.05], [.75, 1.3], [1, 1.6]], elbB: [[0, .1], [.25, .25], [.5, .12], [.75, .45], [1, .1]],
+  spF: [[0, .1], [1, .1]], spB: [[0, .1], [1, .1]],
+  fNx: [[0, -.52], [.25, -.62], [.5, -.72], [.75, -.62], [1, -.52]], fFx: [[0, -.72], [.25, -.62], [.5, -.52], [.75, -.62], [1, -.72]],
+  fNy: [[0, .08], [.25, .08], [.5, .08], [.75, .16], [1, .08]], fFy: [[0, .08], [.25, .16], [.5, .08], [.75, .08], [1, .08]], fP: [[0, -1.4], [1, -1.4]] } };
 const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
@@ -2287,6 +2330,7 @@ function updatePoseHuman(p, dt) {
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
+  else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));   // crawling through a low hole (2026-10-28)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
   else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = !S.screen && leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
@@ -2309,7 +2353,7 @@ function updatePoseHuman(p, dt) {
     }
   }
   if (m.float && a < 0 && p.hurtT <= 0 && sp <= 30 && p.onGround) { T.fNx = -.05; T.fFx = -.2; T.fNy = .05; T.fFy = .02; T.fP = .7; }   // floating in place: feet hang loose, toes down
-  if (p.crouch && p.onGround && a < 0 && p.hurtT <= 0) {
+  if (p.crouch && !p.crawl && p.onGround && a < 0 && p.hurtT <= 0) {
     Object.assign(T, CROUCH);
     if (ST) { const sw = leadFar(p), A = { armF: ST.armF, elbF: ST.elbF + .2, armB: ST.armB + .1, elbB: ST.elbB }; for (const k in A) T[sw ? SWAP[k] : k] = A[k]; }
   }
@@ -2320,7 +2364,7 @@ function updatePoseHuman(p, dt) {
   if (p.hurtT <= 0) T.lean += m.lean;
   smoothPose(p, T, dt);
   // run: alternating legs with the stride locked to distance travelled, arms pumping opposite
-  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.block && !m.float, L = Bd.legs * m.stride;
+  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.crawl && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
   const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .3 * sk);   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
@@ -2740,7 +2784,8 @@ function syncHuman(p, r, dt = 0) {
   r.spike.scale.setScalar(Math.max(Hr.spike, .001)); r.spike.visible = Hr.spike > .03;
   r.ears.forEach(e => { e.scale.setScalar(Math.max(r.spec.face.ears, .001)); e.visible = r.spec.face.ears > .03; });
   r.pads.forEach(m => m.scale.setScalar(r.spec.outfit.pads.size));
-  const shoulder = D.shoulder * Bd.shoulders, hp = clamp(p.hp ?? 3, 0, Math.max(3, ((r.prop && r.prop.rings) || []).length)), pr = r.prop, ps = r.spec.outfit.prop.side, propS = ps === "near" ? near : ps === "left" ? -1 : 1;
+  if (r.prop && (r.prop.kind === "sword" || r.prop.kind === "gauntlet")) propLife(r.prop, p.gears || 0);   // (its berry gears: the life on it split up)
+  const shoulder = D.shoulder * Bd.shoulders, hp = clamp(p.hp ?? 3, 0, Math.max(3, r.prop && r.prop.life ? lifeMax(r.prop.life) : ((r.prop && r.prop.rings) || []).length)), pr = r.prop, ps = r.spec.outfit.prop.side, propS = ps === "near" ? near : ps === "left" ? -1 : 1;
   const grip = pr && pr.kind === "sword" ? clamp(o.grip || 0, 0, 1) : 0; let wristFix = 0;
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
     const i = s > 0 ? 1 : 0, isNear = s === near, st = isNear ? o.aS || 0 : o.bS || 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
@@ -2790,7 +2835,7 @@ function syncHuman(p, r, dt = 0) {
     r.hands.forEach(h => { turn(h.position); h.quaternion.premultiply(_tq); });
     if (pr) { turn(pr.group.position); pr.group.quaternion.premultiply(_tq); }
   }
-  if (pr && pr.chunks) pr.chunks.forEach((m, i) => { m.material = i < hp ? pr.mFull : pr.mEmpty; });   // sword fill = health
+  if (pr && pr.chunks) { let k = 0; pr.chunks.forEach(m => { if (m.userData.slot) { m.material = pr.mEmpty; return; } m.material = k < hp ? pr.mFull : pr.mEmpty; k++; }); }   // sword fill = health (a gear's slot not yet filled: white)
   const shine = hp > 0 && !p.dead ? (api.time + (r.shinePh ?? (r.shinePh = Math.random() * 3))) % 2.8 / .55 : 9;   // every 2.8 s a shine runs along whatever health is left (0..1 while it runs)
   if (pr && pr.glint) {
     const [x0, step] = pr.chunkX, on = shine < 1, u = on ? shine * shine * (3 - 2 * shine) : 0;
@@ -2800,7 +2845,7 @@ function syncHuman(p, r, dt = 0) {
     const k = i < hp && shine < 1.6 ? Math.max(0, Math.sin(Math.PI * clamp((shine - i * .3) / .7, 0, 1))) * .55 : 0;
     m.material.userData.glowE = [k, k, k]; m.material.emissive.setRGB(k, k, k);
   });
-  if (pr && pr.rings) pr.rings.forEach((m, i) => { const on = i < hp; m.visible = true;              // gauntlet rings = health: a lost one stays, gone white (the user: not vanished)
+  if (pr && pr.rings) pr.rings.forEach((m, i) => { const on = i < hp; m.visible = true;              // gauntlet rings = health: a lost one stays, gone white (the user: not vanished) (a split ring: two, one piece each)
     if (m.userData.on !== on) { m.userData.on = on; m.material.color.set(on ? m.userData.col0 || "#ffffff" : "#ffffff"); } });
   if (pr && pr.teeth) {                                               // sword teeth / gauntlet spikes = ATK power (0–3): each one pops out with a little overshoot, or shrinks away
     const n = p.power || 0, h = Math.min(dt || 0, .1), T = r.teethS || (r.teethS = pr.teeth.map(() => ({ x: 0, v: 0 })));
@@ -2966,7 +3011,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  lifeLayout, lifeMax, propLife, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
