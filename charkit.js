@@ -2672,8 +2672,12 @@ function legReach(H, F, Hk, ankle, R, r0) {       // a foot keyed further than t
   Hk.set(F.x, F.y + ankle, F.z);
 }
 const LEG_STRETCH = 1.1, LEG_FOLD = .25;         // how far past its length a leg may stretch (squash and stretch) before the foot comes in; how near the hip a fully bent leg brings the ankle (of the leg's length)
+// held poses (the user, 2026-10-28, on the look: "if the game ran at 30fps, could it give it a cooler aesthetic? it's almost too smooth for these kinds of
+// graphics"): api.animStep poses a second (0: every frame). The limbs hold each pose that long, as animation drawn on twos, while the body still goes where it's
+// going smoothly and the camera with it; all of them on the one beat
+function heldOut(p) { const n = api.animStep; if (!n || !p.out) return p.out; const k = Math.floor(api.time * n); if (p.outK !== k || !p.outH) { p.outK = k; p.outH = Object.assign(p.outH || {}, p.out); } return p.outH; }
 function syncCat(p, r, dt = 0) {
-  const o = p.out, Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
+  const o = heldOut(p), Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
   const HIPY = .6 * Bd.legs, L_TH = .3 * Bd.legs, L_SH = .3 * Bd.legs, L_MT = .17 * Bd.legs, SPINE_L = .23 * Bd.torso,
     L_UA = .27 * Bd.arms, L_FA = .26 * Bd.arms, TAIL_N = 9, TAIL_L = .13 * Bd.tail;
   r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
@@ -2774,7 +2778,7 @@ function keepNeck(p) {                             // the neck keeps its own len
   _nk.multiplyScalar(1 / d); p.neck.copy(_P[3]).addScaledVector(_nk, L); p.neckV.addScaledVector(_nk, -p.neckV.dot(_nk));
 }
 function syncHuman(p, r, dt = 0) {
-  const o = p.out, Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
+  const o = heldOut(p), Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
   const H_HIP = D.hip * Bd.legs, H_TH = D.th * Bd.legs, H_SH = D.sh * Bd.legs, H_SPINE = D.spine * Bd.torso, H_UA = D.ua * Bd.arms, H_FA = D.fa * Bd.arms;
   const fs = p.face > 0 ? 1 : -1;
   r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
