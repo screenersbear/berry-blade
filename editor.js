@@ -181,7 +181,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave",
   cpunch: "punch", ccross: "cross", csmash: "smash", upperhook: "uppercut + hook", gu_fist: "rising swipe", up_fist: "rising uppercut", gu_sword: "rising swipe", up_sword: "rising cut",
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
-  punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch", dn_sword: "down stab", dn_kick: "down kick",
+  punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch (half moon)", dn_sword: "down swing", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
