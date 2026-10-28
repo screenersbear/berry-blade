@@ -2208,6 +2208,12 @@ STRIKES.crawl = { dur: 1, pose: true, keys: {
   spF: [[0, .1], [1, .1]], spB: [[0, .1], [1, .1]],
   fNx: [[0, -.52], [.25, -.62], [.5, -.72], [.75, -.62], [1, -.52]], fFx: [[0, -.72], [.25, -.62], [.5, -.52], [.75, -.62], [1, -.72]],
   fNy: [[0, .08], [.25, .08], [.5, .08], [.75, .16], [1, .08]], fFy: [[0, .08], [.25, .16], [.5, .08], [.75, .08], [1, .08]], fP: [[0, -1.4], [1, -1.4]] } };
+// up after the one you've launched (the user, 2026-10-28: "the player needs a slight crouch and jump movement to follow up. right now it looks like they just
+// literally float up into the air"): down into the knees, the arms swung back (to .1, where the game pushes off), then up out of them, the arms thrown up
+STRIKES.uphop = { dur: .18, pose: true, keys: {
+  lean: [[0, .2], [.1, .45], [.18, .1]], arch: [[0, .05], [.1, .14], [.18, .02]], bodyY: [[0, -.08], [.1, -.32], [.18, .02]], headRot: [[0, -.2], [.1, -.3], [.18, -.4]],
+  armF: [[0, .4], [.1, -.45], [.18, 2.3]], elbF: [[0, .8], [.1, .5], [.18, .3]], armB: [[0, .3], [.1, -.55], [.18, 1.4]], elbB: [[0, .8], [.1, .5], [.18, .4]],
+  fNx: [[0, .2], [.1, .28], [.18, .18]], fNy: [[0, 0], [.1, 0], [.18, .3]], fFx: [[0, -.18], [.1, -.24], [.18, -.26]], fFy: [[0, 0], [.1, 0], [.18, .08]], fP: [[0, 0], [.1, .2], [.18, -.5]] } };
 const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
@@ -2331,6 +2337,7 @@ function updatePoseHuman(p, dt) {
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));   // crawling through a low hole (2026-10-28)
+  else if (p.upHop && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the jump (2026-10-28)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
   else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = !S.screen && leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
@@ -2364,7 +2371,7 @@ function updatePoseHuman(p, dt) {
   if (p.hurtT <= 0) T.lean += m.lean;
   smoothPose(p, T, dt);
   // run: alternating legs with the stride locked to distance travelled, arms pumping opposite
-  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.crawl && !p.block && !m.float, L = Bd.legs * m.stride;
+  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.crawl && !p.upHop && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
   const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .3 * sk);   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
