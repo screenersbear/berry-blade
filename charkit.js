@@ -1221,15 +1221,10 @@ function halo(geo, col, a) {                    // additive glow shell (not a to
 // one will be split in half, one side with life and the other just white. when you get the second gear, the white side at the top of the sword will become the life color
 // too ... the 3rd gear will then divide the middle life bar in half. the fourth will divide the last one in half ... for camila, she'll have her rings divided, in half"):
 // the life on a weapon as rows from the hilt (the cuff) up, each one whole or split in two side by side, a gear's half-strip each; one hit takes one piece. slot: the
-// split row's second half not yours yet (white). Rose: 3 rows; the 1st gear a new top row half yours, the 2nd the rest of it, the 3rd splits the one under it, the 4th
-// the bottom one (7 pieces). Camila: her 4 rings, split from the top down (8)
+// split row's second half not yours yet (white; none now). Each gear splits a row down the middle, from the top down: Rose's 3 rows (the user, 2026-10-28: "change
+// rose's sword to end up at 6 only then for now. basically her sword split down the middle instead of adding a new row": 6 at 3 gears), Camila's 4 rings (8)
 function lifeLayout(kind, base, g) {
   g = Math.max(0, Math.min(4, g | 0));
-  if (kind === "sword") { const n = base + (g ? 1 : 0), rows = Array.from({ length: n }, () => ({ split: false, slot: false }));
-    if (g >= 1) { rows[n - 1].split = true; rows[n - 1].slot = g === 1; }
-    if (g >= 3) rows[n - 2].split = true;
-    if (g >= 4) rows[0].split = true;
-    return rows; }
   const rows = Array.from({ length: base }, () => ({ split: false, slot: false })); for (let i = 0; i < g && i < base; i++) rows[base - 1 - i].split = true; return rows;
 }
 const lifeMax = rows => rows.reduce((a, r) => a + (r.split ? (r.slot ? 1 : 2) : 1), 0);

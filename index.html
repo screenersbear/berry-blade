@@ -567,7 +567,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261028c"></script>
+<script src="charkit.js?v=20261028d"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3597,7 +3597,7 @@ function buildRestCamp(s) {                       // a campfire on a ring of sto
   const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
   for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .62, 6), i % 2 ? wood : woodD); m.rotation.set(Math.PI / 2 - .35, i / 3 * TAU, 0); m.position.y = .14; g.add(m); }
-  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.name = "campChair"; c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.55 * CHAIR_BIG); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
+  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.name = "campChair"; c.position.set(dx / 40, 0, dz + .6 - CHAIR_BACK); c.rotation.y = yaw; c.scale.setScalar(.55 * CHAIR_BIG); g.add(c); return { g: c, x: x + dx, dz: dz - CHAIR_BACK, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.7, 6), woodD); pole.position.set(-1.0, .85, -.1); g.add(pole);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(.62, .36), new THREE.MeshBasicMaterial({ color: "#ffd203", side: THREE.DoubleSide })); flag.position.set(-.68, 1.5, -.1); g.add(flag);
   const fl = (c, s, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.17 * s, .62 * s, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .2 + .31 * s; g.add(m); return m; };
@@ -3606,6 +3606,7 @@ function buildRestCamp(s) {                       // a campfire on a ring of sto
   return { g, x, flames, glow, flag, healed: false, chairs, sitT: 0 };
 }
 const CHAIR_AT = [[108, 0, -.45], [-104, .1, .45], [-188, -.3, .3]];   // [px from the fire, depth (3D), turn]: yours on its right, the two partners' on its left
+const CHAIR_BACK = 1.1;                               // (set back off the line you walk along, a step behind it: you'd walked right through them, the user 2026-10-28 "the character walks right throguht it and it goes through their body"; sitting, you step back into it)
 const CHAIR_BIG = 1.7;                                // (a grown-up's chair, not one at their own hip height: they sit up in it, feet off the floor. The user, 2026-10-27 "the chairs are so tiny, they need to be bigger to look realistic when the player sits on them")
 const seatLift = r => { const h = seatH(r); return h > .2 ? h * (CHAIR_BIG - 1) * 1.02 : 0; };   // (how far up the bigger seat is from where they'd sit: they're raised that much, seatLift, charkit)
 const seatH = r => { const D = r.D, B = r.spec.body; return (D.hip * B.legs - .3 * D.step) * B.scale - .03; };   // (how high a chair's seat is for this one: sat up in it, p.chair, higher than a stump)
@@ -3621,9 +3622,9 @@ function syncRest() {                             // the fire flickering; sit do
     if (!C.told && !C.healed && Math.abs(p.x - C.x) < 260) { C.told = true; toast("SIT IN A CHAIR BY THE FIRE TO REST", 3200); }
     const still = k >= 0 && !held.left && !held.right && p.onGround && Math.abs(p.vx) < 20 && C.offX === undefined;
     C.sitIdle = still ? (C.sitIdle || 0) + dt : 0;
-    if (C.sitIdle > .35) { const c = C.chairs[k]; c.by = "you"; C.mine = k; chairFit(C, k, p.rig); p.sit = 1; p.chair = true; p.x = c.x; p.vx = 0; p.z = c.dz; p.seatLift = seatLift(p.rig); atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
+    if (C.sitIdle > .35) { const c = C.chairs[k]; c.by = "you"; C.mine = k; chairFit(C, k, p.rig); p.sit = 1; p.chair = true; p.x = c.x; p.vx = 0; p.zBack = false; p.seatLift = seatLift(p.rig); atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
     return; }
-  const mc = C.chairs[C.mine ?? 0]; p.x = mc.x; C.sitT += dt; if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
+  const mc = C.chairs[C.mine ?? 0]; p.x = mc.x; p.z = approach(p.z || 0, mc.dz, dt * 6); C.sitT += dt;   // (back into it as you sit) if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); partnerList().forEach(P => { if ((P.q.php ?? PARTNER_HP) < PARTNER_HP) { P.q.php = PARTNER_HP; P.q.heartT = 2.2; } }); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");   // (your partners too: the user, 2026-10-26)
 }
 const CAMP_SPOT = { pal: [-66, -.1], pal2: [-24, .3], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85], ally1: [166, -.55], ally2: [-196, -.72] };   // where each one sits: [px from the fire, depth (3D)]
@@ -4375,7 +4376,7 @@ function authorForest() {
   // C7: the leaning tree's trunk on up from D7 (you walk in front of it); 3 baddies; a ledge out of C8's solid ground at the far end, up it and through
   // B7's hole above (a double jump from the ledge; too high from the floor, but for Rose's big jump); a hole in the floor down to D7
   room("C7", { ground: [[0, 0]], gaps: [[700, 900]], below: C.D7, noRight: true, prev: C.C6, hopY: 0, plats: [[1640, 230, 920, "jut"], [2560, 230, 480, "hole"]],
-    crawl: [{ x0: 2440, x1: 3040, y: 230, to: C.C8, dir: 1 }],   // (the hole in the wall at the ledge's end: crawl in, and on into C8: the user, 2026-10-28)
+    crawl: [{ x0: 2440, x1: 3040, y: 230, to: C.C8, dir: 1, wall: 2560 }],   // (the hole in the wall at the ledge's end: crawl in, and on into C8: the user, 2026-10-28)
     set: [{ k: "leaner", part: "mid", x: 1150 }, { k: "earth", side: 1, col: EARTH, hole: { y: 230, h: 62 } }] }, [["leafy", "leaf", 1180], ["acorn", "rust", 1600], ["stumpy", "olive", 2250]]);
 
   // ── row D
@@ -4404,7 +4405,7 @@ function authorForest() {
   // off from both, lit by her lamps
   const HOMEK = { ground: [[0, 0]], ceils: [[-600, 3200, HOME_CEIL, true]], floor: "wood", authored: true };
   const C9 = S0.length, C10 = C9 + 1, hh = S0[C.C8].h, he = S0[C.C8].elev;
-  room("C8", { ...HOMEK, home: "hall", rug: [700, 2100], noLeft: true, prev: C.C7, next: C9, plats: [[-500, 230, 690, "lip"]], crawl: [{ x0: -500, x1: 130, y: 230, to: C.C7, dir: -1 }],
+  room("C8", { ...HOMEK, home: "hall", rug: [700, 2100], noLeft: true, prev: C.C7, next: C9, plats: [[-500, 230, 690, "lip"]], crawl: [{ x0: -500, x1: 130, y: 230, to: C.C7, dir: -1, wall: 0 }],
     homeEnds: [["hole", { hy: Y(230), ht: Y(230 - 62) }], ["door"]] }, []); nm(S0[C.C8], "HALL");
   S0.push({ h: hh, col: 138, cell: "C9", elev: he, foe: 1, ...HOMEK, ceils: [[-600, 3200, -120, true]], ceil: -120, home: "library", rug: [500, 2200], mini: "lossst", bossX: 1500, prev: C.C8, next: C10,   // (a tall room: Lossst stands on his chandelier under its ceiling, and walks under it)
     plats: [[160, 300, 300, "wshelf"], [880, 170, 800, "chand"]], homeEnds: [["door"], ["big"]] });
@@ -5589,9 +5590,10 @@ const heartsEl = document.getElementById("hearts");
 // strategically, max one in any given level. each gear gives half an extra life, so two make a whole life ... the gears are found with whichever player the
 // character had when they found it. but the player should be able to reallocate them through a menu as an option at the npc who lets you change character"):
 // each one a piece more of life on that hero's weapon (charkit lifeLayout: the sword's rows, the gauntlet's rings, split up as they come), four at most each
-const BGEAR_MAX = 4; let freeBg = { rose: 0, camila: 0 };
+const BGEAR_MAX = 4, BGEAR_ROSE = 3; let freeBg = { rose: 0, camila: 0 };
+const bgMax = id => id === "rose" ? BGEAR_ROSE : BGEAR_MAX;   // (Rose's sword: 3 rows to split, so 3 gears at most, 6 pieces. The user, 2026-10-28)
 const bgState = () => story ? (story.bgears || (story.bgears = { rose: 0, camila: 0 })) : freeBg;
-const bgearsOf = id => (id === "rose" || id === "camila") ? Math.min(BGEAR_MAX, bgState()[id] || 0) : 0;
+const bgearsOf = id => (id === "rose" || id === "camila") ? Math.min(bgMax(id), bgState()[id] || 0) : 0;
 const maxHp = (r = rig) => ((r && HEARTS[r.id]) || 3) + (r ? bgearsOf(r.id) : 0);
 function fillHearts(n) { heartsEl.innerHTML = Array.from({ length: n }, () =>
   `<svg viewBox="0 0 22 20"><path d="M11 18.5 L3 10.5 Q-.5 6 3.2 2.6 Q7.5 -.6 11 4.2 Q14.5 -.6 18.8 2.6 Q22.5 6 19 10.5 Z" fill="#ffd203"/></svg>`).join(""); }
@@ -9395,7 +9397,9 @@ function startTackleCombo(p, lv) {                  // the charged tackle, let g
 // crawlways (the user, 2026-10-28: "we're going to add a crawling animation and the first implementation will be in c7"): a room's crawl: [{ x0, x1, y, to, dir }],
 // a low hole along a floor (or a ledge) at y; in it you crawl (charkit crawlPose, crawlPh: the distance crawled); off the room's edge at its end (dir), into `to`
 const CRAWL_V = 120, CRAWL_PH = TAU / 110;         // (crawlPh: a whole cycle of hands and knees every 110 px crawled)
-const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || p.dead || p.climb || hideout || stronghold || arena) return null; return L.find(z => p.onGround && Math.abs(p.y - z.y) < 6 && p.x >= z.x0 && p.x <= z.x1) || null; };
+const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || p.dead || p.climb || hideout || stronghold || arena) return null; return L.find(z => p.onGround && Math.abs(p.y - z.y) < 6 && p.x >= z.x0 && p.x <= z.x1 && crawlNear(p, z)) || null; };
+const CRAWL_OUT = 36;                                // (out the far end of a crawlway: up on your feet this far past its mouth, the zone's wall. The user, 2026-10-28: "the crawl should end a lot quicker once they get out on the other side")
+const crawlNear = (p, z) => { const out = z.wall === undefined ? -1 : (z.wall - p.x) * z.dir; return out <= CRAWL_OUT || (p.crawl ? p.vx * z.dir >= 0 : p.vx * z.dir > 20); };   // (out past that, in the room: down to crawl only heading in to the hole)
 const crawlOut = (p, d) => !!(p && p.crawl && p.crawl.to !== undefined && p.crawl.dir === d);
 function updatePlayer(dt) {
   const p = player; p.gears = bgearsOf(p.rig.id);   // (its berry gears: the weapon's life split up, charkit propLife)
@@ -9596,6 +9600,7 @@ function updatePlayer(dt) {
 
   p.prevY = moveBody(p, dt, 16);
   if (p.dodge && (((p.dodge.t += dt) > .08 && p.onGround) || p.dodge.t > .7)) { p.dodge = null; p.vx *= .25; if (p.onGround) dust(p.x, p.y, 4, -p.face); }   // (down again: the back-step done)
+  if (p.zBack) { p.z = approach(p.z || 0, 0, dt * 6); if (!p.z) p.zBack = false; }   // (up out of a rest stop's chair: forward onto your line)
   if (p.onGround || p.dive) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; p.stomped = null; }   // back on your feet: the rising hit and the bubble's drift reset
   const span = p.combo ? p.comboSpan : p.tackle ? p.tackle.span : null;   // (charging an attack or the tackle, you can walk off a ledge: only a combo under way, the charged tackle's included, holds you to your footing; the user, 2026-10-17)
   if (span) { const [a, b] = span; if (p.x < a || p.x > b) { p.x = clamp(p.x, a, b); p.vx = 0; } }   // a combo (or a tackle) stops at the edge: it never carries you off a ledge
@@ -18767,8 +18772,8 @@ function takeLoot(q) {
   if (story) writeSave();
 }
 function gotGear(q) {                                // a berry gear: the weapon of whoever found it holds a piece more of life (the other's, if that one's full)
-  const B = bgState(), who = GEAR_HEROES.includes(rig.id) ? rig.id : "camila", other = who === "rose" ? "camila" : "rose", to = (B[who] || 0) < BGEAR_MAX ? who : (B[other] || 0) < BGEAR_MAX ? other : who;
-  B[to] = Math.min(BGEAR_MAX, (B[to] || 0) + 1); if (player && to === rig.id) player.hp = Math.min(maxHp(), player.hp + 1); updateHearts(true);
+  const B = bgState(), who = GEAR_HEROES.includes(rig.id) ? rig.id : "camila", other = who === "rose" ? "camila" : "rose", to = (B[who] || 0) < bgMax(who) ? who : (B[other] || 0) < bgMax(other) ? other : who;
+  B[to] = Math.min(bgMax(to), (B[to] || 0) + 1); if (player && to === rig.id) player.hp = Math.min(maxHp(), player.hp + 1); updateHearts(true);
   SFX.gift(); SFX.power && SFX.power(1); sparks(q.x, q.y - 20, 18); puffs(q.x, q.y - 20, 8, 40, 160); popText(q.x, q.y - 60, "A BERRY GEAR!");
   toast(`A BERRY GEAR · ${to === "rose" ? "ROSE'S SWORD" : "CAMILA'S GAUNTLET"} HOLDS MORE LIFE · A HUB'S DIPLOMAT MOVES GEARS BETWEEN THEM`, 5200); if (story) writeSave();
 }
@@ -18797,12 +18802,12 @@ function bgTick() {                                  // (while it's up: each wea
 function drawGears() {
   const B = bgState(), gearSvg = `<svg viewBox="-12 -12 24 24"><path d="${Array.from({ length: 10 }, (_, i) => { const a0 = i / 10 * Math.PI * 2, a1 = a0 + .3, a2 = a0 + .33, a3 = a0 + .6; return [[a0, 8], [a1, 11], [a2, 11], [a3, 8]].map(([a, rr], j) => (i || j ? "L" : "M") + (Math.cos(a) * rr).toFixed(2) + " " + (Math.sin(a) * rr).toFixed(2)).join(" "); }).join(" ")} Z" fill="#ff66aa" stroke="#2f3b43" stroke-width="1.4"/><circle r="3.6" fill="#5cf01c" stroke="#2f3b43" stroke-width="1.2"/></svg>`;
   document.querySelectorAll("#bgears .bgSide").forEach(el => { const id = el.dataset.h, r = roster.find(q => q.id === id), n = bgearsOf(id); if (r) el.querySelector(".bgHud").innerHTML = weaponSvg(r, maxHp(r), 0, n);
-    el.querySelector(".bgN").textContent = `${n} OF ${BGEAR_MAX} GEARS · ${maxHp(r || { id })} HITS OF LIFE`; });
+    el.querySelector(".bgN").textContent = `${n} OF ${bgMax(id)} GEARS · ${maxHp(r || { id })} HITS OF LIFE`; });
   $("bgPool").innerHTML = gearSvg.repeat((B.rose || 0) + (B.camila || 0));
-  [...$("bgBtns").children].forEach(b => { const to = b.dataset.bg; b.classList.toggle("off", to !== "done" && (!(B[to === "rose" ? "camila" : "rose"] > 0) || (B[to] || 0) >= BGEAR_MAX)); });
+  [...$("bgBtns").children].forEach(b => { const to = b.dataset.bg; b.classList.toggle("off", to !== "done" && (!(B[to === "rose" ? "camila" : "rose"] > 0) || (B[to] || 0) >= bgMax(to))); });
 }
 function giveGear(to) {                              // one gear across, to `to`
-  const B = bgState(), from = to === "rose" ? "camila" : "rose"; if (!(B[from] > 0) || (B[to] || 0) >= BGEAR_MAX) { SFX.nope(); return; }
+  const B = bgState(), from = to === "rose" ? "camila" : "rose"; if (!(B[from] > 0) || (B[to] || 0) >= bgMax(to)) { SFX.nope(); return; }
   B[from]--; B[to] = (B[to] || 0) + 1; SFX.tick(); if (player) { player.hp = Math.min(player.hp, maxHp()); updateHearts(false); } drawGears(); if (story) writeSave();
 }
 function closeGears() {
@@ -20318,7 +20323,7 @@ function sitPlayer(dt) {                          // sitting: face out at the vi
   p.vx = 0; p.yaw = lerp(p.yaw, -Math.PI / 2, 1 - Math.exp(-dt * 6)); p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   spring(p, dt); updatePose(p, dt);
   if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.vy = -260; p.onGround = false; p.face = 1; const H = hideout || restCamp; if (H) { H.sitIdle = 0; H.offSeat = false; }   // (a hideout's seat, or a chair by a rest stop's fire)
-    if (p.chair && restCamp) { const C = restCamp, c = C.chairs[C.mine ?? 0]; if (c && c.by === "you") c.by = null; C.offX = c ? c.x : p.x; C.mine = undefined; p.z = 0; p.seatLift = 0; } p.chair = false; }
+    if (p.chair && restCamp) { const C = restCamp, c = C.chairs[C.mine ?? 0]; if (c && c.by === "you") c.by = null; C.offX = c ? c.x : p.x; C.mine = undefined; p.zBack = true; p.seatLift = 0; } p.chair = false; }   // (zBack: out of it, a step forward again onto your line)
   p.sitHeld = any;
 }
 function syncHideoutBeps(dt) {
