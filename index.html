@@ -11610,7 +11610,7 @@ const ATTACKS = {
 // like you do: speeding up and braking, never one flat walking speed, skidding round when it turns.
 // (2026-10-22, the user: "more agile and their movements more realistic and weighted the same way we've done for the heroines": quicker to
 // react, harder off the mark and on the brakes, backsteps out of your swing and after its own, a feint in now and then; bossFeel below)
-const BRAIN = { think: [.12, .24], accel: 2500, brake: 3600, airAccel: 950, walk: 1.5, sprint: 2.7, dodge: .4, dodgeCd: 1.7, cd: .85, dash: 560, feint: .3, feintCd: [1.6, 3] };
+const BRAIN = { think: [.12, .24], accel: 2500, brake: 3600, airAccel: 950, walk: 1.5, sprint: 2.7, dodge: .55, dodgeCd: 1.15, cd: .45, dash: 560, feint: .3, feintCd: [1.6, 3] };
 const BOSS_RUN = .45;                                // a sprint's stride: this much longer than the walk's (bossStep's phase slows to match)
 const bossStrideK = e => (1 + BOSS_RUN * (e.runK || 0)) * (Math.sign(e.vx) * e.dir < 0 ? .8 : 1);   // (backing off: shorter steps)
 function bossDash(e, d, k = 1, T = .2) {             // a quick burst along the ground (a backstep, a feint): its own momentum, then braking
@@ -11644,6 +11644,9 @@ function bossThink(e, p, D) {
   if (e.plat && dy > 60 && p.onGround) return (e.intent = { kind: "drop", d: Math.sign(dx) || 1 });   // you're below it: down after you
   if (e.backoff > 0) return (e.intent = { kind: "back", tx: e.x - Math.sign(dx) * 240 });
   if (cornered && adx < 220 && !e.plat && Math.random() < .5) return (e.intent = { kind: "over" });   // backed into a wall with you right there: over your head
+  const ch = !D.chase && !e.plat && (p.chargeT || p.tkCharge) && ((p.chargeT || 0) >= CHARGE_STEP * .7 || p.tkCharge) && adx < 360; if (!ch) e.chgPick = 0;   // you're charging a blow up close: it won't wait for it
+  else { if (!e.chgPick) e.chgPick = Math.random() < .55 ? 1 : 2;   // (once a charge: back out of reach, or straight in at you before it's ready)
+    if (e.chgPick === 1) return (e.intent = { kind: "back", tx: e.x - Math.sign(dx) * 320 }); e.atkCd = Math.min(e.atkCd, .15); }
   if (adx > keep + 70) return (e.intent = { kind: "close", tx: p.x - Math.sign(dx) * keep });
   if (adx < keep - 80 && !cornered) return (e.intent = { kind: "space", tx: p.x - Math.sign(dx) * keep });
   if (!D.chase && !e.plat && (e.feintCd || 0) <= 0 && adx > 200 && Math.random() < BRAIN.feint) return (e.intent = { kind: "feint" });   // a feint: a quick step in at you, and back out
@@ -11659,8 +11662,10 @@ function bossMove(e, p, D, dt) {
   if ((e.brainT = (e.brainT || 0) - dt) <= 0) { e.brainT = rand(...BRAIN.think); bossThink(e, p, D); }
   const I = e.intent || { kind: "hold", tx: e.x }, base = D.speed * (D.chase ? 1 : BRAIN.walk);
   if (!p.dead) e.dir = Math.sign(dx) || e.dir;                                              // a fighter keeps its eyes on you
+  if (!D.chase && p.tackle && !p.tackle.seen && e.onGround && !e.plat && adx < 300 && Math.sign(p.face || 1) === -Math.sign(dx) && e.dodgeCd <= 0) {   // your tackle coming at it: up and over it, now and then
+    p.tackle.seen = true; if (Math.random() < BRAIN.dodge * (.7 + (D.jumpy || .3))) { e.dodgeCd = BRAIN.dodgeCd; e.jumpVy = -920; e.jumpVx = Math.sign(dx) * 300; e.windup = .04; e.sq = -.2; e.sqv = 0; return; } }
   // your swing coming, close in: sometimes it hops back out of it (or over you, backed into a wall)
-  if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 190 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
+  if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 230 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
     e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < (arena ? arena.l : 0) + 200 && dx > 0) || (e.x > (arena ? arena.r : WORLD) - 200 && dx < 0);
     if (!wall && !e.plat && groundAt(e.x - Math.sign(dx) * 130) !== null && Math.random() < .5) { bossDash(e, -Math.sign(dx) || -e.dir, 1.15, .24); return; }   // a backstep along the ground, out of reach
     e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; e.dodgeHop = !wall; return;   // (dodgeHop: syncFoe's back flip, an agile one's)
@@ -11709,6 +11714,7 @@ function updateEnemy(dt) {
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
   if (e.under && (e.dead || e.chide)) glosUnderOff(e, 1);
   if (e.backAt !== undefined && time >= e.backAt) stepBack(e, true);   // (a string of your blows taken: a step back out of reach)
+  if (e.breakAt !== undefined && time >= e.breakAt) bossBreakOut(e, p);   // (caught in a combo: out of it)
   if (!e.dead && !e.chide && (e.leaf || e.under)) { if (e.leaf) glosLeafStep(e, dt); else glosUnderStep(e, p, dt);   // (Glos as leaves, or under her ledge: these move her themselves)
     if (e.leaf || e.under) { bossFeel(e, dt); spring(e, dt); const yT = e.dir > 0 ? -.5 : -Math.PI + .5; e.yaw = lerp(e.yaw, yT, 1 - Math.exp(-dt * 9)); return; } }
   e.braking = false; if (e.recoil > 0 || e.hurtT > 0 || e.atk || !e.onGround || e.dead) e.dashT = 0;   // (a dash is only ever on its own feet)
@@ -21594,7 +21600,7 @@ function stringBlow(e, boss, dir, kind) {
   const p = player; if (e.dead || e.gone || kind === "stomp" || p.combo || p.tackle || e.sad || e.calm || e.sleep || e.npc || e.under || e.leaf) return;   // (your own blows only: combat's targets, not a partner's)
   if (time - (e.strT ?? -9) > STRING_GAP) { e.strN = 0; e.strOpen = !e.atk && !(e.windup > 0) && !(e.hurtT > 0) && !(e.juggleT > 0); }   // (open: not winding up or swinging, not still reeling or up in the air from a blow: a hop of its own counts as open)
   e.strT = time; e.strN = (e.strN || 0) + 1;
-  if (e.strN <= (boss ? (e.strOpen ? 3 : 6) : e.strOpen ? 2 : 99)) return;
+  if (boss || e.strN <= (e.strOpen ? 2 : 99)) return;   // (a boss: bossBreak instead)
   e.strN = 0; e.backAt = time + BACK_AFTER; e.backDir = dir;
 }
 function bbEvade(b, p) {                             // your first blow coming: a baddy facing you, and after you (not a partner: it's busy with them), now and then hops back out of it
@@ -21604,6 +21610,28 @@ function bbEvade(b, p) {                             // your first blow coming: 
   const dx = b.x - P.x; if (Math.sign(dx) !== (P.face || 1) || Math.abs(dx) > 150 || time < (b.evT || 0) || Math.random() > BB_EVADE) return;
   b.evT = time + BB_EVADE_CD; b.backDir = Math.sign(dx) || 1; const x0 = b.x; stepBack(b, false); if (b.x === x0 && !b.vx) return;
   b.inv = Math.max(b.inv, .22); SFX.whoosh && SFX.whoosh(); dust(b.x, b.y, 3, -b.backDir);
+}
+// a boss caught in a combo breaks out of it (the user, 2026-10-28: "they should get priority to jump out of combos so the player cannot just stand there and spam the
+// attack button if they've caught them in a combo"): a string of BOSS_BREAK blows (yours or a partner's, none more than BREAK_GAP apart; one more now and then) and
+// it's off, a jump back out of reach (up over you, backed into a wall), a moment's guard (BREAK_INV), and straight back at you. Not out of a charged combo (level 2 up)
+const BOSS_BREAK = 3, BREAK_GAP = .75, BREAK_INV = .5;
+function bossBreak(e, kind) {
+  if (e.dead || e.gone || e.leaf || e.under || e.stag || e.down || e.chide || kind === "stomp" || (player.combo && (player.combo.level || 0) >= 2)) return;
+  if (time - (e.brkT ?? -9) > BREAK_GAP) e.brkN = 0;
+  e.brkT = time; e.brkN = (e.brkN || 0) + 1; if (!e.brkAt) e.brkAt = BOSS_BREAK + (Math.random() < .35 ? 1 : 0);
+  if (e.brkN < e.brkAt) return;
+  e.brkN = 0; e.brkAt = 0; e.breakAt = time + .07;   // (a beat after the blow lands)
+}
+function bossBreakOut(e, p) {
+  e.breakAt = undefined; if (e.dead || e.gone || e.leaf || e.under || e.chide || e.atk) return;   // (mid-swing in its armor: the swing itself is the answer)
+  const D = e.def, dx = p.x - e.x, lo = arena ? arena.l : 0, hi = arena ? arena.r : WORLD, d = -(Math.sign(dx) || e.dir);
+  Object.assign(e, { hurtT: 0, juggleT: 0, windup: 0, recoil: 0, backoff: 0, brainT: 0, steer: false, dashT: 0 });
+  e.inv = Math.max(e.inv, BREAK_INV); e.atkCd = Math.min(e.atkCd, .35); e.dir = Math.sign(dx) || e.dir; e.sq = -.25; e.sqv = 0;
+  if (D.swim) { e.vx = d * 560; e.vy = -220; }   // (a swimmer: a kick away through the water)
+  else { const wall = e.x + d * 260 < lo + 80 || e.x + d * 260 > hi - 80 || (!e.plat && groundAt(e.x + d * 220) === null);   // (backed in, or a drop behind it: over your head)
+    const vx = (wall ? -d : d) * (wall ? 470 : 430), vy = wall ? -920 : -680; e.dodgeHop = !wall;
+    if (e.onGround) { e.jumpVx = vx; e.jumpVy = vy; e.windup = .06; e.vx = 0; } else { e.vx = vx; e.vy = Math.min(e.vy, vy * .8); } }   // (on its feet: a quick crouch into the leap; caught up in the air: a twist out of it)
+  SFX.whoosh(); puffs(e.x, e.y - D.h * .5, 8, D.hw, 260); dust(e.x, e.y, 6, d);
 }
 function stepBack(e, boss) {                         // the step back itself: along the ground, away from you (not off its ledge, into a gap or the water); if it's still up in the air, once it's down
   if (e.dead || e.gone || e.chide || e.leaf || e.under) { e.backAt = undefined; return; }
@@ -21810,7 +21838,7 @@ function hitEnemy(dir, kind) {
   if (e.def && e.def.id === "lossst" && lossstHit(e, dir, kind)) return true;   // (Lossst: Camila's tackle, his guard against a second one, Rose on his chandelier)
   if (e.under && e.under.phase !== "up") { e.under.hits++; e.under.hitT = time; }   // (under her ledge: three and off she comes)
   const arm = (e.atk === "charge" || e.atk === "act") && !e.under && !e.leaf && kind !== "tackle" && !(player.combo && (player.combo.level || 0) >= 2); if (arm) { e.armorAt = time; SFX.armor(); }   // (armored in its attack, as the big baddies are: hurt, the attack comes on. 2026-10-28)
-  e.hitT = time; e.hp -= heroDmg(kind); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; if (!arm) { e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0; }   // half-hearts: 2 + ATK power
+  e.hitT = time; e.hp -= heroDmg(kind); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; if (!arm) { e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0; }   // half-hearts: 2 + ATK power
   if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain(), swordOn()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
   SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15);   // (on the boss's body: heavier)
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
@@ -21821,6 +21849,7 @@ function hitEnemy(dir, kind) {
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
   sparks(kind === "stomp" ? player.x : e.x - dir * 30, kind === "stomp" ? e.y - e.def.h : e.y - e.def.h * .5, 10);
   if (e.hp <= 0) { e.dead = true; e.deathT = 0; e.vx = dir * 120; impactFrame(e.x, e.y - e.def.h * .5, true); foeVoice(e, "ko"); } else foeVoice(e, "hurt");
+  if (!e.dead) bossBreak(e, kind);   // (a string of blows: it breaks out of the combo)
   return true;
 }
 
