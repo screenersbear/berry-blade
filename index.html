@@ -3663,15 +3663,17 @@ function syncRest() {                             // the fire flickering; sit do
     C.sitIdle = still ? (C.sitIdle || 0) + dt : 0;
     if (C.sitIdle > .35) { const c = C.chairs[k]; c.by = "you"; C.mine = k; chairFit(C, k, p.rig); p.sit = 1; p.chair = true; p.x = c.x; p.vx = 0; p.zBack = false; p.seatLift = seatLift(p.rig); atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
     return; }
-  const mc = C.chairs[C.mine ?? 0]; p.x = mc.x; p.z = approach(p.z || 0, mc.dz, dt * 6); C.sitT += dt;   // (back into it as you sit) if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
+  const mc = C.chairs[C.mine ?? 0]; p.x = mc.x; p.z = approach(p.z || 0, mc.dz, dt * 6); C.sitT += dt;   // (back into it as you sit)
+  if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work, the once: this check had been inside the comment above, so it healed every frame you sat, the hearts and the sound on and on. The user, 2026-10-28)
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); partnerList().forEach(P => { if ((P.q.php ?? PARTNER_HP) < PARTNER_HP) { P.q.php = PARTNER_HP; P.q.heartT = 2.2; } }); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");   // (your partners too: the user, 2026-10-26)
 }
-const CAMP_SPOT = { pal: [-66, -.1], pal2: [-24, .3], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85], ally1: [166, -.55], ally2: [-196, -.72] };   // where each one sits: [px from the fire, depth (3D)]
+const CAMP_SPOT = { pal: [-52, .35], pal2: [-20, .6], ej: [48, -.35], ally: [-248, -.45], crew0: [-290, -.15], crew1: [170, -.85], ally1: [214, -.55], ally2: [-330, -.72] };   // where each one sits with no chair to have: [px from the fire, depth (3D)], clear of the chairs (crew0 / crew1 / ally2 had been on them: the user, 2026-10-28, sat in a chair a buddy was at)
+const petRig = r => !!r && r.kind === "cat";        // (a pet's rig: cats and dogs both)
 function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
   const C = restCamp;
   if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } s.chairK = undefined; s.chair = false; s.seatLift = 0; return false; }
-  if (r && C.chairs && s.chairK === undefined) { const k = [1, 2].find(i => !C.chairs[i].by); if (k !== undefined && seatH(r) > .2) { C.chairs[k].by = key; s.chairK = k; chairFit(C, k, r); } else s.chairK = -1; }   // (a chair if one's free: the first two to sit get them)
-  const ch = s.chairK > 0 ? C.chairs[s.chairK] : null, [dx0, dz] = ch ? [ch.x - C.x, ch.dz] : CAMP_SPOT[key], tx = C.x + dx0;
+  if (r && C.chairs && s.chairK === undefined) { const k = [1, 2, 0].find(i => !C.chairs[i].by && (i > 0 || (!!player && !!player.sit && C.mine > 0))); if (k !== undefined && (petRig(r) || seatH(r) > .2)) { C.chairs[k].by = key; s.chairK = k; if (!petRig(r)) chairFit(C, k, r); else C.chairs[k].g.scale.copy(C.chairs[0].g.scale); } else s.chairK = -1; }   // (a chair if one's free: the first to sit get them, yours too once you've sat in another; a pet's the size of yours, it hops up on the seat. The user, 2026-10-28: "make sure pets grab a seat")
+  const ch = s.chairK >= 0 ? C.chairs[s.chairK] : null, [dx0, dz] = ch ? [ch.x - C.x, ch.dz] : CAMP_SPOT[key], tx = C.x + dx0;
   if (s.sitAt !== C) {
     const dx = tx - s.x; s.campT = (s.campT || 0) + dt;
     if ((Math.abs(dx) > 10 || !s.onGround) && s.campT < 4 && s.y < WATER) {   // on its way over (down off a ledge first)
@@ -3683,12 +3685,12 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
       s.vx = approach(s.vx, Math.sign(dx) * Math.min(340, Math.abs(dx) * 5 + 40), 1800 * dt); s.face = Math.sign(dx) || s.face; s.sprint = false; return true;
     }
     s.sitAt = C; s.campT = 0; s.x = tx; s.y = groundAt(tx) ?? s.y; s.vx = s.vy = 0; s.onGround = true; s.plat = null;
-    if (r) {                                       // a stump of its own, as high as it sits (low enough, it sits on the ground; legs too short to sit at all, it stands)
+    if (r && r.D) {                                // a stump of its own, as high as it sits (low enough, it sits on the ground; legs too short to sit at all, it stands)
       const D = r.D, B = r.spec.body, h = (D.hip * B.legs - .42 * D.step) * B.scale - .03, gy = groundAt(tx) ?? GROUND, S2 = C.stumps || (C.stumps = {}); s.noSit = h < -.06;
       if (h > .2 && !S2[key] && !ch) { S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); S2[key].position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(S2[key]); }   // (in a chair: no stump)
     }
   }
-  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.chair = !!ch; s.seatLift = ch && r ? seatLift(r) : 0; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.chair = !!ch; s.seatLift = ch && r ? (petRig(r) ? ch.g.scale.y * 1.02 : seatLift(r)) : 0;   // (a pet up on the seat) s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
   return true;
 }
 const HIDE_SIT = { pal: [-88, .3], pal2: [-132, .45], ej: [98, .05], ally: [-172, -.25], crew0: [-246, -.5], crew1: [176, -.55], ally1: [240, -.4], ally2: [-306, -.35] };   // sat beside you in a hideout: [px from the seat, depth (3D)]
@@ -4334,7 +4336,7 @@ function authorForest() {
   const C = {}; ["A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "B2", "B3", "B4", "B5", "B6", "B7", "B8", "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8"].forEach(c => { C[c] = at(c); });
   if (Object.values(C).some(i => i < 0) || S0[0].cell !== "B1") { console.warn("forest: a room's missing", C, S0[0].cell); return; }
   const KEYS = ["plats", "plats2", "ground", "gaps", "ceils", "ladders", "poles", "below", "up", "upX", "down", "downX", "downWall", "downCam", "climbUp", "climbWall", "climbTip", "noClimbFace", "arriveX", "arriveF",
-    "camTop", "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "restX", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "crumble", "wetBack", "prev", "next"];
+    "camTop", "camUp", "wallL", "wallR", "noLeft", "noRight", "secret", "bep", "rest", "restX", "hub", "peace", "boss", "bossX", "toWorld", "exitLeft", "gifts", "berry", "hill", "nextHi", "back", "set", "items", "open", "gridNext", "hopUp", "dark", "crumble", "wetBack", "prev", "next"];
   const room = (c, o, roster) => { const q = S0[C[c]]; KEYS.forEach(k => delete q[k]); Object.assign(q, { authored: true, plats: [] }, o);   // (only the platforms listed: none of the hour's own)
   if (roster) R0[C[c]] = roster; return q; };
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
@@ -4394,7 +4396,7 @@ function authorForest() {
   // B5: under the ground of A5 (dark, low); land at the left (a mango, two baddies), a hole down into C5, a patch of land past it on to B6
   // B4: a hollow in the tan earth, in from B5's left, through a heap of rock only Camila can smash (the user, 2026-10-26: "now that b4 is there, can you add the
   // breakble rock outside of it in b5 where there is already a wall there. and then camila can open it to get in?"); a power-up at the back of it
-  room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, -40]], items: [["power", 1500], ["tape", 1010, 110, "tape1"]],
+  room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, -40]], items: [["power", 1500], ["tape", 1010, 110, "tape1"]], camUp: 2,
     plats: [[560, 380, 220, "slab"], [900, 290, 220, "slab"], [560, 200, 220, "slab"], [900, 110, 220, "slab"]], crumble: { t: .7, look: "ledge" },
     set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "earthBack", x0: 470, x1: 1210, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 1750], ["leafy", "leaf", 2250]]);   // (four ledges up the back wall, zigzagging, each giving way a moment after you land: a cassette on the top one. The user, 2026-10-27: "the platforms break and they have to do it quickly")
   room("B5", { dark: true, ground: [[0, 0]], gaps: FOREST_HOLE_B5, below: C.C5, prev: C.B4, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 360]],
@@ -5118,6 +5120,7 @@ const SFX = {
   huff() { noise(.2, { vol: .07, f0: 500 }); tone(180, 140, .2, { type: "sine", vol: .05 }); },
   achieve() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f, .16, { type: "triangle", vol: .11, delay: i * .09 })); },
   heal() { [523, 659, 784, 1047].forEach((f, i) => tone(f, f * 1.01, .2, { type: "sine", vol: .12, delay: i * .07 })); tone(1568, 2093, .32, { type: "triangle", vol: .05, delay: .28 }); },   // a heart back: a rising, replenishing chime
+  crackle(n = 1) { if (smpPlay("crack", .05 + .02 * n, { rate: 1.22 - .1 * n })) return; noise(.12, { vol: .16 + .05 * n, f0: 3000, f1: 700, type: "bandpass", q: 1.4 }); },   // (a crumbling ledge's crack, stage n of 3: higher and lighter than its break)
   crack() { if (smpPlay("crack", .09)) return; noise(.18, { vol: .32, f0: 2600, f1: 500, type: "bandpass", q: 1.2 }); tone(180, 70, .16, { type: "square", vol: .08, lp: 900 }); },   // a container breaking
   gift() { tone(660, 1320, .12, { type: "triangle", vol: .12 }); tone(990, 1980, .14, { type: "sine", vol: .09, delay: .08 }); tone(1320, 2640, .16, { type: "sine", vol: .06, delay: .16 }); },
   gate() { noise(1.1, { vol: .16, f0: 260, f1: 70 }); tone(70, 52, 1.1, { type: "sawtooth", vol: .05, lp: 400 }); },
@@ -6107,7 +6110,7 @@ $("bBack").addEventListener("click", () => { if (mode === "select" && !lookPick)
 function selectBack() { SFX.tick(); showMainMenu(); showDev(); }   // (out of the developer's character select: back to the developer menu. The user, 2026-10-25: "you cant hit esc or exit out of that menu in any way")
 function levelGo(w, kind, a, hero) {
   for (const k in upFree) delete upFree[k]; upPrev = 0; upOverride = freedOverride = null;   // (each level from 0% uprising: the pause menu's DEBUG, UPRISING, picks a milestone; it was the DEVELOPER menu's UPRISING PREVIEW, which carried into every level after)
-  rideAbort(); closeMenus(); story = null; tamed = tamed2 = null; hideCatRigs(); alliesOff(); closeLvl(); if (paused) closePause(); SFX.confirm();
+  rideAbort(); closeMenus(); story = null; tamed = tamed2 = null; hideCatRigs(); alliesOff(); closeLvl(); if (paused) closePause(); SFX.confirm(); freeSeen.clear(); freeSeen.add(w);   // (a run of its own: the worlds it rides into)
   { const r = hero && roster.find(q => q.id === hero); if (r) { if (rig && rig !== r && rig.root) rig.root.visible = rig.shadow.visible = false; rig = r; sel = roster.indexOf(r); } }   // (who the level select asked for)
   if (kind === "arena") return startShowdown(w);
   if (!(mode === "play" || mode === "world" || mode === "opp")) { rig = roster[sel]; if (rig.kind === "cat") KIT.paintCards(cards, rig.spec); }   // (from the character screen: whoever's highlighted)
@@ -7229,7 +7232,8 @@ function disposeRoad(R) {
 // environments rsembling the world we came from and starts to look like the next world they're going to ... this will happen the first time going to each new world, and then you can fast travel after that")
 let rideS = null;                                    // ph: out (to black) · in (the road comes up) · drive · end (to black, then on into the world)
 const RIDE_T = 11;                                   // (the drive, seconds: from one world's look into the next's. 16 till the user, 2026-10-27: "make the ride a little shorter overall for the driving portions")
-const rideTo = w => !!story && w !== world && !story.visited.has(w) && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (the first time into a world, and by road: never down into the deep)
+const freeSeen = new Set();                         // (free play, from the level select: the worlds this run's been in)
+const rideTo = w => w !== world && !(story ? story.visited.has(w) : freeSeen.has(w)) && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (the first time into a world, and by road: never down into the deep. Free play too: the user, 2026-10-28 "there should always be a driving scene even if you've been to the map": a developer run had had none)
 const rideMat = {}, rMat = c => rideMat[c] || (rideMat[c] = toon(c)), rPick = (rng, L) => L[Math.floor(rng() * L.length)];
 const rBox = (w, h, d, c, x = 0, y = 0, z = 0) => at(mk(new THREE.BoxGeometry(w, h, d), null, { mat: rMat(c), ol: 0 }), x, y, z);
 const rCyl = (r0, r1, h, c, n = 8) => mk(new THREE.CylinderGeometry(r0, r1, h, n), null, { mat: rMat(c), ol: 0 });
@@ -8258,7 +8262,7 @@ function statsGo() {                                  // (not in the first momen
   if (!statsUp || statsUp.ask || performance.now() - statsUp.t0 < 900) return;
   if (statsUp.full && !statsUp.asked) { askShowdown(); return; }   // (pressed on before the bar filled: the question still comes first)
   const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
-  const byRoad = !!story && w !== world && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (a world you've been to: the map, and the question, skip the ride?)
+  const byRoad = w !== world && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (a world you've been to: the map, and the question, skip the ride? Free play as well)
   const go = rideTo(w) ? () => { $("wstats").classList.remove("show"); startRide(world, w, () => goWorldNow(w)); } : byRoad ? () => { $("wstats").classList.remove("show"); askSkip(world, w); } : () => goWorldNow(w);   // (the first time into a world: La Guagua there, the user 2026-10-26)
   if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, go); }   // (a way not yet drawn: the map first)
   go();
@@ -8280,12 +8284,12 @@ function goWorldDoor(w, ns) {                        // in at a door: at its wor
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
     palsPut({ x: lf ? 0 : WORLD, y: gy, vx: lf ? 120 : -120, vy: 0, onGround: true, plat: null, pounce: null });
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = lf ? clamp(X(130), 10, 40) : X(WORLD) - halfW + 1; camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = lf ? clamp(X(130), 10, 40) : X(WORLD) - halfW + 1; camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, true);
   }, WORLDS[w].name);
 }
 function goWorldNow(w) {                             // on into the next world: its first room, a new day
-  const fromW = world;
+  const fromW = world; if (!story) freeSeen.add(w);
   if (story && fromW === 9 && w === 0 && !story.tale && !tale) {   // off the beach for the first time: the story so far first, after a moment of black (the user, 2026-10-25: "it should fade to black so there's a pause before the cutscene")
     transit = true; paused = true; $("fade").classList.add("on"); $("wstats").classList.remove("show");
     setTimeout(() => { transit = false; startTale(() => goWorldNow(w)); setTimeout(() => $("fade").classList.remove("on"), 300); }, 1700); return; }
@@ -8300,7 +8304,7 @@ function goWorldNow(w) {                             // on into the next world: 
     Object.assign(player, { x: 40, y: gy, vx: 120, vy: 0, face: 1, onGround: true, plat: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, climb: null, safe: { x: 40, y: gy, plat: null } });
     palsPut({ x: 0, y: gy, vx: 120, vy: 0, onGround: true, plat: null, pounce: null });
     player.sunk = false; if (STAGES[0].deep) { const sy = (STAGES[0].deepTop ?? DEEP_TOP) - 110; Object.assign(player, { x: 300, y: sy, vx: 60, vy: 380, onGround: false, safe: { x: 300, y: sy + 200, plat: null } }); palsPut({ x: 220, y: sy, vx: 0, vy: 300, onGround: false, plat: null, pounce: null }); }   // (the deep: dropping in from the pool above, into the water)
-    camX = clamp(X(130), 10, 40); camBase = Y(STAGES[0].deep ? player.y + 70 : gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(130), 10, 40); camBase = Y(STAGES[0].deep ? player.y + 70 : gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; }   // (Noro and Doir stay on the beach)
     if (story && fromW === 9 && w === 0) intro = { t: 0, cast: [], lock: true };   // (held from here: no cameo or Noro rolled for this room before the other one's landed: they'd share her rig)
     enterStage(0, false);
@@ -8327,7 +8331,7 @@ function goWorldBack() {                             // off the left of a world'
     player.sunk = false; const dv = STAGES[ns].dive; if (dv) { const f = dv[0] > 380 ? -1 : 1, x0 = f < 0 ? dv[0] + 40 : dv[1] - 40, dx = f < 0 ? dv[0] - 90 : dv[1] + 90; Object.assign(player, { x: x0, y: SINK - 10, vx: f * 320, vy: -1150, onGround: false, face: f, carry: .6, carryDir: f, safe: { x: dx, y: groundAt(dx) ?? GROUND, plat: null } }); splash(player.x, 1.4); }   // (up out of the deep's pool, onto its bank)
     palsPut({ x: lf ? 0 : WORLD, y: gy, vx: lf ? 120 : -120, vy: 0, onGround: true, plat: null, pounce: null });
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = lf ? clamp(X(130), 10, 40) : X(WORLD) - halfW + 1; camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = lf ? clamp(X(130), 10, 40) : X(WORLD) - halfW + 1; camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, true);
   }, WORLDS[P0.w].name);
 }
@@ -8523,7 +8527,7 @@ function goRoomV(ns, up) {                        // up (or down) a rope ladder 
     palsPut({ x: sx - 50, y: sy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
     ejPlace(sx - 100, sy, 1);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(sy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(sy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
@@ -8560,7 +8564,7 @@ function goRoomSwimUp(ns) {                        // the deep: swum up off the 
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y: y + 10, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), y, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(y + 70); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(y + 70) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); clearArrival(player.x);
   });
 }
@@ -8580,7 +8584,7 @@ function goRoomRise(ns) {                          // the hand-made waves: jumpe
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), y, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(y); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(y) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); clearArrival(player.x);
   });
 }
@@ -8604,7 +8608,7 @@ function goRoomDrop(ns) {                         // down a drop: into the room 
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
@@ -8638,7 +8642,7 @@ function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out
     palsPut({ x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
@@ -8988,12 +8992,40 @@ function crumbleRig(p, look) {
     g.add(at(mk(new THREE.BoxGeometry(w - .1, .03, .07), null, { mat: vn, ol: 0 }), 0, .012, 0));
     g.add(mk(new THREE.TubeGeometry(new THREE.QuadraticBezierCurve3(new THREE.Vector3(nx - .2, -7, -1.4), new THREE.Vector3(nx - .45, -.5, -1.4), new THREE.Vector3(nx + .15, -.12, -.15)), 8, .13, 6), null, { mat: st, ol: .03, smooth: true })); }   // (its stalk, up out of the water)
   else { const rk = toon("#c9a46a"), rk2 = toon("#a8844e"), cr = new THREE.MeshBasicMaterial({ color: "#5a4128" });
-    g.add(at(mk(new THREE.BoxGeometry(w, .42, 3.4), null, { mat: rk, ol: .04 }), 0, -.21, -1.5));   // the ledge, out of the earth behind: held up by the wall it's part of
-    for (let i = 0; i < 9; i++) g.add(at(mk(new THREE.DodecahedronGeometry(.2 + (i % 3) * .07, 0), null, { mat: i % 2 ? rk2 : rk, ol: .03 }), -w / 2 + .2 + i * (w - .4) / 8, -.32, .16 + (i % 2) * .08));   // (its rough front edge)
-    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.03, .3, .03), cr); c.position.set(-w / 2 + .4 + i * (w - .8) / 3, -.2, .2); c.rotation.z = (i % 2 ? .4 : -.3); g.add(c); } }   // (cracks: it won't hold long)
+    // the ledge, out of the earth behind (held up by the wall it's part of), in four pieces where its three cracks will come (CRACK_U): each one sags at a crack
+    // as it opens, so the split shows whichever way you see it (crumbleSag)
+    const U = [0, .2, .5, .8, 1], segs = [];
+    for (let k = 0; k < 4; k++) { const x0 = -w / 2 + U[k] * w, x1 = -w / 2 + U[k + 1] * w, sg = group(g, (x0 + x1) / 2, 0, 0); segs.push({ g: sg, u0: U[k], u1: U[k + 1], len: x1 - x0 });
+      sg.add(at(mk(new THREE.BoxGeometry(x1 - x0, .42, 3.4), null, { mat: rk, ol: .04 }), 0, -.21, -1.5)); }
+    const segAt = x => segs.find(q => x <= -w / 2 + q.u1 * w + 1e-6) || segs[3], put = (m, x, y, z) => { const q = segAt(x); at(m, x - q.g.position.x, y, z); q.g.add(m); };
+    for (let i = 0; i < 9; i++) put(mk(new THREE.DodecahedronGeometry(.2 + (i % 3) * .07, 0), null, { mat: i % 2 ? rk2 : rk, ol: .03 }), -w / 2 + .2 + i * (w - .4) / 8, -.32, .16 + (i % 2) * .08);   // (its rough front edge)
+    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.03, .3, .03), cr); c.rotation.z = (i % 2 ? .4 : -.3); put(c, -w / 2 + .4 + i * (w - .8) / 3, -.2, .2); }   // (cracks: it won't hold long)
+    const dk = new THREE.MeshBasicMaterial({ color: "#2a1c0e" });   // (the dark inside each crack: in the gap as the pieces sag apart)
+    g.userData.seams = [.5, .2, .8].map(u => { const m = new THREE.Mesh(new THREE.BoxGeometry(.1, .4, 3.3), dk); m.position.set(-w / 2 + u * w, -.22, -1.5); m.visible = false; g.add(m); return m; });
+    g.userData.segs = segs; }
+  // the three cracks it gives way in (the user, 2026-10-28: "can they crack in 3 parts, where like there's one noticevable crack and a pause, a second, and a third
+  // and it breaks?"): the middle first, then a side, then the other; each a dark jagged split across the top from the front to the back, hidden till its turn
+  // (crumbleCrack; a ledge's pieces sag apart at it too, crumbleSag)
+  const leaf = look === "leaf", mC = new THREE.MeshBasicMaterial({ color: leaf ? "#24401a" : "#3a2814", polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), rng = rngF(p.crumble * 7 + 3);
+  g.userData.cracks = [.5, .2, .8].map(u => { const cg = new THREE.Group(), x0 = -w / 2 + u * w, z0 = leaf ? .55 : .26, z1 = leaf ? -.85 : -2.6, n = 6; let px = x0, pz = z0;
+    for (let i = 1; i <= n; i++) { const z = z0 + (z1 - z0) * i / n, x = x0 + (rng() - .5) * .3, dx = x - px, dz = z - pz, L = Math.hypot(dx, dz), m = new THREE.Mesh(new THREE.BoxGeometry(.075, .012, L + .03), mC);
+      m.position.set((px + x) / 2, .012, (pz + z) / 2); m.rotation.y = Math.atan2(dx, dz); cg.add(m); if (i === 2 || i === 4) { const b = new THREE.Mesh(new THREE.BoxGeometry(.045, .012, .32), mC); b.position.set(x + (i === 2 ? .1 : -.1), .012, z - .1); b.rotation.y = i === 2 ? .9 : -.9; cg.add(b); } px = x; pz = z; }   // (across the top, a branch or two off it)
+    cg.visible = false; g.add(cg); return cg; });
   g.position.set(X(p.x + p.w / 2), Y(p.y), 0); return g;
 }
-function spawnCrumbles() { clearCrumbles(); const C = STAGES[stage].crumble; if (!C || stronghold || hideout || arena) return; PLATFORMS.filter(p => p.crumble !== undefined).forEach(p => crumbles.push({ p, g: crumbleRig(p, C.look), steps: 0, t: -1, was: false, gph: 0, dip: 0, fall: null, y0: Y(p.y) })); }
+const CRACK_GAP = .34, CRACK_LAST = .26, CRACK_U = [.5, .2, .8], CRACK_SAG = .15;   // (a ledge: the second crack this long after the first, the third as long after that, then this long and it goes · where along it each comes · how far the pieces either side drop at an open one)
+function crumbleSag(c, dt) {                         // a ledge's pieces: each end at an open crack dropped, the piece tilted to meet it
+  const S = c.g.userData.segs; if (!S) return; c.open = c.open || [0, 0, 0];
+  for (let k = 0; k < 3; k++) c.open[k] = approach(c.open[k], c.stage > k ? 1 : 0, dt * 9);
+  const drop = u => { const k = CRACK_U.findIndex(v => Math.abs(v - u) < 1e-6); return k >= 0 ? c.open[k] * CRACK_SAG * (1 + k * .25) : 0; };
+  S.forEach(q => { const dl = drop(q.u0), dr = drop(q.u1); q.g.position.y = -(dl + dr) / 2; q.g.rotation.z = Math.asin(clamp((dl - dr) / q.len, -.5, .5)); });
+  (c.g.userData.seams || []).forEach((m, k) => { m.visible = c.open[k] > .05; });
+}
+function crumbleCrack(c, n) {                        // its nth crack (1-3): seen, heard, a jolt and a little dust
+  c.stage = n; const L = c.g.userData.cracks || []; if (L[n - 1]) L[n - 1].visible = true; SFX.crackle(n); c.dip = Math.max(c.dip, .5 + n * .25); shake = Math.max(shake, 1 + n);
+  dust(c.p.x + c.p.w * CRACK_U[n - 1], c.p.y + 2, 3 + n * 2);   // (a little grit off it: the big puff's for when it goes)
+}
+function spawnCrumbles() { clearCrumbles(); const C = STAGES[stage].crumble; if (!C || stronghold || hideout || arena) return; PLATFORMS.filter(p => p.crumble !== undefined).forEach(p => crumbles.push({ p, g: crumbleRig(p, C.look), steps: 0, t: -1, was: false, gph: 0, dip: 0, fall: null, y0: Y(p.y), stage: 0, ct: 0 })); }
 function clearCrumbles() { crumbles.forEach(c => { actors.remove(c.g); c.g.traverse(o => { if (o.geometry) o.geometry.dispose(); }); }); crumbles = []; }
 function crumbleGo(c) {                              // it gives way: out from under whoever's on it, down it goes
   const i = PLATFORMS.indexOf(c.p); if (i >= 0) PLATFORMS.splice(i, 1); crumbleGone.add(world + ":" + stage + ":" + c.p.crumble);
@@ -9011,9 +9043,13 @@ function updateCrumbles(dt) {
     if (on && !c.was) { c.steps++; c.gph = g; c.dip = 1; SFX.land(); }   // (landing on it: a step)
     else if (on && g !== c.gph && Math.abs(p.vx) > 30) { c.gph = g; c.steps++; c.dip = .6; }   // (each footfall as you walk on it)
     c.was = on;
-    if (c.t < 0 && ((C.steps && c.steps >= C.steps) || (C.t && c.steps > 0))) { c.t = C.steps ? .3 : C.t; SFX.crack(); }   // (its last step: a creak, a moment, and it goes · a ledge: a moment after you land)
-    c.dip = Math.max(0, c.dip - dt * 5); const wob = c.t >= 0 ? Math.sin(time * 46) * .035 : 0;
-    c.g.position.y = c.y0 - c.dip * .07 - (c.t >= 0 ? .02 : 0); c.g.rotation.z = wob;
+    if (C.steps) { const n = Math.min(3, Math.ceil(c.steps * 3 / C.steps)); if (n > c.stage) crumbleCrack(c, n);   // (a leaf: a crack a step, its last step the third, a moment and it goes)
+      if (c.t < 0 && c.steps >= C.steps) c.t = .3; }
+    else if (C.t && c.steps > 0) {                   // (a ledge: the first crack as you land, a pause, the second, a pause, the third, and away it goes)
+      if (!c.stage) crumbleCrack(c, 1); c.ct += dt;
+      if (c.stage === 1 && c.ct >= CRACK_GAP) crumbleCrack(c, 2); if (c.stage === 2 && c.ct >= CRACK_GAP * 2) { crumbleCrack(c, 3); c.t = CRACK_LAST; } }
+    c.dip = Math.max(0, c.dip - dt * 5); const wob = c.stage ? Math.sin(time * 46) * [0, .01, .02, .035][c.stage] : 0;
+    c.g.position.y = c.y0 - c.dip * .07 - c.stage * .012; c.g.rotation.z = wob + (c.p.crumble % 2 ? 1 : -1) * c.stage * .008; crumbleSag(c, dt);   // (sagging a little more each crack, the pieces apart at each)
     if (c.t >= 0 && (c.t -= dt) <= 0) crumbleGo(c);
   }
 }
@@ -9463,7 +9499,9 @@ function tackleStep(p, dt) {
   else if (T.t < TKL.wind + TKL.lunge + TKL.rec) p.vx = approach(p.vx, 0, 2600 * dt);   // pull up
   else { p.tackle = null; p.tackleCd = time + .25; }
 }
-const TK_CHARGE = 1.1;                             // the tackle's charge builds a little slower than the attack's: a level every 1.1 s, not every 1 s (the user, 2026-10-20: slower; 2026-10-21: a little faster, was 1.3)
+// a level every CHARGE_STEP s holding attack (the user, 2026-10-28: "can the charge attacks be made a little faster? does it measure in milliseconds? like maybe 2
+// milliseconds faster": 200 of them each level, 2 wouldn't be seen; 1 s before), the tackle's a little slower than that
+const CHARGE_STEP = .8, TK_CHARGE = .9;              // (the tackle's: 1.3 till 2026-10-21, then 1.1, now .9)
 function startTackleCombo(p, lv) {                  // the charged tackle, let go: as many parts as the charge got to
   const L = KIT.TK_CHARGE, list = p.rig.kind === "cat" ? L.cat : (p.rig.spec.outfit.prop || {}).kind === "sword" ? L.sword : L.other;
   p.combo = { list, level: lv, idx: 0, tackle: true }; p.comboSpan = p.onGround ? supportSpan(p) : null;   // (like any charged combo: it won't carry you off an edge)
@@ -9476,6 +9514,7 @@ const CRAWL_V = 120, CRAWL_PH = TAU / 110;         // (crawlPh: a whole cycle of
 const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || p.dead || p.climb || hideout || stronghold || arena) return null; return L.find(z => p.onGround && Math.abs(p.y - z.y) < 6 && p.x >= z.x0 && p.x <= z.x1 && crawlNear(p, z)) || null; };
 const CRAWL_OUT = 36;                                // (out the far end of a crawlway: up on your feet this far past its mouth, the zone's wall. The user, 2026-10-28: "the crawl should end a lot quicker once they get out on the other side")
 const crawlNear = (p, z) => { const out = z.wall === undefined ? -1 : (z.wall - p.x) * z.dir; return out <= CRAWL_OUT || (p.crawl ? p.vx * z.dir >= 0 : p.vx * z.dir > 20); };   // (out past that, in the room: down to crawl only heading in to the hole)
+const camUpOf = () => (!hideout && !stronghold && !arena && (STAGES[stage] || {}).camUp) || 0;   // (a room whose camera sits higher, room.camUp units: B4, so the cassette on its top ledge shows from the floor. The user, 2026-10-28: "I was in b4 and didn't see the casette at the top")
 const crawlOut = (p, d) => !!(p && p.crawl && p.crawl.to !== undefined && p.crawl.dir === d);
 function updatePlayer(dt) {
   const p = player; p.gears = bgearsOf(p.rig.id); p.powG = bpowOf(p.rig.id);   // (its berry gears: the weapon's life split up, charkit propLife; and its gear teeth)
@@ -9551,11 +9590,11 @@ function updatePlayer(dt) {
   if (ax && ax === p.runDir && control && !p.block && !(p.tpose > 0) && !(p.onGround && held.down) && !(p.onGround && p.hitWall === ax)) p.runT = (p.runT || 0) + dt;   // keep going the same way…
   else { p.runT = 0; p.runDir = ax; }                                                   // …stop, turn, block or hit a wall and it starts over
   const ru = clamp(((p.runT || 0) - .35) / 1.5, 0, 1); p.runK = 1 + .5 * ru * ru * (3 - 2 * ru); p.sprint = p.runK > 1.3;   // up to half again as fast (the old sprint), gradually
-  // charge: hold attack and it builds in three stages (1s, 2s, 3s); let go for that many hits of the charged combo
+  // charge: hold attack and it builds in three stages (CHARGE_STEP apart); let go for that many hits of the charged combo
   if (p.block) { }                         // a charge waits while you block
   else if (held.atk && control && !p.combo && !(p.blockHold > 0) && !p.bubbleLock && !p.tackle && !p.tackleLock) {   // (not while the guard's opening out to the bubble)
     p.chargeT = (p.chargeT || 0) + dt;
-    const lv = p.chargeT >= 3 ? 3 : p.chargeT >= 2 ? 2 : p.chargeT >= 1 ? 1 : 0;
+    const k = p.chargeT / CHARGE_STEP, lv = k >= 3 ? 3 : k >= 2 ? 2 : k >= 1 ? 1 : 0;
     if (lv > (p.chargeLv || 0)) { p.chargeLv = lv; chargeUp(p, lv); }
   } else if (p.chargeT > 0) {
     const lv = p.chargeLv || 0; p.chargeT = 0; p.chargeLv = 0;
@@ -10073,7 +10112,7 @@ function updatePal(dt) { [pal, pal2].forEach((q, i) => { if (q) updatePalOne(q, 
 function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the second)
   const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = palSlot(q, i), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && k === 1 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
   if (!q.pounce && q.atkKind) { q.atkKind = null; q.atkT = -1; }   // (its special's pose, done with)
-  if (campSit(q, i ? "pal2" : "pal", dt) || hideSit(q, i ? "pal2" : "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
+  if (campSit(q, i ? "pal2" : "pal", dt, q.rig) || hideSit(q, i ? "pal2" : "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
   if (player.combo && player.combo[mk] !== player.combo.idx) { player.combo[mk] = player.combo.idx; if ((q.huntT ?? 0) <= 0) { q.huntT = rand(2.4, 3.4); palPounce(q); } }   // a move of the combo (every few seconds at most)
   palDefend(q, dt); palHunt(q, dt);
   if (deepWetAt(q.y) && !q.pounce) {             // in the deep's water: it swims after you, up and down too
@@ -19044,11 +19083,11 @@ function gotTape(T, q) {
 }
 function spawnRoomItems() {
   if (!WORLDS[world] || world === 9 || stronghold || hideout || arena) return;
-  (STAGES[stage].items || []).forEach(([k, x, y, tid], i) => { const id = k === "tape" ? "tape:" + tid : world + ":" + stage + ":fix" + i; if (itemGot(id) || (k === "tape" && (!story || tapeGot(tid) || !tapesHere().some(T => T.id === tid)))) return;   // (the room's own, in their places: [kind, x, y on a platform] · a cassette: [.., its id])
+  (STAGES[stage].items || []).forEach(([k, x, y, tid], i) => { const id = k === "tape" ? "tape:" + tid : world + ":" + stage + ":fix" + i; if (itemGot(id) || (k === "tape" && ((story && tapeGot(tid)) || !tapesHere().some(T => T.id === tid)))) return;   // (the room's own, in their places: [kind, x, y on a platform] · a cassette: [.., its id])
     spawnLoot(k, x, y ?? groundAt(x) ?? GROUND, false, id); if (y !== undefined) { const q = loot[loot.length - 1]; q.y = q.gy = y; } });
   itemPlan(world).forEach((q, i) => { if (q.s !== stage) return; const id = world + ":" + q.s + ":" + q.k + i; if (itemGot(id)) return;
     const x = crateSpot(q.x); if (x !== null) spawnLoot(q.k, x, groundAt(x) ?? GROUND, false, id); });
-  tapesHere().forEach(T => { if (!T.lie || T.w !== world || !story || tapeGot(T.id)) return;   // (the PC page's own cassettes: lying in a room of their world)
+  tapesHere().forEach(T => { if (!T.lie || T.w !== world || (story && tapeGot(T.id)) || itemGot("tape:" + T.id)) return;   // (the PC page's own cassettes: lying in a room of their world; in free play too, the user 2026-10-28: B4's wasn't up there on a developer run)
     const P = tapePlan(world); if (!P || P.s !== stage) return; const x = crateSpot(P.x); if (x !== null) spawnLoot("tape", x, groundAt(x) ?? GROUND, false, "tape:" + T.id); });
 }   // (the worlds' own cassettes: carried by a berry now, dropPick)
 // the drops (the user, 2026-10-27): each time you come into a world, a berry somewhere in it picked at random for each of its three things you haven't got (its
@@ -21983,7 +22022,7 @@ function syncWorld(dt) {
     if (camStandAt !== world + ":" + stage + ":" + !!hideout) { camStandAt = world + ":" + stage + ":" + !!hideout; camStand = camBase; }   // (a new room: from where its arrival put the camera)
     const plLift = onPl && gyC !== null ? clamp((Y(player.plat.y) - (Y(gyC) + hiP) - 2.2) * .45, 0, 1.4) : 0;   // (what the old jump-follow came to, standing up there)
     if (STAGES[stage] && STAGES[stage].deep && !hideout && !stronghold) camBase = lerp(camBase, Y(Math.min(gyC ?? GROUND + 40, player.y + 70)), 1 - Math.exp(-dt * 2.6));   // (the deep: up and down with you as you swim)
-    else if (gyC !== null && !player.sunk) { if (player.onGround) camStand = Y(gyC) + hiP + plLift; else if (Y(player.y) < camStand - 1) camStand = Math.max(Y(gyC), Y(player.y) - 1);   // (in the air: held, unless you've dropped below where you stood: then down with you)
+    else if (gyC !== null && !player.sunk) { if (player.onGround) camStand = Y(gyC) + Math.max(hiP + plLift, camUpOf()); else if (Y(player.y) < camStand - 1) camStand = Math.max(Y(gyC), Y(player.y) - 1);   // (in the air: held, unless you've dropped below where you stood: then down with you)
       camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }
     else if (gyC === null && onPl && !player.sunk) { camStand = Y(player.plat.y) - 3.2; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }   // (A2, A3: nothing below but the bridge, or Camila's rock top)
     if (player.zip) { camStand = Y(player.y) - .8; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 3)); }   // (down the zipline: the camera along with you)
