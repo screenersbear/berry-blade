@@ -5206,6 +5206,78 @@ const SFX = {
   absorb() { tone(1568, 2093, .14, { type: "triangle", vol: .09 }); tone(2093, 3136, .22, { type: "sine", vol: .06, delay: .05 }); },   // in, with a little chime
   parry() { if (smpPlay("parry", .088, { rate: 1.08 })) return; tone(1500, 2600, .1, { type: "triangle", vol: .12 }); tone(2200, 3300, .16, { type: "sine", vol: .08 }); noise(.05, { vol: .18, f0: 5000, f1: 9000, type: "highpass" }); },   // a bright ping
 };
+// the berry buddies' own sounds (the user, 2026-10-28: "find some sound effects for all berry buddies to make"): every one made here from scratch (no recordings, so
+// nothing to license), a voice of its own chattering gibberish through vowel formants at its own pitch and in its own timbre, and a sound that's its alone (Bin's
+// alarm bell, Coil's buzz, Rotor's propeller...). Kinds: hi (joining you, and a little one when it first sees you), atk (a shout into a swing, now and then), sp (its
+// special: a shout and its own sound), hurt, rest (out of hearts). bv*: the helpers (no live() check of their own: buddySay checks, so a test can render them offline)
+const VOWELS = [[800, 1200], [400, 2300], [300, 2700], [500, 900], [350, 700]];   // a e i o u: the first two formants
+const bvT = () => ac.currentTime;
+let bvK = 1;                                          // (the level a buddy's own sound plays at: BV_LEVEL)
+function bvSyl(t, f0, f1, dur, { type = "sawtooth", vol = .1, v = 0, fk = 1, q = 5, vib = 0 } = {}) {   // a syllable: the voice sliding f0 to f1 through vowel v
+  const pk = sfxPitch(), o = ac.createOscillator(), g = ac.createGain(), [F1, F2] = VOWELS[v % 5];
+  o.type = type; o.frequency.setValueAtTime(f0 * pk, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, f1 * pk), t + dur);
+  if (vib) { const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = 6.5; lg.gain.value = f0 * pk * vib; l.connect(lg); lg.connect(o.frequency); l.start(t); l.stop(t + dur + .05); }   // (an old one's wobble)
+  [[F1, 1], [F2, .6]].forEach(([F, k]) => { const b = ac.createBiquadFilter(), gk = ac.createGain(); b.type = "bandpass"; b.frequency.value = F * fk; b.Q.value = q; gk.gain.value = k * q * .9; o.connect(b); b.connect(gk); gk.connect(g); });
+  vol *= bvK; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + Math.min(.02, dur * .3)); g.gain.setValueAtTime(vol, t + dur * .55); g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+  g.connect(sfxBus); o.start(t); o.stop(t + dur + .05);
+}
+function bvTone(t, f0, f1, dur, { type = "sine", vol = .1, a = .004, lp = 0, am = 0, amD = 1 } = {}) {   // a plain tone (am: a flutter in its loudness, so many times a second)
+  const pk = sfxPitch(), o = ac.createOscillator(), g = ac.createGain(); o.type = type; o.frequency.setValueAtTime(f0 * pk, t); if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(20, f1 * pk), t + dur);
+  vol *= bvK; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dur);
+  let n = o; if (lp) { const f = ac.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = lp; o.connect(f); n = f; }
+  if (am) { const m = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain(); m.gain.value = 1 - amD * .5; l.type = "square"; l.frequency.value = am; lg.gain.value = amD * .5; l.connect(lg); lg.connect(m.gain); n.connect(m); n = m; l.start(t); l.stop(t + a + dur + .05); }
+  n.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + a + dur + .05);
+}
+function bvNoise(t, dur, { vol = .1, f0 = 1000, f1 = f0, type = "bandpass", q = 1, a = .005, am = 0 } = {}) {
+  const pk = sfxPitch(), s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = noiseBuf; s.loop = true; f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0 * pk, t); if (f1 !== f0) f.frequency.exponentialRampToValueAtTime(f1 * pk, t + dur);
+  vol *= bvK; g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + dur);
+  let n = f; s.connect(f); if (am) { const m = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain(); m.gain.value = .5; l.frequency.value = am; lg.gain.value = .5; l.connect(lg); lg.connect(m.gain); f.connect(m); n = m; l.start(t); l.stop(t + a + dur + .05); }
+  n.connect(g); g.connect(sfxBus); s.start(t, Math.random() * .5); s.stop(t + a + dur + .05);
+}
+function bvTalk(t, V, n, { up = 1, last = 1, gap = 1, vol = 1 } = {}) {   // n syllables of its gibberish (up: the pitch's lift over them; last: the last one drawn out)
+  let d = 0;
+  for (let i = 0; i < n; i++) { const k = 1 + (up - 1) * (n > 1 ? i / (n - 1) : 1), f = V.f * k * (1 + (Math.random() - .5) * .12), L = V.len * (i === n - 1 ? last : 1) * (.85 + Math.random() * .3);
+    bvSyl(t + d, f * (V.rise || 1.08), f * (V.fall || .9), L, { type: V.type, vol: V.vol * vol, v: V.vw ? V.vw[(i + Math.floor(Math.random() * 2)) % V.vw.length] : Math.floor(Math.random() * 5), fk: V.fk || 1, q: V.q || 5, vib: V.vib || 0 });
+    if (V.breath) bvNoise(t + d, L * .8, { vol: V.breath * vol, f0: 2400, f1: 1600, q: .8 });
+    d += L + V.gap * gap; }
+  return d;
+}
+// each buddy: its voice (f: pitch, type, len: a syllable, gap, vol, fk: formants up or down (a small one's higher), vw: the vowels it leans on, vib, breath) and its sound
+const BUDDY_VOX = {
+  burr:     { f: 300, type: "square", len: .075, gap: .025, vol: .05, fk: 1.1, sig: t => { bvTone(t, 2600, 2500, .22, { type: "triangle", vol: .05 }); bvTone(t + .002, 3900, 3800, .16, { vol: .03 }); bvNoise(t, .1, { vol: .08, f0: 1400, f1: 5000, q: 2 }); } },   // a rapier's ting and swish
+  stilt:    { f: 140, type: "sawtooth", len: .15, gap: .05, vol: .06, fk: .85, vw: [0, 3], sig: t => { bvTone(t, 220, 70, .35, { vol: .14 }); bvTone(t + .05, 520, 180, .2, { type: "triangle", vol: .05 }); } },   // a long-legged boing
+  coil:     { f: 180, type: "square", len: .09, gap: .03, vol: .045, rise: 1, fall: 1, fk: 1.2, q: 8, sig: t => { bvTone(t, 90, 95, .3, { type: "sawtooth", vol: .06, lp: 1800, am: 30 }); bvNoise(t, .25, { vol: .06, f0: 3200, f1: 1400, q: 3 }); [0, .08, .16].forEach(d => bvTone(t + .32 + d, 2400, 2300, .02, { type: "square", vol: .03 })); } },   // a buzz, then his clockwork ticking
+  elpico:   { f: 210, type: "sawtooth", len: .1, gap: .03, vol: .06, vw: [0, 3, 1], sig: t => { [0, .16].forEach(d => { bvTone(t + d, 1250, 1240, .5, { type: "triangle", vol: .06 }); bvTone(t + d, 3150, 3100, .3, { vol: .025 }); }); } },   // the ring bell: ding ding!
+  oldvic:   { f: 120, type: "sawtooth", len: .14, gap: .06, vol: .055, fk: .9, vib: .04, vw: [3, 4, 0], sig: t => { bvNoise(t, .09, { vol: .12, f0: 700, q: .7 }); bvNoise(t + .16, .1, { vol: .1, f0: 600, q: .7 }); bvSyl(t + .3, 110, 90, .3, { type: "sawtooth", vol: .05, v: 4, fk: .9 }); } },   // a harrumph and a cough
+  boxcars:  { f: 110, type: "sawtooth", len: .11, gap: .04, vol: .06, fk: .8, vw: [3, 4], sig: t => { [0, .1].forEach(d => bvNoise(t + d, .07, { vol: .14, f0: 420, q: 1.2 })); for (let i = 0; i < 6; i++) bvTone(t + .24 + i * .045 + Math.random() * .015, 1300 + Math.random() * 500, 900, .025, { type: "square", vol: .04, lp: 3500 }); } },   // a snort, then the dice rattling
+  plumbers: { f: 200, type: "square", len: .07, gap: .02, vol: .045, crew: [1, 1.3, .8], sig: t => { bvTone(t, 880, 860, .5, { type: "triangle", vol: .06 }); bvTone(t, 1470, 1450, .35, { vol: .03 }); bvTone(t + .002, 2370, 2300, .2, { vol: .02 }); bvNoise(t, .06, { vol: .08, f0: 3000, q: 2 }); } },   // a pipe clanged with a wrench
+  vinnie:   { f: 170, type: "sawtooth", len: .12, gap: .04, vol: .05, vw: [1, 2], breath: .03, sig: t => { for (let i = 0; i < 4; i++) bvTone(t + i * .07, 4200 + i * 300, 5200, .04, { vol: .03 }); bvNoise(t + .05, .3, { vol: .1, f0: 600, f1: 2400, q: 1.2 }); } },   // bats squeaking, his cape's rush
+  rink:     { f: 260, type: "square", len: .08, gap: .03, vol: .05, vw: [3, 0], sig: t => { SFX.bark(.95); bvTone(t + .32, 120, 95, .3, { type: "sawtooth", vol: .05, lp: 600, am: 22, amD: .6 }); } },   // a ruff! and a growl
+  doir:     { f: 240, type: "sawtooth", len: .09, gap: .03, vol: .05, vw: [0, 1], sig: t => { bvNoise(t, .18, { vol: .14, f0: 900, f1: 3200, q: 1.5 }); } },   // a kiai into a rush of air
+  noro:     { f: 200, type: "sawtooth", len: .1, gap: .03, vol: .055, vw: [0, 3], sig: t => { bvNoise(t, .2, { vol: .14, f0: 700, f1: 2800, q: 1.5 }); } },
+  bin:      { f: 380, type: "square", len: .07, gap: .025, vol: .045, fk: 1.25, duo: 1.6, sig: t => { bvTone(t, 2350, 2350, .55, { type: "triangle", vol: .05, am: 24 }); bvTone(t, 3520, 3500, .5, { vol: .025, am: 24 }); for (let i = 0; i < 5; i++) bvTone(t + .6 + i * .05, 3000, 2600, .015, { type: "square", vol: .025 }); } },   // BRRRING, and Bon wound up: click click click
+  tusker:   { f: 150, type: "sawtooth", len: .13, gap: .04, vol: .06, fk: .9, vw: [0], sig: t => { bvTone(t, 233, 233, .45, { type: "sawtooth", vol: .06, lp: 1500, a: .04 }); bvTone(t + .12, 349, 349, .5, { type: "sawtooth", vol: .055, lp: 1700, a: .04 }); bvNoise(t + .1, .4, { vol: .05, f0: 800, q: .9, am: 14 }); } },   // a war horn, the flag snapping
+  rotor:    { f: 330, type: "square", len: .07, gap: .025, vol: .045, fk: 1.15, sig: t => { bvNoise(t, .55, { vol: .09, f0: 900, f1: 1400, q: 2.5, am: 32 }); bvTone(t + .45, 1800, 600, .09, { type: "square", vol: .04, lp: 4000 }); } },   // the propeller whirring up, a pew
+  chispa:   { f: 520, type: "triangle", len: .06, gap: .03, vol: .07, fk: 1.35, vw: [2, 1], rise: 1.15, fall: .8, sig: t => { [1568, 2093, 2637, 3136].forEach((f, i) => bvTone(t + i * .055, f, f, .14, { type: "triangle", vol: .03 })); } },   // sparks: a quick twinkle up
+  brisa:    { f: 440, type: "triangle", len: .09, gap: .03, vol: .06, fk: 1.25, breath: .035, vw: [4, 3], sig: t => { bvNoise(t, .6, { vol: .1, f0: 500, f1: 2600, q: 1.6, a: .12 }); bvNoise(t + .1, .35, { vol: .04, f0: 1800, q: 2, am: 18 }); } },   // a gust, her wings fluttering
+  flora:    { f: 300, type: "triangle", len: .13, gap: .04, vol: .065, fk: 1.05, vw: [3, 0], sig: t => { [784, 988, 1175].forEach((f, i) => bvTone(t + i * .09, f, f * 1.01, .35, { vol: .035 })); bvNoise(t, .4, { vol: .04, f0: 2200, q: 2, am: 12 }); } },   // a soft chime, petals fluttering
+};
+// (levels, measured: [its voice, its own sound], each brought to the loudest 30 ms of the hurt sound's level, the voices 1 dB under, rendered offline in the game's chain)
+const BV_LEVEL = { burr: [.65, 2.27], stilt: [1.22, .75], coil: [1.17, 2.99], elpico: [1.05, 1.76], oldvic: [1.48, 1.53], boxcars: [1.38, 5.75], plumbers: [1.48, 1.58], vinnie: [1.4, 4.79],
+  rink: [.92, 1], doir: [1.53, 4.68], noro: [1.41, 5.19], bin: [.73, 2.6], tusker: [1.53, 2.27], rotor: [.52, 3.24], chispa: [.43, 5.25], brisa: [.46, 6.03], flora: [1.46, 2.75] };
+const buddyLast = {};                                 // (when each last spoke: no chatter on top of chatter)
+function buddySay(id, kind, k = 1) {                  // one of its sounds (its own, or a crew's or a pair's); k: louder or softer
+  const V0 = BUDDY_VOX[id]; if (!V0 || !ac || !noiseBuf) return; const LV = BV_LEVEL[id] || [1, 1], V = { ...V0, vol: V0.vol * LV[0] };
+  const t = bvT(), last = buddyLast[id] ?? -9; if (kind !== "sp" && kind !== "rest" && t - last < (kind === "atk" ? 1.4 : .5)) return; buddyLast[id] = t;
+  const many = (V.crew || [1]).map((m, i) => ({ ...V, f: V.f * m, vol: V.vol * (V.crew ? (i ? .42 : .58) : 1) })), d0 = i => i * .11;   // (a crew all talking at once: each quieter)
+  if (kind === "hi") { many.forEach((W, i) => bvTalk(t + d0(i) * 2.2, W, 3 + (i ? 0 : 1), { up: 1.15, last: 1.5, vol: k })); if (V.duo) bvTalk(t + .55, { ...V, f: V.f * V.duo, len: V.len * .8 }, 2, { up: 1.3, vol: k * .5 }); }   // (Bon pipes up after Bin)
+  else if (kind === "atk") { const W = many[Math.floor(Math.random() * many.length)]; bvTalk(t, W, 1, { last: 1.4, vol: k }); }
+  else if (kind === "sp") { many.forEach((W, i) => bvTalk(t + d0(i), W, 2, { up: 1.25, last: 1.8, vol: k })); bvK = LV[1] * k; try { V.sig(t + .05); } finally { bvK = 1; } }
+  else if (kind === "hurt") bvSyl(t, V.f * 1.5, V.f * .7, V.len * 2.2, { type: V.type, vol: V.vol * k, v: 3, fk: V.fk || 1, q: V.q || 5 });
+  else if (kind === "rest") bvTalk(t, { ...V, rise: 1, fall: .75 }, 3, { up: .7, last: 2, gap: 1.6, vol: k });
+}
+SFX.buddy = (id, kind, k) => { if (live()) buddySay(id, kind, k); };
 addEventListener("pointerdown", startMusic);
 addEventListener("keydown", e => {
   padMode(false);                          // (typing: the prompts show the keys again)
@@ -10519,7 +10591,7 @@ const partnerBox = q => { const H = (q.rig && q.rig.heightPx) || 80; return { x1
 function partnerHurt(P, d) {
   const q = P.q; if (!q || q.pinv > 0 || mode !== "play" || transit || stronghold) return false;
   q.php = (q.php ?? PARTNER_HP) - 1; q.pinv = 1.1; q.heartT = 2.2; q.vx = d * 260; q.vy = -360; q.onGround = false; q.plat = null; q.hurtT = .3;
-  sparks(q.x, q.y - 40, 6); SFX.hurt(); shake = Math.max(shake, 2);
+  sparks(q.x, q.y - 40, 6); SFX.hurt(); shake = Math.max(shake, 2); if (P.kind === "ally" && P.a) SFX.buddy(P.a.A.id, q.php <= 0 ? "rest" : "hurt");
   if (q.php <= 0) partnerRest(P);
   return true;
 }
@@ -11167,7 +11239,7 @@ function allyJoin(A, r, st, quiet, crew) {         // it's with you now
   if (buddyAt.stay) delete buddyAt.stay[A.id];     // (one that waited at a rest stop: free to wander again once it's left you)
   st.php = PARTNER_HP; st.pinv = 0; const a = { A, r, st, t: 0, atkCd: 1, hopT: 0, waveT: 1.2, at: allyRoomKey(), pl: player, n: 0, crew: crew || crewOf(A, st.x, st.y) }; allies.push(a); allyHere = null; allyShow(a);
   if (quiet) return a;
-  st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); toast(allyMany(A) ? A.name + ", BERRY BUDDIES, JOIN YOU!" : A.name + " THE BERRY BUDDY JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
+  st.wave = 1; puffs(st.x, st.y - 50, 6, 36, 150); SFX.gift(); buddyLast[A.id] = -9; SFX.buddy(A.id, "hi"); toast(allyMany(A) ? A.name + ", BERRY BUDDIES, JOIN YOU!" : A.name + " THE BERRY BUDDY JOINS YOU!", 3200); popText(st.x, st.y - r.heightPx * 1.3 - 20, A.hi);
   if (story) writeSave();
 }
 function allyToCheck(a = allies[0]) {               // a full party and someone else joins: your ally goes to wait at the last rest stop you were at in this world
@@ -11190,7 +11262,7 @@ function palsStay() {                              // off into another world: yo
 function updateAllyHere(dt) {                      // waiting: it turns to watch you, waves when it sees you, and joins when you reach it
   const H = allyHere; if (!H || mode !== "play" || !player) return; const s = H.st, p = player, d = Math.abs(p.x - s.x); H.t += dt;
   s.face = Math.sign(p.x - s.x) || s.face; s.vx = 0;
-  if (!H.said && d < 700 && !p.dead) { H.said = true; s.wave = 1; H.waveT = 1.6; popText(s.x, s.y - H.r.heightPx * 1.3 - 20, H.A.hi); }
+  if (!H.said && d < 700 && !p.dead) { H.said = true; s.wave = 1; H.waveT = 1.6; popText(s.x, s.y - H.r.heightPx * 1.3 - 20, H.A.hi); SFX.buddy(H.A.id, "hi", .7); }
   if (s.wave > 0 && (H.waveT -= dt) <= 0) s.wave = 0;
   if (d < 140 && Math.abs(p.y - s.y) < 130 && !p.dead) {
     if (H.full) { }                                // (sent home from the choice: it waits here for next time)
@@ -11241,6 +11313,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
         const sp = (ally.combo || 0) >= SP_EVERY && KIT.BUDDY_SP[A.lead || A.id];   // every couple of plain hits: its special (the user, 2026-10-26)
         const G0 = (KIT.BUDDY_PLAIN || {})[A.lead || A.id] || SET.ground;   // (its own plain hits: Rotor's shot)
         ally.spOn = !!sp; if (sp) { ally.combo = 0; spReset(ally); startStrike(s, sp); if (!s.onGround) s.plat = null; } else startStrike(s, G0[ally.n++ % G0.length]);
+        if (sp) SFX.buddy(A.id, "sp"); else if (Math.random() < .35) SFX.buddy(A.id, "atk");   // (its voice: into a special always, a plain hit now and then)
         (ally.crew || []).forEach((m, i) => { m.go = sp ? .05 + i * .07 : .12 + i * .14; m.tgt = tgt; m.sp = !!sp; }); }   // (the rest of a crew: a beat after, all in on a special)
       else s.vx = approach(s.vx, s.face * 470, 2400 * dt);
     } else {
