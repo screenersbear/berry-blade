@@ -180,7 +180,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
   clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave",
   cpunch: "punch", ccross: "cross", csmash: "smash", upperhook: "uppercut + hook", gu_fist: "rising swipe", up_fist: "rising uppercut", gu_sword: "rising swipe", up_sword: "rising cut",
-  tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
+  tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", tk_wheel: "cartwheel", tk_wheel2: "second cartwheel", tk_wheelfall: "up off it, spinning, sword crashing down", tackle_wheel: "cartwheel tackle", tkdig_wheel: "dig in (held): loose, turned to you", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch (half moon)", dn_sword: "down swing", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
@@ -203,10 +203,11 @@ function movesFor(sp) {                                          // every move t
   if (cur && cur.buddy && cur.spec === sp) { list("Attack", (KIT.BUDDY_PLAIN || {})[sp.id] || ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); return out; }   // (its own plain hits: Rotor's shot)
   list("Attack", S.ground, T); list("Forward + attack", S.groundB || S.ground, T);
   list("Attack in the air", S.air1 || S.air, T); list("Forward + attack in the air", S.air2 || S.air, T);
-  list("Up + attack", S.upChain || [S.up], T); add("Up + attack, attack again: the crouch and jump up after them", "uphop", "", T); add("Up + attack in the air", S.up, "", T);   // (uphop: before the launch's second hit, 2026-10-28) add("Down + attack in the air", S.down, "", T);
+  list("Up + attack", S.upChain || [S.up], T); add("Up + attack, attack again: the crouch and jump up after them", "uphop", "", T); add("Up + attack in the air", S.up, "", T); add("Down + attack in the air", S.down, "", T);   // (uphop: before the launch's second hit, 2026-10-28 · the down one had been stranded in this comment)
   add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
-  add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
-  list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
+  const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
+  add("Tackle (attack + block)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold attack + block)", wheel ? "tkdig_wheel" : "tkdig", "", T);
+  list("Charged tackle (hold attack + block)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
   add("In the bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
@@ -277,7 +278,7 @@ function syncHandles() {
 // the dotted line = the picked dot's whole path through the move
 let onion = null, onionOn = true;
 function moveAt(kind, S, u) {                                    // the state that plays a move at u (-1: between loops). The tackle, the dig-in and the back-step are
-  const pm = S.pose && u >= 0 ? kind : null;                     // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
+  const pm = S.pose && u >= 0 ? (kind === "tackle_wheel" ? "tackle" : kind === "tkdig_wheel" ? "tkdig" : kind) : null;   // (Rose's cartwheel and its dig: played as the tackle's are)   // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
   const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
   return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb" && !(pm === "uphop" && u > (S.go ?? .14)), upHop: pm === "uphop" ? { t: u } : null, vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
     tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,

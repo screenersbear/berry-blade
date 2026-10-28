@@ -239,7 +239,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
+  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -395,7 +395,7 @@ const PRESETS = [
       headband: { on: true, col: "#ed145b", tilt: .72, width: 1.4 }, earStuds: { on: true, col: "#fffc01" },
       headphones: { on: false, col: "#1d1d1d", cup: "#ed145b" },   // (off: the user, 2026-10-26 "let's change lydia's design to NOT have headphones"; they're an accessory now, either girl's)
       prop: { kind: "sword", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 } },
-    move: { set: "sword", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 },   // (June's moves, no floating; her own standing pose, 2026-10-25)
+    move: { set: "sword", tackle: "wheel", stance: { lean: .47, headRot: -.19, armB: 1.26, spF: .41, spB: .26, fNz: .34, fFz: .34 },   // (June's moves, no floating; her own standing pose, 2026-10-25 · tackle "wheel": her cartwheel, 2026-10-28)
       anims: { spin: {   // (her air spin's feet: the front one lifted less, the back one a little more mid-turn: the user's file, 2026-10-26 "there was one where the leg twist seemed higher so i lowered the lift on the front foot")
         fNy: [[0, .2607869070194706], [.019, .22499999999999998], [.079, .15, 1], [.11, .15], [.1196, .15], [.1603, .15], [.2009, .15], [.22, .15], [.2415, .15, 1], [.2909, .1515625], [.33, .15421423161123826], [.3404, .155], [.3899, .1584375], [.4393, .16, 1]],
         fFy: [[0, .25], [.11, .25], [.1215, .25], [.1815, .265], [.22, .27768591732555964], [.2415, .28, 1], [.3015, .265], [.33, .25481798881700585], [.3615, .25], [.44, .25]] } } } }),
@@ -481,7 +481,7 @@ function layer(L) {
 const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], twistU: [-1.2, 1.2], twistH: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
   spF: [-.7, 1.6], spB: [-.7, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],
   fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4], wF: [-2, 2], wB: [-2, 2] };   // (wF / wB: a fist bent at the wrist, 2026-10-24)
-const ANIM_CH = { ...POSE_CH, aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], fP: [-2, 1], grip: [0, 1] };
+const ANIM_CH = { ...POSE_CH, aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], wheel: [-13, 13], rise: [0, 2], fP: [-2, 1], grip: [0, 1] };
 function fitPose(v) { const o = {}; if (v && typeof v === "object") for (const k in POSE_CH) if (typeof v[k] === "number" && isFinite(v[k])) o[k] = clamp(v[k], ...POSE_CH[k]); return o; }
 function fitAnims(v) {                           // { move: { channel: [[t, value], ...] } }
   const o = {}; if (!v || typeof v !== "object") return o;
@@ -1565,7 +1565,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0 };
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -1681,7 +1681,7 @@ const CAT_MOVES = {
     } },
 };
 const CAT_GROUND = ["cardswim", "cardswirl"], CAT_AIR = ["cardspin", "carddive"], CAT_CHARGE = ["carddash", "cardcyclone", "cardstorm"];
-const TK_CHARGE = { sword: ["tk_left", "tk_right", "tk_sword"], other: ["tk_left", "tk_right", "tk_hammer"], cat: ["tkc_left", "tkc_right", "tk_cards"] };   // the charged tackle, by kind   // tap, tap again · in the air · charged (cardslash is retired)
+const TK_CHARGE = { wheel: ["tk_wheel", "tk_wheel2", "tk_wheelfall"], sword: ["tk_left", "tk_right", "tk_sword"], other: ["tk_left", "tk_right", "tk_hammer"], cat: ["tkc_left", "tkc_right", "tk_cards"] };   // the charged tackle, by kind   // tap, tap again · in the air · charged (cardslash is retired)
 // gait keys: [phase, ...values]; the last row repeats the first so the cycle loops
 const LEG_KEYS = [                     // paw x (back −), lift, shoe pitch, leg stretch
   [0, -.1, 0, 0, 0], [.12, -.4, 0, -.5, .1], [.2, -.9, .26, -1.3, .75], [.3, -1.28, .5, -1.9, 1], [.42, -1.12, .46, -1.75, .95],
@@ -1752,11 +1752,25 @@ function wallPose(p) {                             // up a bare wall: its keys (
 const TPOSE = { lean: 0, arch: 0, bodyY: 0, headRot: -.08, armF: 0, elbF: .04, armB: 0, elbB: .04, spF: 1.52, spB: 1.52, fNx: .1, fFx: -.1, fNy: 0, fFy: 0 };
 const TIRED_H = { lean: .62, arch: .2, bodyY: -.14, headRot: .32, armF: .78, elbF: .18, armB: .68, elbB: .18, spF: .05, spB: .05, fNx: .18, fFx: -.16 };   // bent over, hands on knees
 const TIRED_C = { lean: 1.05, arch: .5, bodyY: -.2, headRot: .2, armF: .9, elbF: .3, armB: .8, elbB: .3, fNx: .2, fFx: -.2, tailBase: .35, tailCurl: -.3, hatTilt: .32 };
+// a cartwheel's keys, a turn over a0 → a1 (dur: the move's), facing you all the way round: arms up and out, legs apart, up off the ground over her hands
+function WHEEL_KEYS(a0, a1, dur, lead = .1) {
+  const m = (a0 + a1) / 2, k = (t, v) => [Math.min(dur, Math.max(0, t)), v];
+  return { spin: [k(0, 0), k(a0 - .02, -1.2), k(a1, -1.2), k(dur, 0)], wheel: [k(0, 0), k(a0, 0), k(a1, TAU), k(dur, TAU)],
+    rise: [k(0, 0), k(a0, 0), k(m, .95), k(a1, 0), k(dur, 0)], bodyY: [k(0, -.05), k(a0 - lead * .4, -.3), k(a0 + .02, -.05), k(a1, -.05), k(a1 + (dur - a1) * .5, -.24), k(dur, -.06)],
+    lean: [k(0, .2), k(a0 - lead * .4, .42), k(a0 + .02, -.1), k(a1 - .02, -.05), k(a1 + (dur - a1) * .5, .3), k(dur, .2)], arch: [k(0, 0), k(a0, -.32), k(a0 + .06, 0), k(dur, 0)],   // (the hips forward, a hop into it)
+    armF: [k(0, 1.0), k(a0, 2.95), k(a1, 2.95), k(a1 + (dur - a1) * .6, 1.3), k(dur, 1.0)], armB: [k(0, .9), k(a0, 2.95), k(a1, 2.95), k(a1 + (dur - a1) * .6, 1.2), k(dur, .9)],
+    elbF: [k(0, .5), k(a0, .06), k(a1, .06), k(dur, .5)], elbB: [k(0, .5), k(a0, .06), k(a1, .06), k(dur, .5)], spF: [k(0, .2), k(a0, .62), k(a1, .62), k(dur, .2)], spB: [k(0, .2), k(a0, .62), k(a1, .62), k(dur, .2)],
+    blade: [k(0, .9), k(a0, 2.7), k(a1, 2.7), k(dur, .9)], headRot: [k(0, 0), k(dur, 0)],
+    fNx: [k(0, .25), k(a0, .32), k(a0 + .05, 0), k(a1, 0), k(a1 + (dur - a1) * .5, .26), k(dur, .25)], fFx: [k(0, -.25), k(a0, -.3), k(a0 + .05, 0), k(a1, 0), k(a1 + (dur - a1) * .5, -.22), k(dur, -.25)],
+    fNy: [k(0, 0), k(a0 + .05, .05), k(a1, .05), k(a1 + .04, 0)], fFy: [k(0, 0), k(a0 + .05, .05), k(a1, .05), k(a1 + .04, 0)],
+    fNz: [k(0, .1), k(a0 + .04, 1.0), k(a1 - .02, 1.0), k(a1 + .06, .1)], fFz: [k(0, .1), k(a0 + .04, 1.0), k(a1 - .02, 1.0), k(a1 + .06, .1)] };
+}
 const TKDIG_H = { lean: .62, arch: -.05, bodyY: -.3, headRot: -.38, armF: .95, elbF: .35, armB: -.35, elbB: 1.1, spF: .05, spB: -.1, fNx: .36, fFx: -.42, hF: .5 };   // charging the tackle (redone 2026-10-17, the user found it unnatural): a lineman's set, leaning in with a flat back, hips low, head up and eyes forward, the lead hand reaching down and forward, the other cocked at the hip, feet wide and staggered, back heel up
 const TKDIG_C = { lean: .95, arch: .5, bodyY: -.32, headRot: -.25, armF: 1.15, elbF: .9, armB: 1.05, elbB: 1.0, fNx: .3, fFx: -.34, tailBase: 1.8, tailCurl: .15, hatTilt: -.25 };   // (the cat: crouched to pounce, front paws planted ahead, eyes forward, tail up)
 const TACKLE_H = { lean: .7, arch: .2, bodyY: -.16, headRot: .28, armF: 1.3, elbF: 1.95, armB: 1.2, elbB: 2.0, spF: -.32, spB: -.32 };   // shoulder down, forearms braced across in front, head tucked: a running back going through
 const TACKLE_C = { lean: 1.0, arch: .3, bodyY: -.14, headRot: .26, armF: 1.45, elbF: 1.7, armB: 1.35, elbB: 1.7, tailBase: 1.55, tailCurl: -.08, hatTilt: -.4 };
-function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = poseKeys(p, "tackle", p.tackle ? p.tackle.t : 9) || (cat ? TACKLE_C : TACKLE_H); for (const key in TK) o[key] = lerp(o[key] ?? 0, TK[key], k); }   // over the running legs
+const tkKind = (p, k) => p.rig.spec.move.tackle === "wheel" && STRIKES[k + "_wheel"] ? k + "_wheel" : k;   // (Rose's: the cartwheel)
+function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = poseKeys(p, tkKind(p, "tackle"), p.tackle ? p.tackle.t : 9) || (cat ? TACKLE_C : TACKLE_H); for (const key in TK) o[key] = lerp(o[key] ?? 0, TK[key], k); }   // over the running legs
 function extraPoses(p, T, cat) {                  // laid over whatever pose came before
   const t = api.time;
   if (p.block || p.tpose > 0) {                   // the guard, hands drawn in close, opening out to the T as it's held
@@ -1764,7 +1778,7 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
     T.spF = (T.spF ?? 0) - .22; T.spB = (T.spB ?? 0) - .22;
     if (e > 0) for (const k in TPOSE) if (p.onGround || !LEG_CH.has(k)) T[k] = lerp(T[k] ?? 0, TPOSE[k], e);
   }
-  if (p.tkDig > 0) { const k = p.tkDig, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || (cat ? TKDIG_C : TKDIG_H); for (const key in D) T[key] = lerp(T[key] ?? 0, D[key], k); T.bodyY += Math.sin(t * 38) * .008 * k; }   // (trembling with it)
+  if (p.tkDig > 0) { const k = p.tkDig, D = poseKeys(p, tkKind(p, "tkdig"), p.tkCharge ? p.tkCharge.t : 9) || (cat ? TKDIG_C : TKDIG_H); for (const key in D) T[key] = lerp(T[key] ?? 0, D[key], k); T.bodyY += Math.sin(t * 38) * .008 * k; }   // (trembling with it)
   if (p.tired > 0) { Object.assign(T, cat ? TIRED_C : TIRED_H); T.bodyY += Math.sin(t * 10) * .014; T.arch += Math.sin(t * 10) * .03; }   // panting
   if (p.startle > 0) { const k = Math.min(1, p.startle * 4); T.lean = lerp(T.lean, -.28, k); T.bodyY = lerp(T.bodyY, .06, k); T.armF = lerp(T.armF, 2.5, k); T.armB = lerp(T.armB, 2.3, k); T.elbF = lerp(T.elbF, .35, k); T.elbB = lerp(T.elbB, .35, k); T.spF = lerp(T.spF ?? 0, .7, k); T.spB = lerp(T.spB ?? 0, .7, k); T.headRot = lerp(T.headRot, -.18, k); }   // startled: jumps back, hands flung up
   if (p.shy > 0) { const k = Math.min(1, p.shy * 3); T.lean = lerp(T.lean, .16, k); T.armF = lerp(T.armF, 1.75, k); T.elbF = lerp(T.elbF, 2.35, k); T.armB = lerp(T.armB, 1.6, k); T.elbB = lerp(T.elbB, 2.4, k); T.spF = lerp(T.spF ?? 0, -.25, k); T.spB = lerp(T.spB ?? 0, -.25, k); T.headRot = lerp(T.headRot, .3 + Math.sin(t * 9) * .03, k); }   // shy: head down, hands up to the face
@@ -1811,6 +1825,19 @@ const STRIKES = {
       armF: [[0, 1.3], [0.3, 1.3]], elbF: [[0, 1.95], [0.3, 1.95]], armB: [[0, 1.2], [0.3, 1.2]], elbB: [[0, 2.0], [0.3, 2.0]], spF: [[0, -.3], [0.3, -.3]], spB: [[0, -.3], [0.3, -.3]],
       fNx: [[0, 0.28], [0.09, -0.28], [0.18, 0.28], [0.3, -0.28]], fFx: [[0, -0.28], [0.09, 0.28], [0.18, -0.28], [0.3, 0.28]],
       fNy: [[0, 0], [0.09, 0.16], [0.18, 0], [0.3, 0]], fFy: [[0, 0.16], [0.09, 0], [0.18, 0.16], [0.3, 0]] } },
+  // Rose's charged tackle (the user, 2026-10-28: "when they charge it, they will do the first cartwheel and it does a little more damage than not charged, second charge gets
+  // them to roll into a second cart wheel, and third is they bounce off the second cartwheel into the air and to a spinning sword attack crashing down, holding the sword
+  // with two hands as she does it"): dmg, half a hit more a blow
+  tk_wheel: { dur: .48, chain: .48, step: 520, slide: .44, sq: -.1, dmg: 1, sfx: "whoosh", sfx2: [.2, "whoosh"], hits: [{ t0: .04, t1: .44, reach: 75, back: 10, y0: 150, y1: 0, kind: "tackle", wide: true }], keys: WHEEL_KEYS(.02, .42, .48, .04) },
+  tk_wheel2: { dur: .48, chain: .48, step: 520, slide: .44, sq: -.1, dmg: 1, sfx: "whoosh", sfx2: [.2, "whoosh"], hits: [{ t0: .04, t1: .44, reach: 75, back: 10, y0: 150, y1: 0, kind: "tackle", wide: true }], keys: WHEEL_KEYS(.02, .42, .48, .04) },
+  tk_wheelfall: { dur: .95, step: 260, hop: -950, dive: [.4, 1000], diveStill: true, sq: .12, dmg: 1, flow: ["spin"], sfx: "slash", sfx2: [.4, "whoosh"],   // up off the second wheel, spinning, the sword in both hands over her head, and down
+    hits: [{ t0: .08, t1: .36, reach: 85, back: 60, y0: 170, y1: 0, kind: "slash" }, { t0: .4, t1: .54, reach: 110, back: 20, y0: 150, y1: -40, kind: "smash" }, { t0: .54, t1: .66, reach: 130, back: 80, y0: 50, y1: -10, kind: "launch", wide: true }],
+    keys: { spin: [[0, 0], [.06, 0], [.36, TAU * 2], [.95, TAU * 2]], armF: [[0, 2.6], [.08, 3.0], [.36, 3.0], [.44, .55], [.52, .3], [.8, .45], [.95, .4]], armB: [[0, 2.6], [.08, 3.0], [.36, 3.0], [.44, .6], [.52, .35], [.8, .5], [.95, .5]],
+      elbF: [[0, .3], [.08, .25], [.36, .25], [.44, .1], [.8, .3], [.95, .9]], elbB: [[0, .3], [.08, .25], [.36, .25], [.44, .1], [.8, .3], [.95, .6]], spF: [[0, .1], [.95, .1]], spB: [[0, .1], [.95, .1]],
+      blade: [[0, 2.4], [.08, 2.8], [.36, 2.9], [.44, -.7], [.52, -.9], [.8, -.8], [.95, .9]], grip: [[0, 1], [.85, 1], [.95, .4]],
+      lean: [[0, -.1], [.08, -.2], [.36, -.25], [.44, .9], [.52, .75], [.8, .7], [.95, .25]], arch: [[0, -.2], [.36, -.3], [.44, .3], [.95, 0]],
+      bodyY: [[0, 0], [.4, 0], [.52, -.38], [.8, -.36], [.95, -.08]], fNx: [[0, .1], [.4, .1], [.52, .34], [.8, .34], [.95, .24]], fFx: [[0, -.05], [.4, -.1], [.52, -.32], [.8, -.32], [.95, -.2]],
+      fNy: [[0, .3], [.36, .28], [.52, 0], [.95, 0]], fFy: [[0, .25], [.36, .22], [.52, 0], [.95, 0]], fP: [[0, -.5], [.36, -.4], [.52, .3], [.8, .3], [.95, 0]] } },
   tk_sword: { dur: .95, step: 300, hop: -900, dive: [.34, 950], diveStill: true, sq: .1, sfx: "slash", sfx2: [.34, "whoosh"],   // charged tackle 3, with a sword: up, and the blade brought down into the ground; she lands in a crouch
     hits: [{ t0: .3, t1: .46, reach: 105, back: 15, y0: 150, y1: -40, kind: "smash" }, { t0: .46, t1: .6, reach: 125, back: 70, y0: 50, y1: -10, kind: "launch", wide: true }],
     keys: { armF: [[0, .6], [.12, 2.9], [.3, 3.05], [.4, .5], [.48, .3], [.78, .45], [.95, .35]], elbF: [[0, .8], [.12, .4], [.3, .3], [.4, .1], [.78, .3], [.95, 1.15]],
@@ -2184,6 +2211,11 @@ const BACKSTEP_T = [0, .075, .15, .225, .3, .5], bkCurve = (a, b) => BACKSTEP_T.
 Object.assign(STRIKES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_H, .72) },   // (wind .14, lunge .4, pull up .18: the game's TKL)
   tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_H, 1) },
+  // Rose's tackle (the user, 2026-10-28: "for her, she will get in a more limber position while charging to do a cart wheel. she will crouch with upper body slightly turned
+  // towrads the player and then do a light hip forward spinning a cull 360 cart wheel that hits the opponent"): turned to face you, a hop of the hips, and over her hands
+  // a whole turn (wheel), arms and legs out like a star, up off the ground as she goes over (rise); spec.move.tackle "wheel"
+  tackle_wheel: { dur: .72, pose: true, screen: true, keys: WHEEL_KEYS(.14, .54, .72) },
+  tkdig_wheel: { dur: 1, pose: true, screen: true, keys: flatKeys({ lean: .34, arch: .1, bodyY: -.34, headRot: -.2, twistU: -.55, spin: -.35, armF: .9, elbF: .7, armB: .75, elbB: .8, spF: .35, spB: .35, fNx: .34, fFx: -.36, fNz: .22, fFz: .22, hF: .4 }, 1) },   // (crouched, loose, her shoulders turned to you)
   backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1, fFx: -.16, fP: -.2 }, .5),
     lean: bkCurve(0, -.32), arch: bkCurve(0, -.12), fNx: bkCurve(.2, .08), fNy: bkCurve(.1, .14), fFy: bkCurve(.06, .1) } },
   // up a rock wall, one cycle of climbPh (the user, 2026-10-27: "whenever camila climbs a wall, she should be punching hard with her gauntlet hand and then climbing with the other
@@ -2266,7 +2298,8 @@ function keySnap(tr, t) {
   if (d < h0) { const v = d / h0; return y0 + (y1 - y0) * SNAP_DRIFT * v * v; }
   const u = (d - h0) / sn, e = 1 - (1 - u) * (1 - u) * (1 - u); return y0 + (y1 - y0) * (SNAP_DRIFT + (1 - SNAP_DRIFT) * e);
 }
-const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind]; return keySnap(own && own[k] ? own[k] : K[k], a); };
+const FLOW = new Set(["wheel", "rise"]);              // (channels that flow through their keys, not snap between them: a cartwheel's turn and lift; a move's own flow: its list)
+const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind], tr = own && own[k] ? own[k] : K[k], S = STRIKES[p.atkKind]; return FLOW.has(k) || (S && S.flow && S.flow.includes(k)) ? keyvS(tr, a) : keySnap(tr, a); };
 function layPose(T, P, p) {                       // a character's own pose over a built-in one (lead / rear named, like the stance)
   if (!P) return; const sw = leadFar(p); for (const k in P) { const kk = sw ? SWAP[k] || k : k; if (kk in T) T[kk] = P[k]; }
 }
@@ -2319,7 +2352,8 @@ function smoothPose(p, T, dt) {
     if (SPRUNG.has(key)) {
       const v = (p.pv[key] || 0) + ((T[key] - p.pose[key]) * (hit ? 900 : 260) - (p.pv[key] || 0) * (hit ? 52 : 22)) * dt;
       p.pv[key] = v; p.pose[key] += v * dt;
-    } else if (key === "spin" || key === "flip") {
+    } else if (key === "wheel" || key === "rise") p.pose[key] = T[key];   // (a cartwheel's turn and lift: straight from its keys, smooth already; eased, the fast turn never caught up)
+    else if (key === "spin" || key === "flip") {
       p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU);   // a finished turn settles forward, never unwinds back through the turn
       p.pose[key] = lerp(p.pose[key], T[key], k);
     } else {                                             // critically damped: eases out of the old pose and into the new one (no snap at the start, no overshoot at the end)
@@ -2458,7 +2492,7 @@ function updatePoseHuman(p, dt) {
       o.armF = lerp(o.armF, -.55, up * .6); o.armB = lerp(o.armB, .65, up * .6); o.fNy += .07 * up * Bd.legs; }
   }
   tackleOver(p, o, false);
-  if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || TKDIG_H; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
+  if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, tkKind(p, "tkdig"), p.tkCharge ? p.tkCharge.t : 9) || TKDIG_H; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
   if (p.onGround && p.sq < 0 && a < 0 && !m.float) { o.bodyY += p.sq * .3; o.lean -= p.sq * .15; }   // landing: the knees take the weight
   if (p.rig.prop && p.rig.prop.kind === "sword") {          // a spiked sword: in a swing, the blade turns over so its spikes (the notched edge) lead the cut, into the enemy
     let want = 0;                                           // (2026-10-23: the spikes moved to the notched edge, which leads a down or over cut as it is: it turns over for the up cuts now)
@@ -2554,7 +2588,7 @@ function updatePoseCat(p, dt) {
   o.spin = 0; o.flip = 0;
   const CM = p.atkT >= 0 && p.atkKind && CAT_MOVES[p.atkKind];          // Tocsin's keyed moves lay over the pose
   if (CM) { const a = p.atkT, w = p.keysFull ? 1 : clamp(Math.min(a / .025, (CM.dur - a) / .06), 0, 1), KK = keysOf(p, CM);
-    for (const k in KK) { let v = kv(p, KK, k, a); if (k === "spin" || k === "flip") v = Math.atan2(Math.sin(v), Math.cos(v)); o[k] = lerp(o[k] ?? 0, v, w); } }
+    for (const k in KK) { let v = kv(p, KK, k, a); if (k === "spin" || k === "flip" || k === "wheel") v = Math.atan2(Math.sin(v), Math.cos(v)); o[k] = lerp(o[k] ?? 0, v, w); } }
   tackleOver(p, o, true);
   if (p.tkDig > 0 && p.atkT < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || TKDIG_C; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "tailBase", "tailCurl", "hatTilt"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .12 * k; }   // (stalking forward, still crouched)
   if (p.onGround && p.sq < 0 && p.atkT < 0) { o.bodyY += p.sq * .35; o.arch -= p.sq * .2; }   // landing: down on his haunches a moment
@@ -2774,7 +2808,8 @@ function syncHuman(p, r, dt = 0) {
   if (r.spec.move.float) r.root.position.y += (.3 + Math.sin(api.time * 2.3 + (p.floatPh ?? (p.floatPh = Math.random() * 6))) * .045) * sc;   // she floats: hovers above the ground, bobbing
   r.root.scale.set((1 - p.sq * .5) * sc, (1 + p.sq) * sc, (1 - p.sq * .5) * sc);
   r.root.visible = !(p.inv > 0 && p.hurtT <= 0 && Math.floor(p.inv * 18) % 2 === 0);
-  r.yaw.rotation.y = p.yaw + ((p.spinY || 0) + (o.spin || 0) + (o.twist || 0)) * fs; r.spin.rotation.z = -(p.rot + (o.flip || 0));
+  r.yaw.rotation.y = p.yaw + ((p.spinY || 0) + (o.spin || 0) + (o.twist || 0)) * fs; r.spin.rotation.z = -(p.rot + (o.flip || 0)); r.spin.rotation.x = -(o.wheel || 0) * fs;   // (wheel: about the way she faces, a cartwheel's turn; roll is the blade's own)
+  if (o.rise) r.root.position.y += o.rise * sc;   // (rise: all of her up off the ground, a cartwheel going over her hands)
   r.root.updateMatrixWorld(true);
   const near = fs;
   const y0 = H_HIP + o.bodyY * ds, ang = [o.lean * .5 + o.arch * .4, o.lean * .9, o.lean - o.arch * .4].map(a => clamp(a, -1, 1.45));

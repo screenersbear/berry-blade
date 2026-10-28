@@ -602,7 +602,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261028i"></script>
+<script src="charkit.js?v=20261028q"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -809,7 +809,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261028i"></script>
+<script src="editor.js?v=20261028q"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -5625,11 +5625,13 @@ const likeMove = (own, src) => { const m = JSON.parse(JSON.stringify(src)), o = 
   if (o.stance && Object.keys(o.stance).length) m.stance = { ...(m.stance || {}), ...JSON.parse(JSON.stringify(o.stance)) };
   for (const k of ["anims", "rests", "clear", "hits"]) if (o[k] && Object.keys(o[k]).length) m[k] = { ...(m[k] || {}), ...JSON.parse(JSON.stringify(o[k])) };
   return m; };
+const OWN_TACKLE = { rose: "wheel" };                // (whose tackle isn't the shoulder charge)
 function castFix(list, edited) {                     // MOVES_LIKE, OWN_ANIMS and OWN_JUMP over the cast, the ones not edited themselves (a move keyed in the spec itself wins over OWN_ANIMS')
   for (const [id, src] of Object.entries(MOVES_LIKE)) { const a = list.findIndex(p => p.id === id), b = list.find(p => p.id === src);   // (their moves follow June's and Chase's, edits and all, till they're edited themselves)
     if (a >= 0 && b && !edited.has(id)) list[a] = { ...list[a], move: likeMove(list[a].move, b.move) }; }
   for (const [id, A] of Object.entries(OWN_ANIMS)) { const p = list.find(q => q.id === id); if (p && !edited.has(id)) p.move = { ...p.move, anims: { ...JSON.parse(JSON.stringify(A)), ...(p.move.anims || {}) } }; }
   for (const [id, k] of Object.entries(OWN_JUMP)) { const p = list.find(q => q.id === id); if (p && !edited.has(id)) p.move = { ...p.move, jump: k }; }
+  for (const [id, k] of Object.entries(OWN_TACKLE)) { const p = list.find(q => q.id === id); if (p && (!p.move.tackle || p.move.tackle === "shoulder")) p.move = { ...p.move, tackle: k }; }   // (Rose's cartwheel, 2026-10-28: her baked file has no tackle of its own)
   for (const [id, k] of Object.entries(OWN_SPEED)) { const p = list.find(q => q.id === id); if (p && !edited.has(id)) p.move = { ...p.move, speed: k }; }
   return list;
 }
@@ -9630,7 +9632,7 @@ function tackleStep(p, dt) {
 // milliseconds faster": 200 of them each level, 2 wouldn't be seen; 1 s before), the tackle's a little slower than that
 const CHARGE_STEP = .8, TK_CHARGE = .9;              // (the tackle's: 1.3 till 2026-10-21, then 1.1, now .9)
 function startTackleCombo(p, lv) {                  // the charged tackle, let go: as many parts as the charge got to
-  const L = KIT.TK_CHARGE, list = p.rig.kind === "cat" ? L.cat : (p.rig.spec.outfit.prop || {}).kind === "sword" ? L.sword : L.other;
+  const L = KIT.TK_CHARGE, list = p.rig.kind === "cat" ? L.cat : p.rig.spec.move.tackle === "wheel" ? L.wheel : (p.rig.spec.outfit.prop || {}).kind === "sword" ? L.sword : L.other;   // (Rose's: cartwheels, 2026-10-28)
   p.combo = { list, level: lv, idx: 0, tackle: true }; p.comboSpan = p.onGround ? supportSpan(p) : null;   // (like any charged combo: it won't carry you off an edge)
   aura.flare = .35; aura.lv = lv; SFX.release(lv); sparks(p.x, p.y - (p.rig.heightPx || 92) / 2, 6 + lv * 4); hitstop = .05; shake = Math.max(shake, 2 + lv * 2);
   startMove(p, list[0]);
@@ -21615,7 +21617,7 @@ function stepBack(e, boss) {                         // the step back itself: al
 }
 // a blow of yours: 2, and your weapon's power on top (not on a bounce off a head); Camila's half a hit more than Rose's (the user, 2026-10-28: "camila will also do half
 // a hit more damage than rose": a hit's 2, so hers are 3)
-const CAMILA_EXTRA = 1, heroDmg = kind => 2 + (kind === "stomp" ? 0 : (player.power || 0) + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + ((player.power || 0) >= 3 ? GEAR_DMG * (player.powG || 0) : 0));   // (+ the berry gears' teeth, at full power)
+const CAMILA_EXTRA = 1, heroDmg = kind => 2 + (kind === "stomp" ? 0 : (player.power || 0) + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + ((player.power || 0) >= 3 ? GEAR_DMG * (player.powG || 0) : 0) + (((player.atkT >= 0 && KIT.STRIKES[player.atkKind]) || {}).dmg || 0));   // (+ the blow's own dmg: Rose's charged cartwheels, 2026-10-28)   // (+ the berry gears' teeth, at full power)
 function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon's own: a bounce on a head does the plain 2, the user 2026-10-22)
   if (b.inv > 0 || b.dead || b.gone) return false;
   if (b.calm) surprise(b.calm.gid);                                    // (caught napping: the whole lot of them are up)
