@@ -362,7 +362,7 @@
   #banner.show { animation: banner 2.2s ease-out forwards; }
   #banner.stay { animation: none; opacity: 1; transform: translate(-50%, -50%); }
   #fade { position: fixed; inset: 0; background: var(--s); opacity: 0; pointer-events: none; transition: opacity .45s; z-index: 45; }
-  #fade.on { opacity: 1; }
+  #fade.on { opacity: 1; } #fade.now { transition: none; } #map.over { z-index: 48; }   /* (now: on at once; over: the map above the held fade, leaving a world) */
   #proBlack { position: fixed; inset: 0; background: #000; z-index: 46; display: none; pointer-events: none; }   /* (the prologue's black: over the game and the fade, under the voice's words and the story) */
   body.riding:not(.ridePlay) #weapon, body.riding:not(.ridePlay) #life, body.riding #mini, body.riding #hud, body.riding #hint, body.riding #coinHud, body.riding #team, body.riding #catHud, body.riding #bepLife, body.riding #bepArrow, body.riding #exitCue { visibility: hidden !important; }   /* (on La Guagua between worlds: no HUD) */
   #proBlack.show { display: block; } #proTitle { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .9s; } #proTitle.on { opacity: 1; }
@@ -6997,7 +6997,7 @@ let mapAnim = null;                                  // (the way to a world draw
 function mapPath(from, to, then) {                  // the first time out of a world by a way to another: the island's map, the way there drawn out, then on into it (the user,
   story.paths = [...(story.paths || []), linkKey(from, to)]; writeSave();   // 2026-10-25: "show the line to where you are able to go now be drawn out like a little path and then load the new area")
   mapAnim = { from, to, then, t0: performance.now() }; menuUp = "mappath"; paused = true; mapSel = to; mapPick = null;
-  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); SFX.reveal && SFX.reveal();
+  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").classList.add("show"); $("map").classList.toggle("over", fadeHold); drawMap(); SFX.reveal && SFX.reveal();
   mapAnim.timer = setTimeout(mapPathDone, 3200);
 }
 // on to a world you've been to before, by road (the user, 2026-10-26: "when you get out to the world map through an exit you've been, it should show the world map
@@ -7006,16 +7006,16 @@ function mapPath(from, to, then) {                  // the first time out of a w
 let skipAsk = null, skipSel = 0;
 function askSkip(from, to, then = () => goWorldNow(to)) {   // (then: on into the world, however you're going there)
   skipAsk = { from, to, then }; skipSel = 0; menuUp = "rideskip"; paused = true; mapSel = to; mapPick = null;
-  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").querySelector(":scope > .panel > small").style.visibility = "hidden"; $("map").classList.add("show"); drawMap(); $("skSub").textContent = "ON TO " + WORLDS[to].name;
+  drawMapPick(); $("mapBtns").style.visibility = "hidden"; $("map").querySelector(":scope > .panel > small").style.visibility = "hidden"; $("map").classList.add("show"); $("map").classList.toggle("over", fadeHold); drawMap(); $("skSub").textContent = "ON TO " + WORLDS[to].name;
   $("skipAsk").classList.add("show"); SFX.reveal && SFX.reveal(); markMenu();
 }
 function skipAnswer(mosey) {
-  const A = skipAsk; if (!A) return; skipAsk = null; $("skipAsk").classList.remove("show"); $("map").classList.remove("show"); $("mapBtns").style.visibility = ""; $("map").querySelector(":scope > .panel > small").style.visibility = ""; menuUp = null; paused = false; SFX.confirm();
+  const A = skipAsk; if (!A) return; skipAsk = null; $("skipAsk").classList.remove("show"); $("map").classList.remove("show", "over"); $("mapBtns").style.visibility = ""; $("map").querySelector(":scope > .panel > small").style.visibility = ""; menuUp = null; paused = false; SFX.confirm();
   if (mosey) startRide(A.from, A.to, A.then); else A.then();
 }
 $("skBtns").addEventListener("click", e => { const b = e.target.closest("[data-k]"); if (b && skipAsk) skipAnswer(b.dataset.k === "mosey"); });
 function mapPathDone() {                            // (drawn: on into the world; a press once it's there skips the wait)
-  const A = mapAnim; if (!A) return; clearTimeout(A.timer); mapAnim = null; $("map").classList.remove("show"); $("mapBtns").style.visibility = ""; menuUp = null; paused = false; SFX.tick(); A.then();
+  const A = mapAnim; if (!A) return; clearTimeout(A.timer); mapAnim = null; $("map").classList.remove("show", "over"); $("mapBtns").style.visibility = ""; menuUp = null; paused = false; SFX.tick(); A.then();
 }
 function closeMap() { $("map").classList.remove("show"); menuUp = null; $("pause").style.visibility = ""; SFX.tick(); }
 let mapPick = null;                              // { w, opts: [[label, room]], sel }: where in world w to start
@@ -7623,7 +7623,7 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
 }
 function rideTick(dt) {                              // (every frame, paused or not)
   const P = rideS, Bl = $("proBlack"); P.t += dt; const fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); };
-  if (P.ph === "out") { fade(1, .8); if (P.a >= 1 && P.t > .9) { rideBuild(); P.ph = "in"; P.t = 0; $("skipHint").classList.add("pro", "show"); } }
+  if (P.ph === "out") { fade(1, .8); if (P.a >= 1 && P.t > .9) { releaseFade(); rideBuild(); P.ph = "in"; P.t = 0; $("skipHint").classList.add("pro", "show"); } }
   else if (P.ph === "in") { fade(0, 1.4); if (P.a <= 0) { P.ph = "drive"; P.t = 0; } }
   else if (P.ph === "drive") { const E = P.road && P.road.ev;
     if (E && E.kind !== "none" && E.ph !== "wait" && E.ph !== "done") rideEvTick(P, P.road, E, dt);   // (a stop: the drive's clock waits for it)
@@ -8473,10 +8473,16 @@ function goWorld(w) {
     } }
   $("wstats").classList.add("show"); wsUprise(S);
 }
+// leaving a world (the user, 2026-10-28: "when the level ends, it shows the map, but then shows back the end level spot you were in. once it fades out of the level,
+// the screen should not return to the level you just left"): the fade held on under the stats card as it goes, the map, the skip question, till La Guagua's black
+// or the next world takes over from it
+let fadeHold = false;
+function holdFade() { const F = $("fade"); F.classList.add("now", "on"); void F.offsetWidth; F.classList.remove("now"); fadeHold = true; }
+function releaseFade() { if (!fadeHold) return; fadeHold = false; $("fade").classList.remove("on", "msg"); }
 function statsGo() {                                  // (not in the first moment: a button still held from the fight doesn't skip it)
   if (!statsUp || statsUp.ask || performance.now() - statsUp.t0 < 900) return;
   if (statsUp.full && !statsUp.asked) { askShowdown(); return; }   // (pressed on before the bar filled: the question still comes first)
-  const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  const w = statsUp.w; statsUp = null; paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; holdFade();   // (out of the level for good: the fade under everything from here)
   const byRoad = w !== world && !!RIDE_KIT[w] && !!RIDE_KIT[world];   // (a world you've been to: the map, and the question, skip the ride? Free play as well)
   const go = rideTo(w) ? () => { $("wstats").classList.remove("show"); startRide(world, w, () => goWorldNow(w)); } : byRoad ? () => { $("wstats").classList.remove("show"); askSkip(world, w); } : () => goWorldNow(w);   // (the first time into a world: La Guagua there, the user 2026-10-26)
   if (story && w !== world && w < MAP_AT.length && world < MAP_AT.length && !(story.paths || []).includes(linkKey(world, w))) { $("wstats").classList.remove("show"); return mapPath(world, w, go); }   // (a way not yet drawn: the map first)
@@ -8507,7 +8513,7 @@ function goWorldNow(w) {                             // on into the next world: 
   const fromW = world; if (!story) freeSeen.add(w);
   if (story && fromW === 9 && w === 0 && !story.tale && !tale) {   // off the beach for the first time: the story so far first, after a moment of black (the user, 2026-10-25: "it should fade to black so there's a pause before the cutscene")
     transit = true; paused = true; $("fade").classList.add("on"); $("wstats").classList.remove("show");
-    setTimeout(() => { transit = false; startTale(() => goWorldNow(w)); setTimeout(() => $("fade").classList.remove("on"), 300); }, 1700); return; }
+    setTimeout(() => { transit = false; startTale(() => goWorldNow(w)); setTimeout(() => { $("fade").classList.remove("on"); fadeHold = false; }, 300); }, 1700); return; }
   if (story && STAGES[stage] && STAGES[stage].toWorld === w) (story.lastDoor || (story.lastDoor = {}))[fromW] = stage;   // (the door you left this world by)
   { const ns = arrivalRoom(w, fromW); if (ns > 0) return goWorldDoor(w, ns); }
   swapUnderFade(() => {
@@ -8564,7 +8570,7 @@ function swapUnderFade(work, msg) {
   setTimeout(() => {
     try { work(); warmFrame(); }
     catch (e) { console.error("room change failed", e); }
-    finally { F.classList.remove("on", "msg"); transit = false; }
+    finally { F.classList.remove("on", "msg"); transit = false; fadeHold = false; }
   }, 480);
 }
 function warmFrame() { renderer.compile(scene, camera); renderer.compile(actors, camera); render(0); }
@@ -13234,57 +13240,59 @@ function glosLeafStep(e, dt) {
   const hop = Math.floor((L.t - LEAF_GO) / LEAF_HOP); if (hop > L.hop && hop >= 1 && hop <= 3) { L.hop = hop; const [lx] = leafPath(L, hop * LEAF_HOP); dust(lx, groundAt(lx) ?? GROUND, 4); SFX.blop(); }   // (each landing)
   if (L.t >= leafEnd() + .22) { e.leaf = null; e.x = L.x1; e.y = L.y1; e.onGround = true; e.inv = .25; e.atkCd = Math.min(e.atkCd, .7); e.brainT = 0; e.sq = -.3; e.sqv = 0; puffs(e.x, e.y - 90, 6, 40, 160); SFX.whoosh(); }   // herself again
 }
-const GLOS_CRAWL_H = 100, GLOS_CLR_MAX = 340, GLOS_CRAWL_UP = 1.5;   // (under a ledge: how far below it she reaches · the highest ledge she'll take, so a jump still gets to her · her body that far off it, rig units)
+const GLOS_CRAWL_H = 100, GLOS_CLR_MAX = 340, GLOS_CRAWL_UP = 1.5;   // (on a ledge: how tall she is down on all fours · the highest ledge she'll go up on · her body that far off it, rig units)
+// up ON the ledge you're on (the user, 2026-10-28: "fighting glos, she went on a lower level under the floor but I was still able to fight her": she used to hang under
+// it, and your blows reached her through it). Now she goes up on top of it after you and crawls along it on all fours, your height, to be fought there
 function glosUnderSpot(e, p) {                       // a ledge to hang from: room to stand under it, near you
   let best = null;
   for (const q of PLATFORMS) { if (q.crumble !== undefined || q.w < 220) continue; const gy = groundAt(q.x + q.w / 2); if (gy === null) continue; const clr = gy - q.y;
-    if (clr < 215 || clr > GLOS_CLR_MAX || p.x < q.x - 240 || p.x > q.x + q.w + 240) continue; const d = Math.abs(q.x + q.w / 2 - e.x); if (!best || d < best.d) best = { q, d, clr }; }
+    if (clr < 215 || clr > GLOS_CLR_MAX || p.plat !== q || !p.onGround) continue; const d = Math.abs(q.x + q.w / 2 - e.x); if (!best || d < best.d) best = { q, d, clr }; }   // (the ledge you're stood on)
   return best;
 }
 function glosUnderGo(e, p) {
   if (e.leaf || e.under || e.dead || !e.onGround) return false; const B = glosUnderSpot(e, p); if (!B) return false;
-  const q = B.q, top = q.y + 14, h = GLOS_CRAWL_H;   // (crawling along its underside: that deep below it, her body flat, hands and feet up on it)
+  const q = B.q, top = q.y, h = GLOS_CRAWL_H;   // (crawling along its top: her feet on it, that tall down on all fours)
   e.under = { q, phase: "up", t: 0, x0: e.x, y0: e.y, x: clamp(e.x, q.x + 50, q.x + q.w - 50), hits: 0, hitT: -9, top, h, cd: .8, far: 0 }; e.atk = null; e.windup = 0; e.vx = e.vy = 0; e.dashT = 0; e.underCd = rand(7, 10);
   SFX.jump(); dust(e.x, e.y, 4); return true;
 }
 function glosUnderOff(e, how) {                      // 0: lets go, down she drops · 1: knocked off, down hard and dazed a moment · 2: the leap off the ledge's end, to the far side
   const U = e.under; if (!U) return; e.under = null; e.onGround = false; e.plat = null; e.move = null; e.atk = null;
-  const gy = groundAt(e.x) ?? GROUND; e.y = Math.min(U.top + U.h, gy - 10); puffs(e.x, U.top + U.h * .5, 5, 30, 140);   // (over and the right way up, in a burst of leaves, from where she hung)
+  const q = U.q, side = how === 2 ? U.dir : how === 1 ? (Math.sign(e.x - player.x) || e.dir) : (e.x < q.x + q.w / 2 ? -1 : 1);   // (off its end: the way she rushed, away from your blow, or the nearer end)
+  e.x = side < 0 ? q.x - 40 : q.x + q.w + 40; e.y = U.top; puffs(e.x, U.top - U.h * .5, 5, 30, 140);   // (past its end, up on her feet, in a burst of leaves, and down she goes)
   if (how === 2) { e.vx = U.dir * 560; e.vy = -260; e.dir = U.dir; e.sq = .3; e.sqv = 0; SFX.jump(); return; }
-  e.vx = 0; e.vy = how === 1 ? 260 : 80;
+  e.vx = side * 120; e.vy = how === 1 ? -120 : -200;
   if (how === 1) { e.hurtT = .9; e.flash = .14; shake = Math.max(shake, 5); SFX.thud(); puffs(e.x, U.top + 30, 6, 40, 180); e.atkCd = Math.max(e.atkCd, 1.4); }
 }
 function glosUnderStep(e, p, dt) {
   const U = e.under, q = U.q, D = e.def; U.t += dt; e.vy = 0; e.onGround = true; e.plat = null;
   if (!PLATFORMS.includes(q)) { glosUnderOff(e, 0); return; }
-  const bottom = U.top + U.h;                        // (where her head hangs to: e.y, the bottom of her box)
-  if (U.phase === "up") { const u = clamp(U.t / .38, 0, 1); e.x = lerp(U.x0, U.x, u); e.y = lerp(U.y0, Math.min(U.y0, U.top + D.h), u) - Math.sin(u * Math.PI) * 70; e.vx = 0;   // (up till her head meets its underside: then she's over, hanging from it)
-    if (u >= 1) { U.phase = "crawl"; U.t = 0; puffs(e.x, U.top + 10, 4, 30, 120); SFX.thud(); } return; }
-  e.y = bottom;
+  if (U.phase === "up") { const u = clamp(U.t / .42, 0, 1); e.x = lerp(U.x0, U.x, u); e.y = lerp(U.y0, U.top, u) - Math.sin(u * Math.PI) * 120; e.vx = 0;   // (a leap up on to it)
+    if (u >= 1) { U.phase = "crawl"; U.t = 0; puffs(e.x, U.top - 6, 4, 30, 120); SFX.thud(); } return; }
+  e.y = U.top;                                        // (her feet on its top: e.y, the bottom of her box)
   if (U.hits >= 3) { glosUnderOff(e, 1); return; }                 // three blows: off she comes
   if (U.hits === 2 && U.phase !== "rush" && time - U.hitT > .6) { U.phase = "rush"; U.t = 0; U.dir = Math.sign(p.x - e.x) || e.dir; SFX.whoosh(); }   // two, and no third: a rush for the end of it
   if (U.phase === "rush") { e.dir = U.dir; e.vx = U.dir * 560; e.x += e.vx * dt; e.phase += dt * 560 * bossStep(D.rig);
-    if (Math.random() < dt * 30) puffs(e.x, U.top + 8, 1, 10, 80);
+    if (Math.random() < dt * 30) puffs(e.x, U.top - 4, 1, 10, 80);
     if (e.x <= q.x + 16 || e.x >= q.x + q.w - 16) glosUnderOff(e, 2); return; }   // ...and off its end, over to the far side
   if (U.phase === "swipe") { e.vx = 0; e.move = "underswipe";
-    if (!U.hit && U.t >= .24) { U.hit = true; SFX.whoosh(); hzOwner = e; addHz({ x: e.x + e.dir * 34, y: bottom + 18, r: 48, life: .12 }); hzOwner = null; }   // (a swipe down at you: block it)
+    if (!U.hit && U.t >= .24) { U.hit = true; SFX.whoosh(); hzOwner = e; addHz({ x: e.x + e.dir * 60, y: U.top - 45, r: 48, life: .12 }); hzOwner = null; }   // (a swipe along it at you: block it)
     if (U.t >= .58) { U.phase = "crawl"; U.t = 0; U.cd = rand(.7, 1.2); U.hit = false; e.move = null; } return; }
-  const tx = clamp(p.x, q.x + 40, q.x + q.w - 40), d = tx - e.x, sp = 175; e.dir = Math.sign(p.x - e.x) || e.dir;   // creeping along it after you
+  const tx = clamp(p.x - (Math.sign(p.x - e.x) || e.dir) * 75, q.x + 40, q.x + q.w - 40), d = tx - e.x, sp = 175; e.dir = Math.sign(p.x - e.x) || e.dir;   // creeping along it after you (up to you, not into you)
   e.vx = Math.abs(d) < 6 ? 0 : Math.sign(d) * Math.min(sp, Math.abs(d) * 6); e.x += e.vx * dt; e.phase += dt * Math.abs(e.vx) * bossStep(D.rig);
-  U.cd -= dt; if (U.cd <= 0 && !p.dead && Math.abs(p.x - e.x) < 100 && p.y > U.top + 20) { U.phase = "swipe"; U.t = 0; SFX.charge(); }
-  U.far = Math.abs(p.x - (q.x + q.w / 2)) > q.w / 2 + 420 ? U.far + dt : 0; if (U.far > 1.4 || U.t > 9) glosUnderOff(e, 0);   // (you've gone off: so does she)
+  U.cd -= dt; if (U.cd <= 0 && !p.dead && Math.abs(p.x - e.x) < 110 && Math.abs(p.y - U.top) < 40) { U.phase = "swipe"; U.t = 0; SFX.charge(); }
+  U.far = p.plat !== q ? U.far + dt : 0; if (U.far > 1.4 || U.t > 9) glosUnderOff(e, 0);   // (you've gone off it: so does she)
 }
 // crawling along a ledge's underside (the user, 2026-10-28: "when she goes on the platforms, she should have a crawling animation on them. right now she kind of shrinks
 // into it"; she used to hang head down, squashed to fit): upside down, her body flat along it head first, hands and feet up on it, the diagonal pairs stepping as
 // she goes; her head turned to look down at you; the swipe, the arm on your side reaching forward and raking down
 function glosCrawl(e, r, U) {
-  r.__crawl = true; r.root.position.y = Y(U.top); r.root.scale.y = -Math.abs(r.root.scale.y);
+  r.__crawl = true; r.root.position.y = Y(U.top);   // (the right way up on top of it, 2026-10-28: no longer hung upside down under it)
   r.yaw.rotation.y = e.dir > 0 ? -.3 : -Math.PI + .3;   // (side on to you, her way along it: flat along the ledge, not lying out at the camera)
   r.tilt.rotation.set(0, 0, -Math.PI / 2); r.tilt.position.set(-2.5, GLOS_CRAWL_UP, 0);
   const ph = e.phase * 2.2, moving = Math.abs(e.vx) > 5, A = moving ? (U.phase === "rush" ? .6 : .45) : .08;
   r.arms.forEach((L, i) => L.rotation.set((i ? -1 : 1) * .25, 0, Math.PI / 2 + A * Math.sin(ph + i * Math.PI)));
   r.legs.forEach((L, i) => L.rotation.set((i ? -1 : 1) * .12, 0, Math.PI / 2 - .62 + A * .9 * Math.sin(ph + i * Math.PI + Math.PI)));
-  r.head.rotation.z = Math.PI / 2 + .8; if (r.tail[0]) r.tail[0].rotation.z += Math.PI;   // (her ponytail hanging down behind her, not up through the ledge)
+  r.head.rotation.z = Math.PI / 2 - .1;   // (her head up, looking along it at you)
   if (e.move === "underswipe") { const nA = r.arms.length > 1 ? r.arms[(r.arms[0].position.z >= 0) === (e.dir > 0) ? 0 : 1] : r.arms[0], u = U.t;
     nA.rotation.z = u < .24 ? lerp(Math.PI / 2, Math.PI / 2 + .9, u / .24) : lerp(Math.PI / 2 + .9, 4.4, clamp((u - .24) / .12, 0, 1)); }
 }
@@ -22537,7 +22545,7 @@ function frame(now) {                              // (the next frame is asked f
   KIT.animStep = mode === "play" && !edOpen && !castUp ? LOOK.anim || 0 : 0;   // (DEBUG, POSES: held in play only, not in the editor or the cast)
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
   try {
-    if (fadeEl.classList.contains("on")) { if ((fadeT += dt) > 3) { fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
+    if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
     pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
