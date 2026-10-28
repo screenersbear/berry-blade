@@ -9485,7 +9485,7 @@ function updatePlayer(dt) {
   if (upPend >= 0 && control && !p.upUsed && p.atkT >= 0 && p.atkT < UPW + .02 && time - atkPressT < UPW && !p.solo && !p.combo && (p.atkIdx || 0) === 0) { p.atkT = -1; p.atkKind = null; atkBuf = .12; }   // attack, then ↑ just after: that first swing becomes the up attack
   const sw = !!p.dive;                     // (in the deep's water: your combos as on the ground, any time; ↑ ↓ only swim. The user, 2026-10-24: "combat in the water doesn't work well. it feels like you have touch s platform or land to attack": it was the air's, one combo till you landed)
   const upAtk = atkBuf > 0 && !sw && (upPend >= 0 || UP_KEYS.some(k => keys[k]) || pad.du) && !p.upUsed;   // ↑ and attack together (either one first), or attack with ↑ held down: the rising hit (once till you land again)
-  if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto) jumpBuf = .12; }   // ↑ on its own: a jump (a beat late, in case attack was coming)
+  if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = .12; }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
   const upFresh = () => { const f = p.onGround || time - (p.jumpT ?? -9) < .14; if (f) { jumpBuf = 0; p.coyote = 0; p.jcharging = false; p.jcharge = 0; } return f; };   // (↑ is a jump key too: pressed with attack, the hit's own lift takes the jump's place)
   if (cat) {                              // on the ground the cards swim out in front (tap again: they swirl); in the air, card spin then card dive
     if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop) {
@@ -9500,6 +9500,7 @@ function updatePlayer(dt) {
     const list = p.onGround || sw ? SET.ground : SET.air;
     if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop) {
       if (p.atkT < 0 && !sw && (p.floatB || (!p.onGround && held.down)) && SET.down) { atkBuf = 0; p.floatB = false; p.bigJ = 0; p.chain = null; startStrike(p, SET.down); }   // floating in the bubble: straight down
+      else if (p.atkT < 0 && upAtk && SET.upChain && p.onGround && !sw && upLate(p)) { atkBuf = 0; jumpBuf = 0; upPend = -1; p.upUsed = true; upHopStart(p); }   // ↑ + attack again just after the launcher, the one launched still up there: the crouch and jump up after it (the user, 2026-10-28: "if they press up and attack a second time ... jumps up with the enemy")
       else if (p.atkT < 0 && upAtk && SET.up) { atkBuf = 0; jumpBuf = 0; upPend = -1; p.upUsed = true; const fresh = upFresh(), air = !p.onGround, hop = KIT.STRIKES[SET.up].hop;
         if (air || !SET.upChain) { p.chain = null; startStrike(p, air ? SET.up : GROUND_UP[SET.up] || SET.up); p.solo = true; if (air) { p.vy = fresh ? hop : Math.min(p.vy, hop * .85); } }   // (in the air it lifts you too)
         else { p.chain = { kind: "up", list: SET.upChain, needHit: true }; startStrike(p, SET.upChain[0], 0); } }   // on the ground: the launcher, the first of three
@@ -9509,7 +9510,7 @@ function updatePlayer(dt) {
         const L = (air ? (fwd ? SET.air2 : SET.air1) : (fwd ? SET.groundB : SET.ground)) || list, again = p.chain && p.chain.kind === kind && time - (p.lastStrikeT ?? -9) < .3 && (!p.chain.needHit || p.chainHit);
         const nx = again && (p.lastIdx ?? 0) + 1 < L.length ? (p.lastIdx ?? 0) + 1 : 0;
         if (!(air && nx === 0 && (p.airN || 0) > 0)) { p.chain = { kind, list: L, needHit: air }; startStrike(p, L[nx], nx); } }   // (one air combo a jump: once one's landed a blow, another can't start till you're down)   // (pressed again just after one: the next in it)
-      else if (p.chain && p.atkIdx < p.chain.list.length - 1 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; }   // (the air's single rising hit is a move on its own: nothing chains off it)
+      else if (p.chain && p.atkIdx < p.chain.list.length - 1 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; if (upAtk) upPend = -1; }   // (the air's single rising hit is a move on its own: nothing chains off it)   // (its ↑ part of the press: no jump of its own)
     }
   }
   if (p.upHop) { const H = p.upHop, U = KIT.STRIKES.uphop; H.t += dt; p.vx = approach(p.vx, 0, 2400 * dt); if (atkBuf > 0) H.queued = true; atkBuf = 0; jumpBuf = 0;   // up after the launched one (the user, 2026-10-28): down into the knees, a real jump up to it, then the hit (a press on the way up: the blow after, queued)
@@ -9530,7 +9531,7 @@ function updatePlayer(dt) {
       if (p.atkT >= (S.chain ?? S.dur)) { const c = p.combo; if (++c.idx < c.level) startMove(p, c.list[c.idx]); else { p.combo = null; p.atkT = -1; } }
     } else if (cat && p.atkIdx === 0 && p.queued && p.atkT >= (S.chain ?? S.dur)) startMove(p, (KIT.CAT_GROUND.includes(p.atkKind) ? KIT.CAT_GROUND : KIT.CAT_AIR)[1], 1);
     else if (!cat && p.queued && p.chain && p.atkT >= (p.chain.kind === "up" && p.atkIdx === 1 ? Math.min(S.chain ?? S.dur, .3) : S.chain ?? S.dur) && p.chain.list[p.atkIdx + 1] && (!p.chain.needHit || p.chainHit)) {
-      if (p.chain.kind === "up" && p.atkIdx === 0 && p.onGround && !p.combo) { p.upHop = { t: 0, kind: p.chain.list[1], up: false }; p.atkT = -1; p.atkKind = null; p.queued = false; const tb = upHopTarget(p); if (tb) tb.hoverT = KIT.STRIKES.uphop.go + .05; }   // (up after the launched one: a crouch and a jump first, UPHOP)
+      if (p.chain.kind === "up" && p.atkIdx === 0 && p.onGround && !p.combo) { p.atkT = -1; p.atkKind = null; p.queued = false; upHopStart(p); }   // (up after the launched one: a crouch and a jump first, UPHOP)
       else startStrike(p, p.chain.list[p.atkIdx + 1], p.atkIdx + 1); }   // queued: on into the next of this combo (after the jump up, while still up there)
     else if (p.atkT >= S.dur || (p === player && !cat && !p.queued && p.onGround && S.hits && S.hits.length && p.atkT > S.hits[S.hits.length - 1].t1 + .08 && (held.left || held.right || jumpBuf > 0))) {   // (its last blow landed: a move off, or a jump, ends what's left of its follow-through. The user, 2026-10-25: "feels like delayed when the player thinks they can move again")
       if ((cat ? p.atkIdx === 0 : p.chain && p.atkIdx < p.chain.list.length - 1) && !p.solo) { p.lastStrikeT = time; p.lastIdx = p.atkIdx; } p.atkT = -1; p.solo = false; }
@@ -9858,6 +9859,10 @@ function syncSwingTrail() {
 const HANG_AIR = 1.1;                                // how long an air combo can hold you up there, a jump (then you come down as ever): 1.6 at .08 gravity till 2026-10-26, now 1.1 at .3 (not floating)
 const UPHOP_HIT_VY = 240, UPHOP_H = 130, UPHOP_MIN = 90, UPHOP_MAX = 230;   // (the jump up after a launch, charkit STRIKES.uphop: its blow once you're slowing to the top; how high: up to the one you launched, else UPHOP_H)
 function upHopTarget(p) { let best = null, bd = 260; for (const b of baddies) { if (b.dead || b.gone || b.onGround || !(b.juggleT > 0)) continue; const d = Math.abs(b.x - p.x); if (d < bd) { bd = d; best = b; } } return best; }   // (the launched one: up in the air, nearest)
+function upHopStart(p) { p.upHop = { t: 0, kind: p.chain.list[1], up: false }; const tb = upHopTarget(p); if (tb) tb.hoverT = KIT.STRIKES.uphop.go + .05; }   // (the launcher's follow-up: down into the crouch, the one up there hung where it is)
+const UPHOP_LATE = .6;                               // (↑ + attack again this soon after the launcher's over: still its follow-up)
+const upLate = p => !!(p.chain && p.chain.kind === "up" && (p.lastIdx ?? 0) === 0 && time - (p.lastStrikeT ?? -9) < UPHOP_LATE && upHopTarget(p));
+const upFollow = p => !!(p.onGround && (p.upHop || (p.chain && p.chain.kind === "up" && p.atkT >= 0 && p.queued)));   // (the launcher's follow-up queued or under way: a ↑ pressed with it isn't a jump)
 const upCarry = b => !!(player && player.chain && player.chain.kind === "up" && player.atkT >= 0 && !player.onGround && Math.abs(b.x - player.x) < 160);   // (the up chain's one you've hit, up there: kept at your height till its last blow, 2026-10-28)
 const upHopRise = (p, b) => clamp(b ? p.y - b.y + (b.h || 60) * .5 - (p.rig.heightPx || 100) * .55 + 10 : UPHOP_H, UPHOP_MIN, UPHOP_MAX);   // (your chest up level with its middle)
 const LAUNCH_VY = 470, LAUNCH_HANG = .55;            // (launched: up about a jump's height, floating at the top a while for you to jump up after: a touch higher and longer since the crouch before your jump, 2026-10-28; was 440, .4)
