@@ -602,7 +602,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261028q"></script>
+<script src="charkit.js?v=20261028r"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -1767,7 +1767,8 @@ function syncFoe(e, r, dt = 0) {
   // a strike's wind-up building to the end and its follow-through
   const ez = u => u * u * (3 - 2 * u), run = walking ? e.runK || 0 : 0, stride = r.stride * (walking ? bossStrideK(e) : 1);
   const sk = e.skidK || 0, md = Math.sign(e.vx) * e.dir || 0, wu = crouch ? (e.windup0 ? ez(clamp(1 - e.windup / e.windup0, 0, 1)) : 1) : 0;
-  const lk = e.onGround && (e.landT ?? 9) < .32 ? (e.landK || .5) * (1 - e.landT / .32) ** 2 : 0;
+  const lk = e.onGround && (e.landT ?? 9) < .44 ? (e.landK || .5) * (e.landT < .05 ? e.landT / .05 : (1 - (e.landT - .05) / .39) ** 2) : 0;   // (into the knees, and slowly back up out of them)
+  const hs = !walking && (e.haltT ?? 9) < .7 ? Math.sin(e.haltT * 12) * Math.exp(-e.haltT * 5) * (e.haltK || 0) : 0, hpl = !walking && (e.haltT ?? 9) < .7 ? Math.exp(-e.haltT * 6) * Math.min(1, e.haltT / .05) * (e.haltK || 0) : 0;   // (the halt's sway, and the lead foot planted)
   const A0 = charge ? ATTACKS[e.move] : null, kc = A0 ? ez(clamp(1 - e.atkTm / A0.charge, 0, 1)) : 0;
   const ka = act ? (e.actT < .07 ? ez(e.actT / .07) : 1 - .55 * ez(clamp((e.actT - .07) / .45, 0, 1))) : 0;
   // standing: its own idle (BOSS_IDLE: breathing in slow and out quicker, the weight from foot to foot, knees soft, the guard up) and its gestures
@@ -1780,11 +1781,12 @@ function syncFoe(e, r, dt = 0) {
   // torso: a fighter's stoop, leaning into the walk (right into a sprint) and rolling over whichever foot is planted; breathing when it stands still
   let lean = sty.hunch + (walking ? sty.walkLean * w * fw * (1 + 2.2 * run) + Math.sin(ph * 2) * .025 * (1 + run) : Math.sin(ck * 1.8) * .014 * (1 - ik) - breath * .5 * ik + prof.low * 1.4 * ik) + G.lean;
   if (dash) lean += md > 0 ? .3 : -.2;                                    // a dash: low into a lunge, or thrown back on a backstep
-  if (!e.atk && !hurt) lean += (e.accLean || 0) * .85;                  // into a burst of speed, rocking back on the brakes
+  if (!e.atk && !hurt) lean += (e.accLean || 0) * (!walking && (e.haltT ?? 9) < .6 ? .1 : .85);   // into a burst of speed, rocking back on the brakes (not in a halt: that carries it on forward)
   lean -= sk * md * .2;                                                  // a skid: thrown back over its heels
   if (crouch) lean += .1 + .16 * wu;                                     // gathering for a jump...
   if (air) lean += (rising ? .05 : -.04) + clamp(e.vx * e.dir / 1100, -.12, .16);   // ...and into the leap's way
   lean += .16 * lk;                                                       // a landing: over its knees, then up out of it
+  if (!e.atk && !hurt) lean += .8 * hs;                                   // a run stopped short: on past upright, back, settled
   if (charge) lean -= .22 * sty.wind * (.4 + .8 * kc);                    // rear back, more and more...
   if (act) lean += .3 * sty.wind * ka;                                   // ...throw the weight into it, and settle
   if (hurt) lean -= e.dead ? .38 : .3;
@@ -1797,7 +1799,7 @@ function syncFoe(e, r, dt = 0) {
   // tucked in the air, deep in a jump's wind-up and a landing, the rear one loaded for a strike, the front one on a lunge
   const knee = r.legs.map((L, i) => { const s = i ? -1 : 1;
     let k = walking ? .1 + (sty.knee || 0) + Math.max(0, s * cw) * .8 * w * (1 + .5 * run) + .25 * run : air ? (rising ? .75 : .3) : hurt ? .35 : .14 + ik * (prof.knee + Math.max(0, -s * ws) * .25);
-    k += .7 * wu + .6 * lk + (charge ? (s > 0 ? .05 : .4) * kc : 0) + (act ? (s > 0 ? .35 : .1) * ka : 0) + G.kn[i];
+    k += .7 * wu + .6 * lk + (s > 0 ? .35 : .1) * hpl + (charge ? (s > 0 ? .05 : .4) * kc : 0) + (act ? (s > 0 ? .35 : .1) * ka : 0) + G.kn[i];
     if (dash) k += md > 0 ? (s > 0 ? .55 : .05) : .45; return Math.max(0, k); });
   const kneeDrop = r.shins && r.shins.some(Boolean) ? hip * knee.reduce((a, k) => a + (1 - (Math.cos(k * .45) + Math.cos(k * .55)) / 2), 0) / Math.max(1, knee.length) : 0;   // (bent knees: the body that much lower, feet on the floor)
   let by = walking ? hip * (Math.cos(stride * sw) - Math.cos(stride)) * (1 - .7 * run) + r.bobAmt * .6 * (.5 + .5 * Math.cos(2 * ph)) * w * (1 - .5 * run) + run * r.bobAmt * 1.3 * (Math.abs(sw) - .45)
@@ -11625,6 +11627,9 @@ function bossFeel(e, dt) {                           // the heroines' weight for
   e.skidK = approach(e.skidK || 0, e.onGround && ax > 150 && e.braking ? 1 : 0, dt * 10);
   e.windup0 = e.windup > 0 ? Math.max(e.windup0 || 0, e.windup) : 0;   // (how deep into a jump's wind-up)
   e.landT = (e.landT ?? 9) + dt;
+  e.mRun = e.onGround && !e.atk && !(e.hurtT > 0) && !(e.dashT > 0) && !e.braking ? Math.max(ax, (e.mRun || 0) - dt * 900) : e.braking ? e.mRun || 0 : 0;   // a run stopped short (momentum, 2026-10-28): carried on past upright, then back
+  if (ax < 40 && e.onGround && (e.mRun || 0) > 230) { e.haltT = 0; e.haltK = clamp((e.mRun - 150) / 380, .35, 1); e.mRun = 0; }
+  e.haltT = (e.haltT ?? 9) + dt;
 }
 function bossPlan(e, D) { const last = e.lastMoves || [];
   if (D.more && D.more.length) { const L = [D.atk, D.atk2, ...D.more].filter(m => m && (!ATTACKS[m] || !ATTACKS[m].ok || ATTACKS[m].ok(e))), ok = last.length >= 2 && last[0] === last[1] ? L.filter(m => m !== last[0]) : L; return ok[Math.floor(Math.random() * ok.length)]; }   // (more: a boss's further moves, in the turn)
@@ -21532,7 +21537,7 @@ function updateBaddy(b, dt) {
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
   if (GAPS.length && !b.dead && !fly && b.y > Math.min(SINK - 4, FLOOR_LOW + 110) && overGap(b.x) && !b.T.swim) { fallFx(b.x, .9); b.hp = 0; b.dead = true; b.deathT = 0; b.vx = 0; b.sunk = true; }   // into the sea (or down a pit, out of reach): popped
   if (!fly && !b.dead && !b.plat && !b.under) { const g = groundAt(b.x); if (g !== null && b.y > g + 24) { b.y = g; b.vy = Math.min(b.vy, 0); b.onGround = true; } }   // (never left inside the earth)
-  if (b.landV > 0) { b.sq = -clamp(b.landV / 2000, .1, .35); b.sqv = 0; if (T.move === "hop" && !b.atk) b.vx *= .15; if (b.landV > 450) dust(b.x, b.y, 3); }
+  if (b.landV > 0) { b.sq = -clamp(b.landV / 2000, .1, .35); b.sqv = 0; if (b.landV > 200) { b.mLandT = 0; b.mLandK = clamp(b.landV / 900, .3, 1); } if (T.move === "hop" && !b.atk) b.vx *= .15; if (b.landV > 450) dust(b.x, b.y, 3); }
   if (!b.onGround) b.plat = null;
   if (b.onGround) b.phase += dt * Math.abs(b.vx) * bbStep(b);
   spring(b, dt);
@@ -21771,9 +21776,17 @@ function syncBaddy(b, dt) {
   const wind = b.atk === "wind", go = b.atk === "go", hurt = b.hurtT > 0 || b.dead;
   let lean = walking ? .12 : 0;                    // waddle and lean into the walk, rear back to wind up, throw forward on the move
   if (wind) lean -= .22; if (go) lean += .3; if (hurt) lean -= .4; if (air && !hurt) lean += clamp(-b.vy * .00025, -.15, .2);
+  if (dt > 0) { const ax = Math.abs(b.vx), acc = (b.vx - (b.prevVx || 0)) / dt * (b.dir || 1); b.prevVx = b.vx;   // momentum (2026-10-28): leaning into a start, carried on past a stop, a landing in the knees
+    b.accLeanV = (b.accLeanV || 0) + ((clamp(acc * .0001, -.25, .22) * (b.onGround ? 1 : .3) - (b.accLean || 0)) * 140 - (b.accLeanV || 0) * 14) * dt; b.accLean = (b.accLean || 0) + b.accLeanV * dt;
+    b.mRun = b.onGround && !hurt ? Math.max(ax, (b.mRun || 0) - dt * 700) : 0;
+    if (ax < 40 && (b.mRun || 0) > 110) { b.haltT = 0; b.haltK = clamp((b.mRun - 60) / 200, .4, 1); b.mRun = 0; }
+    b.haltT = (b.haltT ?? 9) + dt; b.mLandT = (b.mLandT ?? 9) + dt; }
+  const hs = Math.abs(b.vx) < 45 && b.haltT < .7 ? Math.sin(b.haltT * 12) * Math.exp(-b.haltT * 5) * b.haltK : 0, lk = b.onGround && b.mLandT < .45 ? b.mLandK * (b.mLandT < .06 ? b.mLandT / .06 : (1 - (b.mLandT - .06) / .39) ** 2) : 0;
+  if (!hurt && !wind && !go) lean += (b.accLean || 0) * (b.haltT < .6 ? .1 : .7) + .6 * hs + .22 * lk;   // (in a halt the brakes don't rock it back: it's carried on forward)
   const ww = b.walkW = approach(b.walkW || 0, walking ? 1 : 0, dt * 7), cph = Math.cos(ph);   // (the feet ease into the walk and back out of it)
   r.tilt.rotation.z = -lean; r.tilt.rotation.x = walking ? -cph * .11 : Math.sin(t * 1.7) * .03;                  // rolls over onto the planted foot
   r.bob.position.y = walking ? (Math.abs(cph) - .35) * .07 : wind ? -.04 : Math.sin(t * 2.4) * .01;              // up as the feet pass, down as each one lands
+  r.bob.position.y -= .06 * lk + .015 * Math.abs(hs);   // (down into a landing, and a stop)
   r.feet.forEach((f, i) => { const q = ph + i * Math.PI; f.position.x = f.userData.x0 + Math.sin(q) * FOOT_SWEEP * ww; f.position.y = f.userData.y0 + Math.max(0, Math.cos(q)) * .07 * ww; });
   r.arms.forEach((A, i) => { A.rotation.z = walking ? -Math.sin(ph + i * Math.PI) * .5 : Math.sin(t * 2 + i) * .08 + (wind ? -.9 : go ? 1.2 : 0) + (air ? .6 : 0); });
   r.legs.forEach((L, i) => { L.rotation.z = walking ? Math.sin(ph * (r.feet.length ? 1 : 1.4) + i * Math.PI) * .55 : air ? (i ? -.4 : .4) : 0; });   // (legs with feet on: in step with them)

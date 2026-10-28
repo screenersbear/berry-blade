@@ -2366,7 +2366,34 @@ const RUN_STANCE = .3;                       // tall run, per leg: [phase, thigh
 const RUN_KEYS = [[0, .62, .1, .25], [.1, .3, .38, .05], [.2, -.1, .3, 0], [.3, -.52, .16, -.4], [.4, -.88, .32, -1.0], [.54, -.5, 1.55, -.8], [.68, .35, 2.05, -.35], [.82, 1.08, 1.15, .1], [.93, .95, .32, .3], [1, .62, .1, .25]];
 const WALK_STANCE = .6;
 const WALK_KEYS = [[0, .42, .06, .3], [.12, .28, .2, 0], [.3, 0, .08, 0], [.5, -.32, .14, -.32], [.6, -.4, .5, -.7], [.72, -.12, 1.0, -.45], [.85, .3, .78, .02], [.95, .45, .16, .3], [1, .42, .06, .3]];
-const GATHER = .18;                                   // the run's gather: how long (about two drawn frames, then into the stride)
+const GATHER = .18;
+// momentum (the user, 2026-10-28: "a sort of halting and moving forward and back in to position when they abruptly stop a run, or a recovering from slight crouch
+// animation when landing and standing up to idle ... add similar momentum frames to all enemies, bosses, and buddies (remember pets are also included in buddies)"):
+// a hard stop out of a run carries the body on past upright, back, and settles (HALT: a damped sway, the lead foot planted out in front to stop on); a landing sinks
+// into the knees and stands back up out of them, a touch tall at the end (LAND). Every charkit body: the heroines, buddies, June, the pets
+const HALT = { T: .7, w: TAU / .52, z: 5 }, LAND = { T: .5, dn: .07 };
+function momentum(p, dt, sp) {                         // (the triggers: a landing, a run stopped short)
+  const busy = p.atkT >= 0 || p.hurtT > 0 || p.climb || p.sit || p.crawl || p.dodge || p.tackle || p.zip || p.skid || p.swim || p.dive;
+  if (!p.onGround) { p.mAirVy = Math.max(p.mAirVy || 0, p.vy || 0); p.mWasG = false; return; }
+  if (p.mWasG === false) { const v = p.mAirVy || 0; if (v > 240 && !busy) { p.mLandT = 0; p.mLandK = clamp((v - 160) / 1000, .25, 1); } p.mAirVy = 0; }
+  p.mWasG = true;
+  p.mRun = busy ? 0 : Math.max(sp, (p.mRun || 0) - dt * 900);
+  if (sp < 45 && p.mRun > 230) { p.mHaltT = 0; p.mHaltK = clamp((p.mRun - 120) / 230, .5, 1); p.mRun = 0; }
+}
+function momentumPose(p, o, dt, legs, cat) {           // (laid over the pose, after the springs: these are the frames themselves)
+  if (p.mHaltT != null) { const t = p.mHaltT += dt;
+    if (t > HALT.T || Math.abs(p.vx) > 60 || !p.onGround) p.mHaltT = null;   // (off again, or up: it's over)
+    else { const s = Math.sin(t * HALT.w) * Math.exp(-t * HALT.z) * p.mHaltK, pl = Math.exp(-t * 6) * Math.min(1, t / .05) * p.mHaltK;
+      if (cat) { o.lean += .6 * s; o.arch += .25 * s; o.tailBase += .7 * s; o.bodyY -= .08 * Math.abs(s); o.armF += .45 * pl; o.hatTilt -= .15 * s; }
+      else { o.lean += .95 * s; o.arch += .2 * s; o.headRot -= .3 * s; o.bodyY -= .1 * Math.abs(s); o.armF += 1.1 * s; o.armB += .9 * s; o.elbF += .25 * Math.abs(s); o.elbB += .25 * Math.abs(s);
+        o.fNx += .16 * pl * legs; o.fFx -= .08 * pl * legs; } } }
+  if (p.mLandT != null) { const t = p.mLandT += dt;
+    if (t > LAND.T || !p.onGround) p.mLandT = null;
+    else { const u = t < LAND.dn ? Math.sin(t / LAND.dn * Math.PI / 2) : 1 - sstep(LAND.dn, LAND.T * .78, t), tall = t > LAND.T * .6 ? Math.sin((t - LAND.T * .6) / (LAND.T * .4) * Math.PI) * .12 : 0;
+      const k = p.mLandK * (1 - .65 * (p.gaitAmt || 0)) * (u - tall);   // (running on: only a dip in the stride)
+      if (cat) { o.bodyY -= .24 * k; o.arch += .2 * k; o.lean += .12 * k; o.tailBase += .3 * k; o.armF += .25 * k; o.elbF += .3 * k; }
+      else { o.bodyY -= .2 * k; o.lean += .26 * k; o.arch += .08 * k; o.headRot -= .05 * k; o.fNx += .12 * k * legs; o.fFx -= .1 * k * legs; o.armF += .35 * k; o.armB += .3 * k; o.elbF += .35 * k; o.elbB += .3 * k; } } }
+}                                   // the run's gather: how long (about two drawn frames, then into the stride)
 const CROUCH = { lean: .38, arch: .12, bodyY: -.24, fNx: .24, fFx: -.2, fNy: 0, fFy: 0, armF: .6, elbF: 1.5, armB: .4, elbB: 1.6, headRot: -.1 };
 function updatePoseHuman(p, dt) {
   p.airLegs = false;
@@ -2491,6 +2518,7 @@ function updatePoseHuman(p, dt) {
       o.bodyY += .07 * up - .15 * down; o.lean += .2 * up + .32 * down; o.arch -= .06 * up; o.headRot -= .06 * up;
       o.armF = lerp(o.armF, -.55, up * .6); o.armB = lerp(o.armB, .65, up * .6); o.fNy += .07 * up * Bd.legs; }
   }
+  momentum(p, dt, sp); if (a < 0 && p.hurtT <= 0 && !p.block && !p.crouch && !m.float) momentumPose(p, o, dt, Bd.legs, false);
   tackleOver(p, o, false);
   if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, tkKind(p, "tkdig"), p.tkCharge ? p.tkCharge.t : 9) || TKDIG_H; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
   if (p.onGround && p.sq < 0 && a < 0 && !m.float) { o.bodyY += p.sq * .3; o.lean -= p.sq * .15; }   // landing: the knees take the weight
@@ -2589,6 +2617,7 @@ function updatePoseCat(p, dt) {
   const CM = p.atkT >= 0 && p.atkKind && CAT_MOVES[p.atkKind];          // Tocsin's keyed moves lay over the pose
   if (CM) { const a = p.atkT, w = p.keysFull ? 1 : clamp(Math.min(a / .025, (CM.dur - a) / .06), 0, 1), KK = keysOf(p, CM);
     for (const k in KK) { let v = kv(p, KK, k, a); if (k === "spin" || k === "flip" || k === "wheel") v = Math.atan2(Math.sin(v), Math.cos(v)); o[k] = lerp(o[k] ?? 0, v, w); } }
+  momentum(p, dt, sp); if (p.atkT < 0 && p.hurtT <= 0 && !p.block && !p.crouch) momentumPose(p, o, dt, Bd.legs, true);
   tackleOver(p, o, true);
   if (p.tkDig > 0 && p.atkT < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, "tkdig", p.tkCharge ? p.tkCharge.t : 9) || TKDIG_C; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "tailBase", "tailCurl", "hatTilt"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .12 * k; }   // (stalking forward, still crouched)
   if (p.onGround && p.sq < 0 && p.atkT < 0) { o.bodyY += p.sq * .35; o.arch -= p.sq * .2; }   // landing: down on his haunches a moment
