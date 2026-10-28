@@ -183,7 +183,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch", dn_sword: "down stab", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
-  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step",
+  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
@@ -207,6 +207,7 @@ function movesFor(sp) {                                          // every move t
   add("Tackle (attack + block)", "tackle", "", T); add("Charged tackle (hold attack + block)", "tkdig", "", T);
   list("Charged tackle (hold attack + block)", (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
+  if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
   add("As a berry buddy: special", bsp, "", T);
   return out;
 }
@@ -275,8 +276,9 @@ let onion = null, onionOn = true;
 function moveAt(kind, S, u) {                                    // the state that plays a move at u (-1: between loops). The tackle, the dig-in and the back-step are
   const pm = S.pose && u >= 0 ? kind : null;                     // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
   const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
-  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep", vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
-    tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null };
+  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb", vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
+    tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,
+    climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0 };   // (the climb: up her rock, as the game plays it)
 }
 function handlesAt(times) {                                      // every dot's place (in the world) at other moments of the picked move; the pose is put back after
   const kind = isMove() ? moveKind() : st.atkKind, S = kind && moveDef(kind), M = rig.body.matrixWorld;

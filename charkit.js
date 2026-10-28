@@ -1703,7 +1703,8 @@ function swimPose(p, t) {                          // swimming (the deep, 2026-1
   return { lean: .05, arch: .1 * sp, bodyY: 0, headRot: -.35 * sp, armF: 1.1 + 1.6 * sp + .7 * s2, elbF: .35 + .3 * c2, armB: 1.1 + 1.6 * sp - .7 * s2, elbB: .35 - .3 * c2,
     spF: .3, spB: .3, fNx: -.04, fNy: .12 + .1 * s, fFx: -.1, fFy: .12 - .1 * s, fP: -.6 };
 }
-function wallPose(p) {                             // up a bare wall (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
+function wallPose(p) {                             // up a bare wall: its keys (STRIKES.wallclimb, 2026-10-27), else as it was (the user, 2026-10-22): "an almost bear like stance with her arms bent and pointed up where she will punch the
+  const K = STRIKES.wallclimb; if (K && K.keys) { const P = poseKeys(p, "wallclimb", ((((p.climbPh || 0) / TAU) % 1) + 1) % 1 * K.dur); if (P) return P; }
   const ph = p.climbPh || 0, s = Math.sin(ph), a = Math.max(0, s), b = Math.max(0, -s), hit = Math.pow(Math.abs(Math.cos(ph)), 6);   // wall with her gauntlet ... to cling, and then climb up with the other": elbows out,
   return { lean: .2, arch: .08, bodyY: -.04 + .02 * hit, headRot: -.1,                                           // close in against it, one arm driving straight up into the rock as the other hauls
     armF: 2.35 + .55 * a, elbF: 1.25 - 1.0 * a, armB: 2.35 + .55 * b, elbB: 1.25 - 1.0 * b, spF: .3, spB: .3,
@@ -2141,7 +2142,18 @@ Object.assign(STRIKES, {
   tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_H, 1) },
   backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1, fFx: -.16, fP: -.2 }, .5),
     lean: bkCurve(0, -.32), arch: bkCurve(0, -.12), fNx: bkCurve(.2, .08), fNy: bkCurve(.1, .14), fFy: bkCurve(.06, .1) } },
+  // up a rock wall, one cycle of climbPh (the user, 2026-10-27: "whenever camila climbs a wall, she should be punching hard with her gauntlet hand and then climbing with the other
+  // hand and alternate like that"): F is her weapon hand (swapped onto whichever side it's on). The gauntlet pulled in tight, then driven hard straight up into the rock
+  // (WALL_HIT: the game's crunch), held there as she hauls up past it; the other hand reaching up to take hold above, a knee coming up under each in turn
+  wallclimb: { dur: 1, pose: true, keys: {
+    armF: [[0, 1.75], [.12, 1.45], [.24, 3.05], [.32, 2.92], [.55, 2.7], [.8, 2.05], [1, 1.75]], elbF: [[0, 1.85], [.12, 2.25], [.24, .05], [.32, .25], [.55, .6], [.8, 1.45], [1, 1.85]],
+    armB: [[0, 2.85], [.24, 2.7], [.45, 1.95], [.55, 1.8], [.74, 2.95], [1, 2.85]], elbB: [[0, .4], [.24, .6], [.45, 1.6], [.55, 1.75], [.74, .3], [1, .4]],
+    spF: [[0, .5], [.12, .58], [.24, .22], [.4, .3], [.8, .45], [1, .5]], spB: [[0, .3], [.45, .48], [.55, .5], [.74, .32], [1, .3]],
+    lean: [[0, .2], [.13, .17], [.24, .29], [.4, .21], [1, .2]], arch: [[0, .08], [.24, .14], [.4, .08], [1, .08]], bodyY: [[0, -.04], [.24, -.02], [.5, -.04], [.74, -.03], [1, -.04]],
+    headRot: [[0, -.1], [.2, -.16], [.32, -.08], [1, -.1]], fNx: [[0, .14], [1, .14]], fFx: [[0, .1], [1, .1]], fP: [[0, -.22], [1, -.22]],
+    fNy: [[0, .1], [.24, .03], [.5, .04], [.76, .23], [1, .1]], fFy: [[0, .1], [.26, .23], [.5, .04], [.76, .03], [1, .1]] } },
 });
+const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
   tkdig: { dur: 1, pose: true, screen: true, keys: flatKeys(TKDIG_C, 1) },
@@ -2228,7 +2240,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
-  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0;   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
+  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb);   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
   for (const key in T) {
     if (p.pose[key] === undefined) p.pose[key] = T[key];
     if (SPRUNG.has(key)) {
@@ -2940,7 +2952,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, {
   build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
