@@ -2062,6 +2062,24 @@ function propFeet(p, two) {
   const rim = (x, d) => { for (let i = 8; i < 600; i += 8) if (groundAt(x + d * i) !== null) return x + d * i; return null; };
   return { xs, rims: [rim(p.x, -1), rim(p.x + p.w, 1)].filter(x => x !== null) };
 }
+// the forest filled in behind (the user, 2026-10-28: "in the background, it looks like a stylistic choice to have the trees sort of floating, but with the backdrop being also
+// light, it looks unfinished. is it possible to make it look more filled in and not like the whole backdrop didn't load?"): the forest floor on back under the far trees
+// (they'd stood on nothing past the path's ground, their feet lost in the fog), undergrowth along it, and two far stands of trees, their crowns packed together, in deep
+// greens the fog turns sage: between the trunks, more forest, not the pale sky. Rows B and C (row A looks out over the canopy below; the ravine has its own floor)
+const FAR_C = { floor: "#4a733a", bush: ["#2f5c38", "#3a6b40", "#467845"], crown: ["#28522f", "#315c37", "#3d6a40", "#4a7848"], bark: ["#54463a", "#6a5d4f", "#8a8476"] };
+function farForest(par, bgY, rng) {
+  const R = (a, b) => a + rng() * (b - a), q = new THREE.Quaternion(), e3 = new THREE.Euler(), m4 = new THREE.Matrix4(), V = (x, y, z) => new THREE.Vector3(x, y, z);
+  if (bgY <= .5) par.add(at(mk(new THREE.BoxGeometry(WX + 160, .45, 72), null, { mat: toon(FAR_C.floor), ol: 0 }), WX / 2, bgY - .24, -45.5));   // (the forest floor on back, from the path's ground's back edge)
+  const inst = (geo, cols, list) => cols.forEach((c, i) => { const L = list.filter(o => o.c === i); if (!L.length) return; const im = new THREE.InstancedMesh(geo, toon(c), L.length);
+    L.forEach((o, j) => { q.setFromEuler(e3.set(0, o.ry || 0, o.rz || 0)); m4.compose(V(o.x, o.y, o.z), q, V(o.sx, o.sy, o.sz)); im.setMatrixAt(j, m4); }); im.instanceMatrix.needsUpdate = true; par.add(im); });
+  const bush = [], trunk = [], crown = [];
+  for (let x = -70; x < WX + 70; x += R(1.6, 3.2)) { const r = R(1.2, 2.6); bush.push({ x, y: bgY + r * .35, z: -R(36, 42), sx: r * 1.5, sy: r * .8, sz: r, c: Math.floor(rng() * 3), ry: R(0, TAU) }); }   // undergrowth along its foot
+  const band = (z0, z1, gap, h0, h1, rk) => { for (let x = -90; x < WX + 90; x += R(gap * .6, gap * 1.3)) { const z = -R(z0, z1), h = R(h0, h1), w = R(.35, .7) * rk;   // a stand: trunks, a crown of four over each
+    trunk.push({ x, y: bgY + h / 2, z, sx: w, sy: h + 1, sz: w, c: Math.floor(rng() * 3), rz: R(-.06, .06) });
+    for (let c = 0; c < 4; c++) { const r = R(2.2, 3.8) * rk; crown.push({ x: x + R(-2.6, 2.6) * rk, y: bgY + h + R(-1.2, 1.8) * rk, z: z + R(-1.4, 1.4), sx: r * 1.35, sy: r * .7, sz: r, c: Math.floor(rng() * 4), ry: R(0, TAU) }); } } };
+  band(44, 50, 4.5, 9, 13, 1); band(54, 62, 5.5, 12, 17, 1.3);
+  inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.bush, bush); inst(new THREE.CylinderGeometry(.5, .7, 1, 6), FAR_C.bark, trunk); inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.crown, crown);
+}
 function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const before = new Set(scene.children);
   const rng = rngF(7 + seed * 31);
@@ -2231,6 +2249,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   if (!(bgY < -.5)) for (let i = 0; i < Math.round(14 * WS); i++) { const x = R(-10, WX + 10), z = -R(5, 12);   // lianas hanging out of the canopy
     if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) continue; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); }
   for (let x = -30; x < WX + 30; x += R(14, 24)) tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22));   // the mogotes far off
+  if (bgY > -.5) farForest(scene, bgY, rngF(9137 + seed * 13));   // (the forest filled in behind: its own random, so the rest of the room's the same)
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
     petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
   for (let i = 0; i < Math.round(70 * WS); i++) {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
