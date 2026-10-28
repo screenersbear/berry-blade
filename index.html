@@ -3958,7 +3958,7 @@ function buildHome(k, s) {                            // (setScreen: a room with
   // each room's ends: C8 the crawl hole on the left (C7's earth beyond it) and the open door on; C9 that door again, Lossst's great door on the right; C10 that door, open, and its own wall
   const ends = st.homeEnds || [["solid"], ["solid"]];
   [[0, -1, ends[0]], [WX, 1, ends[1]]].forEach(([xe, sd, [kd, o]]) => homeWall(g, xe, sd, kd, o, st.ceil ?? HOME_CEIL));
-  const door = g.userData.door || null; if (door && st.mini && miniBeaten(st.mini)) { door.k = door.want = 1; door.leaves.forEach(L => L.rotation.y = -L.userData.s * door.sd * Math.PI / 2); }
+  const door = g.userData.door || null; if (door && (!st.mini || miniBeaten(st.mini))) { door.k = door.want = 1; door.leaves.forEach(L => L.rotation.y = L.userData.s * door.sd * Math.PI / 2); }   // (C10: the one you came in by, open)
   let chand = null;
   for (const p of PLATFORMS) {                       // its own platforms: the lip by the hole, the bookcase top, the chandelier, the bed, the night stand
     const x0 = X(p.x), x1 = X(p.x + p.w), y = Y(p.y), cx = (x0 + x1) / 2, w = x1 - x0;
@@ -4039,7 +4039,7 @@ function buildHome(k, s) {                            // (setScreen: a room with
   L.relight = () => { FOG.set("#3a2a1e"); scene.fog.color.copy(FOG); scene.fog.near = 30; scene.fog.far = 90;
     sun.color.set("#ffd9a8"); sun.intensity = 1.5; sun2.color.set("#ffd9a8"); sun2.intensity = 1.5; hemi.color.set("#ffeedd"); hemi.groundColor.set("#6a4630"); hemi.intensity = 1.25; hemi2.color.set("#ffeedd"); hemi2.groundColor.set("#6a4630"); hemi2.intensity = 1.25; };
   L.tick = (t, dt) => { dt = dt || 0;
-    if (door) { door.k = approach(door.k, door.want, dt * .6); const e = door.k * door.k * (3 - 2 * door.k); door.leaves.forEach(Lf => Lf.rotation.y = -Lf.userData.s * door.sd * e * Math.PI / 2); }
+    if (door) { door.k = approach(door.k, door.want, dt * .6); const e = door.k * door.k * (3 - 2 * door.k); door.leaves.forEach(Lf => Lf.rotation.y = Lf.userData.s * door.sd * e * Math.PI / 2); }   // (on into the next room, off the screen: into this one, the front leaf filled the picture)
     if (chand && !chand.fall) { chand.sway = approach(chand.sway, 0, dt * .6); chand.g.rotation.z = Math.sin(t * 2.2) * .012 + chand.sway * Math.sin(t * 9); }
     if (chand && chand.fall) { const F = chand.fall; F.t += dt; F.vy -= 30 * dt; chand.g.position.y = Math.max(F.floor, chand.g.position.y + F.vy * dt); chand.g.rotation.z = approach(chand.g.rotation.z, F.rot, dt * 1.4);
       if (chand.g.position.y <= F.floor && !F.down) { F.down = true; shake = Math.max(shake, 10); SFX.crack(); SFX.thud(); dust(chand.p.x + chand.p.w / 2, GROUND, 14); }
@@ -9392,7 +9392,7 @@ function startTackleCombo(p, lv) {                  // the charged tackle, let g
 }
 // crawlways (the user, 2026-10-28: "we're going to add a crawling animation and the first implementation will be in c7"): a room's crawl: [{ x0, x1, y, to, dir }],
 // a low hole along a floor (or a ledge) at y; in it you crawl (charkit crawlPose, crawlPh: the distance crawled); off the room's edge at its end (dir), into `to`
-const CRAWL_V = 120;
+const CRAWL_V = 120, CRAWL_PH = TAU / 110;         // (crawlPh: a whole cycle of hands and knees every 110 px crawled)
 const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || p.dead || p.climb || hideout || stronghold || arena) return null; return L.find(z => p.onGround && Math.abs(p.y - z.y) < 6 && p.x >= z.x0 && p.x <= z.x1) || null; };
 const crawlOut = (p, d) => !!(p && p.crawl && p.crawl.to !== undefined && p.crawl.dir === d);
 function updatePlayer(dt) {
@@ -9403,7 +9403,7 @@ function updatePlayer(dt) {
   if (p.slideOn) { if (p.atkT >= 0 && (p.atkKind === "slide" || p.atkKind === "cardslash")) p.safeT = Math.max(p.safeT, SLIDE_SAFE); else p.slideOn = false; }   // (the slide: untouchable all the way, and a moment after)
   p.hurtT = Math.max(0, p.hurtT - dt);
   jumpBuf -= dt; atkBuf -= dt;
-  { const Z = crawlZone(p); crawlMute = !!Z; if (Z) { p.crawl = Z; p.crouch = false; p.block = false; p.chargeT = 0; jumpBuf = 0; atkBuf = 0; }   // (crawling through a low hole: on hands and knees, no jumping, no swinging)
+  { const Z = crawlZone(p); crawlMute = !!Z; if (Z) { p.crawl = Z; p.crouch = false; p.block = false; p.chargeT = 0; jumpBuf = 0; atkBuf = 0; p.crawlPh = (p.crawlPh || 0) + Math.abs(p.vx) * dt * CRAWL_PH; }   // (crawling through a low hole: on hands and knees, no jumping, no swinging; crawlPh: charkit crawlPose's cycle, CRAWL_PH)
     else if (p.crawl) { p.crawl = null; p.sq = .14; p.sqv = 0; } }   // (out the other end: up on your feet)
   p.calmT = Math.max(0, (p.calmT || 0) - dt); p.ladderCd = Math.max(0, (p.ladderCd || 0) - dt);
   { const pushing = !!(p.combo || p.tackle); if (p.pushWas && !pushing) unpinBaddies(p); p.pushWas = pushing; }   // (a charged combo or a tackle just ended)
