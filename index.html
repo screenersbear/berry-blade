@@ -1095,27 +1095,15 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { paint: { value: 0 }, paper: { value: 0 }, texel: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { paper: { value: 0 }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, paint, paper, pstep, gtime; uniform vec2 texel; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, paper, pstep, gtime; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     float vnoise(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
-    // PAINTED (DEBUG, LOOK: 2026-10-28): a Kuwahara filter, each pixel the flattest of the four little squares around it: flat paint, the edges kept sharp,
-    // the facets and the jaggies on round things smoothed off, the toon bands as they were
-    vec3 kuwa(vec2 uv) {
-      vec3 m0 = vec3(0.0), m1 = vec3(0.0), m2 = vec3(0.0), m3 = vec3(0.0), s0 = vec3(0.0), s1 = vec3(0.0), s2 = vec3(0.0), s3 = vec3(0.0);
-      for (int j = 0; j <= 2; j++) for (int i = 0; i <= 2; i++) { vec2 o = vec2(float(i), float(j)) * texel * pstep * 1.5; vec3 a;
-        a = texture2D(tex, uv + vec2(-o.x, -o.y)).rgb; m0 += a; s0 += a * a; a = texture2D(tex, uv + vec2(o.x, -o.y)).rgb; m1 += a; s1 += a * a;
-        a = texture2D(tex, uv + vec2(-o.x, o.y)).rgb; m2 += a; s2 += a * a; a = texture2D(tex, uv + vec2(o.x, o.y)).rgb; m3 += a; s3 += a * a; }
-      m0 /= 9.0; m1 /= 9.0; m2 /= 9.0; m3 /= 9.0;
-      vec3 v0 = abs(s0 / 9.0 - m0 * m0), v1 = abs(s1 / 9.0 - m1 * m1), v2 = abs(s2 / 9.0 - m2 * m2), v3 = abs(s3 / 9.0 - m3 * m3);
-      float w0 = v0.r + v0.g + v0.b, w1 = v1.r + v1.g + v1.b, w2 = v2.r + v2.g + v2.b, w3 = v3.r + v3.g + v3.b; vec3 c = m0; float w = w0;
-      if (w1 < w) { w = w1; c = m1; } if (w2 < w) { w = w2; c = m2; } if (w3 < w) { w = w3; c = m3; } return c;
-    }
     void main() {
-      vec4 f = texture2D(tex, vUv); if (paint > .5) f.rgb = kuwa(vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
+      vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
       float l = dot(c, vec3(.299, .587, .114));
       c = mix(vec3(l), c, 1.06);                        // keep the colour vibrant
       c = mix(c, vec3(1.0, .975, .94), .07 * warm);  // pastel: a light tint toward warm white
@@ -1126,27 +1114,29 @@ const gradeMat = new THREE.ShaderMaterial({
       if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin; }   // the land at war: washed out, sooty, darker (its dark edges gone too, 2026-10-26)
       if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l3), c, 1.0 + .3 * bloom); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter
       if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
-      if (paper > .5) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // PAPER (DEBUG, LOOK): a fine grain that boils on the animation's beat, and the paper's own mottle
-        float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;
-        c *= 1.0 + g * .085 + mot * .06; c = mix(c, c * vec3(1.0, .985, .955), .5); }
+      if (paper > .5) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // PAPER (DEBUG, FILTER): over the finished picture, in screen pixels
+        if (paper < 1.5) { float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // FINE: the one tried: a fine grain boiling, the paper's mottle
+          c *= 1.0 + g * .085 + mot * .06; c = mix(c, c * vec3(1.0, .985, .955), .5); }
+        else if (paper < 2.5) { float g = hash(floor(px / 2.0) + sd) - .5, mot = vnoise(px / 70.0) * .6 + vnoise(px / 18.0) * .4 - .5;   // COARSE: a bigger, stronger grain, a heavier mottle
+          c *= 1.0 + g * .13 + mot * .1; c = mix(c, c * vec3(1.0, .975, .93), .6); }
+        else if (paper < 3.5) { float fib = vnoise(vec2(px.x / 26.0, px.y / 3.0)) * .5 + vnoise(vec2(px.x / 3.0, px.y / 22.0)) * .5 - .5, g = hash(floor(px)) - .5, mot = vnoise(px / 110.0) - .5;   // CANVAS: a fine weave
+          c *= 1.0 + fib * .07 + g * .04 + mot * .05; c = mix(c, c * vec3(1.0, .985, .955), .5); }                                                                                     //  fibres, held in place
+        else if (paper < 4.5) { vec2 q = px + vec2(-1.0, 1.0); float h0 = vnoise(px / 5.0) * .65 + vnoise(px / 2.2) * .35, h1 = vnoise(q / 5.0) * .65 + vnoise(q / 2.2) * .35, mot = vnoise(px / 80.0) - .5;   // COLD-PRESS:
+          c *= 1.0 + (h0 - h1) * .35 + (h0 - .5) * .05 + mot * .05; c = mix(c, c * vec3(1.0, .985, .96), .4); }                                                                  //  watercolour paper's raised tooth, lit from the top left
+        else { float g = hash(floor(px)) - .5, mot = vnoise(px / 60.0) * .6 + vnoise(px / 17.0) * .4 - .5, fleck = step(.9975, hash(floor(px / 1.5) + 7.0));   // AGED: an older, warmer sheet, flecked
+          c *= 1.0 + g * .06 + mot * .08 - fleck * .25; c = mix(c, c * vec3(1.0, .93, .82), .45); } }
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
   depthTest: false, depthWrite: false,
 });
 gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat));
-// the game's look, to try out (pause, DEBUG; the user, 2026-10-28: "if the game ran at 30fps, could it give it a cooler aesthetic? it's almost too smooth for these
-// kinds of graphics ... or if maybe another visual filter can be applied to the screen to make it look less polygon-y but keep the toonshader vibes"):
-// fps: the whole game drawn this many times a second (0: as fast as the screen goes) · anim: the characters' poses held, this many a second (0: smooth) · look:
-// 1 PAINTED, 2 PAPER, 3 both. Kept in this browser only
-const LOOK = (() => { try { return { fps: 0, anim: 0, look: 0, ...JSON.parse(localStorage.getItem("bb_look") || "{}") }; } catch { return { fps: 0, anim: 0, look: 0 }; } })();
-const LOOK_FPS = [0, 30], LOOK_ANIM = [0, 20, 15, 12], LOOK_NAMES = ["NONE", "PAINTED", "PAPER", "PAINTED + PAPER"];
-const lookLabel = q => q === "dfps" ? "FRAME RATE: " + (LOOK.fps ? LOOK.fps + " FPS" : "SMOOTH") : q === "danim" ? "POSES: " + (LOOK.anim ? "HELD, " + LOOK.anim + " A SECOND" : "SMOOTH") : "FILTER: " + LOOK_NAMES[LOOK.look || 0];
-function lookStep(q) {
-  if (q === "dfps") LOOK.fps = LOOK_FPS[(LOOK_FPS.indexOf(LOOK.fps) + 1) % LOOK_FPS.length];
-  if (q === "danim") LOOK.anim = LOOK_ANIM[(LOOK_ANIM.indexOf(LOOK.anim) + 1) % LOOK_ANIM.length];
-  if (q === "dlook") LOOK.look = ((LOOK.look || 0) + 1) % LOOK_NAMES.length;
-  try { localStorage.setItem("bb_look", JSON.stringify(LOOK)); } catch { }
-}
+// the paper filter, to try out (pause, DEBUG; the user, 2026-10-28: "30fps doesnt work like I wanted so remove that feature. the paper filter looks like it might be
+// it ... can you remove all the other presentation settings, just keep it smooth and animations smooth like originally, but add some variations on the paper
+// filter? ppainted is also not good so that can go as well"): paper 0 none · 1 FINE (the one tried) · 2 COARSE · 3 CANVAS · 4 COLD-PRESS · 5 AGED. This browser only
+const LOOK = (() => { try { const q = JSON.parse(localStorage.getItem("bb_look") || "{}"); return { paper: q.paper ?? (q.look >= 2 ? 1 : 0) }; } catch { return { paper: 0 }; } })();   // (an old PAPER / BOTH pick: FINE)
+const PAPER_NAMES = ["NONE", "PAPER: FINE", "PAPER: COARSE", "PAPER: CANVAS", "PAPER: COLD-PRESS", "PAPER: AGED"];
+const lookLabel = () => "FILTER: " + PAPER_NAMES[LOOK.paper || 0];
+function lookStep() { LOOK.paper = ((LOOK.paper || 0) + 1) % PAPER_NAMES.length; try { localStorage.setItem("bb_look", JSON.stringify(LOOK)); } catch { } }
 if (window.BEP_IMG) {                                // the bep crowd art: green behind the title, blue behind character select, magenta as the cover when you win
   document.getElementById("title").style.backgroundImage = `url(${BEP_IMG.title})`; document.getElementById("modal").style.setProperty("--cover", `url(${BEP_IMG.cover})`);
   const im = new Image(); im.onload = () => { const t = new THREE.Texture(im); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
@@ -6050,12 +6040,12 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dreset", "dup", "dfps", "danim", "dlook", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dfps" || q === "danim" || q === "dlook" ? lookLabel(q) : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dreset", "dup", "dlook", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, OR SET THIS ROOM BACK TO NEW<br>FRAME RATE, POSES AND FILTER: TRY OUT THE LOOK (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
-  if (what === "dfps" || what === "danim" || what === "dlook") { lookStep(what); SFX.tick(); const b = $("pbtns").querySelector(`[data-p="${what}"]`); if (b) b.textContent = lookLabel(what); return; }   // (the look, to try: kept in this browser)
+  if (what === "dlook") { lookStep(); SFX.tick(); const b = $("pbtns").querySelector(`[data-p="${what}"]`); if (b) b.textContent = lookLabel(); return; }   // (the look, to try: kept in this browser)
   if (what === "dup") { upPrev = (upPrev + 1) % UP_PREVIEW.length; const [, pc, fr] = UP_PREVIEW[upPrev]; upOverride = pc; freedOverride = fr; upDirty = true; SFX.tick();   // (a milestone of this world's uprising, this room rebuilt to it as you go back in: the user, 2026-10-28 "add in the debug mode menu the option to change it to the other milestones")
     const b = $("pbtns").querySelector('[data-p="dup"]'); if (b) b.textContent = upLabel(); return; }
   if (what === "dback") { SFX.tick(); dbgPick = null; $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("debug")); drawPauseMap(); return; }
@@ -22519,7 +22509,7 @@ function render(dt) {
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
   if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
-  { const U = gradeMat.uniforms, lk = LOOK.look || 0; U.paint.value = lk & 1; U.paper.value = lk & 2 ? 1 : 0; U.texel.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = time * (LOOK.anim || 12); }
+  { const U = gradeMat.uniforms; U.paper.value = LOOK.paper || 0; U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);
 }
 
@@ -22541,8 +22531,6 @@ function adaptQuality(dt) {
 let fadeT = 0; const fadeEl = document.getElementById("fade");
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
   requestAnimationFrame(frame);
-  if (LOOK.fps && now - last < 1000 / LOOK.fps - 3) return;   // (DEBUG, FRAME RATE: the last picture held; the time adds up into the next one)
-  KIT.animStep = mode === "play" && !edOpen && !castUp ? LOOK.anim || 0 : 0;   // (DEBUG, POSES: held in play only, not in the editor or the cast)
   const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
   try {
     if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;

@@ -1770,7 +1770,10 @@ const TKDIG_C = { lean: .95, arch: .5, bodyY: -.32, headRot: -.25, armF: 1.15, e
 const TACKLE_H = { lean: .7, arch: .2, bodyY: -.16, headRot: .28, armF: 1.3, elbF: 1.95, armB: 1.2, elbB: 2.0, spF: -.32, spB: -.32 };   // shoulder down, forearms braced across in front, head tucked: a running back going through
 const TACKLE_C = { lean: 1.0, arch: .3, bodyY: -.14, headRot: .26, armF: 1.45, elbF: 1.7, armB: 1.35, elbB: 1.7, tailBase: 1.55, tailCurl: -.08, hatTilt: -.4 };
 const tkKind = (p, k) => p.rig.spec.move.tackle === "wheel" && STRIKES[k + "_wheel"] ? k + "_wheel" : k;   // (Rose's: the cartwheel)
-function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = poseKeys(p, tkKind(p, "tackle"), p.tackle ? p.tackle.t : 9) || (cat ? TACKLE_C : TACKLE_H); for (const key in TK) o[key] = lerp(o[key] ?? 0, TK[key], k); }   // over the running legs
+function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; const TK = poseKeys(p, tkKind(p, "tackle"), p.tackle ? p.tackle.t : 9) || (cat ? TACKLE_C : TACKLE_H);   // over the running legs
+  for (const key in TK) { let v = TK[key]; if (TURNS.has(key)) v += TAU * Math.round(((o[key] ?? 0) - v) / TAU); o[key] = lerp(o[key] ?? 0, v, k); } }   // (a turn counted the short way round from the body: Rose's cartwheel, over, a whole turn, eased out of as
+// none, not unwound back through it; the user, 2026-10-28: "when you finish doing a carthweel, she also kind of flips herself back into place" · "when you start charging it, she does a flip")
+const TURNS = new Set(["spin", "flip", "wheel"]);
 function extraPoses(p, T, cat) {                  // laid over whatever pose came before
   const t = api.time;
   if (p.block || p.tpose > 0) {                   // the guard, hands drawn in close, opening out to the T as it's held
@@ -1955,7 +1958,7 @@ const STRIKES = {
       lean: [[0, .1], [.2, -.35], [.32, -.35], [.5, .1]], armF: [[0, .4], [.2, 1.2], [.36, 1.2], [.5, .3]], elbF: [[0, 1.4], [.2, .6], [.5, 1.2]], armB: [[0, .4], [.2, -.6], [.36, -.6], [.5, .3]] } },
   flykick: { dur: .44, chain: .22, step: 0, lunge: 300, sq: -.05, dive: [.06, 120], sfx: "kick", hits: [{ t0: .06, t1: .32, reach: 95, back: -5, y0: 70, y1: -60, kind: "kick" }],   // flying side kick
     keys: { lean: [[0, 0], [.06, -.45], [.32, -.45], [.44, -.1]], fNx: [[0, .1], [.06, .55], [.32, .55], [.44, .15]], fNy: [[0, .3], [.06, .05], [.32, .05], [.44, .25]],
-      fFx: [[0, -.1], [.06, -.15], [.44, -.1]], fFy: [[0, .35], [.06, .5], [.32, .5], [.44, .3]], armF: [[0, 1], [.06, .3], [.32, .3], [.44, .9]], armB: [[0, 1], [.06, 2.2], [.32, 2.2], [.44, 1]],
+      fFx: [[0, -.1], [.06, -.3], [.32, -.3], [.44, -.12]], fFy: [[0, .35], [.06, .3], [.32, .3], [.44, .3]], armF: [[0, 1], [.06, .3], [.32, .3], [.44, .9]], armB: [[0, 1], [.06, 2.2], [.32, 2.2], [.44, 1]],   // (the trailing leg bent back at a right angle: it had folded flat, the boot crumpled up at the hip, 2026-10-28: "camila's leg seems to get so pulled up that it looks like it's twisted")
       elbF: [[0, .4], [.44, .4]], elbB: [[0, .4], [.44, .4]] } },
   flipaxe: { dur: .5, step: 0, sq: .05, dive: [.3, 450], sfx: "kick", hits: [{ t0: .3, t1: .44, reach: 80, back: 10, y0: 60, y1: -70, kind: "smash" }],   // front flip into an axe kick
     keys: { flip: [[0, 0], [.04, 0], [.3, TAU], [.5, TAU]], fNx: [[0, .15], [.12, .1], [.28, .45], [.36, .5], [.44, .3], [.5, .2]], fNy: [[0, .3], [.12, .5], [.28, 1.0], [.36, .55], [.44, .1], [.5, .2]],
@@ -2500,7 +2503,7 @@ function updatePoseHuman(p, dt) {
   if (SK && SK.keys && !SK.screen) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (the punch and kick, keyed from their old drawn poses: eased in through the pose as they always were, not laid on raw)   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
     for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
       let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
-      if (k === "spin" || k === "flip") v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round
+      if (TURNS.has(k)) v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round (the cartwheel's wheel too, 2026-10-28)
       o[kk] = lerp(o[kk] ?? 0, v, w); }
     if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
@@ -2724,12 +2727,8 @@ function legReach(H, F, Hk, ankle, R, r0) {       // a foot keyed further than t
   Hk.set(F.x, F.y + ankle, F.z);
 }
 const LEG_STRETCH = 1.1, LEG_FOLD = .25;         // how far past its length a leg may stretch (squash and stretch) before the foot comes in; how near the hip a fully bent leg brings the ankle (of the leg's length)
-// held poses (the user, 2026-10-28, on the look: "if the game ran at 30fps, could it give it a cooler aesthetic? it's almost too smooth for these kinds of
-// graphics"): api.animStep poses a second (0: every frame). The limbs hold each pose that long, as animation drawn on twos, while the body still goes where it's
-// going smoothly and the camera with it; all of them on the one beat
-function heldOut(p) { const n = api.animStep; if (!n || !p.out) return p.out; const k = Math.floor(api.time * n); if (p.outK !== k || !p.outH) { p.outK = k; p.outH = Object.assign(p.outH || {}, p.out); } return p.outH; }
 function syncCat(p, r, dt = 0) {
-  const o = heldOut(p), Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
+  const o = p.out, Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
   const HIPY = .6 * Bd.legs, L_TH = .3 * Bd.legs, L_SH = .3 * Bd.legs, L_MT = .17 * Bd.legs, SPINE_L = .23 * Bd.torso,
     L_UA = .27 * Bd.arms, L_FA = .26 * Bd.arms, TAIL_N = 9, TAIL_L = .13 * Bd.tail;
   r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
@@ -2830,7 +2829,7 @@ function keepNeck(p) {                             // the neck keeps its own len
   _nk.multiplyScalar(1 / d); p.neck.copy(_P[3]).addScaledVector(_nk, L); p.neckV.addScaledVector(_nk, -p.neckV.dot(_nk));
 }
 function syncHuman(p, r, dt = 0) {
-  const o = heldOut(p), Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
+  const o = p.out, Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
   const H_HIP = D.hip * Bd.legs, H_TH = D.th * Bd.legs, H_SH = D.sh * Bd.legs, H_SPINE = D.spine * Bd.torso, H_UA = D.ua * Bd.arms, H_FA = D.fa * Bd.arms;
   const fs = p.face > 0 ? 1 : -1;
   r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
