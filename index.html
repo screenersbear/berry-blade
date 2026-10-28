@@ -560,7 +560,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261027c"></script>
+<script src="charkit.js?v=20261027d"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -3579,7 +3579,7 @@ function buildRestCamp(s) {                       // a campfire on a ring of sto
   const stone = toon("#8d8a84"), wood = toon("#7a4a2c"), woodD = toon("#5a321c");
   for (let i = 0; i < 8; i++) { const a = i / 8 * TAU, m = new THREE.Mesh(new THREE.DodecahedronGeometry(.13, 0), stone); m.position.set(Math.cos(a) * .42, .07, Math.sin(a) * .3); m.rotation.set(i, i * 2, 0); g.add(m); }
   for (let i = 0; i < 3; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.06, .07, .62, 6), i % 2 ? wood : woodD); m.rotation.set(Math.PI / 2 - .35, i / 3 * TAU, 0); m.position.y = .14; g.add(m); }
-  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.name = "campChair"; c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.5); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
+  const chairs = CHAIR_AT.map(([dx, dz, yaw], k) => { const c = buildChair(); c.name = "campChair"; c.position.set(dx / 40, 0, dz + .6); c.rotation.y = yaw; c.scale.setScalar(.55 * CHAIR_BIG); g.add(c); return { g: c, x: x + dx, dz, by: null }; });   // three white chairs round the fire: yours, and one each for two partners (sized to whoever sits)
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, 1.7, 6), woodD); pole.position.set(-1.0, .85, -.1); g.add(pole);
   const flag = new THREE.Mesh(new THREE.PlaneGeometry(.62, .36), new THREE.MeshBasicMaterial({ color: "#ffd203", side: THREE.DoubleSide })); flag.position.set(-.68, 1.5, -.1); g.add(flag);
   const fl = (c, s, op) => { const m = new THREE.Mesh(new THREE.ConeGeometry(.17 * s, .62 * s, 7), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, blending: THREE.AdditiveBlending })); m.position.y = .2 + .31 * s; g.add(m); return m; };
@@ -3588,28 +3588,30 @@ function buildRestCamp(s) {                       // a campfire on a ring of sto
   return { g, x, flames, glow, flag, healed: false, chairs, sitT: 0 };
 }
 const CHAIR_AT = [[108, 0, -.45], [-104, .1, .45], [-188, -.3, .3]];   // [px from the fire, depth (3D), turn]: yours on its right, the two partners' on its left
+const CHAIR_BIG = 1.7;                                // (a grown-up's chair, not one at their own hip height: they sit up in it, feet off the floor. The user, 2026-10-27 "the chairs are so tiny, they need to be bigger to look realistic when the player sits on them")
+const seatLift = r => { const h = seatH(r); return h > .2 ? h * (CHAIR_BIG - 1) * 1.02 : 0; };   // (how far up the bigger seat is from where they'd sit: they're raised that much, seatLift, charkit)
 const seatH = r => { const D = r.D, B = r.spec.body; return (D.hip * B.legs - .3 * D.step) * B.scale - .03; };   // (how high a chair's seat is for this one: sat up in it, p.chair, higher than a stump)
-function chairFit(C, k, r) { const c = C.chairs[k]; if (!c || !r) return; const h = seatH(r); if (h > .2) c.g.scale.setScalar(h); }   // (the chair made for them: its seat at their sitting height)
+function chairFit(C, k, r) { const c = C.chairs[k]; if (!c || !r) return; const h = seatH(r); if (h > .2) c.g.scale.setScalar(h * CHAIR_BIG); }   // (the chair made for them: CHAIR_BIG times their sitting height)
 function syncRest() {                             // the fire flickering; sit down in your chair by it and you're healed in full
   const C = restCamp; if (!C) return;
   C.flames.forEach((m, i) => { const f = 1 + .14 * Math.sin(time * (11 + i * 3) + i) + .08 * Math.sin(time * 23 + i * 2); m.scale.set(1 / f, f, 1 / f); m.rotation.y = time * (1 + i); });
   C.glow.material.opacity = .45 + .1 * Math.sin(time * 9) + .05 * Math.sin(time * 17); C.flag.rotation.y = Math.sin(time * 2.2) * .35;
   const p = player, dt = clamp(time - (C.lastT ?? time), 0, .1); C.lastT = time; if (!p || p.dead || mode !== "play" || p.auto) return;
   if (!C.fit) { C.fit = true; chairFit(C, 0, p.rig); }   // (yours, sized to you)
-  const cx = C.chairs[0].x;
-  if (!p.sit) { if (Math.abs(p.x - cx) > 70) C.offSeat = true;   // (the user, 2026-10-27: "the player has to sit down to regain their health"): stand still at your chair and down you sit
-    if (!C.told && !C.healed && Math.abs(p.x - C.x) < 260) { C.told = true; toast("SIT IN YOUR CHAIR BY THE FIRE TO REST", 3200); }
-    const still = !held.left && !held.right && p.onGround && Math.abs(p.vx) < 20 && Math.abs(p.x - cx) < 30 && C.offSeat !== false;
+  if (!p.sit) { const k = C.chairs.findIndex(c => (!c.by || c.by === "you") && Math.abs(p.x - c.x) < 30);   // (the user, 2026-10-27: "the player has to sit down to regain their health": stand still at a chair and down you sit · "if there are no members on your team to claim a chair, let your character sit in any of them": yours, or one no partner's in)
+    if (C.offX !== undefined && Math.abs(p.x - C.offX) > 70) C.offX = undefined;   // (up out of one: step away from it before it'll sit you again)
+    if (!C.told && !C.healed && Math.abs(p.x - C.x) < 260) { C.told = true; toast("SIT IN A CHAIR BY THE FIRE TO REST", 3200); }
+    const still = k >= 0 && !held.left && !held.right && p.onGround && Math.abs(p.vx) < 20 && C.offX === undefined;
     C.sitIdle = still ? (C.sitIdle || 0) + dt : 0;
-    if (C.sitIdle > .35) { p.sit = 1; p.chair = true; p.x = cx; p.vx = 0; atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
+    if (C.sitIdle > .35) { const c = C.chairs[k]; c.by = "you"; C.mine = k; chairFit(C, k, p.rig); p.sit = 1; p.chair = true; p.x = c.x; p.vx = 0; p.z = c.dz; p.seatLift = seatLift(p.rig); atkBuf = 0; p.sitHeld = true; C.sitT = 0; toast(window.BERRY_TOUCH ? "TAP ANYWHERE TO GET UP" : "PRESS ANY BUTTON TO GET UP", 3000); }
     return; }
-  p.x = cx; C.sitT += dt; if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
+  const mc = C.chairs[C.mine ?? 0]; p.x = mc.x; C.sitT += dt; if (C.healed || C.sitT < .8) return;   // (a moment sat, then the rest does its work)
   C.healed = true; const was = p.hp; p.hp = maxHp(); updateHearts(true); partnerList().forEach(P => { if ((P.q.php ?? PARTNER_HP) < PARTNER_HP) { P.q.php = PARTNER_HP; P.q.heartT = 2.2; } }); healFx(p, 1); SFX.heal(true); popText(C.x, (groundAt(C.x) ?? GROUND) - 150, p.hp > was ? "ALL HEALED!" : "A GOOD REST");   // (your partners too: the user, 2026-10-26)
 }
 const CAMP_SPOT = { pal: [-66, -.1], pal2: [-24, .3], ej: [42, -.35], ally: [-140, -.45], crew0: [-92, -.15], crew1: [112, -.85], ally1: [166, -.55], ally2: [-196, -.72] };   // where each one sits: [px from the fire, depth (3D)]
 function campSit(s, key, dt, r) {                 // at a rest stop: over to its place by the fire, and down it sits. True while it's there (or on its way)
   const C = restCamp;
-  if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } s.chairK = undefined; s.chair = false; return false; }
+  if (!C || mode !== "play" || !player || hideout || stronghold) { if (s.sitAt) { s.sitAt = null; s.sit = 0; s.z = 0; } s.chairK = undefined; s.chair = false; s.seatLift = 0; return false; }
   if (r && C.chairs && s.chairK === undefined) { const k = [1, 2].find(i => !C.chairs[i].by); if (k !== undefined && seatH(r) > .2) { C.chairs[k].by = key; s.chairK = k; chairFit(C, k, r); } else s.chairK = -1; }   // (a chair if one's free: the first two to sit get them)
   const ch = s.chairK > 0 ? C.chairs[s.chairK] : null, [dx0, dz] = ch ? [ch.x - C.x, ch.dz] : CAMP_SPOT[key], tx = C.x + dx0;
   if (s.sitAt !== C) {
@@ -3628,7 +3630,7 @@ function campSit(s, key, dt, r) {                 // at a rest stop: over to its
       if (h > .2 && !S2[key] && !ch) { S2[key] = new THREE.Mesh(new THREE.CylinderGeometry(.2, .24, h, 9), toon("#7a4a2c")); S2[key].position.set(dx0 / 40, h / 2 + (Y(gy) - C.g.position.y), dz + .6); C.g.add(S2[key]); }   // (in a chair: no stump)
     }
   }
-  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.chair = !!ch; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
+  s.x = tx; s.vx = 0; s.sit = s.noSit ? 0 : 1; s.chair = !!ch; s.seatLift = ch && r ? seatLift(r) : 0; s.wave = 0; s.sprint = false; s.atkKind = null; s.atkT = -1; s.face = Math.sign(C.x - tx) || 1; s.z = approach(s.z || 0, dz, dt * 2);
   return true;
 }
 const HIDE_SIT = { pal: [-88, .3], pal2: [-132, .45], ej: [98, .05], ally: [-172, -.25], crew0: [-246, -.5], crew1: [176, -.55], ally1: [240, -.4], ally2: [-306, -.35] };   // sat beside you in a hideout: [px from the seat, depth (3D)]
@@ -4705,14 +4707,15 @@ function smpInit() {
   Promise.all(Object.keys(A).map(k => Promise.all(A[k].map(b => ac.decodeAudioData(bytes(b)))).then(bufs => { if (SMP_EQ[k]) bufs.forEach(b => eqTake(b, SMP_EQ[k])); smp.bank[k] = bufs; })))
     .then(() => { smp.state = "ready"; }).catch(() => { smp.state = "failed"; });
 }
-function smpPlay(k, vol, { rate = 1, delay = 0 } = {}) {
+function smpPlay(k, vol, { rate = 1, delay = 0, hp = 0 } = {}) {   // (hp: a high-pass, the low end cut away)
   if (!live()) return false;
   if (smp.state === "idle") smpInit();
   const L = smp.bank[k]; if (!L) return false;
   let i = Math.floor(Math.random() * L.length); if (L.length > 1 && i === smp.last[k]) i = (i + 1) % L.length; smp.last[k] = i;
   const src = ac.createBufferSource(), g = ac.createGain();
   src.buffer = L[i]; src.playbackRate.value = rate * sfxPitch() * rand(.97, 1.03); g.gain.value = vol;
-  src.connect(g); g.connect(sfxBus); src.start(ac.currentTime + delay); return true;
+  if (hp) { const f = ac.createBiquadFilter(); f.type = "highpass"; f.frequency.value = hp; f.Q.value = .7; src.connect(f); f.connect(g); } else src.connect(g);
+  g.connect(sfxBus); src.start(ac.currentTime + delay); return true;
 }
 // the heroes' voices (voices.js, CC0; the user, 2026-10-22: "license free character voices for attacking sounds and getting hurt etc."): Camila,
 // Rose and June each their own; the cats a catgirl's. One line at a time (a new one cuts the last off), the attack shouts not on every blow
@@ -4757,20 +4760,22 @@ const SFX = {
   punch() { noise(.06, { vol: .3, f0: 1500, f1: 6500, type: "bandpass", q: 1.4 }); noise(.075, { vol: .15, f0: 3200, f1: 1500, type: "bandpass", q: .9, delay: .03, a: .01 }); tone(320, 170, .06, { type: "sine", vol: .1, delay: .02 }); },   // a swish, a slap of air, a light knock under it (2026-10-22: brighter, it was a dull thud; 10-23: the snap was a click, the user: "why does it make a clicking sound when you attack ... it's not a good sound effect")
   kick() { noise(.09, { vol: .32, f0: 1000, f1: 5500, type: "bandpass", q: 1.4 }); noise(.085, { vol: .14, f0: 2800, f1: 1300, type: "bandpass", q: .9, delay: .045, a: .01 }); tone(260, 140, .07, { type: "sine", vol: .11, delay: .04 }); },   // (brighter too; no click since 10-23)
   slash() { noise(.075, { vol: .15, f0: 1100, f1: 6200, type: "bandpass", q: 2.4 }); if (smpPlay("slash", .1, { delay: .03 })) return; noise(.14, { vol: .34, f0: 1500, f1: 6500, type: "bandpass", q: 2.2 }); tone(1800, 2900, .07, { type: "triangle", vol: .09 }); tone(3300, 3300, .14, { type: "sine", vol: .035, delay: .05 }); },   // a bright shing
-  hit(w = 1, n = 0) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) })) { noise(.06, { vol: .07, f0: 3000, f1: 1500, type: "bandpass", q: .8, a: .008 }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
+  // (the blow's own sound thinner and brighter since 2026-10-27, its low end cut: "it sounds too thick, almost like she's hitting them with a foam bat"; a sword's brighter still)
+  hit(w = 1, n = 0, sharp = false) { if (smpPlay("hit", .165 * (.82 + .18 * w), { rate: (1.2 - .12 * w) * (1 + .035 * Math.min(n, 5)) * (sharp ? 1.16 : 1.07), hp: sharp ? 420 : 260 })) { noise(.06, { vol: .09, f0: 3400, f1: 1900, type: "bandpass", q: .9, a: .006 }); return; } tone(150, 48, .14, { type: "sine", vol: .28 }); noise(.07, { vol: .26, f0: 3400, f1: 500 }); tone(520, 190, .08, { type: "square", vol: .07, lp: 2400 }); },   // a meaty smack (the take brightened, SMP_EQ, and a crack of treble on it: 2026-10-22)
   impact(big) { if (smpPlay("impact", big ? .31 : .18)) { if (big) tone(110, 34, .55, { type: "sine", vol: .3 }); return; }   // (a big one keeps its long low boom under the punch)
     noise(big ? .5 : .22, { vol: big ? .34 : .26, f0: 4200, f1: 160 }); tone(big ? 110 : 140, 34, big ? .55 : .26, { type: "sine", vol: big ? .34 : .26 }); tone(900, 240, .12, { type: "square", vol: .07, lp: 2600 }); },
   stomp() { tone(160, 520, .2, { type: "sine", vol: .2 }); noise(.05, { vol: .1, f0: 700 }); },
   bite(sword, w = 1) { const k = .8 + .2 * Math.min(w, 1.6);   // a blow of yours landing, with more bite (the user, 2026-10-23, after Odin Sphere: "a more aggressive sound effect"): a sharp crack on top, a short thump under it;
-    noise(.07, { vol: .15 * k, f0: 3600, f1: 1500, type: "bandpass", q: .8, a: .008 }); tone(150, 50, .09, { type: "sine", vol: .2 * k });   // the sword's with a ring of steel through it, the fist's a hard smack (a slap, not the 9 kHz crack: it clicked, 10-23)
-    if (sword) { noise(.07, { vol: .14 * k, f0: 5400, f1: 2700, type: "bandpass", q: 3 }); tone(3150, 2550, .12, { type: "triangle", vol: .045 * k, delay: .004 }); tone(4700, 4300, .08, { type: "sine", vol: .025 * k, delay: .004 }); }
-    else { noise(.05, { vol: .18 * k, f0: 2800, f1: 900, type: "bandpass", q: 1.6 }); } },   // (no square blip under it: a toy's click, 2026-10-24)
+    noise(.06, { vol: .15 * k, f0: 3900, f1: 2000, type: "bandpass", q: .9, a: .005 }); tone(240, 120, .06, { type: "sine", vol: .09 * k });   // (2026-10-27: the thump lighter and higher, a crunch over it: "a slightly more treble-y, crunchier sound ... it shouldnt sound like a metal sword like we did before, but the impact should not be such a dull thud")
+    for (let i = 0; i < 4; i++) noise(.014, { vol: (.12 - i * .022) * k, f0: (sword ? 3300 : 2600) + i * 260, type: "bandpass", q: 2.2, a: .002, delay: .004 + i * .011 });   // the crunch: a quick crackle of it, not a ring
+    noise(.035, { vol: (sword ? .09 : .06) * k, f0: 6200, type: "highpass", a: .003, delay: .003 });   // (its grit up top)
+    if (!sword) noise(.045, { vol: .14 * k, f0: 2800, f1: 1200, type: "bandpass", q: 1.6 }); },   // (the fist's hard smack; no square blip under it: a toy's click, 2026-10-24)
   body(h = 58, boss = false, w = 1) {   // the blow landing on THEM (the user, 2026-10-23: "sounds the enemies make when hit ... not grunt or anything ... just sounds of getting hit"):
     // a fruit body taking it: a wet splat, a hollow thump under it, a crunch of skin on top; deeper and heavier the bigger it is, heaviest on a boss
     const s = clamp(58 / Math.max(30, h), .6, 1.4), k = (boss ? 1.25 : 1) * (.85 + .15 * Math.min(w, 1.6));
-    noise(.1, { vol: .2 * k, f0: 1700 * s, f1: 320 * s, type: "bandpass", q: 1.3 });                 // the splat
-    tone((boss ? 150 : 230) * s, (boss ? 42 : 80) * s, boss ? .2 : .12, { type: "sine", vol: .2 * k, delay: .004 });   // the thump through it
-    noise(.03, { vol: .07 * k, f0: 5200, f1: 2600, type: "highpass", delay: .006 });                     // the skin's crunch
+    noise(.08, { vol: .18 * k, f0: 2300 * s, f1: 650 * s, type: "bandpass", q: 1.3 });                 // the splat (brighter since 2026-10-27)
+    tone((boss ? 170 : 260) * s, (boss ? 60 : 120) * s, boss ? .16 : .08, { type: "sine", vol: .11 * k, delay: .004 });   // the thump through it (lighter: not a dull thud)
+    noise(.045, { vol: .13 * k, f0: 4600, f1: 2900, type: "highpass", delay: .005 });                    // the skin's crunch (louder)
     if (boss) tone(70, 34, .26, { type: "sine", vol: .16 * k, delay: .01 }); },
   hurt() { tone(620, 180, .28, { type: "square", vol: .09, lp: 2200 }); },
   ko() { [523, 440, 349, 262].forEach((f, i) => tone(f, f * .97, .2, { type: "triangle", vol: .12, delay: .2 + i * .16 })); },
@@ -19755,7 +19760,8 @@ function sitPlayer(dt) {                          // sitting: face out at the vi
   const p = player, any = held.atk || held.jump || held.block || held.down || held.left || held.right || keys.ArrowUp || keys.KeyW || pad.u;
   p.vx = 0; p.yaw = lerp(p.yaw, -Math.PI / 2, 1 - Math.exp(-dt * 6)); p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   spring(p, dt); updatePose(p, dt);
-  if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.chair = false; p.vy = -260; p.onGround = false; p.face = 1; const H = hideout || restCamp; if (H) { H.sitIdle = 0; H.offSeat = false; } }   // (a hideout's seat, or your chair by a rest stop's fire)
+  if (atkBuf > 0 || (any && !p.sitHeld)) { atkBuf = 0; jumpBuf = 0; p.sit = 0; p.vy = -260; p.onGround = false; p.face = 1; const H = hideout || restCamp; if (H) { H.sitIdle = 0; H.offSeat = false; }   // (a hideout's seat, or a chair by a rest stop's fire)
+    if (p.chair && restCamp) { const C = restCamp, c = C.chairs[C.mine ?? 0]; if (c && c.by === "you") c.by = null; C.offX = c ? c.x : p.x; C.mine = undefined; p.z = 0; p.seatLift = 0; } p.chair = false; }
   p.sitHeld = any;
 }
 function syncHideoutBeps(dt) {
@@ -20543,6 +20549,8 @@ function updateBaddy(b, dt) {
   spring(b, dt);
   b.yaw = lerp(b.yaw, b.dir > 0 ? -Math.PI / 2 + .62 : -Math.PI / 2 - .62, 1 - Math.exp(-dt * 9));   // three-quarters on, so you see their faces
 }
+// Camila's tackle, the plain one (attack + block, not charged): it sends them further than Rose's (the user, 2026-10-27: "make camila's tackle attack uncharged push enemies further than rose's version of it. give it more knockback")
+const camTackle = kind => kind === "tackle" && player && player.tackle && !(player.combo && player.combo.tackle) && player.rig && player.rig.id === "camila" ? 1.6 : 1;
 const KBT = { sweep: [150, -470], cut: [25, -130], cleave: [460, -420], jab: [25, -130], haymaker: [470, -380], tackle: [500, -320], punch: [90, -200], slash: [150, -240], upper: [70, -520], hook: [330, -260], smash: [200, -160], launch: [360, -640] };   // knockback by hit kind
 // ── the weight of a blow (game feel)
 const HIT_W = { sweep: 1.1, cut: .85, cleave: 1.4, jab: .8, haymaker: 1.4, punch: .75, slash: .85, stomp: .8, kick: 1, hook: 1.05, upper: 1.1, tackle: 1.2, smash: 1.35, launch: 1.35 };   // how heavy each kind lands
@@ -20617,13 +20625,13 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   }
   b.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); if (b.sad) b.sadHits = (b.sadHits || 0) + 1; b.hitT = time;   // (hitT: when it last took a blow: no harm to touch for a moment after, see combat)
   b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1);
-  if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
+  if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain(), swordOn()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
   SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1);   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
   const PS = KIT.STRIKES[player.atkKind] || {}, airLast = !!player.chain && !player.combo && (player.chain.kind === "air1" || player.chain.kind === "air2") && player.atkIdx >= player.chain.list.length - 1;
   if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float" && (airLast || PS.dive || PS.slamLand)) { b.vx = dir * 120 / Math.sqrt(b.wt); b.vy = 640 / Math.sqrt(b.wt); b.juggleT = 0; b.carryVx = null; }   // (an air combo's last blow: down they go, hard. The user, 2026-10-26: "the air ones in particular feel very floaty")
   else if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { const fwd = player.chain && player.chain.kind === "air2", pvx = fwd ? player.face * 160 : player.vx * .2; b.carryVx = pvx; b.vx = pvx + clamp((player.x + dir * 52 - b.x) * 4, -170, 170); b.vy = Math.min(-60, Math.max(player.vy, -40) - 30) / Math.sqrt(b.wt); b.juggleT = .5; }   // (the hero's about to be held there by the blow, rising or not: so is it, not shot up past her on her jump; and kept a fist's length in front of her, not knocked out of reach of the next: 2026-10-26)   // juggled: up there already, hit from the air: carried on the blows at your height, falling with you, not floating off (was 260 up, hung .85 s)   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
-  else { b.vx = dir * KB[0] * 1.2 * knockK / b.wt; if (kind !== "stomp") b.vy = KB[1] / Math.sqrt(b.wt);
+  else { const tk = camTackle(kind); b.vx = dir * KB[0] * 1.2 * knockK * tk / b.wt; if (kind !== "stomp") b.vy = KB[1] * (tk > 1 ? 1.2 : 1) / Math.sqrt(b.wt);
     if ((kind === "upper" || kind === "launch") && knockK >= 1) { b.vy = -440 / Math.sqrt(b.wt); b.vx = dir * 45 / Math.sqrt(b.wt); b.juggleT = .4; b.carryVx = null; }   // (straight up, a touch on: there over you to jump after, not knocked off out of reach: 2026-10-26)   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
     if (knockK < 1 && kind !== "stomp") b.vy = Math.max(b.vy, -220 / Math.sqrt(b.wt)); }   // (a forward combo's blow before its last: a little pop, not up out of reach of the next)
   b.onGround = false;
@@ -20795,11 +20803,11 @@ function hitEnemy(dir, kind) {
   if (e.leaf) return false;   // (as leaves: nothing touches her)
   if (e.under && e.under.phase !== "up") { e.under.hits++; e.under.hitT = time; }   // (under her ledge: three and off she comes)
   e.hitT = time; e.hp -= 2 + (kind === "stomp" ? 0 : player.power || 0); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.6); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0;   // half-hearts: 2 + ATK power
-  if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
+  if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain(), swordOn()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
   SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15);   // (on the boss's body: heavier)
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
-  if (!e.under) { e.vx = dir * KB[0]; if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; } e.windup = 0;
+  if (!e.under) { e.vx = dir * KB[0] * (camTackle(kind) > 1 ? 1.35 : 1); if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; } e.windup = 0;
   e.sq = kind === "stomp" ? -.45 : .2; e.sqv = 0;
   hitFeel(e, dir, kind, true);
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
@@ -21267,7 +21275,7 @@ function update(dt) {
     shake = Math.max(0, shake - dt * 40); return;
   }
   updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateNpcs(dt); catCallTick(dt);
-  if (player.auto) autoPlayer(dt); else updatePlayer(dt);
+  if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);

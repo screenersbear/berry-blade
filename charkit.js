@@ -2603,7 +2603,7 @@ function syncCat(p, r, dt = 0) {
   const o = p.out, Bd = r.spec.body, TS = 1.12 * Bd.scale, gw = Bd.girth;
   const HIPY = .6 * Bd.legs, L_TH = .3 * Bd.legs, L_SH = .3 * Bd.legs, L_MT = .17 * Bd.legs, SPINE_L = .23 * Bd.torso,
     L_UA = .27 * Bd.arms, L_FA = .26 * Bd.arms, TAIL_N = 9, TAIL_L = .13 * Bd.tail;
-  r.root.position.set(X(p.x), Y(p.y), p.z || 0);
+  r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
   r.root.scale.set((1 - p.sq * .5) * TS, (1 + p.sq) * TS, (1 - p.sq * .5) * TS);
   r.root.visible = !(p.inv > 0 && p.hurtT <= 0 && Math.floor(p.inv * 18) % 2 === 0);
   r.yaw.rotation.y = p.yaw + (p.spinY + (o.spin || 0)) * (p.face > 0 ? 1 : -1);
@@ -2704,7 +2704,7 @@ function syncHuman(p, r, dt = 0) {
   const o = p.out, Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
   const H_HIP = D.hip * Bd.legs, H_TH = D.th * Bd.legs, H_SH = D.sh * Bd.legs, H_SPINE = D.spine * Bd.torso, H_UA = D.ua * Bd.arms, H_FA = D.fa * Bd.arms;
   const fs = p.face > 0 ? 1 : -1;
-  r.root.position.set(X(p.x), Y(p.y), p.z || 0);
+  r.root.position.set(X(p.x), Y(p.y) + (p.seatLift || 0), p.z || 0);
   if (r.spec.move.float) r.root.position.y += (.3 + Math.sin(api.time * 2.3 + (p.floatPh ?? (p.floatPh = Math.random() * 6))) * .045) * sc;   // she floats: hovers above the ground, bobbing
   r.root.scale.set((1 - p.sq * .5) * sc, (1 + p.sq) * sc, (1 - p.sq * .5) * sc);
   r.root.visible = !(p.inv > 0 && p.hurtT <= 0 && Math.floor(p.inv * 18) % 2 === 0);
