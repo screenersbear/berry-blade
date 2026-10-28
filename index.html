@@ -10359,6 +10359,8 @@ const petNoun = sp => sp === "dog" ? "DOG" : isAxo(sp) ? "AXOLOTL" : "CAT";
 const petCall = (sp, k) => sp === "dog" ? SFX.bark(k) : isAxo(sp) ? SFX.squeak(k) : SFX.meow(k);
 // air in the deep (the user, 2026-10-24: "the characters should have a light blue bubble over their head to show that they can breathe underwater"):
 // a glass bubble round each one's head, clear in the middle, light blue round its edge, a glint up top; only while their head's under the water
+// and the other way round for an axolotl (the user, 2026-10-28: "make axolotl pets be able to leave the water world but they will have a bubble over their head in the
+// regular world like the heroines have in the water world"): out of the water, anywhere, its head in a bubble of water (the same glass, a little water in it)
 const AIRB = { rigs: new Set() };
 function airBubble(r) {
   if (r.airB) return r.airB;
@@ -10366,16 +10368,21 @@ function airBubble(r) {
     AIRB.m = new THREE.ShaderMaterial({ transparent: true, depthWrite: false, uniforms: { c: { value: new THREE.Color("#9fe0ff") } },
       vertexShader: "varying vec3 vN; varying vec3 vV; void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); vN = normalize(normalMatrix * normal); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }",
       fragmentShader: "uniform vec3 c; varying vec3 vN; varying vec3 vV; void main() { vec3 n = normalize(vN), v = normalize(vV); float f = 1.0 - abs(dot(n, v)); vec3 L = normalize(vec3(-0.45, 0.65, 0.6)); float g = pow(max(dot(reflect(-L, n), v), 0.0), 60.0); float a = 0.17 + 0.6 * pow(f, 2.2) + g * 0.85; gl_FragColor = vec4(mix(c, vec3(1.0), clamp(g + pow(f, 7.0) * 0.4, 0.0, 1.0)), clamp(a, 0.0, 0.95)); }" }); }
-  const cat = r.kind === "cat", R = cat ? .62 : .58, b = new THREE.Mesh(AIRB.geo, AIRB.m); b.scale.setScalar(R); b.position.y = cat ? .08 : .05; b.renderOrder = 6; b.visible = false;
+  const cat = r.kind === "cat", axo = !!(r.spec && r.spec.parts && r.spec.parts.axo), R = cat ? .62 : .58;
+  if (axo && !AIRB.wm) { AIRB.wm = AIRB.m.clone(); AIRB.wm.uniforms.c.value = new THREE.Color("#5cc8f2"); }   // (water, not air: a deeper blue in the glass)
+  const b = new THREE.Mesh(AIRB.geo, axo ? AIRB.wm : AIRB.m); b.scale.setScalar(R); b.position.y = cat ? .08 : .05; b.renderOrder = 6; b.visible = false;
+  if (axo) { b.scale.set(...AXO_BUBBLE); b.position.y = .05; }   // (round its head, and wide enough each side for its gills)
   r.head.add(b); r.airB = b; AIRB.rigs.add(r); return b;
 }
 function syncAirBubbles() {
   AIRB.rigs.forEach(r => { r.airB.visible = false; });
-  const q = STAGES[stage]; if (world !== 13 || !q || !q.deep || hideout || stronghold || mode !== "play") return;
-  const L = [player, pal, pal2, ej && ej.st, ...allyStates()];
-  for (const st of L) { const r = st && st.rig; if (!r || !r.head || !r.root.visible || (r.spec && r.spec.parts && r.spec.parts.axo) || st.dead) continue;
-    if (deepWetAt(st.y - (r.heightPx || 92) * .75)) airBubble(r).visible = true; }   // (its head under the water)
+  const q = STAGES[stage]; if (!q || mode !== "play") return;
+  const deep = world === 13 && !!q.deep && !hideout && !stronghold, L = [player, pal, pal2, ej && ej.st, wild && wild.st, ...strays.map(s => s.st), ...allyStates()];
+  for (const st of L) { const r = st && st.rig; if (!r || !r.head || !r.root.visible || st.dead) continue;
+    const axo = !!(r.spec && r.spec.parts && r.spec.parts.axo), wet = deep && deepWetAt(st.y - (r.heightPx || 92) * .75);   // (its head under the water)
+    if (axo ? !wet : wet) airBubble(r).visible = true; }   // (a heroine's air under the water; an axolotl's water out of it)
 }
+const AXO_BUBBLE = [.6, .58, .84];                 // (an axolotl's: its head, and its gills out each side)
 const deepWetAt = y => { const q = STAGES[stage]; return !!(q && q.deep && !hideout && !stronghold && y - 30 > (q.deepTop ?? -1e9)); };   // (in the deep's water, at this height)
 const KIND_AT = w => w === 5 ? ["night", "night", "blue", "dawn", "dawn", "dawn"] : w === 11 ? ["night", "night", "night", "night", "night", "night"] : ["midday", "afternoon", "golden", "blue", "night", "dawn"];   // (each step of the day: what kind of hour it is)
 const kindNow = () => KIND_AT(world)[dayPos()];
