@@ -1253,11 +1253,21 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
     g.scale.setScalar(0); g.visible = false; return g;
   });
   const teeth = [notches[2], notches[1], notches[0]];      // (the order they come in: the tip's first)
+  // berry gear teeth (the user, 2026-10-28: "improving the power will add teeth to it. one gear is half a tooth, a second makes a whole tooth. this is for the
+  // max level of the weapon"): two smaller pink ones, between the tip's notch and the middle's, then the middle's and the hilt's; each in two halves (a gear each,
+  // the tip's side first), only out once the three are
+  const teethX = [.715, .465].map(u => {
+    const k = .72, h = .072 * k, d = .13 * k, half = (a, b, dd) => { const t = new THREE.Shape(); t.moveTo(a, 0); t.lineTo(b, 0); t.lineTo(0, -dd); t.closePath(); return t; };
+    const g = group(inner, u * LK, -W / 2 + .012, 0), mT = M(GEAR_PINK), mR = M("#2f3b43");
+    const hv = [[0, h], [-h, 0]].map(([a, b]) => { const q = group(g); q.add(P(slab(half(a, b, d), .04, .006), mT)); q.add(at(P(slab(half(a * 1.22, b * 1.22, d * 1.2), .03, .004), mR), 0, .006, 0)); return q; });
+    g.scale.setScalar(0); g.visible = false; return { g, hv };
+  });
   const gc = glowCol(Q.fill), glow = [halo(slab(roundRect(L + .08, W + .08, .1, .06, -(W + .08) / 2), .08, .02), gc, .55),
     halo(slab(roundRect(L + .24, W + .26, .17, -.02, -(W + .26) / 2), .05, .05), gc, .22), halo(new THREE.SphereGeometry(.16, 18, 12), gc, .5)];
   glow.forEach(m => inner.add(m));
-  return { kind: "sword", group: outer, inner, chunks, teeth, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02], P, L, W, lifeKey: "fff" };
+  return { kind: "sword", group: outer, inner, chunks, teeth, teethX, mFull, mEmpty, hideHand: false, glow, glowMats: [mBlade, mFull, mOrb], glowCol: gc, glint, glintM: gm, chunkX: [.16, len + .02], P, L, W, lifeKey: "fff" };
 }
+const GEAR_PINK = "#ff66aa";                       // (the berry gear's own pink: its teeth on the weapons)
 const GAUNT_UP = .1, GAUNT_CUFF = .62;              // (the user, 2026-10-22: "make camila's gauntlet a little shorter ... dont change the fist or the rings": the whole thing slid this far back up the forearm, the gold cuff this much of its old length)
 function propLife(pr, g) {                         // the weapon's life rebuilt for its berry gears, when they change: the sword's chunks, the gauntlet's rings
   const rows = lifeLayout(pr.kind, pr.kind === "sword" ? 3 : pr.ringN, g), key = rows.map(r => r.split ? (r.slot ? "h" : "s") : "f").join(""); pr.life = rows;
@@ -1314,6 +1324,19 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * SZ[i] * 2.2).normalize()));
     aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: SZ[i], q }); sp.scale.setScalar(0); sp.visible = false; return sp;
   });
+  // berry gear teeth (the user, 2026-10-28, as on the sword): a pink spike off the fourth knuckle, then one off the thumb, each split down its length (a gear a half)
+  const halfCone = (r, h, m) => { const q = new THREE.Group();
+    [0, Math.PI].forEach((t0, j) => { const c = new THREE.Group(); c.add(P(new THREE.ConeGeometry(r, h, 10, 1, false, t0, Math.PI), m));
+      const cap = new THREE.Shape(); cap.moveTo(-r, -h / 2); cap.lineTo(r, -h / 2); cap.lineTo(0, h / 2); cap.closePath(); c.add(P(new THREE.ShapeGeometry(cap).rotateY(Math.PI / 2), m)); q.add(c); });
+    return q; };
+  const mGT = M(GEAR_PINK, { side: THREE.DoubleSide }), teethX = [];
+  { const R = .056, sp = group(fist, -.012 + (R + .027 * .7) * Math.cos(ka), -.188 + (R + .027 * .7) * Math.sin(ka), -.102), aim = group(sp), hc = halfCone(.044, .22, mGT);
+    aim.add(at(hc, 0, .1, 0)); aim.add(at(P(new THREE.CylinderGeometry(.05, .054, .028, 14), M("#2f3b43")), 0, .005, 0));
+    const q = [-1, 1].map(s => new THREE.Quaternion().setFromUnitVectors(UP, new THREE.Vector3(Math.cos(sa), Math.sin(sa), s * -.102 * 2.2).normalize()));
+    aim.quaternion.copy(q[1]); spikeAim.push({ sp, aim, z: -.102, q }); sp.scale.setScalar(0); sp.visible = false; teethX.push({ g: sp, hv: hc.children }); }
+  { const sp = new THREE.Group(), hs = thumbs.map(t => { const a = group(t, .02, -.1, 0), hc = halfCone(.036, .17, mGT); a.userData.ts = t; hc.position.y = .085; a.add(hc); a.add(at(P(new THREE.CylinderGeometry(.04, .044, .024, 12), M("#2f3b43")), 0, .004, 0)); return { a, hc }; });
+    thumbs.forEach((t, i) => { const ts = i ? 1 : -1; hs[i].a.position.set(.02, -.1, ts * .13); hs[i].a.quaternion.setFromUnitVectors(UP, new THREE.Vector3(-.55, -.15, ts).normalize()); });
+    sp.scale.setScalar(0); teethX.push({ g: sp, hv: [0, 1].map(j => ({ set visible(v) { hs.forEach(H => { H.hc.children[j].visible = v; }); } })), thumb: hs }); }
   fist.add(at(P(new THREE.SphereGeometry(1, 20, 14).scale(.036, .056, .056), mOrb), -.108, -.075, 0));    // the orb, set in the back of the hand
   fist.add(at(P(new THREE.TorusGeometry(.06, .012, 8, 24).rotateY(Math.PI / 2), mGold), -.106, -.075, 0));
   fist.add(at(P(new THREE.TorusGeometry(.03, .007, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.138, -.068, .006));
@@ -1321,7 +1344,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     halo(new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x + .085, v.y)), 28), gc, .2), halo(new THREE.SphereGeometry(.2, 20, 14), gc, .5), halo(new THREE.SphereGeometry(.26, 20, 14), gc, .2)];
   glow[0].material.side = glow[1].material.side = THREE.DoubleSide; g.add(glow[0], glow[1]);
   glow[2].material.side = glow[3].material.side = THREE.BackSide; fist.add(at(glow[2], 0, -.13, 0), at(glow[3], 0, -.13, 0));   // (round the fist, not over it: the fingers stay clear)
-  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc, P, M, ringG: g, ringN: n, ringX: extra, Q, lifeKey: "f".repeat(n) };
+  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, teethX, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc, P, M, ringG: g, ringN: n, ringX: extra, Q, lifeKey: "f".repeat(n) };
 }
 
 function buildHuman(R) {
@@ -2194,15 +2217,17 @@ Object.assign(STRIKES, {
 });
 // on hands and knees (the user, 2026-10-28: "we're going to add a crawling animation and the first implementation will be in c7": the hole in its wall into C8):
 // one cycle of crawlPh, the game's distance crawled. The torso level, the head up to see ahead; a hand reaching forward as the knee on the other side comes
-// up under her, then the other pair: the shins along the ground behind, the toes trailing
+// up under her, then the other pair: the shins along the ground behind, the toes trailing. The legs redone (the user, 2026-10-28: "the crawl animation should also
+// move the characters' legs"): the feet had been keyed further back than the legs reach, so they stayed straight out behind, still. Now the hips at a thigh's
+// height, the knees down on the floor under them, each shin stepping on in turn (lifted as it comes forward) and pushing back
 STRIKES.crawl = { dur: 1, pose: true, keys: {
-  lean: [[0, 1.3], [.25, 1.25], [.5, 1.3], [.75, 1.25], [1, 1.3]], arch: [[0, -.12], [1, -.12]], bodyY: [[0, -.3], [.25, -.27], [.5, -.3], [.75, -.27], [1, -.3]],
+  lean: [[0, 1.3], [.25, 1.25], [.5, 1.3], [.75, 1.25], [1, 1.3]], arch: [[0, -.12], [1, -.12]], bodyY: [[0, -.33], [.25, -.31], [.5, -.33], [.75, -.31], [1, -.33]],
   headRot: [[0, -1.0], [.25, -.95], [.5, -1.0], [.75, -.95], [1, -1.0]],
   armF: [[0, 1.05], [.25, 1.3], [.5, 1.6], [.75, 1.3], [1, 1.05]], elbF: [[0, .12], [.25, .45], [.5, .1], [.75, .25], [1, .12]],
   armB: [[0, 1.6], [.25, 1.3], [.5, 1.05], [.75, 1.3], [1, 1.6]], elbB: [[0, .1], [.25, .25], [.5, .12], [.75, .45], [1, .1]],
   spF: [[0, .1], [1, .1]], spB: [[0, .1], [1, .1]],
-  fNx: [[0, -.52], [.25, -.62], [.5, -.72], [.75, -.62], [1, -.52]], fFx: [[0, -.72], [.25, -.62], [.5, -.52], [.75, -.62], [1, -.72]],
-  fNy: [[0, .08], [.25, .08], [.5, .08], [.75, .16], [1, .08]], fFy: [[0, .08], [.25, .16], [.5, .08], [.75, .08], [1, .08]], fP: [[0, -1.4], [1, -1.4]] } };
+  fNx: [[0, -.24], [.25, -.33], [.5, -.42], [.75, -.33], [1, -.24]], fFx: [[0, -.42], [.25, -.33], [.5, -.24], [.75, -.33], [1, -.42]],
+  fNy: [[0, .02], [.25, .02], [.5, .02], [.75, .16], [1, .02]], fFy: [[0, .02], [.25, .16], [.5, .02], [.75, .02], [1, .02]], fP: [[0, -1.4], [1, -1.4]] } };
 // up after the one you've launched (the user, 2026-10-28: "the player needs a slight crouch and jump movement to follow up. right now it looks like they just
 // literally float up into the air"): down into the knees, the arms swung back (to go, where the game pushes off), then up out of them, the arms thrown up
 // and the legs straightened under her, toes pointed; after dur the jump's own rising pose (the lead knee driven up) till the blow. Redone the next morning (the
@@ -2859,6 +2884,12 @@ function syncHuman(p, r, dt = 0) {
       if (s.x < 0) { s.x = 0; s.v = 0; }
       g.scale.setScalar(s.x); g.visible = s.x > .01;
     });
+    if (pr.teethX) { const pg = p.powG || 0, TX = r.teethXS || (r.teethXS = pr.teethX.map(() => ({ x: 0, v: 0 })));   // (the berry gears' teeth: only at full power, a half a gear)
+      pr.teethX.forEach((X, i) => { const s = TX[i], want = n >= 3 && pg > i * 2 ? 1 : 0;
+        for (let k = 0, m = Math.ceil(h * 120); k < m; k++) { s.v += (260 * (want - s.x) - 14 * s.v) * h / m; s.x += s.v * h / m; }
+        if (s.x < 0) { s.x = 0; s.v = 0; }
+        X.hv[0].visible = true; X.hv[1].visible = pg >= i * 2 + 2;
+        if (X.thumb) X.thumb.forEach(H => { H.a.scale.setScalar(s.x); H.a.visible = s.x > .01; }); else { X.g.scale.setScalar(s.x); X.g.visible = s.x > .01; } }); }
   }
   if (pr && pr.glow) {                                                // full health: the sword / gauntlet glows; a hit puts it out
     const want = hp >= 3 && !p.dead ? 1 : 0;
