@@ -279,7 +279,7 @@ let onion = null, onionOn = true;
 function moveAt(kind, S, u) {                                    // the state that plays a move at u (-1: between loops). The tackle, the dig-in and the back-step are
   const pm = S.pose && u >= 0 ? kind : null;                     // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
   const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
-  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb" && !(pm === "uphop" && u > .1), upHop: pm === "uphop" ? { t: u } : null, vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
+  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb" && !(pm === "uphop" && u > (S.go ?? .14)), upHop: pm === "uphop" ? { t: u } : null, vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
     tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,
     climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0,   // (the climb: up her rock, as the game plays it)
     popB: pm === "pop_sword" || pm === "pop_reach" ? Math.max(.001, u / S.dur) : 0, popSword: pm === "pop_sword",

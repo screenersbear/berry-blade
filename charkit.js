@@ -2209,11 +2209,13 @@ STRIKES.crawl = { dur: 1, pose: true, keys: {
   fNx: [[0, -.52], [.25, -.62], [.5, -.72], [.75, -.62], [1, -.52]], fFx: [[0, -.72], [.25, -.62], [.5, -.52], [.75, -.62], [1, -.72]],
   fNy: [[0, .08], [.25, .08], [.5, .08], [.75, .16], [1, .08]], fFy: [[0, .08], [.25, .16], [.5, .08], [.75, .08], [1, .08]], fP: [[0, -1.4], [1, -1.4]] } };
 // up after the one you've launched (the user, 2026-10-28: "the player needs a slight crouch and jump movement to follow up. right now it looks like they just
-// literally float up into the air"): down into the knees, the arms swung back (to .1, where the game pushes off), then up out of them, the arms thrown up
-STRIKES.uphop = { dur: .18, pose: true, keys: {
-  lean: [[0, .2], [.1, .45], [.18, .1]], arch: [[0, .05], [.1, .14], [.18, .02]], bodyY: [[0, -.08], [.1, -.32], [.18, .02]], headRot: [[0, -.2], [.1, -.3], [.18, -.4]],
-  armF: [[0, .4], [.1, -.45], [.18, 2.3]], elbF: [[0, .8], [.1, .5], [.18, .3]], armB: [[0, .3], [.1, -.55], [.18, 1.4]], elbB: [[0, .8], [.1, .5], [.18, .4]],
-  fNx: [[0, .2], [.1, .28], [.18, .18]], fNy: [[0, 0], [.1, 0], [.18, .3]], fFx: [[0, -.18], [.1, -.24], [.18, -.26]], fFy: [[0, 0], [.1, 0], [.18, .08]], fP: [[0, 0], [.1, .2], [.18, -.5]] } };
+// literally float up into the air"): down into the knees, the arms swung back (to go, where the game pushes off), then up out of them, the arms thrown up
+// and the legs straightened under her, toes pointed; after dur the jump's own rising pose (the lead knee driven up) till the blow. Redone the next morning (the
+// user: "there's still no proper jump"): the crouch was .1 s and too shallow to see, the rise held to ~70 px under the one up there
+STRIKES.uphop = { dur: .22, go: .14, pose: true, keys: {
+  lean: [[0, .15], [.14, .52], [.22, .04]], arch: [[0, .05], [.14, .22], [.22, -.06]], bodyY: [[0, -.06], [.14, -.46], [.22, .06]], headRot: [[0, -.15], [.14, -.36], [.22, -.45]],
+  armF: [[0, .3], [.14, -.85], [.22, 2.6]], elbF: [[0, .7], [.14, .45], [.22, .25]], armB: [[0, .2], [.14, -.95], [.22, 1.7]], elbB: [[0, .7], [.14, .45], [.22, .35]],
+  fNx: [[0, .22], [.14, .32], [.22, .08]], fNy: [[0, 0], [.14, 0], [.22, .04]], fFx: [[0, -.18], [.14, -.28], [.22, -.1]], fFy: [[0, 0], [.14, 0], [.22, 0]], fP: [[0, 0], [.14, .28], [.22, -.75]] } };
 const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
@@ -2302,7 +2304,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
-  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb);   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
+  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb) || !!p.upHop;   // (the crouch and jump up after a launch too: quick, or the crouch never shows)   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
   for (const key in T) {
     if (p.pose[key] === undefined) p.pose[key] = T[key];
     if (SPRUNG.has(key)) {
@@ -2337,7 +2339,7 @@ function updatePoseHuman(p, dt) {
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));   // crawling through a low hole (2026-10-28)
-  else if (p.upHop && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the jump (2026-10-28)
+  else if (p.upHop && a < 0 && p.hurtT <= 0 && (!p.upHop.up || p.upHop.t < STRIKES.uphop.dur)) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the push off (2026-10-28; then the jump's own rising pose)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);
   else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = !S.screen && leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);

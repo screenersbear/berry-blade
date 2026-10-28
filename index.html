@@ -567,7 +567,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261028b"></script>
+<script src="charkit.js?v=20261028c"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261026a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -763,7 +763,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261028b"></script>
+<script src="editor.js?v=20261028c"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -9512,9 +9512,12 @@ function updatePlayer(dt) {
       else if (p.chain && p.atkIdx < p.chain.list.length - 1 && p.atkT > .04 && !p.solo) { atkBuf = 0; p.queued = true; }   // (the air's single rising hit is a move on its own: nothing chains off it)
     }
   }
-  if (p.upHop) { const H = p.upHop; H.t += dt; p.vx = approach(p.vx, 0, 2400 * dt); atkBuf = 0; jumpBuf = 0;   // up after the launched one (the user, 2026-10-28): down into the knees, then the jump, then the hit
-    if (!H.up && H.t >= UPHOP_GO) { H.up = true; p.vy = -UPHOP_V; p.onGround = false; p.plat = null; p.coyote = 0; p.sq = .26; p.sqv = 0; dust(p.x, p.y, 6); SFX.jump(); }
-    if (H.t >= KIT.STRIKES.uphop.dur || p.hurtT > 0 || p.dead || (!H.up && !p.onGround)) { const k = H.kind, vy = p.vy; p.upHop = null; if (!(p.hurtT > 0) && !p.dead && p.chain) { startStrike(p, k, 1); if (H.up) p.vy = vy; } } }   // (on up with the jump: the hit doesn't push you up again)
+  if (p.upHop) { const H = p.upHop, U = KIT.STRIKES.uphop; H.t += dt; p.vx = approach(p.vx, 0, 2400 * dt); if (atkBuf > 0) H.queued = true; atkBuf = 0; jumpBuf = 0;   // up after the launched one (the user, 2026-10-28): down into the knees, a real jump up to it, then the hit (a press on the way up: the blow after, queued)
+    if (!H.up && H.t >= U.go) { const b = upHopTarget(p), g = GRAV * WEIGHT, v = Math.sqrt(2 * g * upHopRise(p, b));
+      H.up = true; p.vy = -v; p.fullJump = true; p.jumpT = time; p.onGround = false; p.plat = null; p.coyote = 0; p.sq = .3; p.sqv = 0; dust(p.x, p.y, 8); SFX.jump();
+      if (b) { b.juggleT = Math.max(b.juggleT, v / g + .3); b.hoverT = Math.max(b.hoverT || 0, v / g - .02); } }   // (the one up there hangs on till you're up with it: the user's "maybe fall a little more slowly")
+    if ((H.up && (p.vy >= -UPHOP_HIT_VY || H.t >= U.go + .5)) || p.hurtT > 0 || p.dead || (!H.up && !p.onGround)) { const k = H.kind, vy = p.vy, q = H.queued; p.upHop = null;
+      if (!(p.hurtT > 0) && !p.dead && p.chain) { startStrike(p, k, 1); if (H.up) p.vy = vy; p.queued = !!q; } } }   // (near the top of the jump: the blow, which doesn't push you up again)
   if (p.atkT >= 0 && p.atkKind) {          // keyed moves: the humans' strikes and Tocsin's card moves
     const S = cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind], pa = p.atkT; p.atkT += dt;
     if (S.sfx2 && pa < S.sfx2[0] && p.atkT >= S.sfx2[0] && !SWING_SILENT.has(S.sfx2[1])) SFX[S.sfx2[1]]();   // (its second sound too: the clicks the user still heard, 2026-10-24 "clicking/ switch hitting sound ... almost like you're playing with toys")
@@ -9527,7 +9530,7 @@ function updatePlayer(dt) {
       if (p.atkT >= (S.chain ?? S.dur)) { const c = p.combo; if (++c.idx < c.level) startMove(p, c.list[c.idx]); else { p.combo = null; p.atkT = -1; } }
     } else if (cat && p.atkIdx === 0 && p.queued && p.atkT >= (S.chain ?? S.dur)) startMove(p, (KIT.CAT_GROUND.includes(p.atkKind) ? KIT.CAT_GROUND : KIT.CAT_AIR)[1], 1);
     else if (!cat && p.queued && p.chain && p.atkT >= (p.chain.kind === "up" && p.atkIdx === 1 ? Math.min(S.chain ?? S.dur, .3) : S.chain ?? S.dur) && p.chain.list[p.atkIdx + 1] && (!p.chain.needHit || p.chainHit)) {
-      if (p.chain.kind === "up" && p.atkIdx === 0 && p.onGround && !p.combo) { p.upHop = { t: 0, kind: p.chain.list[1], up: false }; p.atkT = -1; p.atkKind = null; p.queued = false; }   // (up after the launched one: a crouch and a jump first, UPHOP)
+      if (p.chain.kind === "up" && p.atkIdx === 0 && p.onGround && !p.combo) { p.upHop = { t: 0, kind: p.chain.list[1], up: false }; p.atkT = -1; p.atkKind = null; p.queued = false; const tb = upHopTarget(p); if (tb) tb.hoverT = KIT.STRIKES.uphop.go + .05; }   // (up after the launched one: a crouch and a jump first, UPHOP)
       else startStrike(p, p.chain.list[p.atkIdx + 1], p.atkIdx + 1); }   // queued: on into the next of this combo (after the jump up, while still up there)
     else if (p.atkT >= S.dur || (p === player && !cat && !p.queued && p.onGround && S.hits && S.hits.length && p.atkT > S.hits[S.hits.length - 1].t1 + .08 && (held.left || held.right || jumpBuf > 0))) {   // (its last blow landed: a move off, or a jump, ends what's left of its follow-through. The user, 2026-10-25: "feels like delayed when the player thinks they can move again")
       if ((cat ? p.atkIdx === 0 : p.chain && p.atkIdx < p.chain.list.length - 1) && !p.solo) { p.lastStrikeT = time; p.lastIdx = p.atkIdx; } p.atkT = -1; p.solo = false; }
@@ -9633,7 +9636,7 @@ function updatePlayer(dt) {
   p.spinY = 0;
   // 3/4 yaw toward the camera; turning swings through the front
   // running / diving: body swings toward profile (so the stretch reads), head keeps looking at the camera
-  const diving = attacking;     // punches, kicks and card moves read best side-on
+  const diving = attacking || !!p.upHop;     // punches, kicks and card moves read best side-on (and the crouch and jump up after a launch: turned to us, a tucked jump read as floating up, 2026-10-28)
   p.prof = approach(p.prof || 0, Math.max(p.onGround ? p.gaitAmt : 0, diving || p.dive || p.swim ? 1 : 0), dt * (diving ? 10 : 4));
   p.bodyYaw = lerp(.85, (p.dive || p.swim) && !attacking ? .08 : .3, p.prof);   // (swimming: right side-on, so the body's tilt along the stroke reads across the screen)
   const yT0 = p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, yT1 = p.tpose > 0 ? lerp(yT0, -Math.PI / 2, Math.min(1, p.tpose * 2.5)) : yT0;   // opening out to the T: turn to face us
@@ -9853,7 +9856,10 @@ function syncSwingTrail() {
     trailDraw(G); });
 }
 const HANG_AIR = 1.1;                                // how long an air combo can hold you up there, a jump (then you come down as ever): 1.6 at .08 gravity till 2026-10-26, now 1.1 at .3 (not floating)
-const UPHOP_GO = .1, UPHOP_V = 800;                  // (the crouch before the jump up after a launch: how long, then how hard you push off: charkit STRIKES.uphop)
+const UPHOP_HIT_VY = 240, UPHOP_H = 130, UPHOP_MIN = 90, UPHOP_MAX = 230;   // (the jump up after a launch, charkit STRIKES.uphop: its blow once you're slowing to the top; how high: up to the one you launched, else UPHOP_H)
+function upHopTarget(p) { let best = null, bd = 260; for (const b of baddies) { if (b.dead || b.gone || b.onGround || !(b.juggleT > 0)) continue; const d = Math.abs(b.x - p.x); if (d < bd) { bd = d; best = b; } } return best; }   // (the launched one: up in the air, nearest)
+const upCarry = b => !!(player && player.chain && player.chain.kind === "up" && player.atkT >= 0 && !player.onGround && Math.abs(b.x - player.x) < 160);   // (the up chain's one you've hit, up there: kept at your height till its last blow, 2026-10-28)
+const upHopRise = (p, b) => clamp(b ? p.y - b.y + (b.h || 60) * .5 - (p.rig.heightPx || 100) * .55 + 10 : UPHOP_H, UPHOP_MIN, UPHOP_MAX);   // (your chest up level with its middle)
 const LAUNCH_VY = 470, LAUNCH_HANG = .55;            // (launched: up about a jump's height, floating at the top a while for you to jump up after: a touch higher and longer since the crouch before your jump, 2026-10-28; was 440, .4)
 const AIR_HITS = 3;                                  // one air combo a jump (or a launch): only its blows that land hold you up, three at most; after it, no more air combos till you're down (the user, 2026-10-23)
 const airCh = p => { const ch = p.chain && !p.combo ? p.chain.kind : null, S = KIT.STRIKES[p.atkKind] || {}; return !p.onGround && (ch === "air1" || ch === "air2") && !S.dive && !S.slamLand ? ch : null; };
@@ -21084,7 +21090,8 @@ function updateBaddy(b, dt) {
     const chase = STAGES[stage] && STAGES[stage].deep && !p.dead && Math.abs(p.x - b.x) < 700;   // (the deep: one that's seen you swims up and down after you, not holding its height)
     const hy = chase ? clamp(p.y - 40 + Math.sin(time * 1.7 + b.phase) * 12, DEEP_TOP + 40, (groundAt(b.x) ?? GROUND) - 10) : (b.homeY ?? (b.homeY = b.y)) - T.hover + Math.sin(time * 1.7 + b.phase) * 9;
     b.vy = approach(b.vy, clamp((hy - b.y) * (chase ? 1.6 : 3.2), chase ? -150 : -240, chase ? 150 : 240), (chase ? 600 : 1100) * dt);
-  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (b.juggleT > 0 ? (b.carryVx != null ? (player.hangT > 0 && !player.onGround ? .3 : 1) : .6) : 1), 1000); if (!b.onGround && b.hurtT > 0) { if (b.juggleT > 0 && b.carryVx != null) b.vx = b.carryVx + (b.vx - b.carryVx) * Math.exp(-4 * dt); else if (!(b.juggleT > 0)) b.vx *= Math.exp(-2.5 * dt); } }   // (carried on an air combo: eased in to a fist's length off the hero, then along with her, and held while she's held, falling when she falls)   // (juggled: a little lighter for a moment, not floating: .28 till 2026-10-26, the user "the enemy just floats in the air" · knocked flying, the air slows it)   // (juggled: lighter a moment, floating there for the follow-up: .42 till 2026-10-23)
+  } else { b.juggleT = Math.max(0, (b.juggleT || 0) - dt); const hov = b.hoverT > 0; if (hov) { b.hoverT -= dt; b.vy *= Math.exp(-8 * dt); }   // (hoverT: hung at the top of its launch while you crouch and jump up to it, 2026-10-28)
+    b.vy = Math.min(b.vy + 2000 * dt * (T.grav || 1) * (hov ? .12 : b.juggleT > 0 ? (b.carryVx != null ? (player.hangT > 0 && !player.onGround ? .3 : 1) : .6) : 1), 1000); if (b.carryVx != null && b.juggleT > 0 && upCarry(b)) b.vy = Math.min(b.vy, player.vy + 30); if (!b.onGround && b.hurtT > 0) { if (b.juggleT > 0 && b.carryVx != null) b.vx = b.carryVx + (b.vx - b.carryVx) * Math.exp(-4 * dt); else if (!(b.juggleT > 0)) b.vx *= Math.exp(-2.5 * dt); } }   // (carried on an air combo: eased in to a fist's length off the hero, then along with her, and held while she's held, falling when she falls)   // (juggled: a little lighter for a moment, not floating: .28 till 2026-10-26, the user "the enemy just floats in the air" · knocked flying, the air slows it)   // (juggled: lighter a moment, floating there for the follow-up: .42 till 2026-10-23)
   moveBody(b, dt, b.hw);
   if (p !== player && friends.includes(p) && b.atk === "go" && !b.dead && Math.abs(p.x - b.x) < p.hw + b.hw && p.y - p.h < b.y && b.y - b.h < p.y) bepHurt(p, Math.sign(p.x - b.x) || b.dir);   // (rammed: a lunge, a roll, a leap)
   if (fly && GAPS.length && overGap(b.x) && b.y > GROUND - 6 && !(b.y > GROUND + 40)) { b.y = GROUND - 6; b.vy = Math.min(b.vy, -60); }   // a floater never goes under
