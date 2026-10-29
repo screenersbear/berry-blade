@@ -67,6 +67,11 @@ function skinCompile(sh) {
   sh.fragmentShader = sh.fragmentShader.replace("#include <lights_toon_pars_fragment>", "#include <lights_toon_pars_fragment>\n" + SKIN_FS)
     .replace("#include <opaque_fragment>", "if (skin > .5) outgoingLight = skinOf(outgoingLight, normal, vViewPosition);\n#include <opaque_fragment>");
 }
+// a picture let go, and its canvas with it (Safari caps all the canvases on a page together: past it a new one comes out blank, so a rig built after
+// many rebuilds had a black head and body, its two biggest pictures. The user, 2026-10-29: "the orange tabby in berry woods head and body were black but his
+// arms and legs were fine"). A canvas emptied to 0 x 0 gives its memory back at once, not whenever it's collected
+const freeCanvas = c => { if (c && c.getContext && c.width) { c.width = 0; c.height = 0; } };
+const freeTex = t => { if (!t) return; const im = t.image; t.dispose(); freeCanvas(im); };
 const canvasTex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
 function cv2(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; }
 function fillPoly(g, pts, col) { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); }
@@ -720,7 +725,7 @@ function wrapFront(planar, earCol, faceY = 0, back = null) {     // project the 
       if (ec) for (const e of EARS) if (x * e.x + y * e.y + z * e.z > Math.cos(.34) && x > e.x + .03) { d[o] = ec[0]; d[o + 1] = ec[1]; d[o + 2] = ec[2]; }
     }
   }
-  g.putImageData(img, 0, 0); if (back) back(g, W, H); return canvasTex(c);
+  g.putImageData(img, 0, 0); if (back) back(g, W, H); freeCanvas(planar); return canvasTex(c);   // (the flat face read: let go)
 }
 function catBackArt(S) {                          // a real cat's coat over the back of the head (equirect: the back is at u = 0 / 1, the top at v = 0)
   const c = S.colors, P = S.parts; if (!P.calico && !P.tabby) return null;
@@ -1579,7 +1584,7 @@ function dispose(R) {
   [R.root, R.shadow].forEach(o => o.traverse(m => { if (m.geometry && !seen.has(m.geometry)) { seen.add(m.geometry); m.geometry.dispose(); } }));
   R.mats.forEach(m => m.dispose()); R.shadow.material.dispose();
   if (R.prop && R.prop.glow) R.prop.glow.forEach(m => m.material.dispose());
-  (R.texs || []).forEach(t => t.dispose());
+  (R.texs || []).forEach(freeTex);
 }
 // apply a changed spec: numbers that the animation reads every frame update in place; anything else rebuilds
 const LIVE = /^body\.(?!build$)|^move\.|^hair\.(width|height|depth|tilt|length|flow|thick|spike)$|^face\.ears$|^outfit\.(scarf\.(len|flow)|pads\.size)$|^(name|id)$/;
@@ -3072,7 +3077,7 @@ function paintCards(cards, spec) {
     g.fillStyle = c.cards[i]; g.fillRect(11, 11, 106, 170);
     g.beginPath(); g.arc(64, 96, 19, 0, TAU); g.fillStyle = "#ffffff"; g.fill();
     const [face, edge] = m.userData.mats;
-    if (face.map) face.map.dispose();
+    if (face.map) freeTex(face.map);
     face.map = canvasTex(cv); face.needsUpdate = true; edge.color.set(c.cardEdge);
   });
 }
