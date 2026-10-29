@@ -3129,19 +3129,19 @@ STRIKES.up_kick = { ...STRIKES.nj_c3, dur: .56, step: 60, hop: -580, hits: [{ t0
 // down while they're in the air. it should extend a little so they can hit a creature they're jumping over or past. so like rose will swing down right below her once,
 // camila can do a punch down where her body makes like a half moon shape as her arm goes over head and down"): no dive, no slam; one blow down under her as she goes,
 // reaching a little below her feet and either side, and on through the jump
-STRIKES.dn_sword = { dur: .44, step: 0, sq: -.04, sfx: "slash", hits: [{ t0: .12, t1: .3, reach: 80, back: 55, y0: 40, y1: -125, kind: "slash" }],   // Rose: the blade up in front, then swept down right under her
+STRIKES.dn_sword = { dur: .44, step: 0, sq: -.04, sfx: "slash", hits: [{ t0: .12, t1: .3, reach: 80, back: 55, y0: 40, y1: -50, kind: "slash" }],   // (its reach under her feet 50 px, was 125: it connected from too high up, the user 2026-10-29)   // Rose: the blade up in front, then swept down right under her
   keys: { armF: [[0, 2.2], [.07, 2.85], [.15, 1.0], [.22, .05], [.3, -.15], [.44, .55]], elbF: [[0, .4], [.07, .6], [.15, .1], [.3, .05], [.44, .3]],
     blade: [[0, 2.0], [.07, 2.7], [.15, .45], [.22, -1.25], [.3, -1.55], [.44, -.3]], grip: [[0, .7], [.05, 1], [.36, 1], [.44, .7]],   // (the blade ends pointing straight down under her)
     armB: [[0, 1.4], [.1, 2.0], [.22, .4], [.44, .8]], elbB: [[0, .7], [.44, .6]],
     lean: [[0, 0], [.07, -.3], [.16, .45], [.24, .8], [.34, .7], [.44, .3]], arch: [[0, 0], [.07, -.2], [.2, .25], [.44, .05]], headRot: [[0, 0], [.16, .3], [.3, .45], [.44, .15]],
     fNx: [[0, .2], [.12, .14], [.26, .3], [.44, .2]], fNy: [[0, .34], [.12, .4], [.26, .48], [.44, .34]], fFx: [[0, -.12], [.12, -.2], [.26, -.05], [.44, -.12]], fFy: [[0, .26], [.12, .3], [.26, .4], [.44, .28]], fP: [[0, -.4], [.44, -.4]] } };
-STRIKES.dn_fist = { dur: .5, step: 0, sq: .06, sfx: "kick", hits: [{ t0: .2, t1: .36, reach: 70, back: 60, y0: 40, y1: -125, kind: "smash" }],   // Camila: arched back, the fist up over her head, and her whole body curling round as it comes down under her: a half moon
+STRIKES.dn_fist = { dur: .5, step: 0, sq: .06, sfx: "kick", hits: [{ t0: .2, t1: .36, reach: 70, back: 60, y0: 40, y1: -50, kind: "smash" }],   // (50 px under her, was 125)   // Camila: arched back, the fist up over her head, and her whole body curling round as it comes down under her: a half moon
   keys: { armF: [[0, 1.6], [.1, 3.05], [.18, 2.6], [.26, .4], [.34, -.1], [.5, .6]], elbF: [[0, 1.0], [.1, .35], [.2, .1], [.34, 0], [.5, .4]],
     armB: [[0, 1.0], [.1, 1.8], [.2, .2], [.34, -.4], [.5, .5]], elbB: [[0, 1.0], [.2, .8], [.5, .9]],
     lean: [[0, 0], [.1, -.55], [.17, -.6], [.26, .7], [.34, 1.05], [.5, .45]], arch: [[0, 0], [.1, -.5], [.17, -.55], [.26, .35], [.34, .55], [.5, .15]], headRot: [[0, 0], [.1, -.3], [.26, .35], [.5, .1]],
     aS: [[0, 0], [.24, 0], [.3, .07], [.4, 0]],
     fNx: [[0, .2], [.1, -.15], [.18, -.2], [.3, .32], [.5, .2]], fNy: [[0, .32], [.1, .22], [.18, .2], [.3, .5], [.5, .34]], fFx: [[0, -.15], [.1, -.35], [.18, -.38], [.3, .1], [.5, -.12]], fFy: [[0, .28], [.1, .3], [.18, .3], [.3, .44], [.5, .3]], fP: [[0, -.3], [.12, -.7], [.3, -.2], [.5, -.35]] } };
-STRIKES.dn_kick = { ...STRIKES.flipaxe, dur: .5, step: 0, hits: [{ t0: .26, t1: .42, reach: 70, back: 50, y0: 40, y1: -110, kind: "smash" }] };   // an axe kick down under her, no dive
+STRIKES.dn_kick = { ...STRIKES.flipaxe, dur: .5, step: 0, hits: [{ t0: .26, t1: .42, reach: 70, back: 50, y0: 40, y1: -50, kind: "smash" }] };   // (50 px under her, was 110)   // an axe kick down under her, no dive
 Object.assign(MOVESETS.brawler, { up: "up_fist", down: "dn_fist" }); Object.assign(MOVESETS.boxer, { up: "up_fist", down: "dn_fist" });
 Object.assign(MOVESETS.sword, { up: "up_sword", down: "dn_sword" }); Object.assign(MOVESETS.ninja, { up: "up_kick", down: "dn_kick" }); Object.assign(MOVESETS.kunoichi, { up: "up_kick", down: "dn_kick" });
 CAT_MOVES.up_cards = { ...CAT_MOVES.cardstorm, dur: .62, dash: [.06, 40, -560], hits: [{ t0: .06, t1: .44, kind: "launch" }] };   // Tocsin: the cards rise from his feet in a crescent and carry him up
