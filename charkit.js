@@ -30,7 +30,43 @@ const PARENT = opt.parent, SHADOWS = opt.shadowParent || opt.parent;
 // ───────────────────────────── cel shading, no outlines ─────────────────────────────
 const gradT = new THREE.DataTexture(new Uint8Array([212, 238, 255]), 3, 1, THREE.RedFormat);
 gradT.minFilter = gradT.magFilter = THREE.NearestFilter; gradT.generateMipmaps = false; gradT.needsUpdate = true;
-const toonT = (color, extra) => new THREE.MeshToonMaterial({ color, gradientMap: gradT, ...extra });
+const toonT = (color, extra) => skinned(new THREE.MeshToonMaterial({ color, gradientMap: gradT, ...extra }));
+// a texture on the characters themselves, over the screen's paper (the user, 2026-10-29: "is there an effect that can be applied to the actual character
+// presentation ... to make it feel a little more textured?"): skin = 1 HATCH (pencil lines in the shade) · 2 GRAIN (paint tooth + dry brush) · 4 PIGMENT
+// (watercolour pooling at the edges), added up. Patterns sit in screen pixels from each part's own origin, so they travel with the part (no shower door)
+const SKIN_U = { skin: { value: 0 }, skinRes: { value: new THREE.Vector2(1, 1) }, skinStep: { value: 1 } };
+api.skin = SKIN_U;
+const SKIN_FS = `uniform float skin, skinStep; uniform vec2 skinRes; varying vec2 vSkinO;
+float skH(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+float skN(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(skH(i), skH(i + vec2(1.0, 0.0)), u.x), mix(skH(i + vec2(0.0, 1.0)), skH(i + vec2(1.0, 1.0)), u.x), u.y); }
+float skLine(vec2 p, vec2 d, float per, float w) { float v = dot(p, d) / per + skN(p / 7.0) * .45; float f = abs(fract(v) - .5) * 2.0, e = 1.4 / per; return 1.0 - smoothstep(w - e, w + e, 1.0 - f); }
+vec3 skinOf(vec3 c, vec3 n, vec3 vp) {
+  vec2 sp = (gl_FragCoord.xy - (vSkinO * .5 + .5) * skinRes) / skinStep;
+  float h = .62;
+  #if NUM_DIR_LIGHTS > 0
+  h = dot(n, directionalLights[0].direction) * .5 + .5;
+  #endif
+  if (mod(skin, 2.0) > .5) { float w1 = clamp((.8 - h) * 1.3, 0.0, .55), w2 = clamp((.52 - h) * 1.6, 0.0, .5), k = .55 + .45 * skN(sp / 5.0);
+    float a = skLine(sp, vec2(.7071, .7071), 4.6, w1) * step(.001, w1), b = skLine(sp, vec2(-.7071, .7071), 5.0, w2) * step(.001, w2);
+    c *= 1.0 - max(a, b) * .45 * k; }
+  if (mod(floor(skin / 2.0), 2.0) > .5) { float t = skN(sp / 1.6) * .55 + skN(sp / 4.5) * .3 + skH(floor(sp)) * .15, br = skN(vec2(sp.x / 16.0, sp.y / 2.2)) - .5;
+    c *= 1.0 + (t - .5) * mix(.55, .3, h) + br * .22;
+    float dry = smoothstep(.8, .95, skN(sp / 1.1) * .7 + skN(vec2(sp.x / 9.0, sp.y / 1.4)) * .3); c = mix(c, c + (1.0 - c) * .4, dry * .45 * smoothstep(.45, .8, h)); }
+  if (mod(floor(skin / 4.0), 2.0) > .5) { float fr = 1.0 - abs(dot(n, normalize(vp))), e = smoothstep(.45, .85, fr + (skN(sp / 6.0) - .5) * .5 + (skN(sp / 2.0) - .5) * .15);
+    c = mix(c, c * c * 1.1, e * .7); c *= 1.0 - smoothstep(.55, .85, skN(sp / 1.4)) * (1.0 - h) * .45; c = mix(c, c + (1.0 - c) * .1, smoothstep(.75, 1.0, h) * (1.0 - e)); }
+  return c;
+}
+`;
+function skinned(m) {
+  m.onBeforeCompile = skinCompile; return m;
+}
+function skinCompile(sh) {
+  Object.assign(sh.uniforms, SKIN_U);
+  sh.vertexShader = sh.vertexShader.replace("#include <common>", "#include <common>\nvarying vec2 vSkinO;")
+    .replace("#include <project_vertex>", "#include <project_vertex>\n{ vec4 o = projectionMatrix * modelViewMatrix * vec4(0.0, 0.0, 0.0, 1.0); vSkinO = o.xy / o.w; }");
+  sh.fragmentShader = sh.fragmentShader.replace("#include <lights_toon_pars_fragment>", "#include <lights_toon_pars_fragment>\n" + SKIN_FS)
+    .replace("#include <opaque_fragment>", "if (skin > .5) outgoingLight = skinOf(outgoingLight, normal, vViewPosition);\n#include <opaque_fragment>");
+}
 const canvasTex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
 function cv2(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; }
 function fillPoly(g, pts, col) { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); }

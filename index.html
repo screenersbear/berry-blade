@@ -1095,10 +1095,10 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { paper: { value: 0 }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { ink: { value: 0 }, tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, paper, pstep, gtime; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, ink, pstep, gtime; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     float vnoise(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
@@ -1114,29 +1114,24 @@ const gradeMat = new THREE.ShaderMaterial({
       if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin; }   // the land at war: washed out, sooty, darker (its dark edges gone too, 2026-10-26)
       if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = mix(vec3(l3), c, 1.0 + .3 * bloom); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter
       if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
-      if (paper > .5) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // PAPER (DEBUG, FILTER): over the finished picture, in screen pixels
-        if (paper < 1.5) { float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // FINE: the one tried: a fine grain boiling, the paper's mottle
-          c *= 1.0 + g * .085 + mot * .06; c = mix(c, c * vec3(1.0, .985, .955), .5); }
-        else if (paper < 2.5) { float g = hash(floor(px / 2.0) + sd) - .5, mot = vnoise(px / 70.0) * .6 + vnoise(px / 18.0) * .4 - .5;   // COARSE: a bigger, stronger grain, a heavier mottle
-          c *= 1.0 + g * .13 + mot * .1; c = mix(c, c * vec3(1.0, .975, .93), .6); }
-        else if (paper < 3.5) { float fib = vnoise(vec2(px.x / 26.0, px.y / 3.0)) * .5 + vnoise(vec2(px.x / 3.0, px.y / 22.0)) * .5 - .5, g = hash(floor(px)) - .5, mot = vnoise(px / 110.0) - .5;   // CANVAS: a fine weave
-          c *= 1.0 + fib * .07 + g * .04 + mot * .05; c = mix(c, c * vec3(1.0, .985, .955), .5); }                                                                                     //  fibres, held in place
-        else if (paper < 4.5) { vec2 q = px + vec2(-1.0, 1.0); float h0 = vnoise(px / 5.0) * .65 + vnoise(px / 2.2) * .35, h1 = vnoise(q / 5.0) * .65 + vnoise(q / 2.2) * .35, mot = vnoise(px / 80.0) - .5;   // COLD-PRESS:
-          c *= 1.0 + (h0 - h1) * .35 + (h0 - .5) * .05 + mot * .05; c = mix(c, c * vec3(1.0, .985, .96), .4); }                                                                  //  watercolour paper's raised tooth, lit from the top left
-        else { float g = hash(floor(px)) - .5, mot = vnoise(px / 60.0) * .6 + vnoise(px / 17.0) * .4 - .5, fleck = step(.9975, hash(floor(px / 1.5) + 7.0));   // AGED: an older, warmer sheet, flecked
-          c *= 1.0 + g * .06 + mot * .08 - fleck * .25; c = mix(c, c * vec3(1.0, .93, .82), .45); } }
+      if (ink > .5) { vec2 tx = tpx; float wl = dot(toSRGB(max(texture2D(tex, vUv - vec2(tx.x, 0.0)).rgb, 0.0)), vec3(.299, .587, .114)), wr = dot(toSRGB(max(texture2D(tex, vUv + vec2(tx.x, 0.0)).rgb, 0.0)), vec3(.299, .587, .114)),
+          wd = dot(toSRGB(max(texture2D(tex, vUv - vec2(0.0, tx.y)).rgb, 0.0)), vec3(.299, .587, .114)), wu = dot(toSRGB(max(texture2D(tex, vUv + vec2(0.0, tx.y)).rgb, 0.0)), vec3(.299, .587, .114));
+        float ed = length(vec2(wr - wl, wu - wd)) * (.75 + .5 * vnoise(gl_FragCoord.xy / pstep / 4.0)); c *= 1.0 - clamp(ed * 3.0, 0.0, .45); }   // INK EDGES (DEBUG, TEXTURE): the colours' borders a little darker, like watercolour drying at its edge
+      { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
+        float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // (FINE, the one the user kept, 2026-10-29: "the papter fine setting which is one i wan tto keep for all versions")
+        c *= 1.0 + g * .085 + mot * .06; c = mix(c, c * vec3(1.0, .985, .955), .5); }
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
   depthTest: false, depthWrite: false,
 });
 gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat));
-// the paper filter, to try out (pause, DEBUG; the user, 2026-10-28: "30fps doesnt work like I wanted so remove that feature. the paper filter looks like it might be
-// it ... can you remove all the other presentation settings, just keep it smooth and animations smooth like originally, but add some variations on the paper
-// filter? ppainted is also not good so that can go as well"): paper 0 none · 1 FINE (the one tried) · 2 COARSE · 3 CANVAS · 4 COLD-PRESS · 5 AGED. This browser only
-const LOOK = (() => { try { const q = JSON.parse(localStorage.getItem("bb_look") || "{}"); return { paper: q.paper ?? (q.look >= 2 ? 1 : 0) }; } catch { return { paper: 0 }; } })();   // (an old PAPER / BOTH pick: FINE)
-const PAPER_NAMES = ["NONE", "PAPER: FINE", "PAPER: COARSE", "PAPER: CANVAS", "PAPER: COLD-PRESS", "PAPER: AGED"];
-const lookLabel = () => "FILTER: " + PAPER_NAMES[LOOK.paper || 0];
-function lookStep() { LOOK.paper = ((LOOK.paper || 0) + 1) % PAPER_NAMES.length; try { localStorage.setItem("bb_look", JSON.stringify(LOOK)); } catch { } }
+// the paper (FINE) is always on now, and a texture to try on the characters themselves (pause, DEBUG, TEXTURE; the user, 2026-10-29: "is there an effect that can be
+// applied to the actual character presentation, along with the papter fine setting ... to make it feel a little more textured? or something added to the filter?
+// the other paper modes were not really doing much"): skin bits for charkit (1 hatch, 2 grain, 4 pigment) and the filter's ink edges. This browser only
+const TEXTURES = [["NONE", 0, 0], ["PENCIL HATCH", 1, 0], ["PAINT GRAIN", 2, 0], ["PIGMENT EDGES", 4, 0], ["GRAIN + PIGMENT", 6, 0], ["INK EDGES (FILTER)", 0, 1], ["PENCIL + INK EDGES", 1, 1]];
+const LOOK = (() => { try { const q = JSON.parse(localStorage.getItem("bb_look") || "{}"); return { tex: Math.min(q.tex | 0, TEXTURES.length - 1) }; } catch { return { tex: 0 }; } })();
+const lookLabel = () => "TEXTURE: " + TEXTURES[LOOK.tex][0];
+function lookStep() { LOOK.tex = (LOOK.tex + 1) % TEXTURES.length; try { localStorage.setItem("bb_look", JSON.stringify(LOOK)); } catch { } }
 if (window.BEP_IMG) {                                // the bep crowd art: green behind the title, blue behind character select, magenta as the cover when you win
   document.getElementById("title").style.backgroundImage = `url(${BEP_IMG.title})`; document.getElementById("modal").style.setProperty("--cover", `url(${BEP_IMG.cover})`);
   const im = new Image(); im.onload = () => { const t = new THREE.Texture(im); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
@@ -6041,7 +6036,7 @@ function pauseChoose(what) {
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
   if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dreset", "dup", "dlook", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : PAUSE_LABEL[q]}</button>`).join("");
-    $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, OR SET THIS ROOM BACK TO NEW<br>FRAME RATE, POSES AND FILTER: TRY OUT THE LOOK (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
+    $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
@@ -22502,6 +22497,7 @@ function render(dt) {
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
+  { const K = KIT.skin; K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); }   // (the characters' own texture, DEBUG)
   if (pan) panScene(); else if (peek) panScene(peek); else renderer.render(scene, camera);
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
@@ -22509,7 +22505,7 @@ function render(dt) {
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
   if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
-  { const U = gradeMat.uniforms; U.paper.value = LOOK.paper || 0; U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
+  { const U = gradeMat.uniforms, T = TEXTURES[LOOK.tex]; U.ink.value = T[2]; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);
 }
 
