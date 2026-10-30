@@ -522,7 +522,7 @@ function layer(L) {
 const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], twistU: [-1.2, 1.2], twistH: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
   spF: [-.7, 1.6], spB: [-.7, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],
   fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4], wF: [-2, 2], wB: [-2, 2] };   // (wF / wB: a fist bent at the wrist, 2026-10-24)
-const ANIM_CH = { ...POSE_CH, aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], wheel: [-13, 13], rise: [0, 2], fP: [-2, 1], grip: [0, 1] };
+const ANIM_CH = { ...POSE_CH, kOut: [0, 1], aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], wheel: [-13, 13], rise: [0, 2], fP: [-2, 1], grip: [0, 1] };
 function fitPose(v) { const o = {}; if (v && typeof v === "object") for (const k in POSE_CH) if (typeof v[k] === "number" && isFinite(v[k])) o[k] = clamp(v[k], ...POSE_CH[k]); return o; }
 function fitAnims(v) {                           // { move: { channel: [[t, value], ...] } }
   const o = {}; if (!v || typeof v !== "object") return o;
@@ -1606,7 +1606,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0, kOut: 0 };
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -2265,6 +2265,11 @@ Object.assign(STRIKES, {
   // up a rock wall, one cycle of climbPh (the user, 2026-10-27: "whenever camila climbs a wall, she should be punching hard with her gauntlet hand and then climbing with the other
   // hand and alternate like that"): F is her weapon hand (swapped onto whichever side it's on). The gauntlet pulled in tight, then driven hard straight up into the rock
   // (WALL_HIT: the game's crunch), held there as she hauls up past it; the other hand reaching up to take hold above, a knee coming up under each in turn
+  // sat cross-legged on the ground, playing the BERRY CONSOLE (2026-10-30: "when the player opens it, the character sits down on the ground, legs crossed"):
+  // hips down by her heels, knees out to the sides, the feet crossed in front, both hands up holding it, looking down at it; a slow breath through the loop
+  console_sit: { dur: 2.4, pose: true, keys: { lean: [[0, .3], [1.2, .34], [2.4, .3]], arch: [[0, .12], [2.4, .12]], bodyY: [[0, -.74], [1.2, -.73], [2.4, -.74]], headRot: [[0, .42], [1.2, .46], [2.4, .42]],
+    armF: [[0, .9], [2.4, .9]], elbF: [[0, 1.6], [2.4, 1.6]], armB: [[0, .8], [2.4, .8]], elbB: [[0, 1.65], [2.4, 1.65]], spF: [[0, .1], [2.4, .1]], spB: [[0, .1], [2.4, .1]],
+    fNx: [[0, .1], [2.4, .1]], fNy: [[0, 0], [2.4, 0]], fFx: [[0, .14], [2.4, .14]], fFy: [[0, 0], [2.4, 0]], fNz: [[0, -.75], [2.4, -.75]], fFz: [[0, .75], [2.4, .75]], fP: [[0, .3], [2.4, .3]], kOut: [[0, 1], [2.4, 1]] } },
   wallclimb: { dur: 1, pose: true, keys: {
     armF: [[0, 1.75], [.12, 1.45], [.24, 3.05], [.32, 2.92], [.55, 2.7], [.8, 2.05], [1, 1.75]], elbF: [[0, 1.85], [.12, 2.25], [.24, .05], [.32, .25], [.55, .6], [.8, 1.45], [1, 1.85]],
     armB: [[0, 2.85], [.24, 2.7], [.45, 1.95], [.55, 1.8], [.74, 2.95], [1, 2.85]], elbB: [[0, .4], [.24, .6], [.45, 1.6], [.55, 1.75], [.74, .3], [1, .4]],
@@ -2417,7 +2422,7 @@ const GATHER = .18;
 // into the knees and stands back up out of them, a touch tall at the end (LAND). Every charkit body: the heroines, buddies, June, the pets
 const HALT = { T: .7, w: TAU / .52, z: 5 }, LAND = { T: .5, dn: .07 };
 function momentum(p, dt, sp) {                         // (the triggers: a landing, a run stopped short)
-  const busy = p.atkT >= 0 || p.hurtT > 0 || p.climb || p.sit || p.crawl || p.dodge || p.tackle || p.zip || p.skid || p.swim || p.dive;
+  const busy = p.atkT >= 0 || p.hurtT > 0 || p.climb || p.sit || p.consSit || p.crawl || p.dodge || p.tackle || p.zip || p.skid || p.swim || p.dive;
   if (!p.onGround) { p.mAirVy = Math.max(p.mAirVy || 0, p.vy || 0); p.mWasG = false; return; }
   if (p.mWasG === false) { const v = p.mAirVy || 0; if (v > 240 && !busy) { p.mLandT = 0; p.mLandK = clamp((v - 160) / 1000, .25, 1); } p.mAirVy = 0; }
   p.mWasG = true;
@@ -2448,7 +2453,8 @@ function updatePoseHuman(p, dt) {
   p.sprintK = approach(p.sprintK || 0, D.run && p.onGround ? clamp(((p.runK || 1) - 1) / .45, 0, 1) : p.sprintK || 0, dt * 3); const sk = p.sprintK * (1 - wk);   // sprinting: how far into it (0 at a run)
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
-  if (p.sit && p.chair) Object.assign(T, { bodyY: -.3, fNx: .3, fFx: .25 });   // (in a chair, 2026-10-27: sat up higher than on a log, the feet under the knees)
+  if (p.consSit && a < 0) { const D2 = STRIKES.console_sit.dur; Object.assign(T, poseKeys(p, "console_sit", (((p.consPh || 0) % D2) + D2) % D2) || {}); }   // sat cross-legged with the BERRY CONSOLE (2026-10-30)
+  else if (p.sit && p.chair) Object.assign(T, { bodyY: -.3, fNx: .3, fFx: .25 });   // (in a chair, 2026-10-27: sat up higher than on a log, the feet under the knees)
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
@@ -2749,12 +2755,14 @@ function turnSolve(p, r, id, th, o0, L0) {
 const chanFor = (p, ch) => leadFar(p) ? SWAP[ch] || ch : ch;     // p.out channel → the spec's (lead / rear) name
 const _ku = new THREE.Vector3(), _kw = new THREE.Vector3();
 const _kf = new THREE.Vector3();
-function kneeIK(H, Hk, out, l1, l2) {             // 2-bone IK in 3D, knee bends to the leg's front (+x when the leg hangs down)
+const _kz = new THREE.Vector3();
+function kneeIK(H, Hk, out, l1, l2, side = 0, kOut = 0) {   // 2-bone IK in 3D, knee bends to the leg's front (+x when the leg hangs down); kOut: out to the leg's side instead (side ±1: sat cross-legged, 2026-10-30)
   _ku.subVectors(Hk, H); const d0 = Math.max(_ku.length(), 1e-4), d = Math.min(d0, (l1 + l2) * .999), k = d0 / d; _ku.normalize();   // k: out of reach, thigh and shin stretch together (it was all in the shin)
   const a = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1)), ux = _ku.x, uy = _ku.y, uz = _ku.z, c = 1 / Math.max(1e-3, 1 - uy);
   _kw.set(1, 0, 0).addScaledVector(_ku, -ux).normalize();   // forward, square to the leg (as before)
   _kf.set(-uy + uz * uz * c, ux, -ux * uz * c).normalize();   // the leg's front turned with the leg: up on a leg raised in front, down on one swung back
   _kw.lerp(_kf, clamp((uy + .5) / .35, 0, 1)).normalize();   // (the same when the foot's below the hip; past hip height the old one flipped over and broke the knee backwards, the user 2026-10-27)
+  if (kOut > 0 && side) { _kz.set(0, 0, side).addScaledVector(_ku, -side * _ku.z); if (_kz.lengthSq() > 1e-6) _kw.lerp(_kz.normalize(), clamp(kOut, 0, 1)).normalize(); }
   return out.copy(H).addScaledVector(_ku, Math.cos(a) * l1 * k).addScaledVector(_kw, Math.sin(a) * l1 * k);
 }
 const _kr = new THREE.Vector3();
@@ -2999,12 +3007,12 @@ function syncHuman(p, r, dt = 0) {
     _H.set(_P[1].x, _P[1].y - .05, s * D.legW * gw);
     _F.set(_H.x + fx * ds, Math.max(0, fy * ds), s * (D.footW * gw + (isNear ? o.fNz || 0 : o.fFz || 0) * .5 * Bd.legs));   // spread: 1 = half a unit out
     _Hk.set(_F.x, _F.y + D.ankle, _F.z); legReach(_H, _F, _Hk, D.ankle, (H_TH + H_SH) * LEG_STRETCH, (H_TH + H_SH) * LEG_FOLD);
-    kneeIK(_H, _Hk, _K, H_TH, H_SH);
+    kneeIK(_H, _Hk, _K, H_TH, H_SH, s, o.kOut || 0);
     const heel = (isNear ? o.hN : o.hF) || 0;
     if (heel > .001 && fy < .02) {                                    // up on the ball of the foot (heel raised, toe still down), the leg reaching just as far so the knee doesn't fold more
       const L = (.07 + r.spec.outfit.boot.len * .5) * D.foot * Bd.feet, d0 = _H.distanceTo(_Hk);
       _F.y += L * Math.sin(heel); const vy = _H.y - _F.y - D.ankle, dz = _F.z - _H.z, dx = Math.sqrt(Math.max(0, d0 * d0 - vy * vy - dz * dz));
-      _F.x = _H.x + (Math.sign(_F.x - _H.x) || -1) * dx; _Hk.set(_F.x, _F.y + D.ankle, _F.z); kneeIK(_H, _Hk, _K, H_TH, H_SH); pitch -= heel;
+      _F.x = _H.x + (Math.sign(_F.x - _H.x) || -1) * dx; _Hk.set(_F.x, _F.y + D.ankle, _F.z); kneeIK(_H, _Hk, _K, H_TH, H_SH, s, o.kOut || 0); pitch -= heel;
     }
     const t = r.legs[i];
     t.pts[0].set(_H.x, _H.y + .1, _H.z); t.pts[1].copy(_H); t.pts[2].copy(_K); t.pts[3].copy(_Hk); t.pts[4].set(_Hk.x + .01, _Hk.y - .06, _Hk.z);

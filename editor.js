@@ -212,6 +212,7 @@ function movesFor(sp) {                                          // every move t
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
   add("Through a low hole (C7's wall into C8)", "crawl", "", T);   // (on hands and knees, one cycle of crawlPh: 2026-10-28)
+  add("Playing the BERRY CONSOLE (sat cross-legged)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
   add("As a berry buddy: special", bsp, "", T);
   return out;
 }
@@ -284,7 +285,8 @@ function moveAt(kind, S, u) {                                    // the state th
     tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,
     climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0,   // (the climb: up her rock, as the game plays it)
     popB: pm === "pop_sword" || pm === "pop_reach" ? Math.max(.001, u / S.dur) : 0, popSword: pm === "pop_sword",
-    crawl: pm === "crawl" ? { x0: -1e9, x1: 1e9, y: 0 } : null, crawlPh: pm === "crawl" ? u / S.dur * Math.PI * 2 : 0, vxC: pm === "crawl" ? 60 : 0 };   // (crawling: through the hole, as the game sets it)   // (popping the bubble: the hold so far, as the game sets it)
+    crawl: pm === "crawl" ? { x0: -1e9, x1: 1e9, y: 0 } : null, crawlPh: pm === "crawl" ? u / S.dur * Math.PI * 2 : 0, vxC: pm === "crawl" ? 60 : 0,
+    consSit: pm === "console_sit" ? 1 : 0, consPh: pm === "console_sit" ? u : 0 };   // (crawling: through the hole, as the game sets it)   // (popping the bubble: the hold so far, as the game sets it)
 }
 function handlesAt(times) {                                      // every dot's place (in the world) at other moments of the picked move; the pose is put back after
   const kind = isMove() ? moveKind() : st.atkKind, S = kind && moveDef(kind), M = rig.body.matrixWorld;
