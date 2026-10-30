@@ -288,11 +288,11 @@
   #pCons { grid-column: 2; } #ptCons { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 22px 8px 2px; box-sizing: border-box; } #ptCons img { max-width: 100%; max-height: 100%; object-fit: contain; }
   #pcNow { font: 600 10px "Jost", sans-serif; letter-spacing: .14em; color: var(--y); padding: 0 6px 6px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
   /* the BERRY CONSOLE held up (2026-10-30): the user's drawing, its screen a 320 x 240 canvas in the hole */
-  #cons { position: fixed; right: 2.5vw; bottom: 4vh; width: min(52vw, 120vh, 720px); aspect-ratio: 754 / 457; z-index: 44; pointer-events: none; opacity: 0; transform: translateY(18px) scale(.96); transition: opacity .25s, transform .25s; }
+  #cons { position: fixed; inset: 0; z-index: 44; pointer-events: none; opacity: 0; transform: scale(.96); transition: opacity .25s, transform .25s; background: rgba(30, 42, 51, .9); }   /* (the whole screen since 2026-10-30, the console's own model in it) */
+  #consView { position: absolute; inset: 0; width: 100%; height: 100%; }
   #cons.on { opacity: 1; transform: none; }
-  #cons .scr { position: absolute; left: 33.55%; top: 11.82%; width: 59.55%; height: 77.02%; background: #c9e2a1; overflow: hidden; }
-  #cons canvas { position: absolute; left: 0; top: 50%; width: 100%; transform: translateY(-50%); aspect-ratio: 4 / 3; }
-  #cons img { position: absolute; inset: 0; width: 100%; height: 100%; }
+  #cons .scr { position: absolute; background: #c9e2a1; overflow: hidden; }   /* (laid over the model's screen: consLayout) */
+  #cons .scr canvas { position: absolute; left: 0; top: 50%; width: 100%; transform: translateY(-50%); aspect-ratio: 4 / 3; }
   #cons iframe { position: absolute; left: 0; top: 50%; width: 100%; transform: translateY(-50%); aspect-ratio: 4 / 3; border: 0; background: #fff; pointer-events: auto; }   /* (a game that's a page: under the canvas, which is see-through then) */
   #pmap { display: block; box-sizing: border-box; }
   #ptSvg { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 22px 8px 2px; box-sizing: border-box; } #ptSvg svg { max-width: 100%; max-height: 100%; }
@@ -783,7 +783,7 @@
 <div id="select" class="hidden"><div class="lockup big"><div class="blk" id="stitle">CHOOSE</div><div class="bar" id="ssub">YOUR CHARACTER</div></div>
   <div class="foot"><div id="blurb"></div><div id="roster"></div><div id="tools"><button id="bBack">‹ BACK</button> <button id="bEdit">EDIT CHARACTERS</button> <button id="bAch">ACHIEVEMENTS</button> <button id="bLvl">LEVEL SELECT</button></div><small id="shint"></small></div></div>
 <div id="achPop"><div class="ic">★</div><div><b>ACHIEVEMENT UNLOCKED</b><span id="achName"></span></div></div>
-<div id="cons"><div class="scr"><canvas id="consCv" width="320" height="240"></canvas></div><img src="story/console.png?v=20261030" alt=""></div>
+<div id="cons"><div class="scr"><canvas id="consCv" width="320" height="240"></canvas></div></div>
 <div id="holdTip"><div class="ic">!</div><div><b>TRY THIS</b><span>PRESS AND HOLD YOUR BUTTONS</span><i>JUMP, ATTACK, BLOCK, OR ATTACK + BLOCK TOGETHER: HOLD ONE DOWN AND ANOTHER MOVE COMES OUT</i></div></div>
 <div id="teamV"><div class="panel">
   <div class="lockup"><div class="blk">YOUR TEAM</div><div class="bar" id="tvCount">BERRY BLADE</div></div>
@@ -816,7 +816,7 @@
     <div id="pmapBox" class="pw" data-pw="w_map"><span class="pwHead">MAP</span><canvas id="pmap"></canvas></div>
     <div id="pWear" class="pw" data-pw="w_wear"><span class="pwHead">ACCESSORIES</span><div id="pwCv"></div></div>
     <div id="pTape" class="pw" data-pw="w_tape"><span class="pwHead">CASSETTE PLAYER</span><div id="ptSvg"></div><span id="ptNow"></span></div>
-    <div id="pCons" class="pw hidden" data-pw="w_cons"><span class="pwHead">BERRY CONSOLE</span><div id="ptCons"><img src="story/console.png?v=20261030" alt=""></div><span id="pcNow"></span></div>
+    <div id="pCons" class="pw hidden" data-pw="w_cons"><span class="pwHead">BERRY CONSOLE</span><div id="ptCons"><img alt=""></div><span id="pcNow"></span></div>
   </div>
   <div id="pSide"><div id="pTeam" class="pw" data-pw="w_team"><span class="pwHead">TEAM</span><div id="ptmRow"></div></div>
   <div class="panel">
@@ -1168,10 +1168,16 @@ if (window.BEP_IMG) {                                // the bep crowd art: green
   const im = new Image(); im.onload = () => { const t = new THREE.Texture(im); t.colorSpace = THREE.NoColorSpace; t.minFilter = THREE.LinearFilter; t.generateMipmaps = false; t.needsUpdate = true;
     gradeMat.uniforms.bgTex.value = t; gradeMat.uniforms.bgA.value = im.width / im.height; gradeMat.uniforms.bgPer.value = im.width === 4331 ? 3492 / 4331 : 1; }; im.src = BEP_IMG.select;   // (the repeat: re-measure it if the art changes)
 }
-addEventListener("resize", () => {
-  renderer.setSize(innerWidth, innerHeight); sizeRT();
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
-});
+// the picture sized to the screen (the user, 2026-10-30: "mobile for some reason shows a squished and zoomed in aspect ratio"): a phone can tell the page its new size
+// late (turned sideways, gone full screen, Safari's bars sliding away), and a resize read then left the picture at the old shape, cropped and stretched. So it's checked
+// again a moment after each of those, and every 400 ms besides; it only resizes when the size has really changed
+let viewW = innerWidth, viewH = innerHeight;
+function fitView() { const w = innerWidth, h = innerHeight; if (!w || !h || (w === viewW && h === viewH)) return; viewW = w; viewH = h;
+  renderer.setSize(w, h); sizeRT(); camera.aspect = w / h; camera.updateProjectionMatrix(); const C = document.getElementById("cons"); if (C && C.classList.contains("on")) consLayout(); }
+const fitLater = () => [80, 300, 700, 1400].forEach(t => setTimeout(fitView, t));
+addEventListener("resize", () => { fitView(); fitLater(); if ($("cons") && $("cons").classList.contains("on")) consLayout(); }); addEventListener("orientationchange", fitLater); addEventListener("pageshow", fitLater);
+document.addEventListener("fullscreenchange", fitLater); document.addEventListener("webkitfullscreenchange", fitLater); if (window.visualViewport) visualViewport.addEventListener("resize", fitView);
+setInterval(fitView, 400);
 
 const sun = new THREE.DirectionalLight("#fff3d6", 2.6);
 sun.position.set(-7, 14, 11);
@@ -9807,7 +9813,7 @@ function resetTrial() {
   rig.root.visible = rig.shadow.visible = true;
   enemy = makeFoeState(foe, WORLD - 360); player.power = 0;
   clearHz(); const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; const done = fillRoom(); spawnEscort(bepRun.back);
-  parts.forEach(q => actors.remove(q.m)); parts = []; allyRoom();
+  parts.forEach(q => actors.remove(q.m)); parts = []; allyRoom(); meetRoom();   // (the one found in a fight: back to its fight with the room's fresh berries)
   shake = 0; hitstop = 0; slowMo = 0; camKick = camKickV = 0; if (beaten === 0) trialTime = 0; aura.show = aura.flare = aura.burst = 0; guardFx.show = guardFx.hit = 0; sprintDir = 0;
   setFoeHud();
   FOES.forEach(hideFoe); if (bossIn) showFoe(foe);
@@ -18745,7 +18751,7 @@ function cronyRig(mainId, C) {                       // its boss's build, its ow
   cronyPaint(r, L, keep); if (L.wide || L.tall) r.body.scale.set(L.wide || 1, L.tall || 1, L.wide || 1); r.size = (r.size || 1) * (L.size || 1); cronyAcc(r, C); return r;
 }
 function cronyFoe(main, C) {                          // its foe: its boss's numbers, small and quick or big and heavy
-  const L = C.look, q = C.quick, d = { ...main, id: C.id, name: C.name, crony: main.id, rig: cronyRig(main.id, C), hp: Math.round(main.hp * (q ? .62 : .76)), speed: Math.round(main.speed * (q ? 1.25 : .88)),
+  const L = C.look, q = C.quick, d = { ...main, id: C.id, name: C.name, crony: main.id, at: C.at, rig: cronyRig(main.id, C), hp: Math.round(main.hp * (q ? .62 : .76)), speed: Math.round(main.speed * (q ? 1.25 : .88)),
     jumpy: clamp((main.jumpy || .3) + (q ? .15 : -.08), 0, .9), cdK: (main.cdK || 1) * (q ? .78 : .95), hw: (main.hw0 ?? main.hw) * (L.wide || 1), h: (main.h0 ?? main.h) * (L.tall || 1), more: undefined, leaf: !!C.leaf, under: false, big: undefined,
     near: C.near || undefined, portraitY: main.portraitY };
   if (!d.rig) return null; delete d.hw0; delete d.h0; delete d.arenaK; if (C.vox) FOE_VOX[C.id] = C.vox; return d;
@@ -20192,16 +20198,55 @@ const CONS_PARTS = { body: [
     ["box", .022, .12, .004, -.084, .02, -.027, "white"], ["box", .075, .022, .004, -.11, .069, -.027, "white"], ["box", .075, .022, .004, -.11, .02, -.027, "white"], ["box", .022, .06, .004, -.137, .0445, -.027, "white"],
     ["box", .13, .03, .004, 0, -.09, -.027, "pink"], ["box", .09, .006, .003, 0, -.09, -.03, "white"]] };
 let consMeshes = null;
-function consModel() {                               // (built once: it goes from hand to hand, Rose's or Camila's)
-  if (consMeshes) return consMeshes;
+function consModel() { return consMeshes || (consMeshes = buildConsModel()); }   // (built once: it goes from hand to hand, Rose's or Camila's)
+function buildConsModel() {
   const mats = {}, M = c => mats[c] || (mats[c] = toon(CONS_C[c] || c));
   const part = ([sh, w, h, d, x, y, z, c, rz]) => { const m = sh === "disc" ? mk(cyl(w, w, d, 18).rotateX(Math.PI / 2), null, { mat: M(c), ol: .004 }) : mk(new THREE.BoxGeometry(w, h, d), null, { mat: M(c), ol: w > .1 && h > .1 ? .008 : .003 });
     m.position.set(x, y, z); if (rz) m.rotation.z = rz; return m; };
   const G = new THREE.Group(), flip = new THREE.Group(); flip.position.x = CONS_FLIP_X;
   CONS_PARTS.body.forEach(q => G.add(part(q))); CONS_PARTS.flip.forEach(q => flip.add(part(q)));
-  const screenM = new THREE.MeshBasicMaterial({ color: CONS_SCREEN.off }), scr = new THREE.Mesh(new THREE.PlaneGeometry(CONS_SCREEN.w, CONS_SCREEN.h), screenM); scr.position.z = CONS_SCREEN.z; flip.add(scr);
+  const screenM = new THREE.MeshBasicMaterial({ color: CONS_SCREEN.off }), scr = new THREE.Mesh(new THREE.PlaneGeometry(CONS_SCREEN.w, CONS_SCREEN.h), screenM); scr.position.z = CONS_SCREEN.z + .0012; flip.add(scr);   // (a hair in front of the blue bezel's face, not fighting it)
   G.add(flip); G.visible = false;
-  return (consMeshes = { G, flip, screenM });
+  return { G, flip, screenM };
+}
+// the console on the screen itself (the user, 2026-10-30: "for the berry console, the menu should show the version of it with the screen covered with the yellow cover ...
+// when you play a game, make the console cover the full screen not just a corner of it. also for the console display can you make it a 3dmodel instead of the drawing
+// frame"): a copy of its model in a renderer of its own, front on. Open, it fills the screen while you play, the LCD (and a game's page) laid exactly over its screen;
+// shut, its yellow HOP cover on, it's the pause menu's picture
+let consView = null, consPicURL = null;
+function consViewMake() {
+  if (consView) return consView;
+  const R = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R.outputColorSpace = renderer.outputColorSpace; R.setClearColor(0x000000, 0);
+  const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff4e2", "#5a4a70", 1.05)); const d = new THREE.DirectionalLight("#ffffff", 2.9); d.position.set(-3, 4, 5); sc.add(d);
+  const M = buildConsModel(); M.G.visible = true; sc.add(M.G); R.domElement.id = "consView"; $("cons").prepend(R.domElement);
+  return (consView = { R, sc, cam: new THREE.PerspectiveCamera(24, 1, .05, 20), M, w: 0, h: 0 });
+}
+const CONS_TILT = [-.3, .46];                       // (turned a little, so it reads as the thing itself: its top away, its right side back)
+function consViewDraw(shut, w, h, k = 1.06) {         // (shut: its cover on; w, h: px; k: room round it)
+  const V = consViewMake(); w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
+  if (V.w !== w || V.h !== h) { V.w = w; V.h = h; V.R.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
+  V.M.flip.rotation.y = shut ? Math.PI : 0; V.M.screenM.color.set(shut ? CONS_SCREEN.off : CONS_SCREEN.on); V.M.G.rotation.set(CONS_TILT[0], CONS_TILT[1], 0);
+  V.M.G.updateMatrixWorld(true); const bb = V.bb || (V.bb = new THREE.Box3()); bb.setFromObject(V.M.G); const c = bb.getCenter(new THREE.Vector3()), z = bb.getSize(new THREE.Vector3());   // (its outline as it's turned: all of it in the picture, whatever shape the screen)
+  const tn = Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)), dist = Math.max(z.y * k / 2 / tn, z.x * k / 2 / (tn * V.cam.aspect));
+  V.cam.position.set(c.x, c.y, bb.max.z + dist); V.cam.lookAt(c.x, c.y, c.z); V.R.render(V.sc, V.cam); return V;
+}
+function quadCSS(W, H, q) {                           // a W x H box's CSS matrix3d that lands its corners on q (top-left, top-right, bottom-left, bottom-right, px): a homography
+  const adj = m => [m[4] * m[8] - m[5] * m[7], m[2] * m[7] - m[1] * m[8], m[1] * m[5] - m[2] * m[4], m[5] * m[6] - m[3] * m[8], m[0] * m[8] - m[2] * m[6], m[2] * m[3] - m[0] * m[5], m[3] * m[7] - m[4] * m[6], m[1] * m[6] - m[0] * m[7], m[0] * m[4] - m[1] * m[3]];
+  const mul = (a, b) => { const c = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) { let v = 0; for (let k = 0; k < 3; k++) v += a[3 * i + k] * b[3 * k + j]; c[3 * i + j] = v; } return c; };
+  const basis = p => { const m = [p[0], p[2], p[4], p[1], p[3], p[5], 1, 1, 1], A = adj(m), v = [A[0] * p[6] + A[1] * p[7] + A[2], A[3] * p[6] + A[4] * p[7] + A[5], A[6] * p[6] + A[7] * p[7] + A[8]]; return mul(m, [v[0], 0, 0, 0, v[1], 0, 0, 0, v[2]]); };
+  const t = mul(basis(q.flat()), adj(basis([0, 0, W, 0, 0, H, W, H]))); for (let i = 0; i < 9; i++) t[i] /= t[8];
+  return `matrix3d(${[t[0], t[3], 0, t[6], t[1], t[4], 0, t[7], 0, 0, 1, 0, t[2], t[5], 0, t[8]].join(",")})`;
+}
+const CONS_SCR_W = 480;                              // (the LCD's own box, px wide: warped onto the model's screen)
+function consLayout() {                              // (shown, and whenever the page changes size while it's up)
+  const el = $("cons"), w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight, V = consViewDraw(false, w, h, 1.12);
+  const at = (x, y) => { const v = new THREE.Vector3(x, y, CONS_SCREEN.z + .001); V.M.flip.localToWorld(v); v.project(V.cam); return [(v.x * .5 + .5) * w, (.5 - v.y * .5) * h]; };
+  const sw = CONS_SCREEN.w / 2, sh = CONS_SCREEN.h / 2, W = CONS_SCR_W, H = Math.round(W * CONS_SCREEN.h / CONS_SCREEN.w);
+  Object.assign(el.querySelector(".scr").style, { left: "0px", top: "0px", width: W + "px", height: H + "px", transformOrigin: "0 0", transform: quadCSS(W, H, [at(-sw, sh), at(sw, sh), at(-sw, -sh), at(sw, -sh)]) });
+}
+function consPic() {                                 // (the pause menu's: shut, the cover on)
+  if (consPicURL) return consPicURL; const V = consViewDraw(true, 480, 320, 1.1); consPicURL = V.R.domElement.toDataURL("image/png");
+  if ($("cons").classList.contains("on")) consLayout(); return consPicURL;
 }
 
 // playing: p.cons = { ph: "sit" (down she sits, it comes out shut) · "flip" (the screen turned round) · "on" · "shut" (the screen back) · "up" (on her feet), t,
@@ -20235,7 +20280,7 @@ function consStep(p, dt) {                           // (updatePlayer, while she
   if (!p.onGround && P.ph !== "up") { closeConsole(true); return; }   // (the ground went from under her: a crumbling ledge)
   const C = consModel();
   if (P.ph === "sit" && P.t >= CONS_T.sit) { P.ph = "flip"; P.t = 0; SFX.tick(); }
-  else if (P.ph === "flip") { const u = Math.min(1, P.t / CONS_T.flip), e = u * u * (3 - 2 * u); C.flip.rotation.y = Math.PI * (1 - e); if (u >= 1) { P.ph = "on"; P.t = 0; C.screenM.color.set(CONS_SCREEN.on); $("cons").classList.add("on"); SFX.confirm(); } }
+  else if (P.ph === "flip") { const u = Math.min(1, P.t / CONS_T.flip), e = u * u * (3 - 2 * u); C.flip.rotation.y = Math.PI * (1 - e); if (u >= 1) { P.ph = "on"; P.t = 0; C.screenM.color.set(CONS_SCREEN.on); $("cons").classList.add("on"); consLayout(); SFX.confirm(); } }
   else if (P.ph === "on") { if (P.scr === "game" && !P.menu) consGameStep(P, dt); }
   else if (P.ph === "shut") { const u = Math.min(1, P.t / CONS_T.shut), e = u * u * (3 - 2 * u); C.flip.rotation.y = Math.PI * e; C.screenM.color.set(CONS_SCREEN.off); if (u >= 1) { P.ph = "up"; P.t = 0; p.consSit = 0; C.G.visible = false; } }
   else if (P.ph === "up" && P.t >= CONS_T.up) consEnd(p);
@@ -20313,7 +20358,7 @@ function consDraw() {                                // (every frame while it's 
     R.forEach((r, i) => { const y = y0 + 22 + i * 26, on = i === P.menu.sel; if (on) { g.fillStyle = L.ink; g.fillRect(66, y - 11, 188, 22); }
       g.fillStyle = on ? L.lite : L.ink; g.font = "11px Bungee, sans-serif"; g.textAlign = "center"; g.fillText(r, 160, y + 1); }); }
 }
-function drawPauseCons() { const n = cartsGot().length; $("pcNow").textContent = !consOwned() ? "" : n ? `${n} GAME${n > 1 ? "S" : ""} · PICK IT TO PLAY` : "NO GAMES YET"; }
+function drawPauseCons() { const im = $("ptCons").querySelector("img"); if (im) { const u = consPic(); if (im.getAttribute("src") !== u) im.src = u; } const n = cartsGot().length; $("pcNow").textContent = !consOwned() ? "" : n ? `${n} GAME${n > 1 ? "S" : ""} · PICK IT TO PLAY` : "NO GAMES YET"; }
 function spawnRoomItems() {
   if (!WORLDS[world] || world === 9 || stronghold || hideout || arena) return;
   (STAGES[stage].items || []).forEach(([k, x, y, tid], i) => { const id = k === "tape" ? "tape:" + tid : world + ":" + stage + ":fix" + i; if (itemGot(id) || (k === "tape" && ((story && tapeGot(tid)) || !tapesHere().some(T => T.id === tid)))) return;   // (the room's own, in their places: [kind, x, y on a platform] · a cassette: [.., its id])
