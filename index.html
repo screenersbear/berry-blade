@@ -20221,13 +20221,15 @@ function consViewMake() {
   const M = buildConsModel(); M.G.visible = true; sc.add(M.G); R.domElement.id = "consView"; $("cons").prepend(R.domElement);
   return (consView = { R, sc, cam: new THREE.PerspectiveCamera(24, 1, .05, 20), M, w: 0, h: 0 });
 }
-const CONS_TILT = [-.3, .46];                       // (turned a little, so it reads as the thing itself: its top away, its right side back)
-function consViewDraw(shut, w, h, k = 1.06) {         // (shut: its cover on; w, h: px; k: room round it)
+// playing: straight on, the slightest tilt down, as wide as the screen (the user, 2026-10-30: "it should be straight on with maybe the slightest tilt down just to be
+// 3d but it should extend across the whole screen. the screen is too small"); the pause menu's picture a little turned, to read as the thing itself
+const CONS_TILT = [-.07, 0], CONS_TILT_PIC = [-.3, .46];
+function consViewDraw(shut, w, h, k = 1.06, tilt = CONS_TILT_PIC, wide = false) {   // (shut: its cover on; w, h: px; k: room round it; wide: across the whole width, its screen whole)
   const V = consViewMake(); w = Math.max(1, Math.round(w)); h = Math.max(1, Math.round(h));
   if (V.w !== w || V.h !== h) { V.w = w; V.h = h; V.R.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
-  V.M.flip.rotation.y = shut ? Math.PI : 0; V.M.screenM.color.set(shut ? CONS_SCREEN.off : CONS_SCREEN.on); V.M.G.rotation.set(CONS_TILT[0], CONS_TILT[1], 0);
+  V.M.flip.rotation.y = shut ? Math.PI : 0; V.M.screenM.color.set(shut ? CONS_SCREEN.off : CONS_SCREEN.on); V.M.G.rotation.set(tilt[0], tilt[1], 0);
   V.M.G.updateMatrixWorld(true); const bb = V.bb || (V.bb = new THREE.Box3()); bb.setFromObject(V.M.G); const c = bb.getCenter(new THREE.Vector3()), z = bb.getSize(new THREE.Vector3());   // (its outline as it's turned: all of it in the picture, whatever shape the screen)
-  const tn = Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)), dist = Math.max(z.y * k / 2 / tn, z.x * k / 2 / (tn * V.cam.aspect));
+  const tn = Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)), dist = wide ? Math.max(z.x * k / 2 / (tn * V.cam.aspect), CONS_SCREEN.h / (2 * .97 * tn)) : Math.max(z.y * k / 2 / tn, z.x * k / 2 / (tn * V.cam.aspect));   // (wide: edge to edge, unless that would cut its screen)
   V.cam.position.set(c.x, c.y, bb.max.z + dist); V.cam.lookAt(c.x, c.y, c.z); V.R.render(V.sc, V.cam); return V;
 }
 function quadCSS(W, H, q) {                           // a W x H box's CSS matrix3d that lands its corners on q (top-left, top-right, bottom-left, bottom-right, px): a homography
@@ -20239,7 +20241,7 @@ function quadCSS(W, H, q) {                           // a W x H box's CSS matri
 }
 const CONS_SCR_W = 480;                              // (the LCD's own box, px wide: warped onto the model's screen)
 function consLayout() {                              // (shown, and whenever the page changes size while it's up)
-  const el = $("cons"), w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight, V = consViewDraw(false, w, h, 1.12);
+  const el = $("cons"), w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight, V = consViewDraw(false, w, h, .99, CONS_TILT, true);
   const at = (x, y) => { const v = new THREE.Vector3(x, y, CONS_SCREEN.z + .001); V.M.flip.localToWorld(v); v.project(V.cam); return [(v.x * .5 + .5) * w, (.5 - v.y * .5) * h]; };
   const sw = CONS_SCREEN.w / 2, sh = CONS_SCREEN.h / 2, W = CONS_SCR_W, H = Math.round(W * CONS_SCREEN.h / CONS_SCREEN.w);
   Object.assign(el.querySelector(".scr").style, { left: "0px", top: "0px", width: W + "px", height: H + "px", transformOrigin: "0 0", transform: quadCSS(W, H, [at(-sw, sh), at(sw, sh), at(-sw, -sh), at(sw, -sh)]) });
