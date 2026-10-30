@@ -19292,14 +19292,59 @@ const COSTUME = {
   costume_axolotl: { kind: "axolotl", cols: {                     // (each girl her own: Camila gold, to go with her gauntlet's glow; Rose pink, with her sword's)
     camila: { body: "#ffc65c", dark: "#f0a43a", belly: "#fff3d9", gill: "#ff8a5c", gill2: "#ff5a3c", rim: "#fff3d9", eye: "#24170e", foot: "#ffd27a" },
     rose: { body: "#ff9ccf", dark: "#f27ab6", belly: "#ffe6f2", gill: "#ff4f9a", gill2: "#d81b6a", rim: "#ffe6f2", eye: "#24121c", foot: "#ffb3da" } } },
-  costume_tortoise: { kind: "tortoise", cols: {                   // (a red-footed tortoise: near-black skin, red and orange scales on its legs, yellow patches on its head; its shell dark, each plate gold in the middle)
-    any: { body: "#3b3633", dark: "#2a2624", belly: "#e3c07a", scale: "#e8412a", scale2: "#ff8a2a", patch: "#f5b63a", shell: "#4a3324", scute: "#d6a443", rim: "#f5b63a", eye: "#151313", foot: "#3b3633" } } } };
+  costume_tortoise: { kind: "tortoise", cols: {                   // (a red-footed tortoise: near-black skin in little scales, red and orange ones down its legs, yellow and orange over its head; its shell high and dark, each plate gold in the middle)
+    any: { body: "#2f2a27", dark: "#171311", belly: "#e2c27e", seam: "#8a6634", scale: "#e0402a", scale2: "#ff7b26", patch: "#f6b832", shell: "#241a14", ring: "#3b2b1f", seamS: "#6e5236", scute: "#dca848", rim: "#d8bf86", eye: "#151313", foot: "#2f2a27", claw: "#e6d3a4" } } } };
 const costumeCols = (id, hero) => { const C = COSTUME[id]; return C && (C.cols[hero] || C.cols.any || C.cols.camila); };
-function costumeArt(cols, kind, front) {             // her body's, her arms', her legs' cloth: the colour, a lighter belly down the front (front: the tube's front, u), scales on a tortoise's legs
-  return tex(128, 256, (c, w, h) => { c.fillStyle = cols.body; c.fillRect(0, 0, w, h);
-    if (front !== null) { c.fillStyle = cols.belly; const u = front * w; c.beginPath(); c.ellipse(u, h * .55, w * .17, h * .42, 0, 0, 7); c.fill(); if (u < w * .2) { c.beginPath(); c.ellipse(u + w, h * .55, w * .17, h * .42, 0, 0, 7); c.fill(); } }
-    if (kind === "tortoise" && front === null) for (let i = 0; i < 26; i++) { const x = (i * 37 % 128), y = (i * 61 % 256); c.fillStyle = i % 3 ? cols.scale : cols.scale2; c.beginPath(); c.ellipse(x, y, 7 + i % 4, 5 + i % 3, i, 0, 7); c.fill(); } });
+const cosHash = (i, s = 1) => { const x = Math.sin(i * 127.1 + s * 311.7) * 43758.5453; return x - Math.floor(x); };
+const cosRGB = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+function cosCells(w, h, near, shade) {               // a canvas of cells (scales, a shell's plates): near(x, y) → [d1, d2, cell] (the nearest centre, the next, which); shade(t, edge, cell) → [r, g, b]
+  return tex(w, h, (c) => { const im = c.createImageData(w, h), D = im.data;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const [d1, d2, k] = near(x, y), col = shade(2 * d1 / (d1 + d2 || 1), d2 - d1, k), i = (y * w + x) * 4; D[i] = col[0]; D[i + 1] = col[1]; D[i + 2] = col[2]; D[i + 3] = 255; }
+    c.putImageData(im, 0, 0); });
 }
+function scaleArt(cols, part) {                      // a tortoise's leg or arm (or mitt, or foot): little rounded scales, dark up top, red and orange from the knee (the elbow) down; the canvas' top is the far end
+  const NX = part === "arm" ? 13 : 15, NY = part === "foot" ? 8 : 12, A = part === "arm" ? .5 : .62, P = [];   // (A: down the limb against round it, so the scales come out round)
+  for (let j = 0; j < NY; j++) for (let i = 0; i < NX; i++) { const k = j * NX + i + (part === "arm" ? 300 : 0); P.push([(i + .2 + cosHash(k) * .6) / NX, (j + .2 + cosHash(k, 2) * .6) / NY, cosHash(k, 3), cosHash(k, 4)]); }
+  const C0 = cosRGB(cols.body), C1 = cosRGB(cols.scale), C2 = cosRGB(cols.scale2), CS = cosRGB(cols.dark), W = 128, H = 256;
+  return cosCells(W, H, (x, y) => { const u = x / W, v = y / H, i0 = Math.floor(u * NX), j0 = Math.floor(v * NY); let d1 = 9, d2 = 9, b = 0;
+    for (let dj = -1; dj <= 1; dj++) { const j = j0 + dj; if (j < 0 || j >= NY) continue; for (let di = -1; di <= 1; di++) { const k = j * NX + ((i0 + di) % NX + NX) % NX, p = P[k]; let dx = Math.abs(u - p[0]); dx = Math.min(dx, 1 - dx); const dy = (v - p[1]) * A * NX / NY * 1.3;
+      const d = Math.hypot(dx, dy); if (d < d1) { d2 = d1; d1 = d; b = k; } else if (d < d2) d2 = d; } }
+    return [d1, d2, b]; },
+  (t, e, k) => { if (e < .005) return CS; const p = P[k], far = 1 - p[1], hot = part === "foot" ? .4 : part === "arm" ? .08 + .62 * THREE.MathUtils.smoothstep(far, .2, .6) : .04 + .56 * THREE.MathUtils.smoothstep(far, .35, .8);
+    const C = p[2] < hot ? (p[3] < .55 ? C1 : C2) : C0, l = 1.12 - .3 * t; return C.map(q => Math.min(255, q * l)); });
+}
+function shellArt(cols, a, b, c, ph0, ph1, th0, th1) {   // the shell's plates, on its own shape: five down the spine, four each side, the rim's round the edge; each dark with rings, gold in the middle
+  const S = [], add = (th, ph) => S.push([-a * Math.cos(ph) * Math.sin(th), b * Math.cos(th), c * Math.sin(ph) * Math.sin(th)]);
+  [.42, .9, 1.4, 1.9, 2.4].forEach(th => add(th, 0));
+  [-1, 1].forEach(s => { [.6, 1.13, 1.67, 2.22].forEach(th => add(th, s * .98)); for (let i = 0; i < 11; i++) add(.32 + i * .255, s * 1.55); add(.2, s * .5); add(2.92, s * .45); });
+  add(.12, 0); add(3.0, 0);
+  const W = 256, H = 256, CS = cosRGB(cols.seamS), C0 = cosRGB(cols.shell), CR = cosRGB(cols.ring), CA = cosRGB(cols.scute);
+  return cosCells(W, H, (x, y) => { const ph = ph0 + (x + .5) / W * (ph1 - ph0), th = th0 + (y + .5) / H * (th1 - th0), px = -a * Math.cos(ph) * Math.sin(th), py = b * Math.cos(th), pz = c * Math.sin(ph) * Math.sin(th); let d1 = 9, d2 = 9, k = 0;
+    S.forEach((s, i) => { const d = Math.hypot(px - s[0], py - s[1], pz - s[2]); if (d < d1) { d2 = d1; d1 = d; k = i; } else if (d < d2) d2 = d; }); return [d1, d2, k]; },
+  (t, e) => e < .009 ? CS : t < .54 ? CA.map(q => Math.min(255, q * (1.14 - .3 * t))) : (Math.abs(t - .5) < .025 || Math.abs(t - .66) < .025 || Math.abs(t - .82) < .025) ? CR : C0);
+}
+function plastronArt(cols) {                         // the plates down her front: pale, a seam down the middle and five across
+  const W = 128, H = 128, C0 = cosRGB(cols.belly), CS = cosRGB(cols.seam);
+  return tex(W, H, (c) => { const im = c.createImageData(W, H), D = im.data;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const ph = (x + .5) / W * Math.PI * 2, th = (y + .5) / H * Math.PI, dx = -Math.cos(ph) * Math.sin(th), dy = Math.cos(th), dz = Math.sin(ph) * Math.sin(th);
+      const seam = dx > 0 && (Math.abs(dz) < .035 || [.62, .3, -.02, -.34, -.66].some(q => Math.abs(dy - q) < .028)), C = seam ? CS : C0.map(q => q * (.92 + .08 * dx)), i = (y * W + x) * 4; D[i] = C[0]; D[i + 1] = C[1]; D[i + 2] = C[2]; D[i + 3] = 255; }
+    c.putImageData(im, 0, 0); });
+}
+function tortHeadArt(cols, open) {                   // the hood: a tortoise's head, in little dark scales; yellow and orange over its crown and down its brow, a red one or two by its face
+  const N = 260, P = []; for (let i = 0; i < N; i++) { const y = 1 - 2 * (i + .5) / N, r = Math.sqrt(1 - y * y), t = i * 2.39996 + cosHash(i, 7) * .5; P.push([r * Math.cos(t), y, r * Math.sin(t)]); }   // (round the hood, as it sits before it's turned: up is y)
+  const W = 256, H = 128, CS = cosRGB(cols.dark), C0 = cosRGB(cols.body), CY = cosRGB(cols.patch), CO = cosRGB(cols.scale2), CRd = cosRGB(cols.scale);
+  const colOf = k => { const [x, y] = P[k], up = -x, fwd = y, h = cosHash(k, 9);   // (as it sits before it's turned to face her way: -x is its up, y its forward)
+    if (up > .62 && fwd > -.2) return h < .55 ? CY : CO; if (up > .3 && fwd > .1) return h < .3 ? CRd : h < .65 ? CO : C0; if (up > .1 && h < .12) return CO; return C0; };
+  return cosCells(W, H, (x, y) => { const ph = (x + .5) / W * Math.PI * 2, th = open + (y + .5) / H * (Math.PI - open), dx = -Math.cos(ph) * Math.sin(th), dy = Math.cos(th), dz = Math.sin(ph) * Math.sin(th); let d1 = 9, d2 = 9, k = 0;
+    P.forEach((p, i) => { const d = Math.hypot(dx - p[0], dy - p[1], dz - p[2]); if (d < d1) { d2 = d1; d1 = d; k = i; } else if (d < d2) d2 = d; }); return [d1, d2, k]; },
+  (t, e, k) => e < .016 ? CS : colOf(k).map(q => Math.min(255, q * (1.1 - .25 * t))));
+}
+function costumeArt(cols, kind, front) {             // her body's, her arms', her legs' cloth: the colour, a lighter belly down the front (front: the tube's front, u)
+  return tex(128, 256, (c, w, h) => { c.fillStyle = cols.body; c.fillRect(0, 0, w, h);
+    if (front !== null) { c.fillStyle = cols.belly; const u = front * w; c.beginPath(); c.ellipse(u, h * .55, w * .17, h * .42, 0, 0, 7); c.fill(); if (u < w * .2) { c.beginPath(); c.ellipse(u + w, h * .55, w * .17, h * .42, 0, 0, 7); c.fill(); } } });
+}
+const pantLeg = p0 => { const R0 = clamp(Math.max(p0(.15), p0(.25)) * 2.1, .145, .175);   // her legs in it: wide and straight down, like a pair of baggy trousers (the user, 2026-10-30), bunched a little over her feet
+  return u => R0 * (u < .07 ? .55 + .45 * Math.sqrt(1 - (1 - u / .07) ** 2) : 1) * (1 + .08 * u + (u > .7 && u < .95 ? .1 * Math.sin((u - .7) / .25 * Math.PI * 2) ** 2 : 0)) * (u > .94 ? .55 + .45 * Math.sqrt(Math.max(0, 1 - ((u - .94) / .06) ** 2)) : 1); };
 function dressCostume(r, id, G, put) {               // (dressGear's: the costume over all of her)
   const C = COSTUME[id], cols = costumeCols(id, r.id); if (!C || !cols || r.kind !== "human") return; const K = C.kind, T = K === "tortoise";
   const M = (col, x) => { const m = toon(col, x); G.mats.push(m); return m; }, hide = o => { if (o.visible) { o.visible = false; G.hid.push(o); } };
@@ -19308,22 +19353,24 @@ function dressCostume(r, id, G, put) {               // (dressGear's: the costum
   const inHead = o => { let q = o; while (q) { if (q === r.head) return true; q = q.parent; } return false; };
   r.root.traverse(o => { if (o.isMesh && !keepUnder.has(o) && !inProp(o) && !inHead(o) && o.visible) hide(o); });   // (her skirt, collar, cuffs, hands, boots, the locks down her back: under it)
   (r.chains || []).forEach(c => { if (c.tube && c.tube.mesh.visible && !(c.anchor[0] > .12 && c.anchor[1] > .05)) hide(c.tube.mesh); });   // (only her fringe out of the hood)
-  const fat = { torso: T ? 1.38 : 1.32, arm: 1.5, leg: 1.38 };   // (baggy and thick)
-  const paint = (t, k, front) => { const map = costumeArt(cols, K, front), m = t.mesh.material.clone(); m.map = map; m.color && m.color.set("#ffffff"); G.mats.push(m); G.cos.push({ t, m: t.mesh.material, prof: t.prof, map });
-    t.mesh.material = m; const p0 = t.prof; t.prof = u => p0(u) * k; };
-  paint(r.torso, fat.torso, .5); r.arms.forEach(a => paint(a, fat.arm, null)); r.legs.forEach(a => paint(a, fat.leg, null));
+  const paint = (t, prof, map) => { const m = t.mesh.material.clone(); m.map = map; m.color && m.color.set("#ffffff"); G.mats.push(m); G.cos.push({ t, m: t.mesh.material, prof: t.prof, map });
+    t.mesh.material = m; t.prof = prof; };
+  const fat = (t, k) => { const p0 = t.prof; return u => p0(u) * k; };
+  paint(r.torso, fat(r.torso, T ? 1.38 : 1.32), costumeArt(cols, K, T ? null : .5)); r.arms.forEach(a => paint(a, fat(a, 1.5), T ? scaleArt(cols, "arm") : costumeArt(cols, K, null)));   // (baggy and thick)
+  r.legs.forEach(a => paint(a, pantLeg(a.prof), T ? scaleArt(cols, "leg") : costumeArt(cols, K, null)));
   // the hood: her head's size, from what's on it; a sphere round it, open in a big circle round her face
   r.root.updateMatrixWorld(true); const hb = new THREE.Box3(), inv = new THREE.Matrix4().copy(r.head.matrixWorld).invert();
   r.head.traverse(o => { if (o.isMesh && o.visible && o.geometry) { o.geometry.computeBoundingBox(); hb.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))); } });
   const hc = hb.getCenter(new THREE.Vector3()), hs = hb.getSize(new THREE.Vector3()), R = Math.max(hs.y, hs.z) * .6, open = .78, tilt = -.16;
   const hood = new THREE.Group(); hood.position.copy(hc); hood.rotation.z = tilt; put(r.head, hood);
-  const mH = M(cols.body, { side: THREE.DoubleSide });
+  const mH = T ? (() => { const m = M("#ffffff", { side: THREE.DoubleSide }); m.map = tortHeadArt(cols, open); return m; })() : M(cols.body, { side: THREE.DoubleSide });
   hood.add(new THREE.Mesh(new THREE.SphereGeometry(R, 40, 28, 0, Math.PI * 2, open, Math.PI - open).rotateZ(-Math.PI / 2), mH));
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(R * Math.sin(open), R * .07, 10, 44).rotateY(Math.PI / 2), M(cols.rim)); rim.position.x = R * Math.cos(open); hood.add(rim);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(R * Math.sin(open), R * (T ? .09 : .07), 10, 44).rotateY(Math.PI / 2), M(cols.rim)); rim.position.x = R * Math.cos(open); hood.add(rim);
   const onHood = (up, side, lift = 0) => new THREE.Vector3(Math.cos(up) * Math.cos(side), Math.sin(up), Math.cos(up) * Math.sin(side)).multiplyScalar(R + lift);   // (a spot on it: up from the face's middle, round to the side)
   [-1, 1].forEach(s => {                             // its eyes, up on the hood over hers
-    const e = new THREE.Mesh(new THREE.SphereGeometry(R * .2, 16, 12).scale(.55, 1, 1), M(cols.eye)); e.position.copy(onHood(1.02, s * .42, -R * .06)); e.lookAt(e.position.clone().multiplyScalar(2)); e.rotateY(Math.PI / 2); hood.add(e);
-    const g = new THREE.Mesh(new THREE.SphereGeometry(R * .065, 8, 6), M("#ffffff")); g.position.copy(onHood(1.1, s * .38, R * .07)); hood.add(g); });
+    const e = new THREE.Mesh(new THREE.SphereGeometry(R * .2, 16, 12).scale(.55, 1, 1), M(cols.eye)); e.position.copy(onHood(T ? .98 : 1.02, s * (T ? .78 : .42), -R * .06)); e.lookAt(e.position.clone().multiplyScalar(2)); e.rotateY(Math.PI / 2); hood.add(e);
+    const g = new THREE.Mesh(new THREE.SphereGeometry(R * .065, 8, 6), M("#ffffff")); g.position.copy(onHood(T ? 1.04 : 1.1, s * (T ? .72 : .38), R * .07)); hood.add(g);
+    if (T) { const lid = new THREE.Mesh(new THREE.SphereGeometry(R * .23, 16, 8, 0, Math.PI * 2, 0, Math.PI * .45).scale(.6, 1, 1.1), M(cols.patch)); lid.position.copy(onHood(1.03, s * .78, -R * .05)); lid.lookAt(lid.position.clone().multiplyScalar(2)); lid.rotateX(Math.PI / 2); lid.rotateX(-.5); hood.add(lid); } });
   if (!T) {                                          // the axolotl: its smile over her face, and three feathery gills out each side
     const sm = new THREE.Mesh(new THREE.TorusGeometry(R * .48, R * .028, 6, 24, 1.5).rotateZ(-.75 - Math.PI / 2 + Math.PI).rotateY(Math.PI / 2), M(cols.dark)); sm.position.x = R * .95; sm.position.y = R * .5; hood.add(sm);
     [-1, 1].forEach(s => [[.45, -.15], [.12, -.05], [-.2, .08]].forEach(([up, back], k) => {
@@ -19332,31 +19379,34 @@ function dressCostume(r, id, G, put) {               // (dressGear's: the costum
       const L = R * (.62 - k * .06); g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(R * .05, R * .08, L, 8), M(cols.gill)), 0, L / 2, 0));
       for (let i = 0; i < 5; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(R * .075, 8, 6).scale(1.3, .6, .5), M(i % 2 ? cols.gill2 : cols.gill)); f.position.set(0, L * (.25 + i * .17), 0); f.rotation.z = (i % 2 ? .6 : -.6); g.add(f);
         const f2 = f.clone(); f2.position.x = R * .05; f2.rotation.z = -f.rotation.z; g.add(f2); } })); }
-  else {                                             // the tortoise: yellow patches over its dark head, a beak's line, a little point to its snout
-    for (let i = 0; i < 9; i++) { const p = new THREE.Mesh(new THREE.SphereGeometry(R * (.1 + (i % 3) * .03), 10, 6).scale(1, .35, 1), M(i % 2 ? cols.patch : cols.scale2)); const v = onHood(.45 + (i % 4) * .28, -1.4 + i * .35, -R * .01); p.position.copy(v); p.lookAt(v.clone().multiplyScalar(2)); p.rotateX(Math.PI / 2); hood.add(p); }
-    const bk = new THREE.Mesh(new THREE.TorusGeometry(R * .42, R * .03, 6, 20, 1.3).rotateZ(-.65 - Math.PI / 2 + Math.PI).rotateY(Math.PI / 2), M(cols.dark)); bk.position.x = R * .96; bk.position.y = R * .52; hood.add(bk); }
+  else {                                             // the tortoise: its blunt snout out over her face (her face where its mouth is), two nostrils, the line of its beak round the opening
+    const sn = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2).scale(R * .5, R * .3, R * .56), mH); const p0 = onHood(.84, 0); sn.position.set(p0.x + R * .08, p0.y - R * .1, 0); hood.add(sn);
+    const bk = new THREE.Mesh(new THREE.TorusGeometry(1, .07, 6, 28, Math.PI).rotateX(Math.PI / 2).rotateY(-Math.PI / 2).scale(R * .5, R, R * .56), M(cols.rim)); bk.position.copy(sn.position); hood.add(bk);   // (its beak's edge, round the front)
+    [-1, 1].forEach(s => hood.add(at(new THREE.Mesh(new THREE.SphereGeometry(R * .05, 8, 6), M(cols.dark)), sn.position.x + R * .36, sn.position.y + R * .17, s * R * .12))); }
   // mitts on her hands (her weapon in its own), the creature's feet in place of her boots
-  r.hands.forEach(H => { const s = 1 / (H.scale.x || 1), m = new THREE.Group(); m.scale.setScalar(s); put(H, m); m.add(at(new THREE.Mesh(new THREE.SphereGeometry(.095, 14, 10), M(cols.body)), 0, -.05, 0));
-    for (let i = 0; i < (T ? 3 : 4); i++) m.add(at(new THREE.Mesh(T ? new THREE.ConeGeometry(.018, .05, 6) : new THREE.SphereGeometry(.03, 8, 6), M(T ? cols.patch : cols.dark)), .06, -.12, (i - (T ? 1 : 1.5)) * .04)); });
+  const mMitt = T ? (() => { const m = M("#ffffff"); m.map = scaleArt(cols, "foot"); return m; })() : M(cols.body);
+  r.hands.forEach(H => { const s = 1 / (H.scale.x || 1), m = new THREE.Group(); m.scale.setScalar(s); put(H, m); m.add(at(new THREE.Mesh(new THREE.SphereGeometry(.095, 14, 10), mMitt), 0, -.05, 0));
+    for (let i = 0; i < (T ? 3 : 4); i++) m.add(at(new THREE.Mesh(T ? new THREE.ConeGeometry(.018, .05, 6) : new THREE.SphereGeometry(.03, 8, 6), M(T ? cols.claw : cols.dark)), .06, -.12, (i - (T ? 1 : 1.5)) * .04)); });
   (r.feet || []).forEach(F => { const f = new THREE.Group(); put(F, f);
-    f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.14, 16, 12).scale(1.35, .62, 1.05), M(cols.foot)), .06, .07, 0));
-    for (let i = 0; i < 4; i++) f.add(at(new THREE.Mesh(T ? new THREE.ConeGeometry(.026, .07, 6).rotateZ(-Math.PI / 2) : new THREE.SphereGeometry(.042, 8, 6), M(T ? cols.patch : cols.dark)), .23, .05, (i - 1.5) * .06));
-    if (T) for (let i = 0; i < 4; i++) f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.03, 8, 6).scale(1, .4, 1), M(i % 2 ? cols.scale : cols.scale2)), .02 + i * .05, .14, (i % 2 ? -1 : 1) * .05)); });
+    if (T) {                                         // a tortoise's: a round stump of a foot, red-scaled, five blunt claws
+      f.add(at(new THREE.Mesh(new THREE.CylinderGeometry(.13, .16, .15, 18), mMitt), .04, .1, 0)); f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.16, 18, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(1, .35, 1), mMitt), .04, .03, 0));
+      for (let i = 0; i < 5; i++) { const a = (i - 2) * .38; f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.034, 8, 6).scale(1.3, .8, 1), M(cols.claw)), .04 + Math.cos(a) * .16, .03, Math.sin(a) * .16)); } }
+    else { f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.14, 16, 12).scale(1.35, .62, 1.05), M(cols.foot)), .06, .07, 0));
+      for (let i = 0; i < 4; i++) f.add(at(new THREE.Mesh(new THREE.SphereGeometry(.042, 8, 6), M(cols.dark)), .23, .05, (i - 1.5) * .06)); } });
   if (!T) {                                          // its tail: thick, tapering, a fin along it, swaying
     const tg = new THREE.Group(); tg.position.set(-.22, -.1, 0); put(r.hips, tg); G.tail = tg;
     const tc = new THREE.CatmullRomCurve3([[0, 0, 0], [-.22, -.12, 0], [-.42, -.3, 0], [-.55, -.5, 0]].map(p => new THREE.Vector3(...p)));
     const tube = new THREE.TubeGeometry(tc, 20, .1, 10), pos = tube.attributes.position, tmp = new THREE.Vector3();
     for (let i = 0; i < pos.count; i++) { tmp.fromBufferAttribute(pos, i); const k = Math.min(1, Math.hypot(tmp.x, tmp.y) / .75); const c = tc.getPointAt(k); tmp.sub(c).multiplyScalar(1 - k * .75).add(c); pos.setXYZ(i, tmp.x, tmp.y, tmp.z); }
     tube.computeVertexNormals(); tg.add(new THREE.Mesh(tube, M(cols.body)));
-    const fin = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 10).scale(1, .5, .08), M(cols.dark)); fin.position.set(-.3, -.2, 0); fin.rotation.z = .6; tg.add(fin); }
-  else {                                             // its shell over her back, the plates round in it, a rim; the plastron down her front; a stub of a tail
-    const sh = new THREE.Group(); sh.position.set(-.12, -.02, 0); put(r.chest, sh);
-    sh.add(new THREE.Mesh(new THREE.SphereGeometry(.42, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(Math.PI / 2).scale(.62, 1.15, 1.02), M(cols.shell)));
-    [[-.2, .18, 0], [-.21, -.12, 0], [-.18, .05, .22], [-.18, .05, -.22], [-.16, -.2, .2], [-.16, -.2, -.2], [-.15, .3, .17], [-.15, .3, -.17]].forEach(([x, y, z]) => { const p = new THREE.Mesh(new THREE.CylinderGeometry(.075, .075, .03, 6).rotateZ(Math.PI / 2), M(cols.scute)); const n = new THREE.Vector3(x / .62, y / 1.15, z / 1.02).normalize(); p.position.set(n.x * .27, n.y * .48, n.z * .43); p.lookAt(p.position.clone().multiplyScalar(2).add(sh.position)); p.rotateY(Math.PI / 2); sh.add(p); });
-    sh.add(new THREE.Mesh(new THREE.TorusGeometry(.43, .035, 8, 32).rotateY(Math.PI / 2).scale(1, 1.15, 1.02), M(cols.rim)));
-    const pl = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 12).scale(.18, 1.25, .95), M(cols.belly)); pl.position.set(.24, -.1, 0); put(r.chest, pl);
-    for (let i = 0; i < 3; i++) put(r.chest, at(new THREE.Mesh(new THREE.BoxGeometry(.01, .012, .36), M("#b8934c")), .29, .1 - i * .16, 0));
-    put(r.hips, at(new THREE.Mesh(new THREE.ConeGeometry(.05, .14, 8).rotateZ(Math.PI / 2 + .6), M(cols.body)), -.24, -.12, 0)); }
+    const fin = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 10).scale(1, .5, .08), M(cols.dark)); fin.position.set(-.22, -.18, 0); fin.rotation.z = .6; tg.add(fin); }
+  else {                                             // its shell: high and domed over her whole back, shoulders to seat, round past her sides; the plastron down her front; a stub of a tail
+    const a = .58, b = .52, c = .37, w = .22, ph0 = -Math.PI / 2 - w, ph1 = Math.PI / 2 + w, th0 = .13, th1 = Math.PI - .1;
+    const ms = M("#ffffff", { side: THREE.DoubleSide }); ms.map = shellArt(cols, a, b, c, ph0, ph1, th0, th1);
+    const sh = new THREE.Mesh(new THREE.SphereGeometry(1, 56, 36, ph0, ph1 - ph0, th0, th1 - th0).scale(a, b, c), ms); sh.position.set(-.02, -.3, 0); put(r.chest, sh);
+    const mp = M("#ffffff"); mp.map = plastronArt(cols);
+    put(r.chest, at(new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20).scale(.11, .43, .27), mp), .25, -.33, 0));
+    put(r.hips, at(new THREE.Mesh(new THREE.ConeGeometry(.055, .16, 8).rotateZ(Math.PI / 2 + .7), M(cols.body)), -.3, -.16, 0)); }
 }
 function undressCostume(G) { (G.cos || []).forEach(q => { q.t.mesh.material = q.m; q.t.prof = q.prof; q.map.dispose(); }); }
 // on and off a rig: dressGear(r, wear) puts on what's listed for her (what was on before comes off). The pieces' materials join r.mats (they flash with her when she's hit)
