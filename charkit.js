@@ -2228,6 +2228,41 @@ Object.assign(STRIKES, {
       fFx: [[0, -.2], [.06, -.1], [.36, -.1], [.8, -.2]], fFy: [[0, 0], [.06, .15], [.36, .3], [.56, .05], [.8, 0]], fP: [[0, 0], [.06, -.4], [.46, .3], [.56, .2], [.8, 0]],
       bodyY: [[0, 0], [.58, 0], [.66, -.25], [.8, 0]] } },
 });
+// the five of 2026-10-30. TIC and TAC (the user: "they swing their symbol to attack and their special is to throw it"): the X / the ring brought down from over the
+// head in both hands, and flung (shot "toss": out at them, a bounce off, back to the hands). PK the same with his pencil ("similar attack pattern"). VEJI: a whirl,
+// his tail and long arms lashing all round him. ESTRELLA: the mic up to her mouth and a note belted out, a ring of sound and light that bowls them over
+Object.assign(STRIKES, {
+  tac_swing: { dur: .58, step: 60, sq: -.08, sfx: "huff", sfx2: [.24, "slam"], hits: [{ t0: .22, t1: .3, reach: 110, back: 0, y0: 140, y1: 0, kind: "smash", fx: "dust" }],   // the ring up, back over the head, and down on them
+    keys: { armF: [[0, 2.75], [.12, 3.25], [.22, 1.15], [.3, .95], [.42, 1.6], [.58, 2.75]], elbF: [[0, .55], [.12, .9], [.22, .05], [.3, .1], [.58, .55]],
+      armB: [[0, 2.75], [.12, 3.25], [.22, 1.15], [.3, .95], [.42, 1.6], [.58, 2.75]], elbB: [[0, .55], [.12, .9], [.22, .05], [.3, .1], [.58, .55]],
+      lean: [[0, 0], [.12, -.2], [.22, .45], [.3, .5], [.42, .25], [.58, 0]], bodyY: [[0, 0], [.12, .02], [.22, -.1], [.3, -.12], [.58, 0]],
+      fNx: [[0, .2], [.22, .4], [.42, .3], [.58, .2]], fFx: [[0, -.15], [.22, -.3], [.58, -.15]] } },
+  tac_toss: { dur: .78, step: 30, sq: -.08, sfx: "huff", sfx2: [.32, "toss"], hits: [{ t0: .32, t1: .34, reach: 0, back: 0, y0: 0, y1: 0, kind: "launch", only: true, shot: "toss" }],   // the ring wound back over the head and flung at them; it flies back to the hands
+    keys: { armF: [[0, 2.75], [.16, 3.4], [.28, 3.5], [.34, 1.4], [.46, 1.2], [.62, 2.2], [.78, 2.75]], elbF: [[0, .55], [.16, 1.0], [.28, 1.2], [.34, .1], [.5, .3], [.78, .55]],
+      armB: [[0, 2.75], [.16, 3.4], [.28, 3.5], [.34, 1.4], [.46, 1.2], [.62, 2.2], [.78, 2.75]], elbB: [[0, .55], [.16, 1.0], [.28, 1.2], [.34, .1], [.5, .3], [.78, .55]],
+      lean: [[0, 0], [.16, -.3], [.28, -.38], [.34, .45], [.5, .3], [.78, 0]], bodyY: [[0, 0], [.16, -.06], [.28, -.1], [.34, -.04], [.78, 0]],
+      fNx: [[0, .2], [.28, .1], [.34, .45], [.6, .3], [.78, .2]], fFx: [[0, -.15], [.28, -.1], [.34, -.32], [.78, -.15]], headRot: [[0, 0], [.28, -.12], [.34, .1], [.78, 0]] } },
+  pk_toss: { dur: .8, step: 30, sq: -.06, sfx: "huff", sfx2: [.34, "toss"], hits: [{ t0: .34, t1: .36, reach: 0, back: 0, y0: 0, y1: 0, kind: "launch", only: true, shot: "toss" }],   // PK: the pencil swung up behind him and hurled end over end at them; back it comes to his hand
+    keys: { armF: [[0, .6], [.14, 2.6], [.28, 3.2], [.36, 1.3], [.5, 1.0], [.8, .6]], elbF: [[0, .8], [.14, 1.2], [.28, 1.5], [.36, .1], [.5, .3], [.8, .8]],
+      blade: [[0, .9], [.14, 1.6], [.28, 2.2], [.36, .4], [.5, .6], [.8, .9]], grip: [[0, 0], [.8, 0]],
+      armB: [[0, .4], [.14, -.4], [.28, -.6], [.36, .9], [.5, .7], [.8, .4]], elbB: [[0, .8], [.36, .5], [.8, .8]],
+      lean: [[0, .1], [.14, -.15], [.28, -.3], [.36, .45], [.5, .35], [.8, .1]], twist: [[0, 0], [.28, -.4], [.36, .35], [.8, 0]],
+      fNx: [[0, .24], [.28, .1], [.36, .45], [.6, .35], [.8, .24]], fFx: [[0, -.2], [.28, -.1], [.36, -.32], [.8, -.2]] } },
+  veji_lash: { dur: .9, step: 0, surge: [.08, 300], slide: .3, sq: -.1, sfx: "whoosh", sfx2: [.38, "whoosh"], trail: [.1, .62],   // VEJI: up on his toes and round, twice, his tail and long arms lashing everything round him
+    hits: [{ t0: .12, t1: .62, reach: 150, back: 150, y0: 150, y1: 0, kind: "sweep", wide: true, fx: "sparks" }],
+    keys: { spin: turnKeys(.1, .62, 2, .9), armF: [[0, .6], [.1, 1.5], [.62, 1.5], [.75, .8], [.9, .6]], elbF: [[0, .8], [.1, .05], [.62, .05], [.9, .8]],
+      armB: [[0, .4], [.1, 1.4], [.62, 1.4], [.75, .6], [.9, .4]], elbB: [[0, .8], [.1, .05], [.62, .05], [.9, .8]],
+      lean: [[0, .1], [.1, -.05], [.62, -.05], [.75, .2], [.9, .1]], bodyY: [[0, 0], [.1, .05], [.62, .05], [.75, -.06], [.9, 0]],
+      fNx: [[0, .2], [.1, .05], [.62, .05], [.9, .2]], fFx: [[0, -.18], [.1, -.05], [.62, -.05], [.9, -.18]] } },
+  estrella_belt: { dur: .95, step: 0, sq: -.06, sfx: "huff", sfx2: [.46, "whoosh"],   // ESTRELLA: the mic up to her mouth, a breath in, and the note belted out: a ring of sound and light that bowls them over
+    hits: [{ t0: .46, t1: .48, reach: 0, back: 0, y0: 0, y1: 0, kind: "sweep", only: true, fx: "sparks", shot: "gust" }, { t0: .66, t1: .68, reach: 0, back: 0, y0: 0, y1: 0, kind: "sweep", only: true, shot: "gust" }],
+    keys: { armF: [[0, .5], [.16, 2.2], [.3, 2.35], [.46, 2.25], [.8, 2.2], [.95, .5]], elbF: [[0, .8], [.16, 2.1], [.3, 2.2], [.95, .8]],
+      armB: [[0, .4], [.16, -.4], [.3, -.6], [.46, .9], [.8, 1.0], [.95, .4]], elbB: [[0, .8], [.46, .2], [.95, .8]],
+      lean: [[0, .1], [.16, -.1], [.3, -.28], [.46, .25], [.8, .2], [.95, .1]], headRot: [[0, 0], [.3, -.25], [.46, .2], [.8, .15], [.95, 0]], bodyY: [[0, 0], [.3, .03], [.46, -.05], [.95, 0]] } },
+});
+STRIKES.tic_swing = JSON.parse(JSON.stringify(STRIKES.tac_swing)); STRIKES.tic_toss = JSON.parse(JSON.stringify(STRIKES.tac_toss));   // (TIC: the same, its X)
+Object.assign(BUDDY_SP, { tic: "tic_toss", tac: "tac_toss", pk: "pk_toss", veji: "veji_lash", estrella: "estrella_belt" });
+Object.assign(BUDDY_PLAIN, { tic: ["tic_swing"], tac: ["tac_swing"] });
 // the pets' specials (the user, 2026-10-26: "can you also give the pets a special attack? although it can be the same for all cats and then the same one for all
 // dogs"): every couple of landed pounces (work.html palLeap). The cat: onto it and curled into a pinwheel of claws, three blows; the dog: a tackle, then a bark
 // that sends a ring of sound on ahead (work.html petBark). Keyed on the pets' own build (the chibi Tocsin); no cards
