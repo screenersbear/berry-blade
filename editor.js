@@ -212,7 +212,7 @@ function movesFor(sp) {                                          // every move t
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
   add("Through a low hole (C7's wall into C8)", "crawl", "", T);   // (on hands and knees, one cycle of crawlPh: 2026-10-28)
-  add("Playing the BERRY CONSOLE (sat cross-legged)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
+  add("Playing the BERRY CONSOLE (sat, legs out in front)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
   add("As a berry buddy: special", bsp, "", T);
   return out;
 }

@@ -2265,11 +2265,11 @@ Object.assign(STRIKES, {
   // up a rock wall, one cycle of climbPh (the user, 2026-10-27: "whenever camila climbs a wall, she should be punching hard with her gauntlet hand and then climbing with the other
   // hand and alternate like that"): F is her weapon hand (swapped onto whichever side it's on). The gauntlet pulled in tight, then driven hard straight up into the rock
   // (WALL_HIT: the game's crunch), held there as she hauls up past it; the other hand reaching up to take hold above, a knee coming up under each in turn
-  // sat cross-legged on the ground, playing the BERRY CONSOLE (2026-10-30: "when the player opens it, the character sits down on the ground, legs crossed"):
-  // hips down by her heels, knees out to the sides, the feet crossed in front, both hands up holding it, looking down at it; a slow breath through the loop
-  console_sit: { dur: 2.4, pose: true, keys: { lean: [[0, .3], [1.2, .34], [2.4, .3]], arch: [[0, .12], [2.4, .12]], bodyY: [[0, -.74], [1.2, -.73], [2.4, -.74]], headRot: [[0, .42], [1.2, .46], [2.4, .42]],
+  // sat on the ground playing the BERRY CONSOLE (2026-10-30, first "legs crossed", then the user: "when they sit down, just have their legs actually spread out in
+  // front of them rather than crossing them"): hips on the ground, both legs out straight in front, a little apart, toes up; both hands up holding it, looking down at it
+  console_sit: { dur: 2.4, pose: true, keys: { lean: [[0, .3], [1.2, .34], [2.4, .3]], arch: [[0, .12], [2.4, .12]], bodyY: [[0, -.72], [1.2, -.71], [2.4, -.72]], headRot: [[0, .42], [1.2, .46], [2.4, .42]],
     armF: [[0, .9], [2.4, .9]], elbF: [[0, 1.6], [2.4, 1.6]], armB: [[0, .8], [2.4, .8]], elbB: [[0, 1.65], [2.4, 1.65]], spF: [[0, .1], [2.4, .1]], spB: [[0, .1], [2.4, .1]],
-    fNx: [[0, .1], [2.4, .1]], fNy: [[0, 0], [2.4, 0]], fFx: [[0, .14], [2.4, .14]], fFy: [[0, 0], [2.4, 0]], fNz: [[0, -.75], [2.4, -.75]], fFz: [[0, .75], [2.4, .75]], fP: [[0, .3], [2.4, .3]], kOut: [[0, 1], [2.4, 1]] } },
+    fNx: [[0, .82], [2.4, .82]], fNy: [[0, 0], [2.4, 0]], fFx: [[0, .78], [2.4, .78]], fFy: [[0, 0], [2.4, 0]], fNz: [[0, .32], [2.4, .32]], fFz: [[0, .32], [2.4, .32]], fP: [[0, -1.1], [2.4, -1.1]], kOut: [[0, 0], [2.4, 0]] } },
   wallclimb: { dur: 1, pose: true, keys: {
     armF: [[0, 1.75], [.12, 1.45], [.24, 3.05], [.32, 2.92], [.55, 2.7], [.8, 2.05], [1, 1.75]], elbF: [[0, 1.85], [.12, 2.25], [.24, .05], [.32, .25], [.55, .6], [.8, 1.45], [1, 1.85]],
     armB: [[0, 2.85], [.24, 2.7], [.45, 1.95], [.55, 1.8], [.74, 2.95], [1, 2.85]], elbB: [[0, .4], [.24, .6], [.45, 1.6], [.55, 1.75], [.74, .3], [1, .4]],
@@ -2453,7 +2453,7 @@ function updatePoseHuman(p, dt) {
   p.sprintK = approach(p.sprintK || 0, D.run && p.onGround ? clamp(((p.runK || 1) - 1) / .45, 0, 1) : p.sprintK || 0, dt * 3); const sk = p.sprintK * (1 - wk);   // sprinting: how far into it (0 at a run)
   const pumpRun = m.run === "pump" || (m.run !== "dash" && m.set === "boxer");   // (auto: a boxer pumps his arms, the rest dash with them back)
   if (p.sit) Object.assign(T, { lean: -.08, arch: .04, bodyY: -.42, armF: .5, elbF: 1.2, armB: .42, elbB: 1.25, spF: .12, spB: .12, fNx: .36, fNy: 0, fFx: .3, fFy: 0, fP: .35, fNz: .05, fFz: -.05, headRot: .1 });
-  if (p.consSit && a < 0) { const D2 = STRIKES.console_sit.dur; Object.assign(T, poseKeys(p, "console_sit", (((p.consPh || 0) % D2) + D2) % D2) || {}); }   // sat cross-legged with the BERRY CONSOLE (2026-10-30)
+  if (p.consSit && a < 0) { const D2 = STRIKES.console_sit.dur; Object.assign(T, poseKeys(p, "console_sit", (((p.consPh || 0) % D2) + D2) % D2) || {}); }   // sat on the ground with the BERRY CONSOLE, legs out in front (2026-10-30)
   else if (p.sit && p.chair) Object.assign(T, { bodyY: -.3, fNx: .3, fFx: .25 });   // (in a chair, 2026-10-27: sat up higher than on a log, the feet under the knees)
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
