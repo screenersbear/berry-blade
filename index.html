@@ -946,9 +946,10 @@ function dawnLook(w) {                                 // the world's dawn: its 
   return (dawnLooks[w] = D);
 }
 let bossDown = false;                              // this stay: the world's boss is beaten (so it isn't waiting at its other way out too)
+let cronyDown = new Set(), mainAgain = new Set();   // this stay: the cronies beaten (by room), and a main boss put back by DEBUG
 let bossNotAt = -1;                                // this stay: the door you walked back into the world by, its boss not beaten: it waits at the world's other doors, not that one (the user, 2026-10-23)
 const miniBeaten = id => !!id && itemGot("boss:" + id);   // (a mini boss beaten: for good. Lossst, Glos's guardian, the user 2026-10-28)
-const bossHere = k => (!!STAGES[k].boss && !bossDown || (!!STAGES[k].mini && !miniBeaten(STAGES[k].mini))) && k !== bossNotAt && !STAGES[k].noBoss;
+const bossHere = k => (!!STAGES[k].boss && !roomBossDown(k) || (!!STAGES[k].mini && !miniBeaten(STAGES[k].mini))) && k !== bossNotAt && !STAGES[k].noBoss;
 let koStay = 0, koScr = null; const koRoom = new Map();                       // knock-outs this stay (each costs the uprising one point less, down to 2) · the black screen up
 function koShow() {                                 // knocked out in the story: the uprising loses 5%, every time (the user, 2026-10-20), on a black screen, then the room again
   const kk = world + ":" + stage; koRoom.set(kk, (koRoom.get(kk) || 0) + 1);   // (the user 2026-10-22: lose 5 times in the same room and further losses there cost nothing; never below 0)
@@ -960,16 +961,16 @@ function koShow() {                                 // knocked out in the story:
   if (story) writeSave();
 }
 let crumbleGone = new Set(), dropNext = false, heroNext = false;   // (dropNext: a new stay in a world, its drops to pick once the room's set up: dropPick)                         // (the breakable platforms broken this stay: spawnCrumbles)
-function newStay() { crumbleGone = new Set(); dropNext = true; heroNext = true; heroSaid = new Set(); koStay = 0; bossDown = false; bossNotAt = -1; roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); meetStay(); }
+function newStay() { crumbleGone = new Set(); dropNext = true; heroNext = true; heroSaid = new Set(); koStay = 0; bossDown = false; bossNotAt = -1; cronyDown = new Set(); mainAgain = new Set(); roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); meetStay(); }
 const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a way out of the world, the room to the left, back the way you came, or the world before
   if (S0.exitLeft && S0.toWorld !== undefined) return "out";
   if (S0.prev !== undefined) return S0.prev;
   if (stage === 0 && STITCH.has(world) && !stronghold && (worldStack.length || prevWorld(world) >= 0)) return "back";   // (a stitched world's first room: off its left, always back out of the world, however you came in: the waves' D1, 2026-10-25)
   if (entrySide === "top" || entrySide === "bottom") return null;
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
-const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !bossDown) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
-const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || bossDown) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
-const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen());   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
+const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !roomBossDown(stage)) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
+const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
+const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock;   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
@@ -4760,6 +4761,7 @@ function setScreen(s) {                              // build stage s (its platf
     level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
     restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
     if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
+    if (mode === "play" && doorBarred(s)) level.objs.push(buildBarGate(s));   // (a way barred till the next world's boss is beaten)
     ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
     bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
     dropTextures();
@@ -6094,7 +6096,7 @@ function debugResetRoom() {
   const k = world + ":" + stage + ":", drop = S => [...S].forEach(id => { if (String(id).startsWith(k)) S.delete(id); });
   roomsDone.delete(stage); drop(giftsTaken); drop(cratesBroken); drop(healTaken); freeGot.forEach(id => { if (id.startsWith(k)) freeGot.delete(id); });
   if (story && story.got) story.got = story.got.filter(id => !id.startsWith(k));
-  if (STAGES[stage].boss) { bossDown = false; bossNotAt = -1; }
+  if (STAGES[stage].boss) { if (STAGES[stage].crony) cronyDown.delete(stage); else { bossDown = false; mainAgain.add(world); } bossNotAt = -1; }   // (a main boss beaten for good: back, this stay)
   resetTrial(); toast("DEBUG: THIS ROOM'S BACK TO NEW", 2400);
 }
 function closePause() { if (!paused) return; if (upDirty) { upDirty = false; level.s = -2; setTimeout(() => { if (mode === "play" && !paused) debugResetRoom(); }, 0); } dbgPick = null; $("pAsk").classList.add("hidden"); paused = false; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("pause").classList.remove("show"); }
@@ -6332,7 +6334,7 @@ function drawLvl() {                                 // first the worlds (one to
   const w = lvlW, W = WORLDS[w], S = W.stages, homes = S.map((q, i) => i).filter(i => S[i].bep), at = new Map(); S.forEach((q, i) => { if (!q.arena && q.cell) at.set(q.cell, i); });
   const cols = Math.max(COLS, ...S.filter(q => q.cell).map(q => +String(q.cell).slice(1) || 0)), rows = [...new Set(S.filter(q => q.cell).map(q => String(q.cell)[0]))].sort();
   let g = `<div class="lvGrid" style="--cols:${cols}"><i></i>` + Array.from({ length: cols }, (_, c) => `<i>${c + 1}</i>`).join("");
-  rows.forEach(r => { g += `<i>${r}</i>`; for (let c = 1; c <= cols; c++) { const i = at.get(r + c); g += i === undefined ? `<span class="none"></span>` : b(w, "room", i, r + c, S[i].boss ? "BOSS" : S[i].hub ? "HUB" : S[i].rest ? "REST" : S[i].bep ? "BEPS" : S[i].toWorld !== undefined ? "EXIT" : i === 0 ? "START" : ""); } });
+  rows.forEach(r => { g += `<i>${r}</i>`; for (let c = 1; c <= cols; c++) { const i = at.get(r + c); g += i === undefined ? `<span class="none"></span>` : b(w, "room", i, r + c, S[i].boss ? (S[i].crony ? "MINI" : "BOSS") : S[i].hub ? "HUB" : S[i].rest ? "REST" : S[i].bep ? "BEPS" : S[i].toWorld !== undefined ? "EXIT" : i === 0 ? "START" : ""); } });
   g += `</div>`;
   const off = S.map((q, i) => i).filter(i => !S[i].arena && !S[i].cell);   // (rooms off the grid: a cove, a chamber)
   const top = `<div class="lvTop"><button data-back="1">‹ WORLDS</button>${b(w, "room", 0, "START OF " + W.name)}</div>`;
@@ -8500,7 +8502,7 @@ function openExit() {                                // the boss is down (or the
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 function wayCue(bossBeat) {                          // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
-  const on = exitOpen && !stronghold && !patrolLock && (bossBeat || mustClear()); if (on) $("exitName").textContent = exitLabel(stage);
+  const on = exitOpen && !stronghold && !patrolLock && (bossBeat || mustClear()) && !doorBarred(stage); if (on) $("exitName").textContent = exitLabel(stage);
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
@@ -8509,7 +8511,7 @@ const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ??
   cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
   cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
   return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
-const wayOnText = () => { const q = STAGES[stage];
+const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP;
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
   if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
   return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
@@ -8552,7 +8554,7 @@ const UP_PREVIEW = [["AS PLAYED", null, null], ["25%", 25, false], ["50%", 50, f
 let upDirty = false;                                 // (the DEBUG menu changed it: this room rebuilt on closing the pause)
 const upLabel = () => "UPRISING: " + (upPrev ? UP_PREVIEW[upPrev][0] : story ? "AS PLAYED" : Math.round(upNow()) + "%");   // (free play: from 0% as you play)
 let upPrev = 0;
-const bossNameOf = () => { const q = STAGES.find(s => s.boss); return (q && FOES[q.foe] && FOES[q.foe].name) || "THE BOSS"; };
+const bossNameOf = () => (FOES[0] && FOES[0].name) || "THE BOSS";   // (the world's main boss: never a crony)
 function wsUprise(S) {                            // the stats card's bar: from where it was to where this run's taken it
   const on = upOn(world); $("wsUp").classList.toggle("hidden", !on); $("wsAsk").classList.add("hidden"); $("wsGo").classList.remove("hidden"); if (!on) return;
   const goal = upGoal(world), now = upStore()[world] || 0, p1 = Math.min(100, now / goal * 100), p0 = Math.min(p1, Math.max(0, now - (S.up || 0)) / goal * 100);
@@ -8588,7 +8590,7 @@ function goWorld(w) {
   statsUp = { w, t0: performance.now() }; paused = true; for (const k in keys) keys[k] = false;
   $("wsName").textContent = WORLDS[world].name;
   const rows = [["TIME", mmss(S.t)], ["ROOMS", Math.max(1, S.rooms.size)], [world === 9 ? "BADDIES SENT PACKING" : "BADDIES WON BACK", S.pops], ["SAD BERRIES CHEERED UP", S.cheered], ["HEARTS LOST", S.lost], ["KNOCK-OUTS", S.kos]];
-  if (S.boss) rows.push(["BEAT", S.boss]);
+  if (S.boss || S.crony) rows.push(["BEAT", S.boss || S.crony]);
   $("wsList").innerHTML = rows.map(([k, v]) => `<span>${k}</span><b>${v}</b>`).join("");
   $("wsGo").textContent = (window.BERRY_TOUCH ? "TAP" : "PRESS ANY BUTTON") + " TO GO ON TO " + WORLDS[w].name;
   { const n = teamCount(); S.partners = 0; if (n && upOn(world) && !freedNow() && !S.bonusGiven) { const add = Math.ceil(upGoal(world) * .1 * n), U = upStore(); U[world] = (U[world] || 0) + add; S.up = (S.up || 0) + add; S.partners = n; S.bonusGiven = true;   // (finished it with partners along: +10% of the uprising each, the user 2026-10-25)
@@ -8620,8 +8622,8 @@ function goWorldDoor(w, ns) {                        // in at a door: at its wor
   swapUnderFade(() => {
     $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd(); palsStay();
-    worldStack.push({ w: world, trail: trail.slice(), bossDown });
-    setWorld(w); worldRefill(); wstReset(); runStart = ns; trail = [ns]; newStay(); bossDown = true; if (story) { story.entry = { w, s: ns }; story.check = null; }
+    worldStack.push({ w: world, trail: trail.slice(), bossDown, cronyDown: [...cronyDown] });
+    setWorld(w); worldRefill(); wstReset(); runStart = ns; trail = [ns]; newStay(); bossDown = true; if (STAGES[ns].crony) cronyDown.add(ns);   // (in at a crony's door: it isn't waiting for you there) if (story) { story.entry = { w, s: ns }; story.check = null; }
     const lf = !!STAGES[ns].exitLeft; roomsSeen.add(ns); entrySide = lf ? "left" : "right"; entryHi = false; dayClock = nextDay(); clockEnter(ns); rollSad(); setScreen(ns);
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
@@ -8641,7 +8643,7 @@ function goWorldNow(w) {                             // on into the next world: 
   swapUnderFade(() => {
     $("wstats").classList.remove("show");
     clearFriends(); clearGifts(); hideFoe(foe); clearHz(); ejEnd(); palsStay();   // (she stays in the world she joined you in; your pets and buddies come along)
-    worldStack.push({ w: world, trail: trail.slice(), bossDown });   // (walk back off this world's first room and you're back where you left the last one, its boss still beaten)
+    worldStack.push({ w: world, trail: trail.slice(), bossDown, cronyDown: [...cronyDown] });   // (walk back off this world's first room and you're back where you left the last one, its boss still beaten)
     setWorld(w); worldRefill(); wstReset(); runStart = 0; trail = [0]; newStay(); if (story) { story.entry = { w, s: 0 }; story.check = null; } roomsSeen.add(0); entrySide = "left"; entryHi = false; dayClock = nextDay(); clockEnter(0); rollSad(); setScreen(0);   // (through a world's way in: the next step of the day (2026-10-26; it was a new day at midday (the user, 2026-10-20; Kesh's garden: its own first hour, night); the beach's morning doesn't carry on into it)
     const gy = groundAt(40) ?? GROUND;
     Object.assign(player, { x: 40, y: gy, vx: 120, vy: 0, face: 1, onGround: true, plat: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, climb: null, safe: { x: 40, y: gy, plat: null } });
@@ -8673,8 +8675,8 @@ function goWorldBackNow(P0) {
   cine = null;
   swapUnderFade(() => {
     clearFriends(); bepRun.escort = null; bepEv = null; clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd(); palsStay();
-    setWorld(P0.w); worldRefill(); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown || !!(story && (story.beat || []).includes(P0.w)); entryHi = false;   // (its boss isn't back: the user, 2026-10-20; nor after a load, the way back not remembered)
-    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; bossNotAt = bossDown ? -1 : ns; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; dayClock = nextDay(); clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
+    setWorld(P0.w); worldRefill(); wstReset(); trail = P0.trail.slice(); runStart = trail[0]; newStay(); bossDown = !!P0.bossDown || !!(story && (story.beat || []).includes(P0.w)); cronyDown = new Set(P0.cronyDown || []); entryHi = false;   // (its boss isn't back: the user, 2026-10-20; nor after a load, the way back not remembered)
+    const ns = trail[trail.length - 1], lf = !!STAGES[ns].exitLeft; bossNotAt = roomBossDown(ns) ? -1 : ns; if (story) { story.entry = { w: P0.w, s: ns }; story.check = null; } entrySide = lf ? "left" : "right"; dayClock = nextDay(); clockEnter(ns); rollSad(); setScreen(ns);   // (its way out on the left: in from the left)
     const x = lf ? 40 : WORLD - 40, gy = groundAt(x) ?? GROUND;
     Object.assign(player, { x, y: gy, vx: lf ? 120 : -120, vy: 0, face: lf ? 1 : -1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, safe: { x, y: gy, plat: null } });
     player.sunk = false; const dv = STAGES[ns].dive; if (dv) { const f = dv[0] > 380 ? -1 : 1, x0 = f < 0 ? dv[0] + 40 : dv[1] - 40, dx = f < 0 ? dv[0] - 90 : dv[1] + 90; Object.assign(player, { x: x0, y: SINK - 10, vx: f * 320, vy: -1150, onGround: false, face: f, carry: .6, carryDir: f, safe: { x: dx, y: groundAt(dx) ?? GROUND, plat: null } }); splash(player.x, 1.4); }   // (up out of the deep's pool, onto its bank)
@@ -9257,7 +9259,7 @@ const CHIDES = {
   _: { say: "AND STAY OUT!", dur: 2.2, line: "jabs a finger at her (the stand-in for a boss with no chide of its own yet)",
     pose(e, r, t, k) { const [A] = r.arms; if (A) { cz(A.rotation, "z", 1.5 + .25 * Math.max(0, Math.sin(t * 9)), k); cz(A.rotation, "x", .1, k); } cz(r.tilt.rotation, "z", r.tilt.rotation.z - .12, k); } },
 };
-const chideOf = f => CHIDES[f && f.id] || CHIDES._;
+const chideOf = f => CHIDES[f && f.id] || CHIDES[f && f.crony] || CHIDES._;   // (a crony: its boss's way of telling her off)
 function chideStep(e, dt) {                          // the boss's side: it drops in, faces her and has its say, then the fight's on
   const C = e.chide, CH = chideOf(e.def), s = ej && ej.st;
   if (!C.t && !e.onGround) { e.vx = approach(e.vx, 0, 1400 * dt); return; }
@@ -9822,8 +9824,9 @@ const walled = (a, b) => !!secret && secret.hp > 0 && Math.min(a, b) < secret.x 
 function moveBody(b, dt, halfW) {
   const x0 = b.x;
   b.x += b.vx * dt;
-  const maxX = arena ? arena.r - halfW : (b === player && (rightOpen() || crawlOut(b, 1))) || b.exitOK ? WORLD + 400 : WORLD - halfW;   // (exitOK: a bep leading you out of the room by its edge)   // beat the opponent and the path on to the right opens (or it's the way you came in)
-  const minX = arena ? arena.l + halfW : (b === player && (backOpen() || crawlOut(b, -1) || (stronghold && stronghold.screen > 0))) || b.exitOK ? -400 : halfW;                 // ... and once it's clear, the way back too
+  const bar = !arena && !stronghold && doorBarred(stage) ? (STAGES[stage].exitLeft ? -1 : 1) : 0;   // (a barred door: everyone stops in front of its barricade)
+  const maxX = arena ? arena.r - halfW : bar > 0 ? WORLD - 125 - halfW : (b === player && (rightOpen() || crawlOut(b, 1))) || b.exitOK ? WORLD + 400 : WORLD - halfW;   // (exitOK: a bep leading you out of the room by its edge)   // beat the opponent and the path on to the right opens (or it's the way you came in)
+  const minX = arena ? arena.l + halfW : bar < 0 ? 125 + halfW : (b === player && (backOpen() || crawlOut(b, -1) || (stronghold && stronghold.screen > 0))) || b.exitOK ? -400 : halfW;                 // ... and once it's clear, the way back too
   if (b.x < minX) { b.x = minX; b.vx = Math.max(0, b.vx); b.hitWall = -1; }
   else if (b.x > maxX) { b.x = maxX; b.vx = Math.min(0, b.vx); b.hitWall = 1; }
   else b.hitWall = 0;
@@ -10122,7 +10125,7 @@ function updatePlayer(dt) {
   // down to the one they were in ... there should be no extra automatic jump that moves the player from one screen to another": up there, that room is shown, and back down you come)
   if (STITCH.has(world) && !STAGES[stage].deep && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && !pan) upSee(p); else p.upY = undefined;
   if (cu && !STAGES[stage].climbWall && !stronghold && !hideout && !arena && !transit && !patrolLock && !p.dead && !p.climb && Math.abs(p.x - cu.x) < 240 && p.y < (groundAt(cu.x) ?? GROUND) - 430) goRoomUp(cu.to);   // (a bare wall: only by climbing it)
-  else if (STAGES[stage].dive && !p.dead && p.x > STAGES[stage].dive[0] && p.x < STAGES[stage].dive[1] && p.y > SINK - 6) { if (STAGES[stage].diveBoss && !bossDown && !exitOpen) { if (!p.sunkT) splashDown(p); } else if (!transit) diveWorld(STAGES[stage].diveTo); }   // (D8's: past Cuss, so only once he's beaten)   // (the deep's pool: down, not back up)
+  else if (STAGES[stage].dive && !p.dead && p.x > STAGES[stage].dive[0] && p.x < STAGES[stage].dive[1] && p.y > SINK - 6) { if (STAGES[stage].diveBoss && !roomBossDown(stage) && !exitOpen) { if (!p.sunkT) splashDown(p); } else if (!transit) diveWorld(STAGES[stage].diveTo); }   // (D8's: past Cuss, so only once he's beaten)   // (the deep's pool: down, not back up)
   else if (GAPS.length && !p.dead && !p.sunkT && p.y > SINK - 6 && overGap(p.x)) splashDown(p);
   if (STAGES[stage].dive && Math.random() < dt * 7) { const [a, b] = STAGES[stage].dive; spawn("bubble", X(rand(a + 30, b - 30)), Y(SINK + 20), rand(-.8, .8), V(rand(-.15, .15), rand(1.2, 2.2), 0), 1.4, rand(.12, .22), { g: -1.5, drag: .6 }); }   // (bubbles rising out of it: the only sign)
   if (p.sunkT && (p.sunkT -= dt) <= 0) resurface(p);
@@ -18664,6 +18667,117 @@ authorWaves();                                       // (Cuss' Waves too: the us
 authorCrux();                                        // (and Crux's city, from the street up to the rooftops: the user, 2026-10-26)
 placeDive();                                         // (the deep's hidden way in, in Cuss' sea caves)
 stitchEdges();                                       // (every stitched world's screens side by side: their floors meeting at one height)
+// ── each world's main boss at one way out, a crony of theirs at each of the others (the user, 2026-10-30: "we will have only one exit that has the main boss. in
+// cuss' cliffs it'; be in a8, and in berry forest it'll be in D8. The other exits should have a mini boss that is designed to look like a direct crony of the main
+// boss, kind of how losst is like glos ... designate one exit for the main boss for each of the other worlds. design 1 or 2 minibosses depending on how many exits the
+// world has for the other exits that are not the main boss. they should be styled and have moves similar to the main boss. when you defeat the main boss, they do not
+// come back until the uprising fight. for exits from other worlds that would lead into a main boss fight of another world that you haven't completed. bar the player
+// from entering that way. say 'find another way...for now.'"). The main doors run on round the island to King P (woods → dunes → casino → bazaar → Kesh → sky →
+// candy works → Crux → the castle; the waves → Volt Keep → the candy works; the lakebed → the bazaar), none of them ever barred. A crony is its boss's own build,
+// recoloured, filled out or drawn up, with something of its own on its head; its boss's two moves, quicker (the small ones) or heavier (the big ones). Beaten, a
+// crony's gone for the stay; its boss, for good (till the showdown)
+const MAIN_DOOR = { 0: "D8", 1: "A8", 2: "B8", 3: "C8", 4: "D8", 5: "A8", 6: "A1", 7: "A8", 8: "A8", 10: "C8", 11: "A8", 12: "C8" };
+const CRONY_BUILD = { glos: buildGlos, duck: buildDuck, vanvan: buildVanVan, loof: buildLoof, sirocco: buildSirocco, kesh: buildKesh, vinella: buildVinella, crux: buildCrux, turtle: buildTurtle, trumpeto: buildTrumpeto, masterno: buildMasterNo, kingp: buildKingP };
+// look: swaps [[hue, ±width, to, sat ×, light ×]] (the colours near that hue, moved), rot/sat/lit (the rest), tint [hex, k] (her whites, greys and blacks toward a colour),
+// size, wide, tall (her build); acc: what's on her head. quick: the small, fast one (its rests shorter); heavy: the big one (slower, more life)
+const CRONIES = {
+  0: [{ id: "slog", name: "SLOG", at: "B8", quick: false, look: { accCol: "#5b3b22", swaps: [[120, 55, 75, .7, .72], [310, 40, 350, 1, .85]], size: .92, wide: 1.32, tall: .84, acc: ["horns"] }, near: "glosCombo", vox: { f: 150, n: 900 } },
+      { id: "glossy", name: "GLOSSY", at: "D1", quick: true, look: { accY: .42, swaps: [[120, 55, 178, 1.05, 1.05], [310, 40, 45, 1, 1.1]], size: 1, wide: .86, tall: 1.06, acc: ["goggles"] }, near: "glosCombo", leaf: true, vox: { f: 260, n: 1500 } }],
+  1: [{ id: "mallard", name: "MALLARD", at: "A1", quick: false, look: { swaps: [[220, 45, 125, .9, .85], [120, 40, 280, 1, 1]], size: 1.08, wide: 1.15, tall: .95, acc: ["cap"], accCol: "#2f8a3a" } },
+      { id: "teal", name: "TEAL", at: "D8", quick: true, look: { swaps: [[220, 45, 178, 1, 1], [120, 40, 25, 1.1, 1]], size: .84, acc: ["band"], accCol: "#e8412a" } }],
+  2: [{ id: "amp", name: "AMP", at: "D1", quick: true, look: { swaps: [[220, 50, 2, 1.05, .95], [90, 40, 52, 1.1, 1.05]], size: .84, wide: 1.12, tall: .86, acc: ["horns"], accCol: "#ffd21f" } },
+      { id: "ohm", name: "OHM", at: "D8", quick: false, look: { swaps: [[220, 50, 275, .9, .85], [90, 40, 175, 1, 1]], size: 1.06, wide: .9, tall: 1.08, acc: ["goggles"] } }],
+  3: [{ id: "plume", name: "PLUME", at: "A1", quick: true, look: { accY: .2, accR: .55, swaps: [[0, 30, 215, 1, 1], [50, 25, 185, .8, 1.1]], size: .9, wide: .92, acc: ["band"], accCol: "#ffd21f" } },
+      { id: "talon", name: "TALON", at: "D8", quick: false, look: { accY: .2, accR: .55, swaps: [[0, 30, 150, .7, .7], [50, 25, 20, 1, .9]], size: 1.08, wide: 1.15, acc: ["patch"] } }],
+  4: [{ id: "cinder", name: "CINDER", at: "C8", quick: false, look: { swaps: [[0, 30, 15, .25, .5]], rot: 0, size: 1.06, wide: 1.12, acc: ["horns"], accCol: "#ff7b26" } },
+      { id: "ember", name: "EMBER", at: "D1", quick: true, look: { swaps: [[0, 30, 38, 1.1, 1.15]], size: .82, acc: ["band"], accCol: "#2a2a30" } }],
+  5: [{ id: "treble", name: "TREBLE", at: "B1", quick: true, look: { swaps: [[55, 30, 200, .25, 1.18], [320, 40, 210, 1, 1]], size: .84, tall: 1.08, wide: .9, acc: ["cap"], accCol: "#1d2340" } },
+      { id: "basso", name: "BASSO", at: "D8", quick: false, look: { swaps: [[55, 30, 272, .75, .6], [320, 40, 28, 1, 1]], size: 1.08, wide: 1.25, tall: .9, acc: ["goggles"] } }],
+  6: [{ id: "licorice", name: "LICORICE", at: "A8", quick: false, look: { accY: .36, accR: .75, swaps: [[320, 35, 356, 1.05, .8], [275, 35, 0, .2, .5], [170, 40, 260, .35, .95]], size: 1.04, wide: 1.1, acc: ["patch"] } },
+      { id: "taffy", name: "TAFFY", at: "D8", quick: true, look: { accY: .42, accR: .8, swaps: [[320, 35, 150, .8, 1.15], [275, 35, 330, 1, 1.2], [170, 40, 20, .6, 1.05]], size: .86, wide: .92, acc: ["band"], accCol: "#ff7ab6" } }],
+  7: [{ id: "spira", name: "SPIRA", at: "A1", quick: true, look: { accY: .36, accR: .55, tint: ["#2d5bd6", .55], size: .88, wide: .9, tall: 1.05, acc: ["goggles"] } },
+      { id: "cog", name: "COG", at: "D8", quick: false, look: { tint: ["#b5762e", .6], size: 1.06, wide: 1.18, acc: ["horns"], accCol: "#c4c4c8" } }],
+  8: [{ id: "snapper", name: "SNAPPER", at: "C8", quick: false, look: { swaps: [[330, 35, 115, .8, .75], [85, 30, 40, 1, .9]], size: 1.06, wide: 1.15, acc: ["band"], accCol: "#5a3a1e" } },
+      { id: "terrapin", name: "TERRAPIN", at: "D1", quick: true, look: { accY: .38, swaps: [[330, 35, 25, 1, 1.05], [85, 30, 185, 1, 1]], size: .86, acc: ["goggles"] } }],
+  10: [{ id: "tuba", name: "TUBA", at: "A8", quick: false, look: { swaps: [[45, 25, 45, .2, 1.05]], rot: 25, size: 1.1, wide: 1.3, tall: .92, acc: ["cap"], accCol: "#7a1f2b" } },
+       { id: "piccolo", name: "PICCOLO", at: "B1", quick: true, look: { accY: .42, rot: 165, size: .82, wide: .88, acc: ["band"], accCol: "#ffd21f" } }],
+  11: [{ id: "snakeeyes", name: "SNAKE EYES", at: "C8", quick: true, look: { accY: .3, accR: .7, rot: 120, size: .88, acc: ["patch"] } },
+       { id: "deuce", name: "DEUCE", at: "A1", quick: false, look: { rot: -35, size: 1.06, wide: 1.15, acc: ["horns"], accCol: "#ffd21f" } }],
+  12: [{ id: "dukep", name: "DUKE P", at: "A8", quick: false, look: { accY: .42, rot: 150, size: .94, wide: 1.1, acc: ["goggles"] } }],
+};
+const cronyOf = id => { for (const w in CRONIES) { const C = CRONIES[w].find(c => c.id === id); if (C) return C; } return null; };
+const hslO = {}, rgbO = {}, tmpC = new THREE.Color();
+function cronyCol(c, L) {                            // one colour through a crony's look, in place (false: left as it is)
+  c.getHSL(hslO, THREE.SRGBColorSpace); let { h, s, l } = hslO; h *= 360;
+  if (s < .14 || l < .05 || l > .97) { if (!L.tint || l <= .04 || l >= .97) return false; const T = L._t || (L._t = new THREE.Color(L.tint[0]).getHSL({}, THREE.SRGBColorSpace)); h = T.h * 360; s = Math.max(s, T.s * L.tint[1]); }   // (greys, whites, blacks: only a tint touches them)
+  else { const S = (L.swaps || []).find(([cc, w]) => Math.abs(((h - cc + 540) % 360) - 180) <= w);
+    if (S) { h = S[2] + (((h - S[0] + 540) % 360) - 180) * .5; s *= S[3]; l *= S[4]; } else if (L.rot || L.sat || L.lit) { h += L.rot || 0; s *= L.sat ?? 1; l *= L.lit ?? 1; } else return false; }
+  c.setHSL((((h % 360) + 360) % 360) / 360, clamp(s, 0, 1), clamp(l, 0, 1), THREE.SRGBColorSpace); return true;
+}
+function cronyPaint(r, L, keep) {                    // every material on the rig through the look (one it shares with its boss's rig: its own copy first), its textures too
+  const seen = new Map(), col = c => { if (c) cronyCol(c, L); };
+  const texOf = t => { const im = t && t.image; if (!im || !im.width || !(im instanceof HTMLCanvasElement || im instanceof HTMLImageElement || (window.ImageBitmap && im instanceof ImageBitmap))) return t;
+    const cv = document.createElement("canvas"); cv.width = im.width; cv.height = im.height; const g = cv.getContext("2d", { willReadFrequently: true }); g.drawImage(im, 0, 0); const D = g.getImageData(0, 0, cv.width, cv.height), d = D.data;
+    for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 8) continue; tmpC.setRGB(d[i] / 255, d[i + 1] / 255, d[i + 2] / 255, THREE.SRGBColorSpace); if (cronyCol(tmpC, L)) { tmpC.getRGB(rgbO, THREE.SRGBColorSpace); d[i] = rgbO.r * 255; d[i + 1] = rgbO.g * 255; d[i + 2] = rgbO.b * 255; } }
+    g.putImageData(D, 0, 0); const t2 = t.clone(); t2.image = cv; t2.needsUpdate = true; return t2; };
+  r.root.traverse(o => { if (!o.isMesh || !o.material || Array.isArray(o.material)) return; const m0 = o.material; if (m0.isMeshBasicMaterial && m0.color && m0.color.getHex() === 0 && !m0.map) return;   // (outlines: black stays black)
+    let m = seen.get(m0); if (!m) { m = keep.has(m0) ? m0.clone() : m0; if (m.color && !m.map) col(m.color); if (m.emissive && m.emissive.getHex()) col(m.emissive); if (m.map) m.map = texOf(m.map); seen.set(m0, m); } o.material = m; });
+  r.mats = r.mats.map(m => seen.get(m) || m);
+}
+function cronyAcc(r, C) {                            // what's on its head, to know it by: sized to its head as built
+  const head = r.head; if (!head) return; r.root.updateMatrixWorld(true); const hb = new THREE.Box3(), inv = new THREE.Matrix4().copy(head.matrixWorld).invert();
+  head.traverse(o => { if (o.isMesh && o.visible && o.geometry) { o.geometry.computeBoundingBox(); hb.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))); } });
+  if (hb.isEmpty()) return; const c = hb.getCenter(new THREE.Vector3()), s = hb.getSize(new THREE.Vector3()), H = s.y, R = Math.max(s.x, s.z) * .5 * (C.look.accR ?? .85), top = hb.max.y, fx = hb.max.x;
+  c.y = hb.min.y + H * (C.look.accY ?? .4) - H * .12;   // (at its brow: a tall hat, a crest or ears above it left out)
+  const M = r.M, P = r.P, A = M(C.look.accCol || "#1d1c22"), g = new THREE.Group(); head.add(g);
+  (C.look.acc || []).forEach(k => {
+    if (k === "band") { g.add(at(P(new THREE.TorusGeometry(R * .98, H * .045, 8, 32).rotateX(Math.PI / 2), A, .02), c.x, c.y + H * .12, c.z)); [-1, 1].forEach(sd => { const t = P(bx(R * .5, H * .06, H * .05), A, .015); t.rotation.z = sd * .5 + .3; g.add(at(t, c.x - R * 1.05, c.y + H * .08 - sd * H * .04, c.z + sd * H * .04)); }); }
+    if (k === "horns") [-1, 1].forEach(sd => { const h = P(new THREE.ConeGeometry(R * .17, H * .32, 10), A, .02); h.rotation.x = sd * .45; g.add(at(h, c.x, top - H * .02, c.z + sd * R * .55)); });
+    if (k === "cap") { const cy = top - H * (C.look.capDown ?? .3); g.add(at(P(new THREE.SphereGeometry(R * .78, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), A, .02), c.x, cy, c.z)); const b = P(cyl(R * .55, R * .55, H * .035, 20), A, .015); b.scale.z = .85; g.add(at(b, c.x + R * .62, cy, c.z)); }
+    if (k === "goggles") { [-1, 1].forEach(sd => { const ring = P(new THREE.TorusGeometry(R * .2, R * .06, 8, 20).rotateY(Math.PI / 2), A, .015); g.add(at(ring, fx + R * .02, c.y + H * .14, c.z + sd * R * .3)); g.add(at(new THREE.Mesh(new THREE.CircleGeometry(R * .17, 20).rotateY(Math.PI / 2), M("#9fe3ff")), fx + R * .03, c.y + H * .14, c.z + sd * R * .3)); });
+      g.add(at(P(new THREE.TorusGeometry(R * 1.0, H * .028, 6, 32).rotateX(Math.PI / 2), A, .015), c.x, c.y + H * .14, c.z)); }
+    if (k === "patch") { g.add(at(P(new THREE.CylinderGeometry(R * .2, R * .2, R * .05, 16).rotateZ(Math.PI / 2), A, .015), fx + R * .02, c.y + H * .12, c.z + R * .28)); const st = P(new THREE.TorusGeometry(R * 1.0, H * .02, 6, 32).rotateX(Math.PI / 2), A, .01); st.rotation.x = .45; g.add(at(st, c.x, c.y + H * .16, c.z)); }
+  });
+  g.traverse(o => { if (o.isMesh && o.material && !r.mats.includes(o.material)) r.mats.push(o.material); });
+}
+function cronyRig(mainId, C) {                       // its boss's build, its own colours, its own build and its own hat
+  const B = CRONY_BUILD[mainId]; if (!B) return null; const r = B(), L = C.look; const keep = new Set(); WORLDS.forEach(W => { const F = W.foes.__list; if (F && F[0] && F[0].rig) F[0].rig.root.traverse(o => { if (o.isMesh && o.material) keep.add(o.material); }); });
+  cronyPaint(r, L, keep); if (L.wide || L.tall) r.body.scale.set(L.wide || 1, L.tall || 1, L.wide || 1); r.size = (r.size || 1) * (L.size || 1); cronyAcc(r, C); return r;
+}
+function cronyFoe(main, C) {                          // its foe: its boss's numbers, small and quick or big and heavy
+  const L = C.look, q = C.quick, d = { ...main, id: C.id, name: C.name, crony: main.id, rig: cronyRig(main.id, C), hp: Math.round(main.hp * (q ? .62 : .76)), speed: Math.round(main.speed * (q ? 1.25 : .88)),
+    jumpy: clamp((main.jumpy || .3) + (q ? .15 : -.08), 0, .9), cdK: (main.cdK || 1) * (q ? .78 : .95), hw: (main.hw0 ?? main.hw) * (L.wide || 1), h: (main.h0 ?? main.h) * (L.tall || 1), more: undefined, leaf: !!C.leaf, under: false, big: undefined,
+    near: C.near || undefined, portraitY: main.portraitY };
+  if (!d.rig) return null; delete d.hw0; delete d.h0; delete d.arenaK; if (C.vox) FOE_VOX[C.id] = C.vox; return d;
+}
+WORLDS.forEach((W, w) => { const f0 = W.foes; const wrap = () => { const L = f0(); if (!L.__cron) { L.__cron = true; wrap.__list = L; (CRONIES[w] || []).forEach(C => { const d = cronyFoe(L[0], C); if (d) L.push(d); }); } return L; }; W.foes = wrap; });
+function assignCronies() {                           // each world's other ways out: its cronies' rooms
+  WORLDS.forEach((W, w) => { const C = CRONIES[w]; if (!C || !MAIN_DOOR[w]) return;
+    W.stages.forEach(q => { if (q && q.boss && !q.arena && (q.toWorld !== undefined || q.end)) { const c = C.findIndex(k => k.at === q.cell); if (q.cell === MAIN_DOOR[w]) { q.foe = 0; delete q.crony; } else if (c >= 0) { q.crony = C[c].id; q.foe = (w === 0 ? 2 : 1) + c; } } }); });
+}
+// whose door is whose: the main boss's (for good once beaten; in free play, for the visit), a crony's (for the stay)
+const mainBeat = w => !!story && w !== 9 && (story.beat || []).includes(w);   // (in free play, as ever: back every stay)
+const roomBossDown = k => { const q = STAGES[k]; if (!q || q.arena) return false; return q.crony ? cronyDown.has(k) : bossDown || (mainBeat(world) && !mainAgain.has(world)); };
+const mainDoorOf = w => { const W = WORLDS[w]; return W && MAIN_DOOR[w] ? W.stages.findIndex(q => q && q.cell === MAIN_DOOR[w] && q.boss && !q.arena) : -1; };
+function doorBarred(k) {                             // a way out into another world's main boss's door (the passage its boss stands on the far side of): shut till that world's boss is beaten
+  const q = STAGES[k]; if (!story || !q || q.toWorld === undefined || q.toWorld === 12 || q.arena) return false; const Y = q.toWorld, d = mainDoorOf(Y); if (d < 0) return false;
+  return WORLDS[Y].stages[d].toWorld === world && !mainBeat(Y);
+}
+let barTipT = -9;
+const BAR_TIP = "FIND ANOTHER WAY...FOR NOW.";
+function buildBarGate(s) {                           // the barred way: a fallen tree and planks across it, a sign
+  const q = STAGES[s], lf = !!q.exitLeft, x = lf ? 70 : WORLD - 70, gy = groundAt(x) ?? GROUND;
+  const G = group(actors, X(x), Y(gy), -.9), wd = toon("#7a5232"), wdD = toon("#5b3b22"), rope = toon("#d8c08a"), iron = toon("#3a3a42");
+  [-1, 1].forEach(sd => G.add(at(mk(cyl(.22, .26, 4.6, 10), null, { mat: wdD, ol: .03 }), 0, 2.3, sd * 2)));
+  [[.8, .2], [1.9, -.18], [3.0, .22], [4.0, -.1]].forEach(([y, rz]) => { const p = mk(bx(.18, .42, 4.8), null, { mat: wd, ol: .03 }); p.rotation.x = rz; G.add(at(p, .12, y, 0)); });
+  [-1, 1].forEach(sd => [.8, 1.9, 3.0, 4.0].forEach(y => G.add(at(mk(new THREE.TorusGeometry(.26, .05, 6, 12).rotateY(Math.PI / 2), null, { mat: rope, ol: .01 }), .12, y, sd * 2))));
+  G.add(at(mk(bx(.06, .5, .5), null, { mat: iron, ol: .01 }), .25, 2.4, 0));
+  const sign = new THREE.Mesh(new THREE.PlaneGeometry(2.7, .93), new THREE.MeshBasicMaterial({ map: tex(512, 176, g => { g.fillStyle = "#b98a62"; g.fillRect(0, 0, 512, 176); g.strokeStyle = "#7a5640"; g.lineWidth = 6; for (let y = 44; y < 176; y += 44) { g.beginPath(); g.moveTo(0, y); g.lineTo(512, y); g.stroke(); }
+    g.strokeStyle = "#5e4238"; g.lineWidth = 12; g.strokeRect(6, 6, 500, 164); g.fillStyle = "#2e2230"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = "900 54px sans-serif"; g.fillText("FIND ANOTHER WAY", 256, 66, 456); g.font = "800 44px sans-serif"; g.fillText("...FOR NOW.", 256, 128, 456); }) }));   // (its board: the user's words)
+  sign.rotation.y = (lf ? Math.PI / 2 - .35 : -Math.PI / 2 + .35); at(sign, lf ? .7 : -.7, 2.6, 0); G.add(sign);
+  return G;
+}
+assignCronies();
 function stitchEdges() {                             // the floors of two screens side by side meet at one height: each ramps to it over its last 260 px (the user, 2026-10-25:
   const R = 260, profOf = q => { const P = []; let d = 0; (q.steps || []).forEach(([x, dy]) => { P.push([x, d], [x, dy]); d = dy; }); (q.ground || []).forEach(p => P.push(p.slice())); P.sort((u, v) => u[0] - v[0]); return P; };   //  "rebuild all the worlds currently with this new screen/world approach")
   const dyAt = (P, x) => { if (!P.length) return 0; for (let i = P.length - 1; i >= 0; i--) if (x >= P[i][0]) { const n = P[i + 1]; return n && n[0] > P[i][0] ? lerp(P[i][1], n[1], (x - P[i][0]) / (n[0] - P[i][0])) : P[i][1]; } return P[0][1]; };   // (as groundAt, without the pits)
@@ -20718,7 +20832,7 @@ function bossArrive() {                          // all three popped: the boss d
   enemy = makeFoeState(foe, bx); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.atkCd = 2.6; { const E0 = enemy; setTimeout(() => { if (enemy === E0 && !E0.dead && bossIn) foeVoice(E0, "taunt"); }, 1100); }   // (Glos: a word for you as she lands)
   enemy.y = -60; enemy.vy = 200; enemy.onGround = false;
   setFoeHud(); SFX.confirm();
-  const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">${STAGES[stage].mini ? "GUARDIAN OF GLOS'S DOOR" : "THE BERRY BADDIES ARE DOWN · HERE COMES THE BOSS"}</div>`;
+  const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">${STAGES[stage].mini ? "GUARDIAN OF GLOS'S DOOR" : foe.crony ? "ONE OF " + ((FOES[0] && FOES[0].name) || "THE BOSS") + "'S CRONIES" : "THE BERRY BADDIES ARE DOWN · HERE COMES THE BOSS"}</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
   if (arena) arenaBoss();                                       // (the showdown: at the far side, and much tougher)
   if (ej && ej.phase === "partner" && !ej.kid && !STAGES[stage].mini) startChide();    // Evil June's along: the boss tells her off first (not Lossst: Glos's to do)
@@ -23305,7 +23419,8 @@ function update(dt) {
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (STAGES[stage].mini && !arena) { markGot("boss:" + STAGES[stage].mini); if (level.door) level.door.want = 1; SFX.gate && SFX.gate(); toast("THE GREAT DOOR SWINGS OPEN", 2600); if (story) writeSave(); }   // (Lossst: beaten for good, Glos's door open)
-    else if (STAGES[stage].boss && !arena) { bossDown = true; if (story) { const B2 = story.beat || (story.beat = []); if (!B2.includes(world)) B2.push(world); } } if (wst) wst.boss = foe.name; dropLoot(enemy.x, enemy.y - 90, 3, true);   // (a boss: three coins)
+    else if (STAGES[stage].boss && !arena && STAGES[stage].crony) cronyDown.add(stage);   // (a crony: gone for the stay)
+    else if (STAGES[stage].boss && !arena) { bossDown = true; mainAgain.delete(world); if (story) { const B2 = story.beat || (story.beat = []); if (!B2.includes(world)) B2.push(world); } } if (wst) { if (STAGES[stage].crony) wst.crony = foe.name; else wst.boss = foe.name; } dropLoot(enemy.x, enemy.y - 90, 3, true);   // (a boss: three coins)
     if (isRunEnd(stage) && story && !arena) { exitOpen = true; cleared++; roomsDone.add(stage); if (level.openShrine) level.openShrine(); SFX.fanfare(true); startBeps();   // (story: on by the island map)
       const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name} DEFEATED</div><div class="bar">→ ON TO THE ISLAND MAP</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
       setTimeout(() => { if (mode === "play" && story && isRunEnd(stage) && !transit && !paused && player && !player.dead) endMap(); }, 2600); }
@@ -23313,6 +23428,7 @@ function update(dt) {
     else if (arena) arenaWin();
     else openExit();
   }
+  if (doorBarred(stage) && !transit && (STAGES[stage].exitLeft ? player.x < 175 : player.x > WORLD - 175) && time - barTipT > 4.5) { barTipT = time; toast(BAR_TIP, 3000); }
   if (STAGES[stage].toWorld === 12 && !kpOpen() && !transit && player.x > WORLD - 90 && time - kpTipT > 4.5) { kpTipT = time; toast(`THE ROAD UP THE MOUNTAIN IS SEALED · BEAT EVERY OTHER BOSS FIRST (${Math.min(bossesBeaten(), kpNeed().length)} OF ${kpNeed().length})`, 3800); }
   if (player.crawl && player.crawl.to !== undefined && !transit) { const Z = player.crawl; if (Z.dir > 0 && player.x > WORLD + 30) goRoom(Z.to, false); else if (Z.dir < 0 && player.x < -30) goRoom(Z.to, true); }   // (through a crawl hole into the next room)
   if (rightOpen() && !transit && player.x > WORLD + 30) stronghold ? shNext() : story && isRunEnd(stage) && !arena ? endMap() : goNext();   // walked off the right edge: on to the next clearing (or, at the end of the line, the island map)
