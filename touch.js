@@ -44,6 +44,7 @@
   #tCorner.hide { display: none; }
   #tPad, #tBtns, #tCorner, #tLT { transition: opacity .7s; }
   #touch.sit #tPad, #touch.sit #tBtns, #touch.sit #tCorner, #touch.sit #tLT { opacity: 0; pointer-events: none; }   /* (sitting in the beps' hideout: the controls fade away) */
+  #touch.cons #tPad, #touch.cons #tBtns, #touch.cons #tLT { opacity: 0; pointer-events: none; }   /* (a BERRY CONSOLE game that's a page, Tic Tac Tower: you tap its screen; the corner opens its menu) */
   #tSit { position: absolute; inset: 0; pointer-events: auto; touch-action: none; display: none; } #touch.sit #tSit { display: block; }
   #tCorner.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
   #tTurn { position: fixed; inset: 0; z-index: 90; display: none; background: #2f3b43; color: #ffde00; align-items: center; justify-content: center;
@@ -173,12 +174,12 @@
   let was = "";
   setInterval(() => {
     const U = window.BERRY_UI; if (!U) return;
-    const s = U.state;                            // "play" | "sit" | "back" | "menu" | "none"
+    const s = U.state;                            // "play" | "sit" | "cons" | "back" | "menu" | "none"
     if (s === was) return; was = s;
-    T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit");
+    T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "cons" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit"); T.classList.toggle("cons", s === "cons");
     if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
     if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); }
-    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "menu"); C.textContent = s === "play" || s === "sit" ? "❚❚" : "‹";
+    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "cons" && s !== "menu"); C.textContent = s === "play" || s === "sit" || s === "cons" ? "❚❚" : "‹";
   }, 120);
 
   // ── offline, and updating itself (sw.js keeps every file on the phone). Whenever it's online it looks for a new version: on opening,
