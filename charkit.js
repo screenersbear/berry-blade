@@ -2316,9 +2316,12 @@ Object.assign(STRIKES, {
 });
 // the slide forward (the user, 2026-10-31: "allow holding the block button and facing forward to allow the player to, similar to the back hop, slide forward and face
 // back towards the enemy"): down low on one hip, the lead leg out ahead, the other folded under, a hand trailing on the ground; work.html turns her round at its end
-STRIKES.fwdslide = { dur: .4, pose: true, keys: { lean: [[0, .1], [.06, -.35], [.3, -.38], [.4, -.05]], bodyY: [[0, 0], [.06, -.32], [.3, -.34], [.4, -.05]], arch: [[0, 0], [.06, -.12], [.4, 0]],
-  fNx: [[0, .2], [.06, .62], [.3, .62], [.4, .25]], fNy: [[0, 0], [.06, .06], [.3, .06], [.4, 0]], fFx: [[0, -.15], [.06, -.05], [.3, -.05], [.4, -.15]], fFy: [[0, 0], [.06, .04], [.3, .04], [.4, 0]], kOut: [[0, 0], [.06, .2], [.3, .2], [.4, 0]],
-  armF: [[0, .4], [.06, 1.5], [.3, 1.5], [.4, .5]], elbF: [[0, .6], [.06, .8], [.4, .6]], armB: [[0, .3], [.06, -.9], [.3, -.9], [.4, .2]], elbB: [[0, .5], [.06, .1], [.4, .5]], headRot: [[0, 0], [.06, .15], [.3, .15], [.4, 0]] } };
+STRIKES.fwdslide = { dur: .4, pose: true, keys: {   // (the user, 2026-10-31: "crouch more and look like they're running around the enemy", and "fully facing back where they were when the animation ends": low, running quick strides, swung round through the front as she goes past; the game carries her out in front of them and back, p.z)
+  lean: [[0, .1], [.05, -.48], [.34, -.5], [.4, -.12]], bodyY: [[0, 0], [.05, -.52], [.34, -.54], [.4, -.12]], arch: [[0, 0], [.05, -.16], [.4, 0]],
+  fNx: [[0, .2], [.06, .45], [.12, -.3], [.18, .45], [.24, -.3], [.3, .45], [.36, -.15], [.4, .1]], fFx: [[0, -.15], [.06, -.3], [.12, .45], [.18, -.3], [.24, .45], [.3, -.3], [.36, .3], [.4, -.1]],
+  fNy: [[0, 0], [.03, .16], [.06, 0], [.12, 0], [.15, .16], [.18, 0], [.24, 0], [.27, .16], [.3, 0], [.4, 0]], fFy: [[0, 0], [.06, 0], [.09, .16], [.12, 0], [.18, 0], [.21, .16], [.24, 0], [.3, 0], [.33, .16], [.36, 0], [.4, 0]], kOut: [[0, 0], [.06, .28], [.34, .28], [.4, 0]],
+  armF: [[0, .4], [.06, -.7], [.12, .95], [.18, -.7], [.24, .95], [.3, -.7], [.36, .6], [.4, .4]], elbF: [[0, .6], [.06, 1.35], [.36, 1.35], [.4, .6]], armB: [[0, .3], [.06, .95], [.12, -.7], [.18, .95], [.24, -.7], [.3, .95], [.36, -.3], [.4, .2]], elbB: [[0, .5], [.06, 1.35], [.36, 1.35], [.4, .5]],
+  spin: [[0, 0], [.14, 0], [.36, -2.45], [.4, -2.54]], headRot: [[0, 0], [.06, .15], [.34, .1], [.4, 0]] } };
 const FIDGETS = { camila: ["fidget_hood", "fidget_look", "fidget_flex"], rose: ["fidget_hood", "fidget_look", "fidget_blade"], all: ["fidget_hood", "fidget_look", "fidget_stretch"] };
 Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
 // the pets' specials (the user, 2026-10-26: "can you also give the pets a special attack? although it can be the same for all cats and then the same one for all
