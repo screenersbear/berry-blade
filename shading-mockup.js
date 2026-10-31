@@ -6,86 +6,18 @@
 // grade + paper pass), so CURRENT is the shipping look. Nothing here runs unless it's opened
 window.ShadingMockup = (() => {
   const KEY = "berry.shadingMockup.v1";
-  const DEF = {
-    character: {
-      lightingInfluence: 1.0,
-      toonRamp: { enabled: true, steps: 3, softness: .15 },
-      shadowTint: { enabled: true, color: "#6A4C8C", strength: .5 },
-      rimLight: { enabled: true, color: "#FFFFFF", width: .3, intensity: .6 },
-      edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .01, intensity: .5 },
-      fakeAO: { enabled: true, strength: .4 },
-      topLight: { enabled: true, strength: .15 },
-      specular: { enabled: false, intensity: 0 },
-      saturation: 1.0
-    },
-    environment: {
-      lightingInfluence: 1.0,
-      toonRamp: { enabled: false, steps: 2, softness: .3 },
-      saturation: .9,
-      contrast: .9,
-      shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 }
-    }
-  };
-  const clone = o => JSON.parse(JSON.stringify(o));
-  const PRESETS = {
-    current: () => { const c = clone(DEF); const C = c.character, E = c.environment; C.toonRamp.enabled = C.shadowTint.enabled = C.rimLight.enabled = C.edgeHighlight.enabled = C.fakeAO.enabled = C.topLight.enabled = C.specular.enabled = false;
-      C.lightingInfluence = 1; C.saturation = 1; E.lightingInfluence = 1; E.toonRamp.enabled = false; E.shadowTint.enabled = false; E.saturation = 1; E.contrast = 1; c.current = true; return c; },
-    softToon: () => { const c = clone(DEF); Object.assign(c.character.toonRamp, { enabled: true, steps: 3, softness: .15 }); c.character.lightingInfluence = 1; c.character.edgeHighlight.enabled = false; return c; },
-    kh: () => { const c = clone(DEF), C = c.character; C.lightingInfluence = .35; Object.assign(C.toonRamp, { enabled: true, steps: 2, softness: .45 }); Object.assign(C.topLight, { enabled: true, strength: .4 });
-      Object.assign(C.fakeAO, { enabled: true, strength: .5 }); Object.assign(C.edgeHighlight, { enabled: true, thickness: .012, intensity: .6 }); Object.assign(C.rimLight, { enabled: true, intensity: .25, width: .25 }); return c; },
-    flat: () => { const c = clone(DEF), C = c.character; C.lightingInfluence = .1; C.toonRamp.enabled = false; C.shadowTint.enabled = false; C.fakeAO.enabled = false; C.topLight.enabled = false; C.edgeHighlight.enabled = false;
-      Object.assign(C.rimLight, { enabled: true, intensity: .7, width: .3 }); C.saturation = 1.3; return c; }
-  };
-  const PRESET_UI = [["current", "CURRENT"], ["softToon", "SOFT TOON"], ["kh", "KINGDOM HEARTS-ISH"], ["flat", "FLAT GRAPHIC"], ["custom", "CUSTOM"]];
+  const SH = () => window.BerryShading;                  // (shading.js: the step itself, its settings and presets, shared with the game)
+  let DEF = null, PRESETS = null, PRESET_UI = null, clone = o => JSON.parse(JSON.stringify(o));
   const LIGHTS_UI = [["midday", "MIDDAY"], ["warm", "WARM LATE AFTERNOON"], ["overcast", "COOL OVERCAST"], ["backlit", "BACKLIT"]];
   let X = null, st = null, THREE = null;                  // X: the game's pieces (ctx); st: the open mockup; THREE: the game's (a module's, not a global)
 
-  // ── the one shader step, chained on after the game's own (MeshToonMaterial: its gradient, both lights, the characters' paper skin) ──
-  const unifs = () => ({ mkOn: { value: 1 }, mkInfl: { value: 1 }, mkRampOn: { value: 0 }, mkSteps: { value: 3 }, mkSoft: { value: .15 }, mkTintOn: { value: 0 }, mkTint: { value: null }, mkTintStr: { value: .5 },
-    mkRimOn: { value: 0 }, mkRimC: { value: null }, mkRimW: { value: .3 }, mkRimI: { value: .6 }, mkAOOn: { value: 0 }, mkAOStr: { value: .4 }, mkTopOn: { value: 0 }, mkTopStr: { value: .15 },
-    mkSpecOn: { value: 0 }, mkSpecI: { value: 0 }, mkSat: { value: 1 }, mkCon: { value: 1 }, mkGround: { value: 0 } });
-  const VERT = `varying vec3 vMkW; varying vec3 vMkN;\n`, VERT_MAIN = `\n vMkW = (modelMatrix * vec4(transformed, 1.0)).xyz; vMkN = normalize(mat3(modelMatrix) * objectNormal);\n`;
-  const FRAG = `uniform float mkOn, mkInfl, mkRampOn, mkSteps, mkSoft, mkTintOn, mkTintStr, mkRimOn, mkRimW, mkRimI, mkAOOn, mkAOStr, mkTopOn, mkTopStr, mkSpecOn, mkSpecI, mkSat, mkCon, mkGround;
-uniform vec3 mkTint, mkRimC; varying vec3 vMkW; varying vec3 vMkN;
-float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w = max(mkSoft, .001) * .5; return clamp((f + smoothstep(.5 - w, .5 + w, y - f)) / s, 0.0, 1.0); }
-`;
-  const FRAG_MAIN = `
-  { vec3 mkBase = outgoingLight, mkAlb = diffuseColor.rgb, mkN = normalize(normal), mkV = normalize(vViewPosition), mkNW = normalize(vMkN);
-    vec3 mkL = vec3(0.0, 1.0, 0.0), mkSun = vec3(0.0); vec3 mkHemi = vec3(0.0);
-    #if NUM_DIR_LIGHTS > 0
-      mkL = directionalLights[0].direction; mkSun = directionalLights[0].color;
-    #endif
-    #if NUM_HEMI_LIGHTS > 0
-      { float hk = dot(mkN, hemisphereLights[0].direction) * .5 + .5; mkHemi = mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, hk); }
-    #endif
-    float mkNL = dot(mkN, mkL), mkX = clamp(mkNL * .5 + .5, 0.0, 1.0), mkR = mkRampOn > .5 ? mkRamp(mkX) : smoothstep(.35, .65, mkX);
-    vec3 mkLit = mkRampOn > .5 ? mkAlb * (mkSun * mix(.5, 1.0, mkR) + mkHemi) * RECIPROCAL_PI + totalEmissiveRadiance : mkBase;   // (stepped: the sun in bands over the sky's fill; its shadow band keeps half the sun, as the game's own ramp keeps .71)
-    if (mkTintOn > .5) { float l = max(dot(mkTint, vec3(.299, .587, .114)), .05); vec3 tc = mkTint / l * .82; mkLit = mix(mkLit, mkLit * tc, (1.0 - mkR) * mkTintStr); }   // (the shadow side shifted toward the tint, not greyed)
-    vec3 mkFlat = mkAlb * 1.05 + totalEmissiveRadiance;
-    vec3 c = mix(mkFlat, mkLit, mkInfl);
-    if (mkAOOn > .5) { float ao = clamp(-mkNW.y, 0.0, 1.0) * .65 + (1.0 - smoothstep(0.0, .7, vMkW.y - mkGround)) * .45; c *= 1.0 - mkAOStr * clamp(ao, 0.0, 1.0); }   // (creases face down; low down near the ground)
-    if (mkTopOn > .5) c += mkAlb * mkTopStr * max(mkNW.y, 0.0);
-    if (mkRimOn > .5) { float f = 1.0 - max(dot(mkN, mkV), 0.0); c += mkRimC * smoothstep(1.0 - mkRimW, 1.0, f) * mkRimI; }
-    if (mkSpecOn > .5) { vec3 h = normalize(mkL + mkV); c += mkSun * smoothstep(.94, .965, dot(mkN, h)) * mkSpecI * .35; }
-    float lu = dot(c, vec3(.299, .587, .114)); c = mix(vec3(lu), c, mkSat); c = (c - .22) * mkCon + .22;
-    outgoingLight = mkOn > .5 ? max(c, 0.0) : mkBase; }
-`;
-  function patchShader(sh, U) {
-    Object.assign(sh.uniforms, U);
-    sh.vertexShader = VERT + sh.vertexShader.replace("#include <project_vertex>", "#include <project_vertex>" + VERT_MAIN);
-    const tail = sh.fragmentShader.includes("#include <opaque_fragment>") ? "#include <opaque_fragment>" : "#include <output_fragment>";
-    sh.fragmentShader = FRAG + sh.fragmentShader.replace(tail, FRAG_MAIN + tail);
-  }
+  // ── the one shader step (shading.js), chained on after the game's own (MeshToonMaterial: its gradient, both lights, the characters' paper skin) ──
   function mockMat(orig, U, tag) {                         // a clone with the step chained on after whatever the game's own patch does
     const m = orig.clone(); m.userData = { ...orig.userData }; const prev = orig.onBeforeCompile, base = THREE.Material.prototype.onBeforeCompile;
     const pk = orig.customProgramCacheKey ? orig.customProgramCacheKey() : "";
-    m.onBeforeCompile = (sh, r) => { if (prev && prev !== base) prev.call(orig, sh, r); patchShader(sh, U); };
+    m.onBeforeCompile = (sh, r) => { if (prev && prev !== base) prev.call(orig, sh, r); SH().patchShader(sh, U); };
     m.customProgramCacheKey = () => pk + "|mock-" + tag; return m;
   }
-  const hullMat = U => new THREE.ShaderMaterial({ uniforms: U, side: THREE.BackSide,   // the light edge (inverted hull): the mesh pushed out along its normals, its back faces in the highlight colour
-    vertexShader: `uniform float th; void main() { gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * th, 1.0); }`,
-    fragmentShader: `uniform vec3 col; uniform float k; void main() { gl_FragColor = vec4(col * k, 1.0); }` });
-
   // ── the lights: the woods' own MIDDAY, its golden late afternoon, and two made up for the test ──
   function lightsOf(name) {
     const S = X.screens, mid = S[0], gold = S[3];
@@ -106,15 +38,7 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
 
   // ── the settings into the shader steps ──
   function applySettings() {
-    const C = st.cfg.character, E = st.cfg.environment, a = st.UC, b = st.UE, H = st.UH;
-    a.mkInfl.value = C.lightingInfluence; a.mkRampOn.value = C.toonRamp.enabled ? 1 : 0; a.mkSteps.value = C.toonRamp.steps; a.mkSoft.value = C.toonRamp.softness;
-    a.mkTintOn.value = C.shadowTint.enabled ? 1 : 0; a.mkTint.value.set(C.shadowTint.color); a.mkTintStr.value = C.shadowTint.strength;
-    a.mkRimOn.value = C.rimLight.enabled ? 1 : 0; a.mkRimC.value.set(C.rimLight.color); a.mkRimW.value = C.rimLight.width; a.mkRimI.value = C.rimLight.intensity;
-    a.mkAOOn.value = C.fakeAO.enabled ? 1 : 0; a.mkAOStr.value = C.fakeAO.strength; a.mkTopOn.value = C.topLight.enabled ? 1 : 0; a.mkTopStr.value = C.topLight.strength;
-    a.mkSpecOn.value = C.specular.enabled ? 1 : 0; a.mkSpecI.value = C.specular.intensity; a.mkSat.value = C.saturation; a.mkCon.value = 1;
-    b.mkInfl.value = E.lightingInfluence; b.mkRampOn.value = E.toonRamp.enabled ? 1 : 0; b.mkSteps.value = E.toonRamp.steps; b.mkSoft.value = E.toonRamp.softness;
-    b.mkTintOn.value = E.shadowTint.enabled ? 1 : 0; b.mkTint.value.set(E.shadowTint.color); b.mkTintStr.value = E.shadowTint.strength; b.mkSat.value = E.saturation; b.mkCon.value = E.contrast;
-    H.col.value.set(C.edgeHighlight.color); H.th.value = C.edgeHighlight.thickness; H.k.value = C.edgeHighlight.intensity; st.edgeOn = !!C.edgeHighlight.enabled;
+    const C = st.cfg.character, E = st.cfg.environment; SH().setChar(st.UC, C); SH().setEnv(st.UE, E); st.edgeOn = SH().setHull(st.hullM, C);
   }
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ custom: st.custom, preset: st.preset, light: st.light, split: st.split, turn: st.turn })); } catch (e) { } };
   function usePreset(name) {
@@ -147,7 +71,7 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
   function pairUp() {                                     // every toon mesh of the girls and the woods: its own material and its clone, the light-edge hull on the girls'
     const add = (root, U, tag, hull) => root.traverse(o => { if (!o.isMesh || o.userData.mkHull) return; const m = o.material; if (!m || !m.isMeshToonMaterial) return;
       let P = st.pairs.get(o); if (!P || P.orig !== m && P.mock !== m) { P = { orig: m, mock: mockMat(m, U, tag) }; st.pairs.set(o, P); }
-      if (hull && !o.userData.mkHullMesh && o.geometry && o.geometry.attributes.normal) { const h = new THREE.Mesh(o.geometry, st.hull); h.userData.mkHull = true; h.visible = false; h.frustumCulled = false; o.add(h); o.userData.mkHullMesh = h; st.hulls.push(h); } });
+      if (hull && !o.userData.mkHullMesh && o.geometry && o.geometry.attributes.normal) { const h = new THREE.Mesh(o.geometry, st.hullM.mat); h.userData.mkHull = true; h.visible = false; h.frustumCulled = false; o.add(h); o.userData.mkHullMesh = h; st.hulls.push(h); } });
     add(st.env, st.UE, "env", false); st.girls.forEach(g => add(g.r.root, st.UC, "char", true));
   }
   function setMats(mock) {                                // the same meshes, drawn with the game's own materials or the mockup's
@@ -216,7 +140,12 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
 <div class="sm-div"></div><div class="sm-tag" data-t="l">CURRENT</div><div class="sm-tag" data-t="r"></div><div class="sm-msg"></div>
 <div class="sm-panel hide"><h3>SHADING MOCKUP</h3><div class="sm-note">Changes go to CUSTOM. The game itself isn't touched: this is its own scene with copies of the materials.</div>
 <h4>CHARACTER</h4>${CH_UI.map(q => row("character", q)).join("")}<h4>ENVIRONMENT</h4>${ENV_UI.map(q => row("environment", q)).join("")}
-<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:10px"><button data-a="saveCustom">SAVE CUSTOM</button><button data-a="reset">RESET CUSTOM</button></div></div>`;
+<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:10px"><button data-a="saveCustom">SAVE CUSTOM</button><button data-a="reset">RESET CUSTOM</button></div>
+<h4>IN THE GAME</h4><div class="sm-note" data-k="gameNow"></div>
+<div style="display:flex;gap:4px;flex-wrap:wrap"><button data-a="applyGame">APPLY THIS LOOK TO THE GAME</button><button data-a="gameOwn">GAME'S OWN LOOK</button><button data-a="reload" style="display:none">RELOAD THE GAME NOW</button></div>
+<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button data-a="download">DOWNLOAD SETTINGS FILE</button><button data-a="load">LOAD SETTINGS FILE</button><button data-a="copy">COPY SETTINGS</button></div>
+<div class="sm-note">APPLY: this browser's game draws the look from its next load. The file moves a look to another device (LOAD it there, then APPLY); COPY it to send it over to be built into the game for everyone.</div>
+<input type="file" accept=".json,application/json" data-k="file" style="display:none"></div>`;
     const P = D.querySelector('[data-k="presets"]'), L = D.querySelector('[data-k="lights"]');
     PRESET_UI.forEach(([k, n]) => { const b = document.createElement("button"); b.dataset.preset = k; b.textContent = n; P.appendChild(b); P.appendChild(document.createTextNode(" ")); });
     LIGHTS_UI.forEach(([k, n]) => { const b = document.createElement("button"); b.dataset.light = k; b.textContent = n; L.appendChild(b); L.appendChild(document.createTextNode(" ")); });
@@ -224,6 +153,8 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
       const v = I.type === "checkbox" ? I.checked : I.type === "color" ? I.value : +I.value; put(st.cfg, p, v); put(st.custom, p, v); applySettings(); uiState(); save(); });
     D.addEventListener("change", e => { if (e.target.type === "range") e.target.blur(); });
     D.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.preset) return usePreset(b.dataset.preset); if (b.dataset.light) return setLights(b.dataset.light), save(); act(b.dataset.a); });
+    D.querySelector('[data-k="file"]').addEventListener("change", async e => { const f = e.target.files && e.target.files[0]; e.target.value = ""; if (!f) return;
+      try { const L = SH().importJSON(await f.text()); st.custom = L.cfg; usePreset("custom"); msg("LOADED " + L.name.toUpperCase() + " INTO CUSTOM", 1800); } catch (err) { msg("THAT ISN'T A SHADING SETTINGS FILE", 2000); } });
     const ab = D.querySelector('[data-a="ab"]'); const hold = v => () => { st.showA = v; uiState(); }; ab.addEventListener("pointerdown", hold(true)); ab.addEventListener("pointerup", hold(false)); ab.addEventListener("pointerleave", hold(false));
     const dv = D.querySelector(".sm-div"); let drag = false; dv.addEventListener("pointerdown", e => { drag = true; dv.setPointerCapture(e.pointerId); });
     dv.addEventListener("pointermove", e => { if (!drag) return; st.splitX = Math.min(.95, Math.max(.05, e.clientX / innerWidth)); uiState(); }); dv.addEventListener("pointerup", () => { drag = false; save(); });
@@ -234,6 +165,7 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     D.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", b.dataset.preset === st.preset)); D.querySelectorAll("[data-light]").forEach(b => b.classList.toggle("on", b.dataset.light === st.light));
     D.querySelector('[data-a="turn"]').classList.toggle("on", st.turn); D.querySelector('[data-a="split"]').classList.toggle("on", st.split); D.querySelector('[data-a="ab"]').classList.toggle("on", st.showA);
     D.querySelector('[data-a="panel"]').classList.toggle("on", !D.querySelector(".sm-panel").classList.contains("hide"));
+    { const A = SH().active(), g = D.querySelector('[data-k="gameNow"]'); if (g) g.textContent = A ? `The game draws ${A.name.toUpperCase()}${A.name === "shipped" ? " (built into the game)" : " (applied in this browser" + (A.at ? ", " + A.at.slice(0, 10) : "") + ")"}.` : "The game draws its own look (CURRENT)."; }
     const sp = st.split && st.preset !== "current", dv = D.querySelector(".sm-div"), tl = D.querySelector('[data-t="l"]'), tr = D.querySelector('[data-t="r"]');
     dv.style.display = sp ? "block" : "none"; dv.style.left = st.splitX * 100 + "vw"; tl.style.display = tr.style.display = sp ? "block" : "none";
     tl.style.left = "12px"; tr.style.left = "calc(" + st.splitX * 100 + "vw + 12px)"; tr.textContent = (PRESET_UI.find(q => q[0] === st.preset) || [, ""])[1];
@@ -247,6 +179,14 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     if (a === "saveCustom") { st.custom = clone(st.cfg); delete st.custom.current; save(); msg("CUSTOM SAVED", 900); }
     if (a === "reset") { st.custom = PRESETS.softToon(); if (st.preset === "custom") usePreset("custom"); save(); }
     if (a === "shots") capture();
+    if (a === "applyGame" || a === "gameOwn") { const own = a === "gameOwn" || st.preset === "current", nm = (PRESET_UI.find(q => q[0] === st.preset) || [, "CUSTOM"])[1]; const c = clone(st.cfg); delete c.current;
+      if (own ? SH().useOwn() : SH().apply(nm, c)) { msg(own ? "THE GAME'S OWN LOOK FROM ITS NEXT LOAD" : nm + " APPLIED: THE GAME DRAWS IT FROM ITS NEXT LOAD", 2400); st.ui.querySelector('[data-a="reload"]').style.display = ""; } else msg("COULDN'T SAVE IT IN THIS BROWSER", 2200); }
+    if (a === "reload") { const u = new URL(location.href); u.searchParams.delete("shading"); location.href = u.toString(); }
+    if (a === "download") { const nm = (PRESET_UI.find(q => q[0] === st.preset) || [, "custom"])[1], c = clone(st.cfg); delete c.current; const b = new Blob([SH().exportJSON(nm, c)], { type: "application/json" }), el = document.createElement("a");
+      el.href = URL.createObjectURL(b); el.download = "berry-shading-" + nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "") + ".json"; document.body.appendChild(el); el.click(); el.remove(); msg("SETTINGS FILE SAVED", 1400); }
+    if (a === "load") st.ui.querySelector('[data-k="file"]').click();
+    if (a === "copy") { const nm = (PRESET_UI.find(q => q[0] === st.preset) || [, "custom"])[1], c = clone(st.cfg); delete c.current; const t = SH().exportJSON(nm, c);
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => msg("SETTINGS COPIED", 1400), () => { prompt("Copy these settings:", t); }); }
     if (a === "close") close();
     uiState();
   }
@@ -293,13 +233,12 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
 
   // ── open / close ──
   function open(ctx) {
-    X = ctx; THREE = ctx.THREE; if (st) close(true);
+    X = ctx; THREE = ctx.THREE; if (st) close(true); if (!SH()) return null; DEF = SH().DEF; PRESETS = SH().PRESETS; PRESET_UI = SH().PRESET_UI; clone = SH().clone;
     let saved = {}; try { saved = JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { }
     const G = X.gradeMat.uniforms; st = { t: 0, spin: 0, pairs: new Map(), hulls: [], preset: "current", light: saved.light || "midday", split: saved.split ?? true, splitX: .5, turn: !!saved.turn, showA: false,
-      custom: saved.custom || PRESETS.softToon(), UC: unifs(), UE: unifs(), gradeKeep: { tint: G.tintC.value.clone(), tintAmt: G.tintAmt.value, warm: G.warm.value, dim: G.dim.value, ruin: G.ruin.value, bloom: G.bloom.value, bgOn: G.bgOn.value } };
-    for (const U of [st.UC, st.UE]) { U.mkTint.value = new THREE.Color(); U.mkRimC.value = new THREE.Color(); }
-    st.UH = { col: { value: new THREE.Color("#ffffff") }, th: { value: .01 }, k: { value: .5 } }; st.hull = hullMat(st.UH);
-    st.env = buildEnv(); st.actors = buildGirls();
+      custom: saved.custom ? SH().normalize(saved.custom) : PRESETS.softToon(), UC: SH().newUnifs(THREE), UE: SH().newUnifs(THREE), gradeKeep: { tint: G.tintC.value.clone(), tintAmt: G.tintAmt.value, warm: G.warm.value, dim: G.dim.value, ruin: G.ruin.value, bloom: G.bloom.value, bgOn: G.bgOn.value } };
+    st.hullM = SH().hullMat(THREE);
+    const raw = X.raw || (f => f()); st.env = raw(buildEnv); st.actors = raw(buildGirls);   // (raw: the game's own look on these, even when a look's applied to the game)
     st.cam = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, .1, 300); st.cam.position.set(.4, 2.0, 9.2); st.cam.lookAt(0, 1.15, 0);
     st.ui = buildUI(); addEventListener("keydown", onKey, true); addEventListener("keyup", onKeyUp, true);
     usePreset(saved.preset && (PRESETS[saved.preset] || saved.preset === "custom") ? saved.preset : "softToon"); setLights(st.light); uiState();
@@ -308,7 +247,7 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
   function close(quiet) {
     if (!st) return; removeEventListener("keydown", onKey, true); removeEventListener("keyup", onKeyUp, true);
     const G = X.gradeMat.uniforms, K = st.gradeKeep; G.tintC.value.copy(K.tint); G.tintAmt.value = K.tintAmt; G.warm.value = K.warm; G.dim.value = K.dim; G.ruin.value = K.ruin; G.bloom.value = K.bloom; G.bgOn.value = K.bgOn;
-    setMats(false); for (const [, P] of st.pairs) P.mock.dispose(); st.hull.dispose();
+    setMats(false); for (const [, P] of st.pairs) P.mock.dispose(); st.hullM.mat.dispose();
     for (const g of st.girls) { try { X.undressGear(g.r); X.KIT.dispose(g.r); } catch (e) { } }
     st.env.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     if (st.ui) st.ui.remove(); st = null; if (!quiet && X.onClose) X.onClose();

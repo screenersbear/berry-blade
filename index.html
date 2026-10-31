@@ -624,8 +624,9 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261030f"></script>
+<script src="charkit.js?v=20261031a"></script>
 <script src="characters.js?v=20261014t"></script>
+<script src="shading.js?v=20261031a"></script>
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
@@ -634,7 +635,7 @@
 <script src="ambience.js?v=20261018a" defer></script>
 <script src="sfx.js?v=20261028d" defer></script>
 <script src="voices.js?v=20261023g" defer></script>
-<script src="shading-mockup.js?v=20261031c" defer></script>
+<script src="shading-mockup.js?v=20261031d" defer></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -714,7 +715,7 @@
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="shade">SHADING MOCKUP</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="shade">SHADING MOCKUP</button><button data-d="dexp">DOWNLOAD DEBUG SETTINGS</button><button data-d="dimp">LOAD DEBUG SETTINGS</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -1196,7 +1197,20 @@ renderer.autoClear = false;
 // ───────────────────────────── cel shading + outlines ─────────────────────────────
 const grad = new THREE.DataTexture(new Uint8Array([182, 222, 255]), 3, 1, THREE.RedFormat);
 grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.generateMipmaps = false; grad.needsUpdate = true;
-const toon = (color, extra) => new THREE.MeshToonMaterial({ color, gradientMap: grad, ...extra });
+// the shading: the game's own, or a look applied from the SHADING MOCKUP (shading.js; the user, 2026-10-31: "can you make it where the mockup settings can be
+// exported so they can actually be applied to the real game?"): kept in this browser, or one shipped with the game. Applied, every MeshToonMaterial made through
+// toon() or the kit's toonT gets its step at load; render() sets the one shared uniform set for each pass, the level's to the look's environment settings and
+// the actors' (the girls, partners, baddies, pets) to its character settings. None applied: nothing here touches a thing
+let shadeRaw = false;                                // (the SHADING MOCKUP building its own: the game's look as it is, unpatched)
+const SHADE = (() => { const B = window.BerryShading, A = B && B.active(); if (!A) return null; const U = B.newUnifs(THREE), H = B.hullMat(THREE);
+  return { A, U, H, edge: B.setHull(H, A.cfg.character), patch: sh => B.patchShader(sh, U), pass(ch) { if (ch) B.setChar(U, A.cfg.character); else B.setEnv(U, A.cfg.environment); } }; })();
+function shadeMat(m) { if (SHADE && !shadeRaw) { m.onBeforeCompile = sh => SHADE.patch(sh); m.customProgramCacheKey = () => "shade"; } return m; }
+function shadeHulls(root) {                          // (the look's edge highlight: its light hull on each of a character's toon parts, once)
+  if (!SHADE || !SHADE.edge || shadeRaw || !root) return;
+  root.traverse(o => { if (!o.isMesh || o.userData.mkHull || o.userData.mkHullMesh || !o.material || !o.material.isMeshToonMaterial || !o.geometry || !o.geometry.attributes.normal) return;
+    const h = new THREE.Mesh(o.geometry, SHADE.H.mat); h.userData.mkHull = true; h.frustumCulled = false; h.castShadow = false; o.add(h); o.userData.mkHullMesh = h; });
+}
+const toon = (color, extra) => shadeMat(new THREE.MeshToonMaterial({ color, gradientMap: grad, ...extra }));
 
 const outlineMats = new Map();
 function outlineMat(th) {
@@ -1245,6 +1259,7 @@ function group(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.pos
 // Built from JSON specs by the shared character kit (charkit.js), the same code the character editor (editor.js) previews with,
 // so a character tweaked in the editor looks and moves the same here.
 const KIT = StarkyCharKit(THREE, { parent: actors, shadowParent: scene, X, Y });
+if (SHADE) KIT.shadeHook = SHADE.patch;            // (an applied look on the characters too, after their paper skin)
 const { Tube, updateChains, toonT, canvasTex, cv2, fillPoly, circ, rounded, FWD, UPV } = KIT.util;
 // ══ COMBAT FEEL (the user, 2026-10-30: "try this for the combat but save where it's now", with a spec, kept word for word in
 // .claude/berry-tools/wip/COMBAT_FEEL_SPEC_1030.md; what was adapted to fit the game: COMBAT_FEEL_NOTES.md). One settings object that every
@@ -1377,6 +1392,8 @@ function feelPanelBuild() {
 <\/style><h3>COMBAT FEEL</h3><div class="fp-note">Every hit effect, live. BEFORE runs the combat exactly as it was on 10-30. Kept in this browser.</div>
 <div class="fp-row" data-k="presets"></div><label class="fp-k"><span>MASTER INTENSITY</span><input type="range" min="0" max="2" step=".05" data-path="masterIntensity"><span class="fp-v"></span></label><div data-k="fx"></div>
 <div class="fp-row"><button data-a="save">SAVE AS DEFAULTS</button><button data-a="reset">RESET</button><button data-a="dummy">SPAWN A TRAINING DUMMY</button><button data-a="close">CLOSE (\`)</button></div>
+<div class="fp-row"><button data-a="fileOut">DOWNLOAD SETTINGS FILE</button><button data-a="fileIn">LOAD SETTINGS FILE</button><button data-a="copy">COPY SETTINGS</button></div>
+<div class="fp-note">The file carries these settings to another browser or device (LOAD it there); COPY them to send over, to be built into the game as its defaults.</div>
 <div class="fp-note">Player settings (GAME SETTINGS): SCREEN SHAKE and FLASHING switch those off under every preset.</div>`;
   const pr = D.querySelector('[data-k="presets"]'); FEEL_PRESET_UI.forEach(([k, n]) => { const b = document.createElement("button"); b.dataset.preset = k; b.textContent = n; pr.appendChild(b); });
   const fx = D.querySelector('[data-k="fx"]');
@@ -1397,9 +1414,24 @@ function feelPanelBuild() {
     if (a === "save") { feelSave(true); b.textContent = "SAVED"; setTimeout(() => { b.textContent = "SAVE AS DEFAULTS"; }, 900); }
     if (a === "reset") { feelSet(feelMine() || feelPreset("default")); feelPanelState(); }
     if (a === "dummy") feelDummy();
+    if (a === "fileOut") saveFile("berry-combat-feel-" + (FEEL.legacy ? "before" : FEEL.preset) + ".json", feelExport());
+    if (a === "fileIn") pickFile(t => { try { feelImport(t); feelPanelState(); toast("COMBAT FEEL SETTINGS LOADED", 1800); } catch (e) { toast("THAT ISN'T A COMBAT FEEL SETTINGS FILE", 2200); } });
+    if (a === "copy") copyText(feelExport(), "COMBAT FEEL SETTINGS COPIED");
     if (a === "close") feelPanelToggle(false); });
   feelEl = D; D.__at = at; document.body.appendChild(D);
 }
+const feelExport = () => JSON.stringify({ berryFeel: 1, preset: FEEL.preset, feel: FEEL }, null, 2);
+function feelImport(text) { const o = JSON.parse(text), f = o && (o.feel || (o.berryDebug && o.keys && o.keys["berry.feel.v1"] && o.keys["berry.feel.v1"].cur)); if (!f || typeof f !== "object") throw new Error("not a combat feel file"); feelSet(feelMerge(feelClone(FEEL_DEFAULT), f)); }
+// files in and out, for every debug / tuning setting (the user, 2026-10-31: "make this for any debugging kind of settings. always have an export option")
+function saveFile(name, text) { try { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type: "application/json" })); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); toast("SAVED " + name.toUpperCase(), 1800); } catch (e) { toast("COULDN'T SAVE THE FILE", 2000); } }
+function pickFile(cb) { const i = document.createElement("input"); i.type = "file"; i.accept = ".json,application/json"; i.style.display = "none"; i.addEventListener("change", async () => { const f = i.files && i.files[0]; i.remove(); if (f) cb(await f.text()); }); document.body.appendChild(i); i.click(); }
+function copyText(text, said) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(said, 1600), () => { prompt("Copy these settings:", text); }); }
+// all of them in one file: the combat feel, a look applied from the SHADING MOCKUP (and the mockup's own), pause > DEBUG > TEXTURE. From pause > DEBUG or the DEVELOPER menu
+const DEBUG_KEYS = ["berry.feel.v1", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look"];
+function debugExport() { const o = { berryDebug: 1, at: new Date().toISOString(), keys: {} }; for (const k of DEBUG_KEYS) { try { const v = localStorage.getItem(k); if (v != null) o.keys[k] = JSON.parse(v); } catch (e) { } } return JSON.stringify(o, null, 2); }
+function debugImport(text) { const o = JSON.parse(text); if (!o || !o.berryDebug || !o.keys) throw new Error("not a debug settings file"); for (const k of DEBUG_KEYS) if (k in o.keys) localStorage.setItem(k, JSON.stringify(o.keys[k])); }
+function debugFileIn() { pickFile(t => { try { debugImport(t); toast("DEBUG SETTINGS LOADED · STARTING AGAIN WITH THEM", 2000); setTimeout(() => location.reload(), 1400); } catch (e) { toast("THAT ISN'T A DEBUG SETTINGS FILE", 2200); } }); }   // (a look and a texture take hold as the game starts)
+const debugFileOut = () => saveFile("berry-debug-settings.json", debugExport());
 function feelPanelState() {
   if (!feelEl) return; const at = feelEl.__at; feelEl.classList.toggle("legacy", !!FEEL.legacy);
   feelEl.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", b.dataset.preset === FEEL.preset));
@@ -5975,7 +6007,7 @@ function buildChar(spec) {
   if (H && pr && pr.kind === "gauntlet" && pr.rings !== H) spec = { ...spec, outfit: { ...spec.outfit, prop: { ...pr, rings: H } } };
   const r = KIT.build(spec), body = r.sync;
   r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); };
-  return r;
+  shadeHulls(r.root); return r;
 }
 const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && sp.villain.on);
 const LOOK_KEY = "berry.looks.v1";                // which look each character wears (an alternate hair style, picked with ↑ ↓ on the select screen)
@@ -6236,7 +6268,7 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dfeel: "COMBAT FEEL", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dfeel: "COMBAT FEEL", dexp: "DOWNLOAD DEBUG SETTINGS", dimp: "LOAD DEBUG SETTINGS", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
 // (the user, 2026-10-28: "the pause menu should first have a option that says "return to game" which is where they cursor starts. but the player can scroll up to get to
 // those other options. hitting okay on the casette player will bring up the music menu, hitting the character viewers should have an accessories heading but also open to
 // the accesories menu ... and hitting the map should make it full screen"): the widgets (w_map, w_wear, w_tape: those you've got) at the top, then the options, RETURN TO GAME last
@@ -6286,13 +6318,15 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dhero", "dreset", "dup", "dlook", "dfeel", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dhero", "dreset", "dup", "dlook", "dfeel", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
   if (what === "dhero") { const o = otherHero(); closePause(); swapHero(o); return; }   // (the other girl, right where you stand: the user, 2026-10-29 "debug mode should allow the player to select the other character")
-  if (what === "dfeel") { SFX.confirm(); feelPanelToggle(true); return; }   // (COMBAT FEEL's panel, over the pause)
+  if (what === "dfeel") { SFX.confirm(); feelPanelToggle(true); return; }
+  if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
+  if (what === "dimp") { SFX.confirm(); debugFileIn(); return; }   // (COMBAT FEEL's panel, over the pause)
   if (what === "dlook") { lookStep(); SFX.tick(); const b = $("pbtns").querySelector(`[data-p="${what}"]`); if (b) b.textContent = lookLabel(); return; }   // (the look, to try: kept in this browser)
   if (what === "dup") { upPrev = (upPrev + 1) % UP_PREVIEW.length; const [, pc, fr] = UP_PREVIEW[upPrev]; upOverride = pc; freedOverride = fr; upDirty = true; SFX.tick();   // (a milestone of this world's uprising, this room rebuilt to it as you go back in: the user, 2026-10-28 "add in the debug mode menu the option to change it to the other milestones")
     const b = $("pbtns").querySelector('[data-p="dup"]'); if (b) b.textContent = upLabel(); return; }
@@ -6590,7 +6624,7 @@ let shadeUp = null;                                   // the SHADING MOCKUP (sha
 function openShading() {
   if (!window.ShadingMockup) return; closeMenus(); story = null; menuUp = null; $("select").classList.add("hidden");   // (over the character screen, if that's where it was opened from)
   shadeUp = window.ShadingMockup.open({ THREE, renderer, frameRT, gradeScene, gradeCam, gradeMat, KIT, buildChar, lookOf, rosterSpecs, makeState, dressGear, undressGear, tropMats, tropPalm, tropTreeFern, tropPlantain,
-    tropGroundFern, tropBromeliad, toon, GROUND, screens: WORLDS[0].screens,
+    tropGroundFern, tropBromeliad, toon, GROUND, screens: WORLDS[0].screens, raw: fn => { shadeRaw = true; KIT.shadeRaw = true; try { return fn(); } finally { shadeRaw = false; KIT.shadeRaw = false; } },   // (raw: its own builds, the game's look as it is, even with a look applied)
     pipe: { pre() { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } },   // (render()'s own, for the characters' paper skin and the grade's ink)
       grade() { const U = gradeMat.uniforms, T = TEXTURES[LOOK.tex]; U.ink.value = T[2]; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; } },
     onClose() { shadeUp = null; showMainMenu(); showDev(); } });
@@ -7115,7 +7149,9 @@ function devChoose(d) {
   else if (d === "edit") { closeMenus(); story = null; showSelect(); openEditor(); }
   else if (d === "cast") openCast();               // (every world's enemies and friends, to look at: the user, 2026-10-23)
   else if (d === "shade") openShading();            // (a look-dev page of its own: the girls and the woods under new shading, nothing in the game changed)
-  else if (d === "feel") feelPanelToggle(true);     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
+  else if (d === "feel") feelPanelToggle(true);
+  else if (d === "dexp") debugFileOut();           // (every debug setting in one file, and back)
+  else if (d === "dimp") debugFileIn();     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
   else showSettings();                              // (BACK: to GAME SETTINGS, where it's opened from)
 }
 function mainChoose(m) { SFX.confirm(); if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else showSlots(m); }
@@ -19820,6 +19856,7 @@ function dressGear(r, wear) {
   else if (wear.hat && ACC[wear.hat] && r.head) { const hat = buildHat(r), yb = hat.userData.yb; put(r.head, hat);   // (last: over everything else on her head, the headphones' band under its crown)
     (r.chains || []).forEach(c => { if (c.parent === "head" && c.anchor[1] > yb - .02 && c.tube && c.tube.mesh.visible) { c.tube.mesh.visible = false; G.hid.push(c.tube.mesh); } }); }   // (locks growing from under the crown, Camila's parting: tucked in under it)
   if (r.mats) r.mats.push(...G.mats);
+  shadeHulls(r.root);                              // (an applied look's edge highlight on what she's wearing too)
 }
 function gearArmR(r, i) {                            // the forearm's radius a little up from the wrist (the arm's own tube), for the bandana round it
   const t = r.arms && r.arms[i]; if (t && t.prof) return t.prof(.8) * 1.06 + .014; if (t && t.radV && t.radV.length) return t.radV[Math.floor(t.radV.length * .8)] * 1.06 + .014; return .1;
@@ -23739,10 +23776,13 @@ function render(dt) {
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } }   // (the characters' own texture, DEBUG · K: an older charkit still cached has none)
+  if (SHADE) SHADE.pass(false);                     // (an applied look: the level's settings, then the characters')
   if (pan) panScene(); else if (peek) panScene(peek); else renderer.render(scene, camera);
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
+  if (SHADE) { SHADE.pass(true); SHADE.U.mkGround.value = player ? Y(groundAt(player.x) ?? GROUND) : 0; }
   renderer.render(actors, camera);
+  if (SHADE) SHADE.pass(false);
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
   if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
@@ -23808,7 +23848,10 @@ let warming = true;
 async function warmUp() {                           // (the user, 2026-10-16: load everything first, the menus and every world, before you can move or pick)
   const step = () => new Promise(r => setTimeout(r, 30));   // (a breath between steps, so the beps keep walking)
   const wait = (pr, ms) => Promise.race([pr, new Promise(r => setTimeout(r, ms))]);
-  const compile = (sc) => renderer.compileAsync ? renderer.compileAsync(sc, camera) : Promise.resolve(renderer.compile(sc, camera));
+  const compile = (sc) => {                           // (three's compileAsync, minus its slip: a material let go of before its program's ready has none, and its check threw,
+    const mats = renderer.compile(sc, camera); if (!renderer.compileAsync || !mats || !mats.forEach) return Promise.resolve();   // "reading 'isReady'", every load: 2026-10-31)
+    return new Promise(res => { const t0 = performance.now(), chk = () => { mats.forEach(m => { const pr = renderer.properties.get(m).currentProgram; if (!pr || !pr.isReady || pr.isReady()) mats.delete(m); });
+      if (!mats.size || performance.now() - t0 > 6000) res(); else setTimeout(chk, 10); }; chk(); }); };
   await step(.3, "THE CHARACTERS");
   await wait(storeReady, 5000);                      // characters saved on claude.ai are in the line-up before it's shown
   const art = window.BEP_IMG ? new Promise(r => { const im = new Image(); im.onload = im.onerror = r; im.src = BEP_IMG.title; }) : null;

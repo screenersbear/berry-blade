@@ -59,6 +59,7 @@ vec3 skinOf(vec3 c, vec3 n, vec3 vp) {
 }
 `;
 function skinned(m) {
+  if (api.shadeHook && !api.shadeRaw) { const h = api.shadeHook; m.onBeforeCompile = sh => { skinCompile(sh); h(sh); }; m.customProgramCacheKey = () => "skin+shade"; return m; }   // (a look applied from the game's SHADING MOCKUP: its step after the skin, 2026-10-31)
   m.onBeforeCompile = skinCompile; return m;
 }
 function skinCompile(sh) {
