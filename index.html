@@ -1119,8 +1119,10 @@ function wPlace(s) {
   return { on, ox, row, slots,
     scatter: (n, m0, m1, salt) => { const step = (WX + m0 + m1) / Math.max(1, n); return slots(step, m0, m1, salt).map(q2 => (q2.x += q2.rs() * step, q2)).filter(inside(m0, m1)); },   // n across the screen and its margins, as n of R(-m0, WX + m1) did
     steps: (a, b, m0, m1, salt) => { const step = (a + b) / 2; return slots(step, m0, m1, salt).map(q2 => (q2.x += (q2.rs() - .5) * (b - a), q2)).filter(inside(m0, m1)); },   // one every a..b, as x += R(a, b) did
-    grid: (step, m0, m1, ph = 0) => { const o = []; for (let j = Math.ceil((ox - m0 - ph) / step); j * step + ph - ox < WX + m1; j++) o.push(j * step + ph - ox); return o; } };   // one every step, on the world's own grid (as x += step from -m0 did, but in step with the screens beside it)
+    grid: (step, m0, m1, ph = 0) => { const o = []; for (let j = Math.ceil((ox - m0 - ph) / step); j * step + ph - ox < WX + m1; j++) o.push(j * step + ph - ox); return o; },
+    gridIn: (step, a, b, ph = 0) => { const o = []; for (let j = Math.ceil((ox + a - ph) / step); j * step + ph - ox < b; j++) o.push(j * step + ph - ox); return o; } };   // (the grid's between a and b, here)   // one every step, on the world's own grid (as x += step from -m0 did, but in step with the screens beside it)
 }
+const wrapIn = (v, a, b) => a + (((v - a) % (b - a)) + (b - a)) % (b - a);   // (something drifting by, where the world's clock has it: the same on every screen that shows it, till it comes round again)
 const slotRun = (get, set) => (sl, f) => { const k = get(); set(sl.rs); try { return f(sl.x, sl); } finally { set(k); } };   // (a builder's own random swapped for a slot's while it makes what's in it)
 
 const INK = "#151318";
@@ -14931,7 +14933,8 @@ function airship(m, moored) {                           // an airship of our own
   return { g, prop, ports, pen };
 }
 function buildSkyland(k = 0, seed = k) {
-  const before = new Set(scene.children), rng = rngF(29 + seed * 43), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
+  const before = new Set(scene.children); let rng = rngF(29 + seed * 43);
+  const R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots and grid: the docks' arches, lamps, crates, the clouds and islands round about)
   const Q = SKY_PAL[k], ST = STAGES[seed] || {}, WY = Y(WATER);
   const mStone = toon(Q.stone), mStoneD = toon(Q.stoneD), mTrim = toon(Q.tile), mArch = toon("#" + new THREE.Color(Q.stoneD).multiplyScalar(.45).getHexString());
   const mTile = toon("#ffffff"); mTile.map = skyTileTex(); mTile.color.set(Q.tile);
@@ -14939,7 +14942,7 @@ function buildSkyland(k = 0, seed = k) {
   const mShade = toon(Q.shade), mCloud = toon(Q.cloud, { emissive: new THREE.Color(Q.shade).multiplyScalar(.35) }), mFlagO = toon("#ff8a1a"), mFlagB = toon("#2a6ae0");
   const lit = Q.lamp > 0, mLamp = new THREE.MeshBasicMaterial({ color: lit ? "#ffd58a" : "#e9dcc0" }), mHalo = new THREE.MeshBasicMaterial({ map: haloTex(), color: "#ffc46a", transparent: true, opacity: lit ? .55 * Q.lamp : 0, blending: THREE.AdditiveBlending, depthWrite: false, fog: false });
   const shipM = { canvas: toon("#f4e6c8"), stripe: toon("#e8742a"), brass: mBrass, wood: mWood, rope: mRope, flag: mFlagB, port: new THREE.MeshBasicMaterial({ color: lit ? "#ffd58a" : "#3a3040" }) };
-  const tileTop = (cx, ty, pw, d = 7) => { const g = new THREE.PlaneGeometry(pw, d).rotateX(-Math.PI / 2), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * pw / 1.3, uv.getY(i) * d / 1.3);
+  const tileTop = (cx, ty, pw, d = 7) => { const g = new THREE.PlaneGeometry(pw, d).rotateX(-Math.PI / 2), uv = g.attributes.uv; for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * pw + cx - pw / 2 + W.ox) / 1.3, uv.getY(i) * d / 1.3);   // (the tiles in step with the world's, so they run on across the screens' edges)
     scene.add(at(new THREE.Mesh(g, mTile), cx, ty + .005, 0)); };
   const archG = (() => { const s = new THREE.Shape(); s.moveTo(-.42, -.7); s.lineTo(-.42, .25); s.absarc(0, .25, .42, Math.PI, 0, true); s.lineTo(.42, -.7); s.closePath(); return new THREE.ShapeGeometry(s, 10); })();
   // the docks: one sandstone block per span between the gaps, stepping with the ground; arches along the front, a tiled top, a stepped
@@ -14949,23 +14952,26 @@ function buildSkyland(k = 0, seed = k) {
   const balus = [], lamps = [], flags = [];
   spans.forEach(([a, b]) => {
     const pieces = []; let pa = a;
-    [...new Set(PROFILE.map(q => q[0]))].forEach(sx => { if (sx > a && sx < b) { pieces.push([pa, sx]); pa = sx; } }); pieces.push([pa, b]);
-    pieces.forEach(([pa, pb]) => {
-      const pw = (pb - pa) * S, cx = X((pa + pb) / 2), ty = Y(groundAt((pa + pb) / 2) ?? GROUND);
+    [...new Set([...(W.on ? [0, WORLD] : []), ...PROFILE.map(q => q[0])])].sort((u, v) => u - v).forEach(sx => { if (sx > a && sx < b) { pieces.push([pa, sx]); pa = sx; } }); pieces.push([pa, b]);   // (a stitched world's: a block ends at the screen's edge, and the next screen's begins there)
+    const sl0 = (u, v) => Math.abs((groundAt(u + 1) ?? 0) - (groundAt(v - 1) ?? 0)) > 2, P2 = !W.on ? pieces : pieces.flatMap(([u, v]) =>   // (sloping up to the edge: a short block at the edge's own height, so the screens beside each other meet level; the rest as before)
+      u === 0 && v > 280 && sl0(u, v) ? [[0, 140], [140, v]] : v === WORLD && v - u > 280 && sl0(u, v) ? [[u, WORLD - 140], [WORLD - 140, WORLD]] : [[u, v]]);
+    P2.forEach(([pa, pb]) => {
+      const atEdge = W.on && pa === 0 ? groundAt(1) : W.on && pb === WORLD ? groundAt(WORLD - 1) : null;
+      const pw = (pb - pa) * S, cx = X((pa + pb) / 2), ty = Y((atEdge ?? groundAt((pa + pb) / 2)) ?? GROUND);
       scene.add(at(mk(new THREE.BoxGeometry(pw, .3, 7), null, { mat: mTrim, ol: 0 }), cx, ty - .15, 0)); tileTop(cx, ty, pw);
       scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(pw - .02, 3.3, 7.1), mStone), cx, ty - 1.95, 0));
       scene.add(at(mk(new THREE.BoxGeometry(pw, .2, .3), null, { mat: mTrim, ol: 0 }), cx, ty - .42, 3.58));
       scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(pw * .84, .9, 6), mStoneD), cx, ty - 4.05, 0));      // the stepped underside
       scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(pw * .6, .9, 4.6), mStone), cx, ty - 4.95, 0));
       scene.add(at(new THREE.Mesh(new THREE.ConeGeometry(Math.min(pw * .3, 3), 2.4, 6), mStoneD).rotateX(Math.PI), cx, ty - 6.6, 0));
-      for (let x = X(pa) + 1.2; x < X(pb) - .9; x += 2.3) { const m = new THREE.Mesh(archG, mArch); at(m, x, ty - 1.75, 3.56); scene.add(m); }
-      for (let x = X(pa) + .3; x < X(pb) - .2; x += .55) balus.push([x, ty, -3.2]);
+      for (const x of W.gridIn(2.3, X(pa) + 1.2, X(pb) - .9)) { const m = new THREE.Mesh(archG, mArch); at(m, x, ty - 1.75, 3.56); scene.add(m); }
+      for (const x of W.gridIn(.55, X(pa) + .3, X(pb) - .2)) balus.push([x, ty, -3.2]);
       if (pw > 3) scene.add(at(mk(new THREE.BoxGeometry(pw - .3, .12, .16), null, { mat: mTrim, ol: 0 }), cx, ty + .95, -3.2));
-      for (let x = X(pa) + R(2, 4); x < X(pb) - 1.5; x += R(8, 11)) lamps.push([x, ty]);
+      for (const sl of W.steps(8, 11, -(X(pa) + 2), X(pb) - 1.5 - WX, 2401)) lamps.push([sl.x, ty]);
       if (pw > 6 && rng() < .7) flags.push([X(pa) + R(1.5, pw - 1.5), ty, rng() < .5]);
-      for (let x = X(pa) + R(3, 7); x < X(pb) - 2; x += R(9, 15)) { const n = 1 + Math.floor(rng() * 3), z = R(-2.7, -2.1);
+      for (const sl of W.steps(9, 15, -(X(pa) + 3), X(pb) - 2 - WX, 2402)) inSlot(sl, x => { const n = 1 + Math.floor(rng() * 3), z = R(-2.7, -2.1);
         for (let i = 0; i < n; i++) { const s = R(.55, .8), c = mk(new THREE.BoxGeometry(s, s, s), null, { mat: mCrate, ol: .02 }); at(c, x + i * .7, ty + s / 2 + (i === 2 ? .7 : 0), z); c.rotation.y = R(-.2, .2); scene.add(c); }
-        if (rng() < .6) scene.add(at(mk(new THREE.CylinderGeometry(.3, .3, .8, 12), null, { mat: mWood, ol: .02 }), x - .8, ty + .4, z + .3)); }
+        if (rng() < .6) scene.add(at(mk(new THREE.CylinderGeometry(.3, .3, .8, 12), null, { mat: mWood, ol: .02 }), x - .8, ty + .4, z + .3)); });
     });
     [a, b].forEach((e, i) => { if (e < -800 || e > WORLD + 800) return;                           // a column at each end of the dock, a lamp on top
       const ex = X(e) + (i ? -.35 : .35), ty = Y(groundAt(e + (i ? -2 : 2)) ?? GROUND);
@@ -15058,28 +15064,29 @@ function buildSkyland(k = 0, seed = k) {
   }
   // the sea of cloud below, heaped clouds rising out of it, airships drifting by, floating islands far off
   const WIDE = 150, sea = new THREE.Mesh(new THREE.PlaneGeometry(WIDE * 2, 140).rotateX(-Math.PI / 2), mCloud); at(sea, WX / 2, WY - .6, -40); scene.add(sea);
-  { const N = 360, im = new THREE.InstancedMesh(puffLo, mCloud, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
-    for (let i = 0; i < N; i++) { const z = i < 120 ? R(-6, 7) : R(-75, -6), s = z > -6 ? R(1.1, 2.4) : R(2, 5);
-      v.set(R(-40, WX + 40), z > -6 ? WY - s * .35 : WY + R(-.6, .4) * s * .5, z); sc.set(s * 1.4, s * .7, s); m4.compose(v, q, sc); im.setMatrixAt(i, m4); }
+  { const SL = [...W.scatter(120, 40, 40, 2403).map(q2 => (q2.near = true, q2)), ...W.scatter(240, 40, 40, 2404)], N = SL.length, im = new THREE.InstancedMesh(puffLo, mCloud, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    SL.forEach((sl, i) => inSlot(sl, x => { const z = sl.near ? R(-6, 7) : R(-75, -6), s = z > -6 ? R(1.1, 2.4) : R(2, 5);
+      v.set(x, z > -6 ? WY - s * .35 : WY + R(-.6, .4) * s * .5, z); sc.set(s * 1.4, s * .7, s); m4.compose(v, q, sc); im.setMatrixAt(i, m4); }));
     scene.add(im); keep.add(im); }
   const heaps = [];
-  for (let i = 0; i < 7; i++) { const g = group(scene, R(-20, WX + 20), WY + R(0, 5), -R(18, 42)), n = 7 + Math.floor(rng() * 6), w = R(5, 10);
+  for (const sl of W.scatter(7, 20, 20, 2405)) inSlot(sl, x => { const g = group(scene, x, WY + R(0, 5), -R(18, 42)), n = 7 + Math.floor(rng() * 6), w = R(5, 10);
     for (let j = 0; j < n; j++) { const u = j / (n - 1), s = w * (.12 + .2 * Math.sin(u * Math.PI)) * R(.8, 1.2); puff(g, (u - .5) * w, s * R(.3, .9), R(-1.5, 1.5), s, s * .85, s); }
-    g.traverse(o => { if (o.isMesh) keep.add(o); }); heaps.push({ g, v: R(.08, .25) * (rng() < .5 ? -1 : 1) }); }
+    g.traverse(o => { if (o.isMesh) keep.add(o); }); heaps.push({ g, x0: x + W.ox, v: R(.08, .25) * (rng() < .5 ? -1 : 1) }); });
   const ships = [];
-  for (let i = 0; i < 3; i++) { const A = airship(shipM, false), z = -R(16, 46), s = R(.7, 1.3); A.g.scale.setScalar(s); A.g.position.set(R(-10, WX + 10), WY + R(9, 16) + (i ? 0 : 4), z);
-    const v = R(.5, 1.1) * (rng() < .5 ? -1 : 1); A.g.rotation.y = v < 0 ? Math.PI : 0; scene.add(A.g); A.g.traverse(o => { if (o.isMesh) keep.add(o); }); ships.push({ ...A, v, y0: A.g.position.y, ph: rng() * 9 }); }
-  for (let i = 0; i < 7; i++) {                                                                   // the floating islands, far off in the haze
-    const g = group(scene, R(-40, WX + 40), WY + R(4, 14), -R(55, 78)), w = R(3, 7);
+  for (const sl of W.scatter(3, 10, 10, 2406)) inSlot(sl, x => { const A = airship(shipM, false), z = -R(16, 46), s = R(.7, 1.3); A.g.scale.setScalar(s); A.g.position.set(x, WY + R(9, 16) + (sl.j % 3 ? 0 : 4), z);
+    const v = R(.5, 1.1) * (rng() < .5 ? -1 : 1); A.g.rotation.y = v < 0 ? Math.PI : 0; scene.add(A.g); A.g.traverse(o => { if (o.isMesh) keep.add(o); }); ships.push({ ...A, v, x0: x + W.ox, y0: A.g.position.y, ph: rng() * 9 }); });
+    for (const sl of W.scatter(7, 40, 40, 2408)) inSlot(sl, x => {                                                                   // the floating islands                                                                   // the floating islands, far off in the haze
+    const g = group(scene, x, WY + R(4, 14), -R(55, 78)), w = R(3, 7);
     g.add(at(new THREE.Mesh(new THREE.ConeGeometry(w * .8, w * 1.4, 7).rotateX(Math.PI), mStoneD), 0, -w * .7, 0));
     g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(w * .8, w * .8, .6, 7), mStone), 0, .3, 0));
     for (let j = 0; j < 3; j++) { const tw = R(.5, 1.1), th = R(2, 6), tx = R(-w * .5, w * .5); g.add(at(new THREE.Mesh(new THREE.CylinderGeometry(tw, tw * 1.1, th, 8), mStone), tx, .6 + th / 2, R(-1, 1)));
       g.add(at(new THREE.Mesh(new THREE.SphereGeometry(tw * 1.05, 10, 6, 0, TAU, 0, Math.PI / 2), mTrim), tx, .6 + th, 0)); }
-  }
+  });
   // see-through clouds that drift by close to the camera now and then, in front of everything, the heroes too (so they go in with the
   // characters, which are drawn over the scenery)
   const fgM = new THREE.MeshBasicMaterial({ map: fgCloudTex(k), transparent: true, opacity: .34, depthWrite: false, fog: false }), fgs = [];
-  for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), fgM); m.position.set(i * 36 + R(0, 14), Y(GROUND) + R(-.5, 4), R(6.5, 9)); m.renderOrder = 5; actors.add(m); fgs.push({ m, v: R(.3, .55) }); }
+  for (const sl of W.scatter(3, 20, 20, 2407)) inSlot(sl, x => {   // (from just past each edge too, so one drifting over the edge is whole on both screens)
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(8, 4), fgM); m.position.set(x, Y(GROUND) + R(-.5, 4), R(6.5, 9)); m.renderOrder = 5; actors.add(m); fgs.push({ m, x0: x + W.ox, v: R(.3, .55) }); });
   // the sky: its horizon on the cloud sea, however far below
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(260, 110), new THREE.MeshBasicMaterial({ map: skyWorldTex(k), fog: false })); at(sky, WX / 2, WY + 53, -82); scene.add(sky); keep.add(sky);
   // wind-blown specks in the air
@@ -15092,10 +15099,10 @@ function buildSkyland(k = 0, seed = k) {
   function tick(t, dt) {
     dt = Math.min(dt || 0, .05);
     anim.forEach(f => f(t, dt));
-    heaps.forEach(h => { h.g.position.x += h.v * dt; if (h.g.position.x > WX + 40) h.g.position.x = -40; if (h.g.position.x < -40) h.g.position.x = WX + 40; });
-    ships.forEach(s => { s.g.position.x += s.v * dt; if (s.g.position.x > WX + 45) s.g.position.x = -45; if (s.g.position.x < -45) s.g.position.x = WX + 45;
+    heaps.forEach(h => { h.g.position.x = wrapIn(h.x0 + h.v * t - W.ox, -40, WX + 40); });   // (where the world's clock has them)
+    ships.forEach(s => { s.g.position.x = wrapIn(s.x0 + s.v * t - W.ox, -45, WX + 45);
       s.g.position.y = s.y0 + Math.sin(t * .5 + s.ph) * .35; s.g.rotation.z = Math.sin(t * .4 + s.ph) * .03; s.prop.rotation.x += dt * 4; s.pen.rotation.x = Math.sin(t * 4 + s.ph) * .2; });
-    fgs.forEach(f => { f.m.position.x += f.v * dt; if (f.m.position.x > WX + 20) f.m.position.x = -20; });
+    fgs.forEach(f => { f.m.position.x = wrapIn(f.x0 + f.v * t - W.ox, -20, WX + 20); });
     if (hatch) { hatch.k = approach(hatch.k, hatch.want, dt * .9); const e = hatch.k * hatch.k * (3 - 2 * hatch.k);
       hatch.hinge.rotation.y = -e * 1.9; hatch.glow.material.opacity = e * (.95 + .05 * Math.sin(t * 3)); hatch.hole.material.color.set(e > .4 ? "#5a3a22" : "#1a1418"); }
     if (lit) mHalo.opacity = .55 * Q.lamp * (.9 + .1 * Math.sin(t * 2.3));
@@ -15113,9 +15120,11 @@ const SKY_STAGES = [
     plats: [[520, 350, 170, "slab"], [880, 290, 200, "deck"], [1200, 330, 160, "cloud"], [1550, 260, 200, "slab"], [1930, 320, 150, "cloud"], [2280, 300, 180, "deck"]] },
   { h: 1, col: 3, cell: "B3", elev: 1, foe: 0, name: "AFTERNOON SPIRES", gaps: [[620, 840], [1900, 2100]], steps: [[1500, -60]],
     plats: [[380, 340, 160, "slab"], [650, 320, 150, "cloud"], [1000, 290, 200, "deck"], [1300, 230, 160, "slab"], [1680, 260, 180, "deck"], [1925, 250, 150, "cloud"], [2300, 290, 160, "slab"]] },
-  { h: 3, col: 4, cell: "B4", elev: 1, foe: 0, name: "GOLDEN HOUR MOORING", gaps: [[2280, 3600]], noRight: true, up: 4, upX: 1500, down: 8, downX: 2280, downWall: -1,
+  { h: 3, col: 4, cell: "B4", elev: 1, foe: 0, name: "GOLDEN HOUR MOORING", gaps: [[2280, 3600]], noRight: true, up: 4, upX: 1415, down: 8, downX: 2280, downWall: -1,   // (upX under the high dock's rope down, 2026-10-31: one rope, the screens one drawing)
+   
     plats: [[420, 350, 180, "deck"], [760, 280, 200, "slab"], [1080, 340, 180, "cloud"], [1800, 300, 200, "deck"], [2050, 230, 150, "slab"]] },
-  { h: 3, col: 4, cell: "A4", elev: 2.6, foe: 0, name: "GOLDEN HOUR HIGH DOCK", noLeft: true, down: 3, downX: 460, downWall: -1, gaps: [[460, 680], [1400, 1620]],
+  { h: 3, col: 4, cell: "A4", elev: 2.6, foe: 0, name: "GOLDEN HOUR HIGH DOCK", noLeft: true, down: 3, downX: 1400, downWall: -1, gaps: [[460, 680], [1400, 1620]],   // (down over the far gap's edge, right over the rope up from the mooring)
+   
     plats: [[540, 340, 150, "cloud"], [900, 300, 200, "deck"], [1180, 240, 160, "slab"], [1430, 320, 150, "cloud"], [1800, 290, 200, "slab"], [2200, 330, 180, "deck"]] },
   { h: 3, col: 5, cell: "A5", elev: 2.6, foe: 0, name: "GOLDEN HOUR SKY BRIDGE", gaps: [[700, 900], [1300, 1500], [1900, 2100]], gifts: [[1730, 210]],
     plats: [[730, 330, 140, "cloud"], [1000, 280, 180, "deck"], [1330, 320, 140, "cloud"], [1650, 260, 160, "slab"], [1930, 330, 140, "cloud"], [2300, 300, 160, "deck"]] },
@@ -15123,8 +15132,8 @@ const SKY_STAGES = [
     plats: [[360, 330, 160, "slab"], [630, 320, 150, "cloud"], [950, 280, 180, "deck"], [1400, 240, 160, "slab"], [1730, 300, 150, "cloud"], [2150, 290, 200, "deck"]] },
   { h: 6, col: 7, cell: "A7", elev: 2.6, foe: 0, boss: true, bossX: 1900, toWorld: 7, name: "LOOF'S PERCH",
     plats: [[400, 340, 220, "slab"], [900, 270, 200, "deck"], [1450, 330, 240, "slab"], [2100, 280, 200, "deck"]] },
-  { h: 3, col: 4, cell: "C4", elev: 0, foe: 0, name: "GOLDEN HOUR UNDERDOCK", noLeft: true, up: 3, upX: 420, gaps: [[900, 1120], [1700, 1900]],
-    plats: [[640, 330, 160, "deck"], [930, 320, 150, "cloud"], [1250, 280, 200, "slab"], [1720, 330, 140, "cloud"], [2100, 300, 200, "deck"]] },
+  { h: 3, col: 4, cell: "C4", elev: 0, foe: 0, name: "GOLDEN HOUR UNDERDOCK", noLeft: true, up: 3, upX: 2295, gaps: [[900, 1120], [1700, 1900]],   // (upX under the mooring's rope down; its deck moved over to clear it)
+    plats: [[640, 330, 160, "deck"], [930, 320, 150, "cloud"], [1250, 280, 200, "slab"], [1720, 330, 140, "cloud"], [2020, 300, 200, "deck"]] },
   { h: 3, col: 5, cell: "C5", elev: 0, foe: 0, name: "GOLDEN HOUR CLOUD LOCKS", gaps: [[520, 740], [1250, 1470], [2000, 2220]], gifts: [[1640, 190]],
     plats: [[550, 330, 150, "cloud"], [880, 290, 180, "deck"], [1280, 320, 150, "cloud"], [1600, 240, 160, "slab"], [2030, 320, 150, "cloud"], [2350, 300, 160, "deck"]] },
   { h: 5, col: 6, cell: "C6", elev: 0, foe: 0, name: "BLUE HOUR UNDERCLOUD", gaps: [[700, 920], [1600, 1820]], steps: [[1250, -60]],
