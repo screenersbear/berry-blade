@@ -1118,7 +1118,8 @@ function wPlace(s) {
   const inside = (m0, m1) => q2 => q2.x >= -m0 && q2.x <= WX + m1;
   return { on, ox, row, slots,
     scatter: (n, m0, m1, salt) => { const step = (WX + m0 + m1) / Math.max(1, n); return slots(step, m0, m1, salt).map(q2 => (q2.x += q2.rs() * step, q2)).filter(inside(m0, m1)); },   // n across the screen and its margins, as n of R(-m0, WX + m1) did
-    steps: (a, b, m0, m1, salt) => { const step = (a + b) / 2; return slots(step, m0, m1, salt).map(q2 => (q2.x += (q2.rs() - .5) * (b - a), q2)).filter(inside(m0, m1)); } };   // one every a..b, as x += R(a, b) did
+    steps: (a, b, m0, m1, salt) => { const step = (a + b) / 2; return slots(step, m0, m1, salt).map(q2 => (q2.x += (q2.rs() - .5) * (b - a), q2)).filter(inside(m0, m1)); },   // one every a..b, as x += R(a, b) did
+    grid: (step, m0, m1, ph = 0) => { const o = []; for (let j = Math.ceil((ox - m0 - ph) / step); j * step + ph - ox < WX + m1; j++) o.push(j * step + ph - ox); return o; } };   // one every step, on the world's own grid (as x += step from -m0 did, but in step with the screens beside it)
 }
 const slotRun = (get, set) => (sl, f) => { const k = get(); set(sl.rs); try { return f(sl.x, sl); } finally { set(k); } };   // (a builder's own random swapped for a slot's while it makes what's in it)
 
@@ -2647,7 +2648,8 @@ function signTex(big, small, accent) {             // a stencilled sign plate: t
 const crateTex = (() => { let t = null; return () => t || (t = tex(64, 64, g => { g.fillStyle = "#b07a44"; g.fillRect(0, 0, 64, 64); g.strokeStyle = "#7d5530"; g.lineWidth = 6; g.strokeRect(3, 3, 58, 58);
   g.beginPath(); g.moveTo(6, 6); g.lineTo(58, 58); g.moveTo(58, 6); g.lineTo(6, 58); g.stroke(); g.strokeStyle = "#9a6a3a"; g.lineWidth = 2; for (let y = 16; y < 64; y += 16) { g.beginPath(); g.moveTo(6, y); g.lineTo(58, y); g.stroke(); } })); })();
 function buildFactory(k = 0, seed = k) {
-  const before = new Set(scene.children), rng = rngF(23 + seed * 41), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
+  const before = new Set(scene.children); let rng = rngF(23 + seed * 41);
+  const R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots and grid, for what runs on past the screen's edges)
   const ST = STAGES[seed] || {}, TH = ST.theme || {}, SET = rowOf(ST) === "A" ? "skyline" : TH.set || "conveyor", ACC = TH.accent || "#ffd21f";   // (its top row: the high catwalks, tall windows all sky: the user, 2026-10-24, "rooftop catwalks, open sky")
   const wallC = new THREE.Color(TH.wall || "#56627e");
   const mFloor = toon("#353b4b"), mPlate = toon(TH.floor || "#5d6782"), mWall2 = toon("#" + wallC.clone().multiplyScalar(.62).getHexString()), mBeam = toon("#2a3040"), mMetal = toon("#aeb8cc"), mDark = toon("#22262f"),
@@ -2671,18 +2673,18 @@ function buildFactory(k = 0, seed = k) {
   const mkStrip = (P, U, mat) => { const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P, 3)); g.setAttribute("uv", new THREE.Float32BufferAttribute(U, 2)); g.computeVertexNormals(); return new THREE.Mesh(g, mat); };
   const mPlate2 = mPlate.clone(); mPlate2.side = THREE.DoubleSide; scene.add(mkStrip(pos, uv, mPlate2));
   const mLip = mStripe.clone(); mLip.side = THREE.DoubleSide; scene.add(mkStrip(lip, luv, mLip));
-  for (let x = -10; x < WX + 12; x += 1.6) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 13), null, { mat: mBeam, ol: 0 }), x, gAt(x) + .03, -1.8));   // plate seams
+  for (const x of W.grid(1.6, 10, 12)) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 13), null, { mat: mBeam, ol: 0 }), x, gAt(x) + .03, -1.8));   // plate seams
   // the back wall: riveted panels, a row of tall windows onto the sky and the city, yellow-and-black bands at the foot of each pillar
   const WZ = -8.2, wy0 = SET === "skyline" ? 2.4 : 4.4, wy1 = SET === "skyline" ? 11 : 10.2;   // (up on the high catwalks the windows are tall: all sky)
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 62, wy0 + 8, .6), mWall), WX / 2, (wy0 - 8) / 2, WZ));
   scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 62, 30 - wy1, .6), mWall), WX / 2, (wy1 + 30) / 2, WZ));
-  for (let x = -30; x < WX + 32; x += 6.5) { scene.add(at(mk(new THREE.BoxGeometry(2.6, wy1 - wy0, .7), null, { mat: mWall2, ol: .03 }), x, (wy0 + wy1) / 2, WZ));
+  for (const x of W.grid(6.5, 30, 32)) { scene.add(at(mk(new THREE.BoxGeometry(2.6, wy1 - wy0, .7), null, { mat: mWall2, ol: .03 }), x, (wy0 + wy1) / 2, WZ));
     scene.add(at(mk(new THREE.BoxGeometry(1.2, 30, .9), null, { mat: mWall2, ol: .03 }), x, 10, WZ + .3));
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.24, 1.1, .92), mStripe), x, .7, WZ + .3)); }
   scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .3, .9), null, { mat: mBeam, ol: .03 }), WX / 2, wy0, WZ + .2)); scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .3, .9), null, { mat: mBeam, ol: .03 }), WX / 2, wy1, WZ + .2));
   // the windows themselves: steel frames of small panes, and glass with a sheen and a glint on it (the user, 2026-10-18: it should be obvious they're there)
   const winH = wy1 - wy0, rowsN = Math.max(3, Math.round(winH / 1.45)), beamL = [];
-  for (let x = -30; x < WX + 32; x += 6.5) { const cx = x + 3.25;
+  for (const x of W.grid(6.5, 30, 32)) { const cx = x + 3.25;
     [-1, 1].forEach(j => scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(.1, winH, .12), mBeam), cx + j * .65, (wy0 + wy1) / 2, WZ)));
     for (let i = 1; i < rowsN; i++) scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(3.9, .1, .12), mBeam), cx, wy0 + winH * i / rowsN, WZ));
     if (cx > -14 && cx < WX + 14) beamL.push([cx, wy1 - .2, 1.9]); }
@@ -2695,14 +2697,14 @@ function buildFactory(k = 0, seed = k) {
   const clouds = at(new THREE.Mesh(new THREE.PlaneGeometry(WX + 140, 15), cloudM), WX / 2, 14, -60); scene.add(clouds); keep.add(clouds);
   const winTex = tex(32, 64, g => { g.fillStyle = "#3d4a6a"; g.fillRect(0, 0, 32, 64); g.fillStyle = "#ffe9a0"; for (let y = 4; y < 60; y += 8) for (let x = 4; x < 28; x += 8) if (Math.random() < .55) g.fillRect(x, y, 4, 4); });
   const mTower = toon("#ffffff"); mTower.map = winTex;
-  for (let i = 0; i < Math.round(40 * WS); i++) { const x = R(-30, WX + 32), z = -R(22, 46), w = R(1.5, 4), h = R(4, 15); const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mTower); at(m, x, h / 2 - 3, z); scene.add(m); }
+  for (const sl of W.scatter(Math.round(40 * WS), 30, 32, 2301)) inSlot(sl, x => { const z = -R(22, 46), w = R(1.5, 4), h = R(4, 15); const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), mTower); at(m, x, h / 2 - 3, z); scene.add(m); });
   const mFar = toon("#6f7fa6"); scene.add(at(new THREE.Mesh(new THREE.SphereGeometry(5, 24, 12, 0, TAU, 0, Math.PI / 2), mFar), R(0, WX + 2), -1, -50));
   const bellFar = new THREE.Mesh(new THREE.LatheGeometry([[0, 0], [5, 0], [4.2, 4], [2.2, 9], [1.4, 11], [0, 11.6]].map(([x, y]) => new THREE.Vector2(x, y)), 24), mFar); at(bellFar, R(10, WX - 8), 0, -55); scene.add(bellFar);
   // pipes along the wall (and down it), valve wheels
   [[3.2, .32, 0], [12.2, .45, 1], [13.4, .25, 2], [2.2, .22, 3]].forEach(([y, r, c]) => { scene.add(at(mk(new THREE.CylinderGeometry(r, r, WX + 62, 14).rotateZ(Math.PI / 2), null, { mat: mPipes[c], ol: .03 }), WX / 2, y, WZ + .9 + r));
-    for (let x = -10; x < WX + 12; x += R(6, 11)) scene.add(at(mk(new THREE.CylinderGeometry(r * 1.25, r * 1.25, .2, 14).rotateZ(Math.PI / 2), null, { mat: mBeam, ol: 0 }), x, y, WZ + .9 + r)); });
-  for (let i = 0; i < 5; i++) { const x = R(-6, WX + 6), c = i % 4; scene.add(at(mk(new THREE.CylinderGeometry(.24, .24, 12, 12), null, { mat: mPipes[c], ol: .03 }), x, 3.2, WZ + 1.6));
-    const wv = mk(new THREE.TorusGeometry(.4, .06, 6, 16), null, { mat: mPipes[(c + 1) % 4], ol: .02 }); at(wv, x, 2.4, WZ + 2.0); scene.add(wv); }
+    for (const sl of W.steps(6, 11, 10, 12, 2302 + c * 7)) inSlot(sl, x => scene.add(at(mk(new THREE.CylinderGeometry(r * 1.25, r * 1.25, .2, 14).rotateZ(Math.PI / 2), null, { mat: mBeam, ol: 0 }), x, y, WZ + .9 + r))); });
+  for (const sl of W.scatter(5, 6, 6, 2306)) inSlot(sl, x => { const c = ((sl.j % 4) + 4) % 4; scene.add(at(mk(new THREE.CylinderGeometry(.24, .24, 12, 12), null, { mat: mPipes[c], ol: .03 }), x, 3.2, WZ + 1.6));
+    const wv = mk(new THREE.TorusGeometry(.4, .06, 6, 16), null, { mat: mPipes[(c + 1) % 4], ol: .02 }); at(wv, x, 2.4, WZ + 2.0); scene.add(wv); });
   // gears on the wall, turning
   const gears = [];
   const nG = SET === "gears" ? 13 : 3;
@@ -2714,7 +2716,7 @@ function buildFactory(k = 0, seed = k) {
   const beltM = toon("#ffffff"); beltM.map = tex(64, 8, g => { g.fillStyle = "#26282e"; g.fillRect(0, 0, 64, 8); g.fillStyle = "#3a3e48"; for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 8); }); beltM.map.wrapS = THREE.RepeatWrapping; beltM.map.repeat.set(40, 1);
   const belt = SET === "conveyor" || SET === "arms";
   if (belt) { scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(WX + 62, .22, 1.4), beltM), WX / 2, beltY, beltZ)); keep.add(scene.children[scene.children.length - 1]); }
-  if (belt) { for (let x = -20; x < WX + 22; x += 4) { scene.add(at(mk(new THREE.BoxGeometry(.18, beltY, .18), null, { mat: mBeam, ol: .02 }), x, beltY / 2 - .1, beltZ - .55)); scene.add(at(mk(new THREE.BoxGeometry(.18, beltY, .18), null, { mat: mBeam, ol: .02 }), x, beltY / 2 - .1, beltZ + .55)); }
+  if (belt) { for (const x of W.grid(4, 20, 22)) { scene.add(at(mk(new THREE.BoxGeometry(.18, beltY, .18), null, { mat: mBeam, ol: .02 }), x, beltY / 2 - .1, beltZ - .55)); scene.add(at(mk(new THREE.BoxGeometry(.18, beltY, .18), null, { mat: mBeam, ol: .02 }), x, beltY / 2 - .1, beltZ + .55)); }
     scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .18, .12), null, { mat: mStripe, ol: 0 }), WX / 2, beltY + .14, beltZ + .72)); }
   const mBare = toon("#9aa4b8"), mBareD = toon("#3a3f4c"), mGlowEye = new THREE.MeshBasicMaterial({ color: "#8ff8ff" });
   const cargo = !belt ? [] : Array.from({ length: Math.round(14 * WS) }, (_, i) => { let m;
@@ -2799,16 +2801,16 @@ function buildFactory(k = 0, seed = k) {
   if (nS && !ST.end && !ST.noRight && seed + 1 < STAGES.length) sgn("→", "", WX - 6);
   if (ST.nextHi !== undefined) sgn("↑", "", WX - 13);
   // girders overhead, lamps hanging from them
-  for (let x = -20; x < WX + 22; x += 7) scene.add(at(mk(new THREE.BoxGeometry(.5, .5, 14), null, { mat: mBeam, ol: .03 }), x, 10.8, -1.4));
+  for (const x of W.grid(7, 20, 22)) scene.add(at(mk(new THREE.BoxGeometry(.5, .5, 14), null, { mat: mBeam, ol: .03 }), x, 10.8, -1.4));
   scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .6, .5), null, { mat: mBeam, ol: .03 }), WX / 2, 11.1, 2.4)); scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .6, .5), null, { mat: mBeam, ol: .03 }), WX / 2, 11.1, -5));
   const lampHalos = [];
-  for (let x = -14; x < WX + 16; x += 8.5) { scene.add(at(mk(new THREE.CylinderGeometry(.02, .02, 1.6, 4), null, { mat: mDark, ol: 0 }), x, 10, -1));
+  for (const x of W.grid(8.5, 14, 16)) { scene.add(at(mk(new THREE.CylinderGeometry(.02, .02, 1.6, 4), null, { mat: mDark, ol: 0 }), x, 10, -1));
     scene.add(at(mk(new THREE.ConeGeometry(.6, .5, 14, 1, true), null, { mat: mDark, ol: .02 }), x, 9.1, -1)); const b = new THREE.Mesh(new THREE.SphereGeometry(.2, 10, 8), mBulb); at(b, x, 8.9, -1); scene.add(b); keep.add(b);
     const h = new THREE.Mesh(new THREE.PlaneGeometry(4, 4), mHalo); at(h, x, 8.8, -.8); scene.add(h); keep.add(h); lampHalos.push(h); }
   // crates, barrels and cables framing the front
   const mBarrel = toon("#c8402c");
-  for (let x = -8; x < WX + 10; x += R(7, 12)) { if (rng() < .5) { const s2 = R(1, 1.5); scene.add(at(mk(new THREE.BoxGeometry(s2, s2, s2), null, { mat: mCrate, ol: .04 }), x, gAt(x) + s2 / 2 - .1, R(5.8, 7))); }
-    else scene.add(at(mk(new THREE.CylinderGeometry(.55, .55, 1.4, 14), null, { mat: mBarrel, ol: .04 }), x, gAt(x) + .6, R(5.8, 7))); }
+  for (const sl of W.steps(7, 12, 8, 10, 2307)) inSlot(sl, x => { if (rng() < .5) { const s2 = R(1, 1.5); scene.add(at(mk(new THREE.BoxGeometry(s2, s2, s2), null, { mat: mCrate, ol: .04 }), x, gAt(x) + s2 / 2 - .1, R(5.8, 7))); }
+    else scene.add(at(mk(new THREE.CylinderGeometry(.55, .55, 1.4, 14), null, { mat: mBarrel, ol: .04 }), x, gAt(x) + .6, R(5.8, 7))); });
   // platforms: catwalks (grating on hangers, a rail at the back), crate stacks, big pipes, and the upper tier of the floor
   for (const p of PLATFORMS) {
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
