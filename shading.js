@@ -4,7 +4,15 @@
 // picked to ship with the game: an exported settings file's "cfg", pasted in). The game patches its own MeshToonMaterials with it at load; null: its own look
 window.BerryShading = (() => {
   const KEY = "berry.shading.v1";
-  const SHIPPED = null;
+  // the game's look, shipped (the user, 2026-10-31, "okay first let's do this lighting for the game" + their exported CUSTOM): the characters flatter (lighting
+  // .31), a soft 3-step ramp, a light rim, a touch of top light, richer colour; the scenery a little calmer, its shadows toward blue-grey. SHIPPED_ID: a choice
+  // made in a browser before this look shipped (an APPLY, NO SHADING) doesn't hide it; one made after it does
+  const SHIPPED_ID = "20261031a", SHIPPED = {
+    character: { lightingInfluence: .31, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
+      rimLight: { enabled: true, color: "#FFFFFF", width: .3, intensity: .35 }, edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .01, intensity: .5 },
+      fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.31 },
+    environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: .9, contrast: .87, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 } }
+  };
   const DEF = {
     character: {
       lightingInfluence: 1.0,
@@ -35,7 +43,8 @@ window.BerryShading = (() => {
     flat: () => { const c = clone(DEF), C = c.character; C.lightingInfluence = .1; C.toonRamp.enabled = false; C.shadowTint.enabled = false; C.fakeAO.enabled = false; C.topLight.enabled = false; C.edgeHighlight.enabled = false;
       Object.assign(C.rimLight, { enabled: true, intensity: .7, width: .3 }); C.saturation = 1.3; return c; }
   };
-  const PRESET_UI = [["current", "CURRENT"], ["softToon", "SOFT TOON"], ["kh", "KINGDOM HEARTS-ISH"], ["flat", "FLAT GRAPHIC"], ["custom", "CUSTOM"]];
+  if (SHIPPED) PRESETS.shipped = () => normalize(SHIPPED);   // (the look the game ships with, to compare and build on)
+  const PRESET_UI = [["current", "ORIGINAL"], ...(SHIPPED ? [["shipped", "IN THE GAME"]] : []), ["softToon", "SOFT TOON"], ["kh", "KINGDOM HEARTS-ISH"], ["flat", "FLAT GRAPHIC"], ["custom", "CUSTOM"]];   // (current: the game unshaded, as it was before any look)
   const unifs = () => ({ mkOn: { value: 1 }, mkInfl: { value: 1 }, mkRampOn: { value: 0 }, mkSteps: { value: 3 }, mkSoft: { value: .15 }, mkTintOn: { value: 0 }, mkTint: { value: null }, mkTintStr: { value: .5 },
     mkRimOn: { value: 0 }, mkRimC: { value: null }, mkRimW: { value: .3 }, mkRimI: { value: .6 }, mkAOOn: { value: 0 }, mkAOStr: { value: .4 }, mkTopOn: { value: 0 }, mkTopStr: { value: .15 },
     mkSpecOn: { value: 0 }, mkSpecI: { value: 0 }, mkSat: { value: 1 }, mkCon: { value: 1 }, mkGround: { value: 0 } });
@@ -95,12 +104,13 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     lay(out, cfg); return out;
   }
   function active() {                                    // the look the game draws now: applied in this browser, or shipped, or null (the game's own)
-    try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s) return s.on && s.cfg ? { name: s.name || "custom", at: s.at, cfg: normalize(s.cfg) } : null; } catch (e) { }
+    try { const s = JSON.parse(localStorage.getItem(KEY) || "null"); if (s && (!SHIPPED || s.ship === SHIPPED_ID)) return s.on && s.cfg ? { name: s.name || "custom", at: s.at, cfg: normalize(s.cfg) } : null; } catch (e) { }
     return SHIPPED ? { name: "shipped", cfg: normalize(SHIPPED) } : null;
   }
-  function apply(name, cfg) { try { localStorage.setItem(KEY, JSON.stringify({ on: true, name, at: new Date().toISOString(), cfg })); return true; } catch (e) { return false; } }
-  function useOwn() { try { localStorage.setItem(KEY, JSON.stringify({ on: false })); return true; } catch (e) { return false; } }   // (off, even over a shipped look)
+  function apply(name, cfg) { try { localStorage.setItem(KEY, JSON.stringify({ on: true, ship: SHIPPED_ID, name, at: new Date().toISOString(), cfg })); return true; } catch (e) { return false; } }
+  function useOwn() { try { localStorage.setItem(KEY, JSON.stringify({ on: false, ship: SHIPPED_ID })); return true; } catch (e) { return false; } }   // (no shading at all, even over a shipped look)
+  function useShipped() { try { localStorage.removeItem(KEY); return true; } catch (e) { return false; } }   // (this browser's choice let go of: the game's shipped look, or none)
   const exportJSON = (name, cfg) => JSON.stringify({ berryShading: 1, name, cfg }, null, 2);
   function importJSON(text) { const j = JSON.parse(text); const cfg = j && (j.cfg || (j.character && j.environment ? j : null)); if (!cfg) throw new Error("not a Berry Blade shading file"); return { name: j.name || "imported", cfg: normalize(cfg) }; }
-  return { KEY, DEF, PRESETS, PRESET_UI, clone, newUnifs, patchShader, setChar, setEnv, hullMat, setHull, normalize, active, apply, useOwn, exportJSON, importJSON };
+  return { KEY, SHIPPED, useShipped, DEF, PRESETS, PRESET_UI, clone, newUnifs, patchShader, setChar, setEnv, hullMat, setHull, normalize, active, apply, useOwn, exportJSON, importJSON };
 })();

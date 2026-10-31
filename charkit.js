@@ -13,7 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
-const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1 };   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 0 };   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -2296,7 +2296,7 @@ Object.assign(STRIKES, {
   // towrads the player and then do a light hip forward spinning a cull 360 cart wheel that hits the opponent"): turned to face you, a hop of the hips, and over her hands
   // a whole turn (wheel), arms and legs out like a star, up off the ground as she goes over (rise); spec.move.tackle "wheel"
   tackle_wheel: { dur: .72, pose: true, screen: true, keys: WHEEL_KEYS(.14, .54, .72) },
-  tkdig_wheel: { dur: 1, pose: true, screen: true, keys: flatKeys({ lean: .34, arch: .1, bodyY: -.34, headRot: -.2, twistU: -.55, spin: -.35, armF: .9, elbF: .7, armB: .75, elbB: .8, spF: .35, spB: .35, fNx: .34, fFx: -.36, fNz: .22, fFz: .22, hF: .4 }, 1) },   // (crouched, loose, her shoulders turned to you)
+  tkdig_wheel: { dur: 1, pose: true, screen: true, keys: flatKeys({ lean: .34, arch: .1, bodyY: -.34, headRot: -.2, twistU: 0, spin: 0, armF: .9, elbF: .7, armB: .75, elbB: .8, spF: .35, spB: .35, fNx: .34, fFx: -.36, fNz: .22, fFz: .22, hF: .4 }, 1) },   // (crouched, loose, facing the way she's going: the user, 2026-10-31 "have rose face forward and not towards the screen when charging". Was turned to you, twistU -.55, spin -.35)
   backstep: { dur: .5, pose: true, screen: true, keys: { ...flatKeys({ bodyY: -.04, headRot: .15, armF: 1.25, elbF: 1.95, armB: 1.1, elbB: 2.05, spF: .1, spB: .1, fFx: -.16, fP: -.2 }, .5),
     lean: bkCurve(0, -.32), arch: bkCurve(0, -.12), fNx: bkCurve(.2, .08), fNy: bkCurve(.1, .14), fFy: bkCurve(.06, .1) } },
   // up a rock wall, one cycle of climbPh (the user, 2026-10-27: "whenever camila climbs a wall, she should be punching hard with her gauntlet hand and then climbing with the other
@@ -2343,6 +2343,13 @@ STRIKES.uphop = { dur: .22, go: .14, pose: true, keys: {
   lean: [[0, .15], [.14, .52], [.22, .04]], arch: [[0, .05], [.14, .22], [.22, -.06]], bodyY: [[0, -.06], [.14, -.46], [.22, .06]], headRot: [[0, -.15], [.14, -.36], [.22, -.45]],
   armF: [[0, .3], [.14, -.85], [.22, 2.6]], elbF: [[0, .7], [.14, .45], [.22, .25]], armB: [[0, .2], [.14, -.95], [.22, 1.7]], elbB: [[0, .7], [.14, .45], [.22, .35]],
   fNx: [[0, .22], [.14, .32], [.22, .08]], fNy: [[0, 0], [.14, 0], [.22, .04]], fFx: [[0, -.18], [.14, -.28], [.22, -.1]], fFy: [[0, 0], [.14, 0], [.22, 0]], fP: [[0, 0], [.14, .28], [.22, -.75]] } };
+// the air up attack's coil (the user, 2026-10-31: "make the air up attack's wind-up a 2-4 frame coil (knees tuck, arm cocks back), and fire the upward impulse on
+// the keyframe where the body extends, not at move start"): curled up in the air, both knees tucked, the striking arm cocked back and down; the strike itself
+// (up_fist / up_sword / up_kick) starts as it ends, on its own extended first key, with the push up. The game holds it COMBAT FEEL's movement.upCoilFrames
+STRIKES.upcoil = { dur: .06, pose: true, keys: {
+  lean: [[0, .1], [.06, .32]], arch: [[0, 0], [.06, .18]], bodyY: [[0, 0], [.06, -.08]], headRot: [[0, -.1], [.06, -.22]],
+  armF: [[0, .2], [.06, -1.05]], elbF: [[0, .6], [.06, 1.55]], armB: [[0, .2], [.06, .55]], elbB: [[0, .6], [.06, 1.0]],
+  fNx: [[0, .15], [.06, .34]], fNy: [[0, .05], [.06, .3]], fFx: [[0, -.1], [.06, .1]], fFy: [[0, .05], [.06, .26]], fP: [[0, 0], [.06, .5]] } };
 const WALL_HIT = .24;                                // (where in its cycle the gauntlet hits the rock)
 Object.assign(CAT_MOVES, {
   tackle: { dur: .72, pose: true, screen: true, keys: flatKeys(TACKLE_C, .72) },
@@ -2469,6 +2476,7 @@ function momentum(p, dt, sp) {                         // (the triggers: a landi
   if (sp < 45 && p.mRun > 230) { p.mHaltT = 0; p.mHaltK = clamp((p.mRun - 120) / 230, .5, 1); p.mRun = 0; }
 }
 function momentumPose(p, o, dt, legs, cat) {           // (laid over the pose, after the springs: these are the frames themselves)
+  if (FEEL_KIT.accLean && p.accLean) o.lean += FEEL_KIT.accLean * p.accLean * (cat ? .45 : .6);   // (COMBAT FEEL's movement: leaning into speeding up, back out of slowing down, 2026-10-31)
   if (p.mHaltT != null) { const t = p.mHaltT += dt;
     if (t > HALT.T || Math.abs(p.vx) > 60 || !p.onGround) p.mHaltT = null;   // (off again, or up: it's over)
     else { const s = Math.sin(t * HALT.w) * Math.exp(-t * HALT.z) * p.mHaltK, pl = Math.exp(-t * 6) * Math.min(1, t / .05) * p.mHaltK;
@@ -2498,6 +2506,7 @@ function updatePoseHuman(p, dt) {
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));   // crawling through a low hole (2026-10-28)
+  else if (p.upCoil && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "upcoil", Math.min(p.upCoil.t, STRIKES.upcoil.dur)) || {});   // the air up attack's coil, before the strike (2026-10-31)
   else if (p.upHop && a < 0 && p.hurtT <= 0 && (!p.upHop.up || p.upHop.t < STRIKES.uphop.dur)) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the push off (2026-10-28; then the jump's own rising pose)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.4, arch: -.2, armF: 2.4, elbF: .5, armB: 2.0, elbB: .5, fNx: .2, fNy: .25, fFx: -.1, fFy: .1, headRot: -.2 }), layPose(T, m.hurt, p);

@@ -142,7 +142,7 @@ window.ShadingMockup = (() => {
 <h4>CHARACTER</h4>${CH_UI.map(q => row("character", q)).join("")}<h4>ENVIRONMENT</h4>${ENV_UI.map(q => row("environment", q)).join("")}
 <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:10px"><button data-a="saveCustom">SAVE CUSTOM</button><button data-a="reset">RESET CUSTOM</button></div>
 <h4>IN THE GAME</h4><div class="sm-note" data-k="gameNow"></div>
-<div style="display:flex;gap:4px;flex-wrap:wrap"><button data-a="applyGame">APPLY THIS LOOK TO THE GAME</button><button data-a="gameOwn">GAME'S OWN LOOK</button><button data-a="reload" style="display:none">RELOAD THE GAME NOW</button></div>
+<div style="display:flex;gap:4px;flex-wrap:wrap"><button data-a="applyGame">APPLY THIS LOOK TO THE GAME</button><button data-a="gameShip">THE GAME'S SHIPPED LOOK</button><button data-a="gameOwn">NO SHADING (ORIGINAL)</button><button data-a="reload" style="display:none">RELOAD THE GAME NOW</button></div>
 <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px"><button data-a="download">DOWNLOAD SETTINGS FILE</button><button data-a="load">LOAD SETTINGS FILE</button><button data-a="copy">COPY SETTINGS</button></div>
 <div class="sm-note">APPLY: this browser's game draws the look from its next load. The file moves a look to another device (LOAD it there, then APPLY); COPY it to send it over to be built into the game for everyone.</div>
 <input type="file" accept=".json,application/json" data-k="file" style="display:none"></div>`;
@@ -165,7 +165,7 @@ window.ShadingMockup = (() => {
     D.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", b.dataset.preset === st.preset)); D.querySelectorAll("[data-light]").forEach(b => b.classList.toggle("on", b.dataset.light === st.light));
     D.querySelector('[data-a="turn"]').classList.toggle("on", st.turn); D.querySelector('[data-a="split"]').classList.toggle("on", st.split); D.querySelector('[data-a="ab"]').classList.toggle("on", st.showA);
     D.querySelector('[data-a="panel"]').classList.toggle("on", !D.querySelector(".sm-panel").classList.contains("hide"));
-    { const A = SH().active(), g = D.querySelector('[data-k="gameNow"]'); if (g) g.textContent = A ? `The game draws ${A.name.toUpperCase()}${A.name === "shipped" ? " (built into the game)" : " (applied in this browser" + (A.at ? ", " + A.at.slice(0, 10) : "") + ")"}.` : "The game draws its own look (CURRENT)."; }
+    { const A = SH().active(), g = D.querySelector('[data-k="gameNow"]'); if (g) g.textContent = A ? `The game draws ${A.name === "shipped" ? "ITS SHIPPED LOOK (IN THE GAME)" : A.name.toUpperCase() + " (applied in this browser" + (A.at ? ", " + A.at.slice(0, 10) : "") + ")"}.` : "The game draws no shading (ORIGINAL)."; }
     const sp = st.split && st.preset !== "current", dv = D.querySelector(".sm-div"), tl = D.querySelector('[data-t="l"]'), tr = D.querySelector('[data-t="r"]');
     dv.style.display = sp ? "block" : "none"; dv.style.left = st.splitX * 100 + "vw"; tl.style.display = tr.style.display = sp ? "block" : "none";
     tl.style.left = "12px"; tr.style.left = "calc(" + st.splitX * 100 + "vw + 12px)"; tr.textContent = (PRESET_UI.find(q => q[0] === st.preset) || [, ""])[1];
@@ -180,7 +180,8 @@ window.ShadingMockup = (() => {
     if (a === "reset") { st.custom = PRESETS.softToon(); if (st.preset === "custom") usePreset("custom"); save(); }
     if (a === "shots") capture();
     if (a === "applyGame" || a === "gameOwn") { const own = a === "gameOwn" || st.preset === "current", nm = (PRESET_UI.find(q => q[0] === st.preset) || [, "CUSTOM"])[1]; const c = clone(st.cfg); delete c.current;
-      if (own ? SH().useOwn() : SH().apply(nm, c)) { msg(own ? "THE GAME'S OWN LOOK FROM ITS NEXT LOAD" : nm + " APPLIED: THE GAME DRAWS IT FROM ITS NEXT LOAD", 2400); st.ui.querySelector('[data-a="reload"]').style.display = ""; } else msg("COULDN'T SAVE IT IN THIS BROWSER", 2200); }
+      if (own ? SH().useOwn() : SH().apply(nm, c)) { msg(own ? "NO SHADING (THE ORIGINAL) FROM THE GAME'S NEXT LOAD" : nm + " APPLIED: THE GAME DRAWS IT FROM ITS NEXT LOAD", 2400); st.ui.querySelector('[data-a="reload"]').style.display = ""; } else msg("COULDN'T SAVE IT IN THIS BROWSER", 2200); }
+    if (a === "gameShip") { if (SH().useShipped()) { msg(SH().SHIPPED ? "THE SHIPPED LOOK FROM THE GAME'S NEXT LOAD" : "NO LOOK IS SHIPPED: THE GAME'S ORIGINAL", 2400); st.ui.querySelector('[data-a="reload"]').style.display = ""; } }   // (this browser's own choice let go of)
     if (a === "reload") { const u = new URL(location.href); u.searchParams.delete("shading"); location.href = u.toString(); }
     if (a === "download") { const nm = (PRESET_UI.find(q => q[0] === st.preset) || [, "custom"])[1], c = clone(st.cfg); delete c.current; const b = new Blob([SH().exportJSON(nm, c)], { type: "application/json" }), el = document.createElement("a");
       el.href = URL.createObjectURL(b); el.download = "berry-shading-" + nm.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/, "") + ".json"; document.body.appendChild(el); el.click(); el.remove(); msg("SETTINGS FILE SAVED", 1400); }
