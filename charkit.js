@@ -13,6 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1 };   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -183,7 +184,7 @@ function updateChains(r, p, dt) {
       tgt.push(tgt[i - 1].clone().addScaledVector(wd.normalize(), seg * sc));
     }
     if (!dt && p.restNow) st.w = null;               // (paused in the editor: the lock hangs at rest)
-    simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm, (c.k1 || 60) / fm, c.damp || 8);
+    simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm * FEEL_KIT.chainStiff, (c.k1 || 60) / fm * FEEL_KIT.chainStiff, (c.damp || 8) * FEEL_KIT.chainDamp);
     st.w.forEach((w, i) => r.body.worldToLocal(c.tube.pts[i].copy(w)));
     const wa = c.wv ? c.wv() : 0;                   // wavy hair: each lock's points pushed side to side along it (none at the root)
     if (wa > 1e-4) for (let i = 1, n = c.tube.pts.length; i < n; i++) { const a = wa * Math.sin(i * 1.3 + (c.ph || 0)) * Math.min(1, i / (n - 1) * 3); c.tube.pts[i].z += a; c.tube.pts[i].x += a * .3; }
@@ -2383,7 +2384,9 @@ function keySnap(tr, t) {
   const u = (d - h0) / sn, e = 1 - (1 - u) * (1 - u) * (1 - u); return y0 + (y1 - y0) * (SNAP_DRIFT + (1 - SNAP_DRIFT) * e);
 }
 const FLOW = new Set(["wheel", "rise"]);              // (channels that flow through their keys, not snap between them: a cartwheel's turn and lift; a move's own flow: its list)
-const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind], tr = own && own[k] ? own[k] : K[k], S = STRIKES[p.atkKind]; return FLOW.has(k) || (S && S.flow && S.flow.includes(k)) ? keyvS(tr, a) : keySnap(tr, a); };
+const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind], tr = own && own[k] ? own[k] : K[k], S = STRIKES[p.atkKind]; const v = FLOW.has(k) || (S && S.flow && S.flow.includes(k)) ? keyvS(tr, a) : keySnap(tr, a);
+  const h = FEEL_KIT.antic !== 1 && S && S.hits && S.hits[0], t0 = h ? h.t0 : 0; if (!h || !(t0 > 0) || a <= 0 || a >= t0 || !tr || !tr.length) return v;
+  return tr[0][1] + (v - tr[0][1]) * (1 + (FEEL_KIT.antic - 1) * Math.sin(Math.PI * a / t0)); };   // (COMBAT FEEL's anticipation: the way into a blow's first hit pulled further, easing back to the keys by the time it lands)
 function layPose(T, P, p) {                       // a character's own pose over a built-in one (lead / rear named, like the stance)
   if (!P) return; const sw = leadFar(p); for (const k in P) { const kk = sw ? SWAP[k] || k : k; if (kk in T) T[kk] = P[k]; }
 }
@@ -2511,7 +2514,7 @@ function updatePoseHuman(p, dt) {
   else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
     : { lean: lerp(.58 + .2 * sk, .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
   else {
-    const b = Math.sin(t * 2.4); Object.assign(T, { bodyY: b * .006 * m.bounce, arch: b * .02, armF: .12 + b * .03, armB: -.08 - b * .02, headRot: Math.sin(t * 1.1) * .04 });
+    const b = Math.sin(t * 2.4) * FEEL_KIT.idle; Object.assign(T, { bodyY: b * .006 * m.bounce, arch: b * .02, armF: .12 + b * .03, armB: -.08 - b * .02, headRot: Math.sin(t * 1.1) * .04 });
     if (ST) { const sw = leadFar(p); for (const k in ST) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0) T[kk] = ST[k]; } T.bodyY += b * .008 * m.bounce; T.armB += b * .03;
       if (ST.hop) { const h = Math.sin(t * 4.8); T.bodyY += (Math.abs(h) - .6) * ST.hop * m.bounce; T[sw ? "armB" : "armF"] += h * .05; T[sw ? "armF" : "armB"] -= h * .04; }   // bouncing on the balls of his feet
     }
@@ -2664,7 +2667,7 @@ function updatePoseCat(p, dt) {
   } else if (p.skid) Object.assign(T, { lean: -.25, arch: -.1, armF: 1.7, elbF: .3, armB: 1.3, elbB: .3, fNx: -.12, fFx: -.22, tailBase: .8, tailCurl: -.2, hatTilt: .25 });
   else if (sp > 30) Object.assign(T, { lean: 1.0 + (p.sprint ? .15 : 0), arch: .1, bodyY: -.03, armF: .3, elbF: .45, armB: .3, elbB: .45, tailBase: 1.15, tailCurl: -.1, tailSwish: .2, hatTilt: -.25 });   // tail rides up over the back, clear of the legs
   else {
-    const b = Math.sin(t * 2.6);
+    const b = Math.sin(t * 2.6) * FEEL_KIT.idle;
     Object.assign(T, { bodyY: b * .008 * m.bounce, arch: .25 + b * .035, armF: .22 + b * .03, armB: .05 - b * .02, headRot: Math.sin(t * 1.3) * .04, hatTilt: Math.sin(t * 1.3 + 1) * .04 });
     if (m.stance) for (const k in m.stance) T[k] = m.stance[k] + (k === "arch" ? b * .035 : k === "bodyY" ? b * .008 * m.bounce : k === "armF" ? b * .03 : 0);   // his own standing pose, still breathing
   }
@@ -2902,7 +2905,7 @@ function syncCat(p, r, dt = 0) {
     tgt.push(r.body.localToWorld(new THREE.Vector3(x, y, z)));
   }
   const tS = p.chains.tail || (p.chains.tail = {}); if (!dt && p.restNow) tS.w = null;
-  simChain(tS, tgt, dt, TAIL_L * sc, 260, 70, 9)
+  simChain(tS, tgt, dt, TAIL_L * sc, 260 * FEEL_KIT.chainStiff, 70 * FEEL_KIT.chainStiff, 9 * FEEL_KIT.chainDamp)
     .forEach((w, i) => r.body.worldToLocal(r.tail.pts[i].copy(w)));
   r.tail.update(UPV);
 }
@@ -3197,7 +3200,7 @@ function shyFace(r) {                           // a copy of the face with full 
 }
 
 return Object.assign(api, {
-  build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
+  FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
   lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },

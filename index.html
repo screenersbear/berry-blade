@@ -624,7 +624,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261030c"></script>
+<script src="charkit.js?v=20261030f"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
@@ -707,13 +707,13 @@
   <small data-pad="↑ ↓ to choose &middot; {j} to pick &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to pick &middot; Esc to go back</small>
 </div></div>
 <div id="settings" class="mnu"><div class="panel">
-  <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND</div></div>
-  <div class="btns" id="setBtns"><button data-g="dev">DEVELOPER</button><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="back">BACK</button></div>
+  <div class="lockup"><div class="blk">GAME SETTINGS</div><div class="bar">SOUND AND SCREEN</div></div>
+  <div class="btns" id="setBtns"><button data-g="dev">DEVELOPER</button><button data-g="music">MUSIC: ON</button><button data-g="sfx">SOUND EFFECTS: ON</button><button data-g="shake">SCREEN SHAKE: ON</button><button data-g="flash">FLASHING: ON</button><button data-g="ach">ACHIEVEMENTS</button><button data-g="back">BACK</button></div>
   <small data-pad="↑ ↓ to choose &middot; {j} to change &middot; {sq} to go back">↑ ↓ to choose &middot; Enter to change &middot; Esc to go back</small>
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -1245,6 +1245,174 @@ function group(parent, x = 0, y = 0, z = 0) { const g = new THREE.Group(); g.pos
 // so a character tweaked in the editor looks and moves the same here.
 const KIT = StarkyCharKit(THREE, { parent: actors, shadowParent: scene, X, Y });
 const { Tube, updateChains, toonT, canvasTex, cv2, fillPoly, circ, rounded, FWD, UPV } = KIT.util;
+// ══ COMBAT FEEL (the user, 2026-10-30: "try this for the combat but save where it's now", with a spec, kept word for word in
+// .claude/berry-tools/wip/COMBAT_FEEL_SPEC_1030.md; what was adapted to fit the game: COMBAT_FEEL_NOTES.md). One settings object that every
+// hit effect reads: its base x the effect's intensity x masterIntensity x the blow's weight. The combat as it was on 10-30 is kept whole: the
+// BEFORE preset runs the old code (hitFeelOld and the old constants everywhere the feel reaches), and the files are in
+// .claude/berry-tools/wip/combat-before-juice-1030/. Tuned live in the COMBAT FEEL panel (` or F1 in play, or DEVELOPER > COMBAT FEEL), kept in localStorage
+const FEEL_KEY = "berry.feel.v1";
+const FEEL_DEFAULT = {
+  preset: "default", legacy: false, masterIntensity: 1,
+  weight: { spread: 2, finisher: 1.5 },                 // a blow's weight: 1 + (HIT_W - 1) x spread (1: the old table), x finisher on a kill or a string's last blow
+  hitstop: { enabled: true, intensity: 1, baseFrames: 5.5, weightK: 1, bossFrames: .7, maxFrames: 12 },   // frames at 60 a second for a blow of weight 1 (the old: about 5 for every blow; now a jab 3.3, a slash 3.9, a cleave 9.9)
+  screenShake: { enabled: true, intensity: 1, baseAmplitude: 5.5, weightK: .7, duration: .15, directional: true },
+  hitFlash: { enabled: true, intensity: 1, frames: 3, color: "#FFFFFF" },
+  hitSparks: { enabled: true, intensity: 1, particleCount: 11, directional: true },
+  knockback: { enabled: true, intensity: 1, baseForce: 300, weightK: .35, hitstunFrames: 19.2 },   // (300 and 19.2: the game's own, a plain blow's push and its .32 s reel)
+  squashStretch: { enabled: true, intensity: 1, amount: .15, recoverTime: .127 },   // (.12 and .127: the game's own squash and its spring)
+  weaponTrail: { enabled: true, intensity: 1, length: 1, fadeTime: .13 },             // (length: x the trail's reach; fadeTime: a point's life, the game's own .13)
+  anticipation: { enabled: true, intensity: 1 },                                    // (1: the keys as they're made; more pulls the wind-ups further back)
+  cancel: { enabled: true, windowFrames: 5, inputBufferFrames: 7.2 },                  // (a follow-through cut short this long after the last blow; presses kept this long)
+  secondaryMotion: { enabled: true, intensity: 1, stiffness: .2, damping: .75 },     // (hair, tails, scarves: .2 / .75 are the springs as they were)
+  idleLife: { enabled: true, intensity: 1 },
+  cameraPunch: { enabled: true, intensity: 1, zoomAmount: .04, duration: .1, kick: 1 },
+  slowMoFinisher: { enabled: true, intensity: 1, timeScale: .3, duration: .25 },
+  hitSound: { enabled: true, intensity: 1, pitchVariance: .08, thump: true },
+  rumble: { enabled: true, intensity: 1 }
+};
+const FEEL_FX = ["hitstop", "screenShake", "hitFlash", "hitSparks", "knockback", "squashStretch", "weaponTrail", "anticipation", "cancel", "secondaryMotion", "idleLife", "cameraPunch", "slowMoFinisher", "hitSound", "rumble"];
+const FEEL_PRESETS = {
+  off: c => { FEEL_FX.forEach(k => { c[k].enabled = false; }); },
+  subtle: c => { c.masterIntensity = .5; },
+  default: () => { },
+  odin: c => { Object.assign(c.secondaryMotion, { intensity: 1.6, stiffness: .14, damping: .6 }); Object.assign(c.weaponTrail, { intensity: 1.5, length: 1.4, fadeTime: .17 });
+    c.screenShake.intensity = .8; c.hitstop.intensity = 1.15; c.anticipation.intensity = 1.35; c.idleLife.intensity = 1.3; c.squashStretch.intensity = 1.2; },
+  extreme: c => { c.masterIntensity = 2; },
+  before: c => { c.legacy = true; }
+};
+const feelClone = o => JSON.parse(JSON.stringify(o));
+function feelMerge(into, from) { for (const k in into) { if (!(k in from)) continue; const a = into[k], b = from[k]; if (a && typeof a === "object") { if (b && typeof b === "object") feelMerge(a, b); } else if (typeof b === typeof a) into[k] = b; } return into; }
+function feelPreset(name) { const c = feelClone(FEEL_DEFAULT); (FEEL_PRESETS[name] || FEEL_PRESETS.default)(c); c.preset = name; return c; }
+let FEEL = (() => { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "null"); if (s && s.cur) return feelMerge(feelClone(FEEL_DEFAULT), s.cur); } catch (e) { } return feelClone(FEEL_DEFAULT); })();
+function feelSave(asDefault) { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "{}") || {}; s.cur = FEEL; if (asDefault) s.mine = feelClone(FEEL); localStorage.setItem(FEEL_KEY, JSON.stringify(s)); } catch (e) { } }
+function feelMine() { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "{}"); if (s && s.mine) return feelMerge(feelClone(FEEL_DEFAULT), s.mine); } catch (e) { } return null; }
+function feelSet(c) { FEEL = c; feelApply(); feelSave(false); }
+const fxS = e => e && e.enabled && !FEEL.legacy ? clamp((e.intensity ?? 1) * FEEL.masterIntensity, 0, 4) : 0;   // an effect's strength now (0: off)
+const feelW = (kind, fin) => Math.max(.25, 1 + ((HIT_W[kind] || 1) - 1) * FEEL.weight.spread) * (fin ? FEEL.weight.finisher : 1);
+let accShake = true, accFlash = true;                 // (GAME SETTINGS: SCREEN SHAKE, FLASHING: the player's own, under every preset)
+let sprK = 420, sprC = 30, feelTrauma = 0, feelShDir = 0, camPunch = null, slowK = .35, leanMo = 0, hitPitch = 1;
+const feelFlashC = new THREE.Color("#ffffff");
+function feelApply() {                                // what the feel settles outside the hit itself: the kit's springs, wind-ups and breathing; the flash colour
+  try { feelFlashC.set(FEEL.hitFlash.color || "#ffffff"); } catch (e) { feelFlashC.set("#ffffff"); }
+  [sprK, sprC] = feelSpring();                       // (every squash's spring: the bodies', yours)
+  const K = KIT.FEEL; if (!K) return; const L = FEEL.legacy, sm = FEEL.secondaryMotion;
+  K.antic = L || !FEEL.anticipation.enabled ? 1 : 1 + (FEEL.anticipation.intensity * FEEL.masterIntensity - 1) * .5;
+  K.idle = L ? 1 : fxS(FEEL.idleLife);
+  if (L) { K.chainStiff = 1; K.chainDamp = 1; } else if (!sm.enabled) { K.chainStiff = 8; K.chainDamp = 3; }   // (off: they follow nearly rigidly, no lag or overshoot)
+  else { const s = clamp(sm.intensity * FEEL.masterIntensity, .05, 4); K.chainStiff = (sm.stiffness / .2) / s; K.chainDamp = (sm.damping / .75) / Math.sqrt(s); }
+}
+function feelShake(amp, dir) {                        // trauma: a hit adds √(amp / max), the shake is max x trauma² (one blow shakes by its amp, quick ones add up, never past the max)
+  const M = 22; feelTrauma = Math.min(1, feelTrauma + Math.sqrt(Math.max(0, amp) / M)); feelShDir = FEEL.screenShake.directional ? dir || 0 : 0;
+}
+const feelShakeAmp = () => 22 * feelTrauma * feelTrauma;
+function feelTick(dt) {                               // (the main loop, game time: the shake and the camera's punch die away; not in the freeze)
+  if (feelTrauma > 0) feelTrauma = Math.max(0, feelTrauma - dt / Math.max(.03, FEEL.screenShake.duration * 2));
+  if (camPunch && (camPunch.t -= dt) <= 0) camPunch = null;
+  leanMo = Math.max(0, leanMo - dt);
+}
+const feelPunch = () => { if (!camPunch) return 0; const u = 1 - camPunch.t / camPunch.T; return camPunch.k * (u < .25 ? u / .25 : 1 - (u - .25) / .75); };   // (in fast, eased back out)
+const feelPitch = () => { const s = fxS(FEEL.hitSound); return s ? 1 + rand(-1, 1) * FEEL.hitSound.pitchVariance * Math.min(s, 2) : 1; };
+const feelKnock = (kind, fin) => FEEL.legacy || !FEEL.knockback.enabled ? 1 : clamp(FEEL.knockback.intensity * FEEL.masterIntensity * FEEL.knockback.baseForce / 300 * (1 + FEEL.knockback.weightK * (feelW(kind, fin) - (HIT_W[kind] || 1))), .25, 2.5);   // (mechanics: off is the game's own push)
+const feelStun = (kind, fin) => FEEL.legacy || !FEEL.knockback.enabled ? 1 : clamp(FEEL.knockback.hitstunFrames / 19.2 * (1 + .25 * (feelW(kind, fin) - 1)), .3, 2.5);
+const feelSq = (kind, fin) => { if (FEEL.legacy) return 1; const s = fxS(FEEL.squashStretch); return s * FEEL.squashStretch.amount / .12 * (.7 + .3 * feelW(kind, fin)); };
+const feelSpring = () => { if (FEEL.legacy) return [420, 30]; const k = Math.pow(2.6 / Math.max(.04, FEEL.squashStretch.recoverTime), 2); return [k, 1.46 * Math.sqrt(k)]; };
+const feelTrailK = () => FEEL.legacy ? 1 : FEEL.weaponTrail.fadeTime / .13 * FEEL.weaponTrail.length;   // (a trail point's life: x the game's own)
+const feelTrailA = () => FEEL.legacy ? 1 : Math.min(1.3, fxS(FEEL.weaponTrail));
+const feelBuf = () => FEEL.legacy ? .12 : FEEL.cancel.enabled ? FEEL.cancel.inputBufferFrames / 60 : 1 / 60;
+const feelCancelAt = () => FEEL.legacy ? .08 : FEEL.cancel.enabled ? FEEL.cancel.windowFrames / 60 : 99;
+function feelSparks(px, py, n, dir) {                 // a burst at the hit, flung the way the blow went (dir 0: all round)
+  for (let i = 0; i < n; i++) {
+    const d = V(rand(-1, 1) + dir * 1.6, rand(-1, .7), rand(-.6, .6)).normalize().multiplyScalar(rand(4, 10) * (dir ? 1.15 : 1));
+    spawn("spark", X(px), Y(py), .6, d, rand(.3, .55), rand(.1, .18), { g: 12, spin: 10 });
+  }
+}
+function onHitConfirmed(attacker, e, A, hp, dir) {   // the moment a blow lands (A: { kind, boss, fin, w }): every effect on this same frame
+  const w = A.w, boss = A.boss, kind = A.kind; let s;
+  if ((s = fxS(FEEL.hitstop))) { const H = FEEL.hitstop; hitstop = Math.max(hitstop, Math.min(H.maxFrames, (H.baseFrames * (1 + H.weightK * (w - 1)) + (boss ? H.bossFrames : 0)) * s) / 60); }
+  e.jolt = (.05 + .045 * w) * Math.min(1.6, fxS(FEEL.hitstop)); e.joltAt = time;   // (it shudders while the picture's held)
+  if ((s = fxS(FEEL.screenShake)) && accShake) feelShake((FEEL.screenShake.baseAmplitude * (1 + FEEL.screenShake.weightK * (w - 1)) + (boss ? 2 : 0)) * s, dir);
+  if ((s = fxS(FEEL.hitFlash)) && accFlash) { e.flashHard = time + FEEL.hitFlash.frames * (.75 + .25 * w) / 60; e.flashK = Math.min(1, s); }   // (game time: it holds through the freeze, then its frames)
+  if ((s = fxS(FEEL.hitSparks))) { if (kind !== "stomp") hitSpark(hp.x, hp.y, w * Math.min(s, 2)); feelSparks(hp.x, hp.y, Math.round(FEEL.hitSparks.particleCount * Math.min(s, 2.5) * (.6 + .4 * w)), FEEL.hitSparks.directional && kind !== "stomp" ? dir : 0); }
+  if ((s = fxS(FEEL.cameraPunch)) && accShake) { camKick += dir * (.07 + .07 * w) * FEEL.cameraPunch.kick * s; const P = FEEL.cameraPunch; camPunch = { t: P.duration, T: Math.max(.02, P.duration), k: P.zoomAmount * s * (.6 + .4 * w), x: hp.x, y: hp.y }; }
+  if (player && kind !== "stomp" && (s = fxS(FEEL.squashStretch))) { player.sq = Math.min(player.sq || 0, (-.05 - .06 * w) * s * FEEL.squashStretch.amount / .12); player.sqv = 0; }   // your body into it
+  if ((s = fxS(FEEL.rumble))) rumble((12 + 18 * w) * Math.min(s, 2), (.2 + .3 * w) * s);
+  if ((s = fxS(FEEL.hitSound)) && FEEL.hitSound.thump && w >= 1.45 && kind !== "stomp" && SFX.thump) SFX.thump(Math.min(1.6, (w - 1.2) * s));   // (a heavy blow's low thump under it)
+  if ((s = fxS(FEEL.slowMoFinisher)) && A.fin) { slowMo = Math.max(slowMo, FEEL.slowMoFinisher.duration * Math.min(s, 2)); slowK = clamp(FEEL.slowMoFinisher.timeScale, .05, 1); }
+}
+// the COMBAT FEEL panel (` or F1 while playing; DEVELOPER > COMBAT FEEL; pause > DEBUG > COMBAT FEEL): every effect's switch and strength, its
+// numbers, the presets, SAVE AS DEFAULTS / RESET, a training dummy. Changes take at once and are kept (localStorage)
+const FEEL_UI = [
+  ["weight", "BLOW WEIGHT", [["spread", "light / heavy spread", 0, 4, .1], ["finisher", "finisher x", 1, 3, .05]]],
+  ["hitstop", "HITSTOP", [["baseFrames", "frames (weight 1)", 0, 12, .5], ["weightK", "by weight", 0, 2, .05], ["bossFrames", "boss + frames", 0, 4, .1], ["maxFrames", "most frames", 1, 24, 1]]],
+  ["screenShake", "SCREEN SHAKE", [["baseAmplitude", "amplitude px", 0, 16, .5], ["weightK", "by weight", 0, 2, .05], ["duration", "duration s", .03, .6, .01], ["directional", "along the blow"]]],
+  ["hitFlash", "HIT FLASH", [["frames", "frames", 0, 10, 1], ["color", "colour"]]],
+  ["hitSparks", "HIT SPARKS", [["particleCount", "sparks", 0, 40, 1], ["directional", "flung the blow's way"]]],
+  ["knockback", "KNOCKBACK + HITSTUN", [["baseForce", "force (300: the game's)", 100, 600, 10], ["weightK", "by weight", 0, 1.5, .05], ["hitstunFrames", "hitstun frames (19: the game's)", 4, 40, 1]]],
+  ["squashStretch", "SQUASH + STRETCH", [["amount", "amount", 0, .4, .01], ["recoverTime", "recover s", .04, .4, .01]]],
+  ["weaponTrail", "WEAPON TRAILS", [["length", "length x", .2, 3, .05], ["fadeTime", "fade s", .03, .4, .01]]],
+  ["anticipation", "ANTICIPATION (WIND-UPS)", []],
+  ["cancel", "CANCELS + INPUT BUFFER", [["windowFrames", "cancel after last hit, frames", 0, 30, 1], ["inputBufferFrames", "buffer frames", 0, 20, 1]]],
+  ["secondaryMotion", "SECONDARY MOTION (HAIR, TAILS)", [["stiffness", "stiffness", .05, 1, .01], ["damping", "damping", .1, 2, .05]]],
+  ["idleLife", "IDLE LIFE (BREATHING)", []],
+  ["cameraPunch", "CAMERA PUNCH + KICK", [["zoomAmount", "zoom", 0, .15, .005], ["duration", "duration s", .03, .4, .01], ["kick", "sideways kick", 0, 3, .1]]],
+  ["slowMoFinisher", "SLOW-MO FINISHER", [["timeScale", "time scale", .05, 1, .05], ["duration", "duration s", 0, 1, .05]]],
+  ["hitSound", "HIT SOUND", [["pitchVariance", "pitch +/-", 0, .3, .01], ["thump", "heavy thump"]]],
+  ["rumble", "RUMBLE", []]
+];
+const FEEL_PRESET_UI = [["before", "BEFORE (10-30)"], ["off", "OFF"], ["subtle", "SUBTLE"], ["default", "DEFAULT"], ["odin", "ODIN SPHERE"], ["extreme", "EXTREME"]];
+let feelEl = null, feelSaveT = 0;
+function feelChanged(custom) { if (custom && FEEL.preset !== "custom") FEEL.preset = "custom"; feelApply(); clearTimeout(feelSaveT); feelSaveT = setTimeout(() => feelSave(false), 250); feelPanelState(); }
+function feelPanelBuild() {
+  const D = document.createElement("div"); D.id = "feelPanel";
+  D.innerHTML = `<style>
+#feelPanel { position: fixed; top: 8px; right: 8px; bottom: 8px; width: min(340px, calc(100vw - 16px)); z-index: 9999; overflow-y: auto; background: rgba(18, 22, 48, .93); color: #fff7e0; font: 600 11px/1.35 system-ui, sans-serif;
+  border: 2px solid #ffd203; border-radius: 10px; padding: 10px 12px; box-sizing: border-box; display: none; -webkit-overflow-scrolling: touch; }
+#feelPanel.show { display: block; } #feelPanel h3 { margin: 0 0 6px; font: 800 14px/1.1 system-ui, sans-serif; color: #ffd203; letter-spacing: .06em; }
+#feelPanel .fp-note { opacity: .75; margin: 2px 0 8px; } #feelPanel .fp-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+#feelPanel button { background: #2a3270; color: #fff7e0; border: 1px solid #5866c4; border-radius: 6px; padding: 5px 7px; font: 700 10px system-ui, sans-serif; cursor: pointer; }
+#feelPanel button.on { background: #ffd203; color: #1a1f45; border-color: #ffd203; } #feelPanel .fp-fx { border-top: 1px solid rgba(255, 210, 3, .25); padding: 6px 0 4px; }
+#feelPanel .fp-head { display: flex; align-items: center; gap: 6px; font-weight: 800; color: #ffe27a; } #feelPanel label.fp-k { display: grid; grid-template-columns: 1fr 110px 34px; align-items: center; gap: 6px; margin: 2px 0; }
+#feelPanel input[type=range] { width: 100%; accent-color: #ffd203; } #feelPanel .fp-v { text-align: right; font-variant-numeric: tabular-nums; } #feelPanel.legacy .fp-fx { opacity: .45; pointer-events: none; }
+<\/style><h3>COMBAT FEEL</h3><div class="fp-note">Every hit effect, live. BEFORE runs the combat exactly as it was on 10-30. Kept in this browser.</div>
+<div class="fp-row" data-k="presets"></div><label class="fp-k"><span>MASTER INTENSITY</span><input type="range" min="0" max="2" step=".05" data-path="masterIntensity"><span class="fp-v"></span></label><div data-k="fx"></div>
+<div class="fp-row"><button data-a="save">SAVE AS DEFAULTS</button><button data-a="reset">RESET</button><button data-a="dummy">SPAWN A TRAINING DUMMY</button><button data-a="close">CLOSE (\`)</button></div>
+<div class="fp-note">Player settings (GAME SETTINGS): SCREEN SHAKE and FLASHING switch those off under every preset.</div>`;
+  const pr = D.querySelector('[data-k="presets"]'); FEEL_PRESET_UI.forEach(([k, n]) => { const b = document.createElement("button"); b.dataset.preset = k; b.textContent = n; pr.appendChild(b); });
+  const fx = D.querySelector('[data-k="fx"]');
+  for (const [key, name, rows] of FEEL_UI) {
+    const box = document.createElement("div"); box.className = "fp-fx"; const has = "enabled" in FEEL_DEFAULT[key];
+    box.innerHTML = `<div class="fp-head">${has ? `<input type="checkbox" data-path="${key}.enabled">` : ""}<span>${name}</span></div>` + (has ? `<label class="fp-k"><span>intensity</span><input type="range" min="0" max="2" step=".05" data-path="${key}.intensity"><span class="fp-v"></span></label>` : "")
+      + rows.map(([k, n, a, b, st]) => typeof FEEL_DEFAULT[key][k] === "boolean" ? `<label class="fp-k"><span>${n}</span><input type="checkbox" data-path="${key}.${k}"><span></span></label>`
+        : typeof FEEL_DEFAULT[key][k] === "string" ? `<label class="fp-k"><span>${n}</span><input type="color" data-path="${key}.${k}"><span></span></label>`
+        : `<label class="fp-k"><span>${n}</span><input type="range" min="${a}" max="${b}" step="${st}" data-path="${key}.${k}"><span class="fp-v"></span></label>`).join("");
+    fx.appendChild(box);
+  }
+  const at = p => p.split(".").reduce((o, k) => o[k], FEEL), put = (p, v) => { const ks = p.split("."), last = ks.pop(); ks.reduce((o, k) => o[k], FEEL)[last] = v; };
+  D.addEventListener("input", e => { const I = e.target, p = I.dataset.path; if (!p) return; put(p, I.type === "checkbox" ? I.checked : I.type === "color" ? I.value : +I.value); feelChanged(true); });
+  D.addEventListener("change", e => { if (e.target.type === "range") e.target.blur(); });   // (the arrow keys back to the game)
+  D.addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return;
+    if (b.dataset.preset) { feelSet(feelPreset(b.dataset.preset)); feelPanelState(); return; }
+    const a = b.dataset.a;
+    if (a === "save") { feelSave(true); b.textContent = "SAVED"; setTimeout(() => { b.textContent = "SAVE AS DEFAULTS"; }, 900); }
+    if (a === "reset") { feelSet(feelMine() || feelPreset("default")); feelPanelState(); }
+    if (a === "dummy") feelDummy();
+    if (a === "close") feelPanelToggle(false); });
+  feelEl = D; D.__at = at; document.body.appendChild(D);
+}
+function feelPanelState() {
+  if (!feelEl) return; const at = feelEl.__at; feelEl.classList.toggle("legacy", !!FEEL.legacy);
+  feelEl.querySelectorAll("[data-preset]").forEach(b => b.classList.toggle("on", b.dataset.preset === FEEL.preset));
+  feelEl.querySelectorAll("[data-path]").forEach(I => { const v = at(I.dataset.path); if (I.type === "checkbox") I.checked = !!v; else if (document.activeElement !== I) I.value = v;
+    const o = I.nextElementSibling; if (o && o.classList.contains("fp-v")) o.textContent = typeof v === "number" ? (Math.abs(v) >= 10 ? v.toFixed(0) : +v.toFixed(3)) : ""; });
+}
+function feelPanelToggle(on) { if (!feelEl) feelPanelBuild(); const show = on ?? !feelEl.classList.contains("show"); feelEl.classList.toggle("show", show); if (show) feelPanelState(); }
+function feelDummy() {                                // a baddy of this world that never swings back, a step in front of you: to try the hits on
+  if (mode !== "play" || !player || transit) return; const all = []; for (const L of BB_ROSTER) for (const q of L || []) { const T = q && BB_TYPES[q[0]]; if (T && !["float", "breach"].includes(T.move) && !T.swim) all.push(q); }
+  const q = (BB_ROSTER[stage] || []).find(e => e && BB_TYPES[e[0]] && !["float", "breach"].includes(BB_TYPES[e[0]].move) && !BB_TYPES[e[0]].swim) || all[0]; if (!q) return;
+  const x = player.x + (player.face || 1) * 200, b = makeBaddy(q[0], q[1], x, groundAt(x) ?? GROUND); Object.assign(b, { dummy: true, dir: -(player.face || 1), seen: true, atkCd: 99 }); baddies.push(b);
+}
+addEventListener("keydown", e => { if ((e.code === "Backquote" || e.code === "F1") && !e.repeat && !(e.target && /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) && e.target.type !== "range" && e.target.type !== "checkbox")) { e.preventDefault(); e.stopPropagation(); feelPanelToggle(); } }, true);
+feelApply();
 
 // ───────────────────────────── Furnace model ─────────────────────────────
 function buildFurnace() {
@@ -1872,7 +2040,7 @@ function syncFoe(e, r, dt = 0) {
   settleJoints(r, e, dt);
   if (r.flip) r.tilt.rotation.z += ez(r.flip) * TAU;   // (the back flip over the spring's pose: a whole turn, so landing out of it is seamless)
   if (r.chains.length) { r.root.updateMatrixWorld(true); updateChains(r, e, dt); }
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -4957,7 +5125,7 @@ function reportSound() {
 // ── sound effects: synthesized on the fly from tones and filtered noise, except the hits and swords, which are recordings (sfx.js, below)
 let ac = null, sfxBus = null, noiseBuf = null, sfxOn = true, sfxLP = null, sfxMuf = false;   // (sfxLP: the effects' low-pass, wide open, closed down under the headphones' song)
 if (new URLSearchParams(location.search).has("mute")) { bgm.dataset.muted = "1"; sfxOn = false; }   // index.html?mute: silent from the first frame (for testing)
-try { const g0 = JSON.parse(localStorage.getItem("berry.settings.v1") || "{}"); if (!new URLSearchParams(location.search).has("mute")) { if (g0.sfx === false) sfxOn = false; if (g0.music === false) bgm.dataset.muted = "1"; } } catch { }   // (GAME SETTINGS: music, sound effects)
+try { const g0 = JSON.parse(localStorage.getItem("berry.settings.v1") || "{}"); if (g0.shake === false) accShake = false; if (g0.flash === false) accFlash = false; if (!new URLSearchParams(location.search).has("mute")) { if (g0.sfx === false) sfxOn = false; if (g0.music === false) bgm.dataset.muted = "1"; } } catch { }   // (GAME SETTINGS: music, sound effects)
 function audio() {
   if (ac && ac.state === "closed") ac = null;          // (closed under us: made anew)
   if (!ac) {
@@ -4995,7 +5163,7 @@ function audioWatch(now) {                          // (every frame: a look ever
   if (ac.state !== "running" && want && !titleUp) { if (++acW.off >= 2 && !acW.told) { acW.told = true; toast("SOUND PAUSED · TAP TO BRING IT BACK", 4000); } ac.resume().catch(() => {}); } else { acW.off = 0; acW.told = false; }
 }
 function env(g, t, a, d, v) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); }
-const sfxPitch = () => mode === "play" ? SCREENS[hour].sfxPitch || 1 : 1;   // night drops every sound effect a few notes lower
+const sfxPitch = () => (mode === "play" ? SCREENS[hour].sfxPitch || 1 : 1) * hitPitch;   // night drops every sound effect a few notes lower
 function tone(f0, f1, dur, { type = "square", vol = .15, delay = 0, a = .005, lp = 0 } = {}) {
   if (!live()) return;
   const pk = sfxPitch(); f0 *= pk; f1 *= pk;
@@ -5254,6 +5422,7 @@ const SFX = {
   gulp() { noise(1.5, { vol: .15, f0: 2200, f1: 300, type: "bandpass", q: 2, a: .15 }); },
   clack() { noise(.035, { vol: .12, f0: 3000, type: "highpass" }); tone(1200, 900, .03, { type: "square", vol: .035 }); },
   thud() { if (smpPlay("thud", .22)) return; tone(70, 40, .18, { type: "sine", vol: .2 }); },
+  thump(k = 1) { tone(78, 38, .2, { type: "sine", vol: .17 * k }); tone(150, 60, .09, { type: "sine", vol: .06 * k, delay: .005 }); },   // (COMBAT FEEL: a heavy blow's low thump under it)
   wood() { if (smpPlay("wood", .25)) return; SFX.hit(); },   // a trunk knocked (the beach palms)
   power(lv) { const f = [0, 520, 700, 940][lv] || 520; tone(f * .5, f, .22, { type: "triangle", vol: .16 }); tone(f, f * 1.5, .3, { type: "sine", vol: .1, delay: .06 }); noise(.25, { vol: .12, f0: 3000, f1: 6000, type: "bandpass", q: 3 }); },
   release(lv) { noise(.35, { vol: .3, f0: 600, f1: 3200, type: "bandpass", q: 1.2 }); tone(220, 90 + lv * 40, .3, { type: "sawtooth", vol: .09, lp: 1400 }); },
@@ -5435,7 +5604,7 @@ addEventListener("keydown", e => {
     return;
   }
   if (mode === "play" && !e.repeat && (e.code === "Escape" || e.code === "Enter")) { e.preventDefault(); openPause(); return; }
-  if (!e.repeat) { if (JUMP_KEYS.includes(e.code)) jumpBuf = .12; if (UP_KEYS.includes(e.code)) upPend = time; if (ATK_KEYS.includes(e.code)) { atkBuf = .12; atkPressT = time; }
+  if (!e.repeat) { if (JUMP_KEYS.includes(e.code)) jumpBuf = feelBuf(); if (UP_KEYS.includes(e.code)) upPend = time; if (ATK_KEYS.includes(e.code)) { atkBuf = feelBuf(); atkPressT = time; }
     const d = e.code === "ArrowRight" || e.code === "KeyD" ? 1 : e.code === "ArrowLeft" || e.code === "KeyA" ? -1 : 0; if (d) tapDir(d);
     if (e.code === "ArrowDown" || e.code === "KeyS") tapDown(); }
   keys[e.code] = true;
@@ -5539,8 +5708,8 @@ function pollPad() {
     if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) pickOpp(oppSel);
     else if (pad.sq && !padPrev.sq) showWorlds();
   } else {
-    if (pad.j && !padPrev.j) { if (modalOpen) onReset(); else jumpBuf = .12; }
-    if ((pad.a || pad.tk) && !(padPrev.a || padPrev.tk)) { atkBuf = .12; atkPressT = time; }
+    if (pad.j && !padPrev.j) { if (modalOpen) onReset(); else jumpBuf = feelBuf(); }
+    if ((pad.a || pad.tk) && !(padPrev.a || padPrev.tk)) { atkBuf = feelBuf(); atkPressT = time; }
     if (pad.du && !padPrev.du) upPend = time;       // (the d-pad's up: a jump, or with attack the up attack)
     if (pad.r && !padPrev.r) tapDir(1); if (pad.l && !padPrev.l) tapDir(-1); if (pad.d && !padPrev.d) tapDown();
   }
@@ -6065,7 +6234,7 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dfeel: "COMBAT FEEL", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
 // (the user, 2026-10-28: "the pause menu should first have a option that says "return to game" which is where they cursor starts. but the player can scroll up to get to
 // those other options. hitting okay on the casette player will bring up the music menu, hitting the character viewers should have an accessories heading but also open to
 // the accesories menu ... and hitting the map should make it full screen"): the widgets (w_map, w_wear, w_tape: those you've got) at the top, then the options, RETURN TO GAME last
@@ -6115,12 +6284,13 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dhero", "dreset", "dup", "dlook", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); PAUSE_OPTS = ["dgo", "dhero", "dreset", "dup", "dlook", "dfeel", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
   if (what === "dhero") { const o = otherHero(); closePause(); swapHero(o); return; }   // (the other girl, right where you stand: the user, 2026-10-29 "debug mode should allow the player to select the other character")
+  if (what === "dfeel") { SFX.confirm(); feelPanelToggle(true); return; }   // (COMBAT FEEL's panel, over the pause)
   if (what === "dlook") { lookStep(); SFX.tick(); const b = $("pbtns").querySelector(`[data-p="${what}"]`); if (b) b.textContent = lookLabel(); return; }   // (the look, to try: kept in this browser)
   if (what === "dup") { upPrev = (upPrev + 1) % UP_PREVIEW.length; const [, pc, fr] = UP_PREVIEW[upPrev]; upOverride = pc; freedOverride = fr; upDirty = true; SFX.tick();   // (a milestone of this world's uprising, this room rebuilt to it as you go back in: the user, 2026-10-28 "add in the debug mode menu the option to change it to the other milestones")
     const b = $("pbtns").querySelector('[data-p="dup"]'); if (b) b.textContent = upLabel(); return; }
@@ -6933,18 +7103,19 @@ function devChoose(d) {
   else if (d === "ach") showAch();
   else if (d === "edit") { closeMenus(); story = null; showSelect(); openEditor(); }
   else if (d === "cast") openCast();               // (every world's enemies and friends, to look at: the user, 2026-10-23)
+  else if (d === "feel") feelPanelToggle(true);     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
   else showSettings();                              // (BACK: to GAME SETTINGS, where it's opened from)
 }
 function mainChoose(m) { SFX.confirm(); if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else showSlots(m); }
 // game settings: the music and the sound effects, on or off (kept on this device)
 const SET_KEY = "berry.settings.v1", MUTED = new URLSearchParams(location.search).has("mute");
-function settingsGet() { try { return { music: true, sfx: true, ...JSON.parse(localStorage.getItem(SET_KEY) || "{}") }; } catch { return { music: true, sfx: true }; } }
+function settingsGet() { try { return { music: true, sfx: true, shake: true, flash: true, ...JSON.parse(localStorage.getItem(SET_KEY) || "{}") }; } catch { return { music: true, sfx: true, shake: true, flash: true }; } }
 function settingsApply() {                         // (index.html?mute, for testing, stays silent whatever's set)
-  const g = settingsGet(); if (MUTED) return;
+  const g = settingsGet(); accShake = g.shake !== false; accFlash = g.flash !== false; if (MUTED) return;   // (SCREEN SHAKE, FLASHING: COMBAT FEEL's accessibility switches)
   sfxOn = g.sfx; if (!g.music) { bgm.dataset.muted = "1"; bgm.pause(); } else if (bgm.dataset.muted) { delete bgm.dataset.muted; if (!titleUp) bgm.play().catch(() => { }); }
 }
 function showSettings() { closeMenus(); menuUp = "settings"; setgSel = 0; renderSettings(); $("settings").classList.add("show"); }
-function renderSettings() { const g = settingsGet(), B = k => $("setBtns").querySelector(`[data-g="${k}"]`); B("music").textContent = "MUSIC: " + (g.music ? "ON" : "OFF"); B("sfx").textContent = "SOUND EFFECTS: " + (g.sfx ? "ON" : "OFF"); markMenu(); }   // (DEVELOPER first since 2026-10-28, the user: "move developer mode to the top setting")
+function renderSettings() { const g = settingsGet(), B = k => $("setBtns").querySelector(`[data-g="${k}"]`); B("music").textContent = "MUSIC: " + (g.music ? "ON" : "OFF"); B("sfx").textContent = "SOUND EFFECTS: " + (g.sfx ? "ON" : "OFF"); B("shake").textContent = "SCREEN SHAKE: " + (g.shake ? "ON" : "OFF"); B("flash").textContent = "FLASHING: " + (g.flash ? "ON" : "OFF"); markMenu(); }   // (DEVELOPER first since 2026-10-28, the user: "move developer mode to the top setting")
 function settingsChoose(k) {
   if (k === "back") { SFX.tick(); showMainMenu(); return; }
   if (k === "dev") { showDev(); return; }         // (free play and testing: was the gear on the main screen)
@@ -9864,7 +10035,7 @@ function moveBody(b, dt, halfW) {
   }
   return prevY;
 }
-function spring(b, dt) { b.sqv += (-420 * b.sq - 30 * b.sqv) * dt; b.sq += b.sqv * dt; }   // (a squash snaps back: stiffer and damped, no jelly wobble. Was 190 / 11 till 2026-10-26: the user, "the sort of spacey, doughy feel")
+function spring(b, dt) { b.sqv += (-sprK * b.sq - sprC * b.sqv) * dt; b.sq += b.sqv * dt; }   // (a squash snaps back: stiffer and damped, no jelly wobble. Was 190 / 11 till 2026-10-26: the user, "the sort of spacey, doughy feel")
 function groundBelow(b) {
   let y = groundAt(b.x) ?? WATER;
   for (const p of PLATFORMS) if (b.x > p.x - 6 && b.x < p.x + p.w + 6 && p.y >= b.y - 1 && p.y < y) y = p.y;
@@ -9995,10 +10166,10 @@ function updatePlayer(dt) {
     if (lv >= 1 && control) startCombo(p, lv);
   }
   const SET = cat ? null : setOf(p.rig.spec);
-  if (upPend >= 0 && control && !p.upUsed && p.atkT >= 0 && p.atkT < UPW + .02 && time - atkPressT < UPW && !p.solo && !p.combo && (p.atkIdx || 0) === 0) { p.atkT = -1; p.atkKind = null; atkBuf = .12; }   // attack, then ↑ just after: that first swing becomes the up attack
+  if (upPend >= 0 && control && !p.upUsed && p.atkT >= 0 && p.atkT < UPW + .02 && time - atkPressT < UPW && !p.solo && !p.combo && (p.atkIdx || 0) === 0) { p.atkT = -1; p.atkKind = null; atkBuf = feelBuf(); }   // attack, then ↑ just after: that first swing becomes the up attack
   const sw = !!p.dive;                     // (in the deep's water: your combos as on the ground, any time; ↑ ↓ only swim. The user, 2026-10-24: "combat in the water doesn't work well. it feels like you have touch s platform or land to attack": it was the air's, one combo till you landed)
   const upAtk = atkBuf > 0 && !sw && (upPend >= 0 || UP_KEYS.some(k => keys[k]) || pad.du) && !p.upUsed;   // ↑ and attack together (either one first), or attack with ↑ held down: the rising hit (once till you land again)
-  if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = .12; }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
+  if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = feelBuf(); }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
   const upFresh = () => { const f = p.onGround || time - (p.jumpT ?? -9) < .14; if (f) { jumpBuf = 0; p.coyote = 0; p.jcharging = false; p.jcharge = 0; } return f; };   // (↑ is a jump key too: pressed with attack, the hit's own lift takes the jump's place)
   if (cat) {                              // on the ground the cards swim out in front (tap again: they swirl); in the air, card spin then card dive
     if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop) {
@@ -10046,7 +10217,7 @@ function updatePlayer(dt) {
     else if (!cat && p.queued && p.chain && p.atkT >= (p.chain.kind === "up" && p.atkIdx === 1 ? Math.min(S.chain ?? S.dur, .3) : S.chain ?? S.dur) && p.chain.list[p.atkIdx + 1] && (!p.chain.needHit || p.chainHit)) {
       if (p.chain.kind === "up" && p.atkIdx === 0 && p.onGround && !p.combo) { p.atkT = -1; p.atkKind = null; p.queued = false; upHopStart(p); }   // (up after the launched one: a crouch and a jump first, UPHOP)
       else startStrike(p, p.chain.list[p.atkIdx + 1], p.atkIdx + 1); }   // queued: on into the next of this combo (after the jump up, while still up there)
-    else if (p.atkT >= S.dur || (p === player && !cat && !p.queued && p.onGround && S.hits && S.hits.length && p.atkT > S.hits[S.hits.length - 1].t1 + .08 && (held.left || held.right || jumpBuf > 0))) {   // (its last blow landed: a move off, or a jump, ends what's left of its follow-through. The user, 2026-10-25: "feels like delayed when the player thinks they can move again")
+    else if (p.atkT >= S.dur || (p === player && !cat && !p.queued && p.onGround && S.hits && S.hits.length && p.atkT > S.hits[S.hits.length - 1].t1 + feelCancelAt() && (held.left || held.right || jumpBuf > 0))) {   // (its last blow landed: a move off, or a jump, ends what's left of its follow-through. The user, 2026-10-25: "feels like delayed when the player thinks they can move again")
       if ((cat ? p.atkIdx === 0 : p.chain && p.atkIdx < p.chain.list.length - 1) && !p.solo) { p.lastStrikeT = time; p.lastIdx = p.atkIdx; } p.atkT = -1; p.solo = false; }
   }
   const attacking = p.atkT >= 0, MV = attacking && p.atkKind ? (cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind]) : null;
@@ -10349,8 +10520,8 @@ function trailPush(T, a, b) {                        // a new sample (b null: a 
   T.S.push({ a: a.clone(), b: b ? b.clone() : null, t: time }); if (T.S.length > TRAIL_N) T.S.shift();
 }
 function trailDraw(T) {
-  const life = T.life || (T.S.length && !T.S[0].b ? FIST_LIFE : TRAIL_LIFE); while (T.S.length && time - T.S[0].t > life) T.S.shift();
-  const n = T.S.length; T.mesh.visible = n >= 2; if (n < 2) return;
+  const life = (T.life || (T.S.length && !T.S[0].b ? FIST_LIFE : TRAIL_LIFE)) * feelTrailK(); while (T.S.length && time - T.S[0].t > life) T.S.shift();
+  const n = T.S.length, ta = feelTrailA(); T.mesh.visible = n >= 2 && ta > 0; if (n < 2 || !(ta > 0)) return; T.mesh.material.uniforms.uA.value = (T.life ? GLOW_TRAIL.a : .95) * ta;   // (COMBAT FEEL: how strong the trails are)
   let k = 0; const fist = !T.S[0].b, put = (a, b, age) => { a.toArray(T.pos, k * 6); b.toArray(T.pos, k * 6 + 3); T.u[2 * k] = T.u[2 * k + 1] = clamp(age / life, 0, 1); T.e[2 * k] = fist ? 1 : .0; T.e[2 * k + 1] = 1; k++; };
   const pts = []; for (let i = 0; i < n - 1; i++) for (let j = 0; j < TRAIL_SUB; j++) pts.push([i, j / TRAIL_SUB]); pts.push([n - 2, 1]);
   const at = (i, t, key) => { const P = T.S, g = q => P[clamp(q, 0, n - 1)][key]; return crInt(g(i - 1), g(i), g(i + 1), g(i + 2), t, key === "a" ? _ta : _tb); };
@@ -12119,9 +12290,9 @@ function startCombo(p, lv) {
   startMove(p, list[0]);
 }
 function impactFrame(x, y, big) {                // a finishing blow (a combo's, or on a boss): the picture holds a beat with a slash flaring at the hit; a boss goes black and white
-  const T = big ? .42 : .2; hitstop = Math.max(hitstop, T); shake = Math.max(shake, big ? 14 : 7);
-  slashFlair(x, y, big); sparks(x, y, big ? 16 : 10);
-  if (big) { renderer.domElement.style.filter = "grayscale(1) contrast(1.8) brightness(1.08)"; clearTimeout(impactFrame.h); impactFrame.h = setTimeout(() => { renderer.domElement.style.filter = ""; }, T * 1000 + 40); }
+  const L = FEEL.legacy, T = (big ? .42 : .2) * (L ? 1 : Math.min(2, fxS(FEEL.hitstop))); hitstop = Math.max(hitstop, T); shake = Math.max(shake, (big ? 14 : 7) * (L ? 1 : fxS(FEEL.screenShake)));
+  slashFlair(x, y, big); sparks(x, y, Math.round((big ? 16 : 10) * (L ? 1 : Math.min(2.5, fxS(FEEL.hitSparks)))));
+  if (big && T > 0) { renderer.domElement.style.filter = "grayscale(1) contrast(1.8) brightness(1.08)"; clearTimeout(impactFrame.h); impactFrame.h = setTimeout(() => { renderer.domElement.style.filter = ""; }, T * 1000 + 40); }
   SFX.impact(big);
 }
 let flairs = [];
@@ -12709,7 +12880,7 @@ function syncKitFoe(e, r, dt) {                // a boss built on a character ri
   k.rot = e.dead ? approach(k.rot, -.6, dt * 3) : 0;
   if (dt > 0) KIT.updatePose(k, dt);
   r.sync(k, r, dt);
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
 }
 // ── their attacks
 const crescentG = new THREE.TorusGeometry(.62, .13, 8, 28, Math.PI * .95).rotateZ(-Math.PI * .475);
@@ -22619,7 +22790,7 @@ function updateBaddy(b, dt) {
       if (p.chargeT > .25 || p.tkCharge || p.dizzy > 0) { rush = 1.35; cdRate = Math.max(cdRate, 2); }   // charging up, or seeing stars: it rushes you
     }
     const want = stop ? 0 : b.dir * T.speed * (near ? (b.angry ? 1.6 : melee ? 1.5 * rush : 1.25) : 1);
-    if ((b.atkCd -= dt * cdRate * (1 + .15 * (b.smart || 0))) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; b.dashed = false; }
+    if (!b.dummy && (b.atkCd -= dt * cdRate * (1 + .15 * (b.smart || 0))) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; b.dashed = false; }
     else if (melee && near && !hold && !stop && !b.dashed && b.onGround && b.atkCd < .3 && Math.abs(dx) > T.range && Math.abs(dx) < T.range + 130 && Math.abs(dy) < 40 && T.move !== "hop" && T.move !== "pogo" && T.move !== "float") {
       b.dashed = true; b.vx = b.dir * Math.max(T.speed * 3, 380); b.vy = -200; b.onGround = false; b.sq = -.18; b.sqv = 0; dust(b.x, b.y, 3, -b.dir); }   // just out of reach: a quick hop in
     else if (T.move === "pogo") { b.vy = -(T.hop || 470); b.vx = want * 1.4; b.onGround = false; b.sq = .28; b.sqv = 0; }   // boing, boing
@@ -22673,7 +22844,12 @@ const KBT = { sweep: [150, -470], cut: [25, -130], cleave: [460, -420], jab: [25
 // ── the weight of a blow (game feel)
 const HIT_W = { sweep: 1.1, cut: .85, cleave: 1.4, jab: .8, haymaker: 1.4, punch: .75, slash: .85, stomp: .8, kick: 1, hook: 1.05, upper: 1.1, tackle: 1.2, smash: 1.35, launch: 1.35 };   // how heavy each kind lands
 let camKick = 0, camKickV = 0, camPush = 0, slowMo = 0, chainN = 0, chainT = -9;
-function hitFeel(e, dir, kind, boss) {
+function hitFeel(e, dir, kind, boss, fin = false) {   // a blow landed: COMBAT FEEL's one impact event, onHitConfirmed (or, under BEFORE, the 10-30 code as it was)
+  if (FEEL.legacy) return hitFeelOld(e, dir, kind, boss);
+  const hw = e.hw ?? (e.def && e.def.hw) ?? 30, h = e.h ?? (e.def && e.def.h) ?? 80, hp = kind === "stomp" ? { x: player ? player.x : e.x, y: e.y - h } : { x: e.x - dir * hw * .6, y: e.y - h * .55 };
+  onHitConfirmed(player, e, { kind, boss, fin, w: feelW(kind, fin) }, hp, dir);
+}
+function hitFeelOld(e, dir, kind, boss) {          // (the combat's own, 10-30: kept whole for the BEFORE preset)
   const w = HIT_W[kind] || 1;
   hitstop = Math.max(hitstop, (boss ? .056 : .045) + .04 * w);   // (a touch longer since 2026-10-23, the Odin Sphere feel: each blow lands, and everything stops on it)
   shake = Math.max(shake, (boss ? 5 : 3) + 2.4 * w);   // (2026-10-23 evening: this had slipped into the comment above, so no blow shook the picture)
@@ -22691,7 +22867,8 @@ const frz = { n: 0, k: 0, t: -9 };
 function comboFreeze(x, y) {
   if (time - frz.t > FREEZE_GAP) { frz.n = 0; frz.k = 0; } frz.t = time;
   if (++frz.n < FREEZE_AT[Math.min(frz.k, FREEZE_AT.length - 1)]) return false;
-  frz.n = 0; frz.k++; hitstop = Math.max(hitstop, FREEZE_T); shake = Math.max(shake, 5); rumble(60, .6);   // (and more impact: a jolt, a slash flaring at the blow)
+  frz.n = 0; frz.k++; if (FEEL.legacy) { hitstop = Math.max(hitstop, FREEZE_T); shake = Math.max(shake, 5); rumble(60, .6); }
+  else { hitstop = Math.max(hitstop, FREEZE_T * Math.min(2, fxS(FEEL.hitstop))); shake = Math.max(shake, 5 * fxS(FEEL.screenShake)); if (fxS(FEEL.rumble)) rumble(60, .6 * fxS(FEEL.rumble)); }   // (COMBAT FEEL: as strong as hitstop / shake / rumble are)   // (and more impact: a jolt, a slash flaring at the blow)
   if (x !== undefined) slashFlair(x, y, false); return true;
 }
 const freezeReset = () => { frz.n = 0; frz.k = 0; frz.t = -9; };   // hits in a quick run (they climb in pitch)
@@ -22699,7 +22876,7 @@ const jolt = e => hitstop > 0 && e.joltAt === time ? rand(-1, 1) * e.jolt : 0;  
 function lastKill(b) {                            // the room's last baddy down: a beat of slow motion, the camera leaning in
   b.seen = true; if (bossIn || STAGES[stage].boss || !baddies.every(o => o === b || !o.seen || o.gone || o.dead || o.sad || o.T.move === "breach")) return;
   if (!baddies.some(o => o !== b && o.seen && o.T.move !== "breach")) return;   // (and only when there were at least two of them: one on its own, no slow motion; the user, 2026-10-20)   // (the last of all the ones you've seen in this room: the user, 2026-10-20)
-  slowMo = .7; hitstop = Math.max(hitstop, .12); rumble(60, .7);
+  if (FEEL.legacy || fxS(FEEL.slowMoFinisher)) { slowMo = Math.max(slowMo, .7); slowK = .35; leanMo = .7; } hitstop = Math.max(hitstop, FEEL.legacy ? .12 : .12 * Math.min(1.5, fxS(FEEL.hitstop))); if (FEEL.legacy || fxS(FEEL.rumble)) rumble(60, .7);
 }
 const _seenV = new THREE.Vector3();
 function markSeen() {                             // every baddy that's been on screen this visit counts toward the last kill
@@ -22778,22 +22955,23 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   }
   b.hp -= heroDmg(kind); if (b.sad) b.sadHits = (b.sadHits || 0) + 1; b.hitT = time;   // (hitT: when it last took a blow: no harm to touch for a moment after, see combat)
   const arm = bbArmored(b, kind); if (arm) { b.armorAt = time; SFX.armor(); }   // (a big one in its heavy attack: hurt, but it doesn't flinch, the swing comes on)
-  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; if (!arm) { b.hurtT = kind === "jab" || kind === "cut" ? .5 : .32; b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1); }
-  if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain(), swordOn()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
-  SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1);   // (and the sound of it landing on its body)
+  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; if (!arm) { b.hurtT = (kind === "jab" || kind === "cut" ? .5 : .32) * feelStun(kind, b.hp <= 0); b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1); }
+  hitPitch = feelPitch(); if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain(), swordOn()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
+  SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1); hitPitch = 1;   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
   const PS = KIT.STRIKES[player.atkKind] || {}, airLast = !!player.chain && !player.combo && (player.chain.kind === "air1" || player.chain.kind === "air2") && player.atkIdx >= player.chain.list.length - 1;
+  const fin = b.hp <= 0 || airLast || (!!player.chain && !player.combo && player.atkIdx >= player.chain.list.length - 1);   // (COMBAT FEEL: a finisher, its weight up)
   if (arm) { }                                     // (armored: no knock back, no pop up)
   else if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float" && (airLast || PS.dive || PS.slamLand)) { b.vx = dir * 120 / Math.sqrt(b.wt); b.vy = 640 / Math.sqrt(b.wt); b.juggleT = 0; b.carryVx = null; }   // (an air combo's last blow: down they go, hard. The user, 2026-10-26: "the air ones in particular feel very floaty")
   else if (up && !player.onGround && kind !== "stomp" && b.T.move !== "float") { const fwd = player.chain && player.chain.kind === "air2", pvx = fwd ? player.face * 160 : player.vx * .2; b.carryVx = pvx; b.vx = pvx + clamp((player.x + dir * 52 - b.x) * 4, -170, 170); b.vy = Math.min(-60, Math.max(player.vy, -40) - 30) / Math.sqrt(b.wt); b.juggleT = .5; }   // (the hero's about to be held there by the blow, rising or not: so is it, not shot up past her on her jump; and kept a fist's length in front of her, not knocked out of reach of the next: 2026-10-26)   // juggled: up there already, hit from the air: carried on the blows at your height, falling with you, not floating off (was 260 up, hung .85 s)   // juggled: up there already, hit from the air: it pops up and on forward, hanging a while
-  else { const tk = camTackle(kind); b.vx = dir * KB[0] * 1.2 * knockK * tk / b.wt; if (kind !== "stomp") b.vy = KB[1] * (tk > 1 ? 1.2 : 1) / Math.sqrt(b.wt);
+  else { const tk = camTackle(kind), kq = feelKnock(kind, fin); b.vx = dir * KB[0] * 1.2 * knockK * tk * kq / b.wt; if (kind !== "stomp") b.vy = KB[1] * (tk > 1 ? 1.2 : 1) * Math.sqrt(kq) / Math.sqrt(b.wt);
     if ((kind === "upper" || kind === "launch") && knockK >= 1) { b.vy = -LAUNCH_VY / Math.sqrt(b.wt); b.vx = dir * 45 / Math.sqrt(b.wt); b.juggleT = LAUNCH_HANG; b.carryVx = null; }   // (straight up, a touch on: there over you to jump after, not knocked off out of reach: 2026-10-26)   // (launched: up about a jump's height, floating a moment at the top for the follow-up)
     if (knockK < 1 && kind !== "stomp") b.vy = Math.max(b.vy, -220 / Math.sqrt(b.wt)); }   // (a forward combo's blow before its last: a little pop, not up out of reach of the next)
   if (!arm) b.onGround = false;
-  b.sq = kind === "stomp" ? -.45 : arm ? .05 : .12; b.sqv = 0;   // (.22 till 2026-10-26: less give)
-  hitFeel(b, dir, kind, false);
-  sparks(kind === "stomp" ? player.x : b.x - dir * b.hw * .6, b.y - b.h * (kind === "stomp" ? 1 : .55), 7);
-  if (b.hp <= 0) { b.dead = true; b.deathT = 0; b.vx *= .4; if (player.combo) impactFrame(b.x, b.y - b.h * .5, false); else hitstop = Math.max(hitstop, .09); lastKill(b); }   // (the freeze only for a combo's finishing blow)
+  b.sq = (kind === "stomp" ? -.45 : arm ? .05 : .12) * feelSq(kind, fin); b.sqv = 0;   // (.22 till 2026-10-26: less give)
+  hitFeel(b, dir, kind, false, fin);
+  if (FEEL.legacy) sparks(kind === "stomp" ? player.x : b.x - dir * b.hw * .6, b.y - b.h * (kind === "stomp" ? 1 : .55), 7);
+  if (b.hp <= 0) { b.dead = true; b.deathT = 0; b.vx *= .4; if (player.combo) impactFrame(b.x, b.y - b.h * .5, false); else hitstop = Math.max(hitstop, FEEL.legacy ? .09 : .09 * Math.min(1.5, fxS(FEEL.hitstop))); lastKill(b); }   // (the freeze only for a combo's finishing blow)
   return true;
 }
 function popBaddy(b) {                           // beaten: won back into a weapon (captureBaddy); the player's ATK power goes up one
@@ -22955,7 +23133,7 @@ function syncBaddy(b, dt) {
     });
   }
   settleJoints(r, b, dt);
-  hitTint(r.mats, b.flash, .12, b.dead && b.deathT > .06 ? .9 : 0);
+  hitTint(r.mats, b.flash, .12, b.dead && b.deathT > .06 ? .9 : 0, b);
   armorTint(r.mats, b);   // (the blow taken on its armor: a gold glint, not the hurt one)
   const gy = Y(groundBelow(b)), ss = clamp(1 - (Y(b.y) - gy) / 6, .3, 1);
   r.shadow.position.set(X(b.x), gy + .02, b.z); r.shadow.scale.setScalar(r.shadowR * ss);
@@ -22969,16 +23147,17 @@ function hitEnemy(dir, kind) {
   if (e.def && e.def.id === "lossst" && lossstHit(e, dir, kind)) return true;   // (Lossst: Camila's tackle, his guard against a second one, Rose on his chandelier)
   if (e.under && e.under.phase !== "up") { e.under.hits++; e.under.hitT = time; }   // (under her ledge: three and off she comes)
   const arm = bigAtk(e) || (e.atk === "charge" || e.atk === "act") && !e.under && !e.leaf && kind !== "tackle" && !(player.combo && (player.combo.level || 0) >= 2); if (arm) { e.armorAt = time; SFX.armor(); }   // (a boss's big attack: not even a tackle or a charged combo breaks it)   // (armored in its attack, as the big baddies are: hurt, the attack comes on. 2026-10-28)
-  e.hitT = time; e.hp -= heroDmg(kind); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; if (!arm) { e.hurtT = kind === "jab" || kind === "cut" ? .5 : .35; e.atk = null; e.atkCd = Math.max(e.atkCd, 1); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0; }   // half-hearts: 2 + ATK power
-  if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain(), swordOn()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
-  SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15);   // (on the boss's body: heavier)
+  e.hitT = time; e.hp -= heroDmg(kind); e.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .22; e.flash = .14; if (!arm) { e.hurtT = (kind === "jab" || kind === "cut" ? .5 : .35) * feelStun(kind, e.hp <= 0); e.atk = null; e.atkCd = Math.max(e.atkCd, 1); e.backoff = Math.random() < .5 ? rand(.3, .6) : 0; e.brainT = 0; }   // half-hearts: 2 + ATK power
+  hitPitch = feelPitch(); if (kind === "stomp") SFX.stomp(); else { SFX.hit((HIT_W[kind] || 1) * 1.15, hitChain(), swordOn()); SFX.bite(swordOn(), (HIT_W[kind] || 1) * 1.15); }
+  SFX.body(e.def ? e.def.h : foe.h, true, kind === "stomp" ? .7 : (HIT_W[kind] || 1) * 1.15); hitPitch = 1;   // (on the boss's body: heavier)
   [...pipsEl.children].forEach((pip, i) => { if (i >= Math.ceil(e.hp / 2) && !pip.classList.contains("lost")) { pip.classList.add("lost", "pop"); setTimeout(() => pip.classList.remove("pop"), 250); } });
   const KB = KBT[kind] || [300, -360];   // light hits keep the follow-up in range
-  if (!e.under && !e.down && !e.stag && !arm) { e.vx = dir * KB[0] * (camTackle(kind) > 1 ? 1.35 : 1); if (kind !== "stomp") e.vy = KB[1]; e.onGround = false; } if (!arm) e.windup = 0;   // (Lossst off balance or flat: he stays where he is)
-  e.sq = kind === "stomp" ? -.45 : .2; e.sqv = 0;
-  hitFeel(e, dir, kind, true);
+  const finB = e.hp <= 0 || (!!player.chain && !player.combo && player.atkIdx >= player.chain.list.length - 1);   // (COMBAT FEEL: a finisher)
+  if (!e.under && !e.down && !e.stag && !arm) { const kq = feelKnock(kind, finB); e.vx = dir * KB[0] * (camTackle(kind) > 1 ? 1.35 : 1) * kq; if (kind !== "stomp") e.vy = KB[1] * Math.sqrt(kq); e.onGround = false; } if (!arm) e.windup = 0;   // (Lossst off balance or flat: he stays where he is)
+  e.sq = (kind === "stomp" ? -.45 : .2) * feelSq(kind, finB); e.sqv = 0;
+  hitFeel(e, dir, kind, true, finB);
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
-  sparks(kind === "stomp" ? player.x : e.x - dir * 30, kind === "stomp" ? e.y - e.def.h : e.y - e.def.h * .5, 10);
+  if (FEEL.legacy) sparks(kind === "stomp" ? player.x : e.x - dir * 30, kind === "stomp" ? e.y - e.def.h : e.y - e.def.h * .5, 10);
   if (e.hp <= 0) { e.dead = true; e.deathT = 0; e.vx = dir * 120; impactFrame(e.x, e.y - e.def.h * .5, true); foeVoice(e, "ko"); } else foeVoice(e, "hurt");
   if (!e.dead) bossBreak(e, kind);   // (a string of blows: it breaks out of the combo)
   return true;
@@ -23251,7 +23430,10 @@ function FLASHSET(mats, f) { FLASHC(mats, f, f * .97, f * .9); }
 // it feel more tangible that way?"): a soft rosy glow that fades as its flash runs out, instead of a flat white on and off
 const HIT_TINT = [1, .62, .68];
 function armorTint(mats, e) { const ak = e.dead ? 0 : clamp(1 - (time - (e.armorAt ?? -9)) / .22, 0, 1); if (ak > 0) FLASHC(mats, .9 * ak, .72 * ak, .25 * ak); }   // (a blow on its armor, 2026-10-28: a gold glint)
-function hitTint(mats, flash, f0, dead) { if (dead) return FLASHSET(mats, dead); const k = clamp(flash / f0, 0, 1), e = k * k * (3 - 2 * k) * .85; FLASHC(mats, HIT_TINT[0] * e, HIT_TINT[1] * e, HIT_TINT[2] * e); }
+function hitTint(mats, flash, f0, dead, who) {   // (who: the one tinted: COMBAT FEEL's solid flash; FLASHING off: no blinking, a steady pale tint while it's beaten, the hit tint softer)
+  if (!accFlash && who && who.dead) return FLASHSET(mats, .4); if (dead) return FLASHSET(mats, dead);
+  if (who && who.flashHard > time && accFlash) { const k = who.flashK ?? 1; return FLASHC(mats, feelFlashC.r * k, feelFlashC.g * k, feelFlashC.b * k); }
+  const k = clamp(flash / f0, 0, 1), e = k * k * (3 - 2 * k) * .85 * (accFlash ? 1 : .4); FLASHC(mats, HIT_TINT[0] * e, HIT_TINT[1] * e, HIT_TINT[2] * e); }
 const CHARGE_COL = ["#fff3a6", "#ffd203", "#ff8a1f", "#ff3d9a"].map(c => new THREE.Color(c)), WHITE_C = new THREE.Color("#ffffff");
 const aura = (() => {
   const add = op => new THREE.MeshBasicMaterial({ color: "#ffd203", transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
@@ -23356,7 +23538,7 @@ function syncFurnace(e, r, dt = 0) {
   r.flames.forEach((f, i) => { f.scale.setScalar(blaze); f.scale.y = (.75 + Math.abs(Math.sin(time * 18 + i * 1.7)) * .5) * blaze; });
   r.glow.intensity = (5 + Math.sin(time * 23) * 1.5 + Math.sin(time * 9) * 1) * (e.atk ? 2.6 : 1);
   r.groundGlow.intensity = r.glow.intensity; r.glow.getWorldPosition(r.groundGlow.position);
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -23405,11 +23587,13 @@ function syncWorld(dt) {
     if (!Number.isFinite(camBase)) camBase = Y(GROUND); if (!Number.isFinite(camStand)) camStand = camBase;   // (never stuck on a bad number: a NaN here blanked the whole view)
     const viewTop = LOOK_Y + Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z;   // (only as far as keeps you on the screen: a plain jump stays inside it, a double jump or a rising blow may not)
     camLift = lerp(camLift, Math.max(0, Y(player.y) + 3.4 - camBase - viewTop), 1 - Math.exp(-dt * 12));
-    const sx = shake ? rand(-.5, .5) * shake * S : 0, sy = shake ? rand(-.5, .5) * shake * S : 0;
+    const sh = accShake ? shake : 0, ta = accShake ? feelShakeAmp() : 0, osc = Math.cos(performance.now() * .075);   // (COMBAT FEEL's trauma shake on the game's own; SCREEN SHAKE off: neither)
+    const sx = (sh ? rand(-.5, .5) * sh * S : 0) + (ta ? ta * .5 * S * (feelShDir ? feelShDir * osc * .9 + rand(-.3, .3) : rand(-1, 1)) : 0), sy = (sh ? rand(-.5, .5) * sh * S : 0) + (ta ? ta * .5 * S * rand(-1, 1) * (feelShDir ? .35 : 1) : 0);
     const cy = cine ? cine.camY : 0;                  // (the gate: panning up the keep)
-    camPush = lerp(camPush, slowMo > 0 ? 1 : 0, 1 - Math.exp(-dt * (slowMo > 0 ? 9 : 3)));   // (the last kill: leaning in, then easing back)
-    camera.position.set(camX + sx + camKick, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9 - camPush * .35, CAM_Z + camSit * 4.5 - camPush * 1.6);
-    camera.lookAt(camX + sx + camKick * .6, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2, 0);
+    camPush = lerp(camPush, leanMo > 0 ? 1 : 0, 1 - Math.exp(-dt * (leanMo > 0 ? 9 : 3)));   // (the last kill: leaning in, then easing back)
+    const ck = accShake ? camKick : 0, pk = accShake ? feelPunch() : 0, px = pk && camPunch ? (X(camPunch.x) - camX) * pk * 3 : 0, py = pk && camPunch ? (Y(camPunch.y) - (LOOK_Y + camBase)) * pk * 1.5 : 0;   // (and COMBAT FEEL's punch: a quick lean in at the blow)
+    camera.position.set(camX + sx + ck + px, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9 - camPush * .35 + py, CAM_Z + camSit * 4.5 - camPush * 1.6 - CAM_Z * pk);
+    camera.lookAt(camX + sx + ck * .6 + px, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2 + py, 0);
     if (arena) arenaCam(sx, sy);
   }
   const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
@@ -23577,7 +23761,7 @@ function frame(now) {                              // (the next frame is asked f
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
     else if (window.__pause || paused || itemsUp || npcUp || teamAsk || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
-    else { const k = slowMo > 0 ? .35 : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt);   // (the last kill's slow motion)
+    else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
       PERF.u += t1 - t0; PERF.r += performance.now() - t1; PERF.n++; PERF.dt += dt; }
   } catch (e) { frameErrs++; if (frameErrs <= 3) console.error("frame error (the game keeps going)", e); }
