@@ -185,6 +185,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
+  pincho_poke: "nose jab", pincho_drill: "nose drill", caracol_bonk: "head bonk", caracol_roll: "shell roll", mordi_punch: "face-fist punch", mordi_chomp: "shark bite",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", tic_swing: "X slam", tac_swing: "ring slam", tic_toss: "X toss", tac_toss: "ring toss", pk_toss: "pencil toss", veji_lash: "tail lash whirl", estrella_belt: "high note", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
@@ -387,7 +388,7 @@ function putKey(A, kind, sc, t, v, start, rest) {                // your key for
 // box it hits on the stage (bright while it's live), and sliders for when it starts and ends, how far it reaches and how high. Your changes are this
 // character's own (spec.move.hits[kind]: one entry per window, its t0 / t1 / reach / y0 / y1); the game plays them (work.html hitsNow)
 const hitsFor = (kind, sp = cur.spec) => { const S = moveDef(kind, sp); if (!S || !S.hits) return []; const o = ((sp.move.hits || {})[kind]) || []; return S.hits.map((h, i) => o[i] ? { ...h, ...o[i] } : { ...h }); };
-const limbHits = sp => sp.base !== "cat" && ["none", "gauntlet"].includes(sp.outfit.prop.kind);   // (fists and feet: the blow lands where the limb is, as in the game)
+const limbHits = sp => sp.base !== "cat" && ["none", "gauntlet", "sword"].includes(sp.outfit.prop.kind);   // (fists, feet and the blade: the blow lands where they are, as in the game: KIT.reachNow, 2026-10-31)
 function hitPatch(kind, i, patch, commit) { const n = clone(cur.spec), H = n.move.hits = n.move.hits || {}, L = H[kind] = (H[kind] || []).slice(); while (L.length <= i) L.push({}); L[i] = { ...(L[i] || {}), ...patch }; stageSpec(n, commit); }
 function renderHits() {
   const box = $("tlHits"); box.innerHTML = ""; if (!isMove()) return;
@@ -415,8 +416,9 @@ function syncHitBox() {                                          // the box the 
   let h = L.find(q => t >= q.t0 && t <= q.t1), live = !!h; if (!h) h = L.find(q => q.t0 > t) || L[L.length - 1];
   const sp = rig.spec, f = st.face || 1, tall = (rig.heightPx || 92) / 92, rk = 1 + ((sp.move.reach ?? 1) - 1) * .6, limb = limbHits(sp) && !h.wide;
   rig.root.updateMatrixWorld(true); const rx = rig.root.position.x, ry = rig.root.position.y;   // (where she stands on the stage: the box is placed from there, in the game's pixels)
-  let fw = 0, bw = 0; if (limb) [...rig.hands, ...rig.feet].forEach(m => { m.getWorldPosition(_lw); const d = (_lw.x - rx) * 40 * f; fw = Math.max(fw, d); bw = Math.max(bw, -d); });
-  const xa = st.x - f * (limb && h.back > 20 ? bw + 16 : h.back * tall), xb = st.x + f * Math.max(limb ? Math.max(fw + (sp.outfit.prop.kind === "gauntlet" ? 44 : 16), 26) : h.reach * tall * rk, 0);
+  if (G.KIT && G.KIT.HIT_PAD) Object.assign(KIT.HIT_PAD, G.KIT.HIT_PAD);   // (the game's pads, as COMBAT FEEL's HIT BOXES set them)
+  const [fw, bw, pad] = limb ? KIT.reachNow(rig, f) : [0, 0, 0];
+  const xa = st.x - f * (limb && h.back > 20 ? bw + pad : h.back * tall), xb = st.x + f * Math.max(limb ? Math.max(fw + pad, 22) * (sp.outfit.prop.kind === "sword" ? rk : 1) : h.reach * tall * rk, 0);
   const ya = st.y - h.y0 * tall, yb = st.y - h.y1 * tall, x1 = rx + (Math.min(xa, xb) - st.x) / 40, x2 = rx + (Math.max(xa, xb) - st.x) / 40, y1 = ry + (st.y - Math.max(ya, yb)) / 40, y2 = ry + (st.y - Math.min(ya, yb)) / 40;
   hitBox.position.set((x1 + x2) / 2, (y1 + y2) / 2, 0); hitBox.scale.set(Math.max(.02, x2 - x1), Math.max(.02, y2 - y1), .9);
   hitBox.material.opacity = live ? .34 : .08; hitBox.children[0].material.opacity = live ? 1 : .35; hitBox.children[0].material.transparent = true; hitBox.visible = true;

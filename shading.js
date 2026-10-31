@@ -7,9 +7,10 @@ window.BerryShading = (() => {
   // the game's look, shipped (the user, 2026-10-31, "okay first let's do this lighting for the game" + their exported CUSTOM): the characters flatter (lighting
   // .31), a soft 3-step ramp, a light rim, a touch of top light, richer colour; the scenery a little calmer, its shadows toward blue-grey. SHIPPED_ID: a choice
   // made in a browser before this look shipped (an APPLY, NO SHADING) doesn't hide it; one made after it does
-  const SHIPPED_ID = "20261031a", SHIPPED = {
+  const SHIPPED_ID = "20261031b", SHIPPED = {   // (b, 2026-10-31: no rim. Every browser takes it, as a new id)
     character: { lightingInfluence: .31, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
-      rimLight: { enabled: true, color: "#FFFFFF", width: .3, intensity: .35 }, edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .01, intensity: .5 },
+      rimLight: { enabled: false, color: "#FFFFFF", width: 0, intensity: .35 },   // (no rim: the user, 2026-10-31 "remove all the rim width for the game's lighting on the character models"; was on, width .3)
+      edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .01, intensity: .5 },
       fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.31 },
     environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: .9, contrast: .87, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 } }
   };

@@ -13,7 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
-const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 0 };   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1 };   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, k) => a + (b - a) * k;
@@ -59,7 +59,7 @@ vec3 skinOf(vec3 c, vec3 n, vec3 vp) {
 }
 `;
 function skinned(m) {
-  if (api.shadeHook && !api.shadeRaw) { const h = api.shadeHook; m.onBeforeCompile = sh => { skinCompile(sh); h(sh); }; m.customProgramCacheKey = () => "skin+shade"; return m; }   // (a look applied from the game's SHADING MOCKUP: its step after the skin, 2026-10-31)
+  if (api.shadeHook && !api.shadeRaw) { const h = api.shadeHook; m.onBeforeCompile = sh => { h(sh); skinCompile(sh); }; m.customProgramCacheKey = () => "shade+skin"; return m; }   // (a look applied from the game's SHADING MOCKUP: its step first, then the skin's texture on it. The other way round its ramp rebuilt the colour from the flat albedo and threw the texture away: the user, 2026-10-31 "nothing changes on screen as you scroll through them")
   m.onBeforeCompile = skinCompile; return m;
 }
 function skinCompile(sh) {
@@ -2265,6 +2265,41 @@ Object.assign(STRIKES, {
 STRIKES.tic_swing = JSON.parse(JSON.stringify(STRIKES.tac_swing)); STRIKES.tic_toss = JSON.parse(JSON.stringify(STRIKES.tac_toss));   // (TIC: the same, its X)
 Object.assign(BUDDY_SP, { tic: "tic_toss", tac: "tac_toss", pk: "pk_toss", veji: "veji_lash", estrella: "estrella_belt" });
 Object.assign(BUDDY_PLAIN, { tic: ["tic_swing"], tac: ["tac_swing"] });
+// the three of 2026-10-31 (the user's art: "these are 3 new berry buddies. the pink and blue creature should be two separate ones and the pink creature in color on the
+// other picture"; the names are my picks). PINCHO, the pink one with the needle nose: a jab of the nose, and a drill: nose first, spinning, straight through them.
+// CARACOL, the blue one with the snail's shell: a bonk of the head, and a roll: tucked up in the shell, over and over through them. MORDI, the magenta block with
+// the face on its fist: a big punch of that fist, and a bite: its head splits open into jaws and it lunges in like a shark (the jaws: work.html dress1031)
+Object.assign(STRIKES, {
+  pincho_poke: { dur: .44, step: 80, sq: -.06, sfx: "whoosh", hits: [{ t0: .14, t1: .22, reach: 115, back: 0, y0: 150, y1: 60, kind: "jab" }],   // the nose jabbed in, head first
+    keys: { lean: [[0, 0], [.1, -.22], [.16, .6], [.26, .55], [.44, 0]], headRot: [[0, 0], [.1, -.12], [.16, .18], [.3, .1], [.44, 0]], bodyY: [[0, 0], [.1, .02], [.16, -.06], [.44, 0]],
+      armF: [[0, .3], [.1, .9], [.16, -.7], [.3, -.5], [.44, .3]], elbF: [[0, .8], [.16, .3], [.44, .8]], armB: [[0, .3], [.1, .9], [.16, -.7], [.3, -.5], [.44, .3]], elbB: [[0, .8], [.16, .3], [.44, .8]],
+      fNx: [[0, .2], [.16, .38], [.44, .2]], fFx: [[0, -.15], [.16, -.3], [.44, -.15]] } },
+  pincho_drill: { dur: .92, step: 0, surge: [.1, 760], slide: .45, sq: -.12, sfx: "whoosh", sfx2: [.34, "whoosh"], trail: [.1, .64],   // the nose first and spinning: a drill straight through them
+    hits: [{ t0: .12, t1: .64, reach: 125, back: 30, y0: 150, y1: 20, kind: "sweep", wide: true, fx: "sparks" }],
+    keys: { wheel: turnKeys(.1, .64, 3, .92), lean: [[0, .05], [.1, .95], [.64, .95], [.78, .25], [.92, .05]], bodyY: [[0, 0], [.1, .04], [.64, .04], [.78, -.06], [.92, 0]],
+      armF: [[0, .3], [.1, -.9], [.64, -.9], [.8, .3], [.92, .3]], elbF: [[0, .8], [.1, .1], [.64, .1], [.92, .8]], armB: [[0, .3], [.1, -.9], [.64, -.9], [.8, .3], [.92, .3]], elbB: [[0, .8], [.1, .1], [.64, .1], [.92, .8]],
+      fNx: [[0, .2], [.1, -.2], [.64, -.2], [.92, .2]], fNy: [[0, 0], [.1, .1], [.64, .1], [.92, 0]], fFx: [[0, -.15], [.1, -.32], [.64, -.32], [.92, -.15]], fFy: [[0, 0], [.1, .05], [.64, .05], [.92, 0]], fP: [[0, 0], [.1, -.6], [.64, -.6], [.92, 0]] } },
+  caracol_bonk: { dur: .46, step: 90, sq: -.1, sfx: "huff", hits: [{ t0: .16, t1: .24, reach: 100, back: 0, y0: 130, y1: 30, kind: "punch" }],   // a bonk of that big blue head
+    keys: { lean: [[0, 0], [.1, -.32], [.18, .72], [.28, .62], [.46, 0]], headRot: [[0, 0], [.1, -.2], [.18, .2], [.46, 0]], bodyY: [[0, 0], [.1, -.04], [.18, -.08], [.46, 0]],
+      armF: [[0, .2], [.1, .6], [.18, -.5], [.46, .2]], elbF: [[0, .6], [.18, .2], [.46, .6]], armB: [[0, .2], [.1, .6], [.18, -.5], [.46, .2]], elbB: [[0, .6], [.18, .2], [.46, .6]],
+      fNx: [[0, .2], [.18, .34], [.46, .2]], fFx: [[0, -.15], [.18, -.28], [.46, -.15]] } },
+  caracol_roll: { dur: 1.0, step: 0, surge: [.14, 820], slide: .55, sq: -.14, sfx: "huff", sfx2: [.2, "whoosh"],   // tucked up in its shell and rolling, over and over, right through them
+    hits: [{ t0: .16, t1: .74, reach: 95, back: 40, y0: 110, y1: 0, kind: "sweep", wide: true, fx: "dust" }],
+    keys: { flip: turnKeys(.14, .74, 3, 1.0), bodyY: [[0, 0], [.1, -.3], [.74, -.3], [.86, -.05], [1, 0]], lean: [[0, 0], [.12, .55], [.74, .55], [.86, .1], [1, 0]], headRot: [[0, 0], [.12, .35], [.74, .35], [1, 0]],
+      armF: [[0, .2], [.12, 1.9], [.74, 1.9], [.88, .4], [1, .2]], elbF: [[0, .6], [.12, 2.2], [.74, 2.2], [1, .6]], armB: [[0, .2], [.12, 1.9], [.74, 1.9], [.88, .4], [1, .2]], elbB: [[0, .6], [.12, 2.2], [.74, 2.2], [1, .6]],
+      fNx: [[0, .2], [.12, .3], [.74, .3], [1, .2]], fNy: [[0, 0], [.12, .5], [.74, .5], [1, 0]], fFx: [[0, -.15], [.12, .2], [.74, .2], [1, -.15]], fFy: [[0, 0], [.12, .5], [.74, .5], [1, 0]] } },
+  mordi_punch: { dur: .52, step: 100, sq: -.08, sfx: "punch", hits: [{ t0: .2, t1: .28, reach: 115, back: 0, y0: 150, y1: 40, kind: "haymaker" }],   // the big fist with its face on, wound back and swung in
+    keys: { armF: [[0, .5], [.14, -1.1], [.2, 1.6], [.32, 1.5], [.52, .5]], elbF: [[0, 1.2], [.14, 1.8], [.2, 0], [.32, .1], [.52, 1.2]], armB: [[0, .4], [.14, .9], [.2, -.4], [.52, .4]], elbB: [[0, .8], [.52, .8]],
+      lean: [[0, .05], [.14, -.22], [.2, .42], [.32, .36], [.52, .05]], twist: [[0, 0], [.14, -.45], [.2, .35], [.52, 0]], bodyY: [[0, 0], [.14, -.04], [.2, -.08], [.52, 0]],
+      fNx: [[0, .2], [.2, .38], [.52, .2]], fFx: [[0, -.15], [.2, -.3], [.52, -.15]] } },
+  mordi_chomp: { dur: .96, step: 0, surge: [.32, 900], slide: .42, sq: -.1, sfx: "huff", sfx2: [.4, "chomp"],   // its head split open into jaws, a lunge in like a shark, and a bite (the jaws: work.html dress1031, by its atkT)
+    hits: [{ t0: .38, t1: .48, reach: 135, back: 10, y0: 160, y1: 20, kind: "launch", fx: "sparks" }],
+    keys: { lean: [[0, 0], [.26, -.28], [.36, .85], [.56, .75], [.76, .2], [.96, 0]], bodyY: [[0, 0], [.26, -.16], [.36, .05], [.56, 0], [.96, 0]], headRot: [[0, 0], [.26, -.2], [.4, .1], [.96, 0]],
+      armF: [[0, .4], [.26, -1.0], [.36, -1.4], [.62, -1.3], [.96, .4]], elbF: [[0, .8], [.36, .2], [.96, .8]], armB: [[0, .4], [.26, -1.0], [.36, -1.4], [.62, -1.3], [.96, .4]], elbB: [[0, .8], [.36, .2], [.96, .8]],
+      fNx: [[0, .2], [.36, -.15], [.62, -.15], [.96, .2]], fNy: [[0, 0], [.36, .25], [.62, .2], [.96, 0]], fFx: [[0, -.15], [.36, -.4], [.62, -.4], [.96, -.15]], fFy: [[0, 0], [.36, .15], [.62, .1], [.96, 0]] } },
+});
+Object.assign(BUDDY_SP, { pincho: "pincho_drill", caracol: "caracol_roll", mordi: "mordi_chomp" });
+Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
 // the pets' specials (the user, 2026-10-26: "can you also give the pets a special attack? although it can be the same for all cats and then the same one for all
 // dogs"): every couple of landed pounces (work.html palLeap). The cat: onto it and curled into a pinwheel of claws, three blows; the dog: a tackle, then a bark
 // that sends a ring of sound on ahead (work.html petBark). Keyed on the pets' own build (the chibi Tocsin); no cards
@@ -2428,10 +2463,21 @@ api.airLegs = (w, up) => ({ fNx: .28 + .08 * w, fNy: .38 + .06 * w + .05 * up, f
 // apart (fNz / fFz .34); off the ground that was dropped, her feet came in under her and both knees folded in across each other. Her stance's spread now
 // stays with her in the air too (as the move's own keys left it, or the jump's, whichever is the wider), so every move is as the editor shows it
 const AIR_SPLAY = ["fNz", "fFz"];
+// hit boxes (the user, 2026-10-31: "hit boxes should be closer to the characters"): a blow lands only this far past the fist, foot or blade itself, right now
+// (was 16 px past a fist or foot, 44 past the gauntlet, and a sword's set reach whatever the blade was doing). The game's combat() and the editor's box both use it
+const HIT_PAD = { fist: 10, gauntlet: 24, blade: 18 }, _rw = new THREE.Vector3(), _rp = new THREE.Vector3();
+api.HIT_PAD = HIT_PAD;
+api.reachNow = (r, face) => {                         // [in front, behind] in px: the furthest fist, foot or blade point from the hips, and the pad past it
+  r.root.updateMatrixWorld(true); r.root.getWorldPosition(_rw); let fw = 0, bw = 0; const f = face || 1, see = v => { const d = (v.x - _rw.x) * 40 * f; fw = Math.max(fw, d); bw = Math.max(bw, -d); };
+  for (const m of [...r.hands, ...r.feet]) see(m.getWorldPosition(_rp));
+  const pr = r.prop, sword = !!(pr && pr.kind === "sword" && pr.inner); if (sword) { pr.inner.updateWorldMatrix(true, false); see(pr.inner.localToWorld(_rp.set(1.2, 0, 0))); see(pr.inner.localToWorld(_rp.set(.6, 0, 0))); }
+  const kind = r.spec && r.spec.outfit && r.spec.outfit.prop ? r.spec.outfit.prop.kind : "none"; return [fw, bw, sword ? HIT_PAD.blade : kind === "gauntlet" ? HIT_PAD.gauntlet : HIT_PAD.fist];
+};
 function airSplay(p, T, ST) { if (!ST || p.onGround) return; const sw = leadFar(p); for (const k of AIR_SPLAY) if (k in ST) { const kk = sw ? SWAP[k] || k : k; T[kk] = Math.max(T[kk] || 0, ST[k]); } }
 function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move's leg keys are left out
   if (p.onGround) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }
-  if (airKeyed(p.atkKind)) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k !== "bodyY" && k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }   // (its own keys over the stance's legs, as on the ground and in the editor)
+  if (airKeyed(p.atkKind)) { const sw = leadFar(p), h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, S.dur || .5, a), L = api.airLegs(w, clamp(-p.vy / 500, -1, 1), p);
+    for (const k in L) T[sw ? SWAP[k] || k : k] = L[k]; airSplay(p, T, ST); return false; }   // (its own leg keys over the air's tucked legs: over the standing stance they stood in mid-air, the user 2026-10-31 "they kind of hold in the air almost like they're standing")   // (its own keys over the stance's legs, as on the ground and in the editor)
   const h = (S.hits && S.hits[0]) || { t0: .08, t1: .2 }, dur = S.dur || .5, w = a < h.t0 ? sstep(0, h.t0, a) : a < h.t1 + .06 ? 1 : 1 - sstep(h.t1 + .06, dur, a);   // into the blow, held through it, easing out
   const up = clamp(-p.vy / 500, -1, 1);           // (rising: tucked tighter; dropping: the legs let down)
   const L = api.airLegs(w, up, p), sw = leadFar(p);   // both knees up, a little apart (the user, 2026-10-23: "rose's legs get all twisted in the air": a wide split front to back crossed them in an X once she turned toward us)
@@ -2476,7 +2522,6 @@ function momentum(p, dt, sp) {                         // (the triggers: a landi
   if (sp < 45 && p.mRun > 230) { p.mHaltT = 0; p.mHaltK = clamp((p.mRun - 120) / 230, .5, 1); p.mRun = 0; }
 }
 function momentumPose(p, o, dt, legs, cat) {           // (laid over the pose, after the springs: these are the frames themselves)
-  if (FEEL_KIT.accLean && p.accLean) o.lean += FEEL_KIT.accLean * p.accLean * (cat ? .45 : .6);   // (COMBAT FEEL's movement: leaning into speeding up, back out of slowing down, 2026-10-31)
   if (p.mHaltT != null) { const t = p.mHaltT += dt;
     if (t > HALT.T || Math.abs(p.vx) > 60 || !p.onGround) p.mHaltT = null;   // (off again, or up: it's over)
     else { const s = Math.sin(t * HALT.w) * Math.exp(-t * HALT.z) * p.mHaltK, pl = Math.exp(-t * 6) * Math.min(1, t / .05) * p.mHaltK;
@@ -2515,9 +2560,12 @@ function updatePoseHuman(p, dt) {
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
   else if (!p.onGround) {
     // (the legs a stride apart, 2026-10-23: they hung close together front to back, one boot stacked over the other: "twisted and distorted ... in the air")
-    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .3, fNy: .4, fFx: -.26, fFy: .06, fP: -.55, fNz: .06, fFz: .04 }), layPose(T, m.rise, p);   // rising: the lead knee driven up, the other leg pushing down and back
-    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .26, fNy: .38, fFx: -.22, fFy: .22, fP: -.45, fNz: .06, fFz: .04 }), layPose(T, m.top, p);   // the top: both bent, still a stride apart
-    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: .18, fNy: .12, fFx: -.16, fFy: .18, fP: -.1, fNz: .05, fFz: .04 }), layPose(T, m.fall, p);   // dropping: reaching down for the landing
+    // (the user, 2026-10-31: "when the girls are in the air, their legs should feel that way": the knee higher going up, both tucked at the top, then a stride apart
+    // and loose coming down, swaying, trailing the way she drifts; only a fast drop reaches down for the ground)
+    const fk = clamp((p.vy - 300) / 800, 0, 1), sway = Math.sin(t * 7.5) * .035 * (1 - fk * .5), drift = clamp((p.vx || 0) * (p.face || 1) / 400, -1, 1) * .06;
+    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .34, fNy: .52, fFx: -.32, fFy: .1, fP: -.7, fNz: .07, fFz: .05 }), layPose(T, m.rise, p);   // rising: the lead knee driven high, the other leg pushing down and back, toes pointed
+    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .24, fNy: .5, fFx: -.2, fFy: .4, fP: -.55, fNz: .07, fFz: .05 }), layPose(T, m.top, p);   // the top: both knees up, tucked, still a stride apart
+    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: lerp(.26, .3, fk) + sway - drift, fNy: lerp(.4, .46, fk), fFx: lerp(-.3, -.36, fk) - sway - drift, fFy: lerp(.3, .38, fk), fP: lerp(-.5, -.55, fk), fNz: .09, fFz: .07 }), layPose(T, m.fall, p);   // dropping: both knees bent, the front one up, the back foot tucked up behind, swaying (they're turned to us, so heights read, front and back don't: hung straight down they looked stood in mid-air)
     airSplay(p, T, ST);                              // (the stance's spread, if it's wider: the user, 2026-10-26)
   } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
@@ -2553,7 +2601,7 @@ function updatePoseHuman(p, dt) {
   p.gb = approach(p.gb, p.onGround ? 1 : 0, dt * 12);
   const g = p.gaitAmt * p.gb, ph = p.gaitPh, dir = Math.sign(p.vx * p.face) || 1, o = p.out;
   Object.assign(o, p.pose);
-  if (a < 0) o.lean += p.accLean * .5;
+  if (a < 0) o.lean += p.accLean * .5 * FEEL_KIT.accLean;   // (FEEL_KIT.accLean: COMBAT FEEL's MOVEMENT lean, x the game's own; 1 = as it was, about 8 degrees at its peak)
   if (!D.run) {
     o.bodyY += g * (.045 * Math.abs(Math.sin(ph)) - .02) * m.bounce;
     o.lean += g * .04 * Math.sin(2 * ph);
@@ -2696,7 +2744,7 @@ function updatePoseCat(p, dt) {
   const g = p.gaitAmt * p.gb, dir = Math.sign(p.vx * p.face) || 1, o = p.out;
   const U = lag => (((p.gaitPh / TAU - lag) % 1) + 1) % 1;
   Object.assign(o, p.pose);
-  if (p.atkT < 0) o.lean += p.accLean;
+  if (p.atkT < 0) o.lean += p.accLean * FEEL_KIT.accLean;
   const b = keyfC(U(0), BODY_KEYS);
   o.lean += g * b[0]; o.arch += g * b[1]; o.bodyY += g * b[2] * m.bounce; o.tailBase += g * b[3];
   const aN = keyfC(U(0), ARM_KEYS), aF = keyfC(U(.04), ARM_KEYS);
@@ -3185,19 +3233,22 @@ STRIKES.up_kick = { ...STRIKES.nj_c3, dur: .56, step: 60, hop: -580, hits: [{ t0
 // down while they're in the air. it should extend a little so they can hit a creature they're jumping over or past. so like rose will swing down right below her once,
 // camila can do a punch down where her body makes like a half moon shape as her arm goes over head and down"): no dive, no slam; one blow down under her as she goes,
 // reaching a little below her feet and either side, and on through the jump
-STRIKES.dn_sword = { dur: .44, step: 0, sq: -.04, sfx: "slash", hits: [{ t0: .12, t1: .3, reach: 80, back: 55, y0: 40, y1: -50, kind: "slash" }],   // (its reach under her feet 50 px, was 125: it connected from too high up, the user 2026-10-29)   // Rose: the blade up in front, then swept down right under her
+STRIKES.dn_sword = { dur: .44, step: 0, sq: -.04, sfx: "slash", hits: [{ t0: .12, t1: .3, reach: 80, back: 55, y0: 30, y1: -22, kind: "slash" }],   // (22 px under her, was 50: the user 2026-10-31 "hit boxes should be closer to the characters, especially the down air attack")
+    // (its reach under her feet 50 px, was 125: it connected from too high up, the user 2026-10-29)   // Rose: the blade up in front, then swept down right under her
   keys: { armF: [[0, 2.2], [.07, 2.85], [.15, 1.0], [.22, .05], [.3, -.15], [.44, .55]], elbF: [[0, .4], [.07, .6], [.15, .1], [.3, .05], [.44, .3]],
     blade: [[0, 2.0], [.07, 2.7], [.15, .45], [.22, -1.25], [.3, -1.55], [.44, -.3]], grip: [[0, .7], [.05, 1], [.36, 1], [.44, .7]],   // (the blade ends pointing straight down under her)
     armB: [[0, 1.4], [.1, 2.0], [.22, .4], [.44, .8]], elbB: [[0, .7], [.44, .6]],
     lean: [[0, 0], [.07, -.3], [.16, .45], [.24, .8], [.34, .7], [.44, .3]], arch: [[0, 0], [.07, -.2], [.2, .25], [.44, .05]], headRot: [[0, 0], [.16, .3], [.3, .45], [.44, .15]],
     fNx: [[0, .2], [.12, .14], [.26, .3], [.44, .2]], fNy: [[0, .34], [.12, .4], [.26, .48], [.44, .34]], fFx: [[0, -.12], [.12, -.2], [.26, -.05], [.44, -.12]], fFy: [[0, .26], [.12, .3], [.26, .4], [.44, .28]], fP: [[0, -.4], [.44, -.4]] } };
-STRIKES.dn_fist = { dur: .5, step: 0, sq: .06, sfx: "kick", hits: [{ t0: .2, t1: .36, reach: 70, back: 60, y0: 40, y1: -50, kind: "smash" }],   // (50 px under her, was 125)   // Camila: arched back, the fist up over her head, and her whole body curling round as it comes down under her: a half moon
+STRIKES.dn_fist = { dur: .5, step: 0, sq: .06, sfx: "kick", hits: [{ t0: .2, t1: .36, reach: 70, back: 60, y0: 30, y1: -22, kind: "smash" }],   // (22 px under her, was 50, 2026-10-31)
+    // (50 px under her, was 125)   // Camila: arched back, the fist up over her head, and her whole body curling round as it comes down under her: a half moon
   keys: { armF: [[0, 1.6], [.1, 3.05], [.18, 2.6], [.26, .4], [.34, -.1], [.5, .6]], elbF: [[0, 1.0], [.1, .35], [.2, .1], [.34, 0], [.5, .4]],
     armB: [[0, 1.0], [.1, 1.8], [.2, .2], [.34, -.4], [.5, .5]], elbB: [[0, 1.0], [.2, .8], [.5, .9]],
     lean: [[0, 0], [.1, -.55], [.17, -.6], [.26, .7], [.34, 1.05], [.5, .45]], arch: [[0, 0], [.1, -.5], [.17, -.55], [.26, .35], [.34, .55], [.5, .15]], headRot: [[0, 0], [.1, -.3], [.26, .35], [.5, .1]],
     aS: [[0, 0], [.24, 0], [.3, .07], [.4, 0]],
     fNx: [[0, .2], [.1, -.15], [.18, -.2], [.3, .32], [.5, .2]], fNy: [[0, .32], [.1, .22], [.18, .2], [.3, .5], [.5, .34]], fFx: [[0, -.15], [.1, -.35], [.18, -.38], [.3, .1], [.5, -.12]], fFy: [[0, .28], [.1, .3], [.18, .3], [.3, .44], [.5, .3]], fP: [[0, -.3], [.12, -.7], [.3, -.2], [.5, -.35]] } };
-STRIKES.dn_kick = { ...STRIKES.flipaxe, dur: .5, step: 0, hits: [{ t0: .26, t1: .42, reach: 70, back: 50, y0: 40, y1: -50, kind: "smash" }] };   // (50 px under her, was 110)   // an axe kick down under her, no dive
+STRIKES.dn_kick = { ...STRIKES.flipaxe, dur: .5, step: 0, hits: [{ t0: .26, t1: .42, reach: 70, back: 50, y0: 30, y1: -22, kind: "smash" }] };   // (22 px under her, was 50, 2026-10-31)
+   // (50 px under her, was 110)   // an axe kick down under her, no dive
 Object.assign(MOVESETS.brawler, { up: "up_fist", down: "dn_fist" }); Object.assign(MOVESETS.boxer, { up: "up_fist", down: "dn_fist" });
 Object.assign(MOVESETS.sword, { up: "up_sword", down: "dn_sword" }); Object.assign(MOVESETS.ninja, { up: "up_kick", down: "dn_kick" }); Object.assign(MOVESETS.kunoichi, { up: "up_kick", down: "dn_kick" });
 CAT_MOVES.up_cards = { ...CAT_MOVES.cardstorm, dur: .62, dash: [.06, 40, -560], hits: [{ t0: .06, t1: .44, kind: "launch" }] };   // Tocsin: the cards rise from his feet in a crescent and carry him up
