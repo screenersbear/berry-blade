@@ -1120,7 +1120,9 @@ function wPlace(s) {
     scatter: (n, m0, m1, salt) => { const step = (WX + m0 + m1) / Math.max(1, n); return slots(step, m0, m1, salt).map(q2 => (q2.x += q2.rs() * step, q2)).filter(inside(m0, m1)); },   // n across the screen and its margins, as n of R(-m0, WX + m1) did
     steps: (a, b, m0, m1, salt) => { const step = (a + b) / 2; return slots(step, m0, m1, salt).map(q2 => (q2.x += (q2.rs() - .5) * (b - a), q2)).filter(inside(m0, m1)); },   // one every a..b, as x += R(a, b) did
     grid: (step, m0, m1, ph = 0) => { const o = []; for (let j = Math.ceil((ox - m0 - ph) / step); j * step + ph - ox < WX + m1; j++) o.push(j * step + ph - ox); return o; },
-    gridIn: (step, a, b, ph = 0) => { const o = []; for (let j = Math.ceil((ox + a - ph) / step); j * step + ph - ox < b; j++) o.push(j * step + ph - ox); return o; } };   // (the grid's between a and b, here)   // one every step, on the world's own grid (as x += step from -m0 did, but in step with the screens beside it)
+    gridIn: (step, a, b, ph = 0) => { const o = []; for (let j = Math.ceil((ox + a - ph) / step); j * step + ph - ox < b; j++) o.push(j * step + ph - ox); return o; },   // (the grid's between a and b, here)
+    rs: (salt, n) => rngF(base + salt * 131 + n * 977 + 13),   // (the n-th thing of a walk's own random)
+    walk: (m0, m1, salt, f) => { const wr = rngF(base + salt * 131 + 7), WR = (a, b) => a + wr() * (b - a); for (let wx = -m0, n = 0; wx < ox + WX + m1 && n < 9999; n++) { const st = f(wx - ox, WR, n); if (!(st > 0)) break; wx += st; } } };   // (one after another from the row's start: f(x here, the walk's random, n) gives how far on the next is)   // one every step, on the world's own grid (as x += step from -m0 did, but in step with the screens beside it)
 }
 const wrapIn = (v, a, b) => a + (((v - a) % (b - a)) + (b - a)) % (b - a);   // (something drifting by, where the world's clock has it: the same on every screen that shows it, till it comes round again)
 const slotRun = (get, set) => (sl, f) => { const k = get(); set(sl.rs); try { return f(sl.x, sl); } finally { set(k); } };   // (a builder's own random swapped for a slot's while it makes what's in it)
@@ -16403,8 +16405,8 @@ function inkEdges(scene, keep, mesh, angle = 35) {   // an old cartoon's ink lin
 // ── Crux's city up off the street (the user, 2026-10-26: "it escalates to sky scrapers up in row b and A being rooftops of sky scrapers mostly. but it should all
 // feel very high"): the terraces (C) a block up, the towers' faces going on up past them; the skyscrapers' upper floors (B), their tops round about, half built;
 // the rooftops (A): the roofs of the towers round about just under you, their tanks and aerials, and past them only sky and the cloud sea a long way down
-function cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt) {
-  const R = (a, b) => a + rng() * (b - a), O = (geo, m, ol = .04) => mk(geo, null, { mat: m, ol }), tones = [mats.white, mats.light, mats.mid, mats.dark];
+function cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt, W = wPlace(-1)) {   // (W: the world's slots and walks, so the faces and roofs run on from screen to screen)
+  const inSlot = slotRun(() => rng, v => { rng = v; }), R = (a, b) => a + rng() * (b - a), O = (geo, m, ol = .04) => mk(geo, null, { mat: m, ol }), tones = [mats.white, mats.light, mats.mid, mats.dark];
   const face = (gx, w, y0, y1, z, tone, win = true) => { const h = y1 - y0, fb = O(new THREE.BoxGeometry(w, h, 2), tone, .05); at(fb, gx, y0 + h / 2, z); scene.add(fb); inkEdges(scene, keep, fb);
     if (win) for (let r = Math.ceil((y0 - gY) / 1.4) * 1.4 + gY + .7; r < y1 - .6; r += 1.4) for (let c = -w / 2 + .6; c < w / 2 - .4; c += .9) scene.add(at(O(new THREE.BoxGeometry(.4, .7, .05), rng() < .15 ? mats.white : mats.black, 0), gx + c, r, z + 1.02));
     return fb; };
@@ -16412,23 +16414,21 @@ function cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt) {
     scene.add(at(O(new THREE.BoxGeometry(w + .3, .3, 2.3), mats.dark, .03), gx, y, z)); const hh = R(2, 5); scene.add(at(O(cyl(.06, .09, hh, 6), mats.black, .01), gx + R(-.5, .5), y + 1.6 + hh / 2, z));
     const L = new THREE.Mesh(ball(.12, 8, 6), new THREE.MeshBasicMaterial({ color: "#ffffff" })); at(L, gx, y + 1.6 + hh, z); scene.add(L); keep.add(L); };
   if (row === "C") {                                  // the terraces: the towers' faces close behind, on up out of sight; a gap now and then, the city past it
-    for (let x = -6; x < WX + 6;) { const w = R(3.2, 6), gx = x + w / 2; if (rng() < .22) { x += w * R(.7, 1.1); continue; }
+    W.walk(6, 6, 3011, (x, WR, n) => { const w = WR(3.2, 6), gx = x + w / 2; if (WR(0, 1) < .22) return w * WR(.7, 1.1); const adv = w + WR(0, .4); if (x + w < -6) return adv; inSlot({ rs: W.rs(3011, n), x }, () => {
       face(gx, w, gY - 12, gY + R(16, 26), R(-8.4, -6.6), tones[(rng() * 4) | 0]);
       if (rng() < .4) { const zz = -5.3, x0 = gx - w * .3; for (let j = 0; j < 4; j++) { const yy = gAt(gx) + 1.8 + j * 2.2; scene.add(at(O(new THREE.BoxGeometry(w * .6, .1, .9), mats.black, .01), gx, yy, zz));   // a fire escape up the face
-        const st = O(new THREE.BoxGeometry(2.4, .08, .5), mats.black, 0); at(st, x0 + .9, yy - 1.1, zz - .1); st.rotation.z = j % 2 ? .75 : -.75; scene.add(st); } }
-      x += w + R(0, .4); }
+        const st = O(new THREE.BoxGeometry(2.4, .08, .5), mats.black, 0); at(st, x0 + .9, yy - 1.1, zz - .1); st.rotation.z = j % 2 ? .75 : -.75; scene.add(st); } } }); return adv; });
     return; }
   if (row === "B") {                                  // the skyscrapers' upper floors: faces coming up from far below, most ending about here (their tops), a few on up; one half built
-    for (let x = -6; x < WX + 6;) { const w = R(3.4, 6.4), gx = x + w / 2, z = R(-9, -6.8); if (rng() < .26) { x += w * R(.7, 1.1); continue; }
+    W.walk(6, 6, 3012, (x, WR, n) => { const w = WR(3.4, 6.4), gx = x + w / 2; if (WR(0, 1) < .26) return w * WR(.7, 1.1); const adv = w + WR(.2, .8); if (x + w < -6) return adv; inSlot({ rs: W.rs(3012, n), x }, () => { const z = R(-9, -6.8);
       const top = gY + (rng() < .3 ? R(14, 24) : R(-3, 8)), tone = tones[(rng() * 4) | 0];
       if (rng() < .2) { const y0 = gY - 14; for (const dx of [-w / 2, 0, w / 2]) scene.add(at(O(new THREE.BoxGeometry(.25, top - y0, .25), mats.black, .01), gx + dx, (y0 + top) / 2, z));   // the steel of one going up
         for (let y = y0 + 2; y < top; y += 2.4) scene.add(at(O(new THREE.BoxGeometry(w, .22, .3), mats.black, .01), gx, y, z)); }
-      else { face(gx, w, gY - 24, top, z, tone); if (top < gY + 12) crown(gx, w, top, z, tone); }
-      x += w + R(.2, .8); }
-    for (let i = 0; i < 9; i++) { const x = R(-10, WX + 10), z = R(-22, -12), w = R(3, 5), top = gY + R(-8, 2), f = face(x, w, top - 20, top, z, tones[(rng() * 4) | 0], false); crown(x, w, top, z, mats.mid); }   // (further off: their tops, under you or about level)
+      else { face(gx, w, gY - 24, top, z, tone); if (top < gY + 12) crown(gx, w, top, z, tone); } }); return adv; });
+    for (const sl of W.scatter(9, 10, 10, 3013)) inSlot(sl, x => { const z = R(-22, -12), w = R(3, 5), top = gY + R(-8, 2), f = face(x, w, top - 20, top, z, tones[(rng() * 4) | 0], false); crown(x, w, top, z, mats.mid); });   // (further off: their tops, under you or about level)
     return; }
   // the rooftops: what's up here with you (bulkheads, a tank, aerials, vents), and the roofs round about, just under you
-  for (let x = R(-2, 4); x < WX + 4; x += R(7, 12)) { const kind = (rng() * 4) | 0, z = R(-7.5, -4.5), y0 = gAt(Math.max(.1, Math.min(WX - .1, x)));
+  for (const sl of W.steps(7, 12, 2, 4, 3014)) inSlot(sl, x => { const kind = (rng() * 4) | 0, z = R(-7.5, -4.5), y0 = gAt(Math.max(.1, Math.min(WX - .1, x)));
     if (kind === 0) { const b = O(new THREE.BoxGeometry(R(2.4, 3.4), R(2.2, 3), R(2, 2.6)), mats.light); b.geometry.computeBoundingBox(); const hh = b.geometry.boundingBox.max.y * 2; at(b, x, y0 + hh / 2, z); scene.add(b); inkEdges(scene, keep, b);   // a stair's bulkhead, its door
       scene.add(at(O(new THREE.BoxGeometry(.8, 1.5, .05), mats.black, 0), x, y0 + .75, z + b.geometry.boundingBox.max.z + .03)); }
     else if (kind === 1) { for (let j = 0; j < 2; j++) { const u = O(new THREE.BoxGeometry(1.3, .9, 1.1), mats.mid); at(u, x + j * 1.5, y0 + .45, z); scene.add(u);   // air-con units, their fans
@@ -16436,12 +16436,12 @@ function cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt) {
     else if (kind === 2) { const hh = R(5, 9); scene.add(at(O(cyl(.07, .1, hh, 6), mats.black, .01), x, y0 + hh / 2, z)); for (let j = 1; j < 4; j++) scene.add(at(O(new THREE.BoxGeometry(R(.8, 1.4), .06, .06), mats.black, 0), x, y0 + hh * j / 4, z));   // an aerial, a red light
       const L = new THREE.Mesh(ball(.14, 8, 6), new THREE.MeshBasicMaterial({ color: "#f0f0f0" })); at(L, x, y0 + hh, z); scene.add(L); keep.add(L); }
     else { for (let j = 0; j < 3; j++) scene.add(at(O(cyl(.18, .18, .9, 10), mats.dark, .02), x + j * .6, y0 + .45, z)); scene.add(at(O(new THREE.BoxGeometry(2, .12, .5), mats.light, .01), x + .6, y0 + .95, z)); }   // vent stacks
-  }
-  for (let i = 0; i < 12; i++) { const x = -20 + i * (WX + 40) / 11 + R(-2, 2), z = R(-24, -11), w = R(4, 8), top = gY - R(1.5, 7), tone = tones[(rng() * 4) | 0];   // the roofs round about, under you
+  });
+  for (const sl of W.slots((WX + 40) / 11, 20, 20, 3015)) inSlot(sl, x0 => { const x = x0 + R(-2, 2), z = R(-24, -11), w = R(4, 8), top = gY - R(1.5, 7), tone = tones[(rng() * 4) | 0];   // the roofs round about, under you
     const f = O(new THREE.BoxGeometry(w, 30, w * .8), tone, .05); at(f, x, top - 15, z); scene.add(f); inkEdges(scene, keep, f);
     scene.add(at(O(new THREE.BoxGeometry(w + .2, .35, w * .8 + .2), mats.dark, .02), x, top + .17, z));
     if (rng() < .5) { const t = group(scene, x + R(-1, 1), top, z); t.add(at(O(cyl(.9, .9, 1.8, 12), mats.mid), 0, 2.2, 0)); t.add(at(O(new THREE.ConeGeometry(1.05, .6, 12), mats.dark, 0), 0, 3.4, 0));   // (a water tower on one)
-      [-1, 1].forEach(a => [-1, 1].forEach(b => t.add(at(O(cyl(.05, .05, 1.3, 5), mats.black, 0), a * .6, .65, b * .6)))); } }
+      [-1, 1].forEach(a => [-1, 1].forEach(b => t.add(at(O(cyl(.05, .05, 1.3, 5), mats.black, 0), a * .6, .65, b * .6)))); } })
 }
 let cruxCloudT = null;
 function cruxCloudTex() {                             // a heap of cartoon cloud, flat along its bottom, a thick ink line round its top
@@ -16453,13 +16453,13 @@ function cruxCloudTex() {                             // a heap of cartoon cloud
     const gr = g.createLinearGradient(0, 150, 0, 192); gr.addColorStop(0, "rgba(244,244,244,0)"); gr.addColorStop(1, "rgba(244,244,244,1)"); });
   return cruxCloudT;
 }
-function cruxClouds(scene, keep, rng, cloudY, k, anim) {   // the cloud sea under the city: a floor of it out to the horizon, heaps of it on top, drifting
-  const R = (a, b) => a + rng() * (b - a), dim = k >= 5 ? .55 : 1, col = new THREE.Color("#e8e8e8").multiplyScalar(dim);
+function cruxClouds(scene, keep, rng, cloudY, k, anim, W = wPlace(-1)) {   // the cloud sea under the city: a floor of it out to the horizon, heaps of it on top, drifting
+  const inSlot = slotRun(() => rng, v => { rng = v; }), R = (a, b) => a + rng() * (b - a), dim = k >= 5 ? .55 : 1, col = new THREE.Color("#e8e8e8").multiplyScalar(dim);
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(WX + 600, 132).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: col })); at(floor, WX / 2, cloudY - .6, -82); scene.add(floor); keep.add(floor);
   const M = new THREE.MeshBasicMaterial({ map: cruxCloudTex(), transparent: true, depthWrite: false, color: new THREE.Color(1, 1, 1).multiplyScalar(dim) }), heaps = [];
-  for (let i = 0; i < 46; i++) { const z = -16 - Math.pow(rng(), .8) * 128, w = R(9, 20) * (1 + -z / 90), q = new THREE.Mesh(new THREE.PlaneGeometry(w, w * .375), M);
-    at(q, R(-60, WX + 60), cloudY + w * .12 + R(-.6, .6), z); q.renderOrder = -1; scene.add(q); keep.add(q); heaps.push([q, R(.15, .5)]); }
-  anim.push((t, dt) => heaps.forEach(([q, sp]) => { q.position.x += dt * sp; if (q.position.x > WX + 80) q.position.x = -80; }));
+  for (const sl of W.scatter(46, 60, 60, 3017)) inSlot(sl, x => { const z = -16 - Math.pow(rng(), .8) * 128, w = R(9, 20) * (1 + -z / 90), q = new THREE.Mesh(new THREE.PlaneGeometry(w, w * .375), M);
+    at(q, x, cloudY + w * .12 + R(-.6, .6), z); q.renderOrder = -1; scene.add(q); keep.add(q); heaps.push([q, R(.15, .5), x + W.ox]); });
+  anim.push((t, dt) => heaps.forEach(([q, sp, x0]) => { q.position.x = wrapIn(x0 + sp * t - W.ox, -80, WX + 80); }));   // (drifting where the world's clock has them)
 }
 function cruxPlat(scene, keep, mats, kind, cx, top, w, foot, rng) {   // the city's ledges up off the street, each held up on something
   const O = (geo, m, ol = .03) => mk(geo, null, { mat: m, ol }), H = Math.max(.2, top - foot);
@@ -16521,7 +16521,8 @@ function cruxSet(scene, keep, rng, mats, P, gY, gAt, anim) {   // a room's own p
     return; }
 }
 function buildCruxCity(k = 0, seed = k) {
-  const before = new Set(scene.children), rng = rngF(113 + seed * 67), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
+  const before = new Set(scene.children); let rng = rngF(113 + seed * 67);
+  const R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots and walks: the street fronts, towers, canyon walls and clouds placed in the world's drawing)
   const ST = STAGES[seed] || {}, WY = Y(WATER), gY = Y(GROUND), gAt = x => Y(groundAt(x / S) ?? GROUND);
   const row = ST.arena ? "A" : String(ST.cell || "D")[0], alt = (ST.elev || 0) * ROW_RISE * S, SET = ST.set || [];   // (how high up: the street's at the bottom, a row a tower's storey on up)
   const lift = { D: 0, C: 11, B: 22, A: 33 }[row] ?? 0, cloudY = gY - ({ D: 20, C: 16, B: 10, A: 6.5 }[row] ?? 20);   // (the towers round about sink a row's height each row up; the cloud sea comes into view under you, up top just under the roofs)
@@ -16540,25 +16541,24 @@ function buildCruxCity(k = 0, seed = k) {
     // (the kerb's face sits just proud of the street's front face: they were level at z 4.0 and fought, so the kerb line shimmered
     // black and grey as you walked, worst on a phone. The user, 2026-10-17: "crux's world was kind of glitching at the bottom")
   });
-  { const N = 180, jl = new THREE.InstancedMesh(new THREE.BoxGeometry(.04, .02, 1.6), mats.mid, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();   // paving joints
-    let n = 0; for (let x = -10; x < WX + 10 && n < N; x += row === "B" ? 1.1 : row === "A" ? 2.4 : 1.6) for (const z of row === "B" ? [-5, -1.4, 2.2] : [-6, -4.2, -2.4, -.6, 1.2, 3]) { if (overGap(x / S) || n >= N) continue; m4.compose(new THREE.Vector3(x + (z % 2 ? .8 : 0), gAt(x) + .01, z), q, new THREE.Vector3(1, 1, 1)); jl.setMatrixAt(n++, m4); }
+  { const XS = W.grid(row === "B" ? 1.1 : row === "A" ? 2.4 : 1.6, 10, 10), ZS = row === "B" ? [-5, -1.4, 2.2] : [-6, -4.2, -2.4, -.6, 1.2, 3], N = XS.length * ZS.length, jl = new THREE.InstancedMesh(new THREE.BoxGeometry(.04, .02, 1.6), mats.mid, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();   // paving joints (on the world's grid, the whole way across)
+    let n = 0; for (const x of XS) for (const z of ZS) { if (overGap(x / S)) continue; m4.compose(new THREE.Vector3(x + (z % 2 ? .8 : 0), gAt(x) + .01, z), q, new THREE.Vector3(1, 1, 1)); jl.setMatrixAt(n++, m4); }
     jl.count = n; scene.add(jl); }
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND);   // a drop between the buildings, down into haze
     scene.add(at(new THREE.Mesh(new THREE.BoxGeometry(w + .1, 14, 12.4), new THREE.MeshBasicMaterial({ color: "#2a2a2a", side: THREE.BackSide })), cx, ty - 7.1, -2.4));
     const haze = new THREE.Mesh(new THREE.PlaneGeometry(w, 3), new THREE.MeshBasicMaterial({ map: tex(8, 64, g => { const gr = g.createLinearGradient(0, 0, 0, 64); gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(1, "rgba(220,220,220,1)"); g.fillStyle = gr; g.fillRect(0, 0, 8, 64); }), transparent: true, opacity: .55, depthWrite: false, fog: false }));
     at(haze, cx, ty - 1.6, 3.7); scene.add(haze); keep.add(haze); });
   // the street front: building faces close behind, arches and colonnades at the bottom, rows of windows, cornices; awnings; lamps
-  if (row !== "D") cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt);   // (up off the street: the towers' faces, their tops, the roofs round about)
-  for (let x = -6; row === "D" && x < WX + 6;) { const tall = rng() < .3, w = tall ? R(4, 6.5) : R(2.6, 5), h = tall ? R(15, 26) : R(3, 7.5), z = R(-8.2, -6.2), gx = x + w / 2; if (overGap((gx) / S) || rng() < .28) { x += w * R(.6, 1.2); continue; } const y0 = gAt(gx), tone = [mats.white, mats.light, mats.mid, mats.dark][(rng() * 4) | 0];   // (a third of them the skyscrapers' feet, up out of sight)
+  if (row !== "D") cruxHigh(scene, keep, rng, mats, row, gY, gAt, alt, W);   // (up off the street: the towers' faces, their tops, the roofs round about)
+  if (row === "D") W.walk(6, 6, 3016, (x, WR, n) => { const tall = WR(0, 1) < .3, w = tall ? WR(4, 6.5) : WR(2.6, 5), gx = x + w / 2; if (WR(0, 1) < .28) return w * WR(.6, 1.2); const adv = w + WR(0, .6); if (x + w < -6 || overGap(gx / S)) return adv; inSlot({ rs: W.rs(3016, n), x }, () => { const h = tall ? R(15, 26) : R(3, 7.5), z = R(-8.2, -6.2), y0 = gAt(gx), tone = [mats.white, mats.light, mats.mid, mats.dark][(rng() * 4) | 0];   // (a third of them the skyscrapers' feet, up out of sight)
     const fb = mk(new THREE.BoxGeometry(w, h, 2), null, { mat: tone, ol: .05 }); at(fb, gx, y0 + h / 2, z); scene.add(fb); inkEdges(scene, keep, fb);
     const cor = mk(new THREE.BoxGeometry(w + .3, .3, 2.3), null, { mat: mats.dark, ol: .03 }); at(cor, gx, y0 + h, z); scene.add(cor); inkEdges(scene, keep, cor);
     if (rng() < .5) { const n = Math.max(2, Math.floor(w / .9)); for (let i = 0; i < n; i++) { const cxx = gx - w / 2 + (i + .5) * w / n; scene.add(at(mk(cyl(.14, .16, 2.2, 10), null, { mat: mats.white, ol: .03 }), cxx, y0 + 1.1, z + 1.1)); } scene.add(at(mk(new THREE.BoxGeometry(w, .3, .5), null, { mat: mats.white, ol: .03 }), gx, y0 + 2.3, z + 1.1)); }
     else { const arch = mk(new THREE.CircleGeometry(.9, 18, 0, Math.PI), null, { mat: mats.black, ol: 0 }); at(arch, gx, y0 + 1.4, z + 1.02); scene.add(arch); scene.add(at(mk(new THREE.BoxGeometry(1.8, 1.4, .05), null, { mat: mats.black, ol: 0 }), gx, y0 + .7, z + 1.02)); }
     for (let r = 3; r < h - .8; r += 1.4) for (let c = -w / 2 + .6; c < w / 2 - .4; c += .9) scene.add(at(mk(new THREE.BoxGeometry(.4, .7, .05), null, { mat: rng() < .15 ? mats.white : mats.black, ol: 0 }), gx + c, y0 + r, z + 1.02));
-    if (rng() < .35) { const aw = mk(new THREE.BoxGeometry(w * .7, .08, 1.2), null, { mat: mats.light, ol: .03 }); at(aw, gx, y0 + 2.8, z + 1.5); aw.rotation.x = .35; scene.add(aw); }
-    x += w + R(0, .6); }
-  for (let x = R(2, 5); (row === "D" || row === "C") && x < WX; x += R(6, 9)) { if (overGap(x / S)) continue; const y0 = gAt(x); scene.add(at(mk(cyl(.05, .06, 2.6, 6), null, { mat: mats.black, ol: .015 }), x, y0 + 1.3, -2.6));   // lamps (the street's, the terraces')
-    scene.add(at(mk(ball(.2, 10, 8), null, { mat: mats.white, ol: .02 }), x, y0 + 2.7, -2.6)); }
+    if (rng() < .35) { const aw = mk(new THREE.BoxGeometry(w * .7, .08, 1.2), null, { mat: mats.light, ol: .03 }); at(aw, gx, y0 + 2.8, z + 1.5); aw.rotation.x = .35; scene.add(aw); } }); return adv; });
+  if (row === "D" || row === "C") for (const sl of W.steps(6, 9, 1, 1, 3001)) inSlot(sl, x => { if (overGap(x / S)) return; const y0 = gAt(x); scene.add(at(mk(cyl(.05, .06, 2.6, 6), null, { mat: mats.black, ol: .015 }), x, y0 + 1.3, -2.6));   // lamps (the street's, the terraces')
+    scene.add(at(mk(ball(.2, 10, 8), null, { mat: mats.white, ol: .02 }), x, y0 + 2.7, -2.6)); });
   // confusion: arrow signposts every which way, stairs to nowhere, a building hanging upside down, big "?" marks turning
   const signs = [];
   for (let i = 0; i < 3; i++) { const x = R(2, WX - 2); if (overGap(x / S)) continue; const s2 = signpost(scene, rng, mats); s2.P.position.set(x, gAt(x), R(-4.5, -3)); keep.add(s2.P); s2.P.traverse(o => keep.add(o)); signs.push(s2); }
@@ -16571,13 +16571,13 @@ function buildCruxCity(k = 0, seed = k) {
   for (let i = 0; i < 5; i++) { const q = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.4), QMARK()); q.position.set(R(0, WX), gY + R(5, 11), R(-12, -9)); scene.add(q); keep.add(q); qs.push([q, R(.4, 1.2) * (rng() < .5 ? -1 : 1)]); }
   // further back: the towers, bridges between them; then the banded canyon walls; the sky
   const towers = [];
-  for (let i = 0; i < 11; i++) { const T = cruxTower(scene, rng, R(.8, 1.4) * 2.1, mats); const x = -10 + i * (WX + 20) / 10 + R(-2, 2), z = R(-46, -24); T.position.set(x, gY - .5 - lift, z); towers.push(T); T.updateMatrixWorld(true); T.children.slice(0, 1).forEach(m => inkEdges(scene, keep, m, 50)); }   // (out of the clouds, the street's height over them; up top you look down on them)
-  for (let i = 0; i < towers.length - 1; i++) if (rng() < .6) { const a = towers[i].position, b = towers[i + 1].position, y = gY - lift + R(15, 24), len = Math.hypot(b.x - a.x, b.z - a.z);
+  for (const sl of W.slots((WX + 20) / 10, 10, 10, 3002)) inSlot(sl, x0 => { const T = cruxTower(scene, rng, R(.8, 1.4) * 2.1, mats); const x = x0 + R(-2, 2), z = R(-46, -24); T.userData.br = rng() < .6 ? R(15, 24) : 0; T.position.set(x, gY - .5 - lift, z); towers.push(T); T.updateMatrixWorld(true); T.children.slice(0, 1).forEach(m => inkEdges(scene, keep, m, 50)); })   // (out of the clouds, the street's height over them; up top you look down on them)
+  for (let i = 0; i < towers.length - 1; i++) if (towers[i].userData.br) { const a = towers[i].position, b = towers[i + 1].position, y = gY - lift + towers[i].userData.br, len = Math.hypot(b.x - a.x, b.z - a.z);   // (each tower's own: whether a bridge goes on to the next, and how high)
     const br = mk(new THREE.BoxGeometry(len, .4, .9), null, { mat: mats.white, ol: .03 }); at(br, (a.x + b.x) / 2, y, (a.z + b.z) / 2); br.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x); scene.add(br); }
-  for (let i = 0; i < 7; i++) { const x = -40 + i * (WX + 80) / 6 + R(-6, 6), z = R(-110, -70), h = R(18, 34), w = R(14, 26), cl = group(scene, x, gY - 1 - lift, z);   // canyon walls: rounded masses in bands (up top, their tops down under you)
-    for (let j = 0; j < 6; j++) cl.add(at(mk(new THREE.CylinderGeometry(w * (1 - j * .07), w * (1 - (j - 1) * .07), h / 6, 18).scale(1, 1, .5), null, { mat: j % 2 ? mats.light : mats.white, ol: .08 }), 0, (j + .5) * h / 6, 0)); }
+  for (const sl of W.slots((WX + 80) / 6, 40, 40, 3003)) inSlot(sl, x0 => { const x = x0 + R(-6, 6), z = R(-110, -70), h = R(18, 34), w = R(14, 26), cl = group(scene, x, gY - 1 - lift, z);   // canyon walls: rounded masses in bands (up top, their tops down under you)
+    for (let j = 0; j < 6; j++) cl.add(at(mk(new THREE.CylinderGeometry(w * (1 - j * .07), w * (1 - (j - 1) * .07), h / 6, 18).scale(1, 1, .5), null, { mat: j % 2 ? mats.light : mats.white, ol: .08 }), 0, (j + .5) * h / 6, 0)); })
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(320, 130 + alt * 1.6), new THREE.MeshBasicMaterial({ map: cruxSkyTex(k), fog: false })); at(sky, WX / 2, gY + 55 - alt * .8, -150); scene.add(sky); keep.add(sky);
-  cruxClouds(scene, keep, rng, cloudY, k, anim);       // (the cloud sea, a long way down)
+  cruxClouds(scene, keep, rng, cloudY, k, anim, W);       // (the cloud sea, a long way down)
   // things in the air: flying skiffs crossing, birds
   const skiffs = [0, 1].map(i => { const f = flyingSkiff(scene, mats, R(.8, 1.1)); f.B.position.set(R(0, WX), gY + (row === "A" ? R(-7, -3) : R(8, 12)), R(-13, -10)); f.sp = R(.8, 1.6) * (i ? -1 : 1); f.ph = R(0, TAU); keep.add(f.B); f.B.traverse(o => keep.add(o)); return f; });   // (up top, they cross under you)
   const birdM = new THREE.MeshBasicMaterial({ color: "#1c1c1c", side: THREE.DoubleSide }), birds = [];
