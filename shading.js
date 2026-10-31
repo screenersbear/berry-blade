@@ -7,10 +7,10 @@ window.BerryShading = (() => {
   // the game's look, shipped (the user, 2026-10-31, "okay first let's do this lighting for the game" + their exported CUSTOM): the characters flatter (lighting
   // .31), a soft 3-step ramp, a light rim, a touch of top light, richer colour; the scenery a little calmer, its shadows toward blue-grey. SHIPPED_ID: a choice
   // made in a browser before this look shipped (an APPLY, NO SHADING) doesn't hide it; one made after it does
-  const SHIPPED_ID = "20261031b", SHIPPED = {   // (b, 2026-10-31: no rim. Every browser takes it, as a new id)
-    character: { lightingInfluence: .31, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
-      rimLight: { enabled: false, color: "#FFFFFF", width: 0, intensity: .35 },   // (no rim: the user, 2026-10-31 "remove all the rim width for the game's lighting on the character models"; was on, width .3)
-      edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .01, intensity: .5 },
+  const SHIPPED_ID = "20261031c", SHIPPED = {   // (c, 2026-10-31: the user's second CUSTOM, lighting influence .04 (was .31). Every browser takes it, as a new id)
+    character: { lightingInfluence: .04, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
+      rimLight: { enabled: true, color: "#FFFFFF", width: 0, intensity: 0 },   // (as the user's file has it: on, at width 0 and intensity 0, so nothing: the shader skips a rim that has no width)
+      edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .017, intensity: .5 },
       fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.31 },
     environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: .9, contrast: .87, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 } }
   };
@@ -70,7 +70,7 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     vec3 c = mix(mkFlat, mkLit, mkInfl);
     if (mkAOOn > .5) { float ao = clamp(-mkNW.y, 0.0, 1.0) * .65 + (1.0 - smoothstep(0.0, .7, vMkW.y - mkGround)) * .45; c *= 1.0 - mkAOStr * clamp(ao, 0.0, 1.0); }   // (creases face down; low down near the ground)
     if (mkTopOn > .5) c += mkAlb * mkTopStr * max(mkNW.y, 0.0);
-    if (mkRimOn > .5) { float f = 1.0 - max(dot(mkN, mkV), 0.0); c += mkRimC * smoothstep(1.0 - mkRimW, 1.0, f) * mkRimI; }
+    if (mkRimOn > .5 && mkRimW > .001 && mkRimI > .001) { float f = 1.0 - max(dot(mkN, mkV), 0.0); c += mkRimC * smoothstep(1.0 - mkRimW, 1.0, f) * mkRimI; }   // (no width: no rim; smoothstep(1, 1, f) is undefined)
     if (mkSpecOn > .5) { vec3 h = normalize(mkL + mkV); c += mkSun * smoothstep(.94, .965, dot(mkN, h)) * mkSpecI * .35; }
     float lu = dot(c, vec3(.299, .587, .114)); c = mix(vec3(lu), c, mkSat); c = (c - .22) * mkCon + .22;
     outgoingLight = mkOn > .5 ? max(c, 0.0) : mkBase; }
