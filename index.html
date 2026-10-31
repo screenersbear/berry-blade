@@ -361,6 +361,7 @@
   #pause .btns { justify-content: center; }
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
   #pAsk.hidden { display: none; }
+  #fpsBox { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); z-index: 60; background: rgba(29, 31, 36, .82); color: var(--y); font: 600 11px/1.45 "Jost", sans-serif; letter-spacing: .06em; padding: 3px 10px; pointer-events: none; white-space: nowrap; } #fpsBox.hidden { display: none; }   /* (pause > DEBUG > FPS COUNTER) */
   #pause.dbg #pTeam { display: none; }   /* (DEBUG's long list: the whole side to itself, no team box) */
   #texPick { position: fixed; left: 50%; top: max(10px, env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 41; } #texPick.low { top: auto; bottom: max(12px, env(safe-area-inset-bottom, 0px)); } #texPick.hidden { display: none; }   /* pause > DEBUG > TEXTURE: a window of its own, the game in view over it */
   #texPick .panel { padding: 10px 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: calc(100vw - 24px); max-height: none; box-sizing: border-box; }
@@ -633,7 +634,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261031e"></script>
+<script src="charkit.js?v=20261031f"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031c"></script>
 <script src="score.js?v=20261028a"></script>
@@ -776,6 +777,7 @@
 <div id="npcTip" class="hidden"></div>
 <audio id="bgm" loop preload="none"></audio>
 <div id="toast"></div>
+<div id="fpsBox" class="hidden"></div>
 <div id="teamMnu" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">ONE TOO MANY</div><div class="bar">TWO PARTNERS AT A TIME · WHO GOES HOME?</div></div>
   <div class="btns" id="teamBtns"></div>
@@ -854,7 +856,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261031c"></script>
+<script src="editor.js?v=20261031d"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -1304,9 +1306,15 @@ const FEEL_DEFAULT = {
   // HIT BOXES (the user, 2026-10-31: "hit boxes should be closer to the characters"): how far past the fist or foot, the gauntlet, the blade itself a blow still lands, px
   // (before: 16 past a fist or foot, 44 past the gauntlet, and a sword's set reach whatever the blade was doing: 128-170 px for Rose, her blade's own 75-90)
   hitBoxes: { fist: 10, gauntlet: 24, blade: 18 },
+  // the user, 2026-10-31 ("if something already exists, tell me what it does and only improve it if it's missing pieces"): off, each is the game's own as it was
+  camera: { enabled: true, lookahead: .12, follow: 4.5, catchUp: 9, framing: .5, fightRange: 520 },   // (lookahead: of the screen's width, the way you're moving; follow / catchUp: per second; framing: 0 you, 1 the middle of you and who you're fighting)
+  turn: { enabled: true, pivotFrames: 4 },                                         // (a turn on the spot: a pivot this many frames; an attack or a jump cuts it short)
+  playerHit: { enabled: true, knockback: 1, invuln: .5, hitstopFrames: 6, shake: 9, flicker: true },   // (when you're hit: the push x, safe this long after the flinch, the freeze, the shake; flicker: a soft pale blink, not vanishing)
+  telegraph: { enabled: true, length: 1, glow: 1, bigK: .3 },                     // (every enemy attack: its wind-up x length, longer for the big ones by bigK, and a glow building to the strike)
+  fidgets: { enabled: true, after: 4, every: 6 },                                  // (standing still this long: a fidget now and then, about every this many seconds)
   // MOVEMENT (the user, 2026-10-31: the floatiness notes, "Yes, build the MOVEMENT section" + whiffs at normal gravity, the air up attack's rise at full gravity
   // and its coil). Off (or BEFORE): the game's own, as it was. weight: gravity x this with the jumps scaled to match (same heights, less hang)
-  movement: { enabled: true, weight: 1, fall: 1.8, jumpCut: 2.1, coyoteFrames: 6, groundAccel: 1, groundStop: 1, airControl: 1, airStrikeGrav: 1, whiffOn: true, whiffGrav: 1, hang: .3,
+  movement: { enabled: true, weight: 1, fall: 1.8, jumpCut: 2.1, coyoteFrames: 6, groundAccel: .72, groundStop: 1, airControl: 1, airStrikeGrav: 1, whiffOn: true, whiffGrav: 1, hang: .3,
     upRiseFull: true, upRiseHeight: 1, upCoil: true, upCoilFrames: 3, landRecovery: 5, camDip: 6, camDipTime: .15, accLean: 6 }   // (the user, 2026-10-31: fall 1.8 (was 1.4), a 5-frame recovery after a fall higher than a full jump, a 6 px dip back over .15 s, a 6-degree lean at its peak)
 };
 const ACC_LEAN_OWN = 5.15;                          // (the game's own acceleration lean at its peak, degrees, measured 2026-10-31: 4.9 Camila / 5.4 Rose starting a run; under half a degree back on stopping)
@@ -1317,9 +1325,16 @@ const upPush = (p, kind, fresh) => {   // the air up attack's push up. MOVEMENT'
   const M = feelMove(), G = GRAV * WEIGHT * M.weight, hop = KIT.STRIKES[kind].hop * Math.sqrt(M.weight), v0 = fresh ? hop : Math.min(p.vy, hop * .85);
   if (!M.upRiseFull || v0 >= 0) { p.upTop = null; return v0; }
   const ag = (KIT.STRIKES[kind].grav ?? .55) * M.airStrikeGrav, H = v0 * v0 / (2 * G * ag) * M.upRiseHeight; p.upTop = p.y - H; return -Math.sqrt(2 * G * H); };
+let camLook = 0;                                     // (COMBAT FEEL's CAMERA lookahead, world units, eased)
+function camFoe(range) {                            // the one you're fighting, for the camera's framing: the boss, or the nearest baddy in range that's on to you
+  if (!player) return null; let best = null, bd = range;
+  if (bossIn && enemy && !enemy.dead && !enemy.gone && Math.abs(enemy.x - player.x) < bd) { best = enemy; bd = Math.abs(enemy.x - player.x); }
+  for (const b of baddies) { if (b.dead || b.gone || b.sad || b.flee || b.sleep || b.calm || b.npc || b.happyT !== undefined || !b.seen) continue; const d = Math.abs(b.x - player.x); if (d < bd && Math.abs(b.y - player.y) < 260) { bd = d; best = b; } }
+  return best;
+}
 let camDip = 0, camDipA = 0, camDipT = -1, camDipD = .15;   // (MOVEMENT's camera dip on a heavy landing: down in .04 s, back over camDipTime)
 const camDipStart = (px, T) => { camDipA = px * S; camDipT = 0; camDipD = Math.max(.02, T); };
-const FEEL_FX = ["hitstop", "screenShake", "hitFlash", "hitSparks", "knockback", "squashStretch", "weaponTrail", "anticipation", "cancel", "secondaryMotion", "idleLife", "cameraPunch", "slowMoFinisher", "hitSound", "rumble", "movement"];
+const FEEL_FX = ["hitstop", "screenShake", "hitFlash", "hitSparks", "knockback", "squashStretch", "weaponTrail", "anticipation", "cancel", "secondaryMotion", "idleLife", "cameraPunch", "slowMoFinisher", "hitSound", "rumble", "movement", "camera", "turn", "playerHit", "telegraph", "fidgets"];
 const FEEL_PRESETS = {
   off: c => { FEEL_FX.forEach(k => { c[k].enabled = false; }); },
   subtle: c => { c.masterIntensity = .5; },
@@ -1409,6 +1424,11 @@ const FEEL_UI = [
   ["slowMoFinisher", "SLOW-MO FINISHER", [["timeScale", "time scale", .05, 1, .05], ["duration", "duration s", 0, 1, .05]]],
   ["hitSound", "HIT SOUND", [["pitchVariance", "pitch +/-", 0, .3, .01], ["thump", "heavy thump"]]],
   ["rumble", "RUMBLE", []],
+  ["camera", "CAMERA", [["lookahead", "lookahead, of the screen's width", 0, .3, .01], ["follow", "follow speed (moving)", 1, 12, .1], ["catchUp", "catch-up when you stop", 1, 20, .1], ["framing", "framing: you (0) to the fight's middle (1)", 0, 1, .05], ["fightRange", "fight in range, px", 200, 900, 10]]],
+  ["turn", "TURNAROUNDS", [["pivotFrames", "pivot, frames", 2, 8, 1]]],
+  ["playerHit", "PLAYER HIT", [["knockback", "knockback x", 0, 2.5, .05], ["invuln", "safe after the flinch, s", 0, 2, .05], ["hitstopFrames", "hitstop, frames", 0, 12, .5], ["shake", "shake px", 0, 20, .5], ["flicker", "a soft flicker (off: the old blink)"]]],
+  ["telegraph", "ENEMY TELEGRAPHS", [["length", "wind-up length x", .5, 2.5, .05], ["glow", "glow", 0, 2, .05], ["bigK", "the big ones' extra", 0, 1, .05]]],
+  ["fidgets", "IDLE FIDGETS", [["after", "after standing still, s", 1, 15, .5], ["every", "then about every, s", 2, 20, .5]]],
   ["hitBoxes", "HIT BOXES", [["fist", "past a fist or foot, px", 0, 40, 1], ["gauntlet", "past the gauntlet, px", 0, 60, 1], ["blade", "past the blade's tip, px", 0, 60, 1]]],
   ["movement", "MOVEMENT", [["weight", "gravity x (jumps match: same height)", .6, 2, .02], ["fall", "fall multiplier (falling vs rising)", 1, 3, .05], ["jumpCut", "jump cut (let go early)", 1, 4, .05],
     ["coyoteFrames", "coyote time, frames", 0, 15, 1], ["groundAccel", "ground acceleration x", .3, 3, .05], ["groundStop", "ground stopping x", .3, 3, .05], ["airControl", "air control x", .2, 3, .05],
@@ -1469,7 +1489,7 @@ function saveFile(name, text) { try { const a = document.createElement("a"); a.h
 function pickFile(cb) { const i = document.createElement("input"); i.type = "file"; i.accept = ".json,application/json"; i.style.display = "none"; i.addEventListener("change", async () => { const f = i.files && i.files[0]; i.remove(); if (f) cb(await f.text()); }); document.body.appendChild(i); i.click(); }
 function copyText(text, said) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(said, 1600), () => { prompt("Copy these settings:", text); }); }
 // all of them in one file: the combat feel, a look applied from the SHADING MOCKUP (and the mockup's own), pause > DEBUG > TEXTURE. From pause > DEBUG or the DEVELOPER menu
-const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look"];
+const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look", "bb_fps"];
 function debugExport() { const o = { berryDebug: 1, at: new Date().toISOString(), keys: {} }; for (const k of DEBUG_KEYS) { try { const v = localStorage.getItem(k); if (v != null) o.keys[k] = JSON.parse(v); } catch (e) { } } return JSON.stringify(o, null, 2); }
 function debugImport(text) { const o = JSON.parse(text); if (!o || !o.berryDebug || !o.keys) throw new Error("not a debug settings file"); for (const k of DEBUG_KEYS) if (k in o.keys) localStorage.setItem(k, JSON.stringify(o.keys[k])); }
 function debugFileIn() { pickFile(t => { try { debugImport(t); toast("DEBUG SETTINGS LOADED · STARTING AGAIN WITH THEM", 2000); setTimeout(() => location.reload(), 1400); } catch (e) { toast("THAT ISN'T A DEBUG SETTINGS FILE", 2200); } }); }   // (a look and a texture take hold as the game starts)
@@ -2035,7 +2055,7 @@ function syncFoe(e, r, dt = 0) {
   const sk = e.skidK || 0, md = Math.sign(e.vx) * e.dir || 0, wu = crouch ? (e.windup0 ? ez(clamp(1 - e.windup / e.windup0, 0, 1)) : 1) : 0;
   const lk = e.onGround && (e.landT ?? 9) < .44 ? (e.landK || .5) * (e.landT < .05 ? e.landT / .05 : (1 - (e.landT - .05) / .39) ** 2) : 0;   // (into the knees, and slowly back up out of them)
   const hs = !walking && (e.haltT ?? 9) < .7 ? Math.sin(e.haltT * 12) * Math.exp(-e.haltT * 5) * (e.haltK || 0) : 0, hpl = !walking && (e.haltT ?? 9) < .7 ? Math.exp(-e.haltT * 6) * Math.min(1, e.haltT / .05) * (e.haltK || 0) : 0;   // (the halt's sway, and the lead foot planted)
-  const A0 = charge ? ATTACKS[e.move] : null, kc = A0 ? ez(clamp(1 - e.atkTm / A0.charge, 0, 1)) : 0;
+  const A0 = charge ? ATTACKS[e.move] : null, kc = A0 ? ez(clamp(1 - e.atkTm / (e.chargeTot || A0.charge), 0, 1)) : 0;
   const ka = act ? (e.actT < .07 ? ez(e.actT / .07) : 1 - .55 * ez(clamp((e.actT - .07) / .45, 0, 1))) : 0;
   // standing: its own idle (BOSS_IDLE: breathing in slow and out quicker, the weight from foot to foot, knees soft, the guard up) and its gestures
   const prof = BOSS_IDLE[e.def && e.def.id] || BOSS_IDLE._, dash = (e.dashT || 0) > 0, still = e.onGround && !walking && !e.atk && !hurt && !crouch && !dash && !(e.chide && e.chide.t > 0);
@@ -2115,7 +2135,7 @@ function syncFoe(e, r, dt = 0) {
   settleJoints(r, e, dt);
   if (r.flip) r.tilt.rotation.z += ez(r.flip) * TAU;   // (the back flip over the spring's pose: a whole turn, so landing out of it is seamless)
   if (r.chains.length) { r.root.updateMatrixWorld(true); updateChains(r, e, dt); }
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e); if (e.atk === "charge" && e.chargeTot && !e.dead && !(e.flash > 0)) teleTint(r.mats, 1 - e.atkTm / e.chargeTot, e.atkTm);   // (its telegraph's glow)
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -5925,6 +5945,25 @@ Object.assign(KIT.STRIKES, {
         armB: [[0, 1.2], [.1, 2.4], [.18, 2.5], [.27, 1.0], [.36, -.3], [.56, .4]], elbB: [[0, .6], [.56, .5]],
         lean: [[0, .2], [.1, -.25], [.18, -.25], [.27, .65], [.4, .55], [.56, .25]], spF: [[0, .2], [.1, .8], [.2, .6], [.27, 0]],
         bodyY: [[0, -.08], [.1, -.04], [.27, -.28], [.42, -.26], [.56, -.08]], fNx: [[0, .26], [.1, .26], [.27, .16], [.44, .16], [.56, .26]], fFx: [[0, -.24], [.27, -.56], [.44, -.54], [.56, -.24]] } } }); }
+// Rose's blade slices (the user, 2026-10-31: "make sure rose's attack animations are slicing or cutting and not like poking straight ahead where it doesnt look like a
+// real sword swing"): her slash, rising cut and cleave each a real arc now, the blade sweeping through the target and on past it into a low follow-through (it had
+// snapped through its arc between two frames and then held, pointing at them, like a thrust), the arc played smoothly through its hit window (flow)
+{ const FLW = ["blade", "armF", "elbF", "twist", "lean"];
+  KIT.STRIKES.rslash = { ...KIT.STRIKES.rslash, dur: .42, flow: FLW, hits: [{ t0: .12, t1: .25, reach: 105, back: 5, y0: 130, y1: 0, kind: "cut" }],   // high over her shoulder, then a diagonal cut down through them, on past to low
+    keys: { armF: [[0, .35], [.08, 2.7], [.12, 2.25], [.17, 1.15], [.22, .35], [.3, .15], [.42, .35]], elbF: [[0, 1.15], [.08, 1.2], [.14, .45], [.22, .2], [.3, .4], [.42, .95]],
+      blade: [[0, .95], [.08, 2.6], [.12, 1.95], [.16, .65], [.2, -.6], [.25, -1.5], [.33, -1.7], [.42, .35]], grip: [[0, 0], [.05, 1], [.33, 1], [.42, .5]],
+      armB: [[0, 1.3], [.08, 1.6], [.16, .9], [.25, -.5], [.42, -.15]], elbB: [[0, .45], [.08, 1], [.16, .9], [.25, .35], [.42, .5]],
+      twist: [[0, 0], [.08, -.4], [.18, .45], [.3, .5], [.42, .05]], lean: [[0, .26], [.08, -.1], [.18, .5], [.3, .45], [.42, .22]], spF: [[0, 0], [.08, .8], [.14, .3], [.2, 0]],
+      bodyY: [[0, -.08], [.08, -.02], [.2, -.18], [.32, -.16], [.42, -.08]], fNx: [[0, .24], [.12, .4], [.42, .28]], fFx: [[0, -.2], [.12, -.3], [.42, -.22]] } };
+  KIT.STRIKES.rrise = { ...KIT.STRIKES.rrise, dur: .44, flow: FLW, hits: [{ t0: .1, t1: .26, reach: 95, back: 10, y0: 165, y1: 10, kind: "cut" }],   // the blade down and back by her heel, then up through them and on over her head
+    keys: { armF: [[0, .35], [.07, -.45], [.12, .3], [.18, 1.6], [.26, 2.7], [.34, 2.8], [.44, .6]], elbF: [[0, 1.15], [.07, .4], [.18, .2], [.26, .3], [.44, 1.0]],
+      blade: [[0, .95], [.07, -2.2], [.11, -1.2], [.16, .1], [.21, 1.3], [.27, 2.3], [.34, 2.5], [.44, 1.0]], grip: [[0, 0], [.05, 1], [.36, 1], [.44, .5]],
+      armB: [[0, 1.3], [.07, -.3], [.18, 1.4], [.27, 2.5], [.44, .4]], elbB: [[0, .45], [.07, .5], [.27, .4], [.44, .5]],
+      twist: [[0, 0], [.07, .3], [.2, -.3], [.44, 0]], lean: [[0, .2], [.07, .45], [.2, -.15], [.32, -.2], [.44, .2]], bodyY: [[0, -.08], [.07, -.22], [.2, .02], [.44, -.08]],
+      fNx: [[0, .24], [.1, .36], [.44, .26]], fFx: [[0, -.2], [.1, -.3], [.44, -.22]] } };
+  const C = KIT.STRIKES.rcleave; KIT.STRIKES.rcleave = { ...C, flow: ["blade", "armF", "elbF", "lean"],   // both hands high, then down through them with all her weight, the blade carried on down to the ground
+    keys: { ...C.keys, armF: [[0, 1.0], [.1, 3.0], [.18, 3.05], [.24, 2.0], [.29, .9], [.36, .35], [.46, .4], [.56, 1.0]], elbF: [[0, .5], [.1, 1.0], [.18, 1.0], [.24, .4], [.29, .05], [.36, .15], [.56, .4]],
+      blade: [[0, 1.0], [.1, 3.0], [.18, 3.1], [.24, 1.6], [.29, -.4], [.34, -1.5], [.46, -1.7], [.56, .3]] } }; }
 // Camila's ground combo made again from scratch (the user, 2026-10-25: "it's not clear when she hits and some animations continue past the point the
 // hit has been made"): three blows, one each, the arm at its full reach exactly while its hit window's open, back to her guard straight after it
 Object.assign(KIT.STRIKES, {
@@ -6381,13 +6420,14 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dhero", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dhero", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
   if (what === "dhero") { const o = otherHero(); closePause(); swapHero(o); return; }   // (the other girl, right where you stand: the user, 2026-10-29 "debug mode should allow the player to select the other character")
   if (what === "dfeel") { SFX.confirm(); feelPanelToggle(true); return; }
+  if (what === "dfps") { SFX.tick(); fpsSet(!fpsOn); const b = $("pbtns").querySelector('[data-p="dfps"]'); if (b) b.textContent = "FPS COUNTER: " + (fpsOn ? "ON" : "OFF"); return; }   // (2026-10-31)
   if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
   if (what === "dimp") { SFX.confirm(); debugFileIn(); return; }   // (COMBAT FEEL's panel, over the pause)
   if (what === "dlook") { texOpen(); return; }   // (the look, to try: kept in this browser. Its own window now, the game in view)
@@ -10267,7 +10307,12 @@ function updatePlayer(dt) {
     if (p.blkDownT === time && !bk && time - (p.turnT ?? -9) < .15 && (p.faceWas > 0 ? held.left : held.right)) { p.face = p.faceWas; bk = true; p.backDownT = p.turnT; p.backWas = true; }   // (back pressed a moment before block had turned you round: facing on again, and the step back)
     const bkEdge = bk && !p.backWas; if (bkEdge) p.backDownT = time; p.backWas = bk; p.dodgeCd = Math.max(0, (p.dodgeCd || 0) - dt);
     const both = bk && held.block && (bkEdge || (p.blkDownT === time && time - (p.backDownT ?? -9) < .15));   // (holding block, back pressed; or block pressed just after back)
-    if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p); }
+    if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p);
+    // and forward with the guard up (the user, 2026-10-31: "... slide forward and face back towards the enemy"): a slide along the ground, safe through it, past them,
+    // and round to face them at its end
+    const fw = p.face > 0 ? held.right : held.left, fwEdge = fw && !p.fwdWas; if (fwEdge) p.fwdDownT = time; p.fwdWas = fw;
+    const both2 = fw && held.block && (fwEdge || (p.blkDownT === time && time - (p.fwdDownT ?? -9) < .15));
+    if (both2 && p === player && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !p.bubble && !deepIn(p)) startSlideFwd(p); }
   // sprint: two quick taps the same way, then keep holding
   if (ax && ax === p.runDir && control && !p.block && !(p.tpose > 0) && !(p.onGround && held.down) && !(p.onGround && p.hitWall === ax)) p.runT = (p.runT || 0) + dt;   // keep going the same way…
   else { p.runT = 0; p.runDir = ax; }                                                   // …stop, turn, block or hit a wall and it starts over
@@ -10285,6 +10330,7 @@ function updatePlayer(dt) {
   const SET = cat ? null : setOf(p.rig.spec);
   if (upPend >= 0 && control && !p.upUsed && p.atkT >= 0 && p.atkT < UPW + .02 && time - atkPressT < UPW && !p.solo && !p.combo && (p.atkIdx || 0) === 0) { p.atkT = -1; p.atkKind = null; atkBuf = feelBuf(); }   // attack, then ↑ just after: that first swing becomes the up attack
   const sw = !!p.dive;                     // (in the deep's water: your combos as on the ground, any time; ↑ ↓ only swim. The user, 2026-10-24: "combat in the water doesn't work well. it feels like you have touch s platform or land to attack": it was the air's, one combo till you landed)
+  if (upPend >= 0 && upPend !== p.upSeen) { p.upSeen = upPend; if (p.onGround && p.atkT < 0 && !p.climb && control) { p.sq = Math.min(p.sq || 0, -.12); p.sqv = 0; } }   // (↑ pressed: a dip at once, on its first frame, while it waits a beat to see if attack's coming: 2026-10-31's latency pass)
   const upAtk = atkBuf > 0 && !sw && (upPend >= 0 || UP_KEYS.some(k => keys[k]) || pad.du) && !p.upUsed;   // ↑ and attack together (either one first), or attack with ↑ held down: the rising hit (once till you land again)
   if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = feelBuf(); }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
   const upFresh = () => { const f = p.onGround || time - (p.jumpT ?? -9) < .14; if (f) { jumpBuf = 0; p.coyote = 0; p.jcharging = false; p.jcharge = 0; } return f; };   // (↑ is a jump key too: pressed with attack, the hit's own lift takes the jump's place)
@@ -10355,7 +10401,8 @@ function updatePlayer(dt) {
   else if (!cat && MV && attacking && p.onGround && p === player && p.chain && p.chain.kind === "B" && (held.left || held.right) && fwdDrive(p, dt)) { }   // (holding forward: the combo carries you on after what it knocks back)
   else if ((!cat || MV) && attacking && p.onGround) p.vx = approach(p.vx, 0, 2600 * dt);   // humans plant their feet while striking
   else if (!(attacking && Math.abs(p.vx) > maxV && Math.sign(p.vx) === mx)) p.vx = approach(p.vx, target, rate * dt * (attacking ? .5 : 1));
-  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle && !p.dodge) { if (p.face !== ax) { p.turnT = time; p.faceWas = p.face; } p.face = ax; }
+  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle && !p.dodge) { if (p.face !== ax) { p.turnT = time; p.faceWas = p.face;
+      if (p === player && !FEEL.legacy && FEEL.turn.enabled && p.onGround && !p.climb) p.pivotT = FEEL.turn.pivotFrames / 60; } p.face = ax; }   // (a turn: COMBAT FEEL's pivot, a few frames; the body turns through it, no instant flip. Nothing waits on it: it's only how she looks)
   if (p.carry > 0) { p.carry -= dt; p.vx = p.carryDir * Math.max(p.carryDir * p.vx, 300); }
 
   if (wet) {                                         // swimming (the user, 2026-10-24: "move up and down the water in a floaty way, no jumping, and can attack still")
@@ -10404,7 +10451,9 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
-  if (p.dodge && (((p.dodge.t += dt) > .08 && p.onGround) || p.dodge.t > .7)) { p.dodge = null; p.vx *= .25; if (p.onGround) dust(p.x, p.y, 4, -p.face); }   // (down again: the back-step done)
+  if (p.dodge && p.dodge.fwd) { const D = p.dodge; D.t += dt; p.vx = p.face * 780 * Math.max(0, 1 - D.t / .46); if (Math.random() < dt * 30) dust(p.x - p.face * 10, p.y, 1, -p.face);   // the slide forward: carried on, slowing
+    if (D.t > .4 || !p.onGround) { p.dodge = null; p.vx *= .2; const F = camFoe(600), back = F ? Math.sign(F.x - p.x) || -p.face : -p.face; if (back !== p.face) { p.face = back; p.pivotT = Math.max(p.pivotT || 0, 3 / 60); } } }   // (its end: round to face them, the one it went past)
+  else if (p.dodge && (((p.dodge.t += dt) > .08 && p.onGround) || p.dodge.t > .7)) { p.dodge = null; p.vx *= .25; if (p.onGround) dust(p.x, p.y, 4, -p.face); }   // (down again: the back-step done)
   if (p.zBack) { p.z = approach(p.z || 0, 0, dt * 6); if (!p.z) p.zBack = false; }   // (up out of a rest stop's chair: forward onto your line)
   if (p.onGround || p.dive) { p.upUsed = false; p.bigJ = 0; p.floatB = false; p.airN = 0; p.stomped = null; }   // back on your feet: the rising hit and the bubble's drift reset
   const span = p.combo ? p.comboSpan : p.tackle ? p.tackle.span : null;   // (charging an attack or the tackle, you can walk off a ledge: only a combo under way, the charged tackle's included, holds you to your footing; the user, 2026-10-17)
@@ -10451,7 +10500,15 @@ function updatePlayer(dt) {
   p.bodyYaw = lerp(.85, (p.dive || p.swim) && !attacking ? .08 : .3, p.prof);   // (swimming: right side-on, so the body's tilt along the stroke reads across the screen)
   const yT0 = p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, yT1 = p.tpose > 0 ? lerp(yT0, -Math.PI / 2, Math.min(1, p.tpose * 2.5)) : yT0;   // opening out to the T: turn to face us
   const yT = p.eat > 0 && p.eatFar && !attacking ? lerp(yT1, -Math.PI / 2, .75) : yT1;   // (eating with the far hand, your weapon in the near one: turned to us, so the bite shows)
-  p.yaw = lerp(p.yaw, yT, 1 - Math.exp(-dt * 16));
+  if (p.pivotT > 0) { p.pivotT -= dt; if (attacking || !p.onGround) p.pivotT = 0; }   // (an attack or a jump: the pivot's over at once, she's round)
+  p.yaw = p.pivotSnap ? yT : lerp(p.yaw, yT, 1 - Math.exp(-dt * (p.pivotT > 0 ? 3 * 60 / Math.max(1, FEEL.turn.pivotFrames) : 16))); p.pivotSnap = false;   // (pivoting: round within its frames)
+  { const FG = FEEL.fidgets, anyIn = held.left || held.right || held.jump || held.down || held.up || held.atk || held.block || jumpBuf > 0 || atkBuf > 0;   // idle fidgets (COMBAT FEEL): standing still a while, now and then; any press ends one at once
+    const still = p === player && p.rig.kind !== "cat" && !FEEL.legacy && FG.enabled && control && p.onGround && !attacking && Math.abs(p.vx) < 20 && !p.block && !p.crouch && !p.climb && !p.sit && !p.cons && !p.dodge && !p.tackle && !p.dead && !anyIn;
+    if (!still) { p.stillT = 0; p.fidget = null; }
+    else { p.stillT = (p.stillT || 0) + dt;
+      if (p.fidget) { p.fidget.t += dt; const S = KIT.STRIKES[p.fidget.kind]; if (!S || p.fidget.t >= S.dur) { p.fidget = null; p.fidgetWait = FG.every * rand(.65, 1.35); } }
+      else if (p.stillT >= FG.after && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const F = KIT.FIDGETS, L = F[String(p.rig.spec.id || p.rig.name || "").toLowerCase()] || F.all, opts = L.filter(k => k !== p.fidgetLast), k = opts[Math.floor(Math.random() * opts.length)] || L[0];
+        p.fidget = { kind: k, t: 0 }; p.fidgetLast = k; } } }   // (never the same one twice running)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   // lean into acceleration, rock back when braking (springy)
   const accel = dt > 0 ? (p.vx - p.prevVx) / dt * p.face : 0; p.prevVx = p.vx;   // (a frame with no time in it (a late one's stamp): 0/0 here left her lean NaN and her body gone, 10-24)
@@ -10462,11 +10519,16 @@ function updatePlayer(dt) {
   updatePose(p, dt);
 }
 
+function startSlideFwd(p) {                          // block + forward: low along the ground, a few steps past them, safe; it ends facing back the way it came
+  Object.assign(p, { dodge: { t: 0, fwd: true }, dodgeCd: .45, vx: p.face * 780, block: false, blockHold: 0, tpose: 0, chargeT: 0, chargeLv: 0, jcharging: false, jcharge: 0, bounceT: -1, sq: -.12, sqv: 0, fidget: null, pivotT: 0 });
+  p.inv = Math.max(p.inv || 0, .42); p.ghostT = .42; jumpBuf = 0; dust(p.x, p.y, 6, -p.face); (SFX.dash || SFX.whoosh)();
+}
 function startDodge(p) {                             // the back-step: a swift low hop back a few steps (~200 px), still facing on, and safe through it
   Object.assign(p, { dodge: { t: 0 }, dodgeCd: .45, vx: -p.face * 560, vy: -420 * JUMPK, fullJump: true, jumpT: time, onGround: false, plat: null, coyote: 0, block: false, blockHold: 0, tpose: 0, chargeT: 0, chargeLv: 0, jcharging: false, jcharge: 0, bounceT: -1, sq: -.18, sqv: 0 });
   p.inv = Math.max(p.inv || 0, .32); jumpBuf = 0; dust(p.x, p.y, 5, p.face); (SFX.dash || SFX.jump)();
 }
 function doJump(p, mv, k, full) {                 // k: how wound up (0 a plain jump, 1 a full second's wind-up) · full: fired on letting go, so it doesn't cut short
+  if (p.pivotT > 0) { p.pivotT = 0; p.pivotSnap = true; } p.fidget = null; p.stillT = 0;   // (a jump cuts a pivot short, and any fidget)
   p.coyote = 0; p.jumpT = time; p.bigJ = k; p.vy = -830 * JUMPK * Math.sqrt(mv.jump * feelMove().weight) * (1 + .2 * k); p.onGround = false; p.sq = .3 + .2 * k; p.sqv = 0; p.bounceT = -1; p.fullJump = full;
   dust(p.x, p.y, 6 + Math.round(k * 8));
   if (p === player) voice("jump", k > .05 ? .8 : .3);   // (a hup now and then; a big jump nearly always)
@@ -10707,7 +10769,7 @@ const ALLY_FIGHT = 1.4;
 const BUDDY_FIGHT = 3.2;                             // (a berry buddy keeps at it longer after your last swing: 2026-10-30)
 const youFight = (win = ALLY_FIGHT) => { const p = player; return !!p && !p.dead && (p.atkT >= 0 || !!p.combo || !!p.tackle || p.chargeT > .15 || time - (p.atkAt ?? -9) < win); };
 function startStrike(p, kind, idx = 0) {
-  const S = KIT.STRIKES[kind]; if (p === player) p.atkAt = time;
+  const S = KIT.STRIKES[kind]; if (p === player) { p.atkAt = time; if (p.pivotT > 0) { p.pivotT = 0; p.pivotSnap = true; } p.fidget = null; p.stillT = 0; }   // (a pivot cut short: facing round at once; a fidget, over)
   p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.atkHits = []; p.queued = false; p.bounceT = -1; p.solo = false; if (!idx) p.chainHit = false;
   if (!SWING_SILENT.has(S.sfx || "punch")) (SFX[S.sfx] || SFX.punch)();   // (the plain swings make no sound of their own now: the user, 2026-10-24, "sounds like theyre flipping switches"; the hit still lands with its sound)
   if (idx >= 1) p.lastStrikeT = -9;
@@ -12668,7 +12730,7 @@ function bossMove(e, p, D, dt) {
   if (D.leaf && (e.leafCd = (e.leafCd ?? 2.5) - dt) <= 0 && adx < 240 && Math.random() < dt * 1.3 && glosLeafGo(e, p)) return;   // (Glos: off as leaves, away from you)
   if (D.under && (e.underCd = (e.underCd ?? 4) - dt) <= 0 && Math.random() < dt * .9 && glosUnderGo(e, p)) return;            // (and up under a ledge, after you from there)
   if (e.atkCd <= 0 && !p.dead) { const near = !!D.near && adx < ATTACKS[D.near].range && Math.abs(p.y - e.y) < 90, pick = near ? D.near : e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];   // (near: a close-in move of its own, when you're right there)
-    if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); if (!near) e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
+    if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); if (!near) e.plan = null; e.atk = "charge"; e.atkTm = A2.charge * (telOn() ? FEEL.telegraph.length * (1 + FEEL.telegraph.bigK * .5) : 1); e.chargeTot = e.atkTm; SFX.charge(); } }   // (a boss's charge: COMBAT FEEL's telegraph length too)
 }
 function foeOffGaps() {                           // a boss never walks (or lands) into a drop: back onto the near edge (rooms with drops, 2026-10-20)
   if (!GAPS.length || !enemy || enemy.dead || enemy.gone || !overGap(enemy.x) || (!enemy.onGround && enemy.y < GROUND - 10)) return;
@@ -13089,7 +13151,7 @@ function syncKitFoe(e, r, dt) {                // a boss built on a character ri
   k.rot = e.dead ? approach(k.rot, -.6, dt * 3) : 0;
   if (dt > 0) KIT.updatePose(k, dt);
   r.sync(k, r, dt);
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e); if (e.atk === "charge" && e.chargeTot && !e.dead && !(e.flash > 0)) teleTint(r.mats, 1 - e.atkTm / e.chargeTot, e.atkTm);   // (its telegraph's glow)
 }
 // ── their attacks
 const crescentG = new THREE.TorusGeometry(.62, .13, 8, 28, Math.PI * .95).rotateZ(-Math.PI * .475);
@@ -18855,7 +18917,7 @@ function bossSwim(e, p, D, dt) {                  // a swimmer (the deep's villa
   e.vy = approach(e.vy, clamp((ty - e.y) * 1.6, -190, 190), 360 * dt);
   e.atkCd -= dt;
   if (e.atkCd <= 0 && !p.dead) { const pick = e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];
-    if (Math.abs(dx) < A2.range * .95 && Math.abs(p.y - e.y) < 260) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); e.plan = null; e.atk = "charge"; e.atkTm = A2.charge; SFX.charge(); } }
+    if (Math.abs(dx) < A2.range * .95 && Math.abs(p.y - e.y) < 260) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); e.plan = null; e.atk = "charge"; e.atkTm = A2.charge * (telOn() ? FEEL.telegraph.length * (1 + FEEL.telegraph.bigK * .5) : 1); e.chargeTot = e.atkTm; SFX.charge(); } }   // (a boss's charge: COMBAT FEEL's telegraph length too)
 }
 const MOREL_INK_M = new THREE.MeshBasicMaterial({ color: "#3a1450", transparent: true, opacity: .9 });
 function spawnInkOrb(e, i) {                      // the deep's villain: blobs of ink, drifting at you and curling after you a little (parry them back)
@@ -20574,10 +20636,12 @@ const CONS_PARTS = { body: [
   flip: [
     ["box", .41, .38, .05, 0, 0, 0, "yel"], ["box", .37, .328, .006, 0, 0, .026, "blue"], ["box", .34, .292, .006, 0, 0, .028, "blueDk"],
     ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([a, b]) => ["disc", .011, 0, .004, a * .178, b * .162, -.027, "screw"]),
-    // HOP on the back, to be read from behind (screen-left there is +x): H at +x, O, P at -x, the P's bowl out toward -x
-    ["box", .022, .12, .004, .137, .02, -.027, "white"], ["box", .022, .12, .004, .084, .02, -.027, "white"], ["box", .075, .022, .004, .11, .02, -.027, "white"],
-    ["box", .022, .12, .004, .0265, .02, -.027, "white"], ["box", .022, .12, .004, -.0265, .02, -.027, "white"], ["box", .075, .022, .004, 0, .069, -.027, "white"], ["box", .075, .022, .004, 0, -.029, -.027, "white"],
-    ["box", .022, .12, .004, -.084, .02, -.027, "white"], ["box", .075, .022, .004, -.11, .069, -.027, "white"], ["box", .075, .022, .004, -.11, .02, -.027, "white"], ["box", .022, .06, .004, -.137, .0445, -.027, "white"],
+    // its logo on the back (the user, 2026-10-31: "change the 'HOP' on the game console to a simplified logo showing the berry blade and gauntlet"): the berry blade,
+    // pale with its pink core, crossed with the gauntlet's fist, its red band and cuff
+    ["box", .03, .2, .004, .01, .03, -.027, "#fff77e", .7], ["box", .011, .17, .003, .012, .036, -.03, "#f32782", .7], ["box", .085, .018, .004, .074, -.046, -.028, "#1e2a33", .7],
+    ["box", .018, .05, .004, .097, -.073, -.028, "#f32782", .7], ["disc", .014, 0, .004, .116, -.096, -.028, "#fff77e"],
+    ["box", .056, .062, .004, -.015, -.004, -.031, "#fc0000", -.7], ["box", .062, .012, .003, -.015, -.004, -.034, "#ffde00", -.7],
+    ["disc", .05, 0, .005, -.06, .052, -.032, "#ffde00"], ["box", .082, .02, .004, -.054, .068, -.035, "#fc0000", -.7],
     ["box", .13, .03, .004, 0, -.09, -.027, "pink"], ["box", .09, .006, .003, 0, -.09, -.03, "white"]] };
 let consMeshes = null;
 function consModel() { return consMeshes || (consMeshes = buildConsModel()); }   // (built once: it goes from hand to hand, Rose's or Camila's)
@@ -20723,6 +20787,14 @@ function consFrameSound() { const w = consFr && consFr.f.contentWindow; if (!w) 
 addEventListener("message", e => { const d = e.data, F = consFr; if (!F || !d || e.source !== F.f.contentWindow) return;
   if (d.bb === "ready") consFrameSound();
   else if (d.bb === "key" && d.type === "keydown" && !d.rep && player && player.cons && !paused && !menuUp) { const K = CONS_KEYS[d.code]; if (K) consInput(K); } });
+function consLogoDraw(g, x, y, s, ink, acc) {         // the console's logo (2026-10-31, was HOP): the berry blade crossed with the gauntlet, in two inks
+  g.save(); g.translate(x, y); g.scale(s, s);
+  g.save(); g.rotate(Math.PI / 4); g.fillStyle = ink; g.fillRect(-3.5, -24, 7, 32); g.beginPath(); g.moveTo(-3.5, -24); g.lineTo(0, -31); g.lineTo(3.5, -24); g.fill();   // the blade, its point up to the right
+  g.fillStyle = acc; g.fillRect(-1.2, -22, 2.4, 27); g.fillStyle = ink; g.fillRect(-10, 8, 20, 4.5); g.fillRect(-2.2, 12, 4.4, 9); g.beginPath(); g.arc(0, 23.5, 3.4, 0, 7); g.fill(); g.restore();
+  g.save(); g.rotate(-Math.PI / 4); g.fillStyle = ink; g.fillRect(-7, -1, 14, 15); g.beginPath(); g.arc(0, -9, 11, 0, 7); g.fill();   // the gauntlet's fist across it, up to the left
+  g.fillStyle = acc; g.fillRect(-10, -8, 20, 4.5); g.fillRect(-7.5, 6, 15, 3.5); g.restore();
+  g.restore();
+}
 function consDraw() {                                // (every frame while it's up)
   const P = player && player.cons; if (!P || !$("cons").classList.contains("on")) return;
   const cv = $("consCv"), g = cv.getContext("2d"), L = CONS_LCD, fr = P.scr === "game" && consFr;
@@ -20730,7 +20802,7 @@ function consDraw() {                                // (every frame while it's 
   cv.parentNode.classList.toggle("dim", !!(fr && P.menu));
   g.textAlign = "center"; g.textBaseline = "middle";
   if (P.scr === "home") {
-    g.fillStyle = L.ink; g.font = "22px Bungee, sans-serif"; g.textAlign = "left"; g.fillText("HOP", 14, 22); g.font = "600 9px Jost, sans-serif"; g.fillText("BERRY CONSOLE", 72, 24);
+    consLogoDraw(g, 36, 21, .55, L.ink, L.pink); g.fillStyle = L.ink; g.textAlign = "left"; g.font = "600 9px Jost, sans-serif"; g.fillText("BERRY CONSOLE", 72, 24);   // (its logo, was HOP: the blade and the gauntlet)
     g.fillRect(14, 38, 292, 2); const C = cartsGot();
     if (!C.length) { g.textAlign = "center"; g.font = "15px Bungee, sans-serif"; g.fillText("NO GAMES YET", 160, 110); g.font = "600 9px Jost, sans-serif";
       g.fillText("BUY ONE AT A HUB'S STALL OR BY THE ROAD,", 160, 138); g.fillText("OR FIND ONE OUT IN THE WORLDS", 160, 152); }
@@ -22946,7 +23018,7 @@ function bbTarget(b) {                            // who a baddy's after: you; b
   return best || foeTgt(b);
 }
 function updateBaddy(b, dt) {
-  const T = b.T, p = b.tgt = bbTarget(b), A = BB_ATK[T.atk];
+  const T = b.T, p = b.tgt = bbTarget(b), A = BB_ATK[T.atk], AW = A ? windOf(b, A) : 0;   // (AW: its wind-up, COMBAT FEEL's TELEGRAPHS)
   if (b.miniCue && !transit && !b.dead) { b.miniCue = false; SFX.trumpet(); }   // (no words over it: the user, 2026-10-25 "remove the mini boss text popup")
   b.inv = Math.max(0, b.inv - dt); b.flash = Math.max(0, b.flash - dt); b.hurtT = Math.max(0, b.hurtT - dt);
   if (b.backAt !== undefined && time >= b.backAt) stepBack(b, false);   // (a string of your blows taken: a step back out of reach)
@@ -22964,10 +23036,10 @@ function updateBaddy(b, dt) {
   else if (b.sad) { if ((b.onGround || fly) && b.hurtT <= 0) updateSad(b, dt); else if (b.onGround) b.vx = approach(b.vx, 0, 900 * dt); }   // a sad berry never fights
   else if (b.atk) {
     b.atkT += dt;
-    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= A.wind) { b.atk = "go"; b.atkT = 0; b.sq = .24; b.sqv = 0; hzOwner = b; A.start(b); hzOwner = null; } }
+    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= AW) { b.atk = "go"; b.atkT = 0; b.sq = .24; b.sqv = 0; hzOwner = b; A.start(b); hzOwner = null; } }
     else if (b.atk === "go") { if (A.land ? (b.onGround && b.atkT > .1) || b.atkT > A.go : b.atkT >= A.go) { b.atk = "rest"; b.atkT = 0; if (A.land) { dust(b.x, b.y, 4); if (A.landFx && b.onGround) A.landFx(b); }
       if (!b.combo && BB_COMBO.has(T.atk) && !p.dead && (b.onGround || fly) && Math.abs(p.x - b.x) < T.range + 40 && Math.abs(p.y - b.y) < (T.vReach || 90) && Math.random() < .3 + .1 * (b.smart || 0) + (b.angry ? .15 : 0)) {
-        b.combo = true; b.atk = "wind"; b.atkT = A.wind * .5; b.dir = Math.sign(p.x - b.x) || b.dir; b.sq = -.16; b.sqv = 0; } } }   // you still there: a quick second one, half the wind-up
+        b.combo = true; b.atk = "wind"; b.atkT = AW * .5; b.dir = Math.sign(p.x - b.x) || b.dir; b.sq = -.16; b.sqv = 0; } } }   // you still there: a quick second one, half the wind-up
     else { b.vx = approach(b.vx, 0, 1400 * dt); if (b.atkT >= A.rest * BB_REST) { b.atk = null; b.crossUp = false; b.combo = false; b.atkCd = b.angry ? rand(.5, .95) : BB_MELEE.has(T.atk) ? rand(.65, 1.2) : rand(1.05, 1.9);   // (a mad one's back at you sooner; so is a brawler. Were .7-1.3, 1-1.8, 1.5-2.7)
       if (b.onGround && !fly && T.move !== "pogo" && !b.cameo && Math.random() < .3) { const bx = b.x - b.dir * 80;   // now and then a hop back out of reach (not off its ledge, or into the water)
         if (!(b.plat && (bx < b.plat.x + 16 || bx > b.plat.x + b.plat.w - 16)) && !(GAPS.length && overGap(bx)) && bx > 40 && bx < WORLD - 40) { b.vx = -b.dir * 260; b.vy = -280; b.onGround = false; b.sq = -.15; b.sqv = 0; } } } }
@@ -23349,6 +23421,7 @@ function syncBaddy(b, dt) {
   }
   settleJoints(r, b, dt);
   hitTint(r.mats, b.flash, .12, b.dead && b.deathT > .06 ? .9 : 0, b);
+  if (b.atk === "wind" && !(b.hurtT > 0) && !b.dead && !(b.flash > 0)) { const A = BB_ATK[b.T.atk]; if (A) { const W = windOf(b, A); teleTint(r.mats, b.atkT / W, W - b.atkT); } }   // (its telegraph's glow)
   armorTint(r.mats, b);   // (the blow taken on its armor: a gold glint, not the hurt one)
   const gy = Y(groundBelow(b)), ss = clamp(1 - (Y(b.y) - gy) / 6, .3, 1);
   r.shadow.position.set(X(b.x), gy + .02, b.z); r.shadow.scale.setScalar(r.shadowR * ss);
@@ -23621,9 +23694,12 @@ function hurtPlayer(d, src) {
     blockHit(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // guarded
   if (src && src.daze) { src.life = Math.min(src.life, src.t); dazePlayer(p); return true; }   // Crux's city: the dizzy swirl only scrambles you
   freezeReset(); p.hp = Math.max(0, p.hp - hurtK(src)); updateHearts(true); p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.tkCharge = null; p.power = Math.max(0, (p.power || 0) - 1);   // each hit costs a level of ATK power
-  p.vx = d * 260; p.vy = -420; p.onGround = false; p.hurtT = .45; p.inv = 1.3; p.atkT = -1; p.bounceT = -1;   // a little bounce back (the user: no long slide)
-  shake = Math.max(shake, 6); hitstop = .05; sparks(p.x, p.y - 40, 8); rumble(70, .9);
-  SFX.hurt(); voice(p.hp <= 0 ? "ko" : "hurt");
+  const PH = FEEL.playerHit, ph = !FEEL.legacy && PH.enabled;   // (COMBAT FEEL's PLAYER HIT, 2026-10-31: the freeze, shake, sparks and weight your blows get, on you; off: the game's own)
+  p.vx = d * 260 * (ph ? PH.knockback : 1); p.vy = -420 * (ph ? Math.sqrt(Math.max(.2, PH.knockback)) : 1); p.onGround = false; p.hurtT = .45; p.inv = ph ? .45 + PH.invuln : 1.3; p.atkT = -1; p.bounceT = -1; p.fidget = null; p.pivotT = 0;   // a little bounce back (the user: no long slide)
+  p.softInv = ph && PH.flicker;   // (safe for a moment after the flinch: a soft pale flicker, not the old blinking out)
+  if (ph) { hitstop = Math.max(hitstop, PH.hitstopFrames / 60); if (accShake) feelShake(PH.shake, d); shake = Math.max(shake, 3); sparks(p.x, p.y - 40, 6); feelSparks(p.x, p.y - (p.rig.heightPx || 92) * .55, 9, d); rumble(90, 1); }
+  else { shake = Math.max(shake, 6); hitstop = .05; sparks(p.x, p.y - 40, 8); rumble(70, .9); }
+  SFX.hurt(); if (ph) { if (SFX.thump) SFX.thump(1.3); if (SFX.body) SFX.body(p.rig.heightPx || 92, false, 1.3); } voice(p.hp <= 0 ? "ko" : "hurt");   // (and a heavier sound: a thump and the blow on the body)
   if (p.hp <= 0) { p.dead = true; p.hurtT = 99; p.inv = 0; p.vy = -560; p.vx = d * 300; shake = 12; hitstop = .14; puffs(p.x, p.y - 40, 6, 30, 160); SFX.ko(); }
   return true;
 }
@@ -23635,7 +23711,7 @@ function finishSync(p, r) {
   const hurt = (p.dead ? p.deadT < .15 : p.hurtT > .3 || p.hitFlash > .1) ? .9 : 0;
   if (p === player && mode === "play" && aura.show > .01 && !hurt) {           // charging: the whole body lights up in the stage color
     const c = CHARGE_COL[aura.lv], k = aura.show * [.08, .16, .24, .34][aura.lv] * (.7 + .3 * Math.sin(time * (12 + aura.lv * 6))); FLASHC(r.mats, c.r * k, c.g * k, c.b * k);
-  } else FLASHSET(r.mats, hurt);
+  } else FLASHSET(r.mats, hurt || (p.softInv && p.inv > 0 && p.hurtT <= 0 && !p.dead && accFlash && Math.floor(p.inv * 22) % 2 ? .26 : 0));   // (safe after a hit: a soft pale flicker, COMBAT FEEL's PLAYER HIT)
   const gy = p.bus ? Y(p.y) : Y(groundBelow(p)), hgt = Y(p.y) - gy, ss = clamp(1 - hgt / 7, .3, 1);   // (on La Guagua: under them, on the seat or the bed)
   r.shadow.position.set(X(p.x), gy + .02, p.z || 0); r.shadow.scale.setScalar(ss * r.spec.body.scale);
 }
@@ -23644,6 +23720,13 @@ function FLASHSET(mats, f) { FLASHC(mats, f, f * .97, f * .9); }
 // a hit landing on an enemy (the user, 2026-10-27: "would it make sense to have enemies flash a faded color briefly to show when hits are connecting and maybe make
 // it feel more tangible that way?"): a soft rosy glow that fades as its flash runs out, instead of a flat white on and off
 const HIT_TINT = [1, .62, .68];
+// enemy telegraphs (the user, 2026-10-31: "give every enemy attack a readable wind-up: an anticipation pose and a brief flash or glow before it strikes. Bigger attacks
+// get longer wind-ups"): the wind-ups and poses were there (a baddy rears back, its arms back, down a little; a boss its own charge pose and sound). New: their length
+// x COMBAT FEEL's telegraph length, the big ones (and the bosses) a bit longer, and a warm glow that builds through the second half of it and flashes at the strike
+const telOn = () => !FEEL.legacy && FEEL.telegraph.enabled;
+const windOf = (b, A) => telOn() ? A.wind * FEEL.telegraph.length * (b.T && (b.T.size === "B" || b.T.size === "G") ? 1 + FEEL.telegraph.bigK : 1) : A.wind;
+function teleTint(mats, u, left) {                  // u: how far through its wind-up (0..1); left: seconds to the strike
+  if (!telOn() || !(u > 0)) return; const k = Math.pow(clamp((u - .45) / .55, 0, 1), 1.5) * .55 + (left < .07 ? .35 : 0), g = k * FEEL.telegraph.glow; if (g > .01) FLASHC(mats, .95 * g, .42 * g, .12 * g); }
 function armorTint(mats, e) { const ak = e.dead ? 0 : clamp(1 - (time - (e.armorAt ?? -9)) / .22, 0, 1); if (ak > 0) FLASHC(mats, .9 * ak, .72 * ak, .25 * ak); }   // (a blow on its armor, 2026-10-28: a gold glint)
 function hitTint(mats, flash, f0, dead, who) {   // (who: the one tinted: COMBAT FEEL's solid flash; FLASHING off: no blinking, a steady pale tint while it's beaten, the hit tint softer)
   if (!accFlash && who && who.dead) return FLASHSET(mats, .4); if (dead) return FLASHSET(mats, dead);
@@ -23753,7 +23836,7 @@ function syncFurnace(e, r, dt = 0) {
   r.flames.forEach((f, i) => { f.scale.setScalar(blaze); f.scale.y = (.75 + Math.abs(Math.sin(time * 18 + i * 1.7)) * .5) * blaze; });
   r.glow.intensity = (5 + Math.sin(time * 23) * 1.5 + Math.sin(time * 9) * 1) * (e.atk ? 2.6 : 1);
   r.groundGlow.intensity = r.glow.intensity; r.glow.getWorldPosition(r.groundGlow.position);
-  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e);
+  hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e); if (e.atk === "charge" && e.chargeTot && !e.dead && !(e.flash > 0)) teleTint(r.mats, 1 - e.atkTm / e.chargeTot, e.atkTm);   // (its telegraph's glow)
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
   r.shadow.position.set(X(e.x), gy + .02, e.z || 0); r.shadow.scale.setScalar(ss * (r.size || 1));
 }
@@ -23783,9 +23866,13 @@ function syncWorld(dt) {
     camera.position.set(camX, Hh * .55 + .4, LINE_Z + 5 + Hh * 1.9); camera.lookAt(camX, Hh * .48, LINE_Z);
   } else {
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    const tx = hideout ? X(hideout.cx) : cine && cine.phase === "pan" ? clamp(X(cine.x), halfW - 1, X(WORLD) - halfW + 1) : clamp(X(player.x) + player.face * 1.6, halfW - 1, X(WORLD) - halfW + 1);
+    const CF = FEEL.camera, camOn = !FEEL.legacy && CF.enabled && !hideout && !(cine && cine.phase === "pan"), moving = Math.abs(player.vx) > 40;
+    if (camOn) { camLook = lerp(camLook, moving ? Math.sign(player.vx) * CF.lookahead * 2 * halfW : 0, 1 - Math.exp(-dt * (moving ? 2.2 : CF.catchUp * .6))); }   // (COMBAT FEEL's CAMERA: ahead the way you're moving, back to you when you stop)
+    let txc = X(player.x) + camLook + (camOn ? .8 * player.vx * S / Math.max(.5, CF.follow) : 0); if (camOn) { const F = camFoe(CF.fightRange); if (F) { const pxw = X(player.x), fxw = X(F.x), m = halfW * .78; txc = lerp(txc, (pxw + fxw) / 2, CF.framing);   // (a fight on: toward the middle of the two of you, both kept on the screen)   // (and most of the follow's lag led out ahead: running, the lookahead shows; a slight lag left)
+      const lo = Math.max(pxw, fxw) - m, hi = Math.min(pxw, fxw) + m; txc = lo <= hi ? clamp(txc, lo, hi) : clamp(txc, pxw - m, pxw + m); } }
+    const tx = hideout ? X(hideout.cx) : cine && cine.phase === "pan" ? clamp(X(cine.x), halfW - 1, X(WORLD) - halfW + 1) : camOn ? clamp(txc, halfW - 1, X(WORLD) - halfW + 1) : clamp(X(player.x) + player.face * 1.6, halfW - 1, X(WORLD) - halfW + 1);   // (off: the game's own, 64 px ahead of the way you face)
     camSit = lerp(camSit, hideout && player.sit ? 1 : 0, 1 - Math.exp(-dt * .8));
-    camX = lerp(camX, tx, 1 - Math.exp(-dt * 4.5));
+    camX = lerp(camX, tx, 1 - Math.exp(-dt * (camOn ? (moving ? CF.follow : CF.catchUp) : 4.5)));
     const gyC = hideout ? null : groundAt(player.x), onPl = player.onGround && player.plat, bridgeUp = onPl && player.plat.kind === "bridge" ? Math.max(0, Y(player.plat.y) - Y(gyC ?? GROUND) - 3.2) : 0;   // (bridgeUp: on a bridge the camera comes up so you're seen whole, the user 2026-10-25)
     const hiP = Math.max(bridgeUp, gyC !== null && onPl && (STAGES[stage] || {}).authored ? Math.max(0, Y(player.plat.y) - Y(gyC) - 5.5) : 0);   // (standing up on a very high platform in the hand-made forest, e.g. Rose's post in C1: the camera comes up too)
     // the camera moves within a screen only for where you stand (the user, 2026-10-25: "jjumping up normally shouldn't move the camera up or
@@ -23950,6 +24037,22 @@ function render(dt) {
 }
 
 let last = performance.now();
+// gameplay at a steady 60 a second (the user, 2026-10-31: "lock gameplay to a stable 60fps, keep hitstop and timing frame-based, add an FPS counter in debug, and
+// flag anything that causes drops"): on a faster screen (120, 144 Hz) the game ticks every 1/60 s all the same, its time in whole 60ths (hitstop, every timer), each
+// tick reading the input before anything moves; slower than 60, up to three ticks a frame catch it up. The FPS counter: pause > DEBUG > FPS COUNTER
+let acc60 = 0, fpsOn = (() => { try { return localStorage.getItem("bb_fps") === "1"; } catch (e) { return false; } })();
+const FPS = { n: 0, t0: performance.now(), lastTick: 0, logic: 0, draw: 0, fps: 60, drops: 0, log: [], shownAt: 0 };
+function fpsSet(on) { fpsOn = on; try { localStorage.setItem("bb_fps", on ? "1" : "0"); } catch (e) { } const el = $("fpsBox"); if (el) el.classList.toggle("hidden", !on); }
+setTimeout(() => fpsSet(fpsOn), 0);   // (kept on from last time)
+function fpsNote(now, lg, dr) {                      // a tick done: its logic and drawing ms; a gap since the last over 25 ms is a drop, noted with what was going on
+  const gap = FPS.lastTick ? now - FPS.lastTick : 16.7; FPS.lastTick = now; FPS.n++; FPS.logic = FPS.logic * .9 + lg * .1; FPS.draw = FPS.draw * .9 + dr * .1;
+  if (gap > 25 && mode === "play") { FPS.drops++; const why = FPS.prevWork > 14 ? (FPS.prevLg > FPS.prevDr ? "logic " + FPS.prevLg.toFixed(0) + " ms" : "drawing " + FPS.prevDr.toFixed(0) + " ms") : "the browser paused (a load, or garbage collected)";
+    FPS.log.unshift(gap.toFixed(0) + " ms · " + why + " · world " + world + " room " + stage + (transit ? " · changing rooms" : "") + (bossIn ? " · a boss" : "")); FPS.log.length = Math.min(FPS.log.length, 8); }
+  FPS.prevLg = lg; FPS.prevDr = dr; FPS.prevWork = lg + dr;
+  if (now - FPS.t0 > 500) { FPS.fps = FPS.n * 1000 / (now - FPS.t0); FPS.n = 0; FPS.t0 = now;
+    if (fpsOn) { const el = $("fpsBox"); if (el) el.innerHTML = `<b>${FPS.fps.toFixed(0)} FPS</b> · logic ${FPS.logic.toFixed(1)} ms · draw ${FPS.draw.toFixed(1)} ms · drops ${FPS.drops}` + FPS.log.slice(0, 3).map(l => `<br>${l}`).join(""); } }
+}
+
 const STEP = 1 / 120;
 // if the frame rate drags (slower GPU, huge window), render at a lower resolution automatically
 let qT = 0, qN = 0, qSum = 0;
@@ -23967,7 +24070,9 @@ function adaptQuality(dt) {
 let fadeT = 0; const fadeEl = document.getElementById("fade");
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
   requestAnimationFrame(frame);
-  const dt = Math.max(0, Math.min(.05, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
+  acc60 += Math.max(0, Math.min(.1, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
+  const ticks = Math.min(3, Math.floor(acc60 * 60 + .25)); if (!ticks) return; acc60 = Math.max(-.01, acc60 - ticks / 60);   // (60 a second: a faster screen's in-between frames do nothing; a slow one's catch up)
+  const dt = ticks / 60, fT0 = performance.now();   // (the game's time in whole 60ths)
   try {
     if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
@@ -23982,7 +24087,7 @@ function frame(now) {                              // (the next frame is asked f
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
-      PERF.u += t1 - t0; PERF.r += performance.now() - t1; PERF.n++; PERF.dt += dt; }
+      PERF.u += t1 - t0; PERF.r += performance.now() - t1; PERF.n++; PERF.dt += dt; fpsNote(performance.now(), t1 - t0, performance.now() - t1); }
   } catch (e) { frameErrs++; if (frameErrs <= 3) console.error("frame error (the game keeps going)", e); }
 }
 let frameErrs = 0, playSave = 0;

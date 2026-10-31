@@ -183,6 +183,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", tk_wheel: "cartwheel", tk_wheel2: "second cartwheel", tk_wheelfall: "up off it, spinning, sword crashing down", tackle_wheel: "cartwheel tackle", tkdig_wheel: "dig in (held): loose, turned to you", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch (half moon)", dn_sword: "down swing", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
+  fwdslide: "slide forward", fidget_hood: "fidget: the hood", fidget_look: "fidget: looking round", fidget_stretch: "fidget: a stretch", fidget_flex: "fidget: the gauntlet", fidget_blade: "fidget: the blade",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pincho_poke: "nose jab", pincho_drill: "nose drill", caracol_bonk: "head bonk", caracol_roll: "shell roll", mordi_punch: "face-fist punch", mordi_chomp: "shark bite",
@@ -208,7 +209,8 @@ function movesFor(sp) {                                          // every move t
   add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
   add("Tackle (attack + block)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold attack + block)", wheel ? "tkdig_wheel" : "tkdig", "", T);
-  list("Charged tackle (hold attack + block)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T);
+  list("Charged tackle (hold attack + block)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T); add("Slide forward (block + forward)", "fwdslide", "", T);
+  list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
   add("In the bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
