@@ -634,6 +634,7 @@
 <script src="ambience.js?v=20261018a" defer></script>
 <script src="sfx.js?v=20261028d" defer></script>
 <script src="voices.js?v=20261023g" defer></script>
+<script src="shading-mockup.js?v=20261031c" defer></script>
 <script type="importmap">
 { "imports": {
   "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
@@ -713,7 +714,7 @@
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="shade">SHADING MOCKUP</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -6584,6 +6585,15 @@ function levelGo(w, kind, a, hero) {
 // frame / speed / turn. Nothing here changes them
 const CAST_NOTES = {};                               // notes shown with one, by the id under its name (e.g. CAST_NOTES["baddy:leafy:leaf"] = "…")
 const CAST_X = 600, CAST_DT = 1 / 60;                // (where on the stage they stand, px; a frame)
+let shadeUp = null;                                   // the SHADING MOCKUP (shading-mockup.js: the user, 2026-10-30; its own scene, the game's pipeline; null: shut)
+function openShading() {
+  if (!window.ShadingMockup) return; closeMenus(); story = null; menuUp = null; $("select").classList.add("hidden");   // (over the character screen, if that's where it was opened from)
+  shadeUp = window.ShadingMockup.open({ THREE, renderer, frameRT, gradeScene, gradeCam, gradeMat, KIT, buildChar, lookOf, rosterSpecs, makeState, dressGear, undressGear, tropMats, tropPalm, tropTreeFern, tropPlantain,
+    tropGroundFern, tropBromeliad, toon, GROUND, screens: WORLDS[0].screens,
+    pipe: { pre() { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } },   // (render()'s own, for the characters' paper skin and the grade's ink)
+      grade() { const U = gradeMat.uniforms, T = TEXTURES[LOOK.tex]; U.ink.value = T[2]; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; } },
+    onClose() { shadeUp = null; showMainMenu(); showDev(); } });
+}
 let castUp = null, castQuiet = false;                // the viewer (null: shut) · (while a boss's attack runs in it: no hazards made)
 const castName = s => String(s || "").replace(/([a-z])([A-Z])/g, "$1 $2").toUpperCase();
 function castWorld(w) {                              // a world's entries, in three groups
@@ -7103,6 +7113,7 @@ function devChoose(d) {
   else if (d === "ach") showAch();
   else if (d === "edit") { closeMenus(); story = null; showSelect(); openEditor(); }
   else if (d === "cast") openCast();               // (every world's enemies and friends, to look at: the user, 2026-10-23)
+  else if (d === "shade") openShading();            // (a look-dev page of its own: the girls and the woods under new shading, nothing in the game changed)
   else if (d === "feel") feelPanelToggle(true);     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
   else showSettings();                              // (BACK: to GAME SETTINGS, where it's opened from)
 }
@@ -23753,6 +23764,7 @@ function frame(now) {                              // (the next frame is asked f
   try {
     if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt);
+    if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
     pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
@@ -23829,6 +23841,7 @@ window.__game = { scoreHour, PC_REC, goWorldNow, arrivalRoom, get patrol() { ret
   goNext, goRoom, goRoomV, goWorld, goWorldBack, pollPad, setDayHeld(v) { dayHeld = v; }, get transit() { return transit; }, get stage() { return stage; }, get world() { return world; }, STAGES, WORLDS,
   step(n) { for (let i = 0; i < n; i++) update(STEP); render(n * STEP); } };
 requestAnimationFrame(frame);
+if (new URLSearchParams(location.search).has("shading")) { const go = () => { if (warming || !window.ShadingMockup) return setTimeout(go, 250); titleUp = false; $("title").classList.add("hidden"); openShading(); }; setTimeout(go, 300); }   // (index.html?shading: straight into the SHADING MOCKUP)
 </script>
 </body>
 </html>
