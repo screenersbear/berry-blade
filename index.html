@@ -3649,11 +3649,15 @@ const rowOf = q => String((q && q.cell) || "")[0];
 // the forest doesn't draw itself
 const DRESS_CEIL = { cave: 102, basement: 126, cellar: 134, subway: 134, bank: 94, vault: 102, dungeon: 94 };   // (each one's underside, px: its slab's height)
 function holesAbove(s) { const up = STAGES.findIndex(q => q && !q.cut && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)); return up < 0 ? null : STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]); }   // (not a room that's been cut: the woods' D1 had a hole up into one, the user 2026-10-28 "an opening in the ceiling to a room not on the map")
-function ceilSpans(gaps) { const spans = []; let x = -600; for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]); return spans; }
+function stripAt(s) { const S0 = STAGES[s], g = S0 && holesAbove(s); return !!(g && holeCeilOn(S0) && holeHidden(S0, g)); }   // (does this room have the strip of ceiling under the room above?)
+function stripNb(s, sd) { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.cell || ""); if (!m || !STITCH.has(world)) return true; const n = STAGES.findIndex(o => o && !o.arena && !o.cut && o.cell === m[1] + (+m[2] + sd)); return n >= 0 && stripAt(n); }
+function ceilSpans(gaps, s) {                       // (s: the strip's own room: where the room beside it has none, it ends just inside this one, ragged, not cut off at the edge they share)
+  const L = s == null || stripNb(s, -1), Rt = s == null || stripNb(s, 1), E = 240, spans = []; let x = L ? -600 : E;
+  for (const [a, b] of gaps) { if (a > x) spans.push([x, Rt ? a : Math.min(a, WORLD - E)]); x = Math.max(x, b); } if (x < (Rt ? WORLD + 600 : WORLD - E)) spans.push([x, Rt ? WORLD + 600 : WORLD - E]); return spans.filter(([a, b]) => b > a); }
 const holeCeilOn = S0 => !(!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.authored && world === 1) || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy"));
 function hardCeils(s) {
   const S0 = STAGES[s], out = []; if (!S0) return out; const gaps = holesAbove(s);
-  if (gaps && holeCeilOn(S0) && holeHidden(S0, gaps)) ceilSpans(gaps).forEach(([a, b]) => out.push([a, b, 120, 1]));   // the strip (buildHoleCeil's)
+  if (gaps && holeCeilOn(S0) && holeHidden(S0, gaps)) ceilSpans(gaps, s).forEach(([a, b]) => out.push([a, b, 120, 1]));   // the strip (buildHoleCeil's)
   const r = rowOf(S0), D = world !== 0 && (ROW_DRESS[world] || {})[r], dy = D && r === "D" && !S0.arena && !S0.cove && !S0.deep && !S0.noDress ? DRESS_CEIL[D.kind] : undefined;
   if (dy !== undefined) ceilSpans(gaps || []).forEach(([a, b]) => out.push([a, b, dy, 1]));   // a bottom row's roof (buildRowDress's)
   return out;
@@ -3670,21 +3674,22 @@ function buildHoleCeil(s) {                       // where a hole in the room ab
   const g = new THREE.Group(); scene.add(g); const S0 = STAGES[s];   // screen, broken at the hole (the user, 2026-10-25: "a strip of ceiling that ran above it and broke a certain point where the gap was")
   if (!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.authored && world === 1) || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy")) return g;   // (a ceiling of its own already)
   const up = STAGES.findIndex(q => q && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD)); if (up < 0) return g;
-  const gaps = STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]), spans = []; let x = -600;
+  const gaps = STAGES[up].gaps.filter(([a, b]) => b > 0 && a < WORLD).sort((p, q) => p[0] - q[0]);
   if (!holeHidden(S0, gaps)) return g;                // (a way up you can see already: no ceiling. The user, 2026-10-25: "make sure the ceiling fix applies ... where ... it isn't a situation where there's an obvious path")
-  for (const [a, b] of gaps) { if (a > x) spans.push([x, a]); x = Math.max(x, b); } if (x < WORLD + 600) spans.push([x, WORLD + 600]);
-  const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], wd = world === 0, R = rngF(777 + s * 31 + world * 101), RR = (a, b) => a + R() * (b - a), yb = Y(120), H = 6;
+  const spans = ceilSpans(gaps, s);   // (on into the room beside it where that one has the strip too; else ending just inside this one)
+  const [c0, c1] = DEEP_LOOK[world] || DEEP_LOOK[0], wd = world === 0, yb = Y(120), H = 6; let R = rngF(777 + s * 31 + world * 101);
+  const RR = (a, b) => a + R() * (b - a), W = WP || wPlace(-1), inSlot = slotRun(() => R, v => { R = v; });   // (its rocks and roots in the world's slots: the same where it runs on into the next room)
   if (world === 7) { const mC = toon(CX.light), mB = toon(CX.dark), mK = toon(CX.black);   // (Crux's city: the floor above's concrete seen from under it, its steel beams, a lamp or two)
     for (const [a, b] of spans) { const xa = X(a), xb = X(b), w = xb - xa; if (w <= .2) continue; g.add(at(mk(new THREE.BoxGeometry(w, H, 16), null, { mat: mC, ol: .04 }), (xa + xb) / 2, yb + H / 2, -4.2));
       g.add(at(mk(new THREE.BoxGeometry(w, .14, .2), null, { mat: mK, ol: 0 }), (xa + xb) / 2, yb + .07, 3.75));
-      for (let x = xa + .8; x < xb - .4; x += 2.4) g.add(at(mk(new THREE.BoxGeometry(.35, .45, 15), null, { mat: mB, ol: .02 }), x, yb - .2, -4.2));
-      for (let x = xa + RR(2, 5); x < xb - 1; x += RR(7, 11)) { g.add(at(mk(cyl(.02, .02, .9, 4), null, { mat: mK, ol: 0 }), x, yb - .45, -1.5)); g.add(at(mk(ball(.16, 8, 6), null, { mat: toon(CX.white), ol: .02 }), x, yb - .95, -1.5)); } }
+      for (const x of W.gridIn(2.4, xa + .8, xb - .4)) g.add(at(mk(new THREE.BoxGeometry(.35, .45, 15), null, { mat: mB, ol: .02 }), x, yb - .2, -4.2));
+      for (const sl of W.steps(7, 11, -(xa + 2), xb - 1 - WX, 2603)) inSlot(sl, x => { g.add(at(mk(cyl(.02, .02, .9, 4), null, { mat: mK, ol: 0 }), x, yb - .45, -1.5)); g.add(at(mk(ball(.16, 8, 6), null, { mat: toon(CX.white), ol: .02 }), x, yb - .95, -1.5)); }); }
     return g; }
   const mE = toon(wd ? "#5a4030" : c0), mE2 = toon(wd ? "#3e2c20" : new THREE.Color(c0).multiplyScalar(.72).getStyle()), mR = toon(wd ? "#4a3426" : c1), mMoss = toon("#4f7a34");
   for (const [a, b] of spans) { const xa = X(a), xb = X(b), w = xb - xa; if (w <= .2) continue;
     g.add(at(mk(new THREE.BoxGeometry(w, H, 16), null, { mat: mE, ol: .04 }), (xa + xb) / 2, yb + H / 2, -4.2));
-    for (let i = 0; i < w * 1.1; i++) g.add(at(mk(new THREE.DodecahedronGeometry(RR(.3, .75), 0), null, { mat: R() < .5 ? mE : mE2, ol: .03 }), xa + R() * w, yb + RR(-.12, .2), RR(-11, 3.4)));   // (its rough underside)
-    for (let i = 0; i < w * (wd ? 1.3 : .5); i++) { const hl = RR(.4, wd ? 2.2 : .8), v = mk(new THREE.CylinderGeometry(.05, .015, hl, 4), null, { mat: wd && R() < .3 ? mMoss : mR, ol: .012 }); v.rotation.z = RR(-.25, .25); at(v, xa + R() * w, yb - hl / 2 + .1, RR(-10, 3.2)); g.add(v); }   // (roots hanging from it in the forest; elsewhere a few spikes of rock)
+    for (const sl of W.steps(.8, 1, -xa, xb - WX, 2601)) inSlot(sl, x => g.add(at(mk(new THREE.DodecahedronGeometry(RR(.3, .75), 0), null, { mat: R() < .5 ? mE : mE2, ol: .03 }), x, yb + RR(-.12, .2), RR(-11, 3.4))));   // (its rough underside)
+    for (const sl of W.steps(wd ? .6 : 1.6, wd ? .94 : 2.4, -xa, xb - WX, 2602)) inSlot(sl, x => { const hl = RR(.4, wd ? 2.2 : .8), v = mk(new THREE.CylinderGeometry(.05, .015, hl, 4), null, { mat: wd && R() < .3 ? mMoss : mR, ol: .012 }); v.rotation.z = RR(-.25, .25); at(v, x, yb - hl / 2 + .1, RR(-10, 3.2)); g.add(v); });   // (roots hanging from it in the forest; elsewhere a few spikes of rock)
     [[xa, -1], [xb, 1]].forEach(([ex, sd]) => { if (ex < -10 || ex > X(WORLD) + 10) return; for (let k = 0; k < 8; k++) g.add(at(mk(new THREE.DodecahedronGeometry(RR(.4, .9), 0), null, { mat: R() < .5 ? mE : mE2, ol: .03 }), ex - sd * RR(0, .5), yb + RR(-.2, 1.6), RR(-10, 3.4))); });   // (the hole's ragged edges)
   }
   return g;
@@ -3692,7 +3697,8 @@ function buildHoleCeil(s) {                       // where a hole in the room ab
 function buildRowDress(s, g) {
   const S0 = STAGES[s], r = rowOf(S0), D = (ROW_DRESS[world] || {})[r];
   if (!D || S0.arena || S0.cove || S0.deep || S0.noDress || (r !== "A" && r !== "D")) return g;
-  const R = rngF(5150 + world * 131 + s * 17), RR = (a, b) => a + R() * (b - a), WX = X(WORLD);
+  let R = rngF(5150 + world * 131 + s * 17); const RR = (a, b) => a + R() * (b - a), WX = X(WORLD), W = WP || wPlace(-1), inSlot = slotRun(() => R, v => { R = v; });   // (W: the world's slots; rowR: one random for the whole row, for what runs the row's length, like the strata)
+  const rowR = salt => { const r = rngF((world + 1) * 7919 + W.row * 104729 + salt * 131); return (a, b) => a + r() * (b - a); };
   const F = rowFx = { drops: [], rings: [], puddles: [], R, birds: [], sway: [], flick: [], drift: [] };
   const M = c => toon(c), basic = (c, o = {}) => new THREE.MeshBasicMaterial({ color: c, fog: false, ...o });
   const box = (w, h, d, m) => mk(new THREE.BoxGeometry(w, h, d), null, { mat: m, ol: 0 });
@@ -3720,7 +3726,7 @@ function buildRowDress(s, g) {
   const streak = (c, op, y0, y1, z0, z1, w, sp) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, .035), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: op, depthWrite: false, fog: false }));
     put(m, RR(0, WX), RR(y0, y1), RR(z0, z1)); F.drift.push({ m, vx: sp * RR(.7, 1.3), vy: 0, span: 70 }); return m; };
   const shafts = (c, n, top) => { const mS = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: .12, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
-    for (let i = 0; i < n; i++) { const w = RR(1.2, 2.6), h = top + 2, m = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(0, -h / 2, 0), mS); m.rotation.z = RR(.18, .32); put(m, RR(2, WX - 2), top, RR(-6, -2)); } };
+    for (const sl of W.scatter(Math.round(n * (WX + 12) / WX), 6, 6, 2701 + n)) inSlot(sl, x => { const w = RR(1.2, 2.6), h = top + 2, m = new THREE.Mesh(new THREE.PlaneGeometry(w, h).translate(0, -h / 2, 0), mS); m.rotation.z = RR(.18, .32); put(m, x, top, RR(-6, -2)); }); };
 
   if (r === "D") {
     const k = D.kind;
@@ -3730,44 +3736,44 @@ function buildRowDress(s, g) {
       for (let i = 0; i < 3; i++) { const x = RR(6 + i * WX / 3, (i + 1) * WX / 3 - 6), w = RR(4, 7), h = RR(4.5, 7), y = -1.5;   // the mouths: the sea out there, bright, an arch of rock round each
         const sh = new THREE.Shape(); sh.moveTo(-w / 2, 0); sh.lineTo(-w / 2, h * .45); sh.absellipse(0, h * .45, w / 2, h * .55, Math.PI, 0, true); sh.lineTo(w / 2, 0); sh.closePath();
         put(new THREE.Mesh(new THREE.ShapeGeometry(sh, 16), basic(D.glow)), x, y, -25.2); put(halo(D.glow, w * 1.8, .35), x, y + h * .5, -24.9); }
-      for (let i = 0; i < 34; i++) { const len = RR(.6, 2.6), rad = RR(.22, .62), c = mk(new THREE.ConeGeometry(rad, len, 7), null, { mat: R() < .5 ? m2 : m1, ol: 0 }); c.rotation.x = Math.PI; put(c, RR(-4, WX + 4), 9.2 - len / 2 + .05, RR(-24, -5)); }   // stalactites
-      for (let i = 0; i < 16; i++) { const rk = mk(new THREE.DodecahedronGeometry(RR(.8, 2.2), 0), null, { mat: R() < .5 ? m1 : m2, ol: 0 }); rk.scale.y = RR(.5, .9); put(rk, RR(-4, WX + 4), RR(-1, 1.2), RR(-24, -14)); }   // rocks at the back
+      for (const sl of W.scatter(34, 4, 4, 2702)) inSlot(sl, x => { const len = RR(.6, 2.6), rad = RR(.22, .62), c = mk(new THREE.ConeGeometry(rad, len, 7), null, { mat: R() < .5 ? m2 : m1, ol: 0 }); c.rotation.x = Math.PI; put(c, x, 9.2 - len / 2 + .05, RR(-24, -5)); });   // stalactites
+      for (const sl of W.scatter(16, 4, 4, 2703)) inSlot(sl, x => { const rk = mk(new THREE.DodecahedronGeometry(RR(.8, 2.2), 0), null, { mat: R() < .5 ? m1 : m2, ol: 0 }); rk.scale.y = RR(.5, .9); put(rk, x, RR(-1, 1.2), RR(-24, -14)); });   // rocks at the back
       pools(D.pool, 5); drips(7);
     } else if (k === "basement") {                    // the keep's basement: no windows, a low ceiling with beams, pipes along it, caged lamps on cords
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3);
       put(box(WX + 70, 14, .3, m2), WX / 2, 6, -7.95);   // (over the window band: blank concrete)
       for (let y = 1.5; y < 12; y += 1.6) put(box(WX + 70, .06, .05, m3), WX / 2, y, -7.75);
       slab(8.6, -7.9, -2.8, m1, 1.6);
-      for (let x = 2; x < WX; x += RR(5.5, 7.5)) put(box(.5, .55, 5.1, m3), x, 8.35, -5.35);   // beams
+      for (const sl of W.steps(5.5, 7.5, 3, 3, 2711)) put(box(.5, .55, 5.1, m3), sl.x, 8.35, -5.35);   // beams
       D.pipes.forEach((c, i) => put(mk(new THREE.CylinderGeometry(.2, .2, WX + 70, 10).rotateZ(Math.PI / 2), null, { mat: M(c), ol: 0 }), WX / 2, 7.9 - i * .42, -7.2 + i * .35));
-      for (let x = RR(3, 7); x < WX; x += RR(8, 11)) lamp(x, 8.6, RR(1.2, 1.7), "#3a3f48", D.lamp, RR(-5.5, -3.5));
+      for (const sl of W.steps(8, 11, 0, 0, 2712)) inSlot(sl, x => lamp(x, 8.6, RR(1.2, 1.7), "#3a3f48", D.lamp, RR(-5.5, -3.5)));
     } else if (k === "bellies") {                     // down in the cloud bank: the rocky undersides of the islands over you, the mist all round
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3);
-      for (let i = 0; i < 6; i++) { const rad = RR(3, 6), h = RR(4, 7), x = RR(-2, WX + 2), z = RR(-26, -8), y = RR(10, 13);
+      for (const sl of W.scatter(7, 8, 8, 2713)) inSlot(sl, x => { const i = ((sl.j % 3) + 3) % 3; const rad = RR(3, 6), h = RR(4, 7), z = RR(-26, -8), y = RR(10, 13);
         const c = mk(new THREE.ConeGeometry(rad, h, 9), null, { mat: [m1, m2, m3][i % 3], ol: 0 }); c.rotation.x = Math.PI; put(c, x, y, z); put(mk(new THREE.CylinderGeometry(rad, rad * .96, .8, 9), null, { mat: m1, ol: 0 }), x, y + h / 2 + .3, z);
-        for (let j = 0; j < 3; j++) put(box(.06, RR(1.5, 3.5), .06, M("#4f5a3a")), x + RR(-rad * .6, rad * .6), y - h * .2 - 1.5, z + RR(-1, 1)); }   // roots hanging off them
+        for (let j = 0; j < 3; j++) put(box(.06, RR(1.5, 3.5), .06, M("#4f5a3a")), x + RR(-rad * .6, rad * .6), y - h * .2 - 1.5, z + RR(-1, 1)); });   // roots hanging off them
       const mMist = new THREE.MeshBasicMaterial({ color: D.mist, transparent: true, opacity: .42, depthWrite: false });
       for (let i = 0; i < 18; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(RR(2.5, 5), 12, 8), mMist); b.scale.y = RR(.4, .6); put(b, RR(-6, WX + 6), RR(1, 9), RR(-30, -9)); F.drift.push({ m: b, vx: RR(.15, .45), vy: 0, span: 80 }); }
     } else if (k === "canyon") {                      // a slot canyon: tall red walls close behind, nearly meeting overhead; the sun in thin strips; a rock arch
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3);
-      wall(-12, -3, 17, m1); for (let y = 0; y < 16; y += RR(1.2, 2.2)) put(box(WX + 70, RR(.2, .5), .2, R() < .5 ? m2 : m3), WX / 2, y, -11.6);   // the strata
-      let x = -6; while (x < WX + 6) { const w = RR(5, 9); put(box(w, 2.6, 8, R() < .5 ? m1 : m2), x + w / 2, 10.6, -7.6); x += w + RR(.6, 1.4); }   // the walls' tops leaning in: slits of sky between
+      wall(-12, -3, 17, m1); { const RW = rowR(2721); for (let y = 0; y < 16; y += RW(1.2, 2.2)) put(box(WX + 70, RW(.2, .5), .2, RW(0, 1) < .5 ? m2 : m3), WX / 2, y, -11.6); }   // the strata (the row's own, so they run on from screen to screen)
+      for (const sl of W.slots(8, 6, 6, 2723)) inSlot(sl, x => { const w = RR(5.8, 7.4); put(box(w, 2.6, 8, R() < .5 ? m1 : m2), x + 4, 10.6, -7.6); });   // the walls' tops leaning in: slits of sky between
       shafts(D.shaft, 5, 9.4);
       const ax = RR(18, WX - 18), aw = RR(9, 13), arch = mk(new THREE.TorusGeometry(aw / 2, 1.1, 8, 18, Math.PI), null, { mat: m3, ol: 0 }); put(arch, ax, 1.5, -9);   // an arch
     } else if (k === "hedge") {                       // a tunnel under the hedges: leaves thick overhead and behind, roots hanging, glowing mushrooms
       const m1 = M(D.c1), m2 = M(D.c2), mR = M(D.c3);
-      wall(-15, -3, 12, m1); for (let i = 0; i < 40; i++) put(mk(new THREE.IcosahedronGeometry(RR(1.2, 2.6), 0), null, { mat: R() < .5 ? m1 : m2, ol: 0 }), RR(-4, WX + 4), RR(8.6, 11), RR(-15, -4));
-      for (let i = 0; i < 18; i++) put(mk(new THREE.IcosahedronGeometry(RR(1, 2), 0), null, { mat: m2, ol: 0 }), RR(-4, WX + 4), RR(-1, 7), -14.4);
-      for (let i = 0; i < 16; i++) { const L = RR(1.5, 4.5), rt = put(box(.09, L, .09, mR), RR(0, WX), 9 - L / 2, RR(-12, -4)); rt.rotation.z = RR(-.2, .2); }
+      wall(-15, -3, 12, m1); for (const sl of W.scatter(40, 4, 4, 2731)) inSlot(sl, x => put(mk(new THREE.IcosahedronGeometry(RR(1.2, 2.6), 0), null, { mat: R() < .5 ? m1 : m2, ol: 0 }), x, RR(8.6, 11), RR(-15, -4)));
+      for (const sl of W.scatter(18, 4, 4, 2732)) inSlot(sl, x => put(mk(new THREE.IcosahedronGeometry(RR(1, 2), 0), null, { mat: m2, ol: 0 }), x, RR(-1, 7), -14.4));
+      for (const sl of W.scatter(16, 0, 0, 2733)) inSlot(sl, x => { const L = RR(1.5, 4.5), rt = put(box(.09, L, .09, mR), x, 9 - L / 2, RR(-12, -4)); rt.rotation.z = RR(-.2, .2); });
       for (let i = 0; i < 7; i++) { const x = RR(100, WORLD - 100); if (!solidAt(x)) continue; const y = gy(x), z = RR(-3, -1.2), cap = new THREE.Mesh(new THREE.SphereGeometry(.28, 10, 6, 0, TAU, 0, Math.PI / 2), basic(D.glow));
         put(box(.07, .35, .07, M("#d8e6e0")), X(x), y + .17, z); put(cap, X(x), y + .33, z); put(halo(D.glow, 1.8, .45), X(x), y + .4, z + .2); }
       for (let i = 0; i < 10; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 4), basic("#fff3a0")); put(f, RR(0, WX), RR(1, 6), RR(-6, 1)); F.drift.push({ m: f, vx: RR(-.4, .4), vy: RR(-.2, .2), span: 70, wob: RR(.5, 1.2) }); }
-      for (let i = 0; i < 18; i++) { const c = R() < .5 ? D.glow : "#ffa8e8", x = RR(-2, WX + 2), y = RR(2, 10), z = y > 8 ? RR(-12, -5) : -14.2; put(new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), basic(c)), x, y, z); put(halo(c, 1.6, .5), x, y, z + .3); }   // glowing buds on the hedges
+      for (const sl of W.scatter(18, 2, 2, 2734)) inSlot(sl, x => { const c = R() < .5 ? D.glow : "#ffa8e8", y = RR(2, 10), z = y > 8 ? RR(-12, -5) : -14.2; put(new THREE.Mesh(new THREE.SphereGeometry(.13, 8, 6), basic(c)), x, y, z); put(halo(c, 1.6, .5), x, y, z + .3); });   // glowing buds on the hedges
       if (typeof keshDiscs !== "undefined") scene.traverse(o => { if (o.isMesh && o.material && o.material.map && (o.material.map === keshDiscs[true] || o.material.map === keshDiscs[false])) o.material.visible = false; });   // (under the hedges: no moon or sun)
     } else if (k === "cellar") {                      // the candy works' cellar: brick, no windows, a low ceiling, syrup vats glowing, oven mouths
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3);
       put(box(WX + 70, 18, .3, m2), WX / 2, 7, -8.7); for (let y = .6; y < 14; y += .7) put(box(WX + 70, .05, .05, m3), WX / 2, y, -8.5);
-      slab(8.4, -8.6, -2.8, m1, 1.6); for (let x = 2; x < WX; x += RR(6, 8)) put(box(.5, .55, 5.6, m3), x, 8.15, -5.7);
+      slab(8.4, -8.6, -2.8, m1, 1.6); for (const sl of W.steps(6, 8, 3, 3, 2741)) put(box(.5, .55, 5.6, m3), sl.x, 8.15, -5.7);
       for (let x = RR(6, 12); x < WX - 4; x += RR(14, 20)) { const v = group(g, x, 0, -6.3), h = RR(3, 4.2); v.add(at(mk(new THREE.CylinderGeometry(1.35, 1.45, h, 18), null, { mat: M(D.vat), ol: .03 }), 0, h / 2, 0));
         v.add(at(new THREE.Mesh(new THREE.CircleGeometry(1.25, 20).rotateX(-Math.PI / 2), basic(D.syrup)), 0, h + .01, 0)); v.add(at(halo(D.syrup, 4, .4), 0, h + .5, .4));
         [-1, 1].forEach(sd => v.add(at(box(2.9, .12, .12, M("#7a4a22")), 0, h * (sd < 0 ? .25 : .75), 1.3))); }
@@ -3776,41 +3782,42 @@ function buildRowDress(s, g) {
     } else if (k === "subway") {                      // under the city's elevated road: its concrete deck overhead, girders under it, its great pillars, strip lights
       const m1 = M(D.c1), m2 = M(D.c2), mB = M(D.band);
       slab(8.4, -24, -2.4, m1, 1.8); put(box(WX + 70, .7, .5, mB), WX / 2, 8.9, -2.3);   // the deck, a red band along its edge
-      for (let x = -2; x < WX + 4; x += 3.2) put(box(.35, .6, 21.4, m2), x, 8.1, -13.2);   // girders under it, front to back
-      for (let x = RR(5, 10); x < WX; x += RR(13, 17)) [-3.2, -14].forEach(z => { put(box(1.6, 9.6, 1.6, m2), x, 4.1, z); put(box(2.4, .7, 2.4, m1), x, 7.9, z); });   // its pillars
-      for (let x = 2; x < WX; x += 6) [-4.4, -8.5, -12.6].forEach(z => { put(box(2.4, .08, .3, basic(D.strip)), x, 7.75, z); const h = halo(D.strip, 3.2, .3); h.rotation.x = -Math.PI / 2 + .4; put(h, x, 7.45, z + .4); });
+      for (const x of W.grid(3.2, 2, 4)) put(box(.35, .6, 21.4, m2), x, 8.1, -13.2);   // girders under it, front to back
+      for (const sl of W.steps(13, 17, 2, 2, 2742)) { const x = sl.x; [-3.2, -14].forEach(z => { put(box(1.6, 9.6, 1.6, m2), x, 4.1, z); put(box(2.4, .7, 2.4, m1), x, 7.9, z); }); }   // its pillars
+      for (const x of W.grid(6, 0, 0)) [-4.4, -8.5, -12.6].forEach(z => { put(box(2.4, .08, .3, basic(D.strip)), x, 7.75, z); const h = halo(D.strip, 3.2, .3); h.rotation.x = -Math.PI / 2 + .4; put(h, x, 7.45, z + .4); });
     } else if (k === "bank") {                        // under the lake's banks: the earth hanging over you, roots and reeds through it, dripping into pools
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3), mR = M(D.roots);
-      slab(9.4, -22, -4, m1, 3); wall(-21.6, -4, 12.5, m2); for (let y = 0; y < 12; y += RR(1.4, 2.4)) put(box(WX + 70, RR(.25, .55), .2, m3), WX / 2, y, -21.2);
-      for (let i = 0; i < 26; i++) { const rk = mk(new THREE.DodecahedronGeometry(RR(.7, 1.8), 0), null, { mat: R() < .5 ? m1 : m3, ol: 0 }); rk.scale.y = RR(.5, .8); put(rk, RR(-4, WX + 4), 9.3, RR(-21, -5)); }   // its lumpy underside
-      for (let i = 0; i < 22; i++) { const L = RR(1, 3.6), rt = put(box(.08, L, .08, mR), RR(-2, WX + 2), 9.3 - L / 2, RR(-20, -5)); rt.rotation.z = RR(-.25, .25); }
+      slab(9.4, -22, -4, m1, 3); wall(-21.6, -4, 12.5, m2); { const RW = rowR(2751); for (let y = 0; y < 12; y += RW(1.4, 2.4)) put(box(WX + 70, RW(.25, .55), .2, m3), WX / 2, y, -21.2); }   // (the row's own strata)
+      for (const sl of W.scatter(26, 4, 4, 2752)) inSlot(sl, x => { const rk = mk(new THREE.DodecahedronGeometry(RR(.7, 1.8), 0), null, { mat: R() < .5 ? m1 : m3, ol: 0 }); rk.scale.y = RR(.5, .8); put(rk, x, 9.3, RR(-21, -5)); });   // its lumpy underside
+      for (const sl of W.scatter(22, 2, 2, 2753)) inSlot(sl, x => { const L = RR(1, 3.6), rt = put(box(.08, L, .08, mR), x, 9.3 - L / 2, RR(-20, -5)); rt.rotation.z = RR(-.25, .25); });
       pools(D.pool, 5); drips(6);
     } else if (k === "awnings") {                     // the covered market: striped awnings all over, lanterns hung under them, stalls along the back
       const mWd = M(D.wood);
-      let x = -6; while (x < WX + 6) { const w = RR(5, 8), st = D.stripes[Math.floor(R() * D.stripes.length)], cv = document.createElement("canvas"); cv.width = 64; cv.height = 8; const c2 = cv.getContext("2d");
+      for (const sl of W.slots(6.6, 6, 6, 2761)) inSlot(sl, x => { const w = RR(6.4, 7.2), st = D.stripes[Math.floor(R() * D.stripes.length)], cv = document.createElement("canvas");   // (in the world's slots: the same awnings where two screens meet)
+        cv.width = 64; cv.height = 8; const c2 = cv.getContext("2d");
         for (let i = 0; i < 8; i++) { c2.fillStyle = st[i % 2]; c2.fillRect(i * 8, 0, 8, 8); } const tx = new THREE.CanvasTexture(cv); tx.colorSpace = THREE.SRGBColorSpace;
         const a = new THREE.Mesh(new THREE.PlaneGeometry(w, 7, 1, 1), new THREE.MeshToonMaterial({ map: tx, gradientMap: grad, side: THREE.DoubleSide })); a.rotation.x = -Math.PI / 2 + .32; put(a, x + w / 2, 8.9 + RR(-.3, .3), -7.5);
-        put(box(.14, 9, .14, mWd), x + .2, 4.5, -4.6); x += w + RR(-.4, .3); }
-      wall(-13, -3, 9.6, M("#6b4a3a")); for (let x2 = RR(1, 4); x2 < WX; x2 += RR(5, 8)) { const w = RR(3, 4.5); put(box(w, 2.4, 1.2, mWd), x2, 1.2, -12); put(box(w + .4, .25, 1.6, M(D.stripes[Math.floor(R() * D.stripes.length)][0])), x2, 2.5, -11.9); }
-      for (let x2 = RR(3, 6); x2 < WX; x2 += RR(5, 7.5)) { const p = group(g, x2, 8.6, RR(-6, -3.5)), len = RR(.8, 1.6); p.add(at(box(.04, len, .04, M("#3a2a20")), 0, -len / 2, 0));
-        p.add(at(mk(new THREE.CylinderGeometry(.3, .3, .55, 10), null, { mat: basic(D.lantern), ol: 0 }), 0, -len - .28, 0)); p.add(at(halo(D.lantern, 2.8, .5), 0, -len - .3, .3)); F.sway.push({ m: p, amp: RR(.04, .08), sp: RR(.8, 1.4), ph: RR(0, 6) }); }
+        put(box(.14, 9, .14, mWd), x + .2, 4.5, -4.6); });
+      wall(-13, -3, 9.6, M("#6b4a3a")); for (const sl of W.steps(5, 8, 0, 0, 2762)) inSlot(sl, x2 => { const w = RR(3, 4.5); put(box(w, 2.4, 1.2, mWd), x2, 1.2, -12); put(box(w + .4, .25, 1.6, M(D.stripes[Math.floor(R() * D.stripes.length)][0])), x2, 2.5, -11.9); })
+      for (const sl of W.steps(5, 7.5, 0, 0, 2763)) inSlot(sl, x2 => { const p = group(g, x2, 8.6, RR(-6, -3.5)), len = RR(.8, 1.6); p.add(at(box(.04, len, .04, M("#3a2a20")), 0, -len / 2, 0));
+        p.add(at(mk(new THREE.CylinderGeometry(.3, .3, .55, 10), null, { mat: basic(D.lantern), ol: 0 }), 0, -len - .28, 0)); p.add(at(halo(D.lantern, 2.8, .5), 0, -len - .3, .3)); F.sway.push({ m: p, amp: RR(.04, .08), sp: RR(.8, 1.4), ph: RR(0, 6) }); })
     } else if (k === "vault") {                       // the casino's back rooms: panelled dark, green lamps over the counting tables, the vault's round steel door
       const m1 = M(D.c1), m2 = M(D.c2), mS = M(D.steel), mS2 = M(D.steel2), mG = M(D.gold);
-      wall(-14, -3, 10.4, m2); for (let x = 0; x < WX + 4; x += 3) put(box(.08, 10, .1, m1), x, 5, -13.6);
+      wall(-14, -3, 10.4, m2); for (const x of W.grid(3, 0, 4)) put(box(.08, 10, .1, m1), x, 5, -13.6);
       slab(9.2, -14, -3.2, m1, 1.8);
       const vx = RR(14, WX - 14), door = group(g, vx, 3.6, -13.4); door.add(mk(new THREE.CylinderGeometry(3, 3, .6, 28).rotateX(Math.PI / 2), null, { mat: mS, ol: .04 }));
       door.add(at(mk(new THREE.CylinderGeometry(2.3, 2.3, .2, 28).rotateX(Math.PI / 2), null, { mat: mS2, ol: 0 }), 0, 0, .35)); door.add(at(mk(new THREE.CylinderGeometry(.35, .35, .5, 12).rotateX(Math.PI / 2), null, { mat: mG, ol: 0 }), 0, 0, .55));
       for (let i = 0; i < 4; i++) { const sp = at(box(.16, 2.4, .12, mG), 0, 0, .6); sp.rotation.z = i * Math.PI / 4; door.add(sp); }
       for (let i = 0; i < 6; i++) { const x = RR(2, WX - 2); if (Math.abs(x - vx) < 5) continue; for (let j = 0; j < RR(2, 5); j++) put(mk(new THREE.CylinderGeometry(.28, .28, .1, 14), null, { mat: M(["#c8102e", "#1a1a1a", "#e8b84a", "#2a6ad8"][j % 4]), ol: 0 }), x + RR(-.4, .4), .05 + j * .11, RR(-12, -10));
         put(mk(new THREE.SphereGeometry(.55, 10, 8).scale(1, .9, 1), null, { mat: M("#c9b48a"), ol: 0 }), x + 1.1, .45, -11.2); }   // chips and money bags
-      for (let x = RR(4, 8); x < WX; x += RR(9, 12)) lamp(x, 9.2, RR(1.4, 2), "#1f6b45", D.lamp, RR(-6, -4));
+      for (const sl of W.steps(9, 12, 0, 0, 2771)) inSlot(sl, x => lamp(x, 9.2, RR(1.4, 2), "#1f6b45", D.lamp, RR(-6, -4)));
     } else if (k === "dungeon") {                     // the castle's dungeons: the windows walled up, a stone vault overhead, chains, more torches
       const m1 = M(D.c1), m2 = M(D.c2), m3 = M(D.c3);
       put(box(WX + 70, 14, .3, m3), WX / 2, 6, -6.05); for (let y = .7; y < 12; y += .9) put(box(WX + 70, .06, .06, m1), WX / 2, y, -5.88);
-      for (let x = 0; x < WX + 4; x += 1.6) put(box(.06, 12, .06, m1), x + ((x / 1.6) % 2) * .8, 6, -5.86);
-      slab(9.4, -6, -2.6, m1, 1.6); for (let x = 0; x < WX + 6; x += RR(5, 7)) { const a = mk(new THREE.TorusGeometry(2.6, .3, 6, 14, Math.PI), null, { mat: m2, ol: 0 }); a.rotation.y = Math.PI / 2; put(a, x, 6.8, -4.3); }   // the vault's ribs
-      for (let x = RR(3, 6); x < WX; x += RR(7, 10)) { const n = Math.round(RR(5, 9)); for (let j = 0; j < n; j++) { const l = mk(new THREE.TorusGeometry(.12, .035, 5, 10), null, { mat: M(D.chain), ol: 0 }); l.rotation.y = j % 2 ? Math.PI / 2 : 0; put(l, x, 9.3 - j * .2, -4.2); } }
-      for (let x = RR(4, 8); x < WX; x += RR(8, 11)) { put(box(.12, .6, .3, M("#2a2420")), x, 3.6, -5.7); flame(x, 3.9, -5.55, D.torch); }
+      for (const x of W.grid(1.6, 0, 4)) put(box(.06, 12, .06, m1), x + ((Math.round((x + W.ox) / 1.6) % 2) + 2) % 2 * .8, 6, -5.86);
+      slab(9.4, -6, -2.6, m1, 1.6); for (const sl of W.steps(5, 7, 0, 6, 2772)) { const x = sl.x; const a = mk(new THREE.TorusGeometry(2.6, .3, 6, 14, Math.PI), null, { mat: m2, ol: 0 }); a.rotation.y = Math.PI / 2; put(a, x, 6.8, -4.3); }   // the vault's ribs
+      for (const sl of W.steps(7, 10, 0, 0, 2773)) inSlot(sl, x => { const n = Math.round(RR(5, 9)); for (let j = 0; j < n; j++) { const l = mk(new THREE.TorusGeometry(.12, .035, 5, 10), null, { mat: M(D.chain), ol: 0 }); l.rotation.y = j % 2 ? Math.PI / 2 : 0; put(l, x, 9.3 - j * .2, -4.2); } });
+      for (const sl of W.steps(8, 11, 0, 0, 2774)) inSlot(sl, x => { put(box(.12, .6, .3, M("#2a2420")), x, 3.6, -5.7); flame(x, 3.9, -5.55, D.torch); });
     }
     return g;
   }
@@ -3818,25 +3825,25 @@ function buildRowDress(s, g) {
   if (D.birds) for (let i = 0; i < 4; i++) bird(D.birds, RR(8, 12), RR(-24, -12));
   if (D.wind) for (let i = 0; i < 9; i++) streak("#ffffff", RR(.25, .45), 1, 9, -10, 2, RR(1.5, 3.5), RR(6, 11));
   if (D.sand) for (let i = 0; i < 12; i++) streak(D.sand, RR(.4, .65), .1, 1.6, -4, 2.5, RR(1, 2.4), RR(5, 9));
-  if (D.cloudsBelow) { const mC = basic(D.cloudsBelow, { transparent: true, opacity: .92 }); for (let i = 0; i < 30; i++) { const b = new THREE.Mesh(new THREE.SphereGeometry(RR(2, 4.5), 12, 8), mC); b.scale.y = RR(.45, .7); put(b, RR(-30, WX + 30), RR(-3, .2), RR(-50, -15)); } }   // the tops of the clouds, down below
-  if (D.masts) for (let x = RR(4, 12); x < WX; x += RR(14, 20)) { const z = RR(-30, -18), h = RR(8, 13); put(box(.25, h, .25, M(D.masts)), x, h / 2 - 2, z); put(box(2.4, .12, .12, M(D.masts)), x, h - 3, z);
-    const b = new THREE.Mesh(new THREE.SphereGeometry(.22, 8, 6), basic(D.blink)); put(b, x, h - 1.9, z); const hh = halo(D.blink, 2, .6); put(hh, x, h - 1.9, z + .3); F.flick.push({ m: b, h: hh, base: 1, sp: 2.4, ph: RR(0, 6), blink: true }); }
-  if (D.canopy) { const m1 = M(D.canopy), m2 = M(D.canopy2); for (let i = 0; i < 26; i++) put(mk(new THREE.IcosahedronGeometry(RR(2.5, 5), 1), null, { mat: R() < .5 ? m1 : m2, ol: 0 }), RR(-20, WX + 20), RR(-3.5, -.5), RR(-34, -14)); }   // the treetops, down below
+  if (D.cloudsBelow) { const mC = basic(D.cloudsBelow, { transparent: true, opacity: .92 }); for (const sl of W.scatter(30, 30, 30, 2781)) inSlot(sl, x => { const b = new THREE.Mesh(new THREE.SphereGeometry(RR(2, 4.5), 12, 8), mC); b.scale.y = RR(.45, .7); put(b, x, RR(-3, .2), RR(-50, -15)); }); }   // the tops of the clouds, down below
+  if (D.masts) for (const sl of W.steps(14, 20, 2, 2, 2782)) inSlot(sl, x => { const z = RR(-30, -18), h = RR(8, 13); put(box(.25, h, .25, M(D.masts)), x, h / 2 - 2, z); put(box(2.4, .12, .12, M(D.masts)), x, h - 3, z);
+    const b = new THREE.Mesh(new THREE.SphereGeometry(.22, 8, 6), basic(D.blink)); put(b, x, h - 1.9, z); const hh = halo(D.blink, 2, .6); put(hh, x, h - 1.9, z + .3); F.flick.push({ m: b, h: hh, base: 1, sp: 2.4, ph: RR(0, 6), blink: true }); });
+  if (D.canopy) { const m1 = M(D.canopy), m2 = M(D.canopy2); for (const sl of W.scatter(26, 20, 20, 2783)) inSlot(sl, x => put(mk(new THREE.IcosahedronGeometry(RR(2.5, 5), 1), null, { mat: R() < .5 ? m1 : m2, ol: 0 }), x, RR(-3.5, -.5), RR(-34, -14))); }   // the treetops, down below
   if (D.flies) for (let i = 0; i < 12; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(.05, 6, 4), basic(D.flies)); put(f, RR(0, WX), RR(1, 7), RR(-8, 1)); F.drift.push({ m: f, vx: RR(-.4, .4), vy: RR(-.2, .2), span: 70, wob: RR(.5, 1.2) }); }
   if (D.shafts) shafts(D.shafts, 6, 14);
-  if (D.bunting) for (let x = -4; x < WX + 4; x += RR(10, 14)) { const w = RR(8, 11), y = RR(9.2, 10.4), z = RR(-7.5, -5.5), n = Math.round(w / .8);   // garlands of little flags across the top
-    for (let j = 0; j < n; j++) { const u = j / (n - 1), fl = new THREE.Mesh(new THREE.ConeGeometry(.28, .5, 3).rotateZ(Math.PI), basic(D.bunting[j % D.bunting.length], { side: THREE.DoubleSide })); put(fl, x + u * w, y - Math.sin(u * Math.PI) * 1.1 - .25, z); F.sway.push({ m: fl, amp: .12, sp: RR(2, 3), ph: RR(0, 6) }); } }
-  if (D.tanks) for (let x = RR(4, 10); x < WX; x += RR(13, 18)) { const z = RR(-26, -16), t = group(g, x, RR(-1, 2), z);   // water towers on the roofs round about
+  if (D.bunting) for (const sl of W.steps(10, 14, 6, 6, 2784)) inSlot(sl, x => { const w = RR(8, 11), y = RR(9.2, 10.4), z = RR(-7.5, -5.5), n = Math.round(w / .8);   // garlands of little flags across the top
+    for (let j = 0; j < n; j++) { const u = j / (n - 1), fl = new THREE.Mesh(new THREE.ConeGeometry(.28, .5, 3).rotateZ(Math.PI), basic(D.bunting[j % D.bunting.length], { side: THREE.DoubleSide })); put(fl, x + u * w, y - Math.sin(u * Math.PI) * 1.1 - .25, z); F.sway.push({ m: fl, amp: .12, sp: RR(2, 3), ph: RR(0, 6) }); } });
+  if (D.tanks) for (const sl of W.steps(13, 18, 2, 2, 2785)) inSlot(sl, x => { const z = RR(-26, -16), t = group(g, x, RR(-1, 2), z);   // water towers on the roofs round about
     t.add(at(mk(new THREE.CylinderGeometry(1.4, 1.4, 2.6, 14), null, { mat: M(D.tanks), ol: .03 }), 0, 3.6, 0)); t.add(at(mk(new THREE.ConeGeometry(1.6, .9, 14), null, { mat: M("#5a4e46"), ol: 0 }), 0, 5.35, 0));
-    [-1, 1].forEach(a => [-1, 1].forEach(b2 => t.add(at(box(.14, 2.4, .14, M("#3a3a3e")), a * .9, 1.2, b2 * .9)))); }
+    [-1, 1].forEach(a => [-1, 1].forEach(b2 => t.add(at(box(.14, 2.4, .14, M("#3a3a3e")), a * .9, 1.2, b2 * .9)))); });
   if (D.reeds) for (let i = 0; i < 26; i++) { const x = RR(0, WORLD); if (groundAt(x) === null) continue; const h = RR(.8, 1.8), rd = put(box(.05, h, .05, M(D.reeds)), X(x), gy(x) + h / 2, RR(-4.5, -2.5)); F.sway.push({ m: rd, amp: .12, sp: RR(1.5, 2.5), ph: RR(0, 6) }); }
-  if (D.flags) for (let x = RR(3, 8); x < WX; x += RR(9, 13)) { const z = RR(-14, -8), h = RR(5, 7.5), p = group(g, x, gy(x / S) - .1, z); p.add(at(box(.1, h, .1, M("#5a4a3a")), 0, h / 2, 0));
-    const f = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .9).translate(.8, 0, 0), basic(D.flags[Math.floor(R() * D.flags.length)], { side: THREE.DoubleSide })); p.add(at(f, .05, h - .5, 0)); F.sway.push({ m: f, amp: .25, sp: RR(3, 5), ph: RR(0, 6), axis: "y" }); }
-  if (D.domes) for (let i = 0; i < 9; i++) { const x = RR(-10, WX + 10), z = RR(-34, -18), rad = RR(1.5, 3); put(box(rad * 1.6, 3, rad * 1.6, M("#e8d2b8")), x, -1, z); put(mk(new THREE.SphereGeometry(rad, 14, 8, 0, TAU, 0, Math.PI / 2), null, { mat: M(D.domes), ol: 0 }), x, .5, z); }
-  if (D.neon) for (let x = RR(5, 10); x < WX; x += RR(12, 17)) { const z = RR(-14, -9), c = D.neon[Math.floor(R() * D.neon.length)], w = RR(3, 5);   // signs on the rooftops round the penthouse, buzzing
+  if (D.flags) for (const sl of W.steps(9, 13, 2, 2, 2786)) inSlot(sl, x => { const z = RR(-14, -8), h = RR(5, 7.5), p = group(g, x, gy(x / S) - .1, z); p.add(at(box(.1, h, .1, M("#5a4a3a")), 0, h / 2, 0));
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(1.6, .9).translate(.8, 0, 0), basic(D.flags[Math.floor(R() * D.flags.length)], { side: THREE.DoubleSide })); p.add(at(f, .05, h - .5, 0)); F.sway.push({ m: f, amp: .25, sp: RR(3, 5), ph: RR(0, 6), axis: "y" }); });
+  if (D.domes) for (const sl of W.scatter(9, 10, 10, 2787)) inSlot(sl, x => { const z = RR(-34, -18), rad = RR(1.5, 3); put(box(rad * 1.6, 3, rad * 1.6, M("#e8d2b8")), x, -1, z); put(mk(new THREE.SphereGeometry(rad, 14, 8, 0, TAU, 0, Math.PI / 2), null, { mat: M(D.domes), ol: 0 }), x, .5, z); });
+  if (D.neon) for (const sl of W.steps(12, 17, 2, 2, 2788)) inSlot(sl, x => { const z = RR(-14, -9), c = D.neon[Math.floor(R() * D.neon.length)], w = RR(3, 5);   // signs on the rooftops round the penthouse, buzzing
     put(box(w + .4, 1.6, .2, M("#1a1420")), x, 6.6, z); const n = new THREE.Mesh(new THREE.PlaneGeometry(w, .9), basic(c)); put(n, x, 6.6, z + .12); const h = halo(c, w * 1.6, .45); put(h, x, 6.6, z + .3);
-    [-1, 1].forEach(sd => put(box(.12, 6, .12, M("#2a2430")), x + sd * w * .4, 3, z)); F.flick.push({ m: n, h, base: 1, sp: RR(6, 9), ph: RR(0, 6), buzz: true }); }
-  if (D.crenel) { const mC = M(D.crenel); put(box(WX + 70, 1.4, 1, mC), WX / 2, gy(WORLD / 2) + .7, -6.4); for (let x = -4; x < WX + 4; x += 2.2) put(box(1.2, 1.1, 1, mC), x, gy(WORLD / 2) + 1.95, -6.4); }   // the battlements along the back
+    [-1, 1].forEach(sd => put(box(.12, 6, .12, M("#2a2430")), x + sd * w * .4, 3, z)); F.flick.push({ m: n, h, base: 1, sp: RR(6, 9), ph: RR(0, 6), buzz: true }); });
+  if (D.crenel) { const mC = M(D.crenel); put(box(WX + 70, 1.4, 1, mC), WX / 2, gy(WORLD / 2) + .7, -6.4); for (const x of W.grid(2.2, 4, 4)) put(box(1.2, 1.1, 1, mC), x, gy(WORLD / 2) + 1.95, -6.4); }   // the battlements along the back
   return g;
 }
 function syncRowMore(dt, t) {                        // the rows' other moving bits: birds across the sky, lamps and lanterns swinging, flames, wind and mist drifting
@@ -15340,7 +15347,8 @@ function duneSkyTex(k) {                              // the desert sky for each
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (duneSkies[k] = t);
 }
 function buildDunes(k = 0, seed = k) {
-  const before = new Set(scene.children), rng = rngF(37 + seed * 53), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
+  const before = new Set(scene.children); let rng = rngF(37 + seed * 53);
+  const R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots: the ripples, scrub, rocks, the dunes far off and the pyramids, placed in the world's drawing)
   const Q = DUNE_PAL[k], ST = STAGES[seed] || {}, WY = Y(WATER), gY = Y(GROUND);
   const mSand = toon(Q.sand), mSandD = toon(Q.sandD), mSandL = toon(Q.sandL), mScrub = toon(Q.scrub), mScrub2 = toon(Q.scrub2), mRock = toon(Q.rock);
   const mStone = toon("#e8c49a"), mStoneD = toon("#b88a62"), mWood = toon("#7a4a2a"), mPit = toon("#" + new THREE.Color(Q.sandD).multiplyScalar(.55).getHexString());
@@ -15353,17 +15361,17 @@ function buildDunes(k = 0, seed = k) {
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 11, bevelEnabled: false }).translate(0, 0, -7), mSand));
     scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: .3, bevelEnabled: false }).translate(0, -.12, 3.9), mSandL));   // a lit lip along the front
   });
-  { const N = 70, ri = new THREE.InstancedMesh(new THREE.TorusGeometry(1, .025, 3, 18, Math.PI * .7).rotateX(Math.PI / 2), mSandD, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
-    let n = 0; for (let i = 0; i < N * 3 && n < N; i++) { const x = R(-20, WX + 20); if (overGap(x / S)) continue; const z = rng() < .5 ? R(-6.5, -1.5) : R(1.5, 3.6), s = R(.8, 2.6);
-      e.set(0, R(-.3, .3) + (rng() < .5 ? 0 : Math.PI), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, Y(groundAt(x / S) ?? GROUND) + .015, z), q, new THREE.Vector3(s * 1.6, 1, s * .6)); ri.setMatrixAt(n++, m4); }
+  { const SL = W.scatter(70, 20, 20, 2501), N = SL.length, ri = new THREE.InstancedMesh(new THREE.TorusGeometry(1, .025, 3, 18, Math.PI * .7).rotateX(Math.PI / 2), mSandD, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+    let n = 0; SL.forEach(sl => inSlot(sl, x => { if (overGap(x / S)) return; const z = rng() < .5 ? R(-6.5, -1.5) : R(1.5, 3.6), s = R(.8, 2.6);
+      e.set(0, R(-.3, .3) + (rng() < .5 ? 0 : Math.PI), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, Y(groundAt(x / S) ?? GROUND) + .015, z), q, new THREE.Vector3(s * 1.6, 1, s * .6)); ri.setMatrixAt(n++, m4); }));
     ri.count = n; scene.add(ri); }
   { const N = 120, sc = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), mScrub, N), sc2 = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), mScrub2, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion();   // dry scrub, in clumps
-    let n = 0, n2 = 0; for (let c = 0; c < 26; c++) { const cx = R(-20, WX + 20); if (overGap(cx / S)) continue; const cz = rng() < .6 ? R(-6.5, -2.5) : R(2, 3.6), cy = Y(groundAt(cx / S) ?? GROUND);
+    let n = 0, n2 = 0; for (const sl of W.scatter(26, 20, 20, 2502)) inSlot(sl, cx => { if (overGap(cx / S)) return; const cz = rng() < .6 ? R(-6.5, -2.5) : R(2, 3.6), cy = Y(groundAt(cx / S) ?? GROUND);
       for (let j = 0; j < 6; j++) { const s = R(.12, .3), v = new THREE.Vector3(cx + R(-.8, .8), cy + s * .4, cz + R(-.4, .4)); m4.compose(v, q.random(), new THREE.Vector3(s, s * .8, s));
-        if (rng() < .65 && n < N) sc.setMatrixAt(n++, m4); else if (n2 < N) sc2.setMatrixAt(n2++, m4); } }
+        if (rng() < .65 && n < N) sc.setMatrixAt(n++, m4); else if (n2 < N) sc2.setMatrixAt(n2++, m4); } })
     sc.count = n; sc2.count = n2; scene.add(sc, sc2); }
-  for (let i = 0; i < 14; i++) { const x = R(-10, WX + 10); if (overGap(x / S)) continue; const r = R(.15, .45);                 // red rocks
-    scene.add(at(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0), rng, r * .4), mRock), x, Y(groundAt(x / S) ?? GROUND) + r * .3, rng() < .5 ? R(-6, -2) : R(2, 3.5))); }
+  for (const sl of W.scatter(14, 10, 10, 2503)) inSlot(sl, x => { if (overGap(x / S)) return; const r = R(.15, .45);                 // red rocks
+    scene.add(at(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0), rng, r * .4), mRock), x, Y(groundAt(x / S) ?? GROUND) + r * .3, rng() < .5 ? R(-6, -2) : R(2, 3.5))); });
   // the sinkholes: sand pouring down into a dark funnel, turning slowly
   const pits = [];
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND), depth = Math.max(2, ty - WY + 1.5);
@@ -15413,11 +15421,11 @@ function buildDunes(k = 0, seed = k) {
   }
   // far off: the flat of the desert to the horizon, big dunes rolling away, the glass pyramids, the beam
   const far = new THREE.Mesh(new THREE.PlaneGeometry(400, 160).rotateX(-Math.PI / 2), mSand); at(far, WX / 2, gY - .7, -78); scene.add(far);
-  for (let i = 0; i < 16; i++) { const z = -R(18, 75), w = R(8, 22), h = R(.8, 2.2) * (1 + -z / 50);
-    scene.add(at(new THREE.Mesh(new THREE.SphereGeometry(1, 20, 8, 0, TAU, 0, Math.PI / 2).scale(w, h, w * .45), rng() < .5 ? mSand : rng() < .5 ? mSandD : mSandL), R(-30, WX + 30), gY - .6, z)); }
+  for (const sl of W.scatter(16, 30, 30, 2504)) inSlot(sl, x => { const z = -R(18, 75), w = R(8, 22), h = R(.8, 2.2) * (1 + -z / 50);
+    scene.add(at(new THREE.Mesh(new THREE.SphereGeometry(1, 20, 8, 0, TAU, 0, Math.PI / 2).scale(w, h, w * .45), rng() < .5 ? mSand : rng() < .5 ? mSandD : mSandL), x, gY - .6, z)); });
   const glass = new THREE.MeshPhysicalMaterial({ color: "#ffffff", transmission: 1, roughness: .04, metalness: 0, ior: 1.42, thickness: 7, specularIntensity: .6, transparent: true, opacity: 1, emissive: new THREE.Color("#7fe6ff").multiplyScalar(.14 * Q.beam) });   // (a faint glow inside after dark)
   const edgeM = new THREE.LineBasicMaterial({ color: "#ffffff", transparent: true, opacity: .55 }), pyr = [];
-  [[WX * .55, -50, 17], [WX * .12 - 18, -82, 6]].forEach(([px, pz, h]) => {
+  [...W.slots(WX * 3, 40, 40, 2505).map(sl => [sl.x + sl.rs() * WX * 3, -50, 17]), ...W.slots(WX * 2.2, 40, 40, 2506).map(sl => [sl.x + sl.rs() * WX * 2.2, -82, 6])].filter(([px]) => px > -40 && px < WX + 40).forEach(([px, pz, h]) => {   // (the pyramids where the world's drawing has them: a great one every three screens or so, a small far one more often)
     const geo = new THREE.ConeGeometry(h * .72, h, 4, 1).rotateY(Math.PI / 4), m = new THREE.Mesh(geo, glass); at(m, px, gY - .6 + h / 2, pz); scene.add(m); keep.add(m);
     const ed = new THREE.LineSegments(new THREE.EdgesGeometry(geo), edgeM); ed.position.copy(m.position); scene.add(ed); keep.add(ed); pyr.push([px, gY - .6 + h, pz, h]); });
   const beamM = new THREE.MeshBasicMaterial({ map: tex(16, 256, g => { const gr = g.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, "rgba(255,255,255,0)"); gr.addColorStop(.25, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,1)"); g.fillStyle = gr; g.fillRect(0, 0, 16, 256); }),
