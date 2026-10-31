@@ -1106,6 +1106,21 @@ const X = x => x * S, Y = y => (GROUND - y) * S;
 const ROW_H = 440, SEAM_T = 86;                      // a row's height (px), and how far under a room's floor its edge with the room below is (its floor's thickness: the room below's ceiling, buildHoleCeil's, just under it at 90)
 const STITCH = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);   // the worlds built as one piece: all of them (Berry Woods first; the rest the user, 2026-10-25: "then rebuild all the worlds currently with this new screen/world approach")
 const cellOff = s => { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.cell || ""); return m && !q.arena && !q.cut ? { x: (+m[2] - 1) * WX, y: -"ABCD".indexOf(m[1]) * ROW_H * S } : null; };   // a screen's place in the world (3D units)
+// each world's scenery placed in its one drawing (the user, 2026-10-31: "I thought we had rebuilt it where it's one big continuous space and the game loads screens in chunks,
+// but the world is built together?"): slots along each row of the world, each with its own random, so every screen that can see a slot builds the same thing in it, and what's
+// at the edge two screens share is the same on both. WP: the screen being built's (setScreen); a builder takes its slots in place of its own random x's, its colours its own still
+let WP = null;
+function wPlace(s) {
+  let apart = false; try { apart = !!stronghold || !!hideout; } catch (e) { }   // (a stronghold's or a hideout's screen: one of its own)
+  const q = STAGES[s], c = q && cellOff(s), on = !!c && STITCH.has(world) && !apart;
+  const ox = on ? c.x : 0, row = on ? "ABCD".indexOf(q.cell[0]) : 9, base = (world + 1) * 7919 + row * 104729;
+  const slots = (step, m0, m1, salt) => { const o = []; for (let j = Math.floor((ox - m0) / step) - 1; j * step <= ox + WX + m1; j++) o.push({ x: j * step - ox, rs: rngF(base + salt * 131 + j * 977), j, step }); return o; };
+  const inside = (m0, m1) => q2 => q2.x >= -m0 && q2.x <= WX + m1;
+  return { on, ox, row, slots,
+    scatter: (n, m0, m1, salt) => { const step = (WX + m0 + m1) / Math.max(1, n); return slots(step, m0, m1, salt).map(q2 => (q2.x += q2.rs() * step, q2)).filter(inside(m0, m1)); },   // n across the screen and its margins, as n of R(-m0, WX + m1) did
+    steps: (a, b, m0, m1, salt) => { const step = (a + b) / 2; return slots(step, m0, m1, salt).map(q2 => (q2.x += (q2.rs() - .5) * (b - a), q2)).filter(inside(m0, m1)); } };   // one every a..b, as x += R(a, b) did
+}
+const slotRun = (get, set) => (sl, f) => { const k = get(); set(sl.rs); try { return f(sl.x, sl); } finally { set(k); } };   // (a builder's own random swapped for a slot's while it makes what's in it)
 
 const INK = "#151318";
 const WHITE = "#f4efe6", RED = "#c8352b", OLIVE = "#6f7d2f", MUST = "#e5c447", SLATE = "#5d6b6a",
@@ -2357,23 +2372,23 @@ function propFeet(p, two) {
 // (they'd stood on nothing past the path's ground, their feet lost in the fog), undergrowth along it, and two far stands of trees, their crowns packed together, in deep
 // greens the fog turns sage: between the trunks, more forest, not the pale sky. Rows B and C (row A looks out over the canopy below; the ravine has its own floor)
 const FAR_C = { floor: "#4a733a", bush: ["#2f5c38", "#3a6b40", "#467845"], crown: ["#28522f", "#315c37", "#3d6a40", "#4a7848"], bark: ["#54463a", "#6a5d4f", "#8a8476"] };
-function farForest(par, bgY, rng) {
-  const R = (a, b) => a + rng() * (b - a), q = new THREE.Quaternion(), e3 = new THREE.Euler(), m4 = new THREE.Matrix4(), V = (x, y, z) => new THREE.Vector3(x, y, z);
+function farForest(par, bgY, WS0) {                // (WS0: the screen's slots, wPlace)
+  let rng = Math.random; const inSlot = slotRun(() => rng, v => { rng = v; }), R = (a, b) => a + rng() * (b - a), q = new THREE.Quaternion(), e3 = new THREE.Euler(), m4 = new THREE.Matrix4(), V = (x, y, z) => new THREE.Vector3(x, y, z);
   if (bgY <= .5) par.add(at(mk(new THREE.BoxGeometry(WX + 160, .45, 72), null, { mat: toon(FAR_C.floor), ol: 0 }), WX / 2, bgY - .24, -45.5));   // (the forest floor on back, from the path's ground's back edge)
   const inst = (geo, cols, list) => cols.forEach((c, i) => { const L = list.filter(o => o.c === i); if (!L.length) return; const im = new THREE.InstancedMesh(geo, toon(c), L.length);
     L.forEach((o, j) => { q.setFromEuler(e3.set(0, o.ry || 0, o.rz || 0)); m4.compose(V(o.x, o.y, o.z), q, V(o.sx, o.sy, o.sz)); im.setMatrixAt(j, m4); }); im.instanceMatrix.needsUpdate = true; par.add(im); });
   const bush = [], trunk = [], crown = [];
-  for (let x = -70; x < WX + 70; x += R(1.6, 3.2)) { const r = R(1.2, 2.6); bush.push({ x, y: bgY + r * .35, z: -R(36, 42), sx: r * 1.5, sy: r * .8, sz: r, c: Math.floor(rng() * 3), ry: R(0, TAU) }); }   // undergrowth along its foot
-  const band = (z0, z1, gap, h0, h1, rk) => { for (let x = -90; x < WX + 90; x += R(gap * .6, gap * 1.3)) { const z = -R(z0, z1), h = R(h0, h1), w = R(.35, .7) * rk;   // a stand: trunks, a crown of four over each
+  for (const sl of WS0.steps(1.6, 3.2, 70, 70, 2201)) inSlot(sl, x => { const r = R(1.2, 2.6); bush.push({ x, y: bgY + r * .35, z: -R(36, 42), sx: r * 1.5, sy: r * .8, sz: r, c: Math.floor(rng() * 3), ry: R(0, TAU) }); });   // undergrowth along its foot
+  const band = (z0, z1, gap, h0, h1, rk) => { for (const sl of WS0.steps(gap * .6, gap * 1.3, 90, 90, 2202 + Math.round(z0))) inSlot(sl, x => { const z = -R(z0, z1), h = R(h0, h1), w = R(.35, .7) * rk;   // a stand: trunks, a crown of four over each
     trunk.push({ x, y: bgY + h / 2, z, sx: w, sy: h + 1, sz: w, c: Math.floor(rng() * 3), rz: R(-.06, .06) });
-    for (let c = 0; c < 4; c++) { const r = R(2.2, 3.8) * rk; crown.push({ x: x + R(-2.6, 2.6) * rk, y: bgY + h + R(-1.2, 1.8) * rk, z: z + R(-1.4, 1.4), sx: r * 1.35, sy: r * .7, sz: r, c: Math.floor(rng() * 4), ry: R(0, TAU) }); } } };
+    for (let c = 0; c < 4; c++) { const r = R(2.2, 3.8) * rk; crown.push({ x: x + R(-2.6, 2.6) * rk, y: bgY + h + R(-1.2, 1.8) * rk, z: z + R(-1.4, 1.4), sx: r * 1.35, sy: r * .7, sz: r, c: Math.floor(rng() * 4), ry: R(0, TAU) }); } }); };
   band(44, 50, 4.5, 9, 13, 1); band(54, 62, 5.5, 12, 17, 1.3);
   inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.bush, bush); inst(new THREE.CylinderGeometry(.5, .7, 1, 6), FAR_C.bark, trunk); inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.crown, crown);
 }
 function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const before = new Set(scene.children);
-  const rng = rngF(7 + seed * 31);
-  const R = (a, b) => a + rng() * (b - a);
+  let rng = rngF(7 + seed * 31);
+  const R = (a, b) => a + rng() * (b - a), W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots for what's round about; the room's own random for the rest)
   const mGrass = toon("#6c9c44"), mDirt = toon("#74402f"), mStone = toon("#a39d93"), mMoss = toon("#6e9c48");   // (red earth, like El Yunque's; mossy limestone, like the karst country's)
   const gAt = x => Y(groundAt(x / S) ?? GROUND);                                   // the ground's height (3D) at x (3D)
   const M = tropMats(), bushMs0 = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c)), barkPitM = toon("#6b5040");
@@ -2511,22 +2526,22 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   if (bgY > .5) {                                    // down in the ravine: its back wall, roots and rocks, the forest floor up on top
     scene.add(at(mk(new THREE.BoxGeometry(WX + 62, bgY + 9, 2.2), null, { mat: mDirt, ol: 0 }), WX / 2, (bgY - 9) / 2, -10.3));
     scene.add(at(mk(new THREE.BoxGeometry(WX + 62, .45, 60), null, { mat: mGrass, ol: 0 }), WX / 2, bgY - .2, -40));
-    const mWallRock = toon("#3c5646"); for (let x = -14; x < WX + 16; x += R(1.6, 3)) { const r = R(.35, .8); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, .8, .35), null, { mat: mWallRock, ol: 0 }), x, R(.4, bgY - .4), -9.3)); }
-    for (let x = -14; x < WX + 16; x += R(.8, 1.8)) { const r = R(.4, 1.1), m = mk(new THREE.DodecahedronGeometry(r, 0).scale(R(1.1, 1.9), R(.6, 1), .35), null, { mat: rng() < .5 ? M.moss : bushMs0[1], ol: 0 }); m.rotation.z = R(0, TAU); scene.add(at(m, x, R(.3, bgY - .2), -9.15)); }   // moss grown over the red earth (turned every which way, so it doesn't tile)
-    for (let x = -14; x < WX + 16; x += R(1.1, 2)) { const r = R(.6, 1.1); scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs0[(x * 7 | 0) & 1 ? 0 : 2], ol: 0 }), x, bgY + r * .2, -9.6)); }   // a bushy lip along the top
-    for (let i = 0; i < Math.round(12 * WS); i++) { const g = tropGroundFern(scene, M, R(-12, WX + 12), R(.8, bgY - .6), -9, rng, R(.8, 1.2)); g.rotation.x = 1.15; }   // ferns growing out of the wall
-    for (let x = -14; x < WX + 16; x += R(.5, 1.3)) { const hl = R(.6, 2.6), v = mk(new THREE.CylinderGeometry(.04, .02, hl, 4), null, { mat: rng() < .6 ? mMoss : toon("#6b5040"), ol: .012 }); at(v, x, bgY - hl / 2, -9.1); scene.add(v); }
+    const mWallRock = toon("#3c5646"); for (const sl of W.steps(1.6, 3, 14, 16, 2101)) inSlot(sl, x => { const r = R(.35, .8); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, .8, .35), null, { mat: mWallRock, ol: 0 }), x, R(.4, bgY - .4), -9.3)); });
+    for (const sl of W.steps(.8, 1.8, 14, 16, 2102)) inSlot(sl, x => { const r = R(.4, 1.1), m = mk(new THREE.DodecahedronGeometry(r, 0).scale(R(1.1, 1.9), R(.6, 1), .35), null, { mat: rng() < .5 ? M.moss : bushMs0[1], ol: 0 }); m.rotation.z = R(0, TAU); scene.add(at(m, x, R(.3, bgY - .2), -9.15)); });   // moss grown over the red earth (turned every which way, so it doesn't tile)
+    for (const sl of W.steps(1.1, 2, 14, 16, 2103)) inSlot(sl, x => { const r = R(.6, 1.1); scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs0[(x * 7 | 0) & 1 ? 0 : 2], ol: 0 }), x, bgY + r * .2, -9.6)); });   // a bushy lip along the top
+    for (const sl of W.scatter(Math.round(12 * WS), 12, 12, 2104)) inSlot(sl, x => { const g = tropGroundFern(scene, M, x, R(.8, bgY - .6), -9, rng, R(.8, 1.2)); g.rotation.x = 1.15; });   // ferns growing out of the wall
+    for (const sl of W.steps(.5, 1.3, 14, 16, 2105)) inSlot(sl, x => { const hl = R(.6, 2.6), v = mk(new THREE.CylinderGeometry(.04, .02, hl, 4), null, { mat: rng() < .6 ? mMoss : toon("#6b5040"), ol: .012 }); at(v, x, bgY - hl / 2, -9.1); scene.add(v); });
   } else if (bgY < -.5) {                            // up high: our ground ends in a cliff at the back, the forest's canopy far below
-    for (let x = -14; x < WX + 16; x += R(.9, 1.8)) { const r = R(.6, 1.3); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .03 }), x, R(-3, -.6), -9.1)); }
+    for (const sl of W.steps(.9, 1.8, 14, 16, 2106)) inSlot(sl, x => { const r = R(.6, 1.3); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .03 }), x, R(-3, -.6), -9.1)); });
   }
   // the rainforest round about: sierra palms in clumps, giant tree ferns, yagrumos, tabonucos, royal palms standing tall at the back, flamboyanes in
   // flower; one great ceiba; lianas hanging; mogotes far off. Deeper = foggier
   const bushMs = bushMs0, petalsAt = [];
-  for (let i = 0; i < Math.round(46 * WS); i++) {
-    const x = R(-14, WX + 14), z = -R(3.5, 34);
-    if (Math.abs(x - WX / 2) < 5 && z > -14) continue;     // keep the sunlit clearing open
-    if (bgY < -.5 && z > -10.5) continue;              // (up high there's nothing behind us but the drop)
-    if (CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1) && z > -9.5) continue;   // under the overhang: no trees through it
+  for (const sl of W.scatter(Math.round(46 * WS), 14, 14, 2110)) inSlot(sl, x => {   // (the trees round about, placed in the world's drawing)
+    const z = -R(3.5, 34);
+    if (Math.abs(x - WX / 2) < 5 && z > -14) return;     // keep the sunlit clearing open
+    if (bgY < -.5 && z > -10.5) return;              // (up high there's nothing behind us but the drop)
+    if (CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1) && z > -9.5) return;   // under the overhang: no trees through it
     const ol = z > -14 ? .06 : 0, by = z < -9.5 ? bgY : gAt(x), roll = rng();
     if (roll < .3) { const n = rng() < .5 ? 3 : 2; for (let j = 0; j < n; j++) tropPalm(scene, M, x + R(-1.2, 1.2), by, z + R(-.8, .8), rng, { h: R(6.5, 10.5), lean: R(-.28, .28), ol }); }
     else if (roll < .5) tropTreeFern(scene, M, x, by, z, rng, { h: R(4.5, 7.5), ol });
@@ -2534,32 +2549,32 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     else if (roll < .69 && z < -10) tropPalm(scene, M, x, by, z, rng, { h: R(12, 16), royal: true, ol });
     else if (roll < .75) { tropFlamboyan(scene, M, x, by, z, rng, { h: R(5, 6.8), ol }); if (z > -9.5) petalsAt.push([x, z]); }
     else tropTabonuco(scene, M, x, by, z, rng, { h: R(9.5, 12.5), ol });
-  }
+  });
   { const x = WX * R(.2, .8), z = -R(15, 21); tropCeiba(scene, M, x, bgY > .5 || bgY < -.5 ? bgY : gAt(x), z, rng, { h: R(12, 14), ol: .04 }); }   // the great ceiba
-  if (!(bgY < -.5)) for (let i = 0; i < Math.round(14 * WS); i++) { const x = R(-10, WX + 10), z = -R(5, 12);   // lianas hanging out of the canopy
-    if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) continue; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); }
-  for (let x = -30; x < WX + 30; x += R(14, 24)) tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22));   // the mogotes far off
-  if (bgY > -.5) farForest(scene, bgY, rngF(9137 + seed * 13));   // (the forest filled in behind: its own random, so the rest of the room's the same)
+  if (!(bgY < -.5)) for (const sl of W.scatter(Math.round(14 * WS), 10, 10, 2111)) inSlot(sl, x => { const z = -R(5, 12);   // lianas hanging out of the canopy
+    if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) return; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); });
+  for (const sl of W.steps(14, 24, 30, 30, 2112)) inSlot(sl, x => tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22)));   // the mogotes far off
+  if (bgY > -.5) farForest(scene, bgY, W);   // (the forest filled in behind: placed in the world's drawing too)
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
     petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
-  for (let i = 0; i < Math.round(70 * WS); i++) {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
-    const z = -R(2, 9), x = R(-12, WX + 12), r = R(.6, 1.5);
-    if (bgY < -.5 && (i & 1)) continue;                // (thinner up high, to open the view down over the treetops)
+  for (const sl of W.scatter(Math.round(70 * WS), 12, 12, 2113)) inSlot(sl, x => {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
+    const z = -R(2, 9), r = R(.6, 1.5);
+    if (bgY < -.5 && (sl.j & 1)) return;                // (thinner up high, to open the view down over the treetops)
     const y0 = gAt(x), roll = rng();
-    if (roll < .3) scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[i % 3], ol: z > -6 ? .04 : 0 }), x, y0 + r * .45, z));
+    if (roll < .3) scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: bushMs[((sl.j % 3) + 3) % 3], ol: z > -6 ? .04 : 0 }), x, y0 + r * .45, z));
     else if (roll < .5) tropMalanga(scene, M, x, y0, z, rng, R(.9, 1.4));
     else if (roll < .64) tropHeliconia(scene, M, x, y0, Math.min(z, -3), rng, R(.9, 1.3));
     else if (roll < .78) tropPlantain(scene, M, x, y0, Math.min(z, -3.5), rng, R(.85, 1.2));
     else if (roll < .9) tropGroundFern(scene, M, x, y0, z, rng, R(.9, 1.3));
     else tropBromeliad(scene, M, x, y0, z, rng, R(.9, 1.3));
-  }
+  });
   // foreground rocks & big dark leaves framing the bottom of the shot (kept low, under where your feet are on screen)
   const rockM = toon("#1f3b33"), fernM = toon("#2b5446");
-  for (let x = -8; x < WX + 10; x += R(6, 11)) {
+  for (const sl of W.steps(6, 11, 8, 10, 2114)) inSlot(sl, x => {
     scene.add(at(mk(new THREE.IcosahedronGeometry(R(.8, 1.4), 0).scale(1.4, .8, 1), null, { mat: rockM, ol: .05 }), x, gAt(x) - .15, R(5, 6.5)));
     for (let k = 0; k < 2; k++) { const fx = x + R(-1.4, 1.4), lf = mk(heartLeafGeo(), null, { mat: M.leafD, ol: .03 }); lf.scale.setScalar(R(.6, .8)); leafAim(lf, R(-.6, .6) + (rng() < .5 ? 0 : Math.PI), R(.15, .4)); at(lf, fx, gAt(fx) + .15, R(5.2, 6.2)); scene.add(lf); }
     for (let k = 0; k < 3; k++) { const fx = x + R(-1, 1), f = mk(new THREE.ConeGeometry(.1, R(.6, 1.1), 3), null, { mat: fernM, ol: .03 }); at(f, fx, gAt(fx) + .3, R(5, 6)); f.rotation.z = R(-.5, .5); scene.add(f); }
-  }
+  });
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(250, 125), new THREE.MeshBasicMaterial({ map: skyTex(k), fog: false }));
   at(sky, WX / 2, 30, -80); scene.add(sky);
   // light shafts
@@ -5019,7 +5034,7 @@ function setScreen(s) {                              // build stage s (its platf
   const tierNow = mode === "play" && world !== 9 ? upTier() : 0, frNow = mode === "play" && world !== 9 && freedNow();
   const scr = WORLDS[frNow && world === 6 ? 0 : world].screens; if (WORLDS[world] && SCREENS[0] !== scr[0]) { SCREENS.splice(0, SCREENS.length, ...scr); level.s = -2; }   // (the candy works set free: the woods' sky and light, outdoors)
   if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow || !!level.freed !== frNow) {
-    if (panKeep) panKeep.old = level; else disposeLevel(level); setPlatforms(s);   // (a pan between stitched screens: the room you're leaving kept, drawn beside the new one till the camera's across)
+    if (panKeep) panKeep.old = level; else disposeLevel(level); setPlatforms(s); WP = wPlace(s);   // (a pan between stitched screens: the room you're leaving kept, drawn beside the new one till the camera's across)
     const c = STAGES[s].col ?? STAGES[s].h;
     level = STAGES[s].home ? buildHome(h, s) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
     level.s = s; level.w = world; level.h = h;
