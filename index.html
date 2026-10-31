@@ -16862,7 +16862,8 @@ function boardSign(big, small) {                      // a weathered board with 
     g.strokeStyle = "#5e4238"; g.lineWidth = 12; g.strokeRect(6, 6, 500, 164); g.fillStyle = "#2e2230"; g.font = "900 78px sans-serif"; g.textBaseline = "middle"; g.fillText(big, 28, 70); g.font = "800 30px sans-serif"; g.fillText(small, 30, 136, 460); });
 }
 function buildLakebed(k = 0, seed = k) {
-  const before = new Set(scene.children), rng = rngF(977 + seed * 61), R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [];
+  const before = new Set(scene.children); let rng = rngF(977 + seed * 61);
+  const R = (a, b) => a + rng() * (b - a), keep = new Set(), anim = [], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots: the lake's far wall, mesas, needle rocks, mountains, huts, lamps, pots and reeds placed in the world's drawing)
   const ST = STAGES[seed] || {}, gY = Y(GROUND), WY = Y(WATER), gAt = x => Y(groundAt(x / S) ?? GROUND), elev = ST.elev || 0, floorY = gY - elev * 6.2;   // the old lake floor: right here on row C, far below up on the rim
   const mats = Object.fromEntries(Object.entries(LK).map(([n, c]) => [n, toon(c)])); mats.sailD = toon(LK.sail, { side: THREE.DoubleSide });
   const lampM = new THREE.MeshBasicMaterial({ color: LK.lamp });
@@ -16881,9 +16882,9 @@ function buildLakebed(k = 0, seed = k) {
     for (let s2 = 0; s2 < (elev ? 5 : 2); s2++) { const band = new THREE.Shape(), yb = -.8 - s2 * 1.6; band.moveTo(X(a), Y(pts[0][1]) + yb); pts.forEach(([x, y]) => band.lineTo(X(x), Y(y) + yb)); for (let i = pts.length - 1; i >= 0; i--) band.lineTo(X(pts[i][0]), Y(pts[i][1]) + yb - .5); band.closePath();   // strata down the cut face
       scene.add(new THREE.Mesh(new THREE.ExtrudeGeometry(band, { depth: .1, bevelEnabled: false }).translate(0, 0, 4.12), s2 % 2 ? mats.rockB : mats.rockD)); }
   });
-  { const N = 260, cr = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .02, .05), mats.crack, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();   // cracks in the dry mud
-    let n = 0; for (let i = 0; i < N * 3 && n < N; i++) { const x = R(-6, WX + 6), z = R(-7.5, 3.6); if (overGap(x / S)) continue; const len = R(.5, 1.8);
-      e.set(0, R(0, Math.PI), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, gAt(x) + .015, z), q, new THREE.Vector3(len, 1, 1)); cr.setMatrixAt(n++, m4); }
+  { const SL = W.scatter(260, 6, 6, 3100), N = SL.length, cr = new THREE.InstancedMesh(new THREE.BoxGeometry(1, .02, .05), mats.crack, N), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();   // cracks in the dry mud
+    let n = 0; SL.forEach(sl => inSlot(sl, x => { const z = R(-7.5, 3.6); if (overGap(x / S)) return; const len = R(.5, 1.8);
+      e.set(0, R(0, Math.PI), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, gAt(x) + .015, z), q, new THREE.Vector3(len, 1, 1)); cr.setMatrixAt(n++, m4); }));
     cr.count = n; scene.add(cr); }
   const bubbles = [];
   GAPS.forEach(([a, b]) => { if (a < -800 || b > WORLD + 800) return; const cx = X((a + b) / 2), w = (b - a) * S, ty = Y(groundAt(a - 1) ?? GROUND);   // a sinkhole: down to a pool of wet mud
@@ -16896,30 +16897,30 @@ function buildLakebed(k = 0, seed = k) {
   const bluff = (x, z, w, h, d, y0) => { const g2 = group(scene, x, y0, z); let y = 0, i = (rng() * 5) | 0;
     while (y < h) { const bh = R(.8, 2.2), ww = w * (1 - y / h * .18) * R(.96, 1.04); g2.add(at(mk(bx(ww, bh, d), null, { mat: band[i++ % 5], ol: .06 }), R(-.3, .3), y + bh / 2, 0)); y += bh; } return g2; };
   const wallH = elev >= 2 ? 9 : elev ? 11 : 12;
-  for (let x = -60; x < WX + 60; x += R(14, 26)) { if (rng() < .3) continue; bluff(x, R(-78, -58), R(12, 22), wallH + R(-3, 5), R(8, 12), floorY - .5); }   // the far wall of the lake, in pieces
-  for (let i = 0; i < 5; i++) { const x = R(-10, WX + 10); bluff(x, R(-34, -22), R(3, 6), R(2.5, 6), R(3, 5), floorY - .5); }   // a few mesas out on the floor
-  { const x = R(WX * .25, WX * .75), z = R(-34, -26), sp = group(scene, x, floorY - .5, z), hh = R(13, 18);   // the painting's needle rock, a little pointed house on top
+  for (const sl of W.steps(14, 26, 60, 60, 3101)) inSlot(sl, x => { if (rng() < .3) return; bluff(x, R(-78, -58), R(12, 22), wallH + R(-3, 5), R(8, 12), floorY - .5); });   // the far wall of the lake, in pieces
+  for (const sl of W.scatter(5, 10, 10, 3102)) inSlot(sl, x => { bluff(x, R(-34, -22), R(3, 6), R(2.5, 6), R(3, 5), floorY - .5); });   // a few mesas out on the floor
+  for (const sl of W.slots(WX * 2.5, 30, 30, 3109)) inSlot(sl, x0 => { const x = x0 + R(0, WX * 2.5); if (x < -30 || x > WX + 30) return; const z = R(-34, -26), sp = group(scene, x, floorY - .5, z), hh = R(13, 18);   // (where the world's drawing has one: every two or three screens)   // the painting's needle rock, a little pointed house on top
     sp.add(mk(new THREE.LatheGeometry([[0, 0], [3.4, 0], [2.2, hh * .25], [1.1, hh * .6], [.8, hh * .9], [1.2, hh], [0, hh]].map(([a, b]) => new THREE.Vector2(a, b)), 16), null, { mat: mats.rockB, ol: .06 }));
-    sp.add(at(mk(cyl(.8, .9, 1.2, 10), null, { mat: mats.hutL, ol: .04 }), 0, hh + .6, 0)); sp.add(at(mk(new THREE.ConeGeometry(1.6, 1.8, 10), null, { mat: mats.hutR, ol: .05 }), 0, hh + 2.1, 0)); }
-  for (let i = 0; i < 6; i++) { const m = mk(new THREE.ConeGeometry(R(14, 24), R(10, 20), 7), null, { mat: rng() < .5 ? mats.mtn : mats.mtnD, ol: .08 }); at(m, -40 + i * (WX + 80) / 5 + R(-8, 8), floorY + R(3, 6), R(-120, -95)); scene.add(m); }   // blue mountains, far off
-  { const fl = group(scene, R(WX * .55, WX * .9), gY + R(13, 17), -70); keep.add(fl);   // a great flat rock floating up in the sky, a village on it
+    sp.add(at(mk(cyl(.8, .9, 1.2, 10), null, { mat: mats.hutL, ol: .04 }), 0, hh + .6, 0)); sp.add(at(mk(new THREE.ConeGeometry(1.6, 1.8, 10), null, { mat: mats.hutR, ol: .05 }), 0, hh + 2.1, 0)); });
+  for (const sl of W.slots((WX + 80) / 5, 40, 40, 3103)) inSlot(sl, x0 => { const m = mk(new THREE.ConeGeometry(R(14, 24), R(10, 20), 7), null, { mat: rng() < .5 ? mats.mtn : mats.mtnD, ol: .08 }); at(m, x0 + R(-8, 8), floorY + R(3, 6), R(-120, -95)); scene.add(m); })   // blue mountains, far off
+  for (const sl of W.slots(WX * 3, 40, 40, 3110)) inSlot(sl, x0 => { const fx = x0 + R(0, WX * 3); if (fx < -40 || fx > WX + 40) return; const fl = group(scene, fx, gY + R(13, 17), -70); keep.add(fl);   // (one every three screens or so, in the world's drawing)   // a great flat rock floating up in the sky, a village on it
     fl.add(mk(new THREE.CylinderGeometry(9, 4, 4, 9).scale(1, 1, .6), null, { mat: mats.rockB, ol: .08 })); fl.add(at(mk(new THREE.CylinderGeometry(9.2, 9, .7, 9).scale(1, 1, .6), null, { mat: mats.rockD, ol: .06 }), 0, 2.2, 0));
     for (let i = 0; i < 4; i++) { const h2 = mudHut(fl, rng, .7, mats); h2.position.set(R(-6, 6), 2.5, R(-2.5, 2.5)); }
-    fl.traverse(o => keep.add(o)); anim.push(t => { fl.position.y += Math.sin(t * .4) * .002; }); }
+    fl.traverse(o => keep.add(o)); anim.push(t => { fl.position.y += Math.sin(t * .4) * .002; }); });
   // out on the floor: mud huts, stranded boats, poles with green balloon lamps, clay pots, dried reeds, a fish skeleton
   const lamps = [];
-  for (let x = R(-2, 3); x < WX + 4; x += R(5, 9)) { if (overGap(x / S)) { x -= 2; continue; } const z = R(-11, -6.5); const y0 = elev ? floorY : gAt(x); const h2 = mudHut(scene, rng, R(.75, 1.15), mats); h2.position.set(x, y0, z); h2.rotation.y = R(-.5, .5); }
-  if (elev) for (let x = R(0, 6); x < WX; x += R(8, 14)) { const h2 = mudHut(scene, rng, R(.8, 1.1), mats); h2.position.set(x, floorY, R(-20, -14)); }   // (from up on the shore, the village down below)
-  for (let x = R(2, 6); x < WX; x += R(9, 15)) { if (overGap(x / S)) continue; const y0 = gAt(x), z = R(-5.5, -3.5);
+  for (const sl of W.steps(5, 9, 2, 4, 3104)) inSlot(sl, x => { if (overGap(x / S)) { x -= 2; return; } const z = R(-11, -6.5); const y0 = elev ? floorY : gAt(x); const h2 = mudHut(scene, rng, R(.75, 1.15), mats); h2.position.set(x, y0, z); h2.rotation.y = R(-.5, .5); });
+  if (elev) for (const sl of W.steps(8, 14, 4, 4, 3105)) inSlot(sl, x => { const h2 = mudHut(scene, rng, R(.8, 1.1), mats); h2.position.set(x, floorY, R(-20, -14)); });   // (from up on the shore, the village down below)
+  for (const sl of W.steps(9, 15, 0, 0, 3106)) inSlot(sl, x => { if (overGap(x / S)) return; const y0 = gAt(x), z = R(-5.5, -3.5);
     const L = group(scene, x, y0, z); L.add(at(mk(cyl(.05, .06, 2.8, 6), null, { mat: mats.woodD, ol: .015 }), 0, 1.4, 0)); L.add(at(mk(cyl(.03, .03, .5, 4), null, { mat: mats.woodD, ol: 0 }), .2, 2.7, 0));
-    const lb = new THREE.Mesh(ball(.26, 14, 10).scale(1, 1.25, 1), lampM); at(lb, .42, 2.4, 0); L.add(lb); lamps.push(lb); }
+    const lb = new THREE.Mesh(ball(.26, 14, 10).scale(1, 1.25, 1), lampM); at(lb, .42, 2.4, 0); L.add(lb); lamps.push(lb); });
   for (let i = 0; i < 2; i++) { const x = R(3, WX - 3); if (overGap(x / S) || elev) continue; const y0 = gAt(x), z = R(-7, -5);   // a boat left on its side when the water went
     const b2 = group(scene, x, y0 + .3, z); b2.add(mk(new THREE.LatheGeometry([[0, -2], [.6, -1.5], [.85, 0], [.65, 1.6], [0, 2.1]].map(([a, b]) => new THREE.Vector2(a, b)), 12).rotateZ(Math.PI / 2).scale(1, .6, 1), null, { mat: mats.wood, ol: .04 }));
     b2.add(at(mk(cyl(.05, .05, 2.4, 6), null, { mat: mats.woodD, ol: .015 }), -.2, 1.1, 0)); b2.rotation.x = R(.4, .7); b2.rotation.y = R(-.4, .4); }
-  for (let i = 0; i < 10; i++) { const x = R(0, WX); if (overGap(x / S)) continue; const y0 = gAt(x), z = R(-6, 2.8), s2 = R(.5, 1);   // clay pots
-    scene.add(at(mk(new THREE.LatheGeometry([[0, 0], [.3, 0], [.42, .3], [.36, .62], [.2, .74], [.24, .8], [0, .8]].map(([a, b]) => new THREE.Vector2(a * s2, b * s2)), 12), null, { mat: rng() < .5 ? mats.hutD : mats.hutL, ol: .02 }), x, y0, z)); }
-  for (let i = 0; i < 14; i++) { const x = R(0, WX); if (overGap(x / S)) continue; const y0 = gAt(x), z = R(-7, 3);   // dried reeds in clumps
-    for (let j = 0; j < 5; j++) { const r = mk(new THREE.ConeGeometry(.04, R(.8, 1.6), 4), null, { mat: mats.reed, ol: 0 }); r.position.set(x + R(-.3, .3), y0 + .5, z + R(-.2, .2)); r.rotation.z = R(-.25, .25); scene.add(r); } }
+  for (const sl of W.scatter(10, 1, 1, 3107)) inSlot(sl, x => { if (overGap(x / S)) return; const y0 = gAt(x), z = R(-6, 2.8), s2 = R(.5, 1);   // clay pots
+    scene.add(at(mk(new THREE.LatheGeometry([[0, 0], [.3, 0], [.42, .3], [.36, .62], [.2, .74], [.24, .8], [0, .8]].map(([a, b]) => new THREE.Vector2(a * s2, b * s2)), 12), null, { mat: rng() < .5 ? mats.hutD : mats.hutL, ol: .02 }), x, y0, z)); });
+  for (const sl of W.scatter(14, 1, 1, 3108)) inSlot(sl, x => { if (overGap(x / S)) return; const y0 = gAt(x), z = R(-7, 3);   // dried reeds in clumps
+    for (let j = 0; j < 5; j++) { const r = mk(new THREE.ConeGeometry(.04, R(.8, 1.6), 4), null, { mat: mats.reed, ol: 0 }); r.position.set(x + R(-.3, .3), y0 + .5, z + R(-.2, .2)); r.rotation.z = R(-.25, .25); scene.add(r); } });
   if (!elev && rng() < .8) { const x = R(WX * .2, WX * .8); if (!overGap(x / S)) { const fb = fishBones(scene, mats, R(.9, 1.3)); fb.position.set(x, gAt(x), R(-6, -4)); fb.rotation.y = R(-.4, .4); } }
   if (seed === 0) { const arch = group(scene, -1.5, gY, 1.5); keep.add(arch);   // the cave mouth you come out of, its roof fringed with rock teeth (the painting's left edge)
     arch.add(at(mk(bx(4.5, 12, 6), null, { mat: mats.rockC, ol: .06 }), -1.6, 6, -1)); arch.add(at(mk(bx(9, 2.6, 6), null, { mat: mats.rockA, ol: .06 }), 1.4, 10.4, -1));
