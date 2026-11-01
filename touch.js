@@ -72,7 +72,7 @@
   const T = document.createElement("div"); T.id = "touch"; T.className = touchy ? "off" : "off kb";
   const arm = (d, rot) => `<g transform="rotate(${rot} 78 78)"><path class="arm" data-d="${d}" d="M58 6 Q58 2 62 2 L94 2 Q98 2 98 6 L98 58 L78 78 L58 58 Z"/><path class="tri" d="M78 16 L88 30 L68 30 Z"/></g>`;
   T.innerHTML = `<div id="tSit"></div><div id="tPad"><svg viewBox="0 0 156 156">${arm("u", 0)}${arm("r", 90)}${arm("d", 180)}${arm("l", 270)}<circle cx="78" cy="78" r="9" fill="rgba(255,255,255,.3)"/></svg></div>
-    <div id="tBtns"><div class="b bY" data-b="y"><svg viewBox="0 0 24 24"><path d="M12 3.5 L21.5 19.5 L2.5 19.5 Z"/></svg><i>TACKLE</i></div><div class="b bX" data-b="x"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg><i>BUDDY</i></div><div class="b bB" data-b="b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg><i>ATTACK</i></div><div class="b bA" data-b="a"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg><i>JUMP</i></div></div>
+    <div id="tBtns"><div class="b bY" data-b="y"><svg viewBox="0 0 24 24"><path d="M12 3.5 L21.5 19.5 L2.5 19.5 Z"/></svg><i>BUDDY</i></div><div class="b bX" data-b="x"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1"/></svg><i>TACKLE</i></div><div class="b bB" data-b="b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg><i>ATTACK</i></div><div class="b bA" data-b="a"><svg viewBox="0 0 24 24"><path d="M5 5 L19 19 M19 5 L5 19"/></svg><i>JUMP</i></div></div>
     <div id="tLT">L2</div><div class="tSh" id="tL">L<i>BLOCK</i></div><div class="tSh" id="tR">R<i>CHARGE!</i></div><div id="tCorner" class="hide">❚❚</div>`;
   const turn = document.createElement("div"); turn.id = "tTurn"; turn.innerHTML = "TURN YOUR PHONE SIDEWAYS<span>BERRY BLADE PLAYS IN LANDSCAPE</span>";
   const mount = () => { document.body.appendChild(T); document.body.appendChild(turn); };
@@ -82,7 +82,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyX"], b: ["KeyC"], x: ["KeyV"], y: ["KeyZ"] };   // (since 2026-11-01, later: □ the buddy, △ the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyX"], b: ["KeyC"], x: ["KeyV"], y: ["KeyZ"] };   // (the 3DS's way round, 2026-11-01: △ (its X, top) the buddy, □ (its Y, left) the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
