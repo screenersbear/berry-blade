@@ -1604,7 +1604,7 @@ function giantPose(p, o) {                           // not in a move: too heavy
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
-  const st = w * (1 - (p.gaitAmt || 0)) * (air || p.hurtT > 0 ? 0 : 1); if (st < .01) return;   // (hit: her hurt pose, not planted)
+  const jk = p.onGround ? Math.min(1, (p.jcharge || 0) * 1.6) : 0, st = w * (1 - (p.gaitAmt || 0)) * (air || p.hurtT > 0 ? 0 : 1) * (1 - jk); if (st < .01) return;   // (hit: her hurt pose, not planted; winding up a big jump: down into her crouch, the user 2026-11-01 "camila doesnt crouch when she's got a big arm and is chargning her jump")
   const G0 = GIANT_STANCE[pr.kind], G = M.gstance || {}, S = {};
   for (const k in G0) if (!/^(armF|elbF|spF|blade)$/.test(k)) S[k] = G0[k];   // (the planted stance; the weapon arm's hold is above, by its move)
   for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
@@ -2998,7 +2998,7 @@ function updatePoseHuman(p, dt) {
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
   else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
     : { lean: lerp(.58 + .2 * sk, .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
-  else {
+  else if (!(p.sit && p.sitGround)) {               // (sat on the ground, waiting: the sit pose stays; the game's p.sitGround, 2026-11-01)
     const b = Math.sin(t * 2.4) * FEEL_KIT.idle; Object.assign(T, { bodyY: b * .006 * m.bounce, arch: b * .02, armF: .12 + b * .03, armB: -.08 - b * .02, headRot: Math.sin(t * 1.1) * .04 });
     if (ST) { const sw = leadFar(p); for (const k in ST) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0) T[kk] = ST[k]; } T.bodyY += b * .008 * m.bounce; T.armB += b * .03;
       if (ST.hop) { const h = Math.sin(t * 4.8); T.bodyY += (Math.abs(h) - .6) * ST.hop * m.bounce; T[sw ? "armB" : "armF"] += h * .05; T[sw ? "armF" : "armB"] -= h * .04; }   // bouncing on the balls of his feet
