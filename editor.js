@@ -188,6 +188,11 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pincho_poke: "nose jab", pincho_drill: "nose drill", caracol_bonk: "head bonk", caracol_roll: "shell roll", mordi_punch: "face-fist punch", mordi_chomp: "shark bite",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", tic_swing: "X slam", tac_swing: "ring slam", tic_toss: "X toss", tac_toss: "ring toss", pk_toss: "pencil toss", veji_lash: "tail lash whirl", estrella_belt: "high note", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
+const GIANT_LAB = { hook: "heavy hook", back: "backhand", slam: "overhead slam", scoop: "scoop up", sweep: "sweep round", drag: "dragged up and over", airSwing: "air swing", airHammer: "air hammer",
+  up: "uppercut", down: "fist first, straight down", haymaker: "haymaker", haymaker_b: "haymaker (forward)", rocket_b: "rocket punch (forward)", c1: "charge 1", c2: "charge 2", c3: "charge 3",
+  slash: "heavy slash", chop: "overhead chop", rise: "rising cut", airChop: "air chop", thrust_b: "thrust (forward)" };   // (the grown weapons' moves, 2026-11-01)
+Object.entries(KIT.GIANT_NAMES || {}).forEach(([k, n]) => { const z = (KIT.STRIKES[k] || {}).wsize || 1, w = KIT.STRIKES[k].giant === "sword" ? "blade" : "arm";
+  MOVE_NAMES[k] = `size ${z + 1} ${w}: ${GIANT_LAB[n] || n}`; });
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
 function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
   const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
@@ -217,6 +222,10 @@ function movesFor(sp) {                                          // every move t
   add("Through a low hole (C7's wall into C8)", "crawl", "", T);   // (on hands and knees, one cycle of crawlPh: 2026-10-28)
   add("Playing the BERRY CONSOLE (sat, legs out in front)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
   add("As a berry buddy: special", bsp, "", T);
+  const wk = ((sp.outfit || {}).prop || {}).kind, GS = (KIT.GIANT_SETS || {})[wk];   // the weapon grown (every 3 baddies won back: 2026-11-01), by size: as the game picks them (work.html KIT.giantSet)
+  if (GS) [1, 2, 3].forEach(z => { const g = GS[z], L = `Weapon size ${z + 1} (${["", "50", "75", "100"][z]}%): `; if (!g) return;
+    list(L + "attack", g.ground, T); list(L + "forward + attack", g.groundB, T); list(L + "attack in the air", g.air1, T);
+    add(L + "up + attack", g.up, "", T); add(L + "down + attack in the air", g.down, "", T); list(L + "charge (hold attack)", g.charge, T); });
   return out;
 }
 function driveMove(p, dt) {
@@ -224,7 +233,7 @@ function driveMove(p, dt) {
   const kind = moveKind(), S = moveDef(kind); if (!S) return;
   tl.t += dt; if (tl.t > S.dur + .45) tl.t = 0;                 // a short rest between loops
   const u = tl.t <= S.dur ? tl.t : -1;
-  Object.assign(p, { keysFull: true, atkIdx: 0, y: GROUND, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false }, moveAt(kind, S, u));
+  Object.assign(p, { keysFull: true, atkIdx: 0, y: GROUND, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false, wsizeV: S.wsize || 0, power: S.wsize || 0 }, moveAt(kind, S, u));   // (wsizeV: a grown weapon's move, at its size)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   p.prof = approach(p.prof || 0, 1, dt * 10); p.bodyYaw = lerp(.85, .3, p.prof); p.yaw = lerp(p.yaw, -p.bodyYaw, 1 - Math.exp(-dt * 16));
   KIT.updatePose(p, dt); p.x = 0;
