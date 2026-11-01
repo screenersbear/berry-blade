@@ -637,7 +637,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261101e"></script>
+<script src="charkit.js?v=20261101h"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -1155,6 +1155,8 @@ let pixelRatio = Math.min(devicePixelRatio || 1, 2);   // (phone build: sharper)
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 document.body.prepend(renderer.domElement);
+renderer.domElement.addEventListener("webglcontextlost", e => { e.preventDefault(); console.warn("the 3D picture was lost: asking for it back"); }, false);
+renderer.domElement.addEventListener("webglcontextrestored", () => { console.warn("the 3D picture is back: this room built again"); try { level.s = -2; if (mode === "play" && STAGES[stage]) setScreen(stage); } catch (e) { console.error(e); } }, false);
 renderer.domElement.tabIndex = 0;
 const scene = new THREE.Scene();
 const FOG = new THREE.Color("#9cbca3");
@@ -5128,7 +5130,7 @@ function bigEnter(ns) {                              // into one of its screens:
   const reuse = level && level.s === ns && !level.subs ? { s: ns, L: level } : null;   // (the screen just built for you: kept, as its part)
   if (!reuse && level && !panKeep) disposeLevel(level);
   buildBig(B, level.h ?? hour, level.ruin || 0, !!level.freed, reuse);
-  bigShift = { x: sx, y: sy, px: u.ox, py: u.oy }; D.big.forEach(v => seenOf(world).add(v.s));
+  bigShift = panKeep ? { x: sx, y: sy, px: u.ox, py: u.oy } : null; D.big.forEach(v => seenOf(world).add(v.s));   // (only a pan uses it: left over, it threw the next pan off)
   return B;
 }
 function bigLeave() {                                // out of it: first back into the screen you're in, in that screen's own terms, then on from there as ever
@@ -9285,14 +9287,17 @@ function panFadeTick(dt) { panFade = Math.max(0, panFade - dt); if (slideCv) sli
 function panScene(P = pan) {                        // the screens, while panning (or peeking): the sky, then each screen cut at the edge it shares with the other
   const bg = scene.background, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(); scene.background = null;
   renderer.setClearColor(FOG, 1); renderer.clear(); renderer.render(P.skyS, camera);
-  P.N.visible = false; renderer.clippingPlanes = [P.cutOld]; renderer.render(scene, camera);
-  P.N.visible = true; P.G.visible = false; renderer.clippingPlanes = [P.cutNew]; renderer.render(scene, camera);
+  P.N.visible = false; panSide(P.G, P.cutOld, P.old); P.N.visible = true; P.G.visible = false; panSide(P.N, P.cutNew, P === pan ? level : null);
   P.G.visible = true; renderer.clippingPlanes = []; scene.background = bg; renderer.setClearColor(cc, ca);
+}
+function panSide(grp, cut, L) {                      // (one side of a pan: a big room's screens each cut to its own part too, where that room sits in the pan)
+  if (!L || !L.subs) { renderer.clippingPlanes = [cut]; renderer.render(scene, camera); return; }
+  for (const u of L.subs) { L.subs.forEach(v => { v.G.visible = v === u; }); renderer.clippingPlanes = [cut, ...u.clip.map(pl => pl.clone().translate(grp.position))]; renderer.render(scene, camera); }
+  L.subs.forEach(v => { v.G.visible = true; });
 }
 function panFg(P = pan) {                           // and their foregrounds, each as cut
   const bg = scene.background; scene.background = null; camera.layers.set(1);
-  P.N.visible = false; renderer.clippingPlanes = [P.cutOld]; renderer.render(scene, camera);
-  P.N.visible = true; P.G.visible = false; renderer.clippingPlanes = [P.cutNew]; renderer.render(scene, camera);
+  P.N.visible = false; panSide(P.G, P.cutOld, P.old); P.N.visible = true; P.G.visible = false; panSide(P.N, P.cutNew, P === pan ? level : null);
   P.G.visible = true; renderer.clippingPlanes = []; camera.layers.set(0); scene.background = bg;
 }
 // a look up into the room above (the user, 2026-10-25: "if a player ever jumps up in a screen that doesnt have a platform for them to land on,
@@ -11396,7 +11401,7 @@ function defendStep(s, dt) {                         // the guard's up: the defe
     if (s.onGround && Math.abs(tx - s.x) > DEF_NEAR) { s.vy = -GRAV * DEF_HOP / 2; s.onGround = false; s.plat = null; s.defHopT = DEF_HOP; s.vx = clamp((tx - s.x) / DEF_HOP, -DEF_HOP_V, DEF_HOP_V); } else s.defHopT = 0; }   // (near: no hop, it just runs there)
   if (s.defSlide > 0) { s.defSlide -= dt; s.vx = s.defDir * DEF_SLIDE_V; s.face = s.defDir; defParry(s, D); if (s.defSlide <= 0) s.defCd = .35; }   // sliding out at them
   else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * DEF_GAP;
-    if (!s.onGround && s.defHopT > 0) { s.defHopT -= dt; s.vx = clamp((tx - s.x) / Math.max(dt, s.defHopT), -DEF_HOP_V, DEF_HOP_V); }   // (in the hop: aimed to come down on its place, wherever that's got to)
+    if (!s.onGround && s.defHopT > 0) { s.defHopT -= dt; s.vx = clamp((tx - s.x) / Math.max(1 / 60, dt, s.defHopT), -DEF_HOP_V, DEF_HOP_V); }   // (in the hop: aimed to come down on its place, wherever that's got to)
     else s.vx = approach(s.vx, clamp((tx - s.x) * (s.onGround ? 14 : 8), -DEF_RUN, DEF_RUN), (s.onGround ? 12000 : 5000) * dt);
     s.sprint = Math.abs(s.vx) > 400; }
   s.z = approach(s.z || 0, .05, dt * 2);
@@ -11509,9 +11514,9 @@ function postRing(s, on) {                           // (its place, a ring on th
 function blockWall() {
   const p = player; if (!p || mode !== "play" || transit) return; const W = [];
   if (p.block || (p.blockHold || 0) > 0 || p.bubble) W.push({ x: p.x, y: p.y, k: "p" });
-  const D = partDefender(); if (D && D.q.block && D.q.defOn) W.push({ x: D.q.x, y: D.q.y, k: "d" });
+  const D = partDefender(); if (D && D.q.block && D.q.defOn && Number.isFinite(D.q.x) && Number.isFinite(D.q.y)) W.push({ x: D.q.x, y: D.q.y, k: "d" });
   const L = [...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined), ...(bossIn && enemy && !enemy.dead && !enemy.gone && !duo ? [enemy] : [])];
-  for (const e of L) { if (!W.length) { e.blkSide = null; continue; } const side = e.blkSide || (e.blkSide = {}), hw = eHW(e) + 18;
+  for (const e of L) { if (!W.length || !Number.isFinite(e.x)) { e.blkSide = null; continue; } const side = e.blkSide || (e.blkSide = {}), hw = eHW(e) + 18;
     for (const w of W) { const dx = e.x - w.x;
       if (Math.abs(e.y - w.y) > 70) { side[w.k] = Math.sign(dx) || 1; continue; }   // (over it, or under: no wall to it)
       const sd = side[w.k] ?? (Math.sign(dx) || 1);
@@ -11752,7 +11757,8 @@ function partnerTick(dt) {
   healTick();
   const L = player && mode === "play" ? partnerList() : [];
   const now = [pal, pal2, ...allies.map(a => a.st), ej && ej.st].filter(Boolean);
-  for (const q of now) { q.inv = 0; /* (a partner's inv: never theirs, it hides them while it's on) */ q.pinv = Math.max(0, (q.pinv || 0) - dt); q.heartT = Math.max(0, (q.heartT || 0) - dt); if (q.hurtT > 0) q.hurtT = Math.max(0, q.hurtT - dt); partnerHearts(q); }   // (hurtT: the hit's flinch; nothing else counts theirs down)
+  for (const q of now) { if (!Number.isFinite(q.x) || !Number.isFinite(q.y)) { q.x = player.x - (player.face || 1) * 60; q.y = player.y; q.vx = q.vy = 0; q.onGround = false; console.warn("a partner on a bad number: put back by you"); }   // (one NaN here can spread to what it touches, and the camera with it)
+    q.inv = 0; /* (a partner's inv: never theirs, it hides them while it's on) */ q.pinv = Math.max(0, (q.pinv || 0) - dt); q.heartT = Math.max(0, (q.heartT || 0) - dt); if (q.hurtT > 0) q.hurtT = Math.max(0, q.hurtT - dt); partnerHearts(q); }   // (hurtT: the hit's flinch; nothing else counts theirs down)
   for (const q of HEART_HAS) if (!now.includes(q)) { if (q.heartSpr) q.heartSpr.visible = false; if (q.tagSpr) q.tagSpr.visible = false; q.heartT = 0; }   // (one that's gone: its hearts with it)
   { const rk = allyRoomKey(); if (rk !== partRoomK) { partRoomK = rk; L.forEach(P => { P.q.tagT = 2.4; }); }   // (its button's mark: a moment in each new room, and when it joins)
     L.forEach((P, i) => { if (!partSeen.has(P.q)) { partSeen.add(P.q); P.q.tagT = 2.8; } if (P.q.worn) P.q.tagT = 0; partTag(P.q, Math.min(i, 1), dt); }); }   // (worn out: no button's mark)
@@ -21385,7 +21391,7 @@ function consFrame(P) {
   const f = document.createElement("iframe"); f.src = C.page; f.allow = "autoplay"; f.title = C.name; $("cons").querySelector(".scr").prepend(f); consFr = { f, id: C.id };
   const T = !!window.BERRY_TOUCH; toast(`${C.name} · ${T ? "HOLD A PANEL, LET GO TO PLACE · SWIPE ONE OF YOURS TO PUSH IT (HOLD IT: ARROWS) · SWIPE ALONG A TIER'S SIDE TO TURN IT · DRAG UNDER IT TO LOOK ROUND · TAP THE BUBBLE: PLAY THE COMPUTER" : padUse ? padText("{lb} / {rb}: THE TIERS · {j}: PLACE · {j} ON ONE OF YOURS, THEN A WAY: PUSH IT · {sq}: PICK UP THE TIER, THEN ← →: TURN IT · {tk}: TURN THE VIEW · START: MENU") : "← → ↑ ↓ MOVE · Q / E: THE TIERS · X: PLACE · X ON ONE OF YOURS, THEN A WAY: PUSH IT · V: PICK UP THE TIER, THEN ← →: TURN IT · Z: TURN THE VIEW · ESC: MENU"}`, 6000);   // (the new rules, 2026-10-31: pieces pushed, lines score)
 }
-function consFrameOff() { if (consFr) { consFr.f.remove(); consFr = null; } }
+function consFrameOff() { if (consFr) { try { const w = consFr.f.contentWindow; if (w && w.eval) w.eval("typeof rend !== 'undefined' && rend.forceContextLoss && (rend.forceContextLoss(), rend.dispose())"); } catch (e) { } consFr.f.src = "about:blank"; consFr.f.remove(); consFr = null; } }   // (its 3D let go at once: left for the browser to collect, a few games opened and closed and it dropped the game's own picture, the oldest, 2026-11-01)
 function consFrameKey(k) { const w = consFr && consFr.f.contentWindow; if (w) w.postMessage({ bb: "key", k }, "*"); }
 function consFrameSound() { const w = consFr && consFr.f.contentWindow; if (!w) return; const src = CART_BGM[consFr.id]; w.postMessage({ bb: "sound", mute: !!bgm.dataset.muted || !src, fx: sfxOn, vol: MUSIC_VOL, src: src ? new URL(src, location.href).href : "" }, "*"); }   // (as loud as the game's own recordings; off with the music setting, or ?mute)
 addEventListener("message", e => { const d = e.data, F = consFr; if (!F || !d || e.source !== F.f.contentWindow) return;
@@ -24558,7 +24564,7 @@ function syncWorld(dt) {
     else if (gyC === null && onPl && !player.sunk) { camStand = Y(player.plat.y) - 3.2; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }   // (A2, A3: nothing below but the bridge, or Camila's rock top)
     if (player.zip) { camStand = Y(player.y) - .8; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 3)); }   // (down the zipline: the camera along with you)
     else if (gyC === null && !onPl && !player.onGround && world === 1 && (STAGES[stage] || {}).authored && Y(player.y) < camStand - 1) { camStand = Y(player.y) - 1; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }   // (falling through the open air: down with you)
-    if (!Number.isFinite(camBase)) camBase = Y(GROUND); if (!Number.isFinite(camStand)) camStand = camBase;   // (never stuck on a bad number: a NaN here blanked the whole view)
+    if (!Number.isFinite(camBase)) camBase = Y(GROUND); if (!Number.isFinite(camStand)) camStand = camBase; if (!Number.isFinite(camX)) camX = Number.isFinite(player.x) ? X(player.x) : X(WORLD / 2); if (!Number.isFinite(camLook)) camLook = 0;   // (never stuck on a bad number: a NaN here blanked the whole view)
     const viewTop = LOOK_Y + Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z;   // (only as far as keeps you on the screen: a plain jump stays inside it, a double jump or a rising blow may not)
     camLift = lerp(camLift, Math.max(0, Y(player.y) + 3.4 - camBase - viewTop), 1 - Math.exp(-dt * 12));
     const sh = accShake ? shake : 0, ta = accShake ? feelShakeAmp() : 0, osc = Math.cos(performance.now() * .075);   // (COMBAT FEEL's trauma shake on the game's own; SCREEN SHAKE off: neither)

@@ -1477,18 +1477,20 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   A[0].copy(S).addScaledVector(_gu, -.06);                                    // (its root a little into the shoulder)
   for (let i = 1; i <= 3; i++) A[i].copy(S).addScaledVector(_gu, i / 3);
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
-  const rest = !(p.atkT >= 0) && !p.combo && !p.block && !(p.tpose > 0) && !(p.hurtT > 0) && !p.tackle && !(p.tkDig > 0) && !p.climb && !p.zip && !p.upHop && !p.upCoil && !p.dodge && !p.crawl && !p.dive && !p.swim && p.onGround !== false && !p.grow && !p.pointKind && !p.tcPose;
-  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, (p.onGround === false ? 20 : 7) / 60);   // (off the ground: let go of at once)
+  const rest = !(p.atkT >= 0) && !p.combo && !p.block && !(p.tpose > 0) && !(p.hurtT > 0) && !p.tackle && !(p.tkDig > 0) && !p.climb && !p.zip && !p.upHop && !p.upCoil && !p.dodge && !p.crawl && !p.dive && !p.swim && !p.grow && !p.pointKind && !p.tcPose;   // (in the air too: carried as on the ground, her feet its floor)
+  if (p.onGround !== false || G.fy0 === undefined) G.fy0 = fy;   // (where the floor was in her body's own terms when she left it: in the air it stays so, turning with her through a flip, so the arm keeps its shape on her)
+  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, 7 / 60), fyA = p.onGround === false ? G.fy0 : fy;
+  const fyK = p.onGround === false ? Math.min(fy, fyA) : fy;   // (what it's kept up out of: the ground, but in a flip, upside down, the ground's "above" her in her body's terms and it dragged the arm toward it, "stretches to the ground when you jump": then her own floor)
   if (wI > .001) { const C = giantAt(GIANT_CLUB, g), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), tt = api.time;   // at rest: leant on the ground beside her (running, dragged further back)
     const nearS = s === (p.face > 0 ? 1 : -1); G.fw = p.restNow ? (nearS ? -1 : .75) : approach(G.fw ?? (nearS ? -1 : .75), run > .3 ? -1 : nearS ? -1 : .75, 4 / 60);   // (on the side facing you: behind her; on the far side: out in front of her, where you can see it past her)
-    _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fy + C.lift - .03 * run, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
+    _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fyA + C.lift - .03 * run, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
     { const L0 = (_gu.length() + _gv.length()) * 1.02; _gx.subVectors(_gw, S); if (_gx.length() > L0) _gw.copy(S).addScaledVector(_gx.normalize(), L0); }   // (no further than the arm's own length: the ground far below, up in a jump, never stretches it down to it)
     for (let i = 0; i <= 6; i++) { const t = i / 6, bw = Math.sin(Math.PI * t); _gx.lerpVectors(S, _gw, t); _gx.x -= C.bow * bw * .5; _gx.y -= .04 * bw; _gx.z += s * C.bow * bw; if (i === 0) _gx.addScaledVector(_gu, -.06 / Math.max(.01, _gu.length()));
       A[i].lerp(_gx, wI); } }
   let legOut = 0; r.legs.forEach(L => L.pts.forEach(q => { legOut = Math.max(legOut, q.z * s); })); legOut += .09 * r.spec.body.limbs;   // (the near leg's outside)
   const hipY = r.hips.position.y + .05, chest = .2 * r.spec.body.girth * D.chest;
   const keep = () => { for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
-    if (q.y < fy + rr * .92) q.y = fy + rr * .92;                              // the ground: it rests on it and drags, never through it
+    if (q.y < fyK + rr * .92) q.y = fyK + rr * .92;                            // the ground: it rests on it and drags, never through it
     if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; }   // her legs: it keeps out to her side of them
     else if (i >= 2 && q.y < S.y + .1 && Math.abs(q.x) < .26 + rr) { const zm = chest + rr * .8; if (q.z * s < zm) q.z = s * zm; } } };   // her body
   keep();
@@ -1496,7 +1498,7 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   G.fist = 0;   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open") G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
-    const hl = .34 * hs, need = (fy + .06 * hs - A[6].y) / hl;                 // near the ground it bends at the wrist to lie along it (dragged), never into it
+    const hl = .34 * hs, need = (fyK + .06 * hs - A[6].y) / hl;                // near the ground it bends at the wrist to lie along it (dragged), never into it
     if (_gx.y < need) { _gy.set(_gx.x, 0, _gx.z); if (_gy.lengthSq() < .09) _gy.subVectors(A[6], A[2]).setY(0); if (_gy.lengthSq() < 1e-4) _gy.set(-1, 0, 0);
       const y = clamp(need, -1, 1); _gx.copy(_gy.normalize().multiplyScalar(Math.sqrt(1 - y * y))).setY(y); }
     _gy.set(0, -.25, -s);                                                         // the palm toward her, its back (the fingers spread, the orb) to you
@@ -1508,7 +1510,7 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   place();
   H.g.updateMatrix(); let lo = 1e9; const fc = G.fist;
   for (const [x, y, z] of [[.06, -.19, .1], [.06, -.19, -.1], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), .08], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), -.08], [-.06, -.12, 0]]) lo = Math.min(lo, _gv.set(x, y, z).applyMatrix4(H.g.matrix).y);
-  if (lo < fy + .004) { const d = Math.min(.25, fy + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
+  if (lo < fyK + .004) { const d = Math.min(.25, fyK + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
   G.tube.update(FWD); giantRings(G, pr);
   G.tube.curve.getPoint(.32, _gv); G.tube.curve.getTangent(.32, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
   G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(.32) * .95);   // where her other hand holds it: on top of it, a little toward her (so it shows, either way she faces)
