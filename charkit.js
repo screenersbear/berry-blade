@@ -1498,8 +1498,8 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   const hipY = r.hips.position.y + .05, chest = .2 * r.spec.body.girth * D.chest;
   const keep = () => { for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
     if (q.y < fyK + rr * .92) q.y = fyK + rr * .92;                            // the ground: it rests on it and drags, never through it
-    if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; }   // her legs: it keeps out to her side of them
-    else if (i >= 2 && q.y < S.y + .1 && Math.abs(q.x) < .26 + rr) { const zm = chest + rr * .8; if (q.z * s < zm) q.z = s * zm; } } };   // her body
+    if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } }   // her legs: it keeps out to her side of them
+    giantBody(r, A, G, s, chest, D); };   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
   G.fist = 0;   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open") G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
@@ -1524,6 +1524,24 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(ug) * .95);   // where her other hand holds it: on top of it, a little toward her (so it shows, either way she faces)
   G.tip = (G.tip || new THREE.Vector3()).copy(A[6]).addScaledVector(_gx, .3 * hs);
 }
+// her body as the arm sees it: rounded, from her skirt's hem up past her shoulders (a capsule along hips → chest, its girth the chest's, wider down at the
+// skirt); each point of the arm (but the root, in her shoulder) pushed out of it, and where the stretch between two points dips into it, both pushed out by as much
+const _bH = new THREE.Vector3(), _bC = new THREE.Vector3(), _bD = new THREE.Vector3(), _bQ = new THREE.Vector3(), _bM = new THREE.Vector3();
+function giantBody(r, A, G, s, chest, D0 = {}) {
+  const P = r.torso.pts; _bH.copy(P[0]); _bH.z = 0; _bC.copy(P[P.length - 1]); _bC.z = 0; _bD.subVectors(_bC, _bH); const L2 = Math.max(1e-4, _bD.lengthSq());   // (hips → neck, along her lean)
+  const g = r.spec.body.girth || 1, rC = chest * 1.45, rW = chest * 1.3, rHem = .5 * (D0.hips || 1.25) * g, T0 = -.2, TW = .55;   // (as measured on her: chest .33 deep with its top on, waist .3, the skirt's hem .64 out)
+  const radAt = t => t < 0 ? rHem : t < TW ? lerp(rHem, rW, t / TW) : lerp(rW, rC, Math.min(1, (t - TW) / (1 - TW)));
+  const out = (q, rr, k) => {                         // how far q is inside her, and which way is out (into _bQ); 0 if it's clear
+    const t = clamp(_bQ.subVectors(q, _bH).dot(_bD) / L2, T0, 1); _bM.copy(_bH).addScaledVector(_bD, t);
+    const rad = radAt(t) + rr * k; _bQ.subVectors(q, _bM); let d = _bQ.length(); if (d >= rad) return 0;
+    if (d < 1e-4) { _bQ.set(0, 0, s); d = 1; } _bQ.multiplyScalar(1 / d); return rad - d;
+  };
+  for (let it = 0; it < 3; it++) {
+    for (let i = 1; i < 7; i++) { const rr = G.prof(i / 6), dd = out(A[i], rr, .9); if (dd > 0) A[i].addScaledVector(_bQ, dd); }
+    for (let i = 1; i < 7; i++) for (const f of [.25, .5, .75]) { const q = _gx.lerpVectors(A[i - 1], A[i], f), rr = G.prof((i - 1 + f) / 6), dd = out(q, rr, .85);
+      if (dd > 0) { A[i].addScaledVector(_bQ, dd * (i === 1 ? 1.5 : 1)); if (i > 1) A[i - 1].addScaledVector(_bQ, dd * .6); } }
+  }
+}
 function giantRoll(r, ang) {                         // her upper body tipped over toward the arm's weight, about her hips: spine, chest, head and the shoulders' line
   const q = _gq.setFromAxisAngle(XAX, ang), pv = _gy.copy(r.torso.pts[1]), turn = v => v.sub(pv).applyQuaternion(q).add(pv);
   for (let k = 2; k < r.torso.pts.length; k++) turn(r.torso.pts[k]); r.torso.update(FWD);
@@ -1546,7 +1564,7 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
 // first the arm's still going the old way and yanks her back, then she leans in and hauls it round the new way, then back to the drag
 const DRAG_LEAN = .78, DRAG_YANK = [.2, .5], DRAG_HAUL = [.16, .62, .55];   // (the run's lean back at the biggest · the yank: how long, how far back · the haul: from, to, how far forward)
 function giantDrag(p, o, g, run, air) {
-  const k = clamp(g / 3, 0, 1), f = p.face || 1, now = api.time;
+  const k = clamp((g - 1) / 2, 0, 1), f = p.face || 1, now = api.time;   // (from the third size on, half; at the fourth, all of it: the user, 2026-11-01 "the lean back shouldnt start happening until level 3 for both girls")
   if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
   if (air || k <= .001) return;
   const r = sstep(.25, .85, run); o.lean -= DRAG_LEAN * k * r; o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
