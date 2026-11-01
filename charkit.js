@@ -1532,11 +1532,25 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
   pr.group.position.z += s * .045 * Math.min(g, 3);
 }
+// its weight dragging her back as she runs (the user, 2026-11-01: "camila leans back when running, like the weight of the arm is pulling her back (which I love)
+// ... let's just make that more intentional. although it would also be great to have it change a little when you turn aroudn. so it goes between two approaches of
+// changing momentum"): running, leant back over her heels, none at the first size and more as it grows, whichever way she faces; and a turn at speed in two beats,
+// first the arm's still going the old way and yanks her back, then she leans in and hauls it round the new way, then back to the drag
+const DRAG_LEAN = .78, DRAG_YANK = [.2, .5], DRAG_HAUL = [.16, .62, .55];   // (the run's lean back at the biggest · the yank: how long, how far back · the haul: from, to, how far forward)
+function giantDrag(p, o, g, run, air) {
+  const k = clamp(g / 3, 0, 1), f = p.face || 1, now = api.time;
+  if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
+  if (air || k <= .001) return;
+  const r = sstep(.25, .85, run); o.lean -= DRAG_LEAN * k * r; o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
+  const tt = p.dragTurn !== undefined ? now - p.dragTurn : 9; if (tt >= DRAG_HAUL[1]) return;
+  const ya = tt < DRAG_YANK[0] ? Math.sin(Math.PI * tt / DRAG_YANK[0]) : 0, ha = tt > DRAG_HAUL[0] ? Math.sin(Math.PI * clamp((tt - DRAG_HAUL[0]) / (DRAG_HAUL[1] - DRAG_HAUL[0]), 0, 1)) : 0;
+  o.lean += k * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
+}
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
-  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); }   // (like a club leant on the ground behind her, out at her side)
+  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); giantDrag(p, o, g, run, air); }   // (like a club leant on the ground behind her, out at her side)
   else if (air || run > .3) { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
   else { o[A] = lerp(o[A], .3, w); o[E] = lerp(o[E], 1.55, w); o[Sp] = lerp(o[Sp] || 0, .2, w); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
