@@ -869,7 +869,7 @@ window.BERRY_BOOT = 1;                       // (three.js is here: the loading c
 const OUTLINES = false;   // soft, outline-free look
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
-const WORLD = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);
+let WORLD = 2560; const CELL_W = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);   // (WORLD: the room you're in, px across; a screen's is CELL_W, the big room's two of them: bigPlatforms)
 const PLATFORMS = [];                    // the current clearing's platforms (filled in by setScreen)
 // one clearing per opponent, walked through left to right; the light runs from midday to night
 const SCREENS = [
@@ -991,8 +991,8 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
   if (entrySide === "top" || entrySide === "bottom") return null;
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
 const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !roomBossDown(stage)) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
-const backOpen = () => leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
-const rightOpen = () => !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
+const backOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(-1) : leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
+const rightOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(1) : !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock;   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
@@ -1016,7 +1016,8 @@ function groundAt(x) {                    // the ground's height at x (px), or n
 }
 const stepXs = () => PROFILE.filter((q, i) => i && PROFILE[i - 1][0] === q[0]).map(q => q[0]);   // where the sheer steps are
 function setPlatforms(s) {
-  PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; const S = STAGES[s];
+  if (STAGES[s] && STAGES[s].big) return bigPlatforms(STAGES[s]);
+  WORLD = CELL_W; PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; const S = STAGES[s];
   (S.plats || SCREENS[S.h][S.boss ? "plats" : "plats2"]).forEach(([x, y, w, kind], i) => { if (S.crumble && crumbleGone.has(world + ":" + s + ":" + i)) return; PLATFORMS.push(S.crumble ? { x, y, w, kind, crumble: i } : { x, y, w, kind }); });   // (a room's breakable platforms: the broken ones gone till you're back in the world)
   (S.gaps || []).forEach(g => GAPS.push(g));
   let d = 0; (S.steps || []).forEach(([x, dy]) => { PROFILE.push([x, d], [x, dy]); d = dy; });   // steps: [x, dy] → a sheer step at x
@@ -5046,26 +5047,117 @@ function authorCrux() {
   W.buddySpots = [C.B1, C.C7];                           // (the berry buddies' spots: the girders' west end, the terraces east. My pick, the user 2026-10-26 "for the other worlds, you decide")
   W.authored = true; W.rosterThin = null; mapGridC.delete(w);
 }
+function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its platforms, its own trees or rocks, its set pieces (into `level`)
+  setPlatforms(s); WP = wPlace(s);
+  const c = STAGES[s].col ?? STAGES[s].h;
+  level = STAGES[s].home ? buildHome(h, s) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
+  level.s = s; level.w = world; level.h = h;
+  if (LADDERS.length) level.objs.push(...buildLadders());
+  if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
+  if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
+  if (world !== 9) level.objs.push(buildDeepBits(s));
+  level.objs.push(buildRowBits(s), buildHoleCeil(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
+  level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
+  restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
+  if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
+  if (mode === "play" && doorBarred(s)) level.objs.push(buildBarGate(s));   // (a way barred till the next world's boss is beaten)
+  ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
+  bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
+}
+// ONE BIG ROOM (a test: the user, 2026-11-01: "can we test having screens that load several screens at once? so like in berry woods where there are those i believe
+// 4 screens that connect the big trees and have the bridge at the top? is it possible ot make it one continuous map without screens and the player can move freely
+// between them so that room loads all at once?"): Berry Woods' A2 A3 (the canopy, the bridge across) over B2 B3 (the two great trunks) as one room, two screens
+// across and two rows high: all four built at once, each in its place (cut to its own part as a pan cuts two), their floors, platforms and climbs one space, their
+// baddies in it together. Its ways out are the four screens' own: the bridge's ends (A1, A4), B3's rock down to C3 and its wall up into A4; B2's wall now climbs
+// straight up onto the rock top in A2. DEBUG → BIG ROOM TEST (off: the four screens, as they were)
+const BIG_CELLS = [["B2", 0, 0], ["B3", 1, 0], ["A2", 0, 1], ["A3", 1, 1]];   // (a screen, how many across, how many rows up)
+const BIG_CUT = GROUND - ROW_H + SEAM_T;              // (px: above this line the top row: where a pan up or down cuts the two rows' pictures)
+let bigOn = (() => { try { return localStorage.getItem("bbBigRoom") === "1"; } catch (e) { return false; } })();
+let bigShift = null;                                 // (into the big room in a pan: how far its middle is from the screen the pan was built for)
+const bigSubsNow = () => BIG_CELLS.map(([c, ax, up]) => ({ s: STAGES.findIndex(q => q && q.cell === c && !q.arena && !q.cut && !q.big), c, ox: ax * CELL_W, oy: -up * ROW_H }));
+const bigSubOf = s => world === 0 && bigOn && mode === "play" && !stronghold && !hideout && !arena && !rideS && bigSubsNow().some(u => u.s === s);
+const bigMovers = () => [player, ...palsAll(), ...allies.flatMap(a => [a.st, ...(a.crew || []).map(m => m.st)]), ej && ej.st].filter(Boolean);
+function bigMake() {                                 // the room: its four screens' items and baddies, put where those screens are in it (its floors: bigPlatforms)
+  const U = bigSubsNow(); if (U.some(u => u.s < 0)) return -1;
+  const q0 = STAGES[U[0].s], D = { big: U, bigW: 2 * CELL_W, h: q0.h, col: q0.col, elev: q0.elev, foe: q0.foe, authored: true, cut: true, items: [] }, roster = [];
+  let p0 = 0; U.forEach(u => { const q = STAGES[u.s]; u.p0 = p0; p0 += (q.plats || []).length;
+    (q.items || []).forEach(it => { const c = it.slice(); c[1] += u.ox; if (typeof c[2] === "number") c[2] += u.oy; D.items.push(c); });
+    (BB_ROSTER[u.s] || []).forEach(([t, col, at, tag]) => roster.push([t, col, at && typeof at === "object" ? (at.plat !== undefined ? { ...at, plat: at.plat + u.p0, x: at.x !== undefined ? at.x + u.ox : undefined } : at) : at + u.ox, tag])); });
+  let i = STAGES.findIndex(q => q && q.big); if (i < 0) { STAGES.push(D); i = STAGES.length - 1; } else STAGES[i] = D;
+  BB_ROSTER[i] = roster; return i;
+}
+function bigPlatforms(D) {                           // its four screens' floors, platforms, ceilings and climbs as one; the top row's open floor isn't (the trunks' floor is under it)
+  const P = [], Gp = [], Pr = [], C = [], L = [];
+  D.big.forEach(u => { setPlatforms(u.s); const top = !!u.oy;
+    PLATFORMS.forEach(q => P.push({ ...q, x: q.x + u.ox, y: q.y + u.oy }));
+    if (!top) { GAPS.forEach(([a, b]) => Gp.push([a + u.ox, b + u.ox])); PROFILE.forEach(([x, dy]) => Pr.push([x + u.ox, dy])); }
+    CEILS.forEach(([a, b, y, ...r]) => C.push([a + u.ox, b + u.ox, y + u.oy, ...r]));
+    LADDERS.forEach(l => L.push({ ...l, face: l.face + u.ox, x: l.x + u.ox, top: l.top + u.oy, bot: l.bot + u.oy, bigSub: u.s })); });   // (bigSub: whose it is, for the way out it leads)
+  WORLD = D.bigW; PLATFORMS.length = 0; P.forEach(q => PLATFORMS.push(q)); GAPS.length = 0; Gp.forEach(g => GAPS.push(g));
+  PROFILE.length = 0; Pr.forEach(q => PROFILE.push(q)); PROFILE.sort((a, b) => a[0] - b[0]); CEILS.length = 0; C.forEach(c => CEILS.push(c));
+  const subIdx = new Set(D.big.map(u => u.s)); LADDERS.length = 0;
+  L.forEach(l => { const top = (D.big.find(v => v.s === l.bigSub) || {}).oy;
+    if (top && !l.pole && (l.to === undefined || subIdx.has(l.to))) return;   // (the top row's own ways down into the trunks' row, and its rock's face: one room now, B2's wall climbs all the way up to the rock top)
+    if (l.to !== undefined && subIdx.has(l.to)) {        // (a climb into one of its own screens: up the wall and onto what's at its top there, not a room away)
+      const pl = PLATFORMS.filter(q => l.x >= q.x - 30 && l.x <= q.x + q.w + 30 && q.y < l.bot - 60 && q.y > l.top - 320).sort((a, b) => b.y - a.y)[0];
+      if (!pl) return; const m = { ...l, top: pl.y, ledge: true }; delete m.to; LADDERS.push(m); }
+    else LADDERS.push(l); });
+  WATER = GROUND + 46 + (D.elev || 0) * ROW_RISE;
+  FLOOR_LOW = GROUND + PROFILE.reduce((m, q) => Math.max(m, q[1]), 0); SINK = Math.max(WATER, FLOOR_LOW + 46);
+}
+function bigClip(u) {                                // (its part: this side of the line between the columns, and of the one between the rows)
+  const cx = CELL_W * S, cy = (ROW_H - SEAM_T) * S;
+  return [u.ox ? new THREE.Plane(new THREE.Vector3(1, 0, 0), -cx) : new THREE.Plane(new THREE.Vector3(-1, 0, 0), cx), u.oy ? new THREE.Plane(new THREE.Vector3(0, 1, 0), -cy) : new THREE.Plane(new THREE.Vector3(0, -1, 0), cy)];
+}
+function buildBig(s, h, tierNow, frNow, reuse) {     // its four screens, each built as on its own and set in its place; one sky over them all (the first's); then its floors as one
+  const D = STAGES[s], out = { objs: [], fg: [], fgSee: [], subs: [], ruin: tierNow, freed: frNow };
+  for (const u of D.big) { let L; if (reuse && reuse.s === u.s) L = reuse.L; else { screenBuild(u.s, h, tierNow, frNow); L = level; }
+    const Gr = new THREE.Group(); Gr.position.set(u.ox * S, -u.oy * S, 0); scene.add(Gr); L.objs.forEach(o => { if (o !== L.sky) Gr.add(o); });
+    if (L.sky) { if (!out.sky) { out.sky = L.sky; scene.add(L.sky); out.objs.push(L.sky); } else { L.sky.visible = false; Gr.add(L.sky); } }
+    out.objs.push(Gr); out.fg.push(...(L.fg || [])); out.fgSee.push(...(L.fgSee || [])); out.subs.push({ ...u, G: Gr, L, clip: bigClip(u) }); }
+  { const L0 = out.subs[0].L; for (const k in L0) if (!(k in out) && !["objs", "fg", "fgSee", "sky", "s", "w", "h"].includes(k)) out[k] = L0[k]; }   // (the rest as its first screen's: its look's key, its materials...)
+  out.shafts = out.subs.flatMap(u => u.L.shafts || []);   // (its light shafts: all four's; its motes, one cloud: the first's, the others' with it)
+  out.relight = (...a) => out.subs.forEach(u => { if (u.L.relight) u.L.relight(...a); });
+  out.tick = (t, dt) => out.subs.forEach(u => { if (u.L.tick) u.L.tick(t, dt); });
+  level = out; level.s = s; level.w = world; level.h = h; setPlatforms(s);
+}
+function bigEnter(ns) {                              // into one of its screens: into the big room instead, at that screen's place in it
+  const B = bigMake(); if (B < 0) return ns; const D = STAGES[B], u = D.big.find(v => v.s === ns); if (!u) return ns;
+  bigMovers().forEach(q => { q.x += u.ox; q.y += u.oy; });
+  const sx = u.ox * S, sy = -u.oy * S; camX += sx; camBase += sy; camStand += sy; camera.position.x += sx; camera.position.y += sy;
+  const reuse = level && level.s === ns && !level.subs ? { s: ns, L: level } : null;   // (the screen just built for you: kept, as its part)
+  if (!reuse && level && !panKeep) disposeLevel(level);
+  buildBig(B, level.h ?? hour, level.ruin || 0, !!level.freed, reuse);
+  bigShift = { x: sx, y: sy, px: u.ox, py: u.oy }; D.big.forEach(v => seenOf(world).add(v.s));
+  return B;
+}
+function bigLeave() {                                // out of it: first back into the screen you're in, in that screen's own terms, then on from there as ever
+  const D = STAGES[stage]; if (!D || !D.big || !player) return;
+  const lad = LADDERS.find(l => l.to !== undefined && l.bigSub !== undefined && Math.abs(l.x - player.x) < 80 && player.y >= l.top - 90 && player.y <= l.bot + 40);   // (off the top of a climb, or down a rope: that screen's, wherever its top reaches)
+  const col = player.x >= CELL_W ? 1 : 0, row = player.y < BIG_CUT ? 1 : 0, u = (lad && D.big.find(v => v.s === lad.bigSub)) || D.big.find(v => (v.ox ? 1 : 0) === col && (v.oy ? 1 : 0) === row) || D.big[0];
+  bigMovers().forEach(q => { q.x -= u.ox; q.y -= u.oy; });
+  const sx = u.ox * S, sy = -u.oy * S; camX -= sx; camBase -= sy; camStand -= sy; camera.position.x -= sx; camera.position.y -= sy;
+  level.bigFrom = { x: sx, y: sy }; stage = u.s; WORLD = CELL_W;
+}
+const bigOpen = sd => !!player && player.y < BIG_CUT && (exitOpen || entrySide === (sd > 0 ? "right" : "left") || !mustClear()) && !ejFight() && !patrolLock;   // (its sides: the bridge's ends open, the trunks' ends walls)
+function bigScene(L = level) {                       // drawn: each screen cut to its own part (the sky, outside them, in every pass, each its share)
+  const bg = scene.background, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(); scene.background = null;
+  renderer.setClearColor(FOG, 1); renderer.clear();
+  for (const u of L.subs) { L.subs.forEach(v => { v.G.visible = v === u; }); renderer.clippingPlanes = u.clip; renderer.render(scene, camera); }
+  L.subs.forEach(v => { v.G.visible = true; }); renderer.clippingPlanes = []; scene.background = bg; renderer.setClearColor(cc, ca);
+}
+function bigFg(L = level) {                          // (and their foregrounds, each as cut)
+  const bg = scene.background; scene.background = null; camera.layers.set(1);
+  for (const u of L.subs) { L.subs.forEach(v => { v.G.visible = v === u; }); renderer.clippingPlanes = u.clip; renderer.render(scene, camera); }
+  L.subs.forEach(v => { v.G.visible = true; }); renderer.clippingPlanes = []; camera.layers.set(0); scene.background = bg;
+}
 function setScreen(s) {                              // build stage s (its platforms, its own trees or rocks) and light it for its hour
   const h = hour = mode === "play" ? dayHeld : STAGES[s].h;            // in play: the day clock's hour
   const tierNow = mode === "play" && world !== 9 ? upTier() : 0, frNow = mode === "play" && world !== 9 && freedNow();
   const scr = WORLDS[frNow && world === 6 ? 0 : world].screens; if (WORLDS[world] && SCREENS[0] !== scr[0]) { SCREENS.splice(0, SCREENS.length, ...scr); level.s = -2; }   // (the candy works set free: the woods' sky and light, outdoors)
   if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow || !!level.freed !== frNow) {
-    if (panKeep) panKeep.old = level; else disposeLevel(level); setPlatforms(s); WP = wPlace(s);   // (a pan between stitched screens: the room you're leaving kept, drawn beside the new one till the camera's across)
-    const c = STAGES[s].col ?? STAGES[s].h;
-    level = STAGES[s].home ? buildHome(h, s) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
-    level.s = s; level.w = world; level.h = h;
-    if (LADDERS.length) level.objs.push(...buildLadders());
-    if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
-    if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
-    if (world !== 9) level.objs.push(buildDeepBits(s));
-    level.objs.push(buildRowBits(s), buildHoleCeil(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
-    level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
-    restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
-    if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
-    if (mode === "play" && doorBarred(s)) level.objs.push(buildBarGate(s));   // (a way barred till the next world's boss is beaten)
-    ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
-    bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
+    if (panKeep) panKeep.old = level; else disposeLevel(level);   // (a pan between stitched screens: the room you're leaving kept, drawn beside the new one till the camera's across)
+    if (STAGES[s].big) buildBig(s, h, tierNow, frNow); else screenBuild(s, h, tierNow, frNow);
     dropTextures();
   }
   if (!ghostBuild) { if (hourEase) hourEaseEnd(false); if (peekCache && peekCache.from !== s) dropPeekCache(); }
@@ -6501,7 +6593,7 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dhero", "dteam", "dwpn", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
@@ -6513,6 +6605,8 @@ function pauseChoose(what) {
   if (/^dp[bcdxeh]$/.test(what)) { dbgTeamAdd(what); return; }
   if (what === "dhero") { const o = otherHero(); closePause(); swapHero(o); return; }   // (the other girl, right where you stand: the user, 2026-10-29 "debug mode should allow the player to select the other character")
   if (what === "dfeel") { SFX.confirm(); feelPanelToggle(true); return; }
+  if (what === "dbig") { SFX.tick(); bigOn = !bigOn; try { localStorage.setItem("bbBigRoom", bigOn ? "1" : "0"); } catch (e) {} const b = $("pbtns").querySelector('[data-p="dbig"]'); if (b) b.textContent = "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF");
+    toast(bigOn ? "BERRY WOODS A2 A3 B2 B3: ONE ROOM, FROM THE NEXT TIME YOU GO IN" : "BERRY WOODS A2 A3 B2 B3: FOUR SCREENS AGAIN, FROM THE NEXT TIME YOU GO IN", 3200); return; }   // (the big room test, 2026-11-01)
   if (what === "dfps") { SFX.tick(); fpsSet(!fpsOn); const b = $("pbtns").querySelector('[data-p="dfps"]'); if (b) b.textContent = "FPS COUNTER: " + (fpsOn ? "ON" : "OFF"); return; }   // (2026-10-31)
   if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
   if (what === "dimp") { SFX.confirm(); debugFileIn(); return; }   // (COMBAT FEEL's panel, over the pause)
@@ -8926,7 +9020,7 @@ function wayCue(bossBeat) {                          // the way-on arrow: only w
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
-function goNext() { const S = STAGES[stage]; if (S.toWorld !== undefined && !S.exitLeft) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row   // (a door on the left: its right edge is just the way on into the world: it used to take you out through the door, 2026-10-24)
+function goNext() { bigLeave(); const S = STAGES[stage]; if (S.toWorld !== undefined && !S.exitLeft) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row   // (a door on the left: its right edge is just the way on into the world: it used to take you out through the door, 2026-10-24)
 const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
   cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
   cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
@@ -9076,7 +9170,7 @@ function goWorldNow(w) {                             // on into the next world: 
     if (story && fromW === 9 && w === 0) startIntro();   // off the beach: into the woods as usual, dropping in, the other one waving and running on ahead
   }, WORLDS[w].name);
 }
-function goBack() { const t = leftOf(); if (t === "out") goWorld(STAGES[stage].toWorld); else if (t === "back") goWorldBack(); else if (t !== null) goRoom(t, true); }
+function goBack() { bigLeave(); const t = leftOf(); if (t === "out") goWorld(STAGES[stage].toWorld); else if (t === "back") goWorldBack(); else if (t !== null) goRoom(t, true); }
 // the world before this one (whose way out leads here), and the way through it to that exit: for walking back into a world you didn't
 // come from this run (you started further on, from the world select or the level select)
 function prevWorld(w) { return w >= WORLDS.length || w === 0 ? -1 : WORLDS.findIndex(W => W.stages.some(q => q.toWorld === w || q.diveTo === w)); }   // (the woods are the start: Loof's sky drops you into them, but only walking back the way you came takes you up again)
@@ -9153,6 +9247,8 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   const old = panKeep.old; panKeep = null;
   if (!old) { transit = false; return; }
   const G = new THREE.Group(), N = new THREE.Group(); G.position.set(dx, dy, 0); scene.add(G, N);
+  if (old.subs && old.bigFrom) { G.position.x -= old.bigFrom.x; G.position.y -= old.bigFrom.y; }   // (out of the big room: its middle, from the screen you left it by)
+  { const bs = bigShift; bigShift = null; if (bs) { G.position.x += bs.x; G.position.y += bs.y; pos0.x += bs.x; pos0.y += bs.y; movers.forEach(m => { if (m) { m.x += bs.px; m.y += bs.py; } }); } }   // (into it)
   old.objs.forEach(o => G.add(o)); level.objs.forEach(o => N.add(o));   // (the old screen moved to its place; the new one where it is)
   const skyS = new THREE.Scene(); if (level.sky) skyS.add(level.sky); if (old.sky) old.sky.visible = false; skyBitsOff(G);   // (one sky over both: the new screen's, whole; its moon and sun too)
   const ax = dir === "left" || dir === "right", cut = ax ? (dx > 0 ? WX : 0) : (dy > 0 ? dy - SEAM_T * S : -SEAM_T * S);   // the edge they share
@@ -9181,7 +9277,7 @@ function panEnd(fade) {
   lookLerp(P.L0, P.L1, 1);
   if (level.sky) scene.add(level.sky);
   [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N);
-  if (upWant(stage) === P.s0 && !peekCache) { P.G.visible = false; peekCache = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (down from the room above into one you can look back up into: the room you left kept for it, in its place already)
+  if (upWant(stage) === P.s0 && !peekCache && !P.old.subs) { P.G.visible = false; peekCache = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (down from the room above into one you can look back up into: the room you left kept for it, in its place already)
   else { scene.remove(P.G); P.G.position.set(0, 0, 0); disposeLevel(P.old); } dropTextures();
   if (!panFade) transit = false;
 }
@@ -9293,7 +9389,7 @@ function lookLerp(a, b, e) {
 }
 const spanAt = (x, y) => PLATFORMS.find(q => (q.kind === "bridge" || (world === 1 && (STAGES[stage] || {}).authored)) && x >= q.x - 4 && x <= q.x + q.w + 4 && Math.abs(q.y - y) < 60) || null;   // (a bridge that runs on across the room's edge: the forest's, 2026-10-24)
 const chargeKeep = () => held.atk && player ? { chargeT: player.chargeT || 0, chargeLv: player.chargeLv || 0 } : { chargeT: 0, chargeLv: 0 };   // (on into the next screen still holding attack: the charge goes with you, the user 2026-10-28)
-function goRoom(ns, back) {                          // on into the next clearing (or the one before): the screen slides across, and you walk in from that side
+function goRoom(ns, back) { bigLeave();                          // on into the next clearing (or the one before): the screen slides across, and you walk in from that side
   cine = null; const crawlFrom = !!player.crawl, y0 = player.y, onSpan = !!(player.plat && (player.plat.kind === "bridge" || (world === 1 && STAGES[stage].authored))); swapPan(back ? "left" : "right", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const from = stage;
@@ -9312,7 +9408,7 @@ function goRoom(ns, back) {                          // on into the next clearin
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
-function goRoomV(ns, up) {                        // up (or down) a rope ladder into the room above (or below): on, or back the way you came
+function goRoomV(ns, up) { bigLeave();                        // up (or down) a rope ladder into the room above (or below): on, or back the way you came
   cine = null; swapPan(up ? "up" : "down", ns, () => {
     const esc = bepRun.escort, from = stage; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
@@ -9389,7 +9485,7 @@ function goRoomRise(ns) {                          // the hand-made waves: jumpe
     enterStage(ns, back); spawnEscort(back); clearArrival(player.x);
   });
 }
-function goRoomDrop(ns) {                         // down a drop: into the room below, falling in from the top of the screen (the user, 2026-10-20: "they fall down to the next screen")
+function goRoomDrop(ns) { bigLeave();                         // down a drop: into the room below, falling in from the top of the screen (the user, 2026-10-20: "they fall down to the next screen")
   cine = null; const fx = player.x, fy = player.y, vy = clamp(player.vy, 380, 900), face = player.face, rs = rowStep(stage, ns);
   swapPan("down", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
@@ -9424,7 +9520,7 @@ function holeAbove(px) {                           // the room above that drops 
 // its lip (the user, 2026-11-01: "it drags the character to the top right part of the entrance in c6. it should just go wherever the character is actually going and not
 // snap them anywhere"). The hand-made worlds only (woods, waves): the rest keep theirs
 const climbHole = cu => (world === 0 || world === 1) && !!STAGES[cu.to] && (STAGES[cu.to].gaps || []).some(([a, b]) => b > 0 && a < WORLD);
-function goRoomUp(ns, holeX, edgeX) {             // (edgeX: up an end wall: out at that edge of the room above)                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
+function goRoomUp(ns, holeX, edgeX) { bigLeave();             // (edgeX: up an end wall: out at that edge of the room above)                    // up off a climb: into the room above, hopping up out of its pit (or its hatch) beside the edge (or up out of the hole you fell in by, holeX)
   cine = null; const fy = player.y, rs = rowStep(stage, ns), v0 = { vx: player.vx, vy: player.vy, face: player.face };
   swapPan("up", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
@@ -9731,6 +9827,7 @@ function updateCameo(dt) {
   spring(s, dt); updatePose(s, dt);
 }
 function enterStage(ns, back) {                      // into the room: its baddies (or not, if you've cleared it), its boss waiting
+  if (bigSubOf(ns)) ns = bigEnter(ns);              // (one of the big room's screens: the big room)
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
   stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
   enemy = makeFoeState(foe, STAGES[stage].bossLeft && player ? Math.max(160, Math.min(STAGES[stage].bossX ?? 420, player.x - 420)) : WORLD - 360); enemy.atkCd = 3;   // (bossLeft: the waves' A1, the boss always on your left, the side its way out is: the user, 2026-10-25)
@@ -10215,6 +10312,7 @@ function resetTrial() {
   const rx = entryX(), hp0 = entrySide === "right" && entryHi ? hiPlat() : null; player = makeState(rx, rig); player.hp = maxHp(); player.y = hp0 ? hp0.y : groundAt(rx) ?? (STAGES[stage] && STAGES[stage].deep ? (STAGES[stage].deepTop ?? DEEP_TOP + 140) + 160 : GROUND); if (STAGES[stage] && STAGES[stage].deep && groundAt(rx) === null) camBase = Y(player.y + 70); if (hp0) player.plat = hp0; if (entrySide === "right") player.face = -1; setupPal(); ejPlace(rx - player.face * 90, player.y, player.face);   // (the deep's open water: mid-water, not sinking out of the room's floor)
   rig.root.visible = rig.shadow.visible = true;
   enemy = makeFoeState(foe, WORLD - 360); player.power = ko ? Math.max(0, pw0 - 1) : 0; player.wsizeV = player.power; player.wKills = 0;   // (knocked out: its weapon a size smaller, down to the first: the user, 2026-11-01)
+  if (bigSubOf(stage)) { stage = bigEnter(stage); oppSel = STAGES[stage].foe; foe = FOES[oppSel]; }   // (starting in one of the big room's screens: the big room)
   clearHz(); const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; const done = fillRoom(); spawnEscort(bepRun.back);
   parts.forEach(q => actors.remove(q.m)); parts = []; allyRoom(); meetRoom();   // (the one found in a fight: back to its fight with the room's fresh berries)
   shake = 0; hitstop = 0; slowMo = 0; camKick = camKickV = 0; if (beaten === 0) trialTime = 0; aura.show = aura.flare = aura.burst = 0; guardFx.show = guardFx.hit = 0; sprintDir = 0;
@@ -24456,7 +24554,7 @@ function syncWorld(dt) {
     const plLift = onPl && gyC !== null ? clamp((Y(player.plat.y) - (Y(gyC) + hiP) - 2.2) * .45, 0, 1.4) : 0;   // (what the old jump-follow came to, standing up there)
     if (STAGES[stage] && STAGES[stage].deep && !hideout && !stronghold) camBase = lerp(camBase, Y(Math.min(gyC ?? GROUND + 40, player.y + 70)), 1 - Math.exp(-dt * 2.6));   // (the deep: up and down with you as you swim)
     else if (gyC !== null && !player.sunk) { if (player.onGround) camStand = Y(gyC) + Math.max(hiP + plLift, camUpOf()); else if (Y(player.y) < camStand - 1) camStand = Math.max(Y(gyC), Y(player.y) - 1);   // (in the air: held, unless you've dropped below where you stood: then down with you)
-      camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }
+      camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * (level.subs && camBase - camStand > 1.5 ? 7 : 2.2))); if (level.subs && !player.onGround && player.vy > 300) camBase = Math.min(camBase, camStand + 1); }   // (the big room: down off the bridge, a long way, it keeps up, never more than a little behind)
     else if (gyC === null && onPl && !player.sunk) { camStand = Y(player.plat.y) - 3.2; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }   // (A2, A3: nothing below but the bridge, or Camila's rock top)
     if (player.zip) { camStand = Y(player.y) - .8; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 3)); }   // (down the zipline: the camera along with you)
     else if (gyC === null && !onPl && !player.onGround && world === 1 && (STAGES[stage] || {}).authored && Y(player.y) < camStand - 1) { camStand = Y(player.y) - 1; camBase = lerp(camBase, camStand, 1 - Math.exp(-dt * 2.2)); }   // (falling through the open air: down with you)
@@ -24597,14 +24695,14 @@ function render(dt) {
   renderer.clear();
   { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } }   // (the characters' own texture, DEBUG · K: an older charkit still cached has none)
   if (SHADE) SHADE.pass(false);                     // (an applied look: the level's settings, then the characters')
-  if (pan) panScene(); else if (peek) panScene(peek); else renderer.render(scene, camera);
+  if (pan) panScene(); else if (peek) panScene(peek); else if (level.subs) bigScene(); else renderer.render(scene, camera);
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
   if (SHADE) { SHADE.pass(true); SHADE.U.mkGround.value = player ? Y(groundAt(player.x) ?? GROUND) : 0; }
   renderer.render(actors, camera);
   if (SHADE) SHADE.pass(false);
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
-  if (pan) panFg(); else if (peek) panFg(peek); else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
+  if (pan) panFg(); else if (peek) panFg(peek); else if (level.subs && !bepSel) { fgSeeThru(dt); bigFg(); } else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
   { const U = gradeMat.uniforms, T = TEXTURES[LOOK.tex]; U.ink.value = T[2]; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);
