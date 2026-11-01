@@ -1567,11 +1567,12 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
 // changing momentum"): running, leant back over her heels, none at the first size and more as it grows, whichever way she faces; and a turn at speed in two beats,
 // first the arm's still going the old way and yanks her back, then she leans in and hauls it round the new way, then back to the drag
 const DRAG_LEAN = .78, DRAG_YANK = [.2, .5], DRAG_HAUL = [.16, .62, .55];   // (the run's lean back at the biggest · the yank: how long, how far back · the haul: from, to, how far forward)
+const DRAG_CAMILA = .74;   // (her run's lean back, of that: the user, 2026-11-01 "camila leans too far back even in level 4. it wasnt as dramatic before": about 3° back at the fourth size, not 12°; Rose's as it was)
 function giantDrag(p, o, g, run, air) {
   const k = clamp((g - 1) / 2, 0, 1), f = p.face || 1, now = api.time;   // (from the third size on, half; at the fourth, all of it: the user, 2026-11-01 "the lean back shouldnt start happening until level 3 for both girls")
   if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
   if (air || k <= .001) return;
-  const r = sstep(.25, .85, run); o.lean -= DRAG_LEAN * k * r; o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
+  const r = sstep(.25, .85, run) * (p.rig.prop && p.rig.prop.kind === "gauntlet" ? DRAG_CAMILA : 1); o.lean -= DRAG_LEAN * k * r; o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
   const tt = p.dragTurn !== undefined ? now - p.dragTurn : 9; if (tt >= DRAG_HAUL[1]) return;
   const ya = tt < DRAG_YANK[0] ? Math.sin(Math.PI * tt / DRAG_YANK[0]) : 0, ha = tt > DRAG_HAUL[0] ? Math.sin(Math.PI * clamp((tt - DRAG_HAUL[0]) / (DRAG_HAUL[1] - DRAG_HAUL[0]), 0, 1)) : 0;
   o.lean += k * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
