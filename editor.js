@@ -210,7 +210,7 @@ function movesFor(sp) {                                          // every move t
   if (sp.base === "cat") { const C = KIT.CAT_MOVES;
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
     add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Attack while running at full speed", "carddash", "", C);
-    at("tk", null); add("Tackle (V / □)", "tackle", "", C); add("Charged tackle (hold V / □)", "tkdig", "", C); list("Charged tackle (hold V / □)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
+    at("tk", null); add("Tackle (Z / △)", "tackle", "", C); add("Charged tackle (hold Z / △)", "tkdig", "", C); list("Charged tackle (hold Z / △)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
     at("etc", null); add("In a bubblegum bubble: hold block to pop it", "pop_reach", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
@@ -224,8 +224,8 @@ function movesFor(sp) {                                          // every move t
   Z = null; add("Down + attack", "slide", "", T); Z = 0; list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   Z = null; add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
-  at("tk", null); add("Tackle (V / □)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold V / □)", wheel ? "tkdig_wheel" : "tkdig", "", T);
-  list("Charged tackle (hold V / □)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
+  at("tk", null); add("Tackle (Z / △)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold Z / △)", wheel ? "tkdig_wheel" : "tkdig", "", T);
+  list("Charged tackle (hold Z / △)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
   at("etc", null); list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
   add("In a bubblegum bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
