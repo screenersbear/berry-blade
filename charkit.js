@@ -1455,7 +1455,7 @@ function giantArmBuild(r) {                          // (once, the first time it
   if (api.onGiant) api.onGiant(r, G.grp);
   return G;
 }
-const _gA = Array.from({ length: 7 }, () => new THREE.Vector3()), _gu = new THREE.Vector3(), _gv = new THREE.Vector3(), _gw = new THREE.Vector3(), _gx = new THREE.Vector3(),
+const _gA = Array.from({ length: 7 }, () => new THREE.Vector3()), _gSh = new THREE.Vector3(), _gu = new THREE.Vector3(), _gv = new THREE.Vector3(), _gw = new THREE.Vector3(), _gx = new THREE.Vector3(),
   _gy = new THREE.Vector3(), _gz = new THREE.Vector3(), _gM = new THREE.Matrix4(), _gq = new THREE.Quaternion();
 function giantFloor(p, r) {                          // the ground under her, in her body's own space (p.airPx: the game's, how far up off it she is)
   _gw.set(r.root.position.x, r.root.position.y - (p.seatLift || 0) - (o_rise(p) + (p.airPx || 0) / 40), r.root.position.z);
@@ -1477,8 +1477,9 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
   G.uB = G.uB === undefined ? uB : G.uB + (uB - G.uB) * .35;
   if (Math.abs((G.uBp ?? -1) - G.uB) > .006) { G.uBp = G.uB; giantArmPaint(G.tex, pr.Q, G.skin, G.uB, u); }
 }
-function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
+function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
+  const S = _gSh.copy(S0), dz = Math.max(0, .2 * r.spec.body.girth * D.chest * 1.45 * .92 - Math.abs(S0.z)); S.z += s * dz;   // (out at her shoulder's side, where her chest ends: grown out of it there, not through her top. The user, 2026-11-01: "camila's arm is still goign through through her chest")
   G.on = true; G.s = s; G.grp.visible = true;
   _gu.subVectors(E, S).multiplyScalar(1 + (c.len - 1) * GIANT_UPPER); _gv.subVectors(W, E).multiplyScalar(c.len);   // (her own upper arm grows less than the gauntleted forearm)
   A[0].copy(S).addScaledVector(_gu, -.06);                                    // (its root a little into the shoulder)
@@ -1528,8 +1529,8 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
 const _bH = new THREE.Vector3(), _bC = new THREE.Vector3(), _bD = new THREE.Vector3(), _bQ = new THREE.Vector3(), _bM = new THREE.Vector3(), _bW = new THREE.Vector3(), _bN = new THREE.Vector3();
 function giantBody(r, A, G, s, chest, D0 = {}) {
   const P = r.torso.pts; _bH.copy(P[0]); _bH.z = 0; _bC.copy(P[P.length - 1]); _bC.z = 0; _bD.subVectors(_bC, _bH); const L2 = Math.max(1e-4, _bD.lengthSq());   // (hips → neck, along her lean)
-  const g = r.spec.body.girth || 1, rC = chest * 1.45, rW = chest * 1.3, rHem = .5 * (D0.hips || 1.25) * g, T0 = -.2, TW = .55;   // (as measured on her: chest .33 deep with its top on, waist .3, the skirt's hem .64 out)
-  const radAt = t => t < 0 ? rHem : t < TW ? lerp(rHem, rW, t / TW) : lerp(rW, rC, Math.min(1, (t - TW) / (1 - TW)));
+  const g = r.spec.body.girth || 1, rC = chest * 1.45, rW = chest * 1.3, rHem = .5 * (D0.hips || 1.25) * g, T0 = -.65, TH = -.15, TW = .55;   // (TH: the skirt's hem; below it her legs, their own rule in keep())   // (as measured on her: chest .33 deep with its top on, waist .3, the skirt's hem .64 out)
+  const radAt = t => t < TH ? .12 : t < 0 ? rHem : t < TW ? lerp(rHem, rW, t / TW) : lerp(rW, rC, Math.min(1, (t - TW) / (1 - TW)));
   const out = (q, rr, k) => {                         // how far q is inside her, and which way is out (into _bQ); 0 if it's clear
     const t = clamp(_bQ.subVectors(q, _bH).dot(_bD) / L2, T0, 1); _bM.copy(_bH).addScaledVector(_bD, t);
     const rad = radAt(t) + rr * k; _bQ.subVectors(q, _bM); let d = _bQ.length(); if (d >= rad) return 0;
@@ -1538,10 +1539,10 @@ function giantBody(r, A, G, s, chest, D0 = {}) {
   const ax = _bM, wq = _bW, n = _bN, q0 = A[0];
   for (let it = 0; it < 8; it++) {                   // its deepest point inside her: the whole arm swung about her shoulder, that point out by as much (its shape and length kept)
     let worst = 0;
-    for (let k = 2; k <= 24; k++) { const f = k / 4, i = Math.min(5, Math.floor(f)), q = _gx.lerpVectors(A[i], A[i + 1], f - i); if (q.distanceTo(q0) < .24) continue;   // (its root in her shoulder: as it should be)
-      const dd = out(q, G.prof(f / 6), .9); if (dd > worst) { worst = dd; wq.copy(q); n.copy(_bQ); } }
+    for (let k = 2; k <= 24; k++) { const f = k / 4, i = Math.min(5, Math.floor(f)), q = _gx.lerpVectors(A[i], A[i + 1], f - i), dq = q.distanceTo(q0); if (dq < .08) continue;   // (its root in her shoulder: as it should be)
+      const dd = out(q, G.prof(f / 6), .9 * clamp((dq - .08) / .27, 0, 1)); if (dd > worst) { worst = dd; wq.copy(q); n.copy(_bQ); } }   // (grown out of her there: its girth only counts as it leaves the shoulder)
     if (worst < .003) break;
-    _gy.subVectors(wq, q0); const L = Math.max(.2, _gy.length()); ax.crossVectors(_gy, n); if (ax.lengthSq() < 1e-8) break; ax.normalize();
+    _gy.subVectors(wq, q0); const L = Math.max(.35, _gy.length()); ax.crossVectors(_gy, n); if (ax.lengthSq() < 1e-8) break; ax.normalize();
     _gq.setFromAxisAngle(ax, Math.min(.35, worst / L * 1.1)); for (let i = 1; i < 7; i++) A[i].sub(q0).applyQuaternion(_gq).add(q0);
   }
 }

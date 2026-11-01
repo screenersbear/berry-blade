@@ -365,7 +365,12 @@
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
   #pAsk.hidden { display: none; }
   #fpsBox { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); z-index: 60; background: rgba(29, 31, 36, .82); color: var(--y); font: 600 11px/1.45 "Jost", sans-serif; letter-spacing: .06em; padding: 3px 10px; pointer-events: none; white-space: nowrap; } #fpsBox.hidden { display: none; }   /* (pause > DEBUG > FPS COUNTER) */
-  #pause.dbg #pTeam { display: none; }   /* (DEBUG's long list: the whole side to itself, no team box) */
+  #pause.dbg #pTeam { display: none; }
+  #pause.dbg .pwrap > :not(#pBody), #pause.dbg #pWidgets { opacity: .18; pointer-events: none; }   /* (DEBUG: a popup over the pause screen, which dims behind it) */
+  #pause.dbg .panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 46; width: min(640px, 94vw); max-height: 90vh; overflow-y: auto; box-sizing: border-box; zoom: 1 !important;
+    box-shadow: 0 0 0 200vmax rgba(24, 30, 35, .55), 8px 8px 0 var(--s); }
+  #pause.dbg .panel { animation: dbgPop .18s ease-out; } @keyframes dbgPop { from { transform: translate(-50%, -50%) scale(.6); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }   /* (its own pop, centred all the way) */
+  #pause.dbg .panel #pbtns { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; }   /* (DEBUG's long list: the whole side to itself, no team box) */
   #texPick { position: fixed; left: 50%; top: max(10px, env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 41; } #texPick.low { top: auto; bottom: max(12px, env(safe-area-inset-bottom, 0px)); } #texPick.hidden { display: none; }   /* pause > DEBUG > TEXTURE: a window of its own, the game in view over it */
   #texPick .panel { padding: 10px 14px 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; max-width: calc(100vw - 24px); max-height: none; box-sizing: border-box; }
   @media (max-height: 520px) { #texPick .panel { padding: 6px 10px 5px; gap: 4px; } #texPick small { display: none; } #texPick .tpHead { font-size: 12px; } }
@@ -637,7 +642,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261101o"></script>
+<script src="charkit.js?v=20261101q"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -5823,19 +5828,23 @@ addEventListener("keydown", e => {
   }
   if (modalOpen) { if (e.code === "Enter" || e.code === "Space" || e.code === "KeyZ" || e.code === "KeyX") { e.preventDefault(); onReset(); } else if (story) { if (e.code === "KeyQ" && !koScr) quitToTitle(); } else if (e.code === "KeyC") showSelect(); else if (e.code === "KeyO" || e.code === "KeyW") showWorlds(); return; }
   if (paused) {
+    if (e.code === "Tab") e.preventDefault();
     if (e.repeat) return;
+    if (e.code === "Tab" && !texUp && !dbgPick && !dbgTeam && !achOpen && !lvlOpen && !teamOpen) { if ($("pause").classList.contains("dbg")) closePause(); else pauseChoose("debug"); return; }   // (Tab: DEBUG, and Tab again, back to the game)
     if (texUp) { const d = { ArrowLeft: -1, KeyA: -1, ArrowUp: -1, KeyW: -1, ArrowRight: 1, KeyD: 1, ArrowDown: 1, KeyS: 1 }[e.code];   // (the TEXTURE window: ← → to try one, Enter done, Esc back to DEBUG)
       if (d) texStep(d); else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(e.code)) { e.preventDefault(); SFX.confirm(); texShut(false); } else if (["Escape", "KeyC", "Backspace"].includes(e.code)) texShut(true); return; }
     if (dbgPick && !achOpen && !lvlOpen && !teamOpen) { const dx = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1 }[e.code] || 0, dy = { ArrowUp: -1, KeyW: -1, ArrowDown: 1, KeyS: 1 }[e.code] || 0;
       if (dx || dy) dbgMove(dx, dy); else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(e.code)) { e.preventDefault(); dbgGo(); } else if (e.code === "Escape" || e.code === "KeyC") pauseChoose("dback"); return; }
     if (dbgTeam) { const d = { ArrowLeft: -1, KeyA: -1, ArrowRight: 1, KeyD: 1 }[e.code]; if (d) { dbgTeamCycle(d); return; } if (e.code === "KeyC") { pauseChoose("dback"); return; } }   // (DEBUG → PARTNERS: ← → who, ↑ ↓ the row)
-    if (["ArrowUp", "ArrowLeft", "KeyW", "KeyA"].includes(e.code)) setPauseSel(pauseSel - 1);
-    else if (["ArrowDown", "ArrowRight", "KeyS", "KeyD"].includes(e.code)) setPauseSel(pauseSel + 1);
+    const row = $("pause").classList.contains("dbg") ? 2 : 1;   // (DEBUG's two columns: up and down a row)
+    if (["ArrowUp", "KeyW"].includes(e.code)) setPauseSel(pauseSel - row); else if (["ArrowLeft", "KeyA"].includes(e.code)) setPauseSel(pauseSel - 1);
+    else if (["ArrowDown", "KeyS"].includes(e.code)) setPauseSel(pauseSel + row); else if (["ArrowRight", "KeyD"].includes(e.code)) setPauseSel(pauseSel + 1);
     else if (["Enter", "Space", "KeyZ", "KeyX", "KeyJ", "KeyK"].includes(e.code)) { e.preventDefault(); pauseChoose(PAUSE_OPTS[pauseSel]); }
     else if (e.code === "Escape") closePause();
     return;
   }
   if (mode === "play" && !e.repeat && (e.code === "Escape" || e.code === "Enter")) { e.preventDefault(); openPause(); return; }
+  if (mode === "play" && !e.repeat && e.code === "Tab" && !paused) { e.preventDefault(); openPause(); if (paused) pauseChoose("debug"); return; }   // (Tab: DEBUG at once, 2026-11-01)
   if (!e.repeat) { if (JUMP_KEYS.includes(e.code)) jumpBuf = feelBuf(); if (UP_KEYS.includes(e.code) && !chgHeld()) upPend = time; if (ATK_KEYS.includes(e.code)) { atkBuf = feelBuf(); atkPressT = time; }
     const d = e.code === "ArrowRight" ? 1 : e.code === "ArrowLeft" ? -1 : 0; if (d) tapDir(d);
     if (e.code === "ArrowDown") tapDown(); }
@@ -7414,7 +7423,7 @@ function safeInsets() {
 function fitMenus() {
   const vv = window.visualViewport, Wd = vv ? vv.width : innerWidth, Ht = vv ? vv.height : innerHeight, [t, r, b, l] = safeInsets(), aw = Wd - l - r - 12, ah = Ht - t - b - 10;
   document.querySelectorAll(FIT_SEL).forEach(el => {
-    if (!el.offsetParent) return; const z0 = el.style.zoom, m0 = el.style.maxHeight, all = el.matches(FIT_ALL); el.style.zoom = ""; if (all) el.style.maxHeight = "none"; const w = el.offsetWidth, h = el.offsetHeight;
+    if (!el.offsetParent) return; if (el.closest("#pause.dbg")) { el.style.zoom = ""; return; } const z0 = el.style.zoom, m0 = el.style.maxHeight, all = el.matches(FIT_ALL); el.style.zoom = ""; if (all) el.style.maxHeight = "none"; const w = el.offsetWidth, h = el.offsetHeight;
     if (!w || !h) { el.style.zoom = z0; el.style.maxHeight = m0; return; }
     const side = el.parentElement && el.parentElement.id === "pSide" ? el.parentElement : null; let room = ah, hh = h;   // (the pause menu's options: beside the widgets, under the team box)
     if (side) { const tm = $("pTeam"), tv = tm && tm.offsetParent ? tm.offsetHeight + (parseFloat(getComputedStyle(side).rowGap) || 0) : 0; room = side.clientHeight - tv - 2; hh = el.scrollHeight; }   // (all of them in what's left there: 2026-10-31, on a phone they ran on out of the box)
@@ -9319,6 +9328,7 @@ const UP_SEE = 200;                                  // (this high, under the op
 function upSee(p) {                                  // up off a jump under an opening into the room above: it's there to see, and you're only in it once you come down onto something of it (its floor by the hole, a ledge); else back down into this one
   const y0 = p.upY ?? p.y; p.upY = p.y;
   const R = holeAbove(p.x); if (!R) return;
+  if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && Math.abs(b.x - p.x) < 900) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
   if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120) startPeek(R.to, true);
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
