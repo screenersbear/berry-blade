@@ -10,7 +10,7 @@
 // 2026-10-20: "make the player able to scroll through menues with virtual control arrows or actual control, not just touch screen"):
 // the d-pad moves through a menu and ✕ (or ○) picks; the menus can still be tapped directly.
 // The partner controls (the user, 2026-10-31: the 3DS pad as the model; "phone yes"): □ and △ send in a partner each (C and V), and two shoulder
-// buttons sit over the four, L block (Shift) and R the tackle (Space): on the right, so a thumb can block and the other push the d-pad (block and a way: the dodge).
+// buttons sit over the four, L the block buddy (S) and R the attack buddy (D), the keyboard's since 2026-11-01: on the right, so a thumb can block and the other push the d-pad (block and a way: the dodge).
 // Over the d-pad, an L2 button (the user, 2026-10-21: "a left trigger button over the d-pad on the virtual controller"): hold it and
 // the game stops with your items over it; press a button on one (✕ ○ □) to use it. It holds the / key down, as the keyboard does.
 // Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
@@ -82,7 +82,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyZ"], b: ["KeyX"], x: ["KeyC"], y: ["KeyV"] };   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyX"], b: ["KeyC"], x: ["KeyV"], y: ["KeyZ"] };   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
@@ -100,7 +100,7 @@
     const pd = [...padPtr.values()].join(""), bd = [...btnPtr.values()].join("");
     "udlr".split("").forEach(d => { key(KEY[d], pd.includes(d)); document.querySelector(`#tPad .arm[data-d="${d}"]`).classList.toggle("on", pd.includes(d)); });
     const held = new Set([...bd].flatMap(b => BTN[b] || []));
-    ["KeyZ", "KeyX", "KeyC", "KeyV"].forEach(k => key(k, held.has(k)));
+    ["KeyX", "KeyC", "KeyV", "KeyZ"].forEach(k => key(k, held.has(k)));
     "axby".split("").forEach(b => document.querySelector(`#tBtns [data-b="${b}"]`).classList.toggle("on", bd.includes(b)));
   };
   const hook = (el, map, read) => {
@@ -115,10 +115,10 @@
     C.addEventListener("pointerdown", e => { e.preventDefault(); C.classList.add("on"); tap("Escape"); });
     LT.addEventListener("pointerdown", e => { e.preventDefault(); try { LT.setPointerCapture(e.pointerId); } catch { } LT.classList.add("on"); key("Slash", true); });   // (held: the items)
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => LT.addEventListener(t, () => { LT.classList.remove("on"); key("Slash", false); }));
-    [["tL", "ShiftLeft"], ["tR", "Space"]].forEach(([id, code]) => { const E = document.getElementById(id);   // (the shoulders: held as long as the thumb's on them)
+    [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { const E = document.getElementById(id);   // (the shoulders: held as long as the thumb's on them)
       E.addEventListener("pointerdown", e => { e.preventDefault(); try { E.setPointerCapture(e.pointerId); } catch { } E.classList.add("on"); key(code, true); });
       ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => E.addEventListener(t, () => { E.classList.remove("on"); key(code, false); })); });
-    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyX"); });   // sitting: a tap anywhere gets you up
+    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyC"); });   // sitting: a tap anywhere gets you up (attack: C since 2026-11-01)
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => C.addEventListener(t, () => C.classList.remove("on")));
     ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner, #tLT, .tSh")) e.preventDefault(); }, { passive: false }));
   };
@@ -188,7 +188,7 @@
     if (s === was) return; was = s;
     T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "cons" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit"); T.classList.toggle("cons", s === "cons");
     if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
-    if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); [["tL", "ShiftLeft"], ["tR", "Space"]].forEach(([id, code]) => { key(code, false); document.getElementById(id).classList.remove("on"); }); }
+    if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { key(code, false); document.getElementById(id).classList.remove("on"); }); }
     const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "cons" && s !== "menu"); C.textContent = s === "play" || s === "sit" || s === "cons" ? "❚❚" : "‹";
   }, 120);
 
