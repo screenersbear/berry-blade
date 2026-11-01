@@ -1478,10 +1478,11 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   for (let i = 1; i <= 3; i++) A[i].copy(S).addScaledVector(_gu, i / 3);
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
   const rest = !(p.atkT >= 0) && !p.combo && !p.block && !(p.tpose > 0) && !(p.hurtT > 0) && !p.tackle && !(p.tkDig > 0) && !p.climb && !p.zip && !p.upHop && !p.upCoil && !p.dodge && !p.crawl && !p.dive && !p.swim && p.onGround !== false && !p.grow && !p.pointKind && !p.tcPose;
-  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, 7 / 60);
+  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, (p.onGround === false ? 20 : 7) / 60);   // (off the ground: let go of at once)
   if (wI > .001) { const C = giantAt(GIANT_CLUB, g), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), tt = api.time;   // at rest: leant on the ground beside her (running, dragged further back)
     const nearS = s === (p.face > 0 ? 1 : -1); G.fw = p.restNow ? (nearS ? -1 : .75) : approach(G.fw ?? (nearS ? -1 : .75), run > .3 ? -1 : nearS ? -1 : .75, 4 / 60);   // (on the side facing you: behind her; on the far side: out in front of her, where you can see it past her)
     _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fy + C.lift - .03 * run, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
+    { const L0 = (_gu.length() + _gv.length()) * 1.02; _gx.subVectors(_gw, S); if (_gx.length() > L0) _gw.copy(S).addScaledVector(_gx.normalize(), L0); }   // (no further than the arm's own length: the ground far below, up in a jump, never stretches it down to it)
     for (let i = 0; i <= 6; i++) { const t = i / 6, bw = Math.sin(Math.PI * t); _gx.lerpVectors(S, _gw, t); _gx.x -= C.bow * bw * .5; _gx.y -= .04 * bw; _gx.z += s * C.bow * bw; if (i === 0) _gx.addScaledVector(_gu, -.06 / Math.max(.01, _gu.length()));
       A[i].lerp(_gx, wI); } }
   let legOut = 0; r.legs.forEach(L => L.pts.forEach(q => { legOut = Math.max(legOut, q.z * s); })); legOut += .09 * r.spec.body.limbs;   // (the near leg's outside)
@@ -3378,7 +3379,7 @@ function syncHuman(p, r, dt = 0) {
   // (twist itself still turns the whole body); 0 in every move as it ships
   const tU = (o.twistU || 0) * fs, tH = (o.twistH || 0) * fs;
   r.hips.position.copy(_P[1]); r.hips.rotation.z = -ang[0] * .6; r.hips.rotation.y = tH;
-  r.chest.position.copy(_SB); r.chest.rotation.z = -ang[1]; r.chest.rotation.y = tU;
+  r.chest.position.copy(_SB); r.chest.rotation.set(0, tU, -ang[1]);   // (all three: giantRoll tips it about x, and that has to start from nothing each frame, or it adds up and turns her chest round and round)
   r.head.position.set(p.neck.x + Math.sin(ang[2]) * D.headOff * Bd.head, p.neck.y + Math.cos(ang[2]) * D.headOff * Bd.head, 0);
   r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)

@@ -637,7 +637,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261101d"></script>
+<script src="charkit.js?v=20261101e"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -5742,7 +5742,7 @@ addEventListener("keydown", e => {
     return;
   }
   if (mode === "play" && !e.repeat && (e.code === "Escape" || e.code === "Enter")) { e.preventDefault(); openPause(); return; }
-  if (!e.repeat) { if (JUMP_KEYS.includes(e.code)) jumpBuf = feelBuf(); if (UP_KEYS.includes(e.code)) upPend = time; if (ATK_KEYS.includes(e.code)) { atkBuf = feelBuf(); atkPressT = time; }
+  if (!e.repeat) { if (JUMP_KEYS.includes(e.code)) jumpBuf = feelBuf(); if (UP_KEYS.includes(e.code) && !chgHeld()) upPend = time; if (ATK_KEYS.includes(e.code)) { atkBuf = feelBuf(); atkPressT = time; }
     const d = e.code === "ArrowRight" ? 1 : e.code === "ArrowLeft" ? -1 : 0; if (d) tapDir(d);
     if (e.code === "ArrowDown") tapDown(); }
   keys[e.code] = true;
@@ -5785,8 +5785,8 @@ function lvlMove(dx, dy) {                           // (the next pick that way,
 }
 function hintHtml() {                                // the controls along the bottom: the keys, or the pad's buttons
   const atk = rig && rig.kind === "cat" ? "CARDS · TAP AGAIN" : "ATTACK · TAP AGAIN";
-  if (!padUse) return "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>↑ A</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>B</b>" + atk + " · HOLD TO CHARGE <b>L</b>BLOCK: YOUR PARTNER IN FRONT <b>R</b>YOUR PARTNER · HOLD: KEEP AT IT <b>□</b>TACKLE · HOLD TO CHARGE <b>△</b>CHARGE! THE TEAM TO A SPOT <b>↑</b>LADDERS <b>↑+B</b>UP ATTACK <b>L2</b>ITEMS <b>❚❚</b>PAUSE";
-  return padText("<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>{j}</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>{a}</b>" + atk + " · HOLD TO CHARGE <b>{blk}</b>BLOCK: YOUR PARTNER IN FRONT <b>{p2}</b>YOUR PARTNER · HOLD: KEEP AT IT <b>{tkl}</b>TACKLE <b>{ch}</b>CHARGE! THE TEAM TO A SPOT <b>↑</b>LADDERS <b>↑+{a}</b>UP ATTACK <b>{it}</b>ITEMS <b>{st}</b>PAUSE");
+  if (!padUse) return "<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>↑ A</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>B</b>" + atk + " · HOLD TO CHARGE <b>L</b>BLOCK: YOUR PARTNER IN FRONT <b>R</b>YOUR PARTNER · HOLD: KEEP AT IT <b>□</b>TACKLE · HOLD TO CHARGE <b>△</b>CHARGE! THE TEAM TO A SPOT · WITH ↑: THEY JUMP (HOLD ↑: HIGHER) <b>↑</b>LADDERS <b>↑+B</b>UP ATTACK <b>L2</b>ITEMS <b>❚❚</b>PAUSE";
+  return padText("<b>← →</b>MOVE · HOLD TO SPEED UP <b>↓↓</b>DROP <b>{j}</b>JUMP ×2 · HOLD STILL: BIG JUMP <b>{a}</b>" + atk + " · HOLD TO CHARGE <b>{blk}</b>BLOCK: YOUR PARTNER IN FRONT <b>{p2}</b>YOUR PARTNER · HOLD: KEEP AT IT <b>{tkl}</b>TACKLE <b>{ch}</b>CHARGE! THE TEAM TO A SPOT · WITH ↑: THEY JUMP (HOLD ↑: HIGHER) <b>↑</b>LADDERS <b>↑+{a}</b>UP ATTACK <b>{it}</b>ITEMS <b>{st}</b>PAUSE");
 }
 function pollPad() {
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].find(Boolean) : null;
@@ -5850,7 +5850,7 @@ function pollPad() {
   } else {
     if (pad.j && !padPrev.j) { if (modalOpen) onReset(); else jumpBuf = feelBuf(); }
     if (pad.a && !padPrev.a) { atkBuf = feelBuf(); atkPressT = time; }
-    if (pad.du && !padPrev.du) upPend = time;       // (the d-pad's up: a jump, or with attack the up attack)
+    if (pad.du && !padPrev.du && !pad.ch) upPend = time;       // (the d-pad's up: a jump, or with attack the up attack)
     if (pad.r && !padPrev.r) tapDir(1); if (pad.l && !padPrev.l) tapDir(-1); if (pad.d && !padPrev.d) tapDown();
   }
   padPrev = { j: pad.j, a: pad.a, l: pad.l, r: pad.r, st: pad.st, d: pad.d, u: pad.u, du: pad.du, tk: pad.tk, tkl: pad.tkl, p1: pad.p1, p2: pad.p2, ch: pad.ch, it: pad.it, sq: pad.sq, bl: pad.bl, lb: pad.lb, rb: pad.rb, r2: pad.r2 };
@@ -5860,12 +5860,14 @@ function tapDown() { const now = performance.now() / 1000; if (now - lastDown < 
 function tapDir(dir) { lastTap = { dir, t: performance.now() / 1000 }; }   // (sprinting is by holding now: see updatePlayer)   // two quick taps the same way = sprint
 let crawlMute = false;                               // (crawling through a hole: jump, attack and block do nothing; updatePlayer sets it. Never in a menu)
 const crawlM = () => crawlMute && mode === "play" && !paused && !menuUp;
+const chgHeld = () => CHARGE_KEYS.some(k => keys[k]) || !!pad.ch;   // (CHARGE! held down: ↑ is the team's)
 const held = {
   get left() { return keys.ArrowLeft || pad.l; },
   get right() { return keys.ArrowRight || pad.r; },
-  get jump() { return !crawlM() && (JUMP_KEYS.some(k => keys[k]) || UP_KEYS.some(k => keys[k]) || pad.j || pad.du); },
+  get jump() { return !crawlM() && (JUMP_KEYS.some(k => keys[k]) || (!chgHeld() && (UP_KEYS.some(k => keys[k]) || pad.du)) || pad.j); },   // (↑ with CHARGE! held: the team's jump, not yours)
   get down() { return keys.ArrowDown || pad.d; },
-  get up() { return UP_KEYS.some(k => keys[k]) || pad.du; },
+  get up() { return !chgHeld() && (UP_KEYS.some(k => keys[k]) || pad.du); },
+  get upRaw() { return UP_KEYS.some(k => keys[k]) || pad.du; },
   get atk() { return !crawlM() && (ATK_KEYS.some(k => keys[k]) || pad.a); },
   get block() { return !crawlM() && (BLOCK_KEYS.some(k => keys[k]) || pad.bl); },   // (L1: its partner, the defender, jumps in front)
   get charge() { return !crawlM() && (CHARGE_KEYS.some(k => keys[k]) || pad.ch); },   // (△: CHARGE!, the team to a spot)
@@ -9583,7 +9585,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   ej.atkCd -= dt; ej.hopT -= dt;
   const SET = setOf(r.spec), busy = partHuman(ej, s, dt, { set: SET, sp: (SET.charge || [])[2], col: "#b06cff" });   // (her special: her set's last charged move)
   if (!busy) partFollow(s, partSlot(s), dt);
-  if (s.onGround && !s.atkKind && !s.block) {
+  if (s.onGround && !s.atkKind && !s.block && !s.post) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ej.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ej.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
@@ -10382,11 +10384,8 @@ function updatePlayer(dt) {
     const bkEdge = bk && !p.backWas; if (bkEdge) p.backDownT = time; p.backWas = bk; p.dodgeCd = Math.max(0, (p.dodgeCd || 0) - dt);
     const both = bk && held.block && (bkEdge || (p.blkDownT === time && time - (p.backDownT ?? -9) < .15));   // (holding block, back pressed; or block pressed just after back)
     if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p);
-    // and forward with the guard up (the user, 2026-10-31: "... slide forward and face back towards the enemy"): a slide along the ground, safe through it, past them,
-    // and round to face them at its end
-    const fw = p.face > 0 ? held.right : held.left, fwEdge = fw && !p.fwdWas; if (fwEdge) p.fwdDownT = time; p.fwdWas = fw;
-    const both2 = fw && held.block && (fwEdge || (p.blkDownT === time && time - (p.fwdDownT ?? -9) < .15));
-    if (both2 && p === player && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !p.bubble && !deepIn(p)) { const D = partDefender(); if (D) defSlideStart(D); else startSlideFwd(p); } }   // (a defender along: it slides out, you hold the guard)
+    // (forward with the guard up was a slide, yours or the defender's: gone, 2026-11-01. Back only)
+  }
   // sprint: two quick taps the same way, then keep holding
   if (ax && ax === p.runDir && control && !p.block && !(p.tpose > 0) && !(p.onGround && held.down) && !(p.onGround && p.hitWall === ax)) p.runT = (p.runT || 0) + dt;   // keep going the same way…
   else { p.runT = 0; p.runDir = ax; }                                                   // …stop, turn, block or hit a wall and it starts over
@@ -10406,7 +10405,7 @@ function updatePlayer(dt) {
   if (upPend >= 0 && control && !p.upUsed && p.atkT >= 0 && p.atkT < UPW + .02 && time - atkPressT < UPW && !p.solo && !p.combo && (p.atkIdx || 0) === 0) { p.atkT = -1; p.atkKind = null; atkBuf = feelBuf(); }   // attack, then ↑ just after: that first swing becomes the up attack
   const sw = !!p.dive;                     // (in the deep's water: your combos as on the ground, any time; ↑ ↓ only swim. The user, 2026-10-24: "combat in the water doesn't work well. it feels like you have touch s platform or land to attack": it was the air's, one combo till you landed)
   if (upPend >= 0 && upPend !== p.upSeen) { p.upSeen = upPend; if (p.onGround && p.atkT < 0 && !p.climb && control) { p.sq = Math.min(p.sq || 0, -.12); p.sqv = 0; } }   // (↑ pressed: a dip at once, on its first frame, while it waits a beat to see if attack's coming: 2026-10-31's latency pass)
-  const upAtk = atkBuf > 0 && !sw && (upPend >= 0 || UP_KEYS.some(k => keys[k]) || pad.du) && !p.upUsed;   // ↑ and attack together (either one first), or attack with ↑ held down: the rising hit (once till you land again)
+  const upAtk = atkBuf > 0 && !sw && (upPend >= 0 || held.up) && !p.upUsed;   // ↑ and attack together (either one first), or attack with ↑ held down: the rising hit (once till you land again)
   if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = feelBuf(); }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
   const upFresh = () => { const f = p.onGround || time - (p.jumpT ?? -9) < .14; if (f) { jumpBuf = 0; p.coyote = 0; p.jcharging = false; p.jcharge = 0; } return f; };   // (↑ is a jump key too: pressed with attack, the hit's own lift takes the jump's place)
   if (cat) {                              // on the ground the cards swim out in front (tap again: they swirl); in the air, card spin then card dive
@@ -11287,18 +11286,21 @@ function partInput(dt) {                             // the two buttons: a press
     B.on = on;
   });
 }
-const DEF_GAP = 70, DEF_SLIDE = .3, DEF_SLIDE_V = 980;
+const DEF_GAP = 70, DEF_SLIDE = .3, DEF_SLIDE_V = 980, DEF_HOP = .22, DEF_HOP_V = 2000, DEF_RUN = 1300, DEF_NEAR = 160;   // (the hop in: its time in the air, its speed at most; the run in after)
 const partDefender = () => { const P = partnerList()[0]; return P && P.q && !P.q.tcFly && !P.q.worn ? P : null; };
 const defFace = () => { const p = player, e = foesAlive().filter(e => !walled(e.x, p.x) && Math.abs(e.x - p.x) < 800 && Math.abs(e.y - p.y) < 260).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0]; return e ? Math.sign(e.x - p.x) || p.face : p.face; };
 function defendStep(s, dt) {                         // the guard's up: the defender jumps in front of you all and holds there, guard up; the rest of the team behind you, guard up
   const p = player, D = partDefender(), me = D && D.q === s, fd = defFace(); s.block = true; s.face = fd;
   if (me && s.post) postClear(D);                    // (posted: the guard brings it back to you, in front)
   if (!me && s.post) { s.vx = approach(s.vx, 0, 3000 * dt); return; }   // (posted elsewhere: it guards where it is)
-  if (!me) { const tx = p.x - fd * (46 + 26 * partSlot(s)); if (s.onGround) s.vx = approach(s.vx, clamp((tx - s.x) * 6, -500, 500), 3000 * dt); return; }   // (behind you)
-  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = p.x + fd * DEF_GAP;   // in front: a jump to it
-    if (s.onGround && Math.abs(tx - s.x) > 30) { s.vy = -440; s.onGround = false; s.plat = null; } s.vx = clamp((tx - s.x) / (2 * 440 / GRAV), -950, 950); }   /* (timed to come down there) */
+  if (!me) { const tx = p.x - fd * (46 + 26 * partSlot(s)); s.vx = approach(s.vx, clamp((tx - s.x) * 10, -DEF_RUN * .75, DEF_RUN * .75), (s.onGround ? 7000 : 4000) * dt); s.sprint = Math.abs(s.vx) > 400; return; }   // (behind you)
+  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = p.x + fd * DEF_GAP;   // in front: a quick low hop to it, timed to come down there
+    if (s.onGround && Math.abs(tx - s.x) > DEF_NEAR) { s.vy = -GRAV * DEF_HOP / 2; s.onGround = false; s.plat = null; s.defHopT = DEF_HOP; s.vx = clamp((tx - s.x) / DEF_HOP, -DEF_HOP_V, DEF_HOP_V); } else s.defHopT = 0; }   // (near: no hop, it just runs there)
   if (s.defSlide > 0) { s.defSlide -= dt; s.vx = s.defDir * DEF_SLIDE_V; s.face = s.defDir; defParry(s, D); if (s.defSlide <= 0) s.defCd = .35; }   // sliding out at them
-  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * DEF_GAP; if (s.onGround) s.vx = approach(s.vx, clamp((tx - s.x) * 7, -800, 800), 4200 * dt); }
+  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * DEF_GAP;
+    if (!s.onGround && s.defHopT > 0) { s.defHopT -= dt; s.vx = clamp((tx - s.x) / Math.max(dt, s.defHopT), -DEF_HOP_V, DEF_HOP_V); }   // (in the hop: aimed to come down on its place, wherever that's got to)
+    else s.vx = approach(s.vx, clamp((tx - s.x) * (s.onGround ? 14 : 8), -DEF_RUN, DEF_RUN), (s.onGround ? 12000 : 5000) * dt);
+    s.sprint = Math.abs(s.vx) > 400; }
   s.z = approach(s.z || 0, .05, dt * 2);
 }
 function defSlideStart(D) {                          // block + forward: the defender slides out fast at them, parrying (shots back at them, blows turned)
@@ -11326,11 +11328,38 @@ function postOf(P) { return P.q.post || null; }
 function postSet(P, x, y, kind, plat) { const q = P.q; q.post = { x: clamp(x, 40, WORLD - 40), y, kind, plat: plat || null, t: 0, idle: 0 }; q.tagT = Math.max(q.tagT || 0, 1.6); q.tagTxt = "△"; if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; } else q.pact = q.pcmd = q.pnext = null; }
 function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); } }
 function postsClear() { partnerList().forEach(postClear); }
-function chargeInput(dt) {                          // △: a press (with a way, or none), or held with a way
+function chargeInput(dt) {                          // △: a press (with a way, or none), or held with a way; with ↑, the team's jumps
   const p = player, ok = mode === "play" && !!p && !p.dead && !paused && !menuUp && !modalOpen && !cine && !transit && !(intro && intro.lock), on = ok && held.charge, ax = (held.right ? 1 : 0) - (held.left ? 1 : 0);
-  if (on && !chgB.on) { chgB = { on: true, t: 0, dir: ax, up: !!held.up, sortie: false }; }
-  if (on) { chgB.t += dt; if (ax) chgB.dir = ax; if (!chgB.sortie && chgB.t >= CHG_HOLD && chgB.dir && !chgB.up) chgStart(p, "sortie"); if (chgB.sortie) chgSortie(p, dt); }
-  if (!on && chgB.on) { chgB.on = false; if (chgB.sortie) chgSortieEnd(p); else chgStart(p, chgB.up ? "up" : chgB.dir ? "go" : "hold"); }
+  const up = on && held.upRaw;
+  if (on && !chgB.on) { chgB = { on: true, t: 0, dir: ax, sortie: false, upT: -1, jumped: false }; upPend = -1; }   // (an ↑ pressed a moment before it: theirs, not a jump of yours)
+  if (on) { chgB.t += dt; if (ax) chgB.dir = ax;
+    if (up) { if (chgB.upT < 0) chgB.upT = 0; chgB.upT += dt; chgCoil(chgB.upT); }                     // ↑ held: they crouch, winding it up
+    else if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.upT = -1; chgB.jumped = true; }         // let go: off they go, as high as it was wound. Again each time
+    if (!chgB.sortie && !chgB.jumped && chgB.upT < 0 && chgB.t >= CHG_HOLD && chgB.dir) chgStart(p, "sortie"); if (chgB.sortie) chgSortie(p, dt); }
+  if (!on && chgB.on) { chgB.on = false; if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.jumped = true; }   // (both let go at once: the jump goes)
+    if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped) chgStart(p, chgB.dir ? "go" : "hold"); }
+}
+const CHG_JUMP = { lo: 170, hi: 420, wind: .1, full: .7, side: 280 };   // (a tap: a hop this high; held to full: this high; how long that takes; with a way held, this fast that way)
+function chgCoil(t) {                               // ↑ held with CHARGE!: the team crouched, wound up (the longer, the lower), their mark over them; full: a tick
+  const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1);
+  partAble().forEach(P => { const q = P.q; q.coilT = .1; q.coilU = u; q.tagT = Math.max(q.tagT || 0, .3); q.tagTxt = "△"; });
+  if (u >= 1 && !chgB.full) { chgB.full = true; SFX.tick(); } else if (u < 1) chgB.full = false;
+}
+function chgHold(s, dt) {                            // (in the partner's own step, first: winding up for the jump, it stands and crouches; come down from it, its place is where it landed)
+  if (s.chgFly && s.onGround && !(s.vy < 0)) { s.chgFly = false; if (s.post) Object.assign(s.post, { x: s.x, y: s.y, plat: s.plat || null }); }
+  if (!(s.coilT > 0)) { if (s.coiled) { s.coiled = false; s.crouch = false; } return false; }
+  s.coilT -= dt; s.coiled = true; if (s.onGround) { s.vx = approach(s.vx, 0, 4000 * dt); s.crouch = true; s.sq = Math.min(s.sq || 0, -.08 - .16 * (s.coilU || 0)); s.sqv = 0; }
+  return true;
+}
+function chgJump(p, t, ax) {                         // let go of ↑: they jump (from the ground; up already, a second time, once), and stay where they come down, to fight what comes
+  const L = partAble(); if (!L.length) return;
+  const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1), h = lerp(CHG_JUMP.lo, CHG_JUMP.hi, u), v = Math.sqrt(2 * GRAV * h); let n = 0;
+  L.forEach((P, k) => { const q = P.q; if (q.climb || q.zip) return;
+    if (q.onGround) q.chgAir = 1; else if (q.chgAir > 0) q.chgAir--; else return;
+    const vx = ax ? ax * CHG_JUMP.side : 0;
+    postSet(P, clamp(q.x + vx * 2 * v / GRAV, 40, WORLD - 40), q.y, "hold", null);
+    Object.assign(q, { vy: -v, vx, onGround: false, plat: null, coilT: 0, coiled: false, crouch: false, sq: .22, sqv: 0, chgFly: true }); dust(q.x, q.y, 3, 0); n++; });
+  if (n) { SFX.jump(); p.wave = Math.max(p.wave || 0, .3); }
 }
 function chgStart(p, how) {                         // the command: where to, and the signal (your hand up, a whistle, their mark; the rings where they're to be)
   const L = partAble(); if (!L.length) return;
@@ -11489,6 +11518,7 @@ function partStrike(o, s, i, X) {                   // the next strike of the st
 function partHuman(o, s, dt, X) {
   const p = player; if (s.worn) { o.pact = o.pcmd = o.pnext = null; s.block = false; s.defOn = false; return false; }   // (worn out: it only follows, slowly)
   if (s.tcOn || s.tcFly) return true;   // (Camila's team charge: where it puts them, teamChargeTick)
+  if (chgHold(s, dt)) return true;                   // (winding up for CHARGE! + ↑)
   if (s.post && !partBlocking()) { const r = postStep(o, s, dt, false); if (!o.pcmd && !o.pact) return r; }   // (CHARGE!: at its place)
   if (partBlocking()) { if (o.pact && (s.onGround || !s.atkKind)) partEnd(o, s, true); o.pcmd = o.pnext = null;
     if (!o.pact) { s.sprint = false; defendStep(s, dt); return true; } }
@@ -11554,6 +11584,7 @@ function partJump(s, k, dx) {                       // you jumped: so does it, a
 function partPet(q, k, dt) {                        // a pet on your command: its pounces (true while it's busy and its following waits)
   const p = player; if (q.worn) { q.pact = q.pcmd = q.pnext = null; q.block = false; q.defOn = false; return false; }
   if (q.tcOn || q.tcFly) return true;
+  if (chgHold(q, dt)) return true;
   if (q.post && !partBlocking()) { const r = postStep(q, q, dt, true); if (!q.pcmd && !q.pact) return r; }
   if (partBlocking() && !q.pounce) { q.pact = q.pcmd = q.pnext = null; defendStep(q, dt); return true; }
   q.defOn = false;
@@ -12722,7 +12753,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   const SET = setOf(r.spec), busy = partHuman(ally, s, dt, { set: SET, sp: KIT.BUDDY_SP[A.lead || A.id] || (SET.charge || [])[2], plain: (KIT.BUDDY_PLAIN || {})[A.lead || A.id], shoot: A.shoot, col: A.col, crew: ally.crew,
     voice: (sp, i) => { if (sp) SFX.buddy(A.id, "sp"); else if (i === 0 && Math.random() < .35) SFX.buddy(A.id, "atk"); } });   // (its voice: into a special always, a string now and then)
   if (!busy) partFollow(s, partSlot(s), dt);
-  if (s.onGround && !s.atkKind && !s.block) {
+  if (s.onGround && !s.atkKind && !s.block && !s.post) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ally.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ally.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
