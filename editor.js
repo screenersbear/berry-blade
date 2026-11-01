@@ -190,7 +190,10 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", tic_swing: "X slam", tac_swing: "ring slam", tic_toss: "X toss", tac_toss: "ring toss", pk_toss: "pencil toss", veji_lash: "tail lash whirl", estrella_belt: "high note", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const GIANT_LAB = { hook: "heavy hook", back: "backhand", slam: "overhead slam", scoop: "scoop up", sweep: "sweep round", drag: "dragged up and over", airSwing: "air swing", airHammer: "air hammer",
   up: "uppercut", down: "fist first, straight down", haymaker: "haymaker", haymaker_b: "haymaker (forward)", rocket_b: "rocket punch (forward)", c1: "charge 1", c2: "charge 2", c3: "charge 3",
-  slash: "heavy slash", chop: "overhead chop", rise: "rising cut", airChop: "air chop", thrust_b: "thrust (forward)" };   // (the grown weapons' moves, 2026-11-01)
+  slash: "heavy slash", chop: "overhead chop", rise: "rising cut", airChop: "air chop", thrust_b: "thrust (forward)", team: "the team punch" };   // (the grown weapons' moves, 2026-11-01)
+Object.assign(MOVE_NAMES, { point_fist: "pointing them at it", point_sword: "pointing them at it, the sword", point_giant: "pointing them at it, the big hand", gg4_tc1: "team charge 1: crouched, the team round her",
+  gg4_tc2: "team charge 2 and 3: the arm cocked back, they get on it", tc_hands: "(a partner) hands on her shoulders", tc_ride: "(a partner) on her arm", pl_c1: "lunge (size 1)", pl_g2: "lunge (size 2)", pl_g3: "lunge (size 3)", pl_g4: "lunge (size 4)",
+  pl_r1: "lunge (size 1)", pl_s2: "lunge (size 2)", pl_s3: "lunge (size 3)", pl_s4: "lunge (size 4)" });
 Object.entries(KIT.GIANT_NAMES || {}).forEach(([k, n]) => { const z = (KIT.STRIKES[k] || {}).wsize || 1, w = KIT.STRIKES[k].giant === "sword" ? "blade" : "arm";
   MOVE_NAMES[k] = `size ${z + 1} ${w}: ${GIANT_LAB[n] || n}`; });
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
@@ -225,7 +228,11 @@ function movesFor(sp) {                                          // every move t
   const wk = ((sp.outfit || {}).prop || {}).kind, GS = (KIT.GIANT_SETS || {})[wk];   // the weapon grown (every 3 baddies won back: 2026-11-01), by size: as the game picks them (work.html KIT.giantSet)
   if (GS) [1, 2, 3].forEach(z => { const g = GS[z], L = `Weapon size ${z + 1} (${["", "50", "75", "100"][z]}%): `; if (!g) return;
     list(L + "attack", g.ground, T); list(L + "forward + attack", g.groundB, T); list(L + "attack in the air", g.air1, T);
-    add(L + "up + attack", g.up, "", T); add(L + "down + attack in the air", g.down, "", T); list(L + "charge (hold attack)", g.charge, T); });
+    add(L + "up + attack", g.up, "", T); add(L + "down + attack in the air", g.down, "", T); list(L + "charge (hold attack)", g.charge, T);
+    if (g.teamCharge) { add(L + "charge 1: the team round her", "gg4_tc1", "", T); add(L + "charges 2 and 3: on her arm", "gg4_tc2", "", T); add(L + "the team, round her", "tc_hands", "", T); add(L + "the team, on her arm", "tc_ride", "", T); } });
+  if (GS) { const P = KIT.POINTS[wk] || [], LU = KIT.LUNGES[wk] || [];   // holding a partner's button: pointing them at it; let go after three charges: her lunge, by size (2026-11-01)
+    add("Holding a partner's button: pointing them at it", P[0], "", T); if (P[1] !== P[0]) add("Holding a partner's button (weapon grown): pointing them at it", P[1], "", T);
+    LU.forEach((k, z) => add(`Holding a partner's button, let go after 3 charges: lunge, weapon size ${z + 1}`, k, "", T)); }
   return out;
 }
 function driveMove(p, dt) {

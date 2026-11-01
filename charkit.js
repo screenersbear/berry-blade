@@ -1391,9 +1391,13 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
 // The sword's blade grows long, broad and thick, near enough a slab. Both rest on the ground and drag along it, never through it, and keep out of her legs.
 const GIANT_ARM = [                                  // by size: the arm's length (x her own), its girth at the shoulder and at the wrist, the hand (x the gauntlet's)
   { len: 1, r0: .058, r1: .07, hand: .95 },
-  { len: 1.4, r0: .08, r1: .14, hand: 1.2 },
-  { len: 1.35, r0: .095, r1: .24, hand: 1.6 },
-  { len: 1.3, r0: .115, r1: .34, hand: 2.0 } ];     // (every size long enough to reach the ground from her shoulder, as in the user's pictures: they grow in girth and hand)
+  { len: 1.75, r0: .08, r1: .14, hand: 1.2 },
+  { len: 1.75, r0: .095, r1: .24, hand: 1.6 },
+  { len: 1.75, r0: .115, r1: .34, hand: 2.0 } ];
+// at rest (the user, 2026-11-01: "recreate the animation stance of the pictures I sent for the level 4"; "incredibly stiff in level 2"): leant on the ground at her side
+// like a club, as the 10-31 mockup had it: from her shoulder, near enough straight, to where it rests out to her side and behind her (back, out; lift: the wrist
+// off the ground), bowed a little; her shoulders over toward its weight (roll), and a slow sway in it
+const GIANT_CLUB = [{ back: 0, out: .12, lift: .12, bow: 0, roll: 0 }, { back: .38, out: .3, lift: .17, bow: .05, roll: .05 }, { back: .58, out: .42, lift: .27, bow: .07, roll: .09 }, { back: .8, out: .5, lift: .38, bow: .08, roll: .14 }];     // (every size long enough to reach the ground from her shoulder, as in the user's pictures: they grow in girth and hand)
 const GIANT_SWORD = [{ L: 1, W: 1, T: 1 }, { L: 1.4, W: 1.6, T: 1.25 }, { L: 1.85, W: 2.3, T: 1.55 }, { L: 2.35, W: 3.1, T: 1.9 }];   // the blade (x its own): the biggest is the 10-31 mockup's slab
 const giantAt = (tab, g) => { const i = Math.min(Math.floor(clamp(g, 0, 3)), 2), u = g - i, A = tab[i], B = tab[i + 1], o = {}; for (const k in A) o[k] = A[k] + (B[k] - A[k]) * u; return o; };   // (past the top: on along the last step, for the burst's overshoot)
 const giantOf = p => clamp(p.wsizeV ?? 0, 0, 3.5);
@@ -1436,8 +1440,9 @@ function buildGiantHand(parent, M, P, Q) {           // its hand (the user's pic
   g.add(at(P(new THREE.TorusGeometry(.026, .006, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.09, -.082, .006));
   return { g, fingers, thumbs, mats: [mf, mG, mOrb, mF] };
 }
-function giantHandPose(H, c, ts) {                   // c: 0 open (dragged along, the fingers out straight and a little fanned) … 1 a fist; ts: the thumb's side
-  H.fingers.forEach((F, i) => { F.k.rotation.z = lerp(.22, 1.6, c); F.k.rotation.x = (i - 1.5) * .26 * (1 - c); F.m.rotation.z = lerp(.18, 1.75, c); });
+function giantHandPose(H, c, ts, pt = 0) {            // c: 0 open (dragged along, the fingers out straight and a little fanned) … 1 a fist; ts: the thumb's side; pt: pointing (the finger by the thumb out)
+  const ix = ts > 0 ? 3 : 0;
+  H.fingers.forEach((F, i) => { const cc = lerp(c, i === ix ? .02 : 1, pt); F.k.rotation.z = lerp(.22, 1.6, cc); F.k.rotation.x = (i - 1.5) * .26 * (1 - cc) * (1 - pt); F.m.rotation.z = lerp(.18, 1.75, cc); });
   H.thumbs.forEach(T => { const on = T.s === ts; T.g.visible = on; if (!on) return; T.g.rotation.set(ts * lerp(.55, -.35, c), 0, lerp(.25, 1.05, c)); T.m.rotation.z = lerp(.12, 1.1, c); });
 }
 function giantArmBuild(r) {                          // (once, the first time it grows)
@@ -1473,6 +1478,13 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   A[0].copy(S).addScaledVector(_gu, -.06);                                    // (its root a little into the shoulder)
   for (let i = 1; i <= 3; i++) A[i].copy(S).addScaledVector(_gu, i / 3);
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
+  const rest = !(p.atkT >= 0) && !p.combo && !p.block && !(p.tpose > 0) && !(p.hurtT > 0) && !p.tackle && !(p.tkDig > 0) && !p.climb && !p.zip && !p.upHop && !p.upCoil && !p.dodge && !p.crawl && !p.dive && !p.swim && p.onGround !== false && !p.grow && !p.pointKind && !p.tcPose;
+  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, 7 / 60);
+  if (wI > .001) { const C = giantAt(GIANT_CLUB, g), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), tt = api.time;   // at rest: leant on the ground beside her (running, dragged further back)
+    const nearS = s === (p.face > 0 ? 1 : -1); G.fw = p.restNow ? (nearS ? -1 : .75) : approach(G.fw ?? (nearS ? -1 : .75), run > .3 ? -1 : nearS ? -1 : .75, 4 / 60);   // (on the side facing you: behind her; on the far side: out in front of her, where you can see it past her)
+    _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fy + C.lift - .03 * run, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
+    for (let i = 0; i <= 6; i++) { const t = i / 6, bw = Math.sin(Math.PI * t); _gx.lerpVectors(S, _gw, t); _gx.x -= C.bow * bw * .5; _gx.y -= .04 * bw; _gx.z += s * C.bow * bw; if (i === 0) _gx.addScaledVector(_gu, -.06 / Math.max(.01, _gu.length()));
+      A[i].lerp(_gx, wI); } }
   let legOut = 0; r.legs.forEach(L => L.pts.forEach(q => { legOut = Math.max(legOut, q.z * s); })); legOut += .09 * r.spec.body.limbs;   // (the near leg's outside)
   const hipY = r.hips.position.y + .05, chest = .2 * r.spec.body.girth * D.chest;
   const keep = () => { for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
@@ -1481,7 +1493,7 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
     else if (i >= 2 && q.y < S.y + .1 && Math.abs(q.x) < .26 + rr) { const zm = chest + rr * .8; if (q.z * s < zm) q.z = s * zm; } } };   // her body
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = approach(G.fist, at0 || p.block ? 1 : 0, (p.restNow ? 99 : 9) * (1 / 60));
+  G.fist = approach(G.fist, at0 || p.block || p.tcPose ? 1 : 0, (p.restNow ? 99 : 9) * (1 / 60)); G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fy + .06 * hs - A[6].y) / hl;                 // near the ground it bends at the wrist to lie along it (dragged), never into it
@@ -1491,16 +1503,21 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
     _gy.addScaledVector(_gx, -_gy.dot(_gx)); if (_gy.lengthSq() < 1e-5) _gy.set(1, 0, 0); _gy.normalize();
     _gz.crossVectors(_gx, _gy); _gM.makeBasis(_gy, _gw.copy(_gx).negate(), _gz); H.g.quaternion.setFromRotationMatrix(_gM);
     H.g.position.copy(A[6]); H.g.scale.setScalar(hs);
-    giantHandPose(H, G.fist, _gz.x + _gz.y * .5 >= 0 ? 1 : -1);
+    giantHandPose(H, G.fist, _gz.x + _gz.y * .5 >= 0 ? 1 : -1, G.pt);
   };
   place();
   H.g.updateMatrix(); let lo = 1e9; const fc = G.fist;
   for (const [x, y, z] of [[.06, -.19, .1], [.06, -.19, -.1], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), .08], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), -.08], [-.06, -.12, 0]]) lo = Math.min(lo, _gv.set(x, y, z).applyMatrix4(H.g.matrix).y);
   if (lo < fy + .004) { const d = Math.min(.25, fy + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
   G.tube.update(FWD); giantRings(G, pr);
-  G.tube.curve.getPoint(.36, _gv); G.tube.curve.getTangent(.36, _gu); _gw.set(.45, .1, -s).addScaledVector(_gu, -_gu.dot(_gw.set(.45, .1, -s))).normalize();
-  G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(.36) * .95);   // where her other hand holds it: on the front of it, toward her
+  G.tube.curve.getPoint(.32, _gv); G.tube.curve.getTangent(.32, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
+  G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(.32) * .95);   // where her other hand holds it: on top of it, a little toward her (so it shows, either way she faces)
   G.tip = (G.tip || new THREE.Vector3()).copy(A[6]).addScaledVector(_gx, .3 * hs);
+}
+function giantRoll(r, ang) {                         // her upper body tipped over toward the arm's weight, about her hips: spine, chest, head and the shoulders' line
+  const q = _gq.setFromAxisAngle(XAX, ang), pv = _gy.copy(r.torso.pts[1]), turn = v => v.sub(pv).applyQuaternion(q).add(pv);
+  for (let k = 2; k < r.torso.pts.length; k++) turn(r.torso.pts[k]); r.torso.update(FWD);
+  [r.chest, r.head].forEach(o => { turn(o.position); o.quaternion.premultiply(q); }); turn(_SB);
 }
 function giantOff(r) { const G = r.giant; if (!G || !G.on) return; G.on = false; G.grp.visible = false; r.arms.forEach(t => { t.mesh.visible = true; }); if (r.prop) r.prop.group.visible = true; }
 const SWORD_LOW = [[1.24, .085], [1.24, -.085], [.7, .085], [.7, -.085], [.3, .085], [.3, -.085]];
@@ -1515,7 +1532,7 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
 }
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
-  if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0) return;
+  if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); o.lean = lerp(o.lean, o.lean + .05 * Math.min(g, 3), w); }   // (like a club leant on the ground behind her, out at her side)
   else { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }
@@ -2345,6 +2362,45 @@ const GIANT_NAMES = {};
     : [add("c1", A ? T.palm(S, z) : T.thrust(S * 1.2, z)), add("c2", T.spin(S, z, 2)), add("c3", A ? T.pound(S * 1.2, z + 1) : T.leap(S * 1.15, z + 1))];
   GIANT_SETS[kind][z] = set;
 }));
+
+// ── pointing them at it, the lunge after, and the team punch (the user, 2026-11-01). Holding a partner's button: it stays in on them, combo after combo, and she takes a
+// defiant stance and points at the enemy (Rose with her sword, Camila even with the big hand) while she charges; let go after three charges: her lunge at them, one for
+// each size of weapon. And at the biggest, Camila's charge: "her crouch. step one of the charge is the team gets around her closely and puts their hands on her
+// shoulders and walk with her if she moves. level two is she gets and cocking the arm back, one team mate jumps on her arm, step 3, the second team mate also jumps on her
+// arm, and when you release, she throws her arm forward in a huge punch and the teamates get lunged forward and also hit the enemy"
+const PT = (o, S = 1) => KZ([0, .6, 1.2], o, S);       // (a held pose: a slow breath through it)
+Object.assign(STRIKES, {
+  point_fist: { dur: 1.2, keys: PT({ lean: [-.04, -.07, -.04], arch: [-.12, -.15, -.12], bodyY: [-.1, -.12, -.1], twist: [-.15, -.15, -.15], headRot: [-.12, -.1, -.12],   // chest out, the gauntlet out straight at them
+    armF: [1.55, 1.58, 1.55], elbF: [.05, .04, .05], spF: [.12, .12, .12], armB: [.35, .38, .35], elbB: [1.7, 1.7, 1.7], spB: [.45, .45, .45], fNx: [.4, .4, .4], fFx: [-.44, -.44, -.44], fNz: [.08, .08, .08], fFz: [.06, .06, .06] }) },
+  point_sword: { dur: 1.2, keys: PT({ lean: [-.04, -.07, -.04], arch: [-.12, -.15, -.12], bodyY: [-.1, -.12, -.1], twist: [-.15, -.15, -.15], headRot: [-.12, -.1, -.12],   // the blade out level, its point at them
+    armF: [1.5, 1.53, 1.5], elbF: [.08, .06, .08], spF: [.1, .1, .1], blade: [0, .02, 0], armB: [.35, .38, .35], elbB: [1.7, 1.7, 1.7], spB: [.45, .45, .45], fNx: [.4, .4, .4], fFx: [-.44, -.44, -.44], fNz: [.08, .08, .08], fFz: [.06, .06, .06] }) },
+  point_giant: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [-.14, -.17, -.14], arch: [-.16, -.18, -.16], bodyY: [-.14, -.16, -.14], twist: [-.1, -.1, -.1], headRot: [-.12, -.1, -.12],   // the big hand out at them, a finger pointing, leant back against its weight
+    armF: [1.3, 1.34, 1.3], elbF: [.1, .08, .1], spF: [.15, .15, .15], fNx: [.44, .44, .44], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+  gg4_tc1: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.38, .4, .38], arch: [.1, .12, .1], bodyY: [-.46, -.48, -.46], headRot: [-.2, -.18, -.2], armF: [.35, .38, .35], elbF: [.25, .25, .25], spF: [.25, .25, .25],   // charge 1: down in a crouch, the arm on the ground before her
+    fNx: [.42, .42, .42], fFx: [-.46, -.46, -.46], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+  gg4_tc2: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.24, .26, .24], arch: [-.05, -.04, -.05], bodyY: [-.4, -.42, -.4], twist: [.42, .45, .42], headRot: [-.2, -.18, -.2], armF: [-.95, -1.0, -.95], elbF: [.55, .55, .55], spF: [.32, .32, .32],   // charges 2 and 3: the arm cocked back (they get up on it)
+    fNx: [.46, .46, .46], fFx: [-.52, -.52, -.52], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+  tc_hands: { dur: 1.2, keys: PT({ lean: [.18, .2, .18], armF: [1.75, 1.8, 1.75], elbF: [.55, .55, .55], armB: [1.75, 1.8, 1.75], elbB: [.55, .55, .55], spF: [-.1, -.1, -.1], spB: [-.1, -.1, -.1], bodyY: [-.06, -.08, -.06] }) },   // a partner's hands on her shoulders
+  tc_ride: { dur: 1.2, keys: PT({ lean: [.35, .38, .35], bodyY: [-.42, -.44, -.42], armF: [.9, .9, .9], elbF: [.9, .9, .9], armB: [.8, .8, .8], elbB: [.9, .9, .9], fNx: [.3, .3, .3], fFx: [-.2, -.2, -.2], fNy: [.2, .2, .2], fFy: [.15, .15, .15] }) },   // crouched on her arm, holding on
+});
+STRIKES.gg4_team = { ...GA.haymaker(GIANT_S[3], 3), wsize: 3, giant: "gauntlet", step: 420, fling: .26 * GIANT_S[3], sfx2: [.28 * GIANT_S[3], "slam"],   // let go: the huge punch, the team flung on ahead off it
+  hits: [GH(.22, .42, "haymaker", GIANT_S[3]), GH(.26, .4, "launch", GIANT_S[3], { reach: 230, back: 20, y0: 200, y1: -20, wide: true })],
+  keys: KZ([0, .1, .22, .32, .5, .9], { armF: [-1.0, -1.25, .8, 1.6, 1.5, .6], elbF: [.55, .6, .1, .02, .05, .2], spF: [.32, .35, .3, .2, .2, .22], twist: [.42, .5, -.2, -.5, -.4, 0], lean: [.24, .12, .5, .62, .55, .3],
+    bodyY: [-.4, -.42, -.3, -.3, -.28, -.12], fNx: [.46, .4, .56, .6, .58, .42], fFx: [-.52, -.5, -.62, -.66, -.64, -.46] }, GIANT_S[3]) };
+GIANT_SETS.gauntlet[3].charge = ["gg4_team"]; GIANT_SETS.gauntlet[3].teamCharge = true; GIANT_NAMES.gg4_team = "team";
+// the lunges, after pointing (the user: "different based on the level of strength their weapon is at"): as it was, a dash and a blow; then the grown ones
+const lng = (st, o) => ({ ...st, ...o, chain: undefined });
+STRIKES.pl_c1 = lng(STRIKES.bx_c1 || STRIKES.jab, { step: 860, slide: .26, sq: .1 });
+STRIKES.pl_r1 = lng(STRIKES.sw_c1 || STRIKES.slash, { step: 860, slide: .26, sq: .1 });
+STRIKES.pl_g2 = lng(GA.rocket(GIANT_S[1], 1), { step: 920, slide: .3, wsize: 1, giant: "gauntlet" });
+STRIKES.pl_g3 = lng(GA.leap(GIANT_S[2], 2), { step: 560, wsize: 2, giant: "gauntlet" });
+STRIKES.pl_g4 = lng(GA.drag(GIANT_S[3], 3), { step: 780, slide: .36, wsize: 3, giant: "gauntlet" });
+STRIKES.pl_s2 = lng(GW.thrust(GIANT_S[1], 1), { step: 920, slide: .3, wsize: 1, giant: "sword" });
+STRIKES.pl_s3 = lng(GW.spin(GIANT_S[2], 2, 2), { step: 720, slide: .42, wsize: 2, giant: "sword" });
+STRIKES.pl_s4 = lng(GW.leap(GIANT_S[3], 3), { step: 600, wsize: 3, giant: "sword" });
+api.LUNGES = { gauntlet: ["pl_c1", "pl_g2", "pl_g3", "pl_g4"], sword: ["pl_r1", "pl_s2", "pl_s3", "pl_s4"] };
+api.POINTS = { gauntlet: ["point_fist", "point_giant"], sword: ["point_sword", "point_sword"] };
+api.giantTop = (r, u, out) => { const G = r.giant; if (!G || !G.on) return null; G.tube.curve.getPoint(u, out); out.y += G.prof(u) * .9; r.body.updateWorldMatrix(true, false); return r.body.localToWorld(out); };   // (the top of the grown arm, for a partner to stand on)
 api.GIANT_SETS = GIANT_SETS; api.GIANT_NAMES = GIANT_NAMES;
 api.giantSet = p => { const pr = p.rig && p.rig.spec.outfit && p.rig.spec.outfit.prop, z = Math.round(p.power || 0); return pr && GIANT_SETS[pr.kind] && z >= 1 ? GIANT_SETS[pr.kind][Math.min(z, 3)] : null; };
 // the berry buddies' specials (the user, 2026-10-26: "one special attack per buddy, so they have a basic hit which they've been doing and one special they can
@@ -2680,7 +2736,6 @@ const TWISTS = new Set(["twist", "twistU", "twistH"]);   // turns about the up a
 const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", wF: "wB", wB: "wF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
 function leadFar(p) {                       // is the prop (lead) hand on the far side right now?
   const pr = p.rig.spec.outfit && p.rig.spec.outfit.prop; if (!pr || pr.kind === "none" || pr.side === "near") return false;
-  if (pr.kind === "gauntlet" && giantOf(p) > .005) return false;   // (grown: always the side that faces you, 2026-11-01)
   return (pr.side === "left") === (p.face > 0);
 }
 function keyvS(tr, t) {                          // monotone cubic through the keys: velocity flows through in-between keys, flat runs stay flat, nothing overshoots
@@ -2829,7 +2884,8 @@ function updatePoseHuman(p, dt) {
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
-  else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));   // crawling through a low hole (2026-10-28)
+  else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));
+  else if ((p.pointKind || p.tcPose) && a < 0 && p.hurtT <= 0 && STRIKES[p.pointKind || p.tcPose]) { const k = p.pointKind || p.tcPose; Object.assign(T, poseKeys(p, k, api.time % STRIKES[k].dur) || {}); }   // (pointing a partner at them; the team charge)   // crawling through a low hole (2026-10-28)
   else if (p.upCoil && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "upcoil", Math.min(p.upCoil.t, STRIKES.upcoil.dur)) || {});   // the air up attack's coil, before the strike (2026-10-31)
   else if (p.upHop && a < 0 && p.hurtT <= 0 && (!p.upHop.up || p.upHop.t < STRIKES.uphop.dur)) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the push off (2026-10-28; then the jump's own rising pose)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
@@ -2934,7 +2990,9 @@ function updatePoseHuman(p, dt) {
     if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
     const BB = p.block && a < 0 ? { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }.blade : undefined, bl = BB !== undefined ? BB : ST && ST.blade;
-    if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
+    const PK = a < 0 && p.pointKind && STRIKES[p.pointKind];
+    if (PK && PK.keys.blade) { const sw = leadFar(p); o.wrist = keyvS(PK.keys.blade, api.time % PK.dur) - (sw ? o.armB + o.elbB : o.armF + o.elbF); }   // (pointing: the blade's own angle)
+    else if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
   }
   // starting to run: a gather before the first stride (the user, 2026-10-22: "bring their torso up and forward and almost step up before
   // crouching down into the full run, almost like winding it up"): up onto the toes leaning in, arms drawn back, then down into the run
@@ -3307,8 +3365,8 @@ function syncHuman(p, r, dt = 0) {
   r.pads.forEach(m => m.scale.setScalar(r.spec.outfit.pads.size));
   if (r.prop && (r.prop.kind === "sword" || r.prop.kind === "gauntlet")) propLife(r.prop, p.gears || 0);   // (its berry gears: the life on it split up)
   const shoulder = D.shoulder * Bd.shoulders, hp = clamp(p.hp ?? 3, 0, Math.max(3, r.prop && r.prop.life ? lifeMax(r.prop.life) : ((r.prop && r.prop.rings) || []).length)), pr = r.prop, ps = r.spec.outfit.prop.side;
-  const gArm = !!(pr && pr.kind === "gauntlet" && giantOf(p) > .005), propS = ps === "near" || gArm ? near : ps === "left" ? -1 : 1;   // (grown, the gauntlet's arm is the one facing you)
-  if (!gArm) giantOff(r);
+  const gArm = !!(pr && pr.kind === "gauntlet" && giantOf(p) > .005), propS = ps === "near" ? near : ps === "left" ? -1 : 1;   // (grown: still her own arm, whichever way she faces)
+  if (!gArm) giantOff(r); else if (r.giant) { const k = (r.giant.idleW ?? 0) * giantAt(GIANT_CLUB, giantOf(p)).roll; if (k > 1e-3) giantRoll(r, propS * k); }   // (her shoulders over toward its weight)
   const grip = pr && pr.kind === "sword" ? clamp(o.grip || 0, 0, 1) : 0; let wristFix = 0;
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
     const i = s > 0 ? 1 : 0, isNear = s === near, st = 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
