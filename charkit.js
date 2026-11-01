@@ -2404,6 +2404,23 @@ STRIKES.pl_g4 = lng(GA.drag(GIANT_S[3], 3), { step: 780, slide: .36, wsize: 3, g
 STRIKES.pl_s2 = lng(GW.thrust(GIANT_S[1], 1), { step: 920, slide: .3, wsize: 1, giant: "sword" });
 STRIKES.pl_s3 = lng(GW.spin(GIANT_S[2], 2, 2), { step: 720, slide: .42, wsize: 2, giant: "sword" });
 STRIKES.pl_s4 = lng(GW.leap(GIANT_S[3], 3), { step: 600, wsize: 3, giant: "sword" });
+
+// Rose's too (the user, 2026-11-01: "for rose, the charge attack with heavy sword will have them jump on her sword"): crouched, the team round her; the blade drawn
+// back flat behind her, one of them up on it, then the other; let go, she swings it round and over and they're flung on off it
+Object.assign(STRIKES, {
+  gs4_tc1: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.36, .38, .36], arch: [.1, .12, .1], bodyY: [-.46, -.48, -.46], headRot: [-.2, -.18, -.2], armF: [.55, .58, .55], elbF: [.5, .5, .5], blade: [-.25, -.22, -.25], grip: [1, 1, 1],   // charge 1: down in a crouch, the blade on the ground before her
+    fNx: [.42, .42, .42], fFx: [-.46, -.46, -.46], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+  gs4_tc2: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.22, .24, .22], arch: [-.05, -.04, -.05], bodyY: [-.4, -.42, -.4], twist: [.45, .48, .45], headRot: [-.2, -.18, -.2], armF: [-.55, -.58, -.55], elbF: [.45, .45, .45], blade: [3.1, 3.12, 3.1], grip: [1, 1, 1],   // charges 2 and 3: drawn back flat behind her (they get up on it)
+    fNx: [.46, .46, .46], fFx: [-.52, -.52, -.52], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+});
+STRIKES.gs4_team = { ...GW.slash(GIANT_S[3], 3), wsize: 3, giant: "sword", step: 420, fling: .17 * GIANT_S[3], sfx2: [.26 * GIANT_S[3], "slam"], quake: [.34 * GIANT_S[3], 3],   // (the team off it as it comes round: they're there as it lands, knocking them on, not up)
+  hits: [GH(.22, .4, "cleave", GIANT_S[3], { reach: 200, back: 60, y0: 230, y1: -20, wide: true }), GH(.3, .42, "haymaker", GIANT_S[3], { reach: 240, back: 20, y0: 60, y1: -20, wide: true })],
+  keys: KZ([0, .1, .2, .3, .45, .9], { armF: [-.55, -.7, 1.6, 1.3, .7, .5], elbF: [.45, .5, .2, .1, .15, .3], blade: [3.1, 3.2, 1.6, -.2, -.7, -1.2], grip: [1, 1, 1, 1, 1, .4], twist: [.45, .52, -.1, -.5, -.4, 0],   // let go: round from behind her, over and down in front, the team flung on off it
+    lean: [.22, .14, .4, .6, .55, .3], bodyY: [-.4, -.42, -.3, -.32, -.3, -.12], fNx: [.46, .4, .56, .6, .58, .42], fFx: [-.52, -.5, -.62, -.66, -.64, -.46] }, GIANT_S[3]) };
+GIANT_SETS.sword[3].charge = ["gs4_team"]; GIANT_SETS.sword[3].teamCharge = true; GIANT_NAMES.gs4_team = "team";
+GIANT_SETS.gauntlet[3].tcPoses = ["gg4_tc1", "gg4_tc2"]; GIANT_SETS.sword[3].tcPoses = ["gs4_tc1", "gs4_tc2"];
+api.swordTop = (r, u, out) => { const pr = r.prop; if (!pr || !pr.inner) return null; pr.inner.updateWorldMatrix(true, false);   // (the top edge of the blade, u along it from the hilt: for one of them to stand on)
+  const x = .12 + u * (pr.L || 1.14), W = (pr.W || .17) * .5, a = pr.inner.localToWorld(new THREE.Vector3(x, W, 0)), b = pr.inner.localToWorld(out.set(x, -W, 0)); if (a.y > b.y) out.copy(a); return out; };
 api.LUNGES = { gauntlet: ["pl_c1", "pl_g2", "pl_g3", "pl_g4"], sword: ["pl_r1", "pl_s2", "pl_s3", "pl_s4"] };
 api.POINTS = { gauntlet: ["point_fist", "point_giant"], sword: ["point_sword", "point_sword"] };
 api.giantTop = (r, u, out) => { const G = r.giant; if (!G || !G.on) return null; G.tube.curve.getPoint(u, out); out.y += G.prof(u) * .9; r.body.updateWorldMatrix(true, false); return r.body.localToWorld(out); };   // (the top of the grown arm, for a partner to stand on)
@@ -2987,6 +3004,8 @@ function updatePoseHuman(p, dt) {
   o.fFx = lerp(o.fFx, sf[0], g); o.fFy = lerp(o.fFy, sf[1], g); o.pF = lerp(o.fP, sf[2], g); o.sF = 0;
   runLayer(p, o, ph / TAU, g);
   giantPose(p, o);                                           // (a grown weapon: hanging, dragged; a move eases out of it and back)
+  if (p.worn && a < 0) { const k = .85, sw = Math.sin(t * 2.2); o.lean += .36 * k; o.arch += .12 * k; o.headRot += (.34 + .04 * sw) * k; o.bodyY -= .05 * k;   // worn out (a partner out of hearts, 2026-11-01): bent over, head hung, arms dangling, a sway
+    o.armF = lerp(o.armF, .1 + .05 * sw, k); o.elbF = lerp(o.elbF, .2, k); o.armB = lerp(o.armB, .06 - .05 * sw, k); o.elbB = lerp(o.elbB, .2, k); o.spF = lerp(o.spF || 0, .05, k); o.spB = lerp(o.spB || 0, .05, k); }
   const SK = a >= 0 && STRIKES[p.atkKind];
   if (SK && SK.keys && !SK.screen) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (the punch and kick, keyed from their old drawn poses: eased in through the pose as they always were, not laid on raw)   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
     for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
@@ -2996,7 +3015,7 @@ function updatePoseHuman(p, dt) {
     if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
     const BB = p.block && a < 0 ? { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }.blade : undefined, bl = BB !== undefined ? BB : ST && ST.blade;
-    const PK = a < 0 && p.pointKind && STRIKES[p.pointKind];
+    const PK = a < 0 && (p.pointKind || p.tcPose) && STRIKES[p.pointKind || p.tcPose];
     if (PK && PK.keys.blade) { const sw = leadFar(p); o.wrist = keyvS(PK.keys.blade, api.time % PK.dur) - (sw ? o.armB + o.elbB : o.armF + o.elbF); }   // (pointing: the blade's own angle)
     else if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
   }
