@@ -2004,7 +2004,8 @@ function climbPose(p, cat) {
   return T;
 }
 function dodgePose(p) {                            // the back-step (2026-10-25): leaning back into the hop, the guard up, knees drawn up a little, the front foot trailing (its keys: STRIKES.backstep)
-  return poseKeys(p, p.dodge.fwd ? "fwdslide" : "backstep", p.dodge.t || 0) || {};   // (or the slide forward: block + forward, 2026-10-31)
+  const D = p.dodge, fl = D.flip && STRIKES.backflip;   // (Rose's backflip, 2026-11-01: its keys over the time she's up, however long that is)
+  return poseKeys(p, D.fwd ? "fwdslide" : fl ? "backflip" : "backstep", fl && D.T ? Math.min(1, (D.t || 0) / D.T) * STRIKES.backflip.dur : D.t || 0) || {};   // (or the slide forward: block + forward, 2026-10-31)
 }
 function zipPose(p) {                              // hanging from the zipline's trolley (the waves, 2026-10-25): both hands up on its bar, legs swinging a little under you
   const s = Math.sin(p.zipPh || 0);
