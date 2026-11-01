@@ -1402,7 +1402,7 @@ const GIANT_SWORD = [{ L: 1, W: 1, T: 1 }, { L: 1.4, W: 1.6, T: 1.25 }, { L: 1.8
 const giantAt = (tab, g) => { const i = Math.min(Math.floor(clamp(g, 0, 3)), 2), u = g - i, A = tab[i], B = tab[i + 1], o = {}; for (const k in A) o[k] = A[k] + (B[k] - A[k]) * u; return o; };   // (past the top: on along the last step, for the burst's overshoot)
 const giantOf = p => clamp(p.wsizeV ?? 0, 0, 3.5);
 api.giantOf = giantOf; api.GIANT_ARM = GIANT_ARM; api.GIANT_SWORD = GIANT_SWORD; api.giantFloor = (p, r) => giantFloor(p, r);
-const GIANT_WRIST = .9, GIANT_RING_T = .27, GIANT_BASE = .17;   // down the arm (0 the shoulder, 1 the wrist): where the rings start up from; a ring's thickness (x the arm's girth); the base above them (world units)
+const GIANT_WRIST = .9, GIANT_RING_T = .27, GIANT_BASE = .17, GIANT_UPPER = .45;   // down the arm (0 the shoulder, 1 the wrist): where the rings start up from; a ring's thickness (x the arm's girth); the base above them (world units)
 function giantArmTex(Q, skin, uB = .5, uR = .62) {   // its colours down its length: her skin to the gauntlet's top (uB), its rim, the base gold with its trim, the rings' gold under them (uR on), red at the wrist
   const [c] = cv2(64, 512), t = canvasTex(c); t.wrapS = THREE.RepeatWrapping; giantArmPaint(t, Q, skin, uB, uR); return t;
 }
@@ -1480,7 +1480,7 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
 function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
   G.on = true; G.s = s; G.grp.visible = true;
-  _gu.subVectors(E, S).multiplyScalar(c.len); _gv.subVectors(W, E).multiplyScalar(c.len);
+  _gu.subVectors(E, S).multiplyScalar(1 + (c.len - 1) * GIANT_UPPER); _gv.subVectors(W, E).multiplyScalar(c.len);   // (her own upper arm grows less than the gauntleted forearm)
   A[0].copy(S).addScaledVector(_gu, -.06);                                    // (its root a little into the shoulder)
   for (let i = 1; i <= 3; i++) A[i].copy(S).addScaledVector(_gu, i / 3);
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
@@ -1496,10 +1496,9 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
       A[i].lerp(_gx, wI); } }
   let legOut = 0; r.legs.forEach(L => L.pts.forEach(q => { legOut = Math.max(legOut, q.z * s); })); legOut += .09 * r.spec.body.limbs;   // (the near leg's outside)
   const hipY = r.hips.position.y + .05, chest = .2 * r.spec.body.girth * D.chest;
-  const keep = () => { for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
+  const keep = () => { giantBody(r, A, G, s, chest, D); for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
     if (q.y < fyK + rr * .92) q.y = fyK + rr * .92;                            // the ground: it rests on it and drags, never through it
-    if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } }   // her legs: it keeps out to her side of them
-    giantBody(r, A, G, s, chest, D); };   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
+    if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } } };   // her legs: it keeps out to her side of them   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
   G.fist = 0;   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open") G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
@@ -1526,7 +1525,7 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
 }
 // her body as the arm sees it: rounded, from her skirt's hem up past her shoulders (a capsule along hips → chest, its girth the chest's, wider down at the
 // skirt); each point of the arm (but the root, in her shoulder) pushed out of it, and where the stretch between two points dips into it, both pushed out by as much
-const _bH = new THREE.Vector3(), _bC = new THREE.Vector3(), _bD = new THREE.Vector3(), _bQ = new THREE.Vector3(), _bM = new THREE.Vector3();
+const _bH = new THREE.Vector3(), _bC = new THREE.Vector3(), _bD = new THREE.Vector3(), _bQ = new THREE.Vector3(), _bM = new THREE.Vector3(), _bW = new THREE.Vector3(), _bN = new THREE.Vector3();
 function giantBody(r, A, G, s, chest, D0 = {}) {
   const P = r.torso.pts; _bH.copy(P[0]); _bH.z = 0; _bC.copy(P[P.length - 1]); _bC.z = 0; _bD.subVectors(_bC, _bH); const L2 = Math.max(1e-4, _bD.lengthSq());   // (hips → neck, along her lean)
   const g = r.spec.body.girth || 1, rC = chest * 1.45, rW = chest * 1.3, rHem = .5 * (D0.hips || 1.25) * g, T0 = -.2, TW = .55;   // (as measured on her: chest .33 deep with its top on, waist .3, the skirt's hem .64 out)
@@ -1536,10 +1535,14 @@ function giantBody(r, A, G, s, chest, D0 = {}) {
     const rad = radAt(t) + rr * k; _bQ.subVectors(q, _bM); let d = _bQ.length(); if (d >= rad) return 0;
     if (d < 1e-4) { _bQ.set(0, 0, s); d = 1; } _bQ.multiplyScalar(1 / d); return rad - d;
   };
-  for (let it = 0; it < 3; it++) {
-    for (let i = 1; i < 7; i++) { const rr = G.prof(i / 6), dd = out(A[i], rr, .9); if (dd > 0) A[i].addScaledVector(_bQ, dd); }
-    for (let i = 1; i < 7; i++) for (const f of [.25, .5, .75]) { const q = _gx.lerpVectors(A[i - 1], A[i], f), rr = G.prof((i - 1 + f) / 6), dd = out(q, rr, .85);
-      if (dd > 0) { A[i].addScaledVector(_bQ, dd * (i === 1 ? 1.5 : 1)); if (i > 1) A[i - 1].addScaledVector(_bQ, dd * .6); } }
+  const ax = _bM, wq = _bW, n = _bN, q0 = A[0];
+  for (let it = 0; it < 8; it++) {                   // its deepest point inside her: the whole arm swung about her shoulder, that point out by as much (its shape and length kept)
+    let worst = 0;
+    for (let k = 2; k <= 24; k++) { const f = k / 4, i = Math.min(5, Math.floor(f)), q = _gx.lerpVectors(A[i], A[i + 1], f - i); if (q.distanceTo(q0) < .24) continue;   // (its root in her shoulder: as it should be)
+      const dd = out(q, G.prof(f / 6), .9); if (dd > worst) { worst = dd; wq.copy(q); n.copy(_bQ); } }
+    if (worst < .003) break;
+    _gy.subVectors(wq, q0); const L = Math.max(.2, _gy.length()); ax.crossVectors(_gy, n); if (ax.lengthSq() < 1e-8) break; ax.normalize();
+    _gq.setFromAxisAngle(ax, Math.min(.35, worst / L * 1.1)); for (let i = 1; i < 7; i++) A[i].sub(q0).applyQuaternion(_gq).add(q0);
   }
 }
 function giantRoll(r, ang) {                         // her upper body tipped over toward the arm's weight, about her hips: spine, chest, head and the shoulders' line
@@ -3438,6 +3441,7 @@ function syncHuman(p, r, dt = 0) {
   if (!gArm) giantOff(r); else if (r.giant) { const k = (r.giant.idleW ?? 0) * giantAt(GIANT_CLUB, giantOf(p)).roll; if (k > 1e-3) giantRoll(r, propS * k); }   // (her shoulders over toward its weight)
   const grip = pr && pr.kind === "sword" ? clamp(o.grip || 0, 0, 1) : 0; let wristFix = 0;
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
+    const lk = gArm && s !== propS && r.giant ? 1 + .2 * clamp(giantOf(p), 0, 1) : 1;   // (holding the grown arm: her other arm a fifth longer)
     const i = s > 0 ? 1 : 0, isNear = s === near, st = 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
     let a = isNear ? o.armF : o.armB, e = isNear ? o.elbF : o.elbB, sp = isNear ? o.spF || 0 : o.spB || 0;
     _S.set(_SB.x, _SB.y - .02, s * shoulder * gw);
@@ -3462,12 +3466,12 @@ function syncHuman(p, r, dt = 0) {
       a = lerp(a, g[0], grip); e = lerp(e, g[1], grip); sp = lerp(sp, g[2], grip);
     }
     if (gArm && s !== propS && r.giant && r.giant.grip) {           // the other hand holds the grown arm up (the user, 2026-11-01: "love camila holding her arm as it gets bigger")
-      const g = gripIK(_S, r.giant.grip, H_UA, H_FA, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); }
+      const g = gripIK(_S, r.giant.grip, H_UA * lk, H_FA * lk, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); }
     e = clamp(e, -.05, 2.8);   // (an elbow bends one way only, never back: 2026-10-31)
     const fa = a + e, fk = pr && pr.fist && s === propS ? clamp((e - .8) / .8, 0, 1) : 0; let qa = armOut(a, sp, s);   // fk: how bent the gauntlet arm is (a punch straightens it all out)
-    _E.copy(_S).addScaledVector(_ad.set(Math.sin(a), -Math.cos(a), 0).applyQuaternion(qa), H_UA * (1 + st)); _E.z += s * .03; _E.sub(_S).setLength(H_UA).add(_S);   // (the elbow nudged out, the upper arm still its own length)
+    _E.copy(_S).addScaledVector(_ad.set(Math.sin(a), -Math.cos(a), 0).applyQuaternion(qa), H_UA * lk * (1 + st)); _E.z += s * .03; _E.sub(_S).setLength(H_UA * lk).add(_S);   // (the elbow nudged out, the upper arm still its own length)
     if (fk > 0) qa = _qi.setFromAxisAngle(_ad, -s * GAUNT.inward * fk * clamp((2.6 - fa) / .5, 0, 1)).multiply(qa);   // the forearm swings in about the upper arm (not with it raised up in a block: that would put the fist in his head)
-    _W.copy(_E).addScaledVector(_ad.set(Math.sin(fa), -Math.cos(fa), 0).applyQuaternion(qa), H_FA * (1 + st)); _W.z += s * .02; _W.sub(_E).setLength(H_FA).add(_E);   // (and the forearm)
+    _W.copy(_E).addScaledVector(_ad.set(Math.sin(fa), -Math.cos(fa), 0).applyQuaternion(qa), H_FA * lk * (1 + st)); _W.z += s * .02; _W.sub(_E).setLength(H_FA * lk).add(_E);   // (and the forearm)
     const hs = D.hand * Bd.hands * (1 + st * .14) * gr;
     r.hands[i].scale.setScalar(hs);
     const t = r.arms[i];
