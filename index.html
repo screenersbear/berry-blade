@@ -41,6 +41,17 @@
   #weapon svg { display: block; }
   #weapon .wpct { font: 15px/1 "Bungee", sans-serif; color: #fff; text-align: center; margin-top: -2px; letter-spacing: .04em; text-shadow: 0 2px 0 #2f3b43, 0 0 4px #2f3b43; }   /* (its power, 25–100%: 2026-11-01) */   /* (its size: set as it's drawn, from the window's height) */
   body.wpnHud #coinHud { left: calc(var(--wpnW, 60px) + 26px); }   /* (the coins: beside the weapon) */
+  /* the uprising, left of the weapon (the user, 2026-11-02): it fills upward, a line at each checkpoint (25, 50, 75%), a colour for each level; thick, not thicker than the weapon */
+  #upBar { position: fixed; left: 14px; top: 10px; z-index: 6; width: var(--upW, 22px); height: var(--upH, 180px); opacity: 0; transition: opacity .18s; pointer-events: none; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, .35)); transform-origin: 50% 100%; }
+  #upBar.show { opacity: 1; }
+  #upBar .ub { position: absolute; inset: 0; border: 3px solid #fff; border-radius: 5px; background: rgba(47, 59, 67, .62); box-sizing: border-box; display: flex; flex-direction: column-reverse; overflow: hidden; }
+  #upBar .ub i { flex: 1; position: relative; }
+  #upBar .ub i + i { border-bottom: 2px solid #fff; }   /* (the checkpoints: column-reverse, so each one after the first sits above) */
+  #upBar .ub i::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: var(--f, 0%); background: var(--c); transition: height .45s cubic-bezier(.3, .8, .3, 1); }
+  #upBar .ub i:nth-child(1) { --c: #ffd203; } #upBar .ub i:nth-child(2) { --c: #ff8a1f; } #upBar .ub i:nth-child(3) { --c: #ff5fa8; } #upBar .ub i:nth-child(4) { --c: #c03cff; }
+  #upBar.lvl { animation: upLvl .7s; } @keyframes upLvl { 0% { transform: scale(1); } 35% { transform: scale(1.14); filter: drop-shadow(0 0 10px #ff6fb8); } 100% { transform: scale(1); } }
+  body.upHud #weapon { left: calc(14px + var(--upW, 22px) + 8px); }
+  body.upHud.wpnHud #coinHud { left: calc(var(--wpnW, 60px) + 26px + var(--upW, 22px) + 8px); }
   #hud { right: 16px; align-items: flex-end; }
   #hud .bar { margin-left: 0; margin-right: 22px; }
   #hud.low { top: 132px; }   /* (under the little map) */
@@ -636,6 +647,9 @@
   #holdTip, #hint { display: none !important; }   /* (the user, 2026-10-17: no tips about the buttons on the phone, neither the "press and hold" one nor the controls bar) */
   #weapon { left: calc(64px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); }   /* (the user, 2026-10-23: the weapon's the health, top left: here just right of the pause button) */
   body.wpnHud #coinHud { left: calc(var(--wpnW, 60px) + 76px + env(safe-area-inset-left)); }
+  #upBar { left: calc(64px + env(safe-area-inset-left)); top: calc(8px + env(safe-area-inset-top)); }   /* (the uprising bar, 2026-11-02: just right of the pause button, the weapon beside it) */
+  body.upHud #weapon { left: calc(64px + var(--upW, 22px) + 8px + env(safe-area-inset-left)); }
+  body.upHud.wpnHud #coinHud { left: calc(var(--wpnW, 60px) + 76px + var(--upW, 22px) + 8px + env(safe-area-inset-left)); }
   @media (max-height: 520px) {   /* the room banners, the exit cue and the loading name, smaller (the user, 2026-10-17) */
     #banner .blk { font-size: 26px; padding: 7px 12px 2px; } #banner .bar { font-size: 9px; margin-left: 28px; letter-spacing: .28em; }
     #exitCue .blk { font-size: 18px; } #exitCue .bar { font-size: 8px; }
@@ -774,7 +788,7 @@
 <div id="koScr"><div class="lockup big"><div class="blk">KNOCKED OUT</div><div class="bar" id="koSub">&nbsp;</div></div></div>
 <div id="fade"><div class="lockup big"><div class="bar">LOADING</div></div></div>
 <div id="proBlack"><div class="lockup big" id="proTitle"><div class="blk">BERRY WOODS</div></div></div>
-<div id="weapon"></div>
+<div id="upBar"><div class="ub"><i></i><i></i><i></i><i></i></div></div><div id="weapon"></div>
 <div id="life" class="hud lockup hidden"><div class="blk" id="pname">TOCSIN</div><div class="bar"><span id="hearts"></span></div></div>
 <canvas id="mini" class="hidden"></canvas>
 <div id="hud" class="hud lockup hidden"><div class="blk" id="ename">SIROCCO</div><div class="bar"><span id="pips"></span><span id="round">1/7</span></div></div>
@@ -6345,6 +6359,14 @@ function weaponSvg(r, hp, pow, g = bgearsOf(r.id), pg = bpowOf(r.id)) {   // (g:
     <g transform="rotate(70 70 ${cy})"><rect x="63" y="${cy - 52}" width="14" height="34" rx="7" fill="#e3141c"/></g>${ring}
     <circle cx="70" cy="${cy}" r="32" fill="${Q.orb}"/><circle cx="70" cy="${cy}" r="13" fill="#8e0008"/><circle cx="66" cy="${cy - 4}" r="21" fill="none" stroke="#fff" stroke-width="5" opacity=".95"/><circle cx="58" cy="${cy - 13}" r="4" fill="#fff"/></svg>`;
 }
+const upBarEl = document.getElementById("upBar"); let upBarKey = "", upBarT = -1;
+function syncUpBar(on, H) {                          // the uprising bar: this world's, beside the weapon (none where there isn't one: the beach)
+  const show = on && upOn(world); upBarEl.classList.toggle("show", show); document.body.classList.toggle("upHud", show); if (!show) return;
+  const u = clamp(freedNow() ? 100 : upNow(), 0, 100), key = Math.round(u * 4) + "|" + H; if (key === upBarKey) return; upBarKey = key;
+  const W = Math.round(clamp(H * .13, 18, 28)); document.body.style.setProperty("--upW", W + "px"); upBarEl.style.setProperty("--upH", H + "px");
+  [...upBarEl.querySelectorAll("i")].forEach((el, i) => el.style.setProperty("--f", clamp((u - 25 * i) / 25, 0, 1) * 100 + "%"));
+  const t = wpnTier(); if (upBarT >= 0 && t > upBarT && world === wpnWorld) { upBarEl.classList.remove("lvl"); void upBarEl.offsetWidth; upBarEl.classList.add("lvl"); } upBarT = t;   // (a checkpoint passed: it swells)
+}
 function syncWeapon(dt) {
   const p = player, pk = rig && rig.spec && rig.spec.outfit && rig.spec.outfit.prop && rig.spec.outfit.prop.kind;
   const on = mode === "play" && !!p && (pk === "sword" || pk === "gauntlet") && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && !castUp && !lvlOpen;   // (in play, whatever you're doing; not over a cutscene or a card)
@@ -6354,6 +6376,7 @@ function syncWeapon(dt) {
       const sv = weaponEl.firstElementChild, vb = sv.viewBox.baseVal, W = Math.round(H * vb.width / vb.height); sv.style.height = H + "px"; sv.style.width = W + "px"; document.body.style.setProperty("--wpnW", W + "px");
       if (hurt) { weaponEl.classList.remove("hit"); void weaponEl.offsetWidth; weaponEl.classList.add("hit"); } } }   // (a heart lost: it jolts, as the hearts pop)
   weaponEl.classList.toggle("show", on); document.body.classList.toggle("wpnHud", on);
+  syncUpBar(on, Math.round(clamp(innerHeight * .3, 140, 232)));
 }
 function updateHearts(pop) {
   { const pk = rig && rig.spec && rig.spec.outfit && rig.spec.outfit.prop && rig.spec.outfit.prop.kind; $("life").classList.toggle("wpn", pk === "sword" || pk === "gauntlet"); }   // (theirs is on the weapon, top left)
@@ -9885,6 +9908,7 @@ function updateCameo(dt) {
 }
 function enterStage(ns, back) {                      // into the room: its baddies (or not, if you've cleared it), its boss waiting
   arriveDone();                                      // (the world's two, not met yet: with you all the same)
+  if (wpnWorld !== world) { wpnWorld = world; wpnByUprise(false); }   // (into another world: the weapon as big as its uprising)
   if (bigSubOf(ns)) ns = bigEnter(ns);              // (one of the big room's screens: the big room)
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
   stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
@@ -10361,13 +10385,13 @@ function musicRestart() {                            // (the user, 2026-10-17: a
   const S = window.BerryScore; syncMusic(0); if (S && S.restart) S.restart(); try { orig.currentTime = 0; } catch (e) { }
 }
 function resetTrial() {
-  const ko = !!(player && player.dead), petHp = [pal, pal2].map(q => q ? q.php ?? PARTNER_HP : PARTNER_HP), pw0 = player ? player.power || 0 : 0;   // (knocked out: your partners don't start over full as you do, each loses a heart: the user, 2026-10-26)
+  const ko = !!(player && player.dead), petHp = [pal, pal2].map(q => q ? q.php ?? PARTNER_HP : PARTNER_HP);   // (knocked out: your partners don't start over full as you do, each loses a heart: the user, 2026-10-26)
   if (duo) { duo.forEach(d => hideFoe(d.D)); duo = null; bossIn = false; }   // (knocked out by Noro and Doir: the room starts over)
   endCameo(); if (ej && ej.phase !== "partner") ejEnd(); exitOpen = false; transit = false; $("exitCue").classList.add("hidden"); $("fade").classList.remove("on");   // (knocked out by Evil June: she's gone)
   if (player && player.bubble) { actors.remove(player.bubble.m); player.bubble.m.geometry.dispose(); player.bubble = null; }   // (the old body's bubble goes with it, no ghost left behind)
   const rx = entryX(), hp0 = entrySide === "right" && entryHi ? hiPlat() : null; player = makeState(rx, rig); player.hp = maxHp(); player.y = hp0 ? hp0.y : groundAt(rx) ?? (STAGES[stage] && STAGES[stage].deep ? (STAGES[stage].deepTop ?? DEEP_TOP + 140) + 160 : GROUND); if (STAGES[stage] && STAGES[stage].deep && groundAt(rx) === null) camBase = Y(player.y + 70); if (hp0) player.plat = hp0; if (entrySide === "right") player.face = -1; setupPal(); ejPlace(rx - player.face * 90, player.y, player.face);   // (the deep's open water: mid-water, not sinking out of the room's floor)
   rig.root.visible = rig.shadow.visible = true;
-  enemy = makeFoeState(foe, WORLD - 360); player.power = ko ? Math.max(0, pw0 - 1) : 0; player.wsizeV = player.power; player.wKills = 0;   // (knocked out: its weapon a size smaller, down to the first: the user, 2026-11-01)
+  enemy = makeFoeState(foe, WORLD - 360); player.power = wpnTier(); player.wsizeV = player.power; player.wKills = 0; wpnWorld = world;   // (its size: this world's uprising, 2026-11-02; a knock-out took a size off before)   // (knocked out: its weapon a size smaller, down to the first: the user, 2026-11-01)
   if (bigSubOf(stage)) { stage = bigEnter(stage); oppSel = STAGES[stage].foe; foe = FOES[oppSel]; }   // (starting in one of the big room's screens: the big room)
   clearHz(); const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; const done = fillRoom(); spawnEscort(bepRun.back);
   parts.forEach(q => actors.remove(q.m)); parts = []; allyRoom(); meetRoom();   // (the one found in a fight: back to its fight with the room's fresh berries)
@@ -24027,9 +24051,9 @@ function popBaddy(b) {                           // beaten: won back into a weap
   }
   b.gone = true;
   captureBaddy(b, b.byPal && ej && ej.st ? { st: ej.st, r: ej.r } : { st: player, r: rig });
-  if (!b.byPal) gainPower();
+  // (no more growing every third won back: the uprising sets its size now, below. 2026-11-02)
   if (wst) { wst.pops++; wst.caps = (wst.caps || 0) + 1; } tally("pops");
-  upAdd(b);
+  upAdd(b); wpnByUprise(true);                       // (a checkpoint of the uprising passed: the weapon grows)
 }
 // ── won back (the user, 2026-10-19): the baddy spins down into a swirl of pink light, and the light's drawn into the weapon of whoever
 // beat it (the sword's blade, the gauntlet; anyone without one, their hand)
@@ -24099,6 +24123,15 @@ function syncCaps(dt) {
 // down a stage. up until the starting stage". p.power is its size (0–3: the ATK power it replaces), p.wKills the ones won back toward the next, p.wsizeV what the
 // kit draws (eased; through a grow: gathering, the burst out past it, the spring back)
 const GROW_EVERY = 3, GROW_T = 1.0, GROW_POP = .36;   // every third won back · the whole grow · when it bursts
+// its size by this world's uprising (the user, 2026-11-02: "the berry blade and gauntlet will react to uprising level, not enemies defeated. so the size of the arm and
+// sword will change based on how many enemies defeated in the area overall. when ever you go to a new world, the size will vary depending on the uprising level"): its four
+// sizes at 0 / 25 / 50 / 75% of the world you're in. Into a world (or back after a knock-out): as big as its uprising, at once. A checkpoint passed: it grows, with its burst.
+// What still boosts it for a while (a power-up, the beps' hideout, a big heal berry, three heal berries at full health) holds till the next world or knock-out
+const wpnTier = () => !upOn(world) ? 0 : freedNow() ? 3 : (u => u >= 75 ? 3 : u >= 50 ? 2 : u >= 25 ? 1 : 0)(upNow());
+let wpnWorld = -1;
+function wpnByUprise(pop) { const p = player; if (!p) return; const t = wpnTier();
+  if (pop) { if (wpnKind(p) && t > (p.power || 0) && !p.dead) growWeapon(p, t); return; }
+  p.power = t; p.wsizeV = t; p.grow = null; p.wKills = 0; }
 const wpnLabel = () => "WEAPON SIZE: " + ((player && player.power || 0) + 1) + " OF 4 · " + POWER_PCT[player && player.power || 0] + "% POWER";
 function gainPower() {                           // one more won back into your weapon (a boss too): every third, it grows a size
   const p = player; if (!p || p.dead || (p.power || 0) >= 3) return;
@@ -24260,7 +24293,7 @@ function hitEnemy(dir, kind) {
   hitFeel(e, dir, kind, true, finB);
   puffs(e.x, e.y - e.def.h * .55, 4, 40, 200);
   if (FEEL.legacy) sparks(kind === "stomp" ? player.x : e.x - dir * 30, kind === "stomp" ? e.y - e.def.h : e.y - e.def.h * .5, 10);
-  if (e.hp <= 0) { e.dead = true; e.deathT = 0; e.vx = dir * 120; impactFrame(e.x, e.y - e.def.h * .5, true); foeVoice(e, "ko"); if (!partBlow) gainPower(); } else foeVoice(e, "hurt");
+  if (e.hp <= 0) { e.dead = true; e.deathT = 0; e.vx = dir * 120; impactFrame(e.x, e.y - e.def.h * .5, true); foeVoice(e, "ko"); } else foeVoice(e, "hurt");   // (a boss down doesn't grow it now: the uprising does, 2026-11-02)
   if (!e.dead) bossBreak(e, kind);   // (a string of blows: it breaks out of the combo)
   return true;
 }
@@ -24767,7 +24800,7 @@ function update(dt) {
   if (opening) { updateOpening(dt); shake = Math.max(0, shake - dt * 40); return; }   // the beach's opening: nobody's playing yet
   if (gift && gift.phase === "in") { updateGift(dt); updateEJ(dt); updateHazards(dt); shake = Math.max(0, shake - dt * 40); return; }   // the bep: everything waits
   if (tutor) { shake = Math.max(0, shake - dt * 40); return; }   // a lesson's page: so does everything here
-  maybeTutor(); maybeMeetVO(); maybeCard();   // (no hero lessons at Camila's rock or Rose's grass: the toast at the foot of the screen says it. The user, 2026-10-27 "let's leave out the tutorials. the warning text at the bottom is enough")
+  maybeMeetVO();   // (no tutorial comic strips any more, the lessons' pages nor the tip cards: the user, 2026-11-02 "remove all tutorial comic strips". maybeTutor / maybeCard kept, not called)   // (no hero lessons at Camila's rock or Rose's grass: the toast at the foot of the screen says it. The user, 2026-10-27 "let's leave out the tutorials. the warning text at the bottom is enough")
   if (gift) updateGift(dt);
   if (hideout) {                                   // in the beps' hideout: no fighting, just them and you
     if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);
