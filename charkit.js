@@ -1402,17 +1402,18 @@ const GIANT_SWORD = [{ L: 1, W: 1, T: 1 }, { L: 1.4, W: 1.6, T: 1.25 }, { L: 1.8
 const giantAt = (tab, g) => { const i = Math.min(Math.floor(clamp(g, 0, 3)), 2), u = g - i, A = tab[i], B = tab[i + 1], o = {}; for (const k in A) o[k] = A[k] + (B[k] - A[k]) * u; return o; };   // (past the top: on along the last step, for the burst's overshoot)
 const giantOf = p => clamp(p.wsizeV ?? 0, 0, 3.5);
 api.giantOf = giantOf; api.GIANT_ARM = GIANT_ARM; api.GIANT_SWORD = GIANT_SWORD; api.giantFloor = (p, r) => giantFloor(p, r);
-const GIANT_U = [0, .26, .5, .7, .9, 1];             // down the arm (0 the shoulder, 1 the wrist): two plates of sleeve to the elbow, two of cuff, the wrist
-function giantArmTex(Q) {                            // its skin, down its length: red sleeve plates with gold rims, the gold cuff striped in its trim with red rims, red at the wrist
-  const [c, x] = cv2(64, 512), Y = v => 512 * (1 - v), band = (v0, v1, col) => { x.fillStyle = col; x.fillRect(0, Y(v1), 64, Y(v0) - Y(v1) + 1); };
-  band(0, 1, Q.fill); band(.235, .26, Q.main); band(.475, .5, Q.main);
-  band(.5, .9, Q.main); x.fillStyle = Q.trim; for (let i = 0; i < 8; i++) x.fillRect(i * 8, Y(.9), 3, Y(.5) - Y(.9));
-  band(.68, .7, Q.fill); band(.88, .9, Q.fill);
-  const t = canvasTex(c); t.wrapS = THREE.RepeatWrapping; return t;
+const GIANT_WRIST = .9, GIANT_RING_T = .27, GIANT_BASE = .17;   // down the arm (0 the shoulder, 1 the wrist): where the rings start up from; a ring's thickness (x the arm's girth); the base above them (world units)
+function giantArmTex(Q, skin, uB = .5, uR = .62) {   // its colours down its length: her skin to the gauntlet's top (uB), its rim, the base gold with its trim, the rings' gold under them (uR on), red at the wrist
+  const [c] = cv2(64, 512), t = canvasTex(c); t.wrapS = THREE.RepeatWrapping; giantArmPaint(t, Q, skin, uB, uR); return t;
 }
-function giantArmProf(G) {                           // its girth down it: wider all the way down, each plate a little wider at its foot and the next tucked in under its rim
-  return t => { const c = G.c; let k = 1;
-    for (let i = 0; i < 5; i++) if (t >= GIANT_U[i] && t < GIANT_U[i + 1]) { const f = (t - GIANT_U[i]) / (GIANT_U[i + 1] - GIANT_U[i]); k = 1 + (i < 4 ? .07 : .02) * f * f; break; }
+function giantArmPaint(t, Q, skin, uB, uR) {
+  const x = t.image.getContext("2d"), Y = v => 512 * (1 - v), band = (v0, v1, col) => { x.fillStyle = col; x.fillRect(0, Y(v1), 64, Y(v0) - Y(v1) + 1); };
+  band(0, 1, Q.fill); band(0, uB, skin); band(uB, Math.min(1, uB + .018), Q.fill);   // (her arm, then the gauntlet's red rim)
+  band(uB + .018, GIANT_WRIST, Q.main); x.fillStyle = Q.trim; for (let i = 0; i < 8; i++) x.fillRect(i * 8, Y(GIANT_WRIST), 3, Y(uB + .018) - Y(GIANT_WRIST));   // (gold with its trim, as her gauntlet's cuff)
+  band(GIANT_WRIST - .02, GIANT_WRIST, Q.fill); t.needsUpdate = true;
+}
+function giantArmProf(G) {                           // its girth down it: wider all the way down; her own arm a little slimmer above the gauntlet, its top edge flared out (as her gauntlet's cuff)
+  return t => { const c = G.c, uB = G.uB ?? .5, f = (t - uB) / .07; let k = t < uB ? .86 : f < 1 ? 1 + .13 * (1 - f) * (1 - f) : 1;
     return rounded((c.r0 + (c.r1 - c.r0) * Math.pow(t, 1.15)) * k, t, .05, .012); };
 }
 function buildGiantHand(parent, M, P, Q) {           // its hand (the user's pictures: fingers like rounded-off rectangles). The gauntlet's frame: the wrist at the origin,
@@ -1445,11 +1446,11 @@ function giantHandPose(H, c, ts, pt = 0) {            // c: 0 open (dragged alon
   H.thumbs.forEach(T => { const on = T.s === ts; T.g.visible = on; if (!on) return; T.g.rotation.set(ts * lerp(.55, -.35, c), 0, lerp(.25, 1.05, c)); T.m.rotation.z = lerp(.12, 1.1, c); });
 }
 function giantArmBuild(r) {                          // (once, the first time it grows)
-  const pr = r.prop, G = { c: { ...GIANT_ARM[1] }, grp: group(r.body), rings: [], ringsOf: null, fist: 0, on: false };
-  G.prof = giantArmProf(G); G.mat = pr.M("#ffffff", { map: giantArmTex(pr.Q) });
+  const pr = r.prop, G = { c: { ...GIANT_ARM[1] }, grp: group(r.body), rings: [], ringsOf: null, fist: 0, on: false, skin: (r.spec.colors && r.spec.colors.skin) || "#f2c3a3" };
+  G.prof = giantArmProf(G); G.tex = giantArmTex(pr.Q, G.skin); G.mat = pr.M("#ffffff", { map: G.tex });
   G.tube = new Tube(G.grp, 7, 56, 28, G.prof, G.mat);
   G.hand = buildGiantHand(G.grp, pr.M, pr.P, pr.Q);
-  G.ringGeo = [new THREE.TorusGeometry(1, .125, 10, 40), new THREE.TorusGeometry(1, .07, 8, 40)];   // a ring, and a split one's halves
+  G.ringGeo = [new THREE.TorusGeometry(1, GIANT_RING_T, 12, 40), new THREE.TorusGeometry(1, GIANT_RING_T / 2, 10, 40)];   // a ring, and a split one's halves (each half as thick: the two together one ring)
   pr.glowMats.push(G.hand.mats[1], G.hand.mats[2]);  // (full health: its gold and its orb glow, as the gauntlet's do)
   if (api.onGiant) api.onGiant(r, G.grp);
   return G;
@@ -1461,14 +1462,20 @@ function giantFloor(p, r) {                          // the ground under her, in
   return r.body.worldToLocal(_gw).y;
 }
 const o_rise = p => (p.out && p.out.rise ? p.out.rise * (p.rig.spec.body.scale || 1) : 0);
-function giantRings(G, pr) {                         // her hearts: the gauntlet's own rings (their colours, gone white when lost: the same materials), spread down the forearm and bigger
+function giantRings(G, pr) {                         // her hearts: the gauntlet's own rings (their colours, gone white when lost: the same materials), thick, stacked up from the wrist one on the next
   if (G.ringsOf !== pr.rings) {
     G.rings.forEach(m => G.grp.remove(m)); G.ringsOf = pr.rings;
-    const ys = pr.rings.map(m => m.position.y), y0 = Math.max(...ys), y1 = Math.min(...ys);
     G.rings = pr.rings.map(m => { const split = m.geometry.parameters && m.geometry.parameters.tube < .015, R = pr.P(G.ringGeo[split ? 1 : 0], m.material);
-      R.userData.u = lerp(.54, .88, y0 - y1 > 1e-4 ? (y0 - m.position.y) / (y0 - y1) : .5); G.grp.add(R); return R; });
+      R.userData.split = split; R.userData.y = m.position.y; G.grp.add(R); return R; }).sort((a, b) => a.userData.y - b.userData.y);   // (the one by the hand first, as on her gauntlet)
   }
-  G.rings.forEach(R => { const u = R.userData.u; G.tube.curve.getPoint(u, _gv); G.tube.curve.getTangent(u, _gu); R.position.copy(_gv); R.quaternion.setFromUnitVectors(ZAX, _gu); R.scale.setScalar(G.prof(u) * 1.03); });
+  const A = G.tube.pts; let L = 0; for (let i = 1; i < A.length; i++) L += A[i].distanceTo(A[i - 1]); L = Math.max(L, .05);
+  let u = GIANT_WRIST;
+  G.rings.forEach(R => { const h = (R.userData.split ? .5 : 1) * GIANT_RING_T * 1.03, th = 2 * h * G.prof(u - h * G.prof(u) / L) / L;   // (its thickness along the arm, where it sits)
+    const uc = u - th / 2; R.userData.u = uc; u -= th;
+    G.tube.curve.getPoint(uc, _gv); G.tube.curve.getTangent(uc, _gu); R.position.copy(_gv); R.quaternion.setFromUnitVectors(ZAX, _gu); R.scale.setScalar(G.prof(uc) * 1.03); });
+  const uB = clamp(u - GIANT_BASE / L, .08, .8);      // (the base above them: short; above that, her arm)
+  G.uB = G.uB === undefined ? uB : G.uB + (uB - G.uB) * .35;
+  if (Math.abs((G.uBp ?? -1) - G.uB) > .006) { G.uBp = G.uB; giantArmPaint(G.tex, pr.Q, G.skin, G.uB, u); }
 }
 function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
@@ -1512,8 +1519,9 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
   for (const [x, y, z] of [[.06, -.19, .1], [.06, -.19, -.1], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), .08], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), -.08], [-.06, -.12, 0]]) lo = Math.min(lo, _gv.set(x, y, z).applyMatrix4(H.g.matrix).y);
   if (lo < fyK + .004) { const d = Math.min(.25, fyK + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
   G.tube.update(FWD); giantRings(G, pr);
-  G.tube.curve.getPoint(.32, _gv); G.tube.curve.getTangent(.32, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
-  G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(.32) * .95);   // where her other hand holds it: on top of it, a little toward her (so it shows, either way she faces)
+  const ug = clamp((G.uB ?? .5) + .035, .2, .8);     // (where her other hand holds it: the gauntlet's base, just under its rim)
+  G.tube.curve.getPoint(ug, _gv); G.tube.curve.getTangent(ug, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
+  G.grip = (G.grip || new THREE.Vector3()).copy(_gv).addScaledVector(_gw, G.prof(ug) * .95);   // where her other hand holds it: on top of it, a little toward her (so it shows, either way she faces)
   G.tip = (G.tip || new THREE.Vector3()).copy(A[6]).addScaledVector(_gx, .3 * hs);
 }
 function giantRoll(r, ang) {                         // her upper body tipped over toward the arm's weight, about her hips: spine, chest, head and the shoulders' line
@@ -1532,7 +1540,7 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
   pr.group.position.z += s * .045 * Math.min(g, 3);
 }
-// its weight dragging her back as she runs (the user, 2026-11-01: "camila leans back when running, like the weight of the arm is pulling her back (which I love)
+// its weight dragging her back as she runs, Camila's arm and Rose's blade alike (the user, 2026-11-01: "camila leans back when running, like the weight of the arm is pulling her back (which I love)
 // ... let's just make that more intentional. although it would also be great to have it change a little when you turn aroudn. so it goes between two approaches of
 // changing momentum"): running, leant back over her heels, none at the first size and more as it grows, whichever way she faces; and a turn at speed in two beats,
 // first the arm's still going the old way and yanks her back, then she leans in and hauls it round the new way, then back to the drag
@@ -1550,9 +1558,10 @@ function giantPose(p, o) {                           // not in a move: too heavy
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
-  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); giantDrag(p, o, g, run, air); }   // (like a club leant on the ground behind her, out at her side)
+  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); }   // (like a club leant on the ground behind her, out at her side)
   else if (air || run > .3) { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
   else { o[A] = lerp(o[A], .3, w); o[E] = lerp(o[E], 1.55, w); o[Sp] = lerp(o[Sp] || 0, .2, w); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
+  giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
   const st = w * (1 - (p.gaitAmt || 0)) * (air ? 0 : 1); if (st < .01) return;
