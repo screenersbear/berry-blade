@@ -183,64 +183,76 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", tk_wheel: "cartwheel", tk_wheel2: "second cartwheel", tk_wheelfall: "up off it, spinning, sword crashing down", tackle_wheel: "cartwheel tackle", tkdig_wheel: "dig in (held): loose, turned to you", slide: "slide", flykick: "flying kick",
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch (half moon)", dn_sword: "down swing", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
-  fwdslide: "slide forward", fidget_hood: "fidget: the hood", fidget_look: "fidget: looking round", fidget_stretch: "fidget: a stretch", fidget_flex: "fidget: the gauntlet", fidget_blade: "fidget: the blade",
+  fidget_hood: "fidget: the hood", fidget_look: "fidget: looking round", fidget_stretch: "fidget: a stretch", fidget_flex: "fidget: the gauntlet", fidget_blade: "fidget: the blade",
   tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pincho_poke: "nose jab", pincho_drill: "nose drill", caracol_bonk: "head bonk", caracol_roll: "shell roll", mordi_punch: "face-fist punch", mordi_chomp: "shark bite",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", tic_swing: "X slam", tac_swing: "ring slam", tic_toss: "X toss", tac_toss: "ring toss", pk_toss: "pencil toss", veji_lash: "tail lash whirl", estrella_belt: "high note", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
 const GIANT_LAB = { hook: "heavy hook", back: "backhand", slam: "overhead slam", scoop: "scoop up", sweep: "sweep round", drag: "dragged up and over", airSwing: "air swing", airHammer: "air hammer",
   up: "uppercut", down: "fist first, straight down", haymaker: "haymaker", haymaker_b: "haymaker (forward)", rocket_b: "rocket punch (forward)", c1: "charge 1", c2: "charge 2", c3: "charge 3",
-  slash: "heavy slash", chop: "overhead chop", rise: "rising cut", airChop: "air chop", thrust_b: "thrust (forward)", team: "the team punch" };   // (the grown weapons' moves, 2026-11-01)
+  slash: "heavy slash", chop: "overhead chop", rise: "rising cut", airChop: "air chop", thrust_b: "thrust (forward)", team: "the team's blow" };   // (the grown weapons' moves, 2026-11-01)
 Object.assign(MOVE_NAMES, { point_fist: "pointing them at it", point_sword: "pointing them at it, the sword", point_giant: "pointing them at it, the big hand", gg4_tc1: "team charge 1: crouched, the team round her",
-  gg4_tc2: "team charge 2 and 3: the arm cocked back, they get on it", gs4_tc1: "team charge 1: crouched, the team round her", gs4_tc2: "team charge 2 and 3: the blade drawn back flat, they get on it", tc_hands: "(a partner) hands on her shoulders", tc_ride: "(a partner) on her arm", pl_c1: "lunge (size 1)", pl_g2: "lunge (size 2)", pl_g3: "lunge (size 3)", pl_g4: "lunge (size 4)",
-  pl_r1: "lunge (size 1)", pl_s2: "lunge (size 2)", pl_s3: "lunge (size 3)", pl_s4: "lunge (size 4)" });
+  gg4_tc2: "team charge 2 and 3: the arm cocked back, they get on it", gs4_tc1: "team charge 1: crouched, the team round her", gs4_tc2: "team charge 2 and 3: the blade drawn back flat, they get on it", tc_hands: "hands on her shoulders", tc_ride: "up on her arm (or her blade)", pl_c1: "lunge (size 1)", pl_g2: "lunge (size 2)", pl_g3: "lunge (size 3)", pl_g4: "lunge (size 4)",
+  pl_r1: "lunge (size 1)", pl_s2: "lunge (size 2)", pl_s3: "lunge (size 3)", pl_s4: "lunge (size 4)", uphop: "crouch, then the jump up", upcoil: "the coil, knees tucked", console_sit: "sat with the console" });
 Object.entries(KIT.GIANT_NAMES || {}).forEach(([k, n]) => { const z = (KIT.STRIKES[k] || {}).wsize || 1, w = KIT.STRIKES[k].giant === "sword" ? "blade" : "arm";
   MOVE_NAMES[k] = `size ${z + 1} ${w}: ${GIANT_LAB[n] || n}`; });
 const setFor = sp => (G.setOf && G.setOf(sp)) || KIT.MOVESETS[sp.move.set] || KIT.MOVESETS.brawler;   // the moves as the game plays them: a hero's own combo (Camila's, Rose's) over her set's (the user, 2026-10-24: "it shows the old animations for camilas two ground attacks")
-function movesFor(sp) {                                          // every move this character plays, by what you press, in play order: [move, label, group]
-  const out = [], add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
+// the move list: [move, label, group, list, size]. list: the one it's under (MOVE_LISTS, picked beside it); size: the weapon size it plays at (0-3, as the game's
+// p.power), null for any (the one picked by the name plate), "grown" for any but the first. The list shows the moves the game plays at the size picked there,
+// one list at a time (the user, 2026-11-01: "condense places of it where possible based on what we are actually using")
+const MOVE_LISTS = { atk: "Attacks", tk: "Tackles", pt: "Partners", etc: "Other" };
+const sizeOk = (m, z) => m[4] === null || m[4] === z || (m[4] === "grown" && z >= 1);
+function movesFor(sp) {                                          // every move this character plays, by what you press, in play order
+  const out = []; let L0 = "atk", Z = null;
+  const at = (l, z) => { L0 = l; Z = z; }, add = (g, k, lab, T) => { if (k && T[k] && T[k].keys) out.push([k, lab, g, L0, Z]); }, list = (g, L, T) => (L || []).forEach((k, i) => add(g, k, `${i + 1}`, T));
   if (cur && cur.buddy && cur.spec === sp && cur.buddy.startsWith("pet-")) { add("Special (every couple of pounces)", (KIT.PET_SP || {})[cur.buddy.slice(4)], "", KIT.CAT_MOVES); return out; }   // (the pets: their pounce is the game's own, their special keyed)
   const TK = KIT.TK_CHARGE || {};                                // (a move used in more than one place shows in each: it's the one move, edited once)
   if (sp.base === "cat") { const C = KIT.CAT_MOVES;
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
-    add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Tackle (attack + block)", "tackle", "", C);
-    add("Charged tackle (hold attack + block)", "tkdig", "", C); list("Charged tackle (hold attack + block)", TK.cat, C); add("Back-step (block + back)", "backstep", "", C);
-    add("In the bubble: hold block to pop it", "pop_reach", "", C);
-    add("Attack while running at full speed", "carddash", "", C);
+    add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Attack while running at full speed", "carddash", "", C);
+    at("tk", null); add("Tackle (V / □)", "tackle", "", C); add("Charged tackle (hold V / □)", "tkdig", "", C); list("Charged tackle (hold V / □)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
+    at("etc", null); add("In a bubblegum bubble: hold block to pop it", "pop_reach", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
   const bsp = (KIT.BUDDY_SP || {})[sp.id];                       // (a berry buddy's special, every couple of plain hits: work.html updateAllyOne)
-  if (cur && cur.buddy && cur.spec === sp) { list("Attack", (KIT.BUDDY_PLAIN || {})[sp.id] || ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); return out; }   // (its own plain hits: Rotor's shot)
+  const team = () => { at("pt", null); add("Team charge (her weapon at full size)", "tc_hands", "", T); add("Team charge (her weapon at full size)", "tc_ride", "", T); };   // (a partner's part in it: work.html, the team charge's partners)
+  if (cur && cur.buddy && cur.spec === sp) { list("Attack", (KIT.BUDDY_PLAIN || {})[sp.id] || ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); team(); return out; }   // (its own plain hits: Rotor's shot)
+  at("atk", 0);                                                  // (the first size's attacks; a grown weapon's, its own: below)
   list("Attack", S.ground, T); list("Forward + attack", S.groundB || S.ground, T);
   list("Attack in the air", S.air1 || S.air, T); list("Forward + attack in the air", S.air2 || S.air, T);
-  list("Up + attack", S.upChain || [S.up], T); add("Up + attack, attack again: the crouch and jump up after them", "uphop", "", T); add("Up + attack in the air: the coil before it", "upcoil", "", T); add("Up + attack in the air", S.up, "", T); add("Down + attack in the air", S.down, "", T);   // (uphop: before the launch's second hit, 2026-10-28 · the down one had been stranded in this comment)
-  add("Down + attack", "slide", "", T); list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
+  list("Up + attack", S.upChain || [S.up], T); add("Up + attack, attack again: the crouch and jump up after them", "uphop", "", T); Z = null; add("Up + attack in the air: the coil before it", "upcoil", "", T); Z = 0; add("Up + attack in the air", S.up, "", T); add("Down + attack in the air", S.down, "", T);   // (uphop: before the launch's second hit, 2026-10-28 · the down one had been stranded in this comment)
+  Z = null; add("Down + attack", "slide", "", T); Z = 0; list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
+  Z = null; add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
-  add("Tackle (attack + block)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold attack + block)", wheel ? "tkdig_wheel" : "tkdig", "", T);
-  list("Charged tackle (hold attack + block)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block + back)", "backstep", "", T); add("Slide forward (block + forward)", "fwdslide", "", T);
-  list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
-  add("In the bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
-  add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
+  at("tk", null); add("Tackle (V / □)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold V / □)", wheel ? "tkdig_wheel" : "tkdig", "", T);
+  list("Charged tackle (hold V / □)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
+  at("etc", null); list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
+  add("In a bubblegum bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
   add("Through a low hole (C7's wall into C8)", "crawl", "", T);   // (on hands and knees, one cycle of crawlPh: 2026-10-28)
   add("Playing the BERRY CONSOLE (sat, legs out in front)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
-  add("As a berry buddy: special", bsp, "", T);
+  at("pt", null); add("As a berry buddy: special", bsp, "", T); if (bsp) team();   // (a hero who's a partner too: Noro, Dorys)
   const wk = ((sp.outfit || {}).prop || {}).kind, GS = (KIT.GIANT_SETS || {})[wk];   // the weapon grown (every 3 baddies won back: 2026-11-01), by size: as the game picks them (work.html KIT.giantSet)
-  if (GS) [1, 2, 3].forEach(z => { const g = GS[z], L = `Weapon size ${z + 1} (${["", "50", "75", "100"][z]}%): `; if (!g) return;
-    list(L + "attack", g.ground, T); list(L + "forward + attack", g.groundB, T); list(L + "attack in the air", g.air1, T);
-    add(L + "up + attack", g.up, "", T); add(L + "down + attack in the air", g.down, "", T); list(L + "charge (hold attack)", g.charge, T);
-    if (g.teamCharge) { const TP = g.tcPoses || ["gg4_tc1", "gg4_tc2"], w = wk === "sword" ? "her sword" : "her arm"; add(L + "charge 1: the team round her", TP[0], "", T); add(L + "charges 2 and 3: on " + w, TP[1], "", T); add(L + "the team, round her", "tc_hands", "", T); add(L + "the team, on " + w, "tc_ride", "", T); } });
+  if (GS) [1, 2, 3].forEach(z => { const g = GS[z]; if (!g) return; at("atk", z);
+    list("Attack", g.ground, T); list("Forward + attack", g.groundB, T); list("Attack in the air", g.air1, T);
+    add("Up + attack", g.up, "", T); add("Down + attack in the air", g.down, "", T); list("Charge (hold attack)", g.charge, T);
+    if (g.teamCharge) { const TP = g.tcPoses || ["gg4_tc1", "gg4_tc2"]; add("Charge (hold attack): the team in it", TP[0], "level 1", T); add("Charge (hold attack): the team in it", TP[1], "levels 2 and 3", T); } });
   if (GS) { const P = KIT.POINTS[wk] || [], LU = KIT.LUNGES[wk] || [];   // holding a partner's button: pointing them at it; let go after three charges: her lunge, by size (2026-11-01)
-    add("Holding a partner's button: pointing them at it", P[0], "", T); if (P[1] !== P[0]) add("Holding a partner's button (weapon grown): pointing them at it", P[1], "", T);
-    LU.forEach((k, z) => add(`Holding a partner's button, let go after 3 charges: lunge, weapon size ${z + 1}`, k, "", T)); }
+    at("pt", P[1] !== P[0] ? 0 : null); add("Holding a partner's button: pointing them at it", P[0], "", T); if (P[1] !== P[0]) { Z = "grown"; add("Holding a partner's button: pointing them at it", P[1], "", T); }
+    LU.forEach((k, z) => { Z = z; add("Holding a partner's button, let go after 3 charges", k, "", T); }); }
   return out;
 }
+let wsize = 0, listOf = "atk", MV = { all: [], shown: [] };   // the weapon size picked by the name plate (0-3, as the game's p.power) · the move list shown · the lists, as last filled
+const wpnKind = (sp = cur.spec) => { const k = (((sp || {}).outfit || {}).prop || {}).kind; return !cur.buddy && sp.base !== "cat" && sp.base !== "villain" && (KIT.GIANT_SETS || {})[k] ? k : null; };   // (the ones whose weapon grows: a hero's gauntlet or sword)
+const wsz = () => wpnKind() ? wsize : 0;
+const moveSize = k => { const m = MV.shown.find(m => m[0] === k) || MV.all.find(m => m[0] === k && sizeOk(m, wsz())) || MV.all.find(m => m[0] === k); return m && typeof m[4] === "number" ? m[4] : wsz(); };
+const atkSet = () => { const k = wpnKind(), g = k && wsz() >= 1 && KIT.GIANT_SETS[k][wsz()]; return g ? { ground: g.ground, air: g.air1 || g.air } : setFor(cur.spec); };   // (ATTACK / AIR ATTACK under the stage: that size's, as the game swaps them in)
 function driveMove(p, dt) {
   KIT.time += dt;
-  const kind = moveKind(), S = moveDef(kind); if (!S) return;
+  const kind = moveKind(), S = moveDef(kind), z = moveSize(kind); if (!S) return;
   tl.t += dt; if (tl.t > S.dur + .45) tl.t = 0;                 // a short rest between loops
   const u = tl.t <= S.dur ? tl.t : -1;
-  Object.assign(p, { keysFull: true, atkIdx: 0, y: GROUND, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false, wsizeV: S.wsize || 0, power: S.wsize || 0 }, moveAt(kind, S, u));   // (wsizeV: a grown weapon's move, at its size)
+  Object.assign(p, { keysFull: true, atkIdx: 0, y: GROUND, vy: 0, hp: 3, hurtT: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, bounceT: -1, block: false, sprint: false, wsizeV: z, power: z }, moveAt(kind, S, u));   // (wsizeV: a grown weapon's move at its size; the rest, the tackles, at the size picked)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   p.prof = approach(p.prof || 0, 1, dt * 10); p.bodyYaw = lerp(.85, .3, p.prof); p.yaw = lerp(p.yaw, -p.bodyYaw, 1 - Math.exp(-dt * 16));
   KIT.updatePose(p, dt); p.x = 0;
@@ -556,11 +568,23 @@ function drive(p, dt) {
   p.keysFull = false;
   KIT.time += dt; animT += dt;
   const cat = p.rig.kind === "cat", mv = p.rig.spec.move;
+  p.wsizeV = p.power = wsz();                                    // (the weapon at the size picked: at rest, dragged as she runs, carried through a jump)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   let target = 0;
   if (anim === "run") target = 300 * mv.speed;
   if (anim === "dash") target = 450 * mv.speed;
-  p.sprint = anim === "dash"; p.block = anim === "block";
+  if (anim === "turn") { if (animT > 1.6) { animT = 0; p.face = -(p.face || 1); p.pivotT = 4 / 60; } target = 300 * mv.speed * p.face; }   // running, round at speed and back (the skid, COMBAT FEEL's 4-frame pivot; grown, the weapon's yank and haul)
+  if (anim === "worn") target = animT % 3 < 2 ? 120 : 0;         // a partner out of hearts: only a slow walk after you (work.html, worn)
+  if (anim === "gbreak" && animT > 2.6) animT = 0;
+  const gbUp = anim === "gbreak" && animT < 1;                   // a guard broken (work.html guardBreak): knocked back reeling .3 s, dazed .45 s more, no guard 1.3 s
+  if (anim === "gbreak" && !gbUp && !p.gbDone) { p.gbDone = true; Object.assign(p, { hurtT: .3, tired: .75, vx: -320, vy: -200, onGround: false, bounceT: -1 }); } else if (gbUp) p.gbDone = false;
+  p.tired = Math.max(0, (p.tired || 0) - dt); p.worn = anim === "worn";
+  if (anim === "coil") {                                         // CHARGE! with ↑ held (a partner): crouched, lower the longer it's held, then the jump (work.html chgCoil / chgHold)
+    if (animT < 1.2) { p.crouch = p.onGround; if (p.onGround) { p.sq = Math.min(p.sq || 0, -.08 - .16 * animT / 1.2); p.sqv = 0; } }
+    else if (p.crouch) { p.crouch = false; p.vy = -760 * Math.sqrt(mv.jump); p.onGround = false; p.sq = .22; p.sqv = 0; }
+    else if (animT > 2.4 && p.onGround) animT = 0;
+  } else p.crouch = false;
+  p.sprint = anim === "dash"; p.block = anim === "block" || gbUp;
   if (anim === "jump" && p.onGround && animT > .55) {
     animT = 0; p.vy = -830 * Math.sqrt(mv.jump); p.onGround = false; p.sq = .3; p.sqv = 0; p.bounceT = -1; p.airJumps = Math.random() < .5 ? 1 : 0;
   }
@@ -570,7 +594,7 @@ function drive(p, dt) {
   } else p.hp = 3;
   p.hurtT = Math.max(0, p.hurtT - dt);
   if (anim === "attack" || anim === "air") {        // the character's own moves: first strike, then the follow-up (Tocsin: card swim, then card swirl)
-    const SET = cat ? { ground: KIT.CAT_GROUND, air: KIT.CAT_AIR } : setFor(cur.spec), air = anim === "air";
+    const SET = cat ? { ground: KIT.CAT_GROUND, air: KIT.CAT_AIR } : atkSet(), air = anim === "air";
     const go = (kind, idx) => { const S = moveDef(kind); p.atkKind = kind; p.atkIdx = idx; p.atkT = 0; p.sq = S.sq ?? -.1; p.sqv = 0;
       if (p.onGround) { p.vx = S.step || 0; if (S.hop) { p.vy = S.hop; p.onGround = false; } } };
     if (air && p.onGround && p.atkT < 0 && animT > .9) { animT = 0; p.vy = -830 * Math.sqrt(mv.jump); p.onGround = false; p.sq = .3; p.sqv = 0; p.airDone = false; }
@@ -580,13 +604,15 @@ function drive(p, dt) {
       const S = moveDef(p.atkKind), pa = p.atkT; p.atkT += dt;
       if (S.dive && pa < S.dive[0] && p.atkT >= S.dive[0] && !p.onGround) p.vy = Math.max(p.vy, S.dive[1]);
       if (S.landEnd && p.onGround && p.atkT > .12) p.atkT = -1;
-      else if (p.atkIdx === 0 && p.atkT >= (S.chain ?? S.dur)) go((p.onGround ? SET.ground : SET.air)[1], 1);
+      else if (p.atkIdx === 0 && p.atkT >= (S.chain ?? S.dur) && (p.onGround ? SET.ground : SET.air)[1]) go((p.onGround ? SET.ground : SET.air)[1], 1);   // (the biggest weapon's air: one blow)
       else if (p.atkT >= S.dur) p.atkT = -1;
     }
   } else p.atkT = -1;
   const attacking = p.atkT >= 0, MV = attacking ? moveDef(p.atkKind) : null;
   if (attacking && p.onGround && !(MV && MV.slide && p.atkT < MV.slide)) p.vx = approach(p.vx, 0, 2600 * dt);
   else if (!(attacking && Math.abs(p.vx) > 140)) p.vx = approach(p.vx, target, (p.onGround ? 2600 : 1700) * dt * (attacking ? .5 : 1));
+  p.skid = anim === "turn" && p.onGround && Math.abs(p.vx) > 110 && Math.sign(p.vx) !== p.face;   // (as work.html: still going the old way, turned round)
+  if (p.pivotT > 0) p.pivotT -= dt;
   if (!p.onGround) {
     let g = 2200; if (p.vy > 0) g *= 1.15;
     if (attacking) g *= MV && MV.grav != null ? MV.grav : .55;
@@ -600,8 +626,8 @@ function drive(p, dt) {
   const diving = attacking;
   p.prof = approach(p.prof || 0, Math.max(p.onGround ? p.gaitAmt : 0, diving ? 1 : 0), dt * (diving ? 10 : 4));
   p.bodyYaw = lerp(.85, .3, p.prof);
-  p.yaw = lerp(p.yaw, -p.bodyYaw, 1 - Math.exp(-dt * 16));
-  const accel = dt > 0 ? (p.vx - p.prevVx) / dt : 0; p.prevVx = p.vx;
+  p.yaw = lerp(p.yaw, p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, 1 - Math.exp(-dt * (p.pivotT > 0 ? 45 : 16)));   // (facing the other way: round through facing you, quick in a pivot)
+  const accel = dt > 0 ? (p.vx - p.prevVx) / dt * (p.face || 1) : 0; p.prevVx = p.vx;
   p.accLeanV += ((clamp(accel * .00011, -.32, .28) * (p.onGround ? 1 : .3) - p.accLean) * 140 - p.accLeanV * 14) * dt;
   p.accLean += p.accLeanV * dt;
   KIT.updatePose(p, dt);
@@ -628,21 +654,45 @@ canvas.addEventListener("wheel", e => { e.preventDefault(); zoomBy(Math.exp(e.de
 $("zoomSeg").addEventListener("click", e => { const b = e.target.closest("button"); if (!b) return; if (b.dataset.z) zoomBy(b.dataset.z === "in" ? 1 / 1.3 : 1.3); else if (b.dataset.f) setFocus(b.dataset.f); });
 $("bTurn").onclick = () => { turn = !turn; $("bTurn").classList.toggle("on", turn); $("bTurn").setAttribute("aria-pressed", turn); };
 function setAnim(a) {
-  anim = a; animT = 9; st.atkT = -1; tl.t = 0; Object.assign(st, { tackle: null, tackleK: 0, tkCharge: null, tkDig: 0, dodge: null });   // (out of a game-driven move)
+  anim = a; animT = 9; st.atkT = -1; tl.t = 0; Object.assign(st, { tackle: null, tackleK: 0, tkCharge: null, tkDig: 0, dodge: null, face: 1, pivotT: 0, skid: false, worn: false, tired: 0, crouch: false, gbDone: false });   // (out of a game-driven move, a turn, a guard break)
+  if (a === "turn" || a === "coil" || a === "gbreak") animT = 0;
   [...$("anim").querySelectorAll("[data-a]")].forEach(x => x.classList.toggle("on", x.dataset.a === a));
   $("tlMove").value = isMove() ? moveKind() : ""; renderKeys();
   if (tab === "ANIMATE") renderControls();
 }
 $("anim").addEventListener("click", e => { const b = e.target.closest("[data-a]"); if (b) setAnim(b.dataset.a); });
 // ── timeline controls
-function fillMoves() {
-  const ms = movesFor(cur.spec), sel = $("tlMove"), n = {}, groups = [];
-  ms.forEach(([k, , g]) => { n[k] = (n[k] || 0) + 1; if (!groups.includes(g)) groups.push(g); });
+function fillMoves(follow = true) {                             // follow: a move playing from another list brings its list up
+  const all = MV.all = movesFor(cur.spec), z = wsz(), here = all.filter(m => sizeOk(m, z)), n = {}, sel = $("tlMove"), ls = $("tlList");
+  const own = m => m[3] === "atk" && typeof m[4] === "number"; if (z >= 1) here.sort((a, b) => own(b) - own(a));   // (grown: that size's own attacks first, then the ones played at any size)
+  all.forEach(([k]) => { n[k] = (n[k] || 0) + 1; });
+  const lists = Object.keys(MOVE_LISTS).filter(l => here.some(m => m[3] === l)), mine = isMove() && here.find(m => m[0] === moveKind());
+  if (follow && mine && listOf !== "all" && mine[3] !== listOf) listOf = mine[3];
+  if (listOf !== "all" && !lists.includes(listOf)) listOf = lists[0] || "atk";
+  ls.hidden = lists.length < 2; ls.innerHTML = lists.map(l => `<option value="${l}">${MOVE_LISTS[l]}</option>`).join("") + `<option value="all">All moves</option>`; ls.value = listOf;
+  const ms = MV.shown = listOf === "all" ? here : here.filter(m => m[3] === listOf), groups = [...new Set(ms.map(m => m[2]))];
   const opt = ([k, lab]) => `<option value="${k}">${lab ? lab + " · " : ""}${MOVE_NAMES[k] || k}${n[k] > 1 ? " (shared)" : ""}</option>`;   // (shared: the same move plays in another combo too)
   sel.innerHTML = `<option value="">Pick a move to edit…</option>` + groups.map(g => `<optgroup label="${g}">${ms.filter(m => m[2] === g).map(opt).join("")}</optgroup>`).join("");
   if (isMove() && !ms.some(([k]) => k === moveKind())) setAnim("idle"); else sel.value = isMove() ? moveKind() : "";
 }
 $("tlMove").onchange = () => setAnim($("tlMove").value ? "move:" + $("tlMove").value : "idle");
+$("tlList").onchange = () => { listOf = $("tlList").value;          // another list: if a move's playing that isn't in it, its first one plays
+  const z = wsz(), L = MV.all.filter(m => sizeOk(m, z) && (listOf === "all" || m[3] === listOf));
+  if (isMove() && L.length && !L.some(m => m[0] === moveKind())) setAnim("move:" + L[0][0]); fillMoves(false); if (tab === "ANIMATE") renderControls(); };
+// on the stage: what this one can show (the weapon's sizes: a hero with a gauntlet or a sword; a guard break: the ones you play; worn out, the wind-up: partners)
+function animBar() {
+  const sp = cur.spec, partner = !!cur.buddy || !!(KIT.BUDDY_SP || {})[sp.id], show = { hero: !cur.buddy, partner, worn: partner && sp.base !== "cat" };   // (worn out: a pet has no pose for it, only the slow walk)
+  [...$("anim").querySelectorAll("[data-who]")].forEach(b => { b.hidden = !show[b.dataset.who]; });
+  $("wSize").hidden = !wpnKind(); [...$("wSize").querySelectorAll("[data-w]")].forEach(b => { b.classList.toggle("on", +b.dataset.w === wsz()); b.setAttribute("aria-pressed", +b.dataset.w === wsz()); });
+  $("anim").querySelector('[data-a="block"]').title = cur.buddy ? "The defender's guard: block (S / L1) puts it in front of you" : "The guard (S / L1)";
+  const on = $("anim").querySelector(`[data-a="${anim}"]`); if (on && on.hidden) setAnim("idle");
+}
+function setWsize(z) {                                           // a weapon size: the stage and the moves at it; a move playing goes to the same one at that size, if it has one
+  if (z === wsize) return; wsize = z; st.wsizeV = st.power = wsz(); tl.nudge = true;
+  if (isMove()) { const m = MV.all.find(m => m[0] === moveKind()); if (m && !sizeOk(m, wsz())) { const L = MV.all.filter(q => sizeOk(q, wsz()) && q[3] === m[3]), q = L.find(q => q[2] === m[2] && q[1] === m[1]) || L.find(q => q[2] === m[2]) || L[0]; setAnim(q ? "move:" + q[0] : "idle"); } }
+  animBar(); fillMoves(); renderKeys(); if (tab === "ANIMATE" || tab === "POSE") renderControls();
+}
+$("wSize").addEventListener("click", e => { const b = e.target.closest("[data-w]"); if (b) setWsize(+b.dataset.w); });
 function setPaused(v, redraw = true) { const was = tl.paused; tl.paused = v; $("tlPlay").textContent = v ? "▶" : "❚❚"; $("tlPlay").setAttribute("aria-label", v ? "Play (space)" : "Pause (space)"); if (redraw && was !== v && tab === "ANIMATE") renderControls(); }
 $("tlPlay").onclick = () => setPaused(!tl.paused);
 let spaceDown = false;
@@ -672,7 +722,8 @@ let lastTarget = "";
 setInterval(() => { if (tab !== "ANIMATE" || isMove() || !isEdOpen()) return; const tg = editTarget(), k = tg ? tg.name + (tg.type === "cycle" ? Math.round(tg.u * 100) : "") : "-"; if (k !== lastTarget) { lastTarget = k; renderControls(); } }, 300);
 $("tlPrev").onclick = () => stepBy(-1 / 60); $("tlNext").onclick = () => stepBy(1 / 60);
 $("tlSpd").onclick = e => { const b = e.target.closest("[data-s]"); if (!b) return; tl.speed = +b.dataset.s; [...$("tlSpd").children].forEach(x => x.classList.toggle("on", x === b)); };
-const loopLen = () => anim === "run" || anim === "dash" ? null : anim === "idle" || anim === "block" ? TAU / 2.6 : anim === "attack" ? 1.4 : anim === "air" ? 1.6 : anim === "jump" ? 1.1 : 1.3;
+const LOOPS = { attack: 1.4, air: 1.6, jump: 1.1, turn: 1.6, gbreak: 2.6, worn: 3, coil: 2.4 };
+const loopLen = () => anim === "run" || anim === "dash" ? null : anim === "idle" || anim === "block" ? TAU / 2.6 : LOOPS[anim] || 1.3;
 function scrubTo(u) {                                           // u = 0..1 along the bar
   setPaused(true);
   if (isMove()) tl.t = u * moveDef(moveKind()).dur;
@@ -763,7 +814,7 @@ function frame(now) {
   rig.shadow.position.set(0, .02, 0); rig.shadow.scale.setScalar(clamp(1 - hgt / 7, .3, 1) * sc);
   ring.scale.setScalar(sc * (1 + .04 * Math.sin(KIT.time * 4)));
   if (turn) camYaw += dt * .5;
-  camLift = lerp(camLift, hgt * .55, 1 - Math.exp(-dt * 4));
+  camLift = lerp(camLift, hgt, 1 - Math.exp(-dt * 12));   // (up with a jump: a double jump's flip, and the weapon carried through it, in view)
   camFocusK = lerp(camFocusK, FOCUS[camFocus][0], 1 - Math.exp(-dt * 6));
   const h = (rig.kind === "cat" ? 1.2 : 1.05) * sc * (1 + camFocusK) + camLift, d = camDist * (.7 + .3 * sc);   // (the part looked at: up or down from the middle)
   camera.position.set(Math.sin(camYaw) * Math.cos(camPitch) * d, h + Math.sin(camPitch) * d, Math.cos(camYaw) * Math.cos(camPitch) * d);
@@ -786,6 +837,7 @@ function stageSpec(s, commit = true) {
   if (commit) { cur.undo.push(cur.committed || JSON.stringify(cur.spec)); if (cur.undo.length > 80) cur.undo.shift(); cur.redo = []; }
   cur.spec = KIT.normalize(s); pending = cur.spec;
   if (commit) cur.committed = JSON.stringify(cur.spec);
+  { const mk = [((cur.spec.outfit || {}).prop || {}).kind, cur.spec.move.set, cur.spec.move.tackle].join(); if (mk !== cur.moveKey) { cur.moveKey = mk; animBar(); fillMoves(); } }   // (the held item, the move set: what's listed, the weapon sizes)
   scheduleSave(cur); renderCastItem(cur); updateFoot();
 }
 function beginDrag() { if (!cur.committed) cur.committed = JSON.stringify(cur.spec); }
@@ -904,7 +956,7 @@ function renderTabs() {
 }
 $("tabs").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if (!b) return; tab = b.dataset.t; renderTabs();
   if (tab === "POSE") { setPaused(false, false); setAnim(poseWhich === "guard" ? "block" : "idle"); setPoseMode(true); }
-  if (tab === "ANIMATE") { if (!isMove()) { const ms = movesFor(cur.spec); if (ms.length) setAnim("move:" + ms[0][0]); tl.t = .35 * (moveDef(moveKind()) || { dur: 0 }).dur; } setPaused(true, false); setPoseMode(true); }
+  if (tab === "ANIMATE") { if (!isMove()) { const ms = MV.shown.length ? MV.shown : movesFor(cur.spec); if (ms.length) setAnim("move:" + ms[0][0]); tl.t = .35 * (moveDef(moveKind()) || { dur: 0 }).dur; } setPaused(true, false); setPoseMode(true); }
   renderControls(); });
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; };
 let ctlN = 0;
@@ -1029,8 +1081,9 @@ function renderPose(box) {
   const seg = el("div", "opts"); [["stance", "Standing"], ["guard", "Block"]].forEach(([k, lab]) => { const b = el("button", "chip" + (k === poseWhich ? " on" : ""), lab); b.type = "button";
     b.onclick = () => { poseWhich = k; setAnim(k === "guard" ? "block" : "idle"); renderControls(); }; seg.append(b); });
   const r0 = el("div", "row"); r0.append(seg); box.append(r0);
-  box.append(el("p", "note", (poseWhich === "guard" ? "How they hold their guard when blocking (C in the game). " : "How they stand when nothing's happening (they keep breathing on top of it). ")
+  box.append(el("p", "note", (poseWhich === "guard" ? "How they hold their guard when blocking (S / L1 in the game). " : "How they stand when nothing's happening (they keep breathing on top of it). ")
     + "Drag the yellow dots on the character: hands, feet, hips, the middle of the back (bends the spine there), head" + (sp.outfit.prop.kind === "sword" ? ", sword tip" : "") + ". To reach an arm or a leg out to the side, turn the camera to face them (VIEW mode) and drag the hand or foot sideways in POSE mode. Drag anywhere else on the stage to turn the camera. The sliders fine-tune; double-click a label to put it back."));
+  if (wsz() >= 1) box.append(el("p", "note", grownNote()));
   const chans = [...(cat ? C_POSE : H_POSE), ...(!cat && sp.outfit.prop.kind === "sword" ? [["blade", "Sword angle"]] : [])];
   chans.forEach(([ch, lab]) => {
     const R = KIT.POSE_CH[ch], path = `move.${key}.${ch}`, v = own[ch] ?? base[ch] ?? 0;
@@ -1043,12 +1096,13 @@ function renderPose(box) {
   const a = el("div", "addrow"), b = el("button", "chip", poseWhich === "guard" ? "RESET BLOCK POSE" : "RESET STANDING POSE"); a.append(b);
   b.onclick = () => { const t = clone(cur.spec); t.move[key] = {}; stageSpec(t); renderControls(); }; box.append(a);
 }
+const grownNote = () => `Weapon size ${wsz() + 1}: the game plants ${wpnKind() === "sword" ? "her under the big blade" : "her under the big arm"} and holds it its own way, over the standing pose and the run. To pose her own, pick WEAPON 1 by her name.`;
 // undo / redo / reset, for whatever animation is on stage
 function resetInfo() {
-  const S = setFor(cur.spec), cat = cur.spec.base === "cat";
+  const S = atkSet(), cat = cur.spec.base === "cat";
   const moves = list => n => list.forEach(k => { delete n.move.anims[k]; delete n.move.rests[k]; });
   if (isMove()) return { label: (MOVE_NAMES[moveKind()] || moveKind()).toUpperCase(), apply: moves([moveKind()]) };
-  if (anim === "run" || anim === "dash") return { label: "RUN", apply: n => { delete n.move.anims.run; } };
+  if (anim === "run" || anim === "dash" || anim === "turn") return { label: "RUN", apply: n => { delete n.move.anims.run; } };
   if (anim === "jump") return { label: "JUMP", apply: n => { n.move.rise = {}; n.move.top = {}; n.move.fall = {}; } };
   if (anim === "attack") return { label: "ATTACKS", apply: moves(cat ? KIT.CAT_GROUND : S.ground) };
   if (anim === "air") return { label: "AIR ATTACKS", apply: moves(cat ? KIT.CAT_AIR : S.air) };
@@ -1086,6 +1140,7 @@ function renderAnimate(box) {
     box.append(el("p", "note", "Pause any animation (space), drag the timeline or tap ← → to a moment, then drag the yellow dots in POSE mode (F switches)."
       + (tg ? ` Right now that changes: ${tg.name}${tg.type === "cycle" ? ` at ${Math.round(tg.u * 100)}% of the stride (sprint uses the same run)` : ""}.` : " This moment can't be posed: pause where they're mid-move."
       ) + " To keyframe a single move with sliders, pick it in the list under the stage."));
+    if (wsz() >= 1 && ["idle", "run", "dash", "turn", "jump"].includes(anim)) box.append(el("p", "note", grownNote()));
     if (anim === "run" || anim === "dash") {
       const sr = el("div", "row"), sl = el("label", null, "Blend into nearby frames"), so = el("output", null, spread > 0 ? `±${Math.round(Math.min(.45, spread * 2) * 100)}% of the stride` : "THIS MOMENT ONLY");
       const si = Object.assign(document.createElement("input"), { type: "range", min: 0, max: .3, step: .01, value: spread }); si.style.setProperty("--fill", (spread / .3 * 100) + "%");
@@ -1186,7 +1241,7 @@ function renderOutfit(box) {
   box.append(el("h3", null, "Held item"));
   box.append(chipsRow("outfit.prop.kind", "Item", KIT.PROPS));
   if (O.prop.kind !== "none") {
-    box.append(el("p", "note", "Its three colored sections are the character's health in the game: one empties with each hit."));
+    box.append(el("p", "note", "Its three colored sections are the character's health in the game: one empties with each hit." + (wpnKind() ? " It grows as baddies are won back (four sizes): pick WEAPON 1 to 4 by the name on the stage to see it grown, in these colours." : "")));
     box.append(chipsRow("outfit.prop.side", "Hand", KIT.PROP_SIDES, { right: "right hand", left: "left hand", near: "camera side" }), rangeRow("outfit.prop.size", "Size"));
     Object.entries(PROP_LABELS[O.prop.kind]).forEach(([k, lab]) => box.append(colorRow(`outfit.prop.${k}`, lab)));
   }
@@ -1409,7 +1464,7 @@ function renderAll() {
   $("kindBar").textContent = cur.spec.base === "cat" ? "CREATURE" : cur.spec.body.build === "tall" ? "HERO" : "HERO · CHIBI";
   if (isVillainSpec(cur.spec)) $("kindBar").textContent = "VILLAIN";
   if (cur.buddy) $("kindBar").textContent = cur.buddy.startsWith("pet-") ? "PET · MOVES" : "BERRY BUDDY · MOVES";
-  fillMoves(); renderKeys();
+  animBar(); fillMoves(); renderKeys();
   showRef();
 }
 async function showRef() {
@@ -1828,6 +1883,12 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .readout {position: absolute; left: 30px; bottom: 120px; font: 600 10px var(--body); letter-spacing: .3em; color: var(--slate); opacity: .6; text-transform: uppercase; font-variant-numeric: tabular-nums; }
 #ed .anim {position: absolute; left: 50%; bottom: 62px; transform: translateX(-50%); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 32px); }
 #ed .anim .btn.on {background: var(--slate); color: var(--mango); }
+#ed .anim [hidden], #ed .tl [hidden] {display: none !important; }
+#ed .plate .wsize {display: flex; gap: 3px; align-items: center; margin: 8px 0 0 26px; }
+#ed .plate .wsize[hidden] {display: none; }
+#ed .plate .wsize b {font: 600 11px var(--body); letter-spacing: .08em; color: var(--slate); margin-right: 5px; }
+#ed .plate .wsize .btn {min-width: 30px; text-align: center; }
+#ed .plate .wsize .btn.on {background: var(--slate); color: var(--mango); }
 #ed .dock {position: absolute; left: 16px; right: 16px; bottom: 12px; display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; }
 #ed .dock > * {pointer-events: auto; }
 #ed .dock .readout, #ed .dock .anim {position: static; transform: none; }
@@ -1835,8 +1896,12 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .tl {width: 100%; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; }
 #ed .tl select {font: 600 11px var(--body); letter-spacing: .08em; text-transform: uppercase; color: var(--slate); background: var(--mango); border: 2px solid var(--slate); border-radius: 0; padding: 6px 4px; max-width: 190px; }
 #ed .tl .btn {min-width: 32px; text-align: center; }
+#ed .tl #tlList {max-width: 124px; flex: 0 1 auto; min-width: 0; }
+#ed .tl #tlMove {flex: 2 1 150px; min-width: 0; }
+#ed .tl .br {flex-basis: 100%; height: 0; order: 8; }
+#ed .tl .spd {order: 10; }
 #ed .tl .btn.on {background: var(--slate); color: var(--mango); }
-#ed .tlbar {position: relative; flex: 1 1 100%; order: 9; height: 26px; background: var(--slate); cursor: ew-resize; touch-action: none; }
+#ed .tlbar {position: relative; flex: 1 1 200px; order: 9; height: 26px; background: var(--slate); cursor: ew-resize; touch-action: none; }
 #ed .tlbar .fill {position: absolute; left: 0; top: 0; bottom: 0; background: rgba(255, 210, 3, .3); pointer-events: none; }
 #ed .tlbar .head {position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1px; background: var(--mango); pointer-events: none; }
 #ed .tlbar .key {position: absolute; top: 5px; width: 16px; height: 16px; margin-left: -8px; padding: 0; border: 3px solid var(--slate); background: var(--paper); transform: rotate(45deg) scale(.75); cursor: pointer; z-index: 2; }
@@ -1994,6 +2059,8 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed .readout {bottom: 116px; }
 #ed .tl {flex-wrap: wrap; }
 #ed .tl select {max-width: 100%; }
+#ed .tl .br {display: none; }
+#ed .tlbar {flex-basis: 100%; order: 11; }
 }
 @media (prefers-reduced-motion: reduce) {
 #ed #busy .scan::after {animation: none; top: 50%; }
@@ -2029,7 +2096,7 @@ const ED_MARKUP = `<div class="app">
       </div>
       <div class="vf"><i></i><i></i><i></i><i></i></div>
       <div class="handles" id="handles" hidden><svg class="onion" aria-hidden="true"><g id="ghosts"></g><g id="ring" display="none"><path class="ro"/><path class="ro"/><path class="ri"/><path class="ri"/><polygon class="rh"/><polygon class="rh"/><ellipse class="ringhit"/></g></svg></div>
-      <div class="plate"><input id="name" maxlength="14" aria-label="Character name" spellcheck="false"><div class="bar" id="kindBar">HERO</div></div>
+      <div class="plate"><input id="name" maxlength="14" aria-label="Character name" spellcheck="false"><div class="bar" id="kindBar">HERO</div><span class="wsize" id="wSize" role="group" aria-label="Weapon size" hidden><b>WEAPON</b><button class="btn small" data-w="0" title="Weapon size 1 (as it starts)">1</button><button class="btn small" data-w="1" title="Weapon size 2 (50%)">2</button><button class="btn small" data-w="2" title="Weapon size 3 (75%)">3</button><button class="btn small" data-w="3" title="Weapon size 4 (100%)">4</button></span></div>
       <figure id="ref" hidden><img alt="Reference drawing"><figcaption>REFERENCE</figcaption></figure>
       <div class="dock">
       <div class="docktop"><div class="readout" id="readout"></div>
@@ -2039,16 +2106,21 @@ const ED_MARKUP = `<div class="app">
       </div>
       <div class="anim" id="anim">
         <button class="btn small on" data-a="idle">IDLE</button><button class="btn small" data-a="run">RUN</button><button class="btn small" data-a="dash">SPRINT</button>
+        <button class="btn small" data-a="turn" title="Running, then turned round at speed and back: the skid and the pivot (the weapon grown: its yank, then the haul round)">RUN + TURN</button>
         <button class="btn small" data-a="jump">JUMP</button><button class="btn small" data-a="attack">ATTACK</button>
-        <button class="btn small" data-a="air">AIR ATTACK</button><button class="btn small" data-a="hurt">HURT</button><button class="btn small" data-a="block">BLOCK</button>
+        <button class="btn small" data-a="air">AIR ATTACK</button>
+        <button class="btn small" data-a="hurt">HURT</button><button class="btn small" data-a="block">BLOCK</button>
+        <button class="btn small" data-a="gbreak" data-who="hero" title="The guard up, then broken by a big one's blow: knocked back reeling, dazed, the guard down a while">GUARD BREAK</button>
+        <button class="btn small" data-a="worn" data-who="worn" title="A partner out of hearts: bent over, only a slow walk after you">WORN OUT</button>
+        <button class="btn small" data-a="coil" data-who="partner" title="CHARGE! with the jump held: crouched, wound up, then the jump to the spot">WIND-UP</button>
         <button class="btn small" id="bTurn" aria-pressed="false">TURNTABLE</button>
       </div>
       <div class="tl" id="tl">
-        <select id="tlMove" aria-label="Move to play on the timeline"></select>
+        <select id="tlList" aria-label="Which moves to list"></select><select id="tlMove" aria-label="Move to play on the timeline"></select>
         <button class="btn small" id="tlPlay" aria-label="Pause">❚❚</button>
         <button class="btn small" id="tlPrev" aria-label="Back one frame">◀</button><button class="btn small" id="tlNext" aria-label="Forward one frame">▶</button>
         <div class="tlbar" id="tlBar" aria-label="Timeline: drag to scrub"><div class="fill" id="tlFill"></div><div class="band" id="tlBand" hidden></div><div id="tlHits"></div><div id="tlKeys"></div><div class="head" id="tlHead"></div></div>
-        <output id="tlTime">LOOP</output>
+        <output id="tlTime">LOOP</output><i class="br" aria-hidden="true"></i>
         <div class="spd" id="tlSpd"><button class="btn small on" data-s="1">1×</button><button class="btn small" data-s=".5">½×</button><button class="btn small" data-s=".25">¼×</button><button class="btn small" data-s=".1">⅒×</button></div>
       </div>
       </div>
