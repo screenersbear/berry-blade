@@ -694,7 +694,7 @@
 <div id="title" class="hidden"><div class="lockup big"><div class="blk">BERRY BLADE</div><div class="bar">PROTOTYPE</div></div><div class="press">TAP TO START</div></div>
 <div id="menu" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">BERRY BLADE</div><div class="bar">MAIN MENU</div></div>
-  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button><button data-m="voices">GAME LOG</button><button data-m="set">GAME SETTINGS</button></div>
+  <div class="btns" id="mbtns"><button data-m="new">NEW GAME</button><button data-m="load">LOAD GAME</button><button data-m="quick">QUICK PLAY</button><button data-m="voices">GAME LOG</button><button data-m="set">GAME SETTINGS</button></div>
   <small data-pad="↑ ↓ to choose &middot; {j} to pick">↑ ↓ to choose &middot; Enter to pick</small>
 </div></div>
 <button id="gear" aria-label="Developer options" title="Developer options"><svg viewBox="0 0 32 32" aria-hidden="true"><g fill="currentColor"><path d="M14 2h4l1 4.2a10 10 0 0 1 2.6 1.1l3.7-2.3 2.8 2.8-2.3 3.7a10 10 0 0 1 1.1 2.6L31 14v4l-4.2 1a10 10 0 0 1-1.1 2.6l2.3 3.7-2.8 2.8-3.7-2.3a10 10 0 0 1-2.6 1.1L18 31h-4l-1-4.2a10 10 0 0 1-2.6-1.1l-3.7 2.3-2.8-2.8 2.3-3.7A10 10 0 0 1 5.1 19L1 18v-4l4.2-1a10 10 0 0 1 1.1-2.6L4 6.7l2.8-2.8 3.7 2.3A10 10 0 0 1 13 5.1Z"/></g><circle cx="16" cy="16" r="5" fill="#ffd203"/></svg></button>
@@ -5872,7 +5872,7 @@ function padMarks() {                                // the pick on a screen tha
   const MB = [...$("modal").querySelectorAll(".btns button")]; MB.forEach(b => b.classList.toggle("on", padUse && modalOpen && b === MB.filter(q => q.offsetParent !== null)[modalSel]));
   const LB = [...$("lvlList").querySelectorAll("button")]; LB.forEach((b, i) => b.classList.toggle("on", (padUse || lvlKey) && lvlOpen && i === lvlSel));
 }
-function lvlBack() { if (lvlAsk) { lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; } if (lvlW !== -1) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was >= 0 ? was : WORLDS.length; padMarks(); SFX.tick(); } else closeLvl(); }   // (out of a world's rooms: back to the worlds; from there, closed)
+function lvlBack() { if (lvlAsk && lvlAsk.kind === "quick") { lvlAsk = null; closeLvl(); showMainMenu(); return; } if (lvlAsk) { lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; } if (lvlW !== -1) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was >= 0 ? was : WORLDS.length; padMarks(); SFX.tick(); } else closeLvl(); }   // (out of a world's rooms: back to the worlds; from there, closed)
 let lvlKey = false;                                  // (the arrow keys in the level select: its pick marked, as on a pad. The user, 2026-10-25: "you cant use your arrows to make selectiosn")
 function lvlPad(pr) {                                // the level select: ← → ↑ ↓ through it (as laid out), ✕ to go there, □ back a step
   lvlMove(pr("l") ? -1 : pr("r") ? 1 : 0, padRep("u") ? -1 : padRep("d") ? 1 : 0);
@@ -6534,11 +6534,11 @@ function dbgGo() {
   const s = dbgPick.sel; dbgPick = null; closePause(); SFX.confirm(); rideAbort();   // (stopped by the road on La Guagua: off it, then there. The user, 2026-10-27: WORLD MAP and DEBUG in the pause menu there too)
   if (story) storyRun(world, s, false); else levelGo(world, "room", s);
 }
-// QUICK PLAY (DEBUG; the user, 2026-11-01: "add a quick play mode that's in debug and just opens a map screen with baddies and platforms for player to test animations. should
+// QUICK PLAY (the main menu's, since the user, 2026-11-01: "quickplay should be in the main game menu not pause menu"; first, the user: "add a quick play mode that's in debug and just opens a map screen with baddies and platforms for player to test animations. should
 // be almost like a smash brothers stage, isolated"): one room of this world's own look, flat ground and its platforms up in the air the Smash way (two low at the sides, two
 // in the middle, one up top), no way out of it, five of this world's baddies small to big, a fresh lot each time they're all won back. Nothing else happens in it (no sad
-// berries, meetings, cameos, Evil June, patrols, trapdoors), it isn't saved or put on the map, and the same DEBUG button takes you back to the room you came from
-let quickFrom = null, quickRefill = 0; const QUICK_CAM = { z: 1.65, y: 8.55, look: 5.9, follow: .5 };   // (how far back, x CAM_Z; the camera's height and where it looks, units over the ground; how far after you it goes off the middle)
+// berries, meetings, cameos, Evil June, patrols, trapdoors), it isn't saved or put on the map, and the pause menu's HOME SCREEN or QUIT GAME takes you out of it, as any free play does
+let quickRefill = 0; const QUICK_CAM = { z: 1.65, y: 8.55, look: 5.9, follow: .5 };   // (how far back, x CAM_Z; the camera's height and where it looks, units over the ground; how far after you it goes off the middle)
 const quickOn = () => !!(STAGES[stage] && STAGES[stage].quick);
 function quickMake() {
   const W = STAGES, q0 = W[0] || {}, kinds = {};
@@ -6557,16 +6557,12 @@ function quickPut(x, face) {                         // you (and the team) stood
   palsPut({ x: x - face * 60, y: gy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null });
   camX = X(x); camStand = camBase = Y(gy) + camUpOf(); camLift = 0; camLook = 0; exitOpen = false; $("exitCue").classList.add("hidden");
 }
-function quickEnter() {
-  if (!player || mode !== "play" || quickOn() || hideout || stronghold || arena) { toast("QUICK PLAY: NOT FROM HERE", 2000); return; }
-  const from = { s: stage, x: player.x, face: player.face || 1 };
-  swapUnderFade(() => { clearFriends(); clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap(); ejEnd();
-    const i = quickMake(); quickFrom = from; quickRefill = 0; roomsDone.delete(i); entrySide = "left"; entryHi = false; level.s = -2; setScreen(i); quickPut(1280, 1); enterStage(i, true); }, "QUICK PLAY");
+function showQuick() {                              // the main menu's QUICK PLAY: who's going (the level select's own last step)
+  closeMenus(); story = null; showLvl(); lvlAsk = { w: 0, kind: "quick", a: 0 }; drawLvl(); lvlSel = 1 + Math.max(0, GEAR_HEROES.indexOf(lvlHero)); padMarks();
 }
-function quickLeave() {
-  if (!quickOn()) return; const F = quickFrom || { s: 0, x: 200, face: 1 };
-  swapUnderFade(() => { clearBaddies(); clearFriends(); clearGifts(); hideFoe(foe); clearHz();
-    const s = F.s < STAGES.length && STAGES[F.s] && !STAGES[F.s].quick ? F.s : 0; quickFrom = null; entrySide = "left"; entryHi = false; level.s = -2; setScreen(s); quickPut(F.x ?? 200, F.face); enterStage(s, true); });
+function quickStart(hero) {                          // free play in Berry Woods, and straight into the stage
+  levelGo(0, "room", 0, hero); clearFriends(); clearGifts(); hideFoe(foe); clearHz(); endCameo(); clearTrap();
+  const i = quickMake(); quickRefill = 0; roomsDone.delete(i); entrySide = "left"; entryHi = false; level.s = -2; setScreen(i); quickPut(1280, 1); enterStage(i, true);
 }
 function quickTick(dt) {                             // all won back: a fresh lot
   if (!quickOn() || transit) { quickRefill = 0; return; }
@@ -6644,7 +6640,7 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dquick", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dquick" ? (quickOn() ? "LEAVE QUICK PLAY" : "QUICK PLAY: A TEST STAGE") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
@@ -6666,7 +6662,6 @@ function pauseChoose(what) {
     const b = $("pbtns").querySelector('[data-p="dup"]'); if (b) b.textContent = upLabel(); return; }
   if (what === "dback") { SFX.tick(); dbgPick = null; dbgTeam = null; $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("debug")); drawPauseMap(); return; }
   if (what === "dreset") { closePause(); SFX.confirm(); debugResetRoom(); return; }
-  if (what === "dquick") { closePause(); SFX.confirm(); if (quickOn()) quickLeave(); else quickEnter(); return; }   // (QUICK PLAY, 2026-11-01)
   if (what === "ach") { SFX.confirm(); showAch(); return; }               // over the pause menu; closing it comes back here
   if (what === "w_team") { SFX.confirm(); showTeam(); return; }           // (the team: who's with you, more about each)
   if (what === "vlog") { SFX.confirm(); showVlog("pause"); return; }
@@ -6908,7 +6903,7 @@ function drawLvlRide() {                             // La Guagua: the stop, the
 }
 function drawLvlWho() {                              // (the last step: CAMILA or ROSE, the one who went last time picked first)
   const L = $("lvlList"); L.classList.remove("worlds"); L.classList.add("rooms"); L.scrollTop = 0;
-  const nm = lvlAsk.kind === "ride" ? "LA GUAGUA" : WORLDS[lvlAsk.w].name;
+  const nm = lvlAsk.kind === "ride" ? "LA GUAGUA" : lvlAsk.kind === "quick" ? "QUICK PLAY" : WORLDS[lvlAsk.w].name;
   L.innerHTML = `<div class="lvTop"><button data-back="2">‹ ${nm}</button></div><h4>WHO'S GOING?</h4><div class="lvWho">` + GEAR_HEROES.map(h => `<button data-hero="${h}">${(roster.find(q => q.id === h) || { name: h }).name.toUpperCase()}</button>`).join("") + `</div>`;
   $("lvlWho").textContent = "FOR TESTING · " + nm + " · WHO'S GOING?";
 }
@@ -6927,8 +6922,9 @@ $("lvlList").addEventListener("click", e => { const p = e.target.closest("[data-
   const rd = e.target.closest("[data-road]");
   if (rd) { const [a, b2] = rd.dataset.road.split("-").map(Number), i = lvlSel, st = $("lvlList").scrollTop; lvlRoad = lvlRoad[0] === a && lvlRoad[1] === b2 ? [b2, a] : [a, b2]; drawLvl(); $("lvlList").scrollTop = st; lvlSel = i; padMarks(); SFX.tick(); return; }   // (a road: picked; picked again, the other way)
   if (hb && lvlAsk && lvlAsk.kind === "ride") { const A = lvlAsk, [f, to] = lvlRoad; lvlAsk = null; lvlHero = hb.dataset.hero; levelGo(f, "room", 0, lvlHero); rideForce = RIDE_STOPS[A.a][0] || null; startRide(f, to, () => goWorldNow(to)); return; }   // (La Guagua: from the first room of the road's one end, on down it)
+  if (hb && lvlAsk && lvlAsk.kind === "quick") { lvlAsk = null; lvlHero = hb.dataset.hero; quickStart(lvlHero); return; }   // (QUICK PLAY, from the main menu)
   if (hb && lvlAsk) { const A = lvlAsk; lvlAsk = null; lvlHero = hb.dataset.hero; levelGo(A.w, A.kind, A.a, lvlHero); return; }   // (who's going: picked, off they go)
-  if (bk && bk.dataset.back === "2") { lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; }   // (back from who's going to the world's rooms)
+  if (bk && bk.dataset.back === "2") { if (lvlAsk && lvlAsk.kind === "quick") { lvlAsk = null; closeLvl(); showMainMenu(); return; } lvlAsk = null; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); return; }   // (QUICK PLAY's: back to the main menu)   // (back from who's going to the world's rooms)
   if (p) { lvlW = +p.dataset.pick; lvlSel = 0; drawLvl(); padMarks(); SFX.tick(); } else if (bk) { const was = lvlW; lvlW = -1; drawLvl(); lvlSel = was >= 0 ? was : WORLDS.length; padMarks(); SFX.tick(); }
   else if (t) { lvlAsk = { w: +t.dataset.w, kind: t.dataset.k, a: +t.dataset.a }; drawLvl(); lvlSel = 1 + Math.max(0, GEAR_HEROES.indexOf(lvlHero)); padMarks(); SFX.tick(); } });   // (a room picked: then who's going)
 $("lvl").addEventListener("click", e => { if (e.target.id === "lvl") closeLvl(); });
@@ -7495,7 +7491,7 @@ function devChoose(d) {
   else if (d === "dimp") debugFileIn();     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
   else showSettings();                              // (BACK: to GAME SETTINGS, where it's opened from)
 }
-function mainChoose(m) { SFX.confirm(); if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else showSlots(m); }
+function mainChoose(m) { SFX.confirm(); if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else if (m === "quick") showQuick(); else showSlots(m); }
 // game settings: the music and the sound effects, on or off (kept on this device)
 const SET_KEY = "berry.settings.v1", MUTED = new URLSearchParams(location.search).has("mute");
 function settingsGet() { try { return { music: true, sfx: true, shake: true, flash: true, ...JSON.parse(localStorage.getItem(SET_KEY) || "{}") }; } catch { return { music: true, sfx: true, shake: true, flash: true }; } }
