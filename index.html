@@ -9881,6 +9881,7 @@ function updateCameo(dt) {
   spring(s, dt); updatePose(s, dt);
 }
 function enterStage(ns, back) {                      // into the room: its baddies (or not, if you've cleared it), its boss waiting
+  arriveDone();                                      // (the world's two, not met yet: with you all the same)
   if (bigSubOf(ns)) ns = bigEnter(ns);              // (one of the big room's screens: the big room)
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
   stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
@@ -12702,7 +12703,7 @@ function dressAlly(r, id) {                        // what the kit can't make: B
 }
 const RIG_KEEP = 4;
 function rigsInUse() { const S = new Set(), add = r => { if (r) S.add(r); }, crew = L => (L || []).forEach(m => add(m.r));
-  allies.forEach(a => { add(a.r); crew(a.crew); }); if (allyHere) { add(allyHere.r); crew(allyHere.crew); } if (meet) { add(meet.r); crew(meet.crew); }
+  allies.forEach(a => { add(a.r); crew(a.crew); }); if (allyHere) { add(allyHere.r); crew(allyHere.crew); } arrive.forEach(M => { add(M.r); crew(M.crew); }); if (meet) { add(meet.r); crew(meet.crew); }
   meetQ.forEach(M => add(M.r)); [tamed, tamed2].forEach(t => t && add(t.r)); strays.forEach(q => add(q.r)); if (wild) add(wild.r); return S; }
 function rigPrune() {                               // (before a new one's built: the oldest of those not with you, not waiting, not on their way home, let go)
   if (castUp || rideS) return; const use = rigsInUse(), idle = [];
@@ -12752,7 +12753,7 @@ const shoreX = x => { const SW = !(rideS && rideS.play) && STAGES[stage] && STAG
 const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" : "") + (arena ? ":ar" : "");
 const allyHide = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); };
 const allyShow = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = true; }); };
-function alliesOff() { allies.forEach(allyHide); allyHide(allyHere); allies = []; allyHere = null; allyBring = null; }   // (a new game, the title, the character screen, the level select)
+function alliesOff() { allies.forEach(allyHide); allyHide(allyHere); allies = []; allyHere = null; allyBring = null; arriveDrop(); }   // (a new game, the title, the character screen, the level select)
 // ── found in a fight (the user, 2026-10-30: "for the berry buddies, let's make them just like pets. they appear at the same rate. a cat or dog buddy OR the other buddies
 // can appear, not both. instead of chasing the cat/dog ones or finding the other ones standing, instead the player will see them fighting a berry. and as you get closer
 // and fight the berry, they will join your team. no notification will be said, you will just fight along side them. if you defeat the berry they were fighting, they will
@@ -12786,7 +12787,7 @@ function meetRoom() {                               // into a room: the meeting,
   if (M0 && (M0.phase === "duel" || M0.phase === "help" || M0.phase === "cheer")) { meetHide(); M0.phase = "wait"; M0.seen = true; }   // (you left them to it: there again when you're back)
   else meetHide();
   if (M0 && M0.phase === "wait" && !meetQ.includes(M0)) meetQ.push(M0);   // (back with the others, in its room)
-  meet = meetQ.find(m => m.room === stage && m.phase === "wait") || null; if (meet) meetQ.splice(meetQ.indexOf(meet), 1);
+  meet = meetQ.find(m => m.room === stage && m.phase === "wait" && !(m.kind === "ally" ? allyWith(m.A) || arrive.some(a => a.A === m.A) : arrive.some(a => a.sp === m.sp && a.w === m.w))) || null; if (meet) meetQ.splice(meetQ.indexOf(meet), 1);   // (not one of the world's two, waiting for you)
   const M = meet; if (!M) return;
   if (M.phase !== "wait" || M.room !== stage || stronghold || hideout || arena || mode !== "play" || !player || bossIn) return;
   if (!M.seen) { M.seen = true; if (M.u >= meetChance()) { M.phase = "done"; return; } }
@@ -12811,9 +12812,14 @@ function meetLand(M) {                              // its blow landing: in the 
   sparks(b.x - d * b.hw * .5, b.y - b.h * .55, 5);
   if (M.kind === "pet") { s.vx = -d * 260; s.vy = -330; s.onGround = false; s.plat = null; }   // (a pet bounces back off it)
 }
-function updateMeet(dt) {
-  const M = meet; if (!M || !M.st || mode !== "play" || !player || transit) return; const s = M.st, p = player, b = M.b; M.t += dt;
-  if (M.phase === "duel" || M.phase === "help") {
+function updateMeet(dt) { meetStep(meet, dt); arrive.slice().forEach(M => meetStep(M, dt)); }
+function meetStep(M, dt) {
+  if (!M || !M.st || mode !== "play" || !player || transit) return; const s = M.st, p = player, b = M.b; M.t += dt;
+  if (M.phase === "sit") {                           // (sat waiting: it watches you come; up, as you reach it)
+    s.sit = 1; s.sitGround = true; s.vx = 0; s.face = Math.sign(p.x - s.x) || s.face;
+    if (Math.abs(p.x - s.x) < 170 && Math.abs(p.y - s.y) < 140 && !p.dead) { s.sit = 0; s.sitGround = false; M.phase = "cheer"; M.t = 0; s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1;
+      if (M.kind === "ally") { buddyLast[M.A.id] = -9; SFX.buddy(M.A.id, "hi", .9); } else petCall(M.sp, 1.3); } }
+  else if (M.phase === "duel" || M.phase === "help") {
     if (!b || b.dead || b.gone) { M.phase = "cheer"; M.t = 0; s.atkKind = null; s.atkT = -1; if (b) b.duel = null; s.face = Math.sign(p.x - s.x) || s.face;   // (the berry beaten: a cheer)
       s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1; if (M.kind === "ally") { buddyLast[M.A.id] = -9; SFX.buddy(M.A.id, "hi", .9); } else petCall(M.sp, 1.3); }
     else {
@@ -12832,19 +12838,19 @@ function updateMeet(dt) {
   if (M.st) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); if (M.crew && M.crew.length) crewStep(M, dt, M.phase === "duel"); }
 }
 function meetJoin(M) {                              // it falls in behind you (no word of it); a fourth along: everything stops and you choose who goes home
-  const s = M.st; M.phase = "done"; s.wave = 0; s.pinv = 0; meet = { ...M, st: null, b: null };
+  const s = M.st; M.phase = "done"; s.wave = 0; s.pinv = 0; s.sit = 0; s.sitGround = false; if (M === meet) meet = { ...M, st: null, b: null }; else arrive = arrive.filter(m => m !== M);   // (the world's two: off the list)
   if (M.kind === "ally") {
-    noteBud(M.A);                                   // (found: the hubs' bell calls it to you anywhere from now on)
+    if (!M.own) noteBud(M.A);                       // (found: the hubs' bell calls it to you anywhere from now on; the world's own aren't, as ever)
     if (teamCount() >= TEAM_MAX) teamChoose({ name: M.A.name, kind: allyMany(M.A) ? "BERRY BUDDIES" : "BERRY BUDDY", keep: () => allyJoin(M.A, M.r, s, true, M.crew),
       home: () => [{ st: s, r: M.r }, ...(M.crew || [])].forEach(m => strays.push({ st: m.st, r: m.r, dir: s.x < player.x ? -1 : 1, t: 0 })) });
     else allyJoin(M.A, M.r, s, true, M.crew);
     if (story) writeSave(); return; }
-  const t = { w: M.w, sp: M.sp, r: M.r }; noteCat(M.w, M.sp); const C = petDef(M.sp, M.w);
+  const t = { w: M.w, sp: M.sp, r: M.r }; if (!M.own) noteCat(M.w, M.sp); const C = petDef(M.sp, M.w);
   if (teamCount() < TEAM_MAX && !(tamed && tamed2)) petAdd(t, s, false);
   else teamChoose({ name: C.name, kind: petNoun(M.sp), keep: () => petAdd(t, s, false), home: () => strays.push({ st: s, r: M.r, dir: s.x < player.x ? -1 : 1, t: 0 }) }, tamed && tamed2 ? "pet" : null);
   if (story) writeSave();
 }
-const meetSyncs = () => { const M = meet; return M && M.st && M.r && M.phase !== "done" ? [{ r: M.r, st: M.st }, ...(M.crew || [])] : []; };
+const meetSyncs = () => [meet, ...arrive].flatMap(M => M && M.st && M.r && M.phase !== "done" ? [{ r: M.r, st: M.st }, ...(M.crew || [])] : []);   // (the world's two as well)
 const MEET_ON = true;                               // (the buddies' old spots, and the pets' hours and chases: off, but kept)
 function allyRoom() {                              // into a room: this world's ally, if this is where it waits (and it isn't with you already)
   npcRoom(); coinHud(); patrolClear();               // (and the hub's beps, if it's one of the hub's rooms; last room's patrol gone)
@@ -12885,14 +12891,49 @@ let teamFresh = false;
 // (2026-11-01, later: "remove the restriction on buddies leaving with you. all buddies you have, the ones who start the map with you and the ones who you find randomly
 // should be able to travel on la guagua with you to the next level": the whole team goes where you go, and the next world's two fill any place left on it)
 function palsStay() {                              // off into another world: your buddies and pets with you (out of sight for the trip, then at your side in its first room); one still waiting in its room stays
+  arriveDrop();                                      // (the world's two you never met: they stay in it)
   allyHide(allyHere); allyHere = null; allies.forEach(a => { allyHide(a); a.away = true; });
   teamFresh = true;
 }
-function worldTeamJoin() {                          // its two, at your side (as many as there's room for: a full team brought along, none)
-  if (!player || world === 9 || !WORLDS[world]) return; const { A, sp } = worldPair(world);
-  if (A && !allyWith(A) && teamCount() < TEAM_MAX) { const r = allyRig(A), a = allyJoin(A, r, makeState(player.x, r), true); allyPlace(player.x - player.face * 90, player.y, player.face, a); }
-  if (sp && teamCount() < TEAM_MAX && !(tamed && tamed2) && ![tamed, tamed2].some(t => t && t.w === world && petSp(t) === sp)) { const t = { w: world, sp, r: wildRig(world, sp) }, q = makeState(clamp(player.x - player.face * 60, 30, WORLD - 30), t.r); q.y = player.y; q.face = player.face; petAdd(t, q, false); }
+// met as you come in (the user, 2026-11-01: "when starting a new map, have the two fighters who will join you, sitting or attacking already when you enter and then they
+// join your team, rather than them just popping in"): each of the world's two that there's room for is there in the room ahead of you, at a berry if one's free to fight
+// (far enough off to see it going on), or sat waiting a way ahead if there isn't. The one fighting comes over once the berry's beaten, with a cheer; the one sat gets up as
+// you reach it. Then they're with you (as one found fighting joins, meetJoin; not on the hubs' bell for it, as before). Off out of the room first: they come along all
+// the same; off out of the world: they stay in it
+let arrive = [];
+function worldTeamJoin() {                          // its two (as many as there's room for: a full team brought along, none)
+  if (!player || world === 9 || !WORLDS[world]) return; const { A, sp } = worldPair(world); let free = TEAM_MAX - teamCount();
+  arriveDrop(); const L = [];
+  if (A && !allyWith(A) && free > 0) { L.push({ kind: "ally", A, w: world }); free--; }
+  if (sp && free > 0 && !(tamed && tamed2) && ![tamed, tamed2].some(t => t && t.w === world && petSp(t) === sp)) L.push({ kind: "pet", sp, w: world });
+  const f = Math.random() < .5 ? 0 : 1; (f ? [1, 0] : [0, 1]).forEach((i, j) => { if (L[i]) arrivePlace(L[i], j === 0, j); });   // (one of them at a berry if there is one, placed first; the other sat; which, by chance)
   partSeen = new Set();
+}
+function arrivePlace(M, fight, k) {                  // in this room as you come in: at a berry (brought into sight if it's further on), or sat waiting a little way on
+  const p = player, fwd = entrySide === "right" ? -1 : 1, see = 480, taken = new Set([...arrive.map(m => m.b), meet && meet.b].filter(Boolean));   // (see: the picture reaches ~540 px ahead of you there)
+  const near = b => !taken.has(b) && !b.duel && !walled(b.x, p.x) && Math.sign(b.x - p.x) === fwd && Math.abs(b.x - p.x) > 200 && Math.abs(b.x - p.x) < 1500 && Math.abs(b.y - p.y) < 220;
+  const B = fight ? baddies.filter(meetFighter).filter(near).sort((a, c) => Math.abs(a.x - p.x) - Math.abs(c.x - p.x)) : [];
+  let b = B[0] || null;
+  if (b && Math.abs(b.x - p.x) > see + 60) {         // (further on: brought into sight, on the same ground)
+    const nx = clamp(p.x + fwd * see, 160, WORLD - 160), gy = groundAt(nx);
+    if (!b.plat && solidAt(nx) && gy !== null && Math.abs(gy - b.y) < 30) { b.x = nx; b.y = gy; b.vx = 0; } else if (Math.abs(b.x - p.x) > 640) b = null; }
+  const r = M.kind === "pet" ? wildRig(M.w, M.sp) : allyRig(M.A);
+  let x; if (b) { const d = Math.sign(b.x - p.x) || fwd; x = clamp(b.x - d * 100, 120, WORLD - 120); if (!solidAt(x)) x = clamp(b.x + d * 100, 120, WORLD - 120); }
+  else { x = clamp(p.x + fwd * (arrive.some(m => m.b) ? 170 : 230 + k * 110), 120, WORLD - 120); for (let i = 0; i < 8 && !solidAt(x); i++) x = clamp(x - fwd * 60, 120, WORLD - 120); }
+  const st = makeState(x, r); Object.assign(st, { y: b && b.plat ? b.y : groundAt(x) ?? p.y, vy: 0, onGround: true, face: b ? Math.sign(b.x - x) || fwd : -fwd, sit: b ? 0 : 1, wave: 0, hopT: 0, php: PARTNER_HP, pinv: 9 });
+  if (b && b.plat) st.plat = b.plat;
+  Object.assign(M, { own: true, r, st, b, t: 0, atkT: rand(.3, .8), hit: false, crew: M.kind === "ally" ? crewOf(M.A, x, st.y) : [], phase: b ? "duel" : "sit" });
+  if (b) { b.duel = M; M.hp0 = b.hp; b.dir = Math.sign(x - b.x) || -fwd; }
+  r.root.visible = r.shadow.visible = true; arrive.push(M);
+}
+function arriveDone() {                              // out of their room before you met them: with you all the same
+  arrive.slice().forEach(M => { if (M.b) M.b.duel = null; M.b = null; const s = M.st; if (!s || M.phase === "done") return;
+    Object.assign(s, { x: player.x - (player.face || 1) * 80, y: player.y, vx: 0, vy: 0, sit: 0, sitGround: false, wave: 0, onGround: true, plat: null }); meetJoin(M); });
+  arrive = [];
+}
+function arriveDrop() {                              // off out of the world (or a new game): they stay where they were
+  arrive.forEach(M => { if (M.b) M.b.duel = null; if (M.r && M.phase !== "done") { M.r.root.visible = M.r.shadow.visible = false; (M.crew || []).forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); } });
+  arrive = [];
 }
 const foundBuds = () => story ? (story.buds || (story.buds = [])) : (window.__freeBuds || (window.__freeBuds = []));   // (the berry buddies you've found fighting: the bell calls them)
 function noteBud(A) { const L = foundBuds(); if (!L.includes(A.id)) L.push(A.id); }
