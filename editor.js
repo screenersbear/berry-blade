@@ -184,7 +184,7 @@ const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "
   punch: "straight punch", kick: "kick", hooks: "hooks", jab: "jab", khooks: "hooks", kjab: "jab", up_kick: "rising kick", dn_fist: "down punch (half moon)", dn_sword: "down swing", dn_kick: "down kick",
   tkc_left: "tackle, left", tkc_right: "tackle, right", tk_cards: "tackle, cards", up_cards: "card rise", dn_cards: "card drop",
   fidget_hood: "fidget: the hood", fidget_look: "fidget: looking round", fidget_stretch: "fidget: a stretch", fidget_flex: "fidget: the gauntlet", fidget_blade: "fidget: the blade",
-  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
+  tackle: "tackle", tkdig: "dig in (held)", backstep: "back-step", backflip: "backflip", wallclimb: "rock wall climb", crawl: "crawl (hands and knees)", pop_sword: "sword out through it", pop_reach: "tiptoe, push up",
   burr_flurry: "rapier flurry", stilt_stomp: "knee + stomp", coil_spin: "spinning top", elpico_drop: "dropkick", oldvic_hay: "old-time haymaker", boxcars_roll: "hook + double uppercut",
   pincho_poke: "nose jab", pincho_drill: "nose drill", caracol_bonk: "head bonk", caracol_roll: "shell roll", mordi_punch: "face-fist punch", mordi_chomp: "shark bite",
   pipe_slam: "pipe slam", vinnie_swoop: "swoop", rink_roll: "rolling tackle", doir_rise: "rising flip", noro_rush: "palm rush", bin_toss: "Bon toss", tusker_charge: "flag charge", rotor_shot: "propeller shot", rotor_gust: "burst + gust", chispa_hop: "spinning hop", brisa_twirl: "twirl + gust", flora_flop: "belly flop", tic_swing: "X slam", tac_swing: "ring slam", tic_toss: "X toss", tac_toss: "ring toss", pk_toss: "pencil toss", veji_lash: "tail lash whirl", estrella_belt: "high note", pet_pinwheel: "pinwheel of claws", pet_bark: "tackle + bark", run_lunge: "running lunge punch", run_drop: "running drop slash" };   // (the berry buddies' specials, 2026-10-26)   // (2026-10-25, the user: "every move we do and create should go in there for their respective characters")   // (the heroes' own: Camila's from the Move Maker; and every other move a hero plays: the user, 2026-10-25 "I didn't see the tackle move in the animations, or the slides")   // (the heroes' own: Camila's from the Move Maker)
@@ -226,6 +226,7 @@ function movesFor(sp) {                                          // every move t
   const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
   at("tk", null); add("Tackle (V / □)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold V / □)", wheel ? "tkdig_wheel" : "tkdig", "", T);
   list("Charged tackle (hold V / □)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
+  if (sp.id === "rose" && KIT.STRIKES.backflip) add("Backflip (block held, back)", "backflip", "", T);   // (Rose's in place of the back-step: only she plays it, work.html startDodge, 2026-11-01)
   at("etc", null); list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
   add("In a bubblegum bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
@@ -260,7 +261,7 @@ function driveMove(p, dt) {
 // drag handles: grab a hand, an elbow, a foot, a knee, the hips, the middle of the back, the head or the sword tip and move it; the arms bend (and reach out
 // sideways) to follow. The dot you grabbed last gets a ring: turn it to bend the forearm or the shin or tilt the head, slide it to twist the hips or the upper body
 // (the user, 2026-10-23: "add points on characters elbows and knees to better pose them. and arrows around the points that allow rotation not just movement")
-const HANDLE_NAMES = { handN: "hand · camera side", handF: "hand · far side", elbowN: "elbow · camera side", elbowF: "elbow · far side", footN: "foot · camera side", footF: "foot · far side",
+const HANDLE_NAMES = { handN: "hand · camera side · the elbow stays put", handF: "hand · far side · the elbow stays put", elbowN: "elbow · camera side · swings round the shoulder", elbowF: "elbow · far side · swings round the shoulder", footN: "foot · camera side", footF: "foot · far side",
   kneeN: "knee · camera side", kneeF: "knee · far side", hips: "hips · up and down", spine: "middle of the back · bend", head: "head · lean", tip: "sword tip" };
 const RING_SAYS = { elbowN: "ring: bend the forearm", elbowF: "ring: bend the forearm", kneeN: "ring: bend the shin", kneeF: "ring: bend the shin", head: "ring: tilt", hips: "ring: hip twist", spine: "ring: upper body twist" };
 const ringFor = id => { const k = KIT.RING_OF[id]; return k && !(k === "twist" && rig.kind === "cat") ? k : null; };
@@ -312,8 +313,8 @@ let onion = null, onionOn = true;
 function moveAt(kind, S, u) {                                    // the state that plays a move at u (-1: between loops). The tackle, the dig-in and the back-step are
   const pm = S.pose && u >= 0 ? (kind === "tackle_wheel" ? "tackle" : kind === "tkdig_wheel" ? "tkdig" : kind) : null;   // (Rose's cartwheel and its dig: played as the tackle's are)   // driven by the game, not played as attacks, so they're set up the way it does (work.html tackleStep, tkCharge, startDodge)
   const tkV = pm === "tackle" ? (u < .14 ? 0 : u < .54 ? 560 * (1 - ((u - .14) / .4) ** 2 * .55) : 560 * .45 * (1 - (u - .54) / .18)) : 0;   // (braced, the lunge on the running legs, pulling up)
-  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "wallclimb" && pm !== "upcoil" && !(pm === "uphop" && u > (S.go ?? .14)), upHop: pm === "uphop" ? { t: u } : null, upCoil: pm === "upcoil" ? { t: u } : null, vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
-    tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : null,
+  return { atkKind: S.pose ? null : kind, atkT: S.pose ? -1 : u, onGround: pm !== "backstep" && pm !== "backflip" && pm !== "wallclimb" && pm !== "upcoil" && !(pm === "uphop" && u > (S.go ?? .14)), upHop: pm === "uphop" ? { t: u } : null, upCoil: pm === "upcoil" ? { t: u } : null, vx: tkV, tackle: pm === "tackle" ? { t: u } : null, tackleK: pm === "tackle" ? 1 : 0,
+    tkCharge: pm === "tkdig" ? { t: u, lv: 0 } : null, tkDig: pm === "tkdig" ? 1 : 0, dodge: pm === "backstep" ? { t: u } : pm === "backflip" ? { t: u, flip: true, T: S.dur } : null,   // (Rose's backflip: its keys over its own length, as dodgePose reads them)
     climb: pm === "wallclimb" ? { wallClimb: "back" } : null, climbPh: pm === "wallclimb" ? u / S.dur * Math.PI * 2 : 0,   // (the climb: up her rock, as the game plays it)
     popB: pm === "pop_sword" || pm === "pop_reach" ? Math.max(.001, u / S.dur) : 0, popSword: pm === "pop_sword",
     crawl: pm === "crawl" ? { x0: -1e9, x1: 1e9, y: 0 } : null, crawlPh: pm === "crawl" ? u / S.dur * Math.PI * 2 : 0, vxC: pm === "crawl" ? 60 : 0,
@@ -752,7 +753,7 @@ function updateTL() {
 }
 // the timeline's diamonds = your keys on the picked move. Click one for what to do with it (the user, 2026-10-23: "add a way to delete the dots you've made
 // by clicking on them on the timeline and having the options pop up")
-const PARTS = [["lead arm", ["armF", "spF", "elbF", "aS", "gF", "wF"]], ["rear arm", ["armB", "spB", "elbB", "bS", "gB", "wB"]], ["front leg", ["fNx", "fNy", "fNz", "hN"]], ["back leg", ["fFx", "fFy", "fFz", "hF"]],
+const PARTS = [["lead arm", ["armF", "spF", "elbF", "rlF", "aS", "gF", "wF"]], ["rear arm", ["armB", "spB", "elbB", "rlB", "bS", "gB", "wB"]], ["front leg", ["fNx", "fNy", "fNz", "hN"]], ["back leg", ["fFx", "fFy", "fFz", "hF"]],
   ["body", ["lean", "arch", "bodyY", "twist", "spin", "flip"]], ["upper body twist", ["twistU"]], ["hip twist", ["twistH"]], ["head", ["headRot"]], ["toes", ["fP"]], ["sword", ["blade", "grip"]],
   ["tail", ["tailBase", "tailCurl"]], ["hat", ["hatTilt", "hatLift"]]];
 const partOf = sc => { const p = (PARTS.find(([, cs]) => cs.includes(sc)) || ["other"])[0]; return cur.spec.base === "cat" ? p.replace(" arm", " paw") : p; };
@@ -1067,7 +1068,7 @@ function villainFrame(dt) {                                    // the stage with
 }
 // pose mode: the standing pose (and the block pose) are this character's own; sliders start from the move set's
 let poseWhich = "stance";
-const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["armF", "Lead arm raise"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["wF", "Lead fist bend"], ["armB", "Rear arm raise"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["wB", "Rear fist bend"],
+const H_POSE = [["lean", "Lean forward"], ["bodyY", "Crouch (− lower)"], ["armF", "Lead arm raise"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["rlF", "Lead forearm turn (round the upper arm)"], ["wF", "Lead fist bend"], ["armB", "Rear arm raise"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["rlB", "Rear forearm turn (round the upper arm)"], ["wB", "Rear fist bend"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["headRot", "Head tilt"]];
 const C_POSE = [["lean", "Lean forward"], ["arch", "Arch the back"], ["bodyY", "Crouch (− lower)"], ["armF", "Front paw raise"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw raise"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"],
   ["fNx", "Front foot"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot"], ["fFz", "Back foot out to the side"], ["tailBase", "Tail up"], ["tailCurl", "Tail curl"], ["hatTilt", "Hat tilt"], ["headRot", "Head tilt"]];
@@ -1085,7 +1086,7 @@ function renderPose(box) {
     b.onclick = () => { poseWhich = k; setAnim(k === "guard" ? "block" : "idle"); renderControls(); }; seg.append(b); });
   const r0 = el("div", "row"); r0.append(seg); box.append(r0);
   box.append(el("p", "note", (poseWhich === "guard" ? "How they hold their guard when blocking (S / L1 in the game). " : "How they stand when nothing's happening (they keep breathing on top of it). ")
-    + "Drag the yellow dots on the character: hands, feet, hips, the middle of the back (bends the spine there), head" + (sp.outfit.prop.kind === "sword" ? ", sword tip" : "") + ". To reach an arm or a leg out to the side, turn the camera to face them (VIEW mode) and drag the hand or foot sideways in POSE mode. Drag anywhere else on the stage to turn the camera. The sliders fine-tune; double-click a label to put it back."));
+    + "Drag the yellow dots on the character: hands, feet, hips, the middle of the back (bends the spine there), head" + (sp.outfit.prop.kind === "sword" ? ", sword tip" : "") + ". An elbow swings round its shoulder any way you drag it, the hand riding along; then a hand reaches with the elbow kept where you put it, the forearm turning round the upper arm as it needs to (the forearm turn sliders too). Dragging moves a dot across the screen, so to push one toward you or away (an arm out to the side, or in across the chest), turn the camera (VIEW mode, ⟲) to look along that way, then drag in POSE mode. Drag anywhere else on the stage to turn the camera. The sliders fine-tune; double-click a label to put it back."));
   if (wsz() >= 1) box.append(el("p", "note", grownNote()));
   const chans = [...(cat ? C_POSE : H_POSE), ...(!cat && sp.outfit.prop.kind === "sword" ? [["blade", "Sword angle"]] : [])];
   chans.forEach(([ch, lab]) => {
@@ -1132,7 +1133,7 @@ function densify(tr) {                                       // copy a move's ow
   for (let i = 0; i < tr.length - 1; i++) { const [a, va] = tr[i], b = tr[i + 1][0]; out.push([a, va]); [.25, .5, .75].forEach(f => { const t = a + (b - a) * f; out.push([+t.toFixed(4), KIT.keyv(tr, t)]); }); }
   out.push([...tr[tr.length - 1]]); return out;
 }
-const H_ANIM = [["armF", "Lead arm"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["aS", "Lead arm stretch"], ["gF", "Lead fist size"], ["wF", "Lead fist bend"], ["armB", "Rear arm"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["bS", "Rear arm stretch"], ["gB", "Rear fist size"], ["wB", "Rear fist bend"],
+const H_ANIM = [["armF", "Lead arm"], ["spF", "Lead arm out to the side"], ["elbF", "Lead elbow"], ["rlF", "Lead forearm turn"], ["aS", "Lead arm stretch"], ["gF", "Lead fist size"], ["wF", "Lead fist bend"], ["armB", "Rear arm"], ["spB", "Rear arm out to the side"], ["elbB", "Rear elbow"], ["rlB", "Rear forearm turn"], ["bS", "Rear arm stretch"], ["gB", "Rear fist size"], ["wB", "Rear fist bend"],
   ["lean", "Lean"], ["arch", "Arch"], ["twistU", "Upper body twist"], ["twistH", "Hip twist"], ["twist", "Whole body turn"], ["bodyY", "Crouch / rise"], ["fNx", "Front foot forward"], ["fNy", "Front foot lift"], ["fNz", "Front foot out to the side"], ["fFx", "Back foot forward"], ["fFy", "Back foot lift"], ["fFz", "Back foot out to the side"],
   ["headRot", "Head tilt"], ["spin", "Spin"], ["flip", "Flip"]];
 const C_ANIM = [["armF", "Front paw"], ["spF", "Front paw out to the side"], ["elbF", "Front elbow"], ["armB", "Back paw"], ["spB", "Back paw out to the side"], ["elbB", "Back elbow"], ["lean", "Lean"], ["arch", "Arch"], ["bodyY", "Crouch / rise"],
@@ -1822,7 +1823,7 @@ $("edBack").onclick = closeEd;   // (its own id: the game's select screen has a 
   if (smp) { sample = smp; const lim = await smp.limits().catch(() => null); sampleImages = !!(lim && lim.images); $("ask").hidden = false; }
   $("newOffline").hidden = sampleImages; if (pickFile) $("bMake").disabled = !sampleImages;
 })();
-window.__ed = { cam(y, p = camPitch, d = camDist) { camYaw = y; camPitch = p; camDist = d; }, get cur() { return cur; }, get rig() { return rig; }, get st() { return st; }, KIT, edit, select, get cast() { return cast; }, importText, renderAll, close: closeEd };
+window.__ed = { cam(y, p = camPitch, d = camDist) { camYaw = y; camPitch = p; camDist = d; }, get camera() { return camera; }, get cur() { return cur; }, get rig() { return rig; }, get st() { return st; }, KIT, edit, select, get cast() { return cast; }, importText, renderAll, close: closeEd };
 return { open: openEd, close: closeEd };
 
 }
@@ -1841,13 +1842,13 @@ const ED_CSS = `#ed { position: fixed; inset: 0; z-index: 70; overflow: auto; te
 #ed :focus-visible {outline: 3px solid var(--mango); outline-offset: 2px; }
 #ed .app {height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); }
 #ed .top {background: var(--mango); display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap;
-  padding: 12px 18px 12px; border-bottom: 3px solid var(--slate); }
+  padding: 12px 18px 12px; border-bottom: 3px solid var(--slate); position: relative; }
 #ed .lockup {display: inline-flex; flex-direction: column; align-items: flex-start; }
 #ed .blk {font-family: var(--display); line-height: .95; color: var(--slate); font-size: 34px; letter-spacing: .01em; }
 #ed .bar {background: var(--slate); color: var(--mango); font: 500 12px/1 var(--body); letter-spacing: .42em; text-transform: uppercase;
   padding: 7px 10px 7px 14px; margin: 3px 0 0 30px; white-space: nowrap; }
 #ed .top .acts {display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-#ed .saveState {font: 600 11px var(--body); letter-spacing: .22em; text-transform: uppercase; color: var(--slate); opacity: .7; margin-right: 6px; }
+#ed .saveState {font: 600 11px/12px var(--body); letter-spacing: .22em; text-transform: uppercase; color: var(--slate); opacity: .7; position: absolute; right: 18px; bottom: 0; white-space: nowrap; pointer-events: none; }   /* (out of the header's flow, in its bottom edge: its words changing as you drag (KEEPING A DRAFT… / DRAFT KEPT · CHOOSE WHEN YOU CLOSE) wrapped the header a line taller or shorter and jumped the stage 47 px under the pointer mid-drag, 2026-11-01) */
 #ed .btn {font: 14px/1 var(--display); background: var(--mango); color: var(--slate); border: 3px solid var(--slate); border-radius: 0;
   padding: 9px 13px 6px; transition: background .12s, color .12s, transform .12s; white-space: nowrap; }
 #ed .btn:hover {background: var(--slate); color: var(--mango); }

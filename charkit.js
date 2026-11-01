@@ -523,7 +523,7 @@ function layer(L) {
 }
 // pose channels a character can set for its standing / block pose and keyframe in its moves (ranges keep them sane)
 const POSE_CH = { hN: [0, .9], hF: [0, .9], lean: [-.8, 1.6], arch: [-.6, .9], bodyY: [-.5, .3], headRot: [-.7, .7], twist: [-1.2, 1.2], twistU: [-1.2, 1.2], twistH: [-1.2, 1.2], armF: [-3.2, 3.2], elbF: [-.6, 2.6], armB: [-3.2, 3.2], elbB: [-.6, 2.6],
-  spF: [-.7, 1.6], spB: [-.7, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],
+  spF: [-1.1, 1.6], spB: [-1.1, 1.6], rlF: [-1.6, 1.6], rlB: [-1.6, 1.6], fNz: [-.3, 1.2], fFz: [-.3, 1.2],   // (spF/spB in to -1.1, was -.7; rlF/rlB: the forearm turned round the upper arm, + in across her: the user, 2026-11-01 "I cannot get it to turn to the place it needs to go ... I cant turn it in every direction")
   fNx: [-1.3, 1.3], fNy: [0, 1.1], fFx: [-1.3, 1.3], fFy: [0, 1.1], blade: [-3.2, 3.2], tailBase: [0, 2.6], tailCurl: [-.6, .6], hatTilt: [-.7, .7], hatLift: [0, .4], wF: [-2, 2], wB: [-2, 2] };   // (wF / wB: a fist bent at the wrist, 2026-10-24)
 const ANIM_CH = { ...POSE_CH, kOut: [0, 1], aS: [-.3, 1.5], bS: [-.3, 1.5], gF: [-.4, 1.6], gB: [-.4, 1.6], spin: [-13, 13], flip: [-13, 13], wheel: [-13, 13], rise: [0, 2], fP: [-2, 1], grip: [0, 1] };
 function fitPose(v) { const o = {}; if (v && typeof v === "object") for (const k in POSE_CH) if (typeof v[k] === "number" && isFinite(v[k])) o[k] = clamp(v[k], ...POSE_CH[k]); return o; }
@@ -1487,7 +1487,7 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
   const rest = !(p.atkT >= 0) && !p.combo && !p.block && !(p.tpose > 0) && !(p.hurtT > 0) && !p.tackle && !(p.tkDig > 0) && !p.climb && !p.zip && !p.upHop && !p.upCoil && !p.dodge && !p.crawl && !p.dive && !p.swim && !p.grow && !p.pointKind && !p.tcPose;   // (in the air too: carried as on the ground, her feet its floor)
   if (p.onGround !== false || G.fy0 === undefined) G.fy0 = fy;   // (where the floor was in her body's own terms when she left it: in the air it stays so, turning with her through a flip, so the arm keeps its shape on her)
-  const wI = G.idleW = p.restNow ? (rest ? 1 : 0) : approach(G.idleW ?? 1, rest ? 1 : 0, 7 / 60), fyA = p.onGround === false ? G.fy0 : fy;
+  const rk = rest ? 1 - clamp(p.gPoseK || 0, 0, 1) : 0, wI = G.idleW = p.restNow ? rk : approach(G.idleW ?? 1, rk, 7 / 60), fyA = p.onGround === false ? G.fy0 : fy;   // (posed by the character: less of the rest, giantPose's gPoseK)
   const fyK = p.onGround === false ? Math.min(fy, fyA) : fy;   // (what it's kept up out of: the ground, but in a flip, upside down, the ground's "above" her in her body's terms and it dragged the arm toward it, "stretches to the ground when you jump": then her own floor)
   if (wI > .001) { const C = giantAt(GIANT_CLUB, g), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), tt = api.time;   // at rest: leant on the ground beside her (running, dragged further back)
     const nearS = s === (p.face > 0 ? 1 : -1); G.fw = p.restNow ? (nearS ? -1 : .75) : approach(G.fw ?? (nearS ? -1 : .75), run > .3 ? -1 : nearS ? -1 : .75, 4 / 60);   // (on the side facing you: behind her; on the far side: out in front of her, where you can see it past her)
@@ -1588,19 +1588,21 @@ const GIANT_STANCE = {
 api.GIANT_STANCE = GIANT_STANCE;
 const ownPoseOf = (p, air) => { const M = p.rig.spec.move || {}; return air ? (p.vy < -160 ? M.rise : p.vy < 160 ? M.top : M.fall) : p.hurtT > 0 ? M.hurt : null; };   // (the pose she's in that the character may have set)
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
-  p.gripFree = false;
+  p.gripFree = false; p.gPoseK = 0;                  // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
-  const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); };
+  const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); }, armPosed = P => !!P && ["armF", "elbF", "spF", "rlF"].some(c => P[c] !== undefined);
+  if (armPosed(M.gstance)) p.gPoseK = w * (1 - (p.gaitAmt || 0)) * (air ? 0 : 1);   // (the character's own grown standing pose has the weapon arm: the grown arm goes where it's put, the user 2026-11-01)
+  if (air && armPosed(own)) p.gPoseK = 1;            // (and a jump pose of theirs that has it)
   if (pr.kind === "gauntlet") { hold(A, air ? -.15 : lerp(-.42, -.62, run)); hold(E, air ? .25 : .04); hold(Sp, .22); }   // (like a club leant on the ground behind her, out at her side)
   else if (air || run > .3) { hold(A, air ? .1 : lerp(-.18, -.42, run)); hold(E, .18); hold(Sp, .12); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
   else { hold(A, .3); hold(E, 1.55); hold(Sp, .2); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
   const RT = M.anims && M.anims.run, gr = air ? 0 : (p.gaitAmt || 0) * (p.gb ?? 1);
   if (RT && gr > .01) { const uu = (((p.gaitPh || 0) / TAU) % 1 + 1) % 1; [["armF", A], ["elbF", E], ["spF", Sp]].forEach(([k, kk]) => { if (RT[k]) o[kk] += keyvS(RT[k], uu) * gr * w; }); }   // (the run's own edits to that arm: on top of the drag)
-  p.gripFree = (!!own && ["armB", "elbB", "spB"].some(mine)) || (!!RT && gr > .3 && ["armB", "elbB", "spB"].some(k => RT[k]));   // (her other arm posed in this jump, hit or run: it lets go of the grown arm)
-  if (p.atkT >= 0 && p.atkKind && STRIKES[p.atkKind] && STRIKES[p.atkKind].giant) { const K = M.anims && M.anims[p.atkKind]; p.gripFree = !!K && ["armB", "elbB", "spB"].some(k => K[k]); }   // (and in a grown move whose other arm the character keyed)
+  p.gripFree = (!!own && ["armB", "elbB", "spB", "rlB"].some(mine)) || (!!RT && gr > .3 && ["armB", "elbB", "spB", "rlB"].some(k => RT[k]));   // (her other arm posed in this jump, hit or run: it lets go of the grown arm)
+  if (p.atkT >= 0 && p.atkKind && STRIKES[p.atkKind] && STRIKES[p.atkKind].giant) { const K = M.anims && M.anims[p.atkKind]; p.gripFree = !!K && ["armB", "elbB", "spB", "rlB"].some(k => K[k]); }   // (and in a grown move whose other arm the character keyed)
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
@@ -1610,7 +1612,7 @@ function giantPose(p, o) {                           // not in a move: too heavy
   for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
   for (const k in S) { const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
   if (pr.kind === "sword" && (G.blade !== undefined || G.armF !== undefined || G.elbF !== undefined)) o.wrist = lerp(o.wrist ?? -.6, (G.blade ?? G0.blade) - (o[A] + o[E]), st);   // (the blade at its angle: hers if she has one, else back over her shoulder)
-  if (pr.kind === "gauntlet" && ["armB", "elbB", "spB"].some(k => G[k] !== undefined)) p.gripFree = true;   // (her other arm posed: it lets go of the grown one)
+  if (pr.kind === "gauntlet" && ["armB", "elbB", "spB", "rlB"].some(k => G[k] !== undefined)) p.gripFree = true;   // (her other arm posed: it lets go of the grown one)
 }
 
 function buildHuman(R) {
@@ -1842,7 +1844,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0, kOut: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0, kOut: 0, rlF: 0, rlB: 0 };
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -2826,7 +2828,7 @@ function poseKeys(p, kind, t) {                   // a game-driven move's pose a
 }
 const LEG_CH = new Set(["fNx", "fNy", "fFx", "fFy", "fNz", "fFz", "fP", "fS", "hN", "hF", "bodyY"]);   // the legs' channels (and the hips' height)
 const TWISTS = new Set(["twist", "twistU", "twistH"]);   // turns about the up axis: with the lead hand on the far side they turn the other way
-const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", wF: "wB", wB: "wF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
+const SWAP = { armF: "armB", armB: "armF", elbF: "elbB", elbB: "elbF", spF: "spB", spB: "spF", fNz: "fFz", fFz: "fNz", aS: "bS", bS: "aS", gF: "gB", gB: "gF", wF: "wB", wB: "wF", rlF: "rlB", rlB: "rlF", fNx: "fFx", fFx: "fNx", fNy: "fFy", fFy: "fNy", hN: "hF", hF: "hN" };
 function leadFar(p) {                       // is the prop (lead) hand on the far side right now?
   const pr = p.rig.spec.outfit && p.rig.spec.outfit.prop; if (!pr || pr.kind === "none" || pr.side === "near") return false;
   return (pr.side === "left") === (p.face > 0);
@@ -3217,7 +3219,7 @@ function armOut(a, sp, s) {                        // the turn that swings an ar
   _a0.set(Math.sin(a), -Math.cos(a), 0); _a1.set(Math.sin(a) * Math.cos(sp), -Math.cos(a) * Math.cos(sp), s * Math.sin(sp));
   return _aq.setFromUnitVectors(_a0, _a1);
 }
-const _gp = new THREE.Vector3(), _gt = new THREE.Vector3(), _gS = new THREE.Vector3(), _zAx = new THREE.Vector3(0, 0, 1), _qi = new THREE.Quaternion(), _tq = new THREE.Quaternion();
+const _gp = new THREE.Vector3(), _gt = new THREE.Vector3(), _gS = new THREE.Vector3(), _zAx = new THREE.Vector3(0, 0, 1), _qi = new THREE.Quaternion(), _tq = new THREE.Quaternion(), _qr = new THREE.Quaternion();
 const GAUNT = { inward: .42, flex: .5, turn: 1.2 };   // the gauntlet arm, bent (the user, 2026-10-17: not straight up "like a trophy"): turned in at the shoulder, the wrist curled, the fingers toward you
 function gripIK(S, T, UA, FA, s) {                  // the arm angles (a, e, sp) that put the hand exactly on T: the bend sets the reach, sp tilts the arm's plane out (or in, across the chest)
   const dx = T.x - S.x, dy = T.y - S.y, dz = (T.z - S.z) * s, L = clamp(Math.hypot(dx, dy, dz), Math.abs(UA - FA) * 1.02 + .01, (UA + FA) * .998);
@@ -3234,8 +3236,35 @@ function poseHandles(p, r) {
   if (r.prop && r.prop.kind === "sword") { r.root.updateMatrixWorld(true); out.push({ id: "tip", pos: r.body.worldToLocal(r.prop.inner.localToWorld(new THREE.Vector3(1.0, 0, 0))) }); }
   return out;
 }
+const _hD = new THREE.Vector3(), _hN = new THREE.Vector3(), _hN2 = new THREE.Vector3(), _hE = new THREE.Vector3(), _hW = new THREE.Vector3(), _hU = new THREE.Vector3(), _hF = new THREE.Vector3(), _hV = new THREE.Vector3(), _hX = new THREE.Vector3(), _hn = new THREE.Vector3();
+function armFromPts(p, r, s, isNear, S, E, W, UA, FA) {   // the channels that put this arm's elbow at E and its wrist at W, as syncHuman builds it (its little nudges out undone); over: how far past the limits
+  const unNudge = (v, n, len) => { const b = v.dot(n), m = b + Math.sqrt(Math.max(0, b * b - n.lengthSq() + len * len)); return v.multiplyScalar(m).sub(n).divideScalar(len).normalize(); };
+  unNudge(_hU.subVectors(E, S).divideScalar(UA), _hn.set(0, 0, s * .03), UA);   // (the elbow's way as the angles give it, before it's nudged out .03)
+  const ca = isNear ? "armF" : "armB", sp = Math.asin(clamp(_hU.z * s, -1, 1)); let a = Math.atan2(_hU.x, -_hU.y); a += TAU * Math.round(((p.out[ca] || 0) - a) / TAU);
+  unNudge(_hF.subVectors(W, E).divideScalar(FA), _hn.set(0, 0, s * .02), FA);   // (and the forearm's, before its .02)
+  const e = Math.acos(clamp(_hF.dot(_hU), -1, 1));
+  _hV.set(Math.cos(a), Math.sin(a), 0).applyQuaternion(armOut(a, sp, s)); _hX.crossVectors(_hU, _hV); _hF.addScaledVector(_hU, -_hF.dot(_hU));   // (its bend's own way, unturned; and round from it)
+  const rho = _hF.lengthSq() > 1e-10 ? Math.atan2(_hF.dot(_hX), _hF.dot(_hV)) : 0;
+  const pr = r.prop, ps = r.spec.outfit.prop && r.spec.outfit.prop.side, near = p.face > 0 ? 1 : -1, propS = ps === "near" ? near : ps === "left" ? -1 : 1;
+  const fk = pr && pr.fist && s === propS ? clamp((e - .8) / .8, 0, 1) : 0, rl = -s * rho - GAUNT.inward * fk * clamp((2.6 - (a + e)) / .5, 0, 1);   // (the gauntlet's own turn in on its bent arm: off what's set)
+  const over = Math.max(0, POSE_CH.spF[0] - sp, sp - POSE_CH.spF[1]) + Math.max(0, Math.abs(rl) - POSE_CH.rlF[1]) + Math.max(0, e - 2.8);
+  return { a, sp, e, rl, over };
+}
+function handSolve(p, r, s, isNear, T) {             // a human's hand to T: its two bones reach it with the elbow as near where it is as the limits let it be (round the reach), the forearm turning round the upper arm (rl) as it must
+  const P = r.arms[s > 0 ? 1 : 0].pts, S = P[1], UA = S.distanceTo(P[2]), FA = P[2].distanceTo(P[3]); if (UA < 1e-4 || FA < 1e-4) return null;
+  _hD.subVectors(T, S); const d0 = _hD.length(); if (d0 < 1e-4) return null; _hD.divideScalar(d0);
+  const L = clamp(d0, Math.abs(UA - FA) * 1.02 + .01, (UA + FA) * .998), al = Math.acos(clamp((UA * UA + L * L - FA * FA) / (2 * UA * L), -1, 1));
+  _hN.subVectors(P[2], S); _hN.addScaledVector(_hD, -_hN.dot(_hD)); if (_hN.lengthSq() < 1e-8) _hN.set(-_hD.y, _hD.x, 0); _hN.normalize(); _hN2.crossVectors(_hD, _hN);   // (the elbow's side of the reach: where it is now)
+  _hW.copy(S).addScaledVector(_hD, L); let best = null;
+  for (let k = 0; k < 49; k++) {                     // round the circle the elbow can be on, nearest where it is first: the first one inside every limit
+    const th = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * TAU / 48, c = Math.cos(th), sn = Math.sin(th);
+    _hE.copy(S).addScaledVector(_hD, Math.cos(al) * UA).addScaledVector(_hN, Math.sin(al) * UA * c).addScaledVector(_hN2, Math.sin(al) * UA * sn);
+    const v = armFromPts(p, r, s, isNear, S, _hE, _hW, UA, FA), sc = v.over * 100 + Math.abs(th); if (!best || sc < best.sc) best = { ...v, sc }; if (v.over < 1e-6) break; }
+  return { [isNear ? "armF" : "armB"]: best.a, [isNear ? "elbF" : "elbB"]: clamp(best.e, -.05, 2.8), [isNear ? "spF" : "spB"]: clamp(best.sp, POSE_CH.spF[0], POSE_CH.spF[1]), [isNear ? "rlF" : "rlB"]: clamp(best.rl, POSE_CH.rlF[0], POSE_CH.rlF[1]) };
+}
 function dragSolve(p, r, id, T) {                   // → { channel (as in p.out): value }
   const o = p.out, cat = r.kind === "cat", Bd = r.spec.body, near = p.face > 0 ? 1 : -1, res = {};
+  if ((id === "handN" || id === "handF") && !cat) { const isNear = id === "handN", h = handSolve(p, r, isNear ? near : -near, isNear, T); if (h) return h; }   // (a human's: the elbow stays where you put it)
   if (id === "handN" || id === "handF") {
     const isNear = id === "handN", s = isNear ? near : -near, gw = Bd.girth;
     let Sx, Sy, Sz, UA, FA, off;
@@ -3258,7 +3287,7 @@ function dragSolve(p, r, id, T) {                   // → { channel (as in p.ou
   else if (id === "elbowN" || id === "elbowF") {    // the elbow: the upper arm swings round to it, the forearm keeps its bend (the hand rides along)
     const isNear = id === "elbowN", s = isNear ? near : -near, S0 = r.arms[s > 0 ? 1 : 0].pts[1], ca = isNear ? "armF" : "armB";
     _ku.subVectors(T, S0); let a = Math.atan2(_ku.x, -_ku.y); a += TAU * Math.round(((o[ca] || 0) - a) / TAU);   // (over the top, it carries on round rather than flipping back)
-    res[ca] = a; res[isNear ? "spF" : "spB"] = clamp(Math.atan2(_ku.z * s - (cat ? .05 : .03), Math.hypot(_ku.x, _ku.y)), -.7, 1.6);
+    res[ca] = a; res[isNear ? "spF" : "spB"] = clamp(Math.atan2(_ku.z * s - (cat ? .05 : .03), Math.hypot(_ku.x, _ku.y)), cat ? -.7 : POSE_CH.spF[0], 1.6);   // (a human's elbow: in across her too, to -1.1)
   } else if (id === "kneeN" || id === "kneeF") {     // the knee: the thigh swings round to it, the shin keeps its line (the foot rides along)
     const isNear = id === "kneeN", t = r.legs[(isNear ? near : -near) > 0 ? 1 : 0], H = t.pts[1], K = t.pts[2];
     _kd.subVectors(T, H).setLength(H.distanceTo(K)).add(H).sub(K); legShift(o, r, near, isNear, _kd, res);
@@ -3466,7 +3495,7 @@ function syncHuman(p, r, dt = 0) {
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
     const lk = gArm && s !== propS && r.giant ? 1 + .2 * clamp(giantOf(p), 0, 1) : 1;   // (holding the grown arm: her other arm a fifth longer)
     const i = s > 0 ? 1 : 0, isNear = s === near, st = 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
-    let a = isNear ? o.armF : o.armB, e = isNear ? o.elbF : o.elbB, sp = isNear ? o.spF || 0 : o.spB || 0;
+    let a = isNear ? o.armF : o.armB, e = isNear ? o.elbF : o.elbB, sp = isNear ? o.spF || 0 : o.spB || 0, rl = isNear ? o.rlF || 0 : o.rlB || 0;   // (rl: the forearm turned round the upper arm)
     _S.set(_SB.x, _SB.y - .02, s * shoulder * gw);
     if (grip > .001 && s === propS) {                                 // two-handed: bring the sword hand in where the other hand can reach the hilt too (the blade keeps its angle)
       const UA = H_UA * (1 + st), FA = H_FA * (1 + st), q0 = armOut(a, sp, s), fa0 = a + e;
@@ -3477,7 +3506,7 @@ function syncHuman(p, r, dt = 0) {
       else _gp.set(_gS.x + (_gt.x - _gS.x) * rf / dxy, _gS.y + (_gt.y - _gS.y) * rf / dxy, _gS.z);
       _gt.lerp(_gp, grip);
       const g = gripIK(_S, _gt, UA, FA, s); g[0] += TAU * Math.round((a - g[0]) / TAU);
-      a = g[0]; e = g[1]; sp = g[2]; wristFix = fa0 - (a + e);
+      a = g[0]; e = g[1]; sp = g[2]; wristFix = fa0 - (a + e); rl = lerp(rl, 0, grip);
     }
     if (grip > .001 && s !== propS) {                                 // two-handed: this hand closes on the hilt, just under the sword hand
       const UA = H_UA * (1 + st), FA = H_FA * (1 + st);
@@ -3486,13 +3515,14 @@ function syncHuman(p, r, dt = 0) {
       let g = gripIK(_S, _gp, UA, FA, s);                            // then back the wrist off along the forearm, so the fist (not the wrist) sits on the grip
       _gt.set(Math.sin(g[0] + g[1]), -Math.cos(g[0] + g[1]), 0).applyQuaternion(armOut(g[0], g[2], s)).multiplyScalar(-.1 * D.hand * Bd.hands).add(_gp);
       g = gripIK(_S, _gt, UA, FA, s); g[0] += TAU * Math.round((a - g[0]) / TAU);
-      a = lerp(a, g[0], grip); e = lerp(e, g[1], grip); sp = lerp(sp, g[2], grip);
+      a = lerp(a, g[0], grip); e = lerp(e, g[1], grip); sp = lerp(sp, g[2], grip); rl = lerp(rl, 0, grip);
     }
     if (gArm && s !== propS && r.giant && r.giant.grip && !p.gripFree) {           // the other hand holds the grown arm up (the user, 2026-11-01: "love camila holding her arm as it gets bigger")
-      const g = gripIK(_S, r.giant.grip, H_UA * lk, H_FA * lk, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); }
+      const g = gripIK(_S, r.giant.grip, H_UA * lk, H_FA * lk, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); rl = lerp(rl, 0, k); }
     e = clamp(e, -.05, 2.8);   // (an elbow bends one way only, never back: 2026-10-31)
     const fa = a + e, fk = pr && pr.fist && s === propS ? clamp((e - .8) / .8, 0, 1) : 0; let qa = armOut(a, sp, s);   // fk: how bent the gauntlet arm is (a punch straightens it all out)
     _E.copy(_S).addScaledVector(_ad.set(Math.sin(a), -Math.cos(a), 0).applyQuaternion(qa), H_UA * lk * (1 + st)); _E.z += s * .03; _E.sub(_S).setLength(H_UA * lk).add(_S);   // (the elbow nudged out, the upper arm still its own length)
+    if (Math.abs(rl) > 1e-4) qa = _qr.setFromAxisAngle(_ad, -s * rl).multiply(qa);   // the forearm's bend turned round the upper arm (_ad: its way), + in across her
     if (fk > 0) qa = _qi.setFromAxisAngle(_ad, -s * GAUNT.inward * fk * clamp((2.6 - fa) / .5, 0, 1)).multiply(qa);   // the forearm swings in about the upper arm (not with it raised up in a block: that would put the fist in his head)
     _W.copy(_E).addScaledVector(_ad.set(Math.sin(fa), -Math.cos(fa), 0).applyQuaternion(qa), H_FA * lk * (1 + st)); _W.z += s * .02; _W.sub(_E).setLength(H_FA * lk).add(_E);   // (and the forearm)
     const hs = D.hand * Bd.hands * (1 + st * .14) * gr;
