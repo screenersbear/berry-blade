@@ -1521,7 +1521,7 @@ function saveFile(name, text) { try { const a = document.createElement("a"); a.h
 function pickFile(cb) { const i = document.createElement("input"); i.type = "file"; i.accept = ".json,application/json"; i.style.display = "none"; i.addEventListener("change", async () => { const f = i.files && i.files[0]; i.remove(); if (f) cb(await f.text()); }); document.body.appendChild(i); i.click(); }
 function copyText(text, said) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(said, 1600), () => { prompt("Copy these settings:", text); }); }
 // all of them in one file: the combat feel, a look applied from the SHADING MOCKUP (and the mockup's own), pause > DEBUG > TEXTURE. From pause > DEBUG or the DEVELOPER menu
-const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look", "bb_fps"];
+const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look", "bb_fps", "bbBigRoom", "bbItemsInf"];   // (the big room test and unlimited items too, 2026-11-01)
 function debugExport() { const o = { berryDebug: 1, at: new Date().toISOString(), keys: {} }; for (const k of DEBUG_KEYS) { try { const v = localStorage.getItem(k); if (v != null) o.keys[k] = JSON.parse(v); } catch (e) { } } return JSON.stringify(o, null, 2); }
 function debugImport(text) { const o = JSON.parse(text); if (!o || !o.berryDebug || !o.keys) throw new Error("not a debug settings file"); for (const k of DEBUG_KEYS) if (k in o.keys) localStorage.setItem(k, JSON.stringify(o.keys[k])); }
 function debugFileIn() { pickFile(t => { try { debugImport(t); toast("DEBUG SETTINGS LOADED · STARTING AGAIN WITH THEM", 2000); setTimeout(() => location.reload(), 1400); } catch (e) { toast("THAT ISN'T A DEBUG SETTINGS FILE", 2200); } }); }   // (a look and a texture take hold as the game starts)
@@ -5080,6 +5080,7 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
 const BIG_CELLS = [["B2", 0, 0], ["B3", 1, 0], ["A2", 0, 1], ["A3", 1, 1]];   // (a screen, how many across, how many rows up)
 const BIG_CUT = GROUND - ROW_H + SEAM_T;              // (px: above this line the top row: where a pan up or down cuts the two rows' pictures)
 let bigOn = (() => { try { return localStorage.getItem("bbBigRoom") === "1"; } catch (e) { return false; } })();
+let itemsInf = (() => { try { return localStorage.getItem("bbItemsInf") === "1"; } catch (e) { return false; } })();   // (DEBUG → UNLIMITED ITEMS: the bag never runs out. The user, 2026-11-01: "give unlimited items in debug mode")
 let bigShift = null;                                 // (into the big room in a pan: how far its middle is from the screen the pan was built for)
 const bigSubsNow = () => BIG_CELLS.map(([c, ax, up]) => ({ s: STAGES.findIndex(q => q && q.cell === c && !q.arena && !q.cut && !q.big), c, ox: ax * CELL_W, oy: -up * ROW_H }));
 const bigSubOf = s => world === 0 && bigOn && mode === "play" && !stronghold && !hideout && !arena && !rideS && bigSubsNow().some(u => u.s === s);
@@ -6640,7 +6641,7 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
@@ -6655,6 +6656,8 @@ function pauseChoose(what) {
   if (what === "dbig") { SFX.tick(); bigOn = !bigOn; try { localStorage.setItem("bbBigRoom", bigOn ? "1" : "0"); } catch (e) {} const b = $("pbtns").querySelector('[data-p="dbig"]'); if (b) b.textContent = "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF");
     toast(bigOn ? "BERRY WOODS A2 A3 B2 B3: ONE ROOM, FROM THE NEXT TIME YOU GO IN" : "BERRY WOODS A2 A3 B2 B3: FOUR SCREENS AGAIN, FROM THE NEXT TIME YOU GO IN", 3200); return; }   // (the big room test, 2026-11-01)
   if (what === "dfps") { SFX.tick(); fpsSet(!fpsOn); const b = $("pbtns").querySelector('[data-p="dfps"]'); if (b) b.textContent = "FPS COUNTER: " + (fpsOn ? "ON" : "OFF"); return; }   // (2026-10-31)
+  if (what === "dinf") { SFX.tick(); itemsInf = !itemsInf; try { localStorage.setItem("bbItemsInf", itemsInf ? "1" : "0"); } catch (e) {} const b = $("pbtns").querySelector('[data-p="dinf"]'); if (b) b.textContent = "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF");
+    toast(itemsInf ? "UNLIMITED ITEMS: USE ANY OF THEM AS OFTEN AS YOU LIKE (KEPT IN THIS BROWSER)" : "ITEMS: AS MANY AS YOU'RE CARRYING AGAIN", 3000); return; }   // (2026-11-01)
   if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
   if (what === "dimp") { SFX.confirm(); debugFileIn(); return; }   // (COMBAT FEEL's panel, over the pause)
   if (what === "dlook") { texOpen(); return; }   // (the look, to try: kept in this browser. Its own window now, the game in view)
@@ -21596,15 +21599,15 @@ function closeItems() { if (!itemsUp) return; itemsUp = false; $("items").classL
 const kbUse = () => !window.BERRY_TOUCH && !padUse && !(window.matchMedia && matchMedia("(pointer: coarse)").matches);   // (the keyboard's letters only on a computer played with its keys: the user, 2026-10-24 "in mobile the items should show button names instead of computer keys")
 function drawItems(flash) {
   const B = bag(), touch = !kbUse();
-  $("itemRow").innerHTML = ITEMS.map(it => `<div class="itc${B[it.k] ? "" : " none"}${flash === it.k ? " used" : ""}" data-it="${it.k}"><div class="itb">${padGlyph(it.pad)}${touch ? "" : `<small>${it.kb}</small>`}</div>
-    <div class="iti">${ITEM_SVG[it.k]}<b>×${B[it.k]}</b></div><div class="itn">${it.name}</div><div class="itd">${it.desc}</div></div>`).join("");
+  $("itemRow").innerHTML = ITEMS.map(it => `<div class="itc${B[it.k] || itemsInf ? "" : " none"}${flash === it.k ? " used" : ""}" data-it="${it.k}"><div class="itb">${padGlyph(it.pad)}${touch ? "" : `<small>${it.kb}</small>`}</div>
+    <div class="iti">${ITEM_SVG[it.k]}<b>×${itemsInf ? "∞" : B[it.k]}</b></div><div class="itn">${it.name}</div><div class="itd">${it.desc}</div></div>`).join("");
   $("itemCoins").innerHTML = `${ITEM_SVG.coin}<b>${B.coins}</b>`;
 }
 function useItem(k) {
   const B = bag(), p = player; if (!itemsUp || !p) return;
   const card = $("itemRow").querySelector(`[data-it="${k}"]`);
-  if (!B[k]) { SFX.nope(); if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); } return; }
-  B[k]--; const H = p.rig.heightPx || 92;
+  if (!B[k] && !itemsInf) { SFX.nope(); if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); } return; }
+  if (!itemsInf) B[k]--; const H = p.rig.heightPx || 92;   // (DEBUG's UNLIMITED ITEMS: none used up)
   if (k === "fruit") { partnerList().forEach(P => { const q = P.q; q.php = Math.min(PARTNER_HP, (q.php ?? PARTNER_HP) + 1); q.heartT = 2.2; healFx(q, 1); });   // (and a heart back for each of your partners: the user, 2026-10-26)
     const was = p.hp; p.hp = maxHp(); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, 3); SFX.heal(true); popText(p.x, p.y - H - 30, "HEARTS FULL"); }
   else if (k === "power") { growWeapon(p, 3); sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER FULL"); }
