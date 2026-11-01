@@ -283,7 +283,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
+  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -303,7 +303,7 @@ const TOCSIN = {
     outfit: "#4a1062", trim: "#ffffff", bow: "#ff3214", star: "#ffe600", gloves: "#ff3214", crescent: "#ffffff",
     hat: "#6a1b8f", hatBand: "#ffffff", shoes: "#6a1b8f", soles: "#ffffff", cards: ["#1593e8", "#3fd42a", "#ff1a2a"], cardEdge: "#ffe23a",
     patch: "#e08a3c", patch2: "#8c6c50", patch3: "#2a2522", belly: "#ffffff", collar: "#2a2f55", bell: "#e9c03a", iris: "#ffffff", points: "#4a3326", blush: "#ff86a8" },
-  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
+  move: { set: "brawler", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },
 };
 const PRESETS = [
@@ -574,7 +574,7 @@ function fit(t, v, path) {                     // shape v like the template t, k
       yaw: num(t.yaw, 0, -180, 180), pitch: num(t.pitch, 0, -90, 90), len: num(t.len, .15, 0, .8), width: num(t.width, .5, .1, 1.2), sharp: num(t.sharp, 1.5, .5, 4) }));
     return JSON.parse(JSON.stringify(t));
   }
-  if (/^move\.(stance|guard|rise|top|fall|hurt)$/.test(path)) return fitPose(v);
+  if (/^move\.(stance|gstance|guard|rise|top|fall|hurt)$/.test(path)) return fitPose(v);   // (gstance: her standing pose with a grown weapon, sizes 2-4, 2026-11-01)
   if (path === "move.anims") return fitAnims(v);
   if (path === "move.rests") return fitRests(v);
   if (path === "move.clear") return fitRests(v);
@@ -1579,20 +1579,38 @@ function giantDrag(p, o, g, run, air) {
   const ya = tt < DRAG_YANK[0] ? Math.sin(Math.PI * tt / DRAG_YANK[0]) : 0, ha = tt > DRAG_HAUL[0] ? Math.sin(Math.PI * clamp((tt - DRAG_HAUL[0]) / (DRAG_HAUL[1] - DRAG_HAUL[0]), 0, 1)) : 0;
   const te = (p.rig.prop && DRAG_TURN_EASE[p.rig.prop.kind]) || 1; o.lean += k * te * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
 }
+// her standing pose with it grown (lead / rear named, the weapon in the lead hand): planted under the weight. A character's own (spec.move.gstance, the editor's
+// POSE at weapon sizes 2-4) is laid over it (the user, 2026-11-01: "I was trying to change camila's pose and animate her with the new ewapons and none of the jjoints I
+// clicked would allow me to move them": this overwrote every posed value, and her other hand stayed locked on the grown arm)
+const GIANT_STANCE = {
+  gauntlet: { lean: .08, arch: .06, bodyY: -.07, headRot: -.06, fNx: .2, fFx: -.22, fNz: .18, fFz: .16, fNy: 0, fFy: 0, fP: 0, armF: -.42, elbF: .04, spF: .22 },
+  sword: { lean: .1, arch: .04, bodyY: -.1, headRot: -.06, fNx: .21, fFx: -.24, fNz: .22, fFz: .2, fNy: 0, fFy: 0, fP: 0, armF: .3, elbF: 1.55, spF: .2, armB: .12, elbB: .35, blade: 2.6 } };   // (blade: its angle, back over her shoulder)
+api.GIANT_STANCE = GIANT_STANCE;
+const ownPoseOf = (p, air) => { const M = p.rig.spec.move || {}; return air ? (p.vy < -160 ? M.rise : p.vy < 160 ? M.top : M.fall) : p.hurtT > 0 ? M.hurt : null; };   // (the pose she's in that the character may have set)
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
+  p.gripFree = false;
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
-  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); }   // (like a club leant on the ground behind her, out at her side)
-  else if (air || run > .3) { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
-  else { o[A] = lerp(o[A], .3, w); o[E] = lerp(o[E], 1.55, w); o[Sp] = lerp(o[Sp] || 0, .2, w); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
+  const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
+  const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); };
+  if (pr.kind === "gauntlet") { hold(A, air ? -.15 : lerp(-.42, -.62, run)); hold(E, air ? .25 : .04); hold(Sp, .22); }   // (like a club leant on the ground behind her, out at her side)
+  else if (air || run > .3) { hold(A, air ? .1 : lerp(-.18, -.42, run)); hold(E, .18); hold(Sp, .12); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
+  else { hold(A, .3); hold(E, 1.55); hold(Sp, .2); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
+  const RT = M.anims && M.anims.run, gr = air ? 0 : (p.gaitAmt || 0) * (p.gb ?? 1);
+  if (RT && gr > .01) { const uu = (((p.gaitPh || 0) / TAU) % 1 + 1) % 1; [["armF", A], ["elbF", E], ["spF", Sp]].forEach(([k, kk]) => { if (RT[k]) o[kk] += keyvS(RT[k], uu) * gr * w; }); }   // (the run's own edits to that arm: on top of the drag)
+  p.gripFree = (!!own && ["armB", "elbB", "spB"].some(mine)) || (!!RT && gr > .3 && ["armB", "elbB", "spB"].some(k => RT[k]));   // (her other arm posed in this jump, hit or run: it lets go of the grown arm)
+  if (p.atkT >= 0 && p.atkKind && STRIKES[p.atkKind] && STRIKES[p.atkKind].giant) { const K = M.anims && M.anims[p.atkKind]; p.gripFree = !!K && ["armB", "elbB", "spB"].some(k => K[k]); }   // (and in a grown move whose other arm the character keyed)
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
-  const st = w * (1 - (p.gaitAmt || 0)) * (air ? 0 : 1); if (st < .01) return;
-  const S = pr.kind === "gauntlet" ? { lean: .08, arch: .06, bodyY: -.07, headRot: -.06, fNx: .2, fFx: -.22, fNz: .18, fFz: .16, fNy: 0, fFy: 0, fP: 0 } : { lean: .1, arch: .04, bodyY: -.1, headRot: -.06, fNx: .21, fFx: -.24, fNz: .22, fFz: .2, fNy: 0, fFy: 0, fP: 0 };
-  const sw2 = leadFar(p); for (const k in S) { const kk = sw2 ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
-  if (pr.kind !== "gauntlet") { const B = sw ? "armF" : "armB", EB = sw ? "elbF" : "elbB"; o[B] = lerp(o[B], .12, st); o[EB] = lerp(o[EB], .35, st); }   // (her other hand down at her side, easy)
+  const st = w * (1 - (p.gaitAmt || 0)) * (air || p.hurtT > 0 ? 0 : 1); if (st < .01) return;   // (hit: her hurt pose, not planted)
+  const G0 = GIANT_STANCE[pr.kind], G = M.gstance || {}, S = {};
+  for (const k in G0) if (!/^(armF|elbF|spF|blade)$/.test(k)) S[k] = G0[k];   // (the planted stance; the weapon arm's hold is above, by its move)
+  for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
+  for (const k in S) { const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
+  if (pr.kind === "sword" && (G.blade !== undefined || G.armF !== undefined || G.elbF !== undefined)) o.wrist = lerp(o.wrist ?? -.6, (G.blade ?? G0.blade) - (o[A] + o[E]), st);   // (the blade at its angle: hers if she has one, else back over her shoulder)
+  if (pr.kind === "gauntlet" && ["armB", "elbB", "spB"].some(k => G[k] !== undefined)) p.gripFree = true;   // (her other arm posed: it lets go of the grown one)
 }
 
 function buildHuman(R) {
@@ -3469,7 +3487,7 @@ function syncHuman(p, r, dt = 0) {
       g = gripIK(_S, _gt, UA, FA, s); g[0] += TAU * Math.round((a - g[0]) / TAU);
       a = lerp(a, g[0], grip); e = lerp(e, g[1], grip); sp = lerp(sp, g[2], grip);
     }
-    if (gArm && s !== propS && r.giant && r.giant.grip) {           // the other hand holds the grown arm up (the user, 2026-11-01: "love camila holding her arm as it gets bigger")
+    if (gArm && s !== propS && r.giant && r.giant.grip && !p.gripFree) {           // the other hand holds the grown arm up (the user, 2026-11-01: "love camila holding her arm as it gets bigger")
       const g = gripIK(_S, r.giant.grip, H_UA * lk, H_FA * lk, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); }
     e = clamp(e, -.05, 2.8);   // (an elbow bends one way only, never back: 2026-10-31)
     const fa = a + e, fk = pr && pr.fist && s === propS ? clamp((e - .8) / .8, 0, 1) : 0; let qa = armOut(a, sp, s);   // fk: how bent the gauntlet arm is (a punch straightens it all out)

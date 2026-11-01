@@ -210,7 +210,7 @@ function movesFor(sp) {                                          // every move t
   if (sp.base === "cat") { const C = KIT.CAT_MOVES;
     list("Attack", KIT.CAT_GROUND, C); list("Attack in the air", KIT.CAT_AIR, C); add("Up + attack", KIT.CAT_UP, "", C); add("Down + attack in the air", KIT.CAT_DOWN, "", C);
     add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Attack while running at full speed", "carddash", "", C);
-    at("tk", null); add("Tackle (Z / △)", "tackle", "", C); add("Charged tackle (hold Z / △)", "tkdig", "", C); list("Charged tackle (hold Z / △)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
+    at("tk", null); add("Tackle (V / □)", "tackle", "", C); add("Charged tackle (hold V / □)", "tkdig", "", C); list("Charged tackle (hold V / □)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
     at("etc", null); add("In a bubblegum bubble: hold block to pop it", "pop_reach", "", C);
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
@@ -224,8 +224,8 @@ function movesFor(sp) {                                          // every move t
   Z = null; add("Down + attack", "slide", "", T); Z = 0; list("Charge (hold attack)", (B[sp.move.set] || {}).charge || B.brawler.charge, T);
   Z = null; add("Attack while running at full speed", G.runAttackOf ? G.runAttackOf(sp) : null, "", T);   // (the running attack, 2026-10-26)
   const wheel = sp.move.tackle === "wheel";                      // (Rose's: the cartwheel, its dig and its three charged parts, 2026-10-28)
-  at("tk", null); add("Tackle (Z / △)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold Z / △)", wheel ? "tkdig_wheel" : "tkdig", "", T);
-  list("Charged tackle (hold Z / △)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
+  at("tk", null); add("Tackle (V / □)", wheel ? "tackle_wheel" : "tackle", "", T); add("Charged tackle (hold V / □)", wheel ? "tkdig_wheel" : "tkdig", "", T);
+  list("Charged tackle (hold V / □)", wheel ? TK.wheel : (((sp.outfit || {}).prop || {}).kind === "sword" ? TK.sword : TK.other), T); add("Back-step (block held, back)", "backstep", "", T);   // (block + forward's slide: gone from the game, 2026-11-01)
   at("etc", null); list("Idle fidgets (standing still a while)", (KIT.FIDGETS && (KIT.FIDGETS[String(sp.id || sp.name || "").toLowerCase()] || KIT.FIDGETS.all)) || [], T);
   add("In a bubblegum bubble: hold block to pop it", sp.move.set === "sword" ? "pop_sword" : "pop_reach", "", T);   // (as the game picks: work.html popSword, the sword set's)
   if ((((sp.outfit || {}).prop || {}).kind) === "gauntlet") add("Climb a rock wall (↑ at her rock)", "wallclimb", "", T);   // (the gauntlet's punch, then the other hand: one cycle, 2026-10-27)
@@ -282,7 +282,7 @@ function editTarget() {                                        // what dragging 
   if (anim === "hurt" && st.hurtT > 0) return { type: "pose", key: "hurt", name: "hurt pose" };
   if ((anim === "jump" || anim === "air") && !st.onGround && st.atkT < 0 && st.bounceT < 0) { const k = st.vy < -160 ? "rise" : st.vy < 160 ? "top" : "fall"; return { type: "pose", key: k, name: { rise: "jump: going up", top: "jump: top", fall: "jump: coming down" }[k] }; }
   if (anim === "block") return { type: "pose", key: "guard", name: "block pose" };
-  if (anim === "idle") return { type: "pose", key: "stance", name: "standing pose" };
+  if (anim === "idle") return wsz() >= 1 ? { type: "pose", key: "gstance", name: "standing pose with the grown weapon" } : { type: "pose", key: "stance", name: "standing pose" };   // (sizes 2-4: her planted stance, its own)
   return null;
 }
 const posing = () => poseMode && !!editTarget();
@@ -503,7 +503,8 @@ function partMenu(kind, anchor) {                                // CLEAR ONE PA
 function applyVals(vals) {                                       // a dot or a ring has moved: { channel (as in st.out): value }
   const tgt = hdrag.target, n = clone(cur.spec), m = n.move;
   if (tgt.type === "pose") {                                     // standing / block / jump / hurt: the character's own pose
-    for (const ch in vals) { const sc = KIT.chanFor(st, ch), R = KIT.POSE_CH[sc]; if (!R) continue; m[tgt.key][sc] = clamp(vals[ch] - (ch === "lean" && tgt.key !== "hurt" ? cur.spec.move.lean : 0), R[0], R[1]); }
+    const P = m[tgt.key] = m[tgt.key] || {};
+    for (const ch in vals) { const sc = KIT.chanFor(st, ch), R = KIT.POSE_CH[sc]; if (!R) continue; P[sc] = clamp(vals[ch] - (ch === "lean" && tgt.key !== "hurt" && tgt.key !== "gstance" ? cur.spec.move.lean : 0), R[0], R[1]); }   // (the grown stance's lean is its own, not on top of the character's)
   } else if (tgt.type === "keys") {                             // a keyframed move, at this moment: your key there
     const { kind, S, t } = tgt, base = S.keys || {}, A = m.anims[kind] = m.anims[kind] || {}, sw = !S.screen && KIT.leadFar(st);   // (screen: a move keyed by the sides as seen, far / near)
     for (const ch in vals) {
@@ -656,6 +657,7 @@ $("bTurn").onclick = () => { turn = !turn; $("bTurn").classList.toggle("on", tur
 function setAnim(a) {
   anim = a; animT = 9; st.atkT = -1; tl.t = 0; Object.assign(st, { tackle: null, tackleK: 0, tkCharge: null, tkDig: 0, dodge: null, face: 1, pivotT: 0, skid: false, worn: false, tired: 0, crouch: false, gbDone: false });   // (out of a game-driven move, a turn, a guard break)
   if (a === "turn" || a === "coil" || a === "gbreak") animT = 0;
+  if (a === "idle" || a === "block" || a === "hurt") Object.assign(st, { gaitAmt: 0, vx: 0, sprint: false });   // (stood still at once: a pose paused straight after the run showed the run, and the grown stance not at all)
   [...$("anim").querySelectorAll("[data-a]")].forEach(x => x.classList.toggle("on", x.dataset.a === a));
   $("tlMove").value = isMove() ? moveKind() : ""; renderKeys();
   if (tab === "ANIMATE") renderControls();
@@ -1072,10 +1074,11 @@ const C_POSE = [["lean", "Lean forward"], ["arch", "Arch the back"], ["bodyY", "
 function poseBase(sp, which) {                                  // the pose before this character's own changes
   const cat = sp.base === "cat", S = setFor(sp);
   if (cat) return which === "guard" ? { ...KIT.POSE0, arch: .25, ...KIT.CAT_BLOCK } : { ...KIT.POSE0, arch: .25, armF: .22, armB: .05 };
+  if (which === "gstance") return { ...KIT.POSE_H0, ...(S.stance || {}), ...((KIT.GIANT_STANCE || {})[wpnKind()] || {}) };   // (planted under the grown weapon: as the game holds her)
   return { ...KIT.POSE_H0, ...(which === "guard" ? S.block || KIT.BLOCK_DEF : S.stance || {}) };
 }
 function renderPose(box) {
-  const sp = cur.spec, cat = sp.base === "cat", key = poseWhich === "guard" ? "guard" : "stance", own = sp.move[key] || {}, base = poseBase(sp, poseWhich);
+  const sp = cur.spec, cat = sp.base === "cat", key = poseWhich === "guard" ? "guard" : wsz() >= 1 ? "gstance" : "stance", own = sp.move[key] || {}, base = poseBase(sp, key);   // (weapon sizes 2-4: the standing pose with it grown)
   box.append(el("h3", null, "Pose"));
   animTools(box);
   const seg = el("div", "opts"); [["stance", "Standing"], ["guard", "Block"]].forEach(([k, lab]) => { const b = el("button", "chip" + (k === poseWhich ? " on" : ""), lab); b.type = "button";
@@ -1095,8 +1098,10 @@ function renderPose(box) {
   });
   const a = el("div", "addrow"), b = el("button", "chip", poseWhich === "guard" ? "RESET BLOCK POSE" : "RESET STANDING POSE"); a.append(b);
   b.onclick = () => { const t = clone(cur.spec); t.move[key] = {}; stageSpec(t); renderControls(); }; box.append(a);
+  if (key === "gstance") b.textContent = "RESET STANDING POSE (WEAPON 2-4)";
 }
-const grownNote = () => `Weapon size ${wsz() + 1}: the game plants ${wpnKind() === "sword" ? "her under the big blade" : "her under the big arm"} and holds it its own way, over the standing pose and the run. To pose her own, pick WEAPON 1 by her name.`;
+const grownNote = () => `Weapon size ${wsz() + 1}: with the grown ${wpnKind() === "sword" ? "blade" : "arm"} she has her own standing pose, planted under the weight (sizes 2 to 4 share it; WEAPON 1 is her everyday one). Drag her here to change it.`
+  + (wpnKind() === "gauntlet" ? " Her other hand holds the big arm up; move that hand and it lets go, in this pose or in any grown move you key it in." : "") + " In the run and jumps the game carries the weapon, and your changes there go on top.";
 // undo / redo / reset, for whatever animation is on stage
 function resetInfo() {
   const S = atkSet(), cat = cur.spec.base === "cat";
@@ -1108,6 +1113,7 @@ function resetInfo() {
   if (anim === "air") return { label: "AIR ATTACKS", apply: moves(cat ? KIT.CAT_AIR : S.air) };
   if (anim === "hurt") return { label: "HURT POSE", apply: n => { n.move.hurt = {}; } };
   if (anim === "block") return { label: "BLOCK POSE", apply: n => { n.move.guard = {}; } };
+  if (wsz() >= 1) return { label: "STANDING POSE", apply: n => { n.move.gstance = {}; } };   // (weapon 2-4: the grown one)
   return { label: "STANDING POSE", apply: n => { n.move.stance = {}; } };
 }
 function animTools(box) {
