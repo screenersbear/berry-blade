@@ -1419,30 +1419,29 @@ function buildGiantHand(parent, M, P, Q) {           // its hand (the user's pic
   const g = group(parent), mf = M(Q.fill), mG = M(Q.main), mOrb = M(Q.orb), mF = M(tint(Q.fill, .8, .8, .8)), mDeep = M(tint(Q.orb, .42, .4, .4));   // −y down the hand, the palm to +x, the knuckles along z
   const seg = (th, len, w, r) => P(slab(roundRect(th, len, r, -th / 2, -len), w, Math.min(r * .5, w * .25)), mF);   // a piece of finger, hanging from its joint: th thick, w across (a shade darker than the hand, so each one reads)
   const band = (th, w) => P(slab(roundRect(th, .012, .005, -th / 2, -.006), w, .003), mG);                       // (a gold band round a joint)
-  g.add(at(P(slab(roundRect(.05, .05, .02, -.025, -.05), .2, .01), mDeep), .02, -.165, 0));                     // (dark along the knuckles' palm side: the gaps between the fingers show it)
-  g.add(at(P(slab(roundRect(.12, .19, .045, -.06, -.19), .2, .03), mf), 0, .01, 0));                        // the palm
-  g.add(at(P(new THREE.CylinderGeometry(.1, .11, .07, 18), mf), 0, -.005, 0));                               // (the heel of it, round into the wrist)
-  const FZ = [-.08, -.027, .027, .08], FL = [[.088, .075], [.1, .085], [.094, .08], [.076, .064]];
+  g.add(at(P(slab(roundRect(.045, .045, .018, -.022, -.045), .19, .01), mDeep), .015, -.125, 0));                     // (dark along the knuckles' palm side: the gaps between the fingers show it)
+  g.add(at(P(slab(roundRect(.1, .15, .04, -.05, -.15), .19, .025), mf), 0, .01, 0));                         // the palm (the user, 2026-11-01: "the fingers ... aren't all that visible": a smaller palm, long fingers, well apart)
+  g.add(at(P(new THREE.CylinderGeometry(.08, .09, .06, 18), mf), 0, -.005, 0));                              // (the heel of it, round into the wrist)
+  const FZ = [-.084, -.029, .029, .084], FL = [[.11, .095], [.125, .105], [.118, .1], [.095, .08]];
   const fingers = FZ.map((z, i) => {
-    const k = group(g, 0, -.18, z), a = seg(.066, FL[i][0], .036, .018); k.add(a);
+    const k = group(g, 0, -.14, z), a = seg(.064, FL[i][0], .04, .019); k.add(a);
     k.add(at(P(new THREE.SphereGeometry(1, 10, 8).scale(.014, .028, .024), mG), -.036, -.03, 0));            // a gold plate on its knuckle
     k.add(at(band(.072, .04), 0, -.004, 0));
-    const m = group(k, 0, -FL[i][0] + .006, 0); m.add(seg(.06, FL[i][1], .034, .017)); m.add(at(band(.066, .038), 0, -.002, 0));
-    m.add(at(P(new THREE.SphereGeometry(1, 10, 8).scale(.01, .02, .018), mG), -.032, -FL[i][1] + .02, 0));   // (and on its tip: the nail)
+    const m = group(k, 0, -FL[i][0] + .006, 0); m.add(seg(.058, FL[i][1], .038, .018));
     return { k, m };
   });
   const thumbs = [-1, 1].map(ts => {                 // the thumb out of the side of the palm (which side: the game's, at run time)
-    const t = group(g, .02, -.06, ts * .1), a = seg(.064, .075, .05, .025); t.add(a);
-    const m = group(t, 0, -.07, 0); m.add(seg(.058, .062, .048, .024)); t.visible = false; return { g: t, m, s: ts };
+    const t = group(g, .02, -.05, ts * .095), a = seg(.06, .09, .046, .022); t.add(a);
+    const m = group(t, 0, -.085, 0); m.add(seg(.055, .075, .044, .021)); t.visible = false; return { g: t, m, s: ts };
   });
-  g.add(at(P(new THREE.SphereGeometry(1, 20, 14).scale(.034, .05, .05), mOrb), -.062, -.09, 0));              // the orb, set in the back of the hand
-  g.add(at(P(new THREE.TorusGeometry(.056, .011, 8, 24).rotateY(Math.PI / 2), mG), -.06, -.09, 0));
-  g.add(at(P(new THREE.TorusGeometry(.026, .006, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.09, -.082, .006));
+  g.add(at(P(new THREE.SphereGeometry(1, 20, 14).scale(.03, .044, .044), mOrb), -.052, -.07, 0));              // the orb, set in the back of the hand
+  g.add(at(P(new THREE.TorusGeometry(.05, .01, 8, 24).rotateY(Math.PI / 2), mG), -.05, -.07, 0));
+  g.add(at(P(new THREE.TorusGeometry(.023, .006, 6, 18).rotateY(Math.PI / 2), M("#ffffff")), -.077, -.063, .006));
   return { g, fingers, thumbs, mats: [mf, mG, mOrb, mF] };
 }
 function giantHandPose(H, c, ts, pt = 0) {            // c: 0 open (dragged along, the fingers out straight and a little fanned) … 1 a fist; ts: the thumb's side; pt: pointing (the finger by the thumb out)
   const ix = ts > 0 ? 3 : 0;
-  H.fingers.forEach((F, i) => { const cc = lerp(c, i === ix ? .02 : 1, pt); F.k.rotation.z = lerp(.22, 1.6, cc); F.k.rotation.x = (i - 1.5) * .26 * (1 - cc) * (1 - pt); F.m.rotation.z = lerp(.18, 1.75, cc); });
+  H.fingers.forEach((F, i) => { const cc = lerp(c, i === ix ? .02 : 1, pt); F.k.rotation.z = lerp(.22, 1.6, cc); F.k.rotation.x = -(i - 1.5) * .3 * (1 - cc) * (1 - pt); /* (fanned out: it was turned the wrong way, the fingers crossing into one block) */ F.m.rotation.z = lerp(.18, 1.75, cc); });
   H.thumbs.forEach(T => { const on = T.s === ts; T.g.visible = on; if (!on) return; T.g.rotation.set(ts * lerp(.55, -.35, c), 0, lerp(.25, 1.05, c)); T.m.rotation.z = lerp(.12, 1.1, c); });
 }
 function giantArmBuild(r) {                          // (once, the first time it grows)
@@ -1493,7 +1492,7 @@ function giantArm(p, r, s, S, E, W, D) {             // the arm grown out of the
     else if (i >= 2 && q.y < S.y + .1 && Math.abs(q.x) < .26 + rr) { const zm = chest + rr * .8; if (q.z * s < zm) q.z = s * zm; } } };   // her body
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = approach(G.fist, at0 || p.block || p.tcPose ? 1 : 0, (p.restNow ? 99 : 9) * (1 / 60)); G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
+  G.fist = 0;   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open") G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fy + .06 * hs - A[6].y) / hl;                 // near the ground it bends at the wrist to lie along it (dragged), never into it
@@ -1534,8 +1533,15 @@ function giantPose(p, o) {                           // not in a move: too heavy
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
   const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
-  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); o.lean = lerp(o.lean, o.lean + .05 * Math.min(g, 3), w); }   // (like a club leant on the ground behind her, out at her side)
-  else { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }
+  if (pr.kind === "gauntlet") { o[A] = lerp(o[A], air ? -.15 : lerp(-.42, -.62, run), w); o[E] = lerp(o[E], air ? .25 : .04, w); o[Sp] = lerp(o[Sp] || 0, .22, w); }   // (like a club leant on the ground behind her, out at her side)
+  else if (air || run > .3) { o[A] = lerp(o[A], air ? .1 : lerp(-.18, -.42, run), w); o[E] = lerp(o[E], .18, w); o[Sp] = lerp(o[Sp] || 0, .12, w); o.wrist = lerp(o.wrist ?? -.6, (air ? -1.9 : lerp(-2.25, -2.55, run)) - (o[A] + o[E]), w); }   // (on the move: one hand, dragged)
+  else { o[A] = lerp(o[A], .3, w); o[E] = lerp(o[E], 1.55, w); o[Sp] = lerp(o[Sp] || 0, .2, w); o.grip = lerp(o.grip || 0, 0, w); o.wrist = lerp(o.wrist ?? -.6, 2.6 - (o[A] + o[E]), w); }   // standing: over her shoulder, the hilt in her hand by her chest, the blade back behind her
+  // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
+  // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
+  const st = w * (1 - (p.gaitAmt || 0)) * (air ? 0 : 1); if (st < .01) return;
+  const S = pr.kind === "gauntlet" ? { lean: .08, arch: .06, bodyY: -.07, headRot: -.06, fNx: .2, fFx: -.22, fNz: .18, fFz: .16, fNy: 0, fFy: 0, fP: 0 } : { lean: .1, arch: .04, bodyY: -.1, headRot: -.06, fNx: .21, fFx: -.24, fNz: .22, fFz: .2, fNy: 0, fFy: 0, fP: 0 };
+  const sw2 = leadFar(p); for (const k in S) { const kk = sw2 ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
+  if (pr.kind !== "gauntlet") { const B = sw ? "armF" : "armB", EB = sw ? "elbF" : "elbB"; o[B] = lerp(o[B], .12, st); o[EB] = lerp(o[EB], .35, st); }   // (her other hand down at her side, easy)
 }
 
 function buildHuman(R) {
@@ -3451,7 +3457,7 @@ function syncHuman(p, r, dt = 0) {
     const want = hp >= 3 && !p.dead ? 1 : 0;
     r.glowA = r.glowA === undefined ? want : approach(r.glowA, want, (dt || 1 / 60) * (want ? 1.6 : 6));
     const k = r.glowA * (.78 + .22 * Math.sin(api.time * 6)), c = pr.glowCol;
-    pr.glow.forEach(m => { m.material.opacity = k * m.userData.a; m.visible = k > .01; });
+    const kg = pr.kind === "sword" ? 1 - .7 * clamp(giantOf(p), 0, 1) : 1; pr.glow.forEach(m => { m.material.opacity = k * kg * m.userData.a; m.visible = k * kg > .01; });   // (a grown blade's glow, fainter: it hid her)
     pr.glowMats.forEach(m => { m.userData.glowE = [c.r * k * .42, c.g * k * .42, c.b * k * .42]; m.emissive.setRGB(...m.userData.glowE); });
   }
   [-1, 1].forEach((s, i) => {
