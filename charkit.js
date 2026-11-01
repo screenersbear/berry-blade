@@ -1468,7 +1468,7 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
     G.rings = pr.rings.map(m => { const split = m.geometry.parameters && m.geometry.parameters.tube < .015, R = pr.P(G.ringGeo[split ? 1 : 0], m.material);
       R.userData.split = split; R.userData.y = m.position.y; G.grp.add(R); return R; }).sort((a, b) => a.userData.y - b.userData.y);   // (the one by the hand first, as on her gauntlet)
   }
-  const A = G.tube.pts; let L = 0; for (let i = 1; i < A.length; i++) L += A[i].distanceTo(A[i - 1]); L = Math.max(L, .05);
+  const A = G.tube.pts; let L = 0; for (let i = 1; i < A.length; i++) L += A[i].distanceTo(A[i - 1]); if (!Number.isFinite(L)) return; L = Math.max(L, .05);   // (an arm on a bad number: left as it was this frame, never a throw that stops the whole frame, the camera with it)
   let u = GIANT_WRIST;
   G.rings.forEach(R => { const h = (R.userData.split ? .5 : 1) * GIANT_RING_T * 1.03, th = 2 * h * G.prof(u - h * G.prof(u) / L) / L;   // (its thickness along the arm, where it sits)
     const uc = u - th / 2; R.userData.u = uc; u -= th;
@@ -1567,15 +1567,17 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
 // changing momentum"): running, leant back over her heels, none at the first size and more as it grows, whichever way she faces; and a turn at speed in two beats,
 // first the arm's still going the old way and yanks her back, then she leans in and hauls it round the new way, then back to the drag
 const DRAG_LEAN = .78, DRAG_YANK = [.2, .5], DRAG_HAUL = [.16, .62, .55];   // (the run's lean back at the biggest · the yank: how long, how far back · the haul: from, to, how far forward)
-const DRAG_EASE = { gauntlet: .74, sword: .87 };   // (how much of that each girl's run takes, so both run about 3° back at the fourth size: the user, 2026-11-01 "camila leans too far back even in level 4. it wasnt as dramatic before" (12° it was), then "ease rose's lean too" (7°))
+const DRAG_EASE = { gauntlet: .74, sword: .7 };   // (Rose's again, 2026-11-01: "rose is still leaning way too far back, almost like 90 degrees backwards with the heavy sword": about upright at the fourth size, her turn's yank as much less)
+const DRAG_TURN_EASE = { sword: .7 };   // (how much of that each girl's run takes, so both run about 3° back at the fourth size: the user, 2026-11-01 "camila leans too far back even in level 4. it wasnt as dramatic before" (12° it was), then "ease rose's lean too" (7°))
 function giantDrag(p, o, g, run, air) {
   const k = clamp((g - 1) / 2, 0, 1), f = p.face || 1, now = api.time;   // (from the third size on, half; at the fourth, all of it: the user, 2026-11-01 "the lean back shouldnt start happening until level 3 for both girls")
   if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
   if (air || k <= .001) return;
-  const r = sstep(.25, .85, run) * ((p.rig.prop && DRAG_EASE[p.rig.prop.kind]) || 1); o.lean -= DRAG_LEAN * k * r; o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
+  if (p.atkT >= 0 || p.tackle || p.hurtT > 0 || p.dodge || p.slideOn) return;   // (never on top of a move, a hit, a back-step or a slide: it stacked with their own lean back)
+  const r = sstep(.25, .85, run) * ((p.rig.prop && DRAG_EASE[p.rig.prop.kind]) || 1) * (!p.skid && (p.vx || 0) * f > 0 ? 1 : 0); o.lean -= DRAG_LEAN * k * r;   // (the run's own only when she's running on the way she faces) o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
   const tt = p.dragTurn !== undefined ? now - p.dragTurn : 9; if (tt >= DRAG_HAUL[1]) return;
   const ya = tt < DRAG_YANK[0] ? Math.sin(Math.PI * tt / DRAG_YANK[0]) : 0, ha = tt > DRAG_HAUL[0] ? Math.sin(Math.PI * clamp((tt - DRAG_HAUL[0]) / (DRAG_HAUL[1] - DRAG_HAUL[0]), 0, 1)) : 0;
-  o.lean += k * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
+  const te = (p.rig.prop && DRAG_TURN_EASE[p.rig.prop.kind]) || 1; o.lean += k * te * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
 }
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;

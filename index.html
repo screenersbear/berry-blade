@@ -642,7 +642,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261101s"></script>
+<script src="charkit.js?v=20261101u"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -10425,6 +10425,12 @@ const CRAWL_OUT = 36;                                // (out the far end of a cr
 const crawlNear = (p, z) => { const out = z.wall === undefined ? -1 : (z.wall - p.x) * z.dir; return out <= CRAWL_OUT || (p.crawl ? p.vx * z.dir >= 0 : p.vx * z.dir > 20); };   // (out past that, in the room: down to crawl only heading in to the hole)
 const camUpOf = () => (!hideout && !stronghold && !arena && (STAGES[stage] || {}).camUp) || 0;   // (a room whose camera sits higher, room.camUp units: B4, so the cassette on its top ledge shows from the floor. The user, 2026-10-28: "I was in b4 and didn't see the casette at the top")
 const crawlOut = (p, d) => !!(p && p.crawl && p.crawl.to !== undefined && p.crawl.dir === d);
+function heroSane(p) {                             // you on a bad number (NaN): back where you last were on good ones, still, and a note of what was going on
+  if (!p) return; const ok = [p.x, p.y, p.vx, p.vy].every(Number.isFinite);
+  if (ok) { (p.good || (p.good = {})).x = p.x; p.good.y = p.y; return; }
+  console.warn("you were on a bad number: put back", { x: p.x, y: p.y, vx: p.vx, vy: p.vy, atk: p.atkKind, tackle: p.tackle && p.tackle.kind, stage });
+  const g = p.good || { x: entryX ? entryX() : 200, y: GROUND }; p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0; if (!Number.isFinite(p.z)) p.z = 0;
+}
 function updatePlayer(dt) {
   const p = player; p.gears = bgearsOf(p.rig.id); p.powG = bpowOf(p.rig.id);   // (its berry gears: the weapon's life split up, charkit propLife; and its gear teeth)
   growTick(p, dt);
@@ -10972,9 +10978,10 @@ function startStrike(p, kind, idx = 0) {
   const landed = !!p.strikeLanded; p.strikeLanded = false;
   if (idx > 0 && landed && airCh(p) && (p.airN || 0) < AIR_HITS && (p.hangLeft ?? HANG_AIR) > 0) { airHold(p, airCh(p)); if (p === player) baddies.forEach(b => { if (b.carryVx != null && b.juggleT > 0 && !b.onGround && Math.abs(b.x - p.x) < 160) b.vy = Math.min(b.vy, p.vy + 30); }); }   // (and the one you're hitting caught with you, not dropping away under the next blow: 2026-10-26)   // an air combo's next blow, the last one landed: still held up there (the user, 2026-10-23, after Odin Sphere; a miss and you drop)
   else if (!p.onGround && ch === "up" && idx >= 2) { p.vx = p.face * 300; p.vy = Math.min(p.vy, -180); }   // the launch's last hit: on forward with them
-  if (p.onGround) { p.vx = p.face * S.step; if (S.hop) { p.vy = p.chain && p.chain.kind === "up" && idx === 1 && !p.combo ? -800 : S.hop; p.onGround = false; } }   // small step, no skating (the launch's second hit: a full jump up after them)
+  if (p.onGround) { p.vx = p.face * (S.step || 0); if (S.hop) {   // (|| 0: a move with no step of its own, the grown weapon's up attack, set vx to NaN, and the NaN threw her ~480 px, broke the arm and froze the camera: the user, 2026-11-01 "the glitch keeps happening where the screen moves elsewhere and I cant play again")
+    p.vy = p.chain && p.chain.kind === "up" && idx === 1 && !p.combo ? -800 : S.hop; p.onGround = false; } }   // small step, no skating (the launch's second hit: a full jump up after them)
   else if (p.dive && !p.combo) { p.vx = p.face * (S.step || 120) * .75; p.vy *= .4; }   // (in the water: a little surge into the swing, no hop)
-  else if (p.combo) { p.vx = p.face * (S.lunge || S.step * .8); if (S.hop) p.vy = Math.min(p.vy, S.hop * .75); }   // combo parts keep going in the air
+  else if (p.combo) { p.vx = p.face * (S.lunge || (S.step || 0) * .8); if (S.hop) p.vy = Math.min(p.vy, S.hop * .75); }   // combo parts keep going in the air
   else if (S.lunge) p.vx = p.face * S.lunge;                                                       // flying kicks carry him forward
   p.sq = S.sq; p.sqv = 0;
 }
@@ -24669,7 +24676,7 @@ function update(dt) {
     shake = Math.max(0, shake - dt * 40); return;
   }
   partInput(dt); updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateMeet(dt); updateNpcs(dt); catCallTick(dt);
-  if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
+  if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt); heroSane(player);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); teamChargeTick(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); blockWall(); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
