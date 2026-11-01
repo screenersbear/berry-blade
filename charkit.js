@@ -1574,10 +1574,11 @@ function giantDrag(p, o, g, run, air) {
   if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
   if (air || k <= .001) return;
   if (p.atkT >= 0 || p.tackle || p.hurtT > 0 || p.dodge || p.slideOn) return;   // (never on top of a move, a hit, a back-step or a slide: it stacked with their own lean back)
-  const r = sstep(.25, .85, run) * ((p.rig.prop && DRAG_EASE[p.rig.prop.kind]) || 1) * (!p.skid && (p.vx || 0) * f > 0 ? 1 : 0); o.lean -= DRAG_LEAN * k * r;   // (the run's own only when she's running on the way she faces) o.arch = (o.arch || 0) - .14 * k * r; o.headRot = (o.headRot || 0) - .1 * k * r; o.bodyY = (o.bodyY || 0) - .03 * k * r;   // (the run: dragged back, her head up against it)
+  const r = sstep(.25, .85, run) * ((p.rig.prop && DRAG_EASE[p.rig.prop.kind]) || 1) * (!p.skid && (p.vx || 0) * f > 0 ? 1 : 0); o.lean -= DRAG_LEAN * k * r;   // (the run's own only when she's running on the way she faces; the run: dragged back. Its arch, head and drop went from here with a comment slip on 2026-11-01 (charkit u) and the look's been judged without them since, so they stay off)
+  const gC = !!p.rig.prop && p.rig.prop.kind === "gauntlet"; if (gC) o.headRot = (o.headRot || 0) + .32 * k * r;   // (Camila's chin up, out of her tall collar, as she's dragged back: the user, 2026-11-01 "her head seems to get lost in her chest as she leans abck")
   const tt = p.dragTurn !== undefined ? now - p.dragTurn : 9; if (tt >= DRAG_HAUL[1]) return;
   const ya = tt < DRAG_YANK[0] ? Math.sin(Math.PI * tt / DRAG_YANK[0]) : 0, ha = tt > DRAG_HAUL[0] ? Math.sin(Math.PI * clamp((tt - DRAG_HAUL[0]) / (DRAG_HAUL[1] - DRAG_HAUL[0]), 0, 1)) : 0;
-  const te = (p.rig.prop && DRAG_TURN_EASE[p.rig.prop.kind]) || 1; o.lean += k * te * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * (-.16 * ya + .12 * ha);   // (yanked back · then down and in, hauling)
+  const te = (p.rig.prop && DRAG_TURN_EASE[p.rig.prop.kind]) || 1; o.lean += k * te * (-DRAG_YANK[1] * ya + DRAG_HAUL[2] * ha); o.arch = (o.arch || 0) + k * (-.18 * ya + .12 * ha); o.bodyY = (o.bodyY || 0) - .08 * k * ha; o.headRot = (o.headRot || 0) + k * ((gC ? .12 : -.16) * ya + .12 * ha);   // (yanked back · then down and in, hauling; Camila's chin up through the yank, out of her collar)
 }
 // her standing pose with it grown (lead / rear named, the weapon in the lead hand): planted under the weight. A character's own (spec.move.gstance, the editor's
 // POSE at weapon sizes 2-4) is laid over it (the user, 2026-11-01: "I was trying to change camila's pose and animate her with the new ewapons and none of the jjoints I
@@ -1607,7 +1608,7 @@ function giantPose(p, o) {                           // not in a move: too heavy
     // 2026-11-01: "let it fall to her side instead of grabbing her long arm when she's running. but when she's doing the basic running and picking up speed for that sprint, have her still hold it" · "for the big arms only")
     const sk = Math.max(clamp(((p.runK || 1) - 1.3) / .2, 0, 1), p.sprint && !((p.runK || 1) > 1) ? 1 : 0) * (p.gaitAmt || 0);   // (the game: runK 1.3 → 1.5; the editor's SPRINT: p.sprint alone)
     if (sk > .01) { const fB = sw ? "armF" : "armB", fE = sw ? "elbF" : "elbB", fS = sw ? "spF" : "spB", fR = sw ? "rlF" : "rlB", sn = Math.sin(p.gaitPh || 0);
-      o[fB] = lerp(o[fB] ?? 0, -.08 + .32 * sn, sk); o[fE] = lerp(o[fE] ?? 0, .45 + .15 * Math.max(0, sn), sk); o[fS] = lerp(o[fS] ?? 0, .1, sk); o[fR] = lerp(o[fR] ?? 0, 0, sk);
+      o[fB] = lerp(o[fB] ?? 0, -.12 + .22 * sn, sk); o[fE] = lerp(o[fE] ?? 0, .4 + .12 * Math.max(0, sn), sk); o[fS] = lerp(o[fS] ?? 0, .62, sk); o[fR] = lerp(o[fR] ?? 0, 0, sk);   // (out to her side, back as before: clear of her back and the big arm, the user 2026-11-01 "make her right arm stick out to her side more but in the same leaning-back position")
       if (sk > .3) p.gripFree = true; } }
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
