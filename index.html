@@ -11388,6 +11388,23 @@ function partInput(dt) {                             // the two buttons: a press
     if (q) q.pcharge = 0;
     B.on = on;
   });
+  partAuto(dt);
+}
+// the buddies help on their own while you fight (the user, 2026-11-01: "when you attack with camila and rose, the buddies should still intermittenly attack, but just
+// make it do less damage than when you command them to attack"): while you're at it, now and then each goes in at what's near it, a string of its own, its blows
+// lighter (partWeak); your button's are full. Not while you guard, nor one posted, worn out, on your button or busy already
+const PART_AUTO = { gap: [1.3, 2.6], near: 330, fight: .9 };   // (how often, seconds; how near a baddy has to be; how long after your last blow you count as fighting)
+let heroFightT = -9;
+function partAuto(dt) {
+  const p = player; if (!p || mode !== "play" || transit || cine || p.dead || partBlocking()) return;
+  if (p.atkT >= 0 || p.combo || p.tackle) heroFightT = time;
+  const on = time - heroFightT < PART_AUTO.fight;
+  partnerList().forEach((P, i) => { const q = P.q; if (!q || q.worn || q.post || q.tcOn || q.tcFly || q.coilT > 0) return;
+    q.autoT = (q.autoT ?? rand(...PART_AUTO.gap) * .5) - dt; if (!on || q.autoT > 0) return;
+    if (partHeld === i || (partBtn[i] && partBtn[i].on)) return;
+    const o = P.kind === "pet" ? q : P.kind === "ally" ? P.a : ej; if (!o || o.pact || o.pcmd || o.pnext || (P.kind === "pet" && q.pounce)) return;
+    const f = partTarget(q, !q.onGround); if (!f || Math.abs(f.x - q.x) > PART_AUTO.near || Math.abs(f.y - q.y) > 200) { q.autoT = .3; return; }
+    q.autoT = rand(...PART_AUTO.gap); o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !q.onGround, weak: true }; });
 }
 const DEF_GAP = 70, DEF_SLIDE = .3, DEF_SLIDE_V = 980, DEF_HOP = .22, DEF_HOP_V = 2000, DEF_RUN = 1300, DEF_NEAR = 160;   // (the hop in: its time in the air, its speed at most; the run in after)
 const partDefender = () => { const P = partnerList()[0]; return P && P.q && !P.q.tcFly && !P.q.worn ? P : null; };
@@ -11550,7 +11567,7 @@ function pointEnd(p, release) {                      // let go: three charges, a
   aura.flare = .3; aura.lv = 3; SFX.release(3); sparks(p.x, p.y - (p.rig.heightPx || 92) / 2, 14); hitstop = .05; shake = Math.max(shake, 5); if (p === player) voice("attack", 1);
 }
 function partCommand(P, type) {                     // what you're doing as you press it says what they do
-  const p = player, q = P.q, up = !!held.up || upPend >= 0;
+  const p = player, q = P.q, up = !!held.up || upPend >= 0; q.pWeak = false;   // (your button: full blows from now, the one they're at too)
   const cmd = { type, up: up && !held.down, down: !!held.down, fwd: !!(held.left || held.right), air: !p.onGround };
   if (up && upPend >= 0) upPend = -1;               // (↑ pressed with it: theirs, not a jump of yours)
   if (P.kind === "pet") { if (q.pact || q.pounce) q.pnext = cmd; else q.pcmd = cmd; return; }
@@ -11570,7 +11587,7 @@ function partTarget(s, air) {                       // the one it goes for: near
     const d = Math.abs(e.x - s.x) + Math.abs(e.y - s.y) * .5 + (Math.sign(e.x - p.x) === p.face ? 0 : 140); if (d < bd) { bd = d; best = e; } }
   return best;
 }
-function partHitFoe(...a) { partBlow = true; try { return partHitFoe0(...a); } finally { partBlow = false; } }   // (a partner's: not your weapon's power)
+function partHitFoe(...a) { partBlow = true; partWeak = !!(a[0] && a[0].pWeak); try { return partHitFoe0(...a); } finally { partBlow = false; partWeak = false; } }   // (a partner's: not your weapon's power)
 function partHitFoe0(s, e, dir, kind, noJug) {             // a blow of theirs landing; up in the air, held at their height the way yours are (the last of an air combo sends it down)
   const D2 = duo && duo.find(d => d.e === e);
   if (D2) { withBoss(D2, () => hitEnemy(dir, kind)); return true; }
@@ -11597,6 +11614,7 @@ function partStrikeStep(o, s, dt) {                 // a frame of one of its str
 }
 function partEnd(o, s, drop) { o.pact = null; o.spOn = false; s.atkKind = null; s.atkT = -1; s.pLast = false; s.hangT = 0; s.sprint = false; o.pcmd = drop ? null : o.pnext; o.pnext = null; if (drop) o.pcmd = null; }
 function partStart(o, s, cmd, X) {                  // a command: which string of moves, and at whom
+  s.pWeak = !!cmd.weak;                              // (one they've gone in with on their own: lighter blows)
   const SET = X.set, air = !s.onGround || cmd.air; let kind, list;
   if (cmd.type === "special") { kind = "special"; list = [X.sp]; }
   else if (cmd.up && !air && SET.upChain) { kind = "up"; list = SET.upChain; }
@@ -11693,7 +11711,7 @@ function partPet(q, k, dt) {                        // a pet on your command: it
   q.defOn = false;
   if (partBlocking()) { q.pact = q.pcmd = q.pnext = null; if (!q.pounce) { q.block = true; if (q.onGround) q.vx = approach(q.vx, 0, 2600 * dt); const f = partTarget(q, false); q.face = f ? Math.sign(f.x - q.x) || q.face : p.face; return true; } return false; }
   q.block = false;
-  if (!q.pact && q.pcmd && !q.pounce) { const c = q.pcmd; q.pcmd = null; const sp = c.type === "special" ? KIT.PET_SP[petOf(q)] : null, tgt = partTarget(q, true);
+  if (!q.pact && q.pcmd && !q.pounce) { const c = q.pcmd; q.pcmd = null; q.pWeak = !!c.weak; const sp = c.type === "special" ? KIT.PET_SP[petOf(q)] : null, tgt = partTarget(q, true);
     q.pact = { t: 0, tgt, legs: c.type === "special" ? [{ sp, kind: sp ? "smash" : "launch", T: .45 }] : c.up ? [{ kind: "launch", T: .38 }, { kind: "smash", T: .3 }] : c.down && !q.onGround ? [{ kind: "smash", T: .22 }] : [{ kind: "smash", T: c.air || !q.onGround ? .3 : .38 }, { kind: "smash", T: .34 }] };
     if (!tgt) q.pact.legs.length = 1; }
   const A = q.pact; if (!A) return false;
@@ -23845,9 +23863,9 @@ function stepBack(e, boss) {                         // the step back itself: al
 // a hit more damage than rose": a hit's 2, so hers are 3)
 // the weapon's size is its power now (the user, 2026-11-01: "in terms of damage, we'll use percentages. basic level is 25% and it increases damage as that goes";
 // asked, a power meter: 25 / 50 / 75 / 100%, a blow as it was the 25%, the biggest four times as hard). p.power: the size, 0–3. A partner's blow (partBlow): +1 a size, as it was
-const POWER_PCT = [25, 50, 75, 100]; let partBlow = false;
+const POWER_PCT = [25, 50, 75, 100]; let partBlow = false, partWeak = false;   // (partWeak: a blow of one they went in with on their own, partAuto)
 const wKB = () => partBlow ? 1 : 1 + .15 * (player.power || 0);   // (and its blows knock them further, the bigger it is)
-const CAMILA_EXTRA = 1, heroDmg = kind => { const z = player.power || 0; if (kind === "stomp") return 2; if (partBlow) return 2 + z;
+const CAMILA_EXTRA = 1, heroDmg = kind => { const z = player.power || 0; if (kind === "stomp") return 2; if (partBlow) return partWeak ? 1 + Math.floor(z / 2) : 2 + z;   // (theirs: on your command, 2 + the size; on their own, lighter)
   return (2 + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + (((player.atkT >= 0 && KIT.STRIKES[player.atkKind]) || {}).dmg || 0)) * (1 + z) + (z >= 3 ? GEAR_DMG * (player.powG || 0) : 0); };   // (+ the blow's own dmg: Rose's charged cartwheels, 2026-10-28)   // (+ the berry gears' teeth, at full power)
 function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon's own: a bounce on a head does the plain 2, the user 2026-10-22)
   if (b.inv > 0 || b.dead || b.gone) return false;
