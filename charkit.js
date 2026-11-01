@@ -417,7 +417,7 @@ const PRESETS = [
       collar: { on: true, top: .27, bottom: .12, h: .17, y: .1, col: "#ec1c24", open: 1.1, lined: true, inner: "#fff701" },
       neck: { on: true, col: "#2d383c", h: .2, r: .095 },
       prop: { kind: "gauntlet", side: "left", main: "#ffde00", fill: "#fc0000", orb: "#d30102", trim: "#f6fc50", c1: "#3bfe00", c2: "#fe0000", c3: "#0d97f9", c4: "#c03cff", rings: 4, size: 1.2 } },
-    move: { set: "boxer" } }),                                  // (moves exactly like Chase)
+    move: { set: "boxer", gstance: { armB: .4, elbB: 1.56, spB: -.22, rlB: 1.25, wB: .25 } } }),   // (moves exactly like Chase; gstance: her standing pose with the big arm (sizes 2-4), its other hand holding it, from the user's file, 2026-11-01 "I also fixed that stance to have her holding it so base it off of this, and make this the neutral")
   merge0(HUMAN_DEFAULT, { id: "rose", name: "ROSE",       // (was Lydia; the user, 2026-10-20) from the approved mockup: June's outfit and June's hairstyle (in Rose's own
     body: { build: "tall", torso: .9 },                          //   brown), her headphones (magenta cups), Chase's face and eyes (brown), no mask, no tail; on her feet,
     head: { width: 1, height: 1.16, jaw: .99, chinLen: .04, cheeks: .1 },   //   June's sword. Her body June's (the user, 2026-10-22: "make rose the same proportions as june and poses
@@ -1603,6 +1603,12 @@ function giantPose(p, o) {                           // not in a move: too heavy
   if (RT && gr > .01) { const uu = (((p.gaitPh || 0) / TAU) % 1 + 1) % 1; [["armF", A], ["elbF", E], ["spF", Sp]].forEach(([k, kk]) => { if (RT[k]) o[kk] += keyvS(RT[k], uu) * gr * w; }); }   // (the run's own edits to that arm: on top of the drag)
   p.gripFree = (!!own && ["armB", "elbB", "spB", "rlB"].some(mine)) || (!!RT && gr > .3 && ["armB", "elbB", "spB", "rlB"].some(k => RT[k]));   // (her other arm posed in this jump, hit or run: it lets go of the grown arm)
   if (p.atkT >= 0 && p.atkKind && STRIKES[p.atkKind] && STRIKES[p.atkKind].giant) { const K = M.anims && M.anims[p.atkKind]; p.gripFree = !!K && ["armB", "elbB", "spB", "rlB"].some(k => K[k]); }   // (and in a grown move whose other arm the character keyed)
+  if (pr.kind === "gauntlet" && !air && p.atkT < 0 && !p.gripFree) {   // at a full sprint, her other hand lets go of the big arm and swings loose at her side; running and picking up speed for it, she holds on (the user,
+    // 2026-11-01: "let it fall to her side instead of grabbing her long arm when she's running. but when she's doing the basic running and picking up speed for that sprint, have her still hold it" · "for the big arms only")
+    const sk = Math.max(clamp(((p.runK || 1) - 1.3) / .2, 0, 1), p.sprint && !((p.runK || 1) > 1) ? 1 : 0) * (p.gaitAmt || 0);   // (the game: runK 1.3 → 1.5; the editor's SPRINT: p.sprint alone)
+    if (sk > .01) { const fB = sw ? "armF" : "armB", fE = sw ? "elbF" : "elbB", fS = sw ? "spF" : "spB", fR = sw ? "rlF" : "rlB", sn = Math.sin(p.gaitPh || 0);
+      o[fB] = lerp(o[fB] ?? 0, -.08 + .32 * sn, sk); o[fE] = lerp(o[fE] ?? 0, .45 + .15 * Math.max(0, sn), sk); o[fS] = lerp(o[fS] ?? 0, .1, sk); o[fR] = lerp(o[fR] ?? 0, 0, sk);
+      if (sk > .3) p.gripFree = true; } }
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
