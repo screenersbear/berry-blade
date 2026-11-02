@@ -34,7 +34,11 @@ const RAIL_Y = 74, LB = 58, CX0 = GX0 + 36, CX1 = GX1 - 36, GRAV = 1800, CARRY =
 const DOOR_Y0 = 146, SHELF_X0 = MX1, SHELF_X1 = 530, TRAY_X = 482;
 const PG = 462, WAIT_X = 580, GRAB_X = TRAY_X + 58;
 const GAME_T = 60;
-const KINDS = [{ c: '#5aa9e6', d: '#2c6aa3', w: 6 }, { c: '#9a6bd6', d: '#5c3a93', w: 2 }, { c: '#f06aa8', d: '#ad346c', w: 2 }];   // blueberries mostly (the user's drawn berry), now and then a grape one or a raspberry pink
+const KINDS = [{ c: '#5aa9e6', d: '#2c6aa3', w: 3, n: 'BLUE' }, { c: '#9a6bd6', d: '#5c3a93', w: 2, n: 'GRAPE' }, { c: '#f06aa8', d: '#ad346c', w: 2, n: 'PINK' }, { c: '#f5b631', d: '#b77a12', w: 2, n: 'GOLD' }];   // four colours (the user, 2026-11-02: "have 4 colors of berries"): blueberries the most (the user's drawn berry), then grape, raspberry pink and a golden one
+// the points (the user, 2026-11-02: "players get bonus points for lining up two or more of the same color. the score will be about 100 points for each stack, and then
+// bonus for continued streak of not dropping, for colors matching, and speed points at the end"): 100 a stack; a run of one colour in it 50 for two, 150 for three, 400 for
+// all four (two pairs, 100); a stack in a row with none dropped 10 more than the last (up to 100); and how quick each stack went up, added up and paid at the end
+const PTS = 100, MATCH = [0, 0, 50, 150, 400], STREAK_UP = 10, STREAK_MAX = 100, PAR = 6, PER_S = 12, SPEED_MAX = 50;
 const CATS = [{ b: '#f3a24c', d: '#c66f22', stripe: 1 }, { b: '#a3a9b3', d: '#6c7380', stripe: 1 }, { b: '#45414b', d: '#26232b', dark: 1 }, { b: '#f6f0e6', d: '#e09a52', patch: 1 }];
 const DOGS = [{ b: '#e3b56d', d: '#b9863e' }, { b: '#9c6b44', d: '#6b4426' }, { b: '#f4efe6', d: '#5b4b3f', spots: 1 }, { b: '#403a38', d: '#221e1d', chest: 1, dark: 1 }];
 const HELMET = '#f2e8cf';   // (the dogs' helmet, the chess pawn on top: charkit's DOG_HELMET)
@@ -138,8 +142,8 @@ function buildStatic() {
 }
 
 // ── state
-let state = 'title', T = 0, timeLeft = GAME_T, stacks = 0, best = 0, overT = 0, lastTick = 99, startT = 0;
-try { best = +localStorage.getItem('berryStackBest') || 0; } catch (e) { }
+let state = 'title', T = 0, timeLeft = GAME_T, stacks = 0, best = 0, overT = 0, lastTick = 99, startT = 0, score = 0, streak = 0, speedPts = 0, stackT0 = -1, stackT = 0, newBest = false, best0 = 0;
+try { best = +localStorage.getItem('berryStackBestScore') || 0; } catch (e) { }   // (the best score now; the old best count of stacks, berryStackBest, left be)
 const claw = { x: PLATE_X - 60, vx: 0, dir: 1, phi: 0, dphi: 0, L: LB, mode: 'hold', t: 0, open: 0, berry: pickKind() };
 let stack = [], flying = [], parts = [], pops = [], pets = [], skewer = null, kebab = null, trayPlate = null, petWait = 0;
 const sway = { th: 0, w: 0 }, plate = { up: 1 };
@@ -194,15 +198,15 @@ const SFX = {
 
 // ── play
 function startGame() {
-  state = 'play'; timeLeft = GAME_T; stacks = 0; stack = []; flying = []; skewer = null; sway.th = sway.w = 0; settle = 0; plate.up = 1; lastTick = 99; startT = T;
+  state = 'play'; timeLeft = GAME_T; stacks = 0; score = 0; streak = 0; speedPts = 0; stackT0 = -1; newBest = false; stack = []; flying = []; skewer = null; sway.th = sway.w = 0; settle = 0; plate.up = 1; lastTick = 99; startT = T;
   if (!claw.berry && claw.mode === 'hold') claw.berry = pickKind(); SFX.start();
 }
-function endGame() { state = 'over'; overT = 0; if (stacks > best) { best = stacks; try { localStorage.setItem('berryStackBest', String(best)); } catch (e) { } } SFX.end(); }
+function endGame() { state = 'over'; overT = 0; const tot = score + speedPts; best0 = best; newBest = tot > best; if (newBest) { best = tot; try { localStorage.setItem('berryStackBestScore', String(best)); } catch (e) { } } SFX.end(); }
 function act() {
   ac();
   if (state === 'title') startGame();
   else if (state === 'play') drop();
-  else if (state === 'over' && overT > .9) startGame();
+  else if (state === 'over' && overT > 1.5) startGame();
 }
 function drop() {
   if (claw.mode !== 'hold' || !claw.berry || !plateReady() || stack.length >= 4) return;
@@ -215,12 +219,14 @@ function land(b, bx) {
   stack.push({ k: b.k, bx: clamp(bx, -R * 1.1, R * 1.1), s: 0, ds: 4.2, face: 'happy', ft: .7 });
   stack.forEach((q, i) => { if (i < n) q.kick = { t: .035 * (n - 1 - i), v: 3.4 - .5 * (n - 1 - i) + rand(0, .4) }; });   // (the stack squashes under it, a thick jiggle that goes on down from the one it landed on: the user, 2026-11-02, "jiggle a little more, but a thicker jiggle not watery")
   const off = n ? bx - stack[n - 1].bx : bx; sway.w += off * .014 + b.vx * .0016 + rand(-.05, .05);
-  b.gone = true; SFX.plop(n);
+  b.gone = true; SFX.plop(n); if (!n) stackT0 = T;
   const p = stackPos(n); for (let i = 0; i < 6; i++) parts.push({ k: 'dot', x: p.x + rand(-R, R), y: p.y + R * .8, vx: rand(-90, 90), vy: rand(-160, -60), r: rand(1.5, 3), c: '#ffffff', life: .45, t: 0 });
   if (stack.length === 4) settle = .3;
 }
+const tally = () => state === 'over' ? clamp((overT - .35) / .8, 0, 1) : 0;   // (how far the end's count of the speed points has got)
+function dropped() { if (state === 'play') streak = 0; }
 function slip(b, dir) {
-  b.mode = 'slip'; b.vx = dir * rand(150, 230); b.vy = -Math.abs(b.vy) * .18 - 70; b.spin = dir * 9; b.face = 'eek'; SFX.slip();
+  dropped(); b.mode = 'slip'; b.vx = dir * rand(150, 230); b.vy = -Math.abs(b.vy) * .18 - 70; b.spin = dir * 9; b.face = 'eek'; SFX.slip();
   if (stack.length) { sway.w += dir * .22; const q = stack[stack.length - 1]; q.ds -= 3; }
 }
 function startSkewer() { skewer = { t: 0, x: PLATE_X + stack.reduce((a, q) => a + q.bx, 0) / stack.length, tip: GY0 - 280, spread: 0, done: false, dt: 0 }; }
@@ -239,7 +245,7 @@ function update(dt) {
     timeLeft -= dt; const s = Math.ceil(timeLeft);
     if (timeLeft <= 10 && s !== lastTick && s > 0) { lastTick = s; SFX.tick(); }
     if (timeLeft <= 0) { timeLeft = 0; endGame(); }
-  } else if (state === 'over') overT += dt;
+  } else if (state === 'over') { const k0 = tally(); overT += dt; const k1 = tally(); if (speedPts && k1 > k0) { if (k1 >= 1) SFX.score(); else if (Math.floor(k1 * 14) > Math.floor(k0 * 14)) SFX.tick(); } }   // (the speed points counted on, a tick at a time)
   updClaw(dt); updFlying(dt); updStack(dt); updSkewer(dt); updKebab(dt); updPets(dt);
   door = approach(door, doorTo, dt * 4.5);
   if (plate.up < 1 && (!kebab || kebab.stage !== 'out' || kebab.x > PLATE_X + 90)) plate.up = Math.min(1, plate.up + dt / .35);
@@ -279,7 +285,7 @@ function updFlying(dt) {
     }
     if (b.tip && b.mode === 'slip' && b.vy > 0 && y0 + R <= PLATE_Y + 1 && b.y + R > PLATE_Y && Math.abs(b.x - PLATE_X) < PLATE_W / 2 && plate.up >= 1) { b.y = PLATE_Y - R; b.vy = 0; b.spin = b.vx / R; }   // (a toppled one rolls off the plate, not through it)
     if (b.y >= FLOOR - R) {                           // down on the floor of the machine: a bounce or two, a roll, and it's gone
-      b.y = FLOOR - R;
+      b.y = FLOOR - R; if (!b.lost) { b.lost = true; dropped(); }
       if (b.vy > 90) { b.vy = -b.vy * .38; b.vx *= .8; b.ds -= 3; SFX.bump(); } else { b.vy = 0; b.vx *= Math.pow(.25, dt); }
       if (b.mode !== 'floor') { b.mode = 'floor'; b.t = 0; b.face = 'dizzy'; } b.spin = b.vx / R;
     }
@@ -302,12 +308,12 @@ function updStack(dt) {
   sway.w += (-(over ? 6 : 32) * sway.th - 2.5 * sway.w + over * (.35 + .1 * n)) * dt; sway.th = clamp(sway.th + sway.w * dt, -.5, .5);
   if (Math.abs(sway.th) > TIP && !skewer) { topple(Math.sign(sway.th)); return; }
   for (const q of stack) { if (q.kick && (q.kick.t -= dt) <= 0) { q.ds += q.kick.v; q.kick = null; } spring(q, dt, 150, 12); if (q.ft > 0 && (q.ft -= dt) <= 0) q.face = 'calm'; if (over && n > 1) q.face = 'eek'; }
-  if (settle > 0 && !over && (settle -= dt) <= 0 && stack.length === 4) { stacks++; startSkewer(); }   // (not while it's going: it has to stand)
+  if (settle > 0 && !over && (settle -= dt) <= 0 && stack.length === 4) { stacks++; stackT = stackT0 >= 0 ? T - stackT0 : PAR; startSkewer(); }   // (not while it's going: it has to stand)
 }
 function topple(dir) {                                  // over it goes: off the plate and down, one after the other, the top furthest
   stack.forEach((q, i) => { const p = stackPos(i); flying.push({ k: q.k, x: p.x, y: p.y, vx: dir * (110 + i * 70) + rand(-20, 20), vy: -30 - i * 45, rot: sway.th * .6, spin: dir * (5 + i * 2), s: q.s, ds: -2, mode: 'slip', t: 0, face: 'eek', tip: true }); });
   pops.push({ x: PLATE_X + dir * 40, y: PLATE_Y - 150, s: 'OOPS!', t: 0, c: '#f0507c' });
-  stack = []; settle = 0; sway.th = sway.w = 0; SFX.topple();
+  stack = []; settle = 0; sway.th = sway.w = 0; SFX.topple(); dropped();
 }
 function updSkewer(dt) {
   const S = skewer; if (!S) return; S.t += dt;
@@ -318,8 +324,19 @@ function updSkewer(dt) {
   for (const q of stack) q.bx = lerp(q.bx, S.x - PLATE_X, Math.min(1, dt * 9));
   sway.th *= Math.pow(.01, dt); sway.w *= Math.pow(.01, dt);
   for (let i = stack.length - 1; i >= 0; i--) { const q = stack[i], p = stackPos(i); if (!q.pierced && S.tip >= p.y) { q.pierced = true; q.ds += 3.5; q.face = 'ouch'; q.ft = .45; if (i === stack.length - 1) juice(p.x, p.y - R + 3, q.k.c); SFX.pierce(3 - i); } }
-  if (u >= 1 && !S.done) { S.done = true; S.dt = 0; pops.push({ x: S.x + (S.x < PLATE_X + 40 ? 64 : -64), y: PLATE_Y - 3 * KSTEP, s: '+1', t: 0 }); SFX.score(); for (let i = 0; i < 14; i++) parts.push({ k: 'star', x: S.x + rand(-40, 40), y: PLATE_Y - rand(20, 200), vx: rand(-60, 60), vy: rand(-120, -20), r: rand(3, 5), c: pick(['#ffd34d', '#f06aa8', '#5aa9e6', '#7cc443']), life: .8, t: 0, g: 200 }); }
+  if (u >= 1 && !S.done) { S.done = true; S.dt = 0; scoreStack(S.x + (S.x < PLATE_X + 40 ? 64 : -64), PLATE_Y - 3 * KSTEP); SFX.score(); for (let i = 0; i < 14; i++) parts.push({ k: 'star', x: S.x + rand(-40, 40), y: PLATE_Y - rand(20, 200), vx: rand(-60, 60), vy: rand(-120, -20), r: rand(3, 5), c: pick(['#ffd34d', '#f06aa8', '#5aa9e6', '#7cc443']), life: .8, t: 0, g: 200 }); }
   if (S.done && (S.dt += dt) > .35) startDelivery();
+}
+function runs(ks) { const o = []; for (let i = 0; i < ks.length;) { let j = i; while (j + 1 < ks.length && ks[j + 1] === ks[i]) j++; if (j > i) o.push({ n: j - i + 1, k: ks[i] }); i = j + 1; } return o; }   // (the runs of one colour, bottom up)
+function scoreStack(px, py) {
+  const R2 = runs(stack.map(q => q.k)), mt = R2.reduce((a, r) => a + MATCH[r.n], 0), top = R2.reduce((a, r) => r.n > a.n ? r : a, { n: 0 });
+  streak++; const sb = Math.min(STREAK_MAX, STREAK_UP * (streak - 1)), sp = Math.round(clamp((PAR - stackT) * PER_S, 0, SPEED_MAX));
+  score += PTS + mt + sb; speedPts += sp;
+  const L = [{ s: '+' + PTS }];
+  if (mt) L.push({ s: (top.n === 4 ? 'ALL ' + top.k.n + '!' : R2.length > 1 ? 'TWO PAIRS' : top.n === 3 ? 'THREE ' + top.k.n : top.k.n + ' PAIR') + ' +' + mt, c: top.k.c, f: top.n === 4 ? 24 : 20 });
+  if (sb) L.push({ s: `STREAK \u00d7${streak} +${sb}`, c: '#f2b630', f: 18 });
+  L.forEach((q, i) => pops.push({ x: px, y: py + i * 34, s: q.s, c: q.c, f: q.f, t: -i * .22 }));
+  if (top.n >= 3) for (let i = 0; i < 10; i++) parts.push({ k: 'heart', x: px + rand(-40, 40), y: py + rand(0, 60), vx: rand(-50, 50), vy: rand(-140, -40), r: rand(4, 6), c: top.k.c, life: .9, t: 0, g: 160 });
 }
 function updKebab(dt) {
   const K = kebab;
@@ -477,10 +494,12 @@ function drawTime(x) {                                   // the crayon on the le
 }
 function drawScore(x) {
   const cx = 546; x.textAlign = 'center'; x.textBaseline = 'middle';
-  x.font = FONT(14); x.fillStyle = INK; x.fillText('STACKS', cx, 30);
-  x.font = FONT(46); x.lineJoin = 'round'; x.lineWidth = 6; x.strokeStyle = '#fffaf0'; x.strokeText(String(stacks), cx, 76); x.fillStyle = crayon(x, '#d63d7c', -.6, 1.6); x.fillText(String(stacks), cx, 76);
-  x.lineWidth = 1.3; x.strokeStyle = INK; x.strokeText(String(stacks), cx, 76);
-  x.font = SANS(13); x.fillStyle = INK; x.globalAlpha = .75; x.fillText(`BEST ${best}`, cx, 112); x.globalAlpha = 1;
+  const v = String(state === 'over' ? score + Math.round(speedPts * tally()) : score);
+  x.font = FONT(14); x.fillStyle = INK; x.fillText('SCORE', cx, 30);
+  x.font = FONT(v.length > 3 ? 38 : 46); x.lineJoin = 'round'; x.lineWidth = 6; x.strokeStyle = '#fffaf0'; x.strokeText(v, cx, 74); x.fillStyle = crayon(x, '#d63d7c', -.6, 1.6); x.fillText(v, cx, 74);
+  x.lineWidth = 1.3; x.strokeStyle = INK; x.strokeText(v, cx, 74);
+  x.font = SANS(13); x.fillStyle = INK; x.globalAlpha = .75; x.fillText(`BEST ${state === 'over' && tally() < 1 ? best0 : best}`, cx, 108);   // (the old best till the end's count is done) x.globalAlpha = 1;
+  if (state === 'play' && streak >= 2) { x.font = FONT(14); x.lineJoin = 'round'; x.lineWidth = 4; x.strokeStyle = '#fffaf0'; x.strokeText(`STREAK \u00d7${streak}`, cx, 130); x.fillStyle = '#d98a0c'; x.fillText(`STREAK \u00d7${streak}`, cx, 130); }   // (no drops for that many stacks)
 }
 function card(x, lines) {                               // a paper card over the glass: the title, the hints, the score at the end
   const cx = (GX0 + GX1) / 2, cy = 226, w = 300, h = 186;
@@ -523,10 +542,11 @@ function draw() {
     else { circ(x, p.x, p.y, p.r); x.fillStyle = p.c; x.fill(); }
     x.restore();
   }
-  for (const p of pops) { x.save(); x.globalAlpha = clamp(1.4 - p.t * 1.3, 0, 1); x.textAlign = 'center'; x.font = FONT(30); x.lineWidth = 5; x.lineJoin = 'round'; x.strokeStyle = '#fffaf0'; const yy = p.y - p.t * 40; x.strokeText(p.s, p.x, yy); x.fillStyle = crayon(x, p.c || '#7cc443', -.6, 1.6); x.fillText(p.s, p.x, yy); x.lineWidth = 1.2; x.strokeStyle = INK; x.strokeText(p.s, p.x, yy); x.restore(); }
+  for (const p of pops) { if (p.t < 0) continue; x.save(); x.globalAlpha = clamp(1.4 - p.t * 1.3, 0, 1); x.textAlign = 'center'; x.font = FONT(p.f || 30); x.lineWidth = 5; x.lineJoin = 'round'; x.strokeStyle = '#fffaf0'; const yy = p.y - p.t * 40; x.strokeText(p.s, p.x, yy); x.fillStyle = crayon(x, p.c || '#7cc443', -.6, 1.6); x.fillText(p.s, p.x, yy); x.lineWidth = 1.2; x.strokeStyle = INK; x.strokeText(p.s, p.x, yy); x.restore(); }
   drawTime(x); drawScore(x);
-  if (state === 'title') card(x, [[['BERRY STACK', -50], 30, true], [['STACK 4 BERRIES ON THE PLATE', -6], 15], [['AS MANY STACKS AS YOU CAN IN 1 MINUTE', 16], 13], [[`${dropKey()} OR TAP TO DROP · ${dropKey()} TO START`, 54], 14, false, '#d63d7c']]);
-  if (state === 'over') card(x, [[['TIME!', -54], 34, true, '#f2b630'], [[`${stacks} STACK${stacks === 1 ? '' : 'S'}`, -8], 26, true], [[stacks >= best && stacks > 0 ? 'A NEW BEST!' : `BEST ${best}`, 28], 15], [[overT > .9 ? `${dropKey()} TO PLAY AGAIN` : ' ', 60], 14, false, '#d63d7c']]);
+  if (state === 'title') card(x, [[['BERRY STACK', -50], 30, true], [['STACK 4 BERRIES ON THE PLATE', -6], 15], [['AS MANY STACKS AS YOU CAN IN 1 MINUTE', 14], 13], [['BONUS: SAME COLORS \u00b7 NO DROPS \u00b7 SPEED', 32], 11], [[`${dropKey()} OR TAP TO DROP · ${dropKey()} TO START`, 54], 14, false, '#d63d7c']]);
+  if (state === 'over') { const k = tally(); card(x, [[['TIME!', -66], 30, true, '#f2b630'], [[`${stacks} STACK${stacks === 1 ? '' : 'S'} \u00b7 ${score}`, -32], 14], [[`SPEED BONUS +${Math.round(speedPts * k)}`, -12], 14, false, '#3f8fd0'],
+    [[`${score + Math.round(speedPts * k)}`, 20], 30, true], [[k < 1 ? ' ' : newBest ? 'A NEW BEST!' : `BEST ${best}`, 50], 14, false, newBest ? '#d63d7c' : INK], [[overT > 1.5 ? `${dropKey()} TO PLAY AGAIN` : ' ', 74], 13, false, '#d63d7c']]); }
 }
 
 // ── the loop (a fixed step, drawn every frame), paused under the console's menu
@@ -626,6 +646,6 @@ addEventListener('message', e => { const d = e.data; if (!d || d.bb == null || e
 }));
 cv.addEventListener('pointerdown', e => { e.preventDefault(); if (!EMB) FXOFF = false; act(); music(); });
 if (EMB) parent.postMessage({ bb: 'ready' }, '*');
-window.__bs = { step: n => { for (let i = 0; i < n; i++) update(DT); }, draw, act, key, get: () => ({ state, paused: PAUSED, fxOff: FXOFF, stacks, timeLeft: +timeLeft.toFixed(2), stack: stack.length, flying: flying.length, claw: { x: Math.round(claw.x), bx: Math.round(clawBerry().x), mode: claw.mode }, top: stack.length ? Math.round(stackPos(stack.length - 1).x) : PLATE_X, kebab: kebab && kebab.stage, pets: pets.map(p => p.st), plate: plate.up }), set: o => { if ('timeLeft' in o) timeLeft = o.timeLeft; if ('clawX' in o) claw.x = o.clawX; if ('pet' in o) forcePet = o.pet; }, pause: on => { PAUSED = on; } };   // (for testing it)
+window.__bs = { step: n => { for (let i = 0; i < n; i++) update(DT); }, draw, act, key, get: () => ({ state, paused: PAUSED, fxOff: FXOFF, stacks, score, streak, speedPts, stackT, timeLeft: +timeLeft.toFixed(2), stack: stack.length, flying: flying.length, claw: { x: Math.round(claw.x), bx: Math.round(clawBerry().x), mode: claw.mode }, top: stack.length ? Math.round(stackPos(stack.length - 1).x) : PLATE_X, kebab: kebab && kebab.stage, pets: pets.map(p => p.st), plate: plate.up }), set: o => { if ('timeLeft' in o) timeLeft = o.timeLeft; if ('clawX' in o) claw.x = o.clawX; if ('pet' in o) forcePet = o.pet; }, pause: on => { PAUSED = on; } };   // (for testing it)
 </script>
 </body></html>

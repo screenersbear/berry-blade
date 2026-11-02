@@ -668,7 +668,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261102p"></script>
+<script src="charkit.js?v=20261102q"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -1401,7 +1401,7 @@ const FEEL_DEFAULT = {
   turn: { enabled: true, pivotFrames: 4 },                                         // (a turn on the spot: a pivot this many frames; an attack or a jump cuts it short)
   playerHit: { enabled: true, knockback: 1, invuln: .5, hitstopFrames: 6, shake: 9, flicker: true },   // (when you're hit: the push x, safe this long after the flinch, the freeze, the shake; flicker: a soft pale blink, not vanishing)
   telegraph: { enabled: true, length: 1, glow: 1, bigK: .3 },                     // (every enemy attack: its wind-up x length, longer for the big ones by bigK, and a glow building to the strike)
-  fidgets: { enabled: true, after: 4, every: 6 },                                  // (standing still this long: a fidget now and then, about every this many seconds)
+  fidgets: { enabled: true, after: 4, every: 6, idle: 12 },                                  // (standing still this long: a fidget now and then, about every this many seconds)
   // MOVEMENT (the user, 2026-10-31: the floatiness notes, "Yes, build the MOVEMENT section" + whiffs at normal gravity, the air up attack's rise at full gravity
   // and its coil). Off (or BEFORE): the game's own, as it was. weight: gravity x this with the jumps scaled to match (same heights, less hang)
   movement: { enabled: true, weight: 1, fall: 1.8, jumpCut: 2.1, coyoteFrames: 6, groundAccel: .72, groundStop: 1, airControl: 1, airStrikeGrav: 1, whiffOn: true, whiffGrav: 1, hang: .3,
@@ -1518,7 +1518,7 @@ const FEEL_UI = [
   ["turn", "TURNAROUNDS", [["pivotFrames", "pivot, frames", 2, 8, 1]]],
   ["playerHit", "PLAYER HIT", [["knockback", "knockback x", 0, 2.5, .05], ["invuln", "safe after the flinch, s", 0, 2, .05], ["hitstopFrames", "hitstop, frames", 0, 12, .5], ["shake", "shake px", 0, 20, .5], ["flicker", "a soft flicker (off: the old blink)"]]],
   ["telegraph", "ENEMY TELEGRAPHS", [["length", "wind-up length x", .5, 2.5, .05], ["glow", "glow", 0, 2, .05], ["bigK", "the big ones' extra", 0, 1, .05]]],
-  ["fidgets", "IDLE FIDGETS", [["after", "after standing still, s", 1, 15, .5], ["every", "then about every, s", 2, 20, .5]]],
+  ["fidgets", "IDLE FIDGETS", [["after", "after standing still, s", 1, 15, .5], ["every", "then about every, s", 2, 20, .5], ["idle", "the girls' big idle from, s", 4, 60, 1]]],
   ["hitBoxes", "HIT BOXES", [["fist", "past a fist or foot, px", 0, 40, 1], ["gauntlet", "past the gauntlet, px", 0, 60, 1], ["blade", "past the blade's tip, px", 0, 60, 1]]],
   ["movement", "MOVEMENT", [["weight", "gravity x (jumps match: same height)", .6, 2, .02], ["fall", "fall multiplier (falling vs rising)", 1, 3, .05], ["jumpCut", "jump cut (let go early)", 1, 4, .05],
     ["coyoteFrames", "coyote time, frames", 0, 15, 1], ["groundAccel", "ground acceleration x", .3, 3, .05], ["groundStop", "ground stopping x", .3, 3, .05], ["airControl", "air control x", .2, 3, .05],
@@ -10970,7 +10970,8 @@ function updatePlayer(dt) {
     if (!still) { p.stillT = 0; p.fidget = null; }
     else { p.stillT = (p.stillT || 0) + dt;
       if (p.fidget) { p.fidget.t += dt; const S = KIT.STRIKES[p.fidget.kind]; if (!S || p.fidget.t >= S.dur) { p.fidget = null; p.fidgetWait = FG.every * rand(.65, 1.35); } }
-      else if (p.stillT >= FG.after && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const F = KIT.FIDGETS, L = F[String(p.rig.spec.id || p.rig.name || "").toLowerCase()] || F.all, opts = L.filter(k => k !== p.fidgetLast), k = opts[Math.floor(Math.random() * opts.length)] || L[0];
+      else if (p.stillT >= FG.after && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const id = String(p.rig.spec.id || p.rig.name || "").toLowerCase(), F = KIT.FIDGETS, L = F[id] || F.all, big = KIT.IDLES && KIT.IDLES[id], opts = L.filter(k => k !== p.fidgetLast);
+        const k = big && p.stillT >= (FG.idle ?? 12) && p.fidgetLast !== big ? big : opts[Math.floor(Math.random() * opts.length)] || L[0];   // (stood still a good while: her big idle every other time, the user 2026-11-02, KIT.IDLES)
         p.fidget = { kind: k, t: 0 }; p.fidgetLast = k; } } }   // (never the same one twice running)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   // lean into acceleration, rock back when braking (springy)
@@ -22198,12 +22199,12 @@ function buyAcc(id) {
 // the look of them, under the map in the pause menu and bigger in ACCESSORIES: a little renderer of its own, the two of them side by side in what they've got on
 let wearPv = null;
 const curHero = () => rig && GEAR_HEROES.includes(rig.id) ? rig.id : (story && story.char) || "camila";   // (whoever you're playing)
-function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body") {   // (only: the ones shown. Just one since 2026-10-27, the user: "only show the character you're currently playing as" · frame "head": up close, HEADPHONES)
+function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body", tick = 0) {   // (only: the ones shown. Just one since 2026-10-27, the user: "only show the character you're currently playing as" · frame "head": up close, HEADPHONES)
   if (!wearPv) {
     const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
     const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d);
     const cam = new THREE.PerspectiveCamera(22, 2, .1, 60); wearPv = { R2, sc, cam, rigs: {} }; }
-  const V = wearPv, G = gearState();
+  const V = wearPv, G = gearState(); V.last = [into, w, h, only, frame];
   for (const id of GEAR_HEROES) { const k = id === "rose" ? 1 : 0;
     let E = V.rigs[id]; const src = roster.find(q => q.id === id); if (!src) continue;
     if (!E || E.spec !== src.spec) { if (E) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } const r = buildChar(src.spec);   // (the old one let go, its pictures with it)
@@ -22211,7 +22212,7 @@ function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body") {   // (onl
       const st = makeState(0, r); st.onGround = true; E = V.rigs[id] = { r, st, spec: src.spec, fresh: true };
       if (r.head) { r.root.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(r.head), sz = bb.getSize(new THREE.Vector3()); E.hc = r.head.worldToLocal(bb.getCenter(new THREE.Vector3())); E.hs = Math.max(sz.x, sz.y, sz.z); } }   // (her bare head's middle and size, before anything's on it: HEADPHONES frames on it)
     const W = G.wear[id] || {}; if (E.r.__gearKey !== JSON.stringify(W)) dressGear(E.r, W);
-    const st = E.st; E.yaw = k ? -Math.PI / 2 - .3 : -Math.PI / 2 + .3; st.face = 1; for (let i = 0, n = E.fresh ? 60 : 3; i < n; i++) { st.yaw = E.yaw; KIT.updatePose(st, 1 / 60); E.r.sync(st, E.r, 1 / 60); } E.fresh = false;   // (built new, a hair look's own rig: settled into her stance first, not half up out of a T, the user 2026-10-28 "rose will stand up straight")
+    const st = E.st, T0 = KIT.time; E.yaw = k ? -Math.PI / 2 - .3 : -Math.PI / 2 + .3; st.face = 1; for (let i = 0, n = E.fresh ? 60 : tick ? 1 : 3, h = tick && !E.fresh ? tick : 1 / 60; i < n; i++) { st.yaw = E.yaw; KIT.time = E.t = (E.t || 0) + h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false;   // (her own clock: the game's stands still while paused)   // (built new, a hair look's own rig: settled into her stance first, not half up out of a T, the user 2026-10-28 "rose will stand up straight")
     E.x = only.length > 1 ? (k ? .95 : -.95) : 0; E.r.root.position.set(E.x, 0, 0); E.r.root.visible = only.includes(id); }
   if (into && V.R2.domElement.parentNode !== into) into.appendChild(V.R2.domElement);
   if (w && h && (V.w !== w || V.h !== h)) { V.w = w; V.h = h; V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
@@ -22223,6 +22224,8 @@ function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body") {   // (onl
 }
 // the box under the map (the pause menu): whoever you're playing, in what she's got on; no words (the user, 2026-10-27: "dont show any text. just show the character
 // and then the accessories appear on them as they play"). A click: ACCESSORIES
+// (the user, 2026-11-02: "the character in the menu screen should breathe like in their regular non moving stance": while she's on show, paused, her standing pose goes on, frame by frame)
+function wearBreathe(dt) { const V = wearPv; if (!V || !V.last || !V.last[0] || !V.R2.domElement.isConnected || !V.R2.domElement.offsetParent) return; try { wearPreview(...V.last, dt); } catch (e) { V.last = null; console.warn("wear breathe", e); } }
 function drawPauseWear() {
   const B = $("pWear"); if (!B || B.classList.contains("hidden")) return; const C = $("pwCv"), h = Math.max(60, Math.round((C.clientHeight || B.clientHeight - 24) - 6)), w = Math.max(48, Math.round(Math.min(C.clientWidth || B.clientWidth, h * .8)));   // (as big as its widget lets her be)
   try { wearPreview(C, w, h, [curHero()]); const cv = wearPv && wearPv.R2.domElement; if (cv) { cv.style.width = w + "px"; cv.style.height = h + "px"; } } catch (e) { console.warn("wear preview", e); }
@@ -22651,7 +22654,7 @@ function gotTape(T, q) {
 const CONS_PRICE = 500, CART_HUB = 150, CART_ROAD = 120;
 const CARTS = [{ id: "cart1", name: "TIC TAC TOWER", hub: true, page: "games/tictactower.html?v=20261101a", cpu: true,   // (the new rules, 2026-10-31: pieces pushed, lines score)
     help: { touch: "HOLD A PANEL, LET GO TO PLACE · SWIPE ONE OF YOURS TO PUSH IT (HOLD IT: ARROWS) · SWIPE ALONG A TIER'S SIDE TO TURN IT · DRAG UNDER IT TO LOOK ROUND · TAP THE BUBBLE: PLAY THE COMPUTER", pad: "{lb} / {rb}: THE TIERS · {j}: PLACE · {j} ON ONE OF YOURS, THEN A WAY: PUSH IT · {sq}: PICK UP THE TIER, THEN ← →: TURN IT · {tk}: TURN THE VIEW · START: MENU", keys: "← → ↑ ↓ MOVE · Q / E: THE TIERS · X: PLACE · X ON ONE OF YOURS, THEN A WAY: PUSH IT · V: PICK UP THE TIER, THEN ← →: TURN IT · Z: TURN THE VIEW · ESC: MENU" } },
-  { id: "cart2", name: "BERRY STACK", road: true, tune: true, page: "games/berrystack.html?v=20261102f",   // (the user's, 2026-11-02: a toy claw machine; four berries on the plate, skewered, out to a cat or a dog)
+  { id: "cart2", name: "BERRY STACK", road: true, tune: true, page: "games/berrystack.html?v=20261102g",   // (the user's, 2026-11-02: a toy claw machine; four berries on the plate, skewered, out to a cat or a dog)
     help: { touch: "TAP TO DROP THE BERRY · STACK 4 ON THE PLATE", pad: "{j}: DROP THE BERRY · STACK 4 ON THE PLATE · START: MENU", keys: "X: DROP THE BERRY · STACK 4 ON THE PLATE · ESC: MENU" } },
   { id: "cart3", name: "MINI-GAME 3", road: true },
   { id: "cart4", name: "MINI-GAME 4", road: true }, { id: "cart5", name: "MINI-GAME 5", w: 4 }, { id: "cart6", name: "MINI-GAME 6", w: 7 }];   // (hub: every hub's stall · road: the stands by the road, the next one you haven't got · w: lying in a room of that world · page: a game that's a page of its own)
@@ -26594,7 +26597,7 @@ function frame(now) {                              // (the next frame is asked f
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);

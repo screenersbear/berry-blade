@@ -1615,10 +1615,11 @@ const GIANT_STANCE = {
 api.GIANT_STANCE = GIANT_STANCE;
 const ownPoseOf = (p, air) => { const M = p.rig.spec.move || {}; return air ? (p.vy < -160 ? M.rise : p.vy < 160 ? M.top : M.fall) : p.hurtT > 0 ? M.hurt : null; };   // (the pose she's in that the character may have set)
 function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
-  p.gripFree = false; p.gPoseK = 0;                  // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
+  p.gripFree = false; p.gPoseK = 0; const F = p.fidget, FS = F && STRIKES[F.kind], OA = FS && FS.ownArms, own0 = OA ? clamp(Math.min((F.t - OA[0]) / .3, (OA[1] - F.t) / .3), 0, 1) : 0, fh = !!(FS && FS.freeHand && F.t > FS.freeHand[0] && F.t < FS.freeHand[1]);   // (own0: a big idle's own arms, Camila's handstand on the grown fist, the user 2026-11-02 "even with big hands")
+                   // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
   if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
-  const w = clamp(g, 0, 1), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
+  const w = clamp(g, 0, 1) * (1 - own0), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
   const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); }, armPosed = P => !!P && ["armF", "elbF", "spF", "rlF"].some(c => P[c] !== undefined);
   if (armPosed(M.gstance)) p.gPoseK = w * (1 - (p.gaitAmt || 0)) * (air ? 0 : 1);   // (the character's own grown standing pose has the weapon arm: the grown arm goes where it's put, the user 2026-11-01)
@@ -1630,6 +1631,8 @@ function giantPose(p, o) {                           // not in a move: too heavy
   if (RT && gr > .01) { const uu = (((p.gaitPh || 0) / TAU) % 1 + 1) % 1; [["armF", A], ["elbF", E], ["spF", Sp]].forEach(([k, kk]) => { if (RT[k]) o[kk] += keyvS(RT[k], uu) * gr * w; }); }   // (the run's own edits to that arm: on top of the drag)
   p.gripFree = (!!own && ["armB", "elbB", "spB", "rlB"].some(mine)) || (!!RT && gr > .3 && ["armB", "elbB", "spB", "rlB"].some(k => RT[k]));   // (her other arm posed in this jump, hit or run: it lets go of the grown arm)
   if (p.atkT >= 0 && p.atkKind && STRIKES[p.atkKind] && STRIKES[p.atkKind].giant) { const K = M.anims && M.anims[p.atkKind]; p.gripFree = !!K && ["armB", "elbB", "spB", "rlB"].some(k => K[k]); }   // (and in a grown move whose other arm the character keyed)
+  if (own0) { p.gPoseK = Math.max(p.gPoseK, own0); if (own0 > .5) p.gripFree = true; }   // (the grown arm where the idle puts it, the other hand off it)
+  if (fh) p.gripFree = true;   // (Rose's dance: the grown sword stays on her shoulder, her other hand off the hilt to dance)
   if (pr.kind === "gauntlet" && !air && p.atkT < 0 && !p.gripFree) {   // at a full sprint, her other hand lets go of the big arm and swings loose at her side; running and picking up speed for it, she holds on (the user,
     // 2026-11-01: "let it fall to her side instead of grabbing her long arm when she's running. but when she's doing the basic running and picking up speed for that sprint, have her still hold it" · "for the big arms only")
     const sk = Math.max(clamp(((p.runK || 1) - 1.3) / .2, 0, 1), p.sprint && !((p.runK || 1) > 1) ? 1 : 0) * (p.gaitAmt || 0);   // (the game: runK 1.3 → 1.5; the editor's SPRINT: p.sprint alone)
@@ -1643,7 +1646,7 @@ function giantPose(p, o) {                           // not in a move: too heavy
   const G0 = GIANT_STANCE[pr.kind], G = M.gstance || {}, S = {};
   for (const k in G0) if (!/^(armF|elbF|spF|blade)$/.test(k)) S[k] = G0[k];   // (the planted stance; the weapon arm's hold is above, by its move)
   for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
-  for (const k in S) { const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
+  for (const k in S) { if (fh && /^(armB|elbB|spB|rlB)$/.test(k)) continue; const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }   // (fh: her other arm her own, dancing)
   if (pr.kind === "sword" && (G.blade !== undefined || G.armF !== undefined || G.elbF !== undefined)) o.wrist = lerp(o.wrist ?? -.6, (G.blade ?? G0.blade) - (o[A] + o[E]), st);   // (the blade at its angle: hers if she has one, else back over her shoulder)
   // (her other arm posed in it: still holding the grown arm, where and as she posed it, holdSolve. It let go before, 2026-11-01, and her posed hand ended up by her chin facing the other way)
 }
@@ -1877,7 +1880,7 @@ function update(R, spec) {                       // returns the rig to use (the 
 const POSE0 = { lean: .6, arch: .25, bodyY: 0, headRot: 0, armF: .15, elbF: .3, armB: -.1, elbB: .3, spF: 0, spB: 0, fNz: 0, fFz: 0,
   fNx: .08, fNy: 0, fFx: -.07, fFy: 0, fP: 0, fS: 0, tailBase: 1.2, tailCurl: -.2, tailSwish: .6, hatTilt: 0, hatLift: 0 };
 const SPRUNG = new Set(["lean", "armF", "elbF", "armB", "elbB", "hatTilt"]);   // these overshoot and settle (follow-through)
-const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0, kOut: 0, rlF: 0, rlB: 0 };
+const POSE_H0 = { ...POSE0, lean: .06, arch: 0, armF: .12, elbF: .25, armB: -.08, elbB: .25, fNx: .07, fFx: -.07, wrist: -.6, twist: 0, twistU: 0, twistH: 0, spin: 0, bS: 0, flip: 0, wheel: 0, rise: 0, gF: 0, gB: 0, wF: 0, wB: 0, grip: 0, hN: 0, hF: 0, kOut: 0, rlF: 0, rlB: 0, lid: 0, headY: 0 };   // (lid: her eyes half shut, fed up; headY: her head turned on her neck: the big idles, 2026-11-02)
 function makeState(x, r, z = 0, groundY = 470) {
   const P0 = r.kind === "cat" ? POSE0 : POSE_H0;
   return { rig: r, x, z, y: groundY, vx: 0, vy: 0, face: 1, onGround: true, coyote: 0, sq: 0, sqv: 0, rot: 0, spinY: 0, yaw: -.85,
@@ -2788,6 +2791,55 @@ Object.assign(STRIKES, {
   fidget_blade: { dur: 1.8, pose: true, keys: { armF: [[0, .35], [.35, 1.5], [1.4, 1.5], [1.8, .35]], elbF: [[0, 1.15], [.35, .5], [1.4, .5], [1.8, 1.15]], blade: [[0, .95], [.35, -.2], [.75, .3], [1.05, -.2], [1.8, .95]],   // ROSE: the blade up before her eyes, turned to the light, along its edge
       roll: [[0, 0], [.55, 1.2], [1.05, -.6], [1.8, 0]], headRot: [[0, 0], [.35, .18], [1.4, .18], [1.8, 0]] } },
 });
+// the girls' big idles (the user, 2026-11-02: "create an idle animation for the girls. rose will bounce up and down like warming herself up, and then start dancing.
+// camila will cross her arms and look annoyed. then she'll do a handstand even with big hands"): played by work.html in place of a fidget once she's stood still a
+// good while (FEEL.fidgets.idle). F is the lead hand (the weapon's); every key starts and ends on her own standing pose, so she goes in and out of it smoothly
+const BEAT = (t0, t1, per, a, b) => { const o = []; for (let i = 0, t = t0; t <= t1 + 1e-6; i++, t = t0 + i * per / 2) o.push([+t.toFixed(3), i % 2 ? b : a]); return o; };   // (a, b, a, b... every half of per, t0 to t1)
+const PI = Math.PI;
+Object.assign(STRIKES, {
+  idle_rose: { dur: 8, pose: true, freeHand: [.3, 7.7], keys: {   // ROSE: the sword up on her shoulder, up on the balls of her feet bouncing, shaking her free arm out, the last bounces off the ground (0-2.6); then a dance: hips swaying, a step-touch, her free
+    // hand punching up on the beat, then both arms up waving (2.6-6.4); a twirl, and the sword held high, a hand on her hip (6.4-7.5)
+    bodyY: [[0, -.08], ...BEAT(.3, 2.2, .38, -.26, 0), [2.6, -.1], ...BEAT(2.85, 6.35, .5, -.16, -.05), [6.6, -.04], [7.0, -.02], [7.5, -.02], [8, -.08]],
+    rise: [[0, 0], [1.06, 0], [1.25, .1], [1.44, 0], [1.63, .16], [1.82, 0], [2.01, .2], [2.2, 0], [8, 0]], fP: [[0, 0], [1.06, 0], [1.25, -.4], [1.44, 0], [1.63, -.45], [1.82, 0], [2.01, -.5], [2.2, 0], [8, 0]],
+    hN: [[0, 0], [.3, .5], [2.3, .5], [2.6, .15], [6.4, .15], [6.7, 0], [8, 0]], hF: [[0, 0], [.3, .5], [2.3, .5], [2.6, .15], [6.4, .15], [6.7, 0], [8, 0]],
+    lean: [[0, .47], [.3, .16], [2.4, .16], [2.6, .1], [6.6, .1], [7.0, 0], [7.5, 0], [8, .47]],
+    arch: [[0, 0], [2.6, 0], ...BEAT(2.85, 6.35, .5, .12, -.06), [6.6, 0], [7.0, -.18], [7.5, -.18], [8, 0]],
+    headRot: [[0, -.19], [.3, -.04], [2.6, -.04], ...BEAT(2.85, 6.35, .5, .07, -.05), [6.6, -.04], [7.0, -.18], [7.5, -.18], [8, -.19]],
+    twist: [[0, 0], [2.6, 0], ...BEAT(2.85, 6.35, 1, .35, -.35), [6.6, 0], [8, 0]],
+    twistU: [[0, 0], [.3, 0], ...BEAT(.49, 2.2, 1.52, .12, -.12), [2.6, 0], ...BEAT(2.85, 6.35, 1, -.16, .16), [6.6, 0], [8, 0]],
+    fNz: [[0, .34], [.3, .22], [2.6, .22], ...BEAT(2.85, 6.35, 1, .5, .14), [6.6, .3], [7.0, .3], [8, .34]], fFz: [[0, .34], [.3, .22], [2.6, .22], ...BEAT(2.85, 6.35, 1, .14, .5), [6.6, .3], [7.0, .3], [8, .34]],
+    fNy: [[0, 0], [2.6, 0], ...BEAT(2.85, 6.35, 1, 0, .15), [6.6, 0], [8, 0]], fFy: [[0, 0], [2.6, 0], ...BEAT(2.85, 6.35, 1, .15, 0), [6.6, 0], [8, 0]],
+    armB: [[0, 1.26], [.35, .25], ...BEAT(.49, 2.2, .38, .4, .15), [2.6, 1.2], ...BEAT(2.85, 4.35, .5, 2.9, 1.5), [4.6, 2.3], [4.85, 2.7], [6.35, 2.7], [6.6, 1.5], [7.0, .1], [7.5, .1], [8, 1.26]],
+    elbB: [[0, .45], [.35, .5], ...BEAT(.49, 2.2, .38, .3, .7), [2.6, 1.2], ...BEAT(2.85, 4.35, .5, .15, 1.3), [4.6, .6], [4.85, .35], [6.35, .35], [6.6, 1.2], [7.0, 1.9], [7.5, 1.9], [8, .45]],
+    spB: [[0, .26], [.35, .35], [2.6, .3], [2.85, .2], [4.6, .3], ...BEAT(4.85, 6.35, 1, .85, .2), [6.6, .3], [7.0, .95], [7.5, .95], [8, .26]],
+    armF: [[0, .35], [.35, .3], [4.35, .3], [4.6, 1.6], [4.85, 2.6], [6.35, 2.6], [6.6, 1.2], [7.0, 2.85], [7.5, 2.85], [8, .35]],
+    elbF: [[0, 1.15], [.35, 1.55], [4.35, 1.55], [4.6, .9], [4.85, .4], [6.35, .4], [6.6, 1.0], [7.0, .3], [7.5, .3], [8, 1.15]],
+    spF: [[0, .41], [.35, .2], [4.6, .2], ...BEAT(4.85, 6.35, 1, .2, .85), [6.6, .4], [7.0, .3], [7.5, .3], [8, .41]],
+    blade: [[0, .95], [.35, 2.6], [4.35, 2.6], [4.85, 3.1], [6.35, 3.1], [6.6, 1.6], [7.0, 3.1], [7.5, 3.1], [8, .95]],
+    spin: [[0, 0], [6.35, 0], [6.95, TAU], [8, TAU]] } },
+  idle_camila: { dur: 8.6, pose: true, ownArms: [3.75, 8.1], keys: {   // CAMILA: arms folded, weight on one hip, eyes half shut, looking away, a glance back, a sigh, her foot tapping (0-3.4);
+    // then up onto her hands, over like a cartwheel and held there, the other hand off onto her hip for a moment (on just the gauntlet, grown or not), and over onto her feet (3.75-8.6)
+    armF: [[0, .55], [.45, .2], [3.4, .2], [3.75, 2.2], [4.05, 2.95], [7.55, 2.95], [7.9, 1.4], [8.6, .55]],
+    elbF: [[0, 1.35], [.45, 1.4], [3.4, 1.4], [3.75, .8], [4.05, .06], [7.55, .06], [8.0, .7], [8.6, 1.35]],
+    spF: [[0, 0], [.45, -.8], [3.4, -.8], [3.75, .2], [4.05, .5], [4.65, .35], [7.0, .35], [7.55, .6], [8.0, .2], [8.6, 0]],
+    armB: [[0, .75], [.45, .15], [3.4, .15], [3.75, 2.2], [4.05, 2.95], [5.45, 2.95], [5.75, .1], [6.3, .1], [6.6, 2.95], [7.55, 2.95], [7.9, 1.4], [8.6, .75]],
+    elbB: [[0, 1.3], [.45, 1.55], [3.4, 1.55], [3.75, .8], [4.05, .06], [5.45, .06], [5.75, 1.9], [6.3, 1.9], [6.6, .06], [7.55, .06], [8.0, .6], [8.6, 1.3]],
+    spB: [[0, .1], [.45, -.75], [3.4, -.75], [3.75, .2], [4.05, .5], [4.65, .35], [5.45, .35], [5.75, .95], [6.3, .95], [6.6, .35], [7.0, .35], [7.55, .6], [8.0, .2], [8.6, .1]],
+    lean: [[0, .24], [.45, 0], [3.4, 0], [3.75, .45], [4.05, .3], [4.3, -.05], [7.2, -.05], [7.6, .35], [8.6, .24]],
+    arch: [[0, 0], [.45, -.12], [3.4, -.12], [3.75, 0], [4.6, -.15], [7.0, -.15], [7.3, 0], [8.6, 0]],
+    bodyY: [[0, -.17], [.45, -.06], [2.2, -.06], [2.45, 0], [2.85, -.1], [3.4, -.08], [3.75, -.32], [4.05, -.05], [7.2, -.05], [7.5, -.3], [7.9, -.1], [8.6, -.17]],
+    twist: [[0, 0], [.45, .22], [3.4, .22], [3.75, 0], [8.6, 0]],
+    headY: [[0, 0], [.5, .55], [1.5, .55], [1.75, -.2], [2.3, -.2], [2.55, .6], [3.4, .6], [3.7, 0], [8.6, 0]],
+    headRot: [[0, 0], [.5, -.16], [1.5, -.16], [1.75, -.05], [2.3, -.05], [2.55, -.2], [3.4, -.2], [3.7, 0], [4.05, -.25], [4.5, -.3], [7.1, -.3], [7.5, 0], [8.6, 0]],
+    lid: [[0, 0], [.5, .55], [1.6, .55], [1.75, .3], [2.3, .3], [2.55, .6], [3.4, .6], [3.6, 0], [8.6, 0]],
+    fNz: [[0, .1], [.45, .2], [3.4, .2], [3.75, .25], [4.1, .25], [4.45, 1.0], [5.0, .08], [6.6, .08], [7.0, 1.0], [7.35, .35], [7.6, .25], [8.6, .1]],
+    fFz: [[0, .08], [.45, .16], [3.4, .16], [3.75, .22], [4.1, .22], [4.45, 1.0], [5.0, .08], [6.6, .08], [7.0, 1.0], [7.35, .3], [7.6, .2], [8.6, .08]],
+    fNx: [[0, .37], [3.4, .37], [3.75, .3], [4.3, 0], [7.1, 0], [7.5, .3], [8.6, .37]], fFx: [[0, -.4], [3.4, -.4], [3.75, -.3], [4.3, 0], [7.1, 0], [7.5, -.3], [8.6, -.4]],
+    fNy: [[0, 0], [.7, 0], ...BEAT(.9, 3.3, .4, 0, .09), [3.5, 0], [5.8, 0], [6.1, .35], [6.4, 0], [8.6, 0]],
+    spin: [[0, 0], [3.75, 0], [4.1, -1.2], [7.3, -1.2], [7.8, 0], [8.6, 0]],
+    wheel: [[0, 0], [4.1, 0], [4.65, PI], ...BEAT(5.0, 6.8, .9, PI + .04, PI - .04), [7.0, PI], [7.55, TAU], [8.6, TAU]],
+    rise: [[0, 0], [4.1, 0], [4.65, .95], [7.0, .95], [7.55, 0], [8.6, 0]] } },
+});
 // the slide forward (the user, 2026-10-31: "allow holding the block button and facing forward to allow the player to, similar to the back hop, slide forward and face
 // back towards the enemy"): down low on one hip, the lead leg out ahead, the other folded under, a hand trailing on the ground; work.html turns her round at its end
 STRIKES.fwdslide = { dur: .4, pose: true, keys: {   // (the user, 2026-10-31: "crouch more and look like they're running around the enemy", and "fully facing back where they were when the animation ends": low, running quick strides, swung round through the front as she goes past; the game carries her out in front of them and back, p.z)
@@ -2797,6 +2849,7 @@ STRIKES.fwdslide = { dur: .4, pose: true, keys: {   // (the user, 2026-10-31: "c
   armF: [[0, .4], [.06, -.7], [.12, .95], [.18, -.7], [.24, .95], [.3, -.7], [.36, .6], [.4, .4]], elbF: [[0, .6], [.06, 1.35], [.36, 1.35], [.4, .6]], armB: [[0, .3], [.06, .95], [.12, -.7], [.18, .95], [.24, -.7], [.3, .95], [.36, -.3], [.4, .2]], elbB: [[0, .5], [.06, 1.35], [.36, 1.35], [.4, .5]],
   spin: [[0, 0], [.14, 0], [.36, -2.45], [.4, -2.54]], headRot: [[0, 0], [.06, .15], [.34, .1], [.4, 0]] } };
 const FIDGETS = { camila: ["fidget_hood", "fidget_look", "fidget_flex"], rose: ["fidget_hood", "fidget_look", "fidget_blade"], all: ["fidget_hood", "fidget_look", "fidget_stretch"] };
+const IDLES = { rose: "idle_rose", camila: "idle_camila" };   // (the big idle of each, above)
 Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
 // the archetypes' own moves, the same for every buddy of one (the user, 2026-11-02: "we will use archetypes for the buddies"; the thief's "sleek attack animations"):
 // the THIEF: a low claw swipe whipped up across, a snatch (in fast, the hand flicked up, back to the chest), the dashing knife-hand; its charge special's dash, held
@@ -3049,7 +3102,7 @@ function smoothPose(p, T, dt) {
     if (SPRUNG.has(key)) {
       const v = (p.pv[key] || 0) + ((T[key] - p.pose[key]) * (hit ? 900 : 260) - (p.pv[key] || 0) * (hit ? 52 : 22)) * dt;
       p.pv[key] = v; p.pose[key] += v * dt;
-    } else if (key === "wheel" || key === "rise") p.pose[key] = T[key];   // (a cartwheel's turn and lift: straight from its keys, smooth already; eased, the fast turn never caught up)
+    } else if (key === "wheel" || key === "rise") { if (key === "wheel") p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU); p.pose[key] = p.flowEase > 0 ? lerp(p.pose[key], T[key], k) : T[key]; }   // (a big idle cut short, upside down: eased back onto her feet, flowEase)   // (a cartwheel's turn and lift: straight from its keys, smooth already; eased, the fast turn never caught up)
     else if (key === "spin" || key === "flip") {
       p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU);   // a finished turn settles forward, never unwinds back through the turn
       p.pose[key] = lerp(p.pose[key], T[key], k);
@@ -3155,6 +3208,7 @@ function updatePoseHuman(p, dt) {
     const B = { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }, sw = leadFar(p); for (const k in B) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0 && (p.onGround || !LEG_CH.has(kk))) T[kk] = B[k]; }   // (in the air the guard is the arms and body only: the legs keep the jump; a ground stance's feet up there contorted Chase's legs)
   }
   if (p.pivotT > 0 && a < 0 && p.onGround && p.hurtT <= 0) { T.lean -= .16; T.bodyY -= .03; T.armF += .35; T.armB += .25; T.headRot -= .06; }   // a turn on the spot: weight back as she swings round (COMBAT FEEL's pivot, 2026-10-31)
+  if (p.fidgetWas && !p.fidget) p.flowEase = .6; p.fidgetWas = !!p.fidget; p.flowEase = a >= 0 || p.tackle || p.dodge ? 0 : Math.max(0, (p.flowEase || 0) - dt);   // (a handstand cut short by a press: back over onto her feet, not snapped)
   if (p.fidget && a < 0 && p.hurtT <= 0 && p.onGround) { const F = poseKeys(p, p.fidget.kind, p.fidget.t), S = STRIKES[p.fidget.kind]; if (F) { Object.assign(T, F);   // an idle fidget, standing still a while (2026-10-31)
     if (S && S.keys.blade) { const sw = leadFar(p); T.wrist = keyvS(S.keys.blade, Math.min(p.fidget.t, S.dur)) - (sw ? T.armB + T.elbB : T.armF + T.elbF); } } }   // (the blade's own angle, as a strike's keys set it)
   if (a < 0 && p.hurtT <= 0 && !p.climb) extraPoses(p, T, false);
@@ -3661,9 +3715,9 @@ function syncHuman(p, r, dt = 0) {
   r.chest.position.copy(_SB); r.chest.rotation.set(0, tU, -ang[1]);   // (all three: giantRoll tips it about x, and that has to start from nothing each frame, or it adds up and turns her chest round and round)
   const hb = r.prop && r.prop.kind === "gauntlet" ? clamp(giantOf(p), 0, 1) : 0, a2 = ang[2] < 0 ? ang[2] * (1 - .6 * hb) : ang[2], hu = hb * Math.min(.14, Math.max(0, .27 * (Math.sin(.22) - Math.sin(ang[1]))));   // her arm grown: her head held up out of her tall collar (its front rises as she stands up out of her boxer's lean, .22, or leans back under the weight: up by as much), and over it, not sunk back behind it (the user, 2026-11-02: "look at how camila's head sinks into her body")
   r.head.position.set(p.neck.x + Math.sin(a2) * D.headOff * Bd.head, p.neck.y + Math.cos(a2) * D.headOff * Bd.head + hu, 0);
-  r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
+  r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5 + (o.headY || 0) * fs, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)
-  if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1; });   // (carved eyes: shut with the face)
+  if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1 - .55 * clamp(o.lid || 0, 0, 1); });   // (carved eyes: shut with the face; lid: half shut, Camila fed up)
   if (!r.sculpt) { r.cap.scale.set(Hr.depth, Hr.height, Hr.width); r.cap.rotation.z = Hr.tilt; }
   if (r.headband) r.headband.scale.set(1, Hr.height / 1.06, Hr.width / 1.24);   // hugs the hair (sized for June's, so she's unchanged)
   r.spike.scale.setScalar(Math.max(Hr.spike, .001)); r.spike.visible = Hr.spike > .03;
@@ -3930,7 +3984,7 @@ function shyFace(r) {                           // a copy of the face with full 
 return Object.assign(api, { CUP, settleTex, bmpOK: () => BMP_OK, lostBack: () => { LOSS_EP++; },
   FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
-  DBG_RIG, FIDGETS, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
+  DBG_RIG, FIDGETS, IDLES, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
   util: { Tube, simChain, updateChains, toonT, gradT, canvasTex, cv2, fillPoly, star, circ, bandArt, ramp, rounded, mk, at, group, pointAlong, FWD, UPV, hex, tint, wrapFront },
 });
 }
