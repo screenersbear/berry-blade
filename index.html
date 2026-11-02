@@ -1236,10 +1236,16 @@ const _pvSz = new THREE.Vector2();
 function pvRender(R, sc, cam, P) {                  // a preview's own renderer (its canvas see-through): the picture into its target, then through the filter onto the canvas
   R.getDrawingBufferSize(_pvSz); const w = Math.max(1, _pvSz.x), h = Math.max(1, _pvSz.y);
   if (!P.rt || P.rt.width !== w || P.rt.height !== h) { if (P.rt) P.rt.dispose(); P.rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 }); P.rt.texture.colorSpace = THREE.SRGBColorSpace; }
-  R.setRenderTarget(P.rt); R.setClearColor(0x000000, 0); R.clear(); R.render(sc, cam); R.setRenderTarget(null);
+  R.setRenderTarget(P.rt); R.setClearColor(0x000000, 0); R.clear(); pvShade(true, w, h, R.getPixelRatio()); R.render(sc, cam); pvShade(false); R.setRenderTarget(null);
   pvUniforms(P, P.rt.texture, w, h, R, true); R.setClearColor(0x000000, 0); R.clear(); R.render(P.s, gradeCam);
 }
 function pvFree(P) { if (!P) return; if (P.rt) P.rt.dispose(); P.m.dispose(); }
+let pvGround = 0;
+function pvShade(on, w, h, step) {                   // (round a preview's own picture, as render() does round the actors' pass: the applied look's character settings, not the level's — its
+  if (on) { if (SHADE) { SHADE.pass(true); pvGround = SHADE.U.mkGround.value; SHADE.U.mkGround.value = 0; }   // colour, its steps; they were drawn with the level's, washed out: the user, 2026-11-02 "the models shown in the menu still look flat compared to
+    const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(w, h); K.skinStep.value = step; } }   // the game style") · the characters' own texture at the picture's size · the ground under them at 0
+  else if (SHADE) { SHADE.pass(false); SHADE.U.mkGround.value = pvGround; }
+}
 let PV_BAKE = null;
 function pvBake(RT) {                               // (the game's renderer) a picture rendered into RT, through the filter: the target to read it back from, straight alpha
   const P = PV_BAKE || (PV_BAKE = pvGradeMake()), w = RT.width, h = RT.height;
@@ -6838,7 +6844,7 @@ function rigHead(r, st) {                            // a rig's head as a pictur
     const bx = new THREE.Box3().setFromObject(head), sz = bx.getSize(new THREE.Vector3()), hp = bx.getCenter(new THREE.Vector3()), d = Math.max(sz.x, sz.y) * 3.1;
     cam.position.set(hp.x + d * .12, hp.y + d * .04, hp.z + d); cam.lookAt(hp.x, hp.y + sz.y * .06, hp.z);
     const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
-    renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(ps, cam);
+    renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); pvShade(true, RT.width, RT.height, K); renderer.render(ps, cam); pvShade(false);
     const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(pvBake(RT), 0, 0, W2, H2, px);   // (through the game's filter, 2026-11-02)
     renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa); RT.dispose();
     big = document.createElement("canvas"); big.width = W2; big.height = H2; const bg = big.getContext("2d"), img = bg.createImageData(W2, H2);
@@ -7367,7 +7373,7 @@ function heroShot(id, part, sil) {                // a hero as the game draws th
       cam.position.set(hp.x + d * .12, hp.y + d * .04, hp.z + d); cam.lookAt(hp.x, hp.y + sz.y * .06, hp.z); }
     else { cam.position.set(H * .3, H * .55, H * 3.15); cam.lookAt(0, H * .5, 0); }
     const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
-    renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(ps, cam);
+    renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); pvShade(true, RT.width, RT.height, K); renderer.render(ps, cam); pvShade(false);
     const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(pvBake(RT), 0, 0, W2, H2, px);   // (through the game's filter, 2026-11-02)
     renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa); RT.dispose();
     const big = document.createElement("canvas"); big.width = W2; big.height = H2; const bg = big.getContext("2d"), img = bg.createImageData(W2, H2);
@@ -9458,10 +9464,12 @@ function upWant(s) {                               // the room above s, if one o
   return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
 }
 const UP_SEE = 200;                                  // (this high, under the opening, the room above is put up: before the camera lifts to it)
+const UP_FIGHT = { x: 420, y: 200 };                 // (the way up shut only with one close by, at the height you jumped from: a fight. Was any awake within 900 px, the floor's far below a stack's top too, so back down in a room whose baddies were up again, the way up just stopped. The user, 2026-11-02 "after falling down, the ability to jump up again disappeared")
 function upSee(p) {                                  // up off a jump under an opening into the room above: it's there to see, and you're only in it once you come down onto something of it (its floor by the hole, a ledge); else back down into this one
-  const y0 = p.upY ?? p.y; p.upY = p.y;
+  const y0 = p.upY ?? p.y; p.upY = p.y; if (p.onGround) p.upFoot = p.y;
   const R = holeAbove(p.x); if (!R) return;
-  if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && Math.abs(b.x - p.x) < 900) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
+  const ft = p.upFoot ?? p.y;                          // (where you jumped from)
+  if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
   if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120) startPeek(R.to, true);
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
@@ -9629,7 +9637,7 @@ function goRoomRise(ns) {                          // the hand-made waves: jumpe
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), y, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(y) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); if (camArriveOn()) camArrive(x, y, Y(y) + camUpOf()); else camBase = Y(y) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); clearArrival(player.x);
   });
 }
@@ -9653,7 +9661,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); if (camArriveOn()) camArrive(player.x, player.y, camBase); exitOpen = false;   // (falling in from the top: the camera with you, then on down after you, not down to the floor and back up to find you) $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
@@ -9695,7 +9703,7 @@ function goRoomUp(ns, holeX, edgeX) { bigLeave();             // (edgeX: up an e
     palsPut({ x: clamp(x - 50 * f, 40, WORLD - 40), y: gy, vx: 0, vy: -400, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * f, 60, WORLD - 60), gy, f);
     const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
-    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); exitOpen = false; $("exitCue").classList.add("hidden");
+    camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); camBase = Y(gy) + camUpOf(); if (camArriveOn()) camArrive(player.x, player.y, camBase); exitOpen = false;   // (no lift carried over from the jump below) $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
@@ -10449,7 +10457,8 @@ function updateCrates(dt) {
       if (b.y >= b.gy) { b.y = b.gy; b.vy = b.vy > 200 ? -b.vy * .35 : 0; b.vx *= .6; } }
     b.g.position.set(X(b.x), Y(b.y) + .3 + (b.vy ? 0 : Math.sin(b.t * 3) * .06), 0); b.g.rotation.y = b.t * 1.6;
     if (!p.dead && Math.abs(p.x - b.x) < 34 && p.y > b.y - 70 && p.y < b.y + 40) {             // (taken even at full health: the user)
-      b.got = true; healTaken.add(b.id); actors.remove(b.g); const was = p.hp; p.hp = Math.min(maxHp(), p.hp + 1); updateHearts(true); healFx(p, 0); SFX.heal(); voice("heal", .7); popText(b.x, b.y - 50, p.hp > was ? "+1 HEART" : "YUM!"); }
+      b.got = true; healTaken.add(b.id); actors.remove(b.g); const was = p.hp; p.hp = Math.min(maxHp(), p.hp + 1); updateHearts(true); healFx(p, 0); SFX.heal(); voice("heal", .7);
+      const pt = healPartners(1); popText(b.x, b.y - 50, p.hp > was || pt ? "+1 HEART" : "YUM!"); }   // (the team's too: the user, 2026-11-02 "I took an item from a box and it didn't heal my partner too")
   }
   healBerries = healBerries.filter(b => !b.got);
 }
@@ -10576,6 +10585,20 @@ const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || 
 const CRAWL_OUT = 36;                                // (out the far end of a crawlway: up on your feet this far past its mouth, the zone's wall. The user, 2026-10-28: "the crawl should end a lot quicker once they get out on the other side")
 const crawlNear = (p, z) => { const out = z.wall === undefined ? -1 : (z.wall - p.x) * z.dir; return out <= CRAWL_OUT || (p.crawl ? p.vx * z.dir >= 0 : p.vx * z.dir > 20); };   // (out past that, in the room: down to crawl only heading in to the hole)
 const camUpOf = () => (!hideout && !stronghold && !arena && (STAGES[stage] || {}).camUp) || 0;   // (a room whose camera sits higher, room.camUp units: B4, so the cassette on its top ledge shows from the floor. The user, 2026-10-28: "I was in b4 and didn't see the casette at the top")
+function standCam(x, P) {                            // where the camera settles over you stood at x on P (a platform; null: the ground), as syncWorld has it (null: nothing under you there)
+  const gy = groundAt(x); if (gy === null) return P ? Y(P.y) - 3.2 : null;
+  const bu = P && P.kind === "bridge" ? Math.max(0, Y(P.y) - Y(gy) - 3.2) : 0, hiP = Math.max(bu, P && (STAGES[stage] || {}).authored ? Math.max(0, Y(P.y) - Y(gy) - 5.5) : 0);
+  return Y(gy) + Math.max(hiP + (P ? clamp((Y(P.y) - (Y(gy) + hiP) - 2.2) * .45, 0, 1.4) : 0), camUpOf());
+}
+const camLiftFor = y => Math.max(0, Y(y) + 3.4 - camBase - (LOOK_Y + Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z));   // (as much lift as keeps you on the screen there: syncWorld's)
+// into a room above or below, the camera's arrival (the hand-made worlds): where it'll stay over what you're coming down on, lifted only as far as keeps you in view, so
+// the slide ends there and it stays. It was the camera of the jump you went up on, carried over, then down again (the user, 2026-11-02: "the screen whips up so hihg and
+// then back down to where the platform is. the screen movement should be relative to where platforms are, not just automatically whip all the way to the next direction")
+const camArriveOn = () => world === 0 || world === 1;
+function camArrive(x, y, fallback) {
+  const P = PLATFORMS.find(q => x >= q.x && x <= q.x + q.w && q.y >= y - 2 && q.y - y < 40) || null, cs = standCam(x, P);   // (just under you: what you'll land on)
+  camBase = cs ?? fallback; camLift = camLiftFor(y);
+}
 const crawlOut = (p, d) => !!(p && p.crawl && p.crawl.to !== undefined && p.crawl.dir === d);
 function heroSane(p) {                             // you on a bad number (NaN): back where you last were on good ones, still, and a note of what was going on
   if (!p) return; const ok = [p.x, p.y, p.vx, p.vy].every(Number.isFinite);
@@ -11349,7 +11372,7 @@ function petChore(q, dt) {                           // the pet on its own: now 
 }
 function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the second)
   if (q.zipR) return;                                // (down the zipline behind you: zipRide moves it)
-  const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = partSlot(q), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && k === 1 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
+  const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = partSlot(q), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && q === pal2 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
   if (!q.pounce && q.atkKind) { q.atkKind = null; q.atkT = -1; }   // (its special's pose, done with)
   if (climbWith(q, dt)) { q.yaw = lerp(q.yaw, q.face > 0 ? -.85 : -Math.PI + .85, 1 - Math.exp(-dt * 12)); q.blink -= dt; if (q.blink < -.12) q.blink = 2 + Math.random() * 2.5; updatePose(q, dt); return; }   // (up a climb after you)
   if (campSit(q, i ? "pal2" : "pal", dt, q.rig) || hideSit(q, i ? "pal2" : "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
@@ -11632,11 +11655,11 @@ function partnerList() {
 // nearest baddy (or the boss) and plays a whole string of the hero's kind of moves on its own, then back to its place: on the ground its combo (← → held as you press:
 // the forward one), ↑ held the launcher and up after it for the rest, ↓ the slide, and in the air (it jumps when you do) its air combo (↓: down at them). A pet
 // pounces the same ways. Held on, one stage of charge (its glow), and let go, its special. Never on its own. While you block they all block, and their buttons wait
-const PART_CHARGE = .6, PART_REACH = 560, PART_GAP = [78, 142], PART_Z = [-.3, -.6];
+const PART_CHARGE = .6, PART_REACH = 560, PART_GAP = [78, 142, 202, 254], PART_Z = [-.3, -.6, -.12, -.42];   // (2, 3: a pet's places, behind the buddies)
 const partBtn = [0, 1].map(() => ({ on: false, t: 0, full: false }));
 let pJumpCue = null, partRoomK = "", partSeen = new Set();   // (pJumpCue: your last jump, for them to jump with you: { t, vy, dbl })
 const partBlocking = () => !!player && !player.dead && mode === "play" && (!!player.block || (player.blockHold || 0) > 0 || (player.gbT > 0 && held.block));   // (yours broken: theirs stays up, 2026-11-01)
-const partSlot = q => { const i = partnerList().findIndex(P => P.q === q); return i < 0 ? 0 : Math.min(i, 1); };
+const partSlot = q => { const L = partnerList(), i = L.findIndex(P => P.q === q); if (i >= 0) return Math.min(i, 1); const j = [pal, pal2].indexOf(q); return j < 0 ? 0 : Math.min(Math.min(L.length, 2) + j, 3); };   // (a pet: the next place free after the buddies, never on one of theirs. The user, 2026-11-02 "the cat joined our team and he was overlapping with the berry buddies")
 const partCol = P => P.kind === "ally" ? P.a.A.col || "#ffffff" : P.kind === "pet" ? (petSp(P.t) === "dog" ? "#9fe8ff" : "#ff9ad0") : "#b06cff";
 const partBtnName = i => window.BERRY_TOUCH ? (i ? "△" : "L") : padUse ? padName(i ? "p2" : "blk") : i ? "Z" : "S";
 const chgName = () => window.BERRY_TOUCH ? "R" : padUse ? padName("ch") : "D";   // (CHARGE!'s button: its mark over their heads)
@@ -11696,13 +11719,16 @@ function parryMelee(p, e, d) {                      // a blow parried (blocked j
   const dir = parrySide(p, e); offBalance(e, dir, 1.5); sparks(p.x + dir * 30, p.y - (p.rig.heightPx || 92) * .55, 12); SFX.parry(); popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "PARRY!");
   hitstop = Math.max(hitstop, .09); shake = Math.max(shake, 5); blkArch("parry", e, dir);
 }
+const GUST = { reach: 150, up: 120, push: 560, lift: -380, hold: .6 };   // (the guard-up gust: reach px past your front, only the ones close · push/lift: a short heavy shove up off their feet · hold: they dig in when they land. Was 340 px, a 720 push and a long slide: the user, 2026-11-02 "way too much reach ... dont send them so far back and give them more momentum")
 function gustPush(D, parried, e0, dir0) {           // the blocker black mage's gust: off it, the way you face; the guard going up: them shoved back to make room; a parry: spun round, dizzy
   const p = player, s = D.q, dir = dir0 || defFace(), ox = Number.isFinite(s.x) ? s.x : p.x, H = (s.rig && s.rig.heightPx) || 90;
-  const L = parried ? [e0].filter(Boolean) : partFoesAll().filter(e => !walled(e.x, ox) && (e.x - p.x) * dir > -20 && Math.abs(e.x - p.x) < 340 && Math.abs(e.y - p.y) < 160);
-  for (let i = 0; i < 12; i++) spawn("smoke", X(ox + dir * rand(10, 60)), Y(s.y - H * rand(.2, .8)), rand(-.2, .4), V(dir * rand(9, 16), rand(-1, 1.5), rand(-.6, .6)), rand(.35, .55), rand(.18, .32), { g: 0, drag: 3, spin: 3 });
+  const near = e => Math.abs(e.x - p.x) - eHW(e) * .5;   // (how far its near side is from you)
+  const L = parried ? [e0].filter(Boolean) : partFoesAll().filter(e => !walled(e.x, ox) && (e.x - p.x) * dir > -20 && near(e) < GUST.reach && Math.abs(e.y - p.y) < GUST.up);
+  for (let i = 0; i < 12; i++) spawn("smoke", X(ox + dir * rand(10, 50)), Y(s.y - H * rand(.2, .8)), rand(-.2, .4), V(dir * rand(6, 11), rand(-1, 1.5), rand(-.6, .6)), rand(.3, .45), rand(.18, .32), { g: 0, drag: 3.5, spin: 3 });   // (the puff only as far as it reaches)
   SFX.whoosh(); noise(.35, { vol: .14, f0: 900, f1: 300, type: "bandpass", q: .8 }); s.wave = Math.max(s.wave || 0, .4);
   for (const e of L) { if (parried) { offBalance(e, dir, 2.2, true); if (e === enemy) e.dir = -(e.dir || dir); else e.dir = dir; e.face = e.dir; popText(e.x, e.y - eH(e) - 30, "WHOOSH!"); }   // (turned right round, away from you)
-    else { e.atk = null; e.atkCd = Math.max(e.atkCd || 0, .8); e.hurtT = Math.max(e.hurtT || 0, .3); e.vx = dir * 720 / (e.wt || 1.2); if (e !== enemy) { e.vy = -300; e.onGround = false; } } }
+    else { const k = 1 - .35 * clamp(near(e) / GUST.reach, 0, 1); e.atk = null; e.windup = 0; e.atkCd = Math.max(e.atkCd || 0, .8); e.hurtT = Math.max(e.hurtT || 0, GUST.hold); e.vx = dir * GUST.push * k / (e.wt || 1.2);   // (the nearer, the harder)
+      if (e !== enemy) { e.vy = GUST.lift * k; e.onGround = false; e.sq = -.25; e.sqv = 0; } else e.recoil = Math.max(e.recoil || 0, GUST.hold); } }   // (lifted off its feet and down again, digging in: no slide. A boss: shoved, and plants itself)
 }
 const monkOn = () => { const D = partDefender(), AR = D && archOfP(D); return !!(AR && AR.roll); };
 const ROLL = { T: .46, v: 980, team: 230 };
@@ -22265,7 +22291,7 @@ function spawnLoot(kind, x, y, pop, id) {            // pop: it bursts out (of a
 function clearLoot() { loot.forEach(q => { actors.remove(q.g); }); loot = []; }
 // what a berry baddy's carrying (the user, 2026-11-02: the thief "randomly steal[s] from berries they hit, they'll steal food and other items ... randomize when enemies have
 // items to either drop or to steal"): now and then one carries something, bobbing over its head; beaten, it drops it; a thief's blow can take it first
-const HELD = { chance: .3, kinds: [["guava", .34], ["chinola", .2], ["coin", .24], ["gum", .1], ["fruit", .12]] };
+const HELD = { chance: .3, shown: false, kinds: [["guava", .34], ["chinola", .2], ["coin", .24], ["gum", .1], ["fruit", .12]] };   // (shown: off, what one carries a surprise till it drops or is stolen. The user, 2026-11-02 "don't show what item a berry has")
 let heldOn = [];   // [{ b, g }]: the ones showing
 function holdItems() { baddies.forEach(b => { if (b.item || b.sad || b.npc || b.type === "friend" || b.dead || b.gone || Math.random() >= HELD.chance) return; let r = Math.random(), k = HELD.kinds[0][0]; for (const [kk, w] of HELD.kinds) { if ((r -= w) < 0) { k = kk; break; } } b.item = { k }; }); }
 function heldMesh(b) { const h = heldOn.find(q => q.b === b); if (h) { actors.remove(h.g); heldOn = heldOn.filter(q => q !== h); } }
@@ -22276,8 +22302,8 @@ function stealFrom(b, s) {                          // a thief's: what it carrie
   loot.slice(n0).forEach(q => { q.steal = true; q.vy = -420; }); popText(x, y - 20, "STOLEN!"); SFX.coin(); sparks(x, y, 6); return true;
 }
 function syncHeld() {                               // (render) each one carried, over its carrier's head
-  heldOn = heldOn.filter(h => { if (h.b.item && !h.b.dead && !h.b.gone && baddies.includes(h.b)) return true; actors.remove(h.g); return false; });
-  for (const b of baddies) { if (!b.item || b.dead || b.gone) continue; let h = heldOn.find(q => q.b === b); if (!h) { h = { b, g: lootRig(b.item.k) }; h.g.scale.setScalar(.72); heldOn.push(h); }
+  heldOn = heldOn.filter(h => { if (HELD.shown && h.b.item && !h.b.dead && !h.b.gone && baddies.includes(h.b)) return true; actors.remove(h.g); return false; });
+  if (HELD.shown) for (const b of baddies) { if (!b.item || b.dead || b.gone) continue; let h = heldOn.find(q => q.b === b); if (!h) { h = { b, g: lootRig(b.item.k) }; h.g.scale.setScalar(.72); heldOn.push(h); }
     const vis = !!(b.r && b.r.root && b.r.root.visible) && !b.under; h.g.visible = vis; if (vis) { h.g.position.set(X(b.x), Y(b.y - (b.h || 60)) + .62 + Math.sin(time * 3 + b.x) * .08, (b.z || 0) + .35); h.g.rotation.y = time * 1.6; } }
 }
 function dropLoot(x, y, n, boss) {                   // a beaten berry's coins (or, now and then, an item instead)
@@ -22361,7 +22387,7 @@ function bgTick() {                                  // (while it's up: each wea
     const n = bgearsOf(V.id); KIT.propLife(V.pr, n); if (V.pr.chunks) V.pr.chunks.forEach(m => { m.material = m.userData.slot ? V.pr.mEmpty : V.pr.mFull; }); if (V.pr.rings) V.pr.rings.forEach(m => m.material.color.set(m.userData.col0 || "#ffffff"));
     if (V.pr.teethX) { const pg = bpowOf(V.id); V.pr.teethX.forEach((X, i) => { const k = pg > i * 2 ? (pg >= i * 2 + 2 ? 1 : KIT.TOOTH_HALF) : 0;   // (its gear teeth, as they'd be: half out, or all the way)
       X.g.scale.setScalar(k); X.g.visible = k > 0; if (X.stud) X.stud.visible = k >= 1; }); }
-    renderer.setRenderTarget(V.RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(V.sc, V.cam);
+    renderer.setRenderTarget(V.RT); renderer.setClearColor(0x000000, 0); renderer.clear(); pvShade(true, 256, 256, 1); renderer.render(V.sc, V.cam); pvShade(false);
     const px = new Uint8Array(256 * 256 * 4); renderer.readRenderTargetPixels(pvBake(V.RT), 0, 0, 256, 256, px); const g = V.cv.getContext("2d"), img = g.createImageData(256, 256);
     for (let y = 0; y < 256; y++) img.data.set(px.subarray((255 - y) * 1024, (256 - y) * 1024), y * 1024); g.putImageData(img, 0, 0); });
   renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
@@ -22750,8 +22776,12 @@ const HEAL_AMT = { guava: 1, chinola: 2, fruit: 99 }, HEAL_KINDS = ["guava", "ch
 function healTeam(k) {                               // a healing fruit, for everyone: you and the team (the worn out up again)
   const p = player, n = HEAL_AMT[k] || 0; if (!p || !n) return;
   const was = p.hp; p.hp = Math.min(maxHp(), p.hp + n); updateHearts(false); [...heartsEl.children].forEach((h, i) => { if (i >= was && i < p.hp) { h.classList.add("pop"); setTimeout(() => h.classList.remove("pop"), 300); } }); healFx(p, k === "fruit" ? 3 : n);
-  partnerList().forEach(P => { const q = P.q; q.php = Math.min(PARTNER_HP, (q.php ?? PARTNER_HP) + n); if (q.php > 0) q.worn = false; q.heartT = 2.2; healFx(q, Math.min(2, n)); });
+  healPartners(n);
   SFX.heal(true);
+}
+function healPartners(n) {                           // the team's share of a heal (true: one of them wasn't full)
+  let any = false; partnerList().forEach(P => { const q = P.q; if ((q.php ?? PARTNER_HP) < PARTNER_HP) any = true; q.php = Math.min(PARTNER_HP, (q.php ?? PARTNER_HP) + n); if (q.php > 0) q.worn = false; q.heartT = 2.2; healFx(q, Math.min(2, n)); });
+  return any;
 }
 // what the healer carries (the user, 2026-11-02: "make the ones he's holding be models of the most recent 10 items you've collected"): the bag's fruit and gum in the
 // order they came, newest last; used up (or sold), the newest of that kind goes first; more than ten, his arms just stay full
