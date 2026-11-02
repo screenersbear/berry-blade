@@ -75,28 +75,24 @@ function skinCompile(sh) {
 // arms and legs were fine"). A canvas emptied to 0 x 0 gives its memory back at once, not whenever it's collected
 const freeCanvas = c => { if (c && c.getContext && c.width) { c.width = 0; c.height = 0; } };
 const freeTex = t => { if (!t) return; const im = t.image; t.__gone = true; t.dispose(); freeCanvas(im); if (im && typeof im.close === "function") im.close(); };
-// a character's picture, once drawn, kept as an ImageBitmap and its canvas let go (the user, 2026-11-02: characters' textures gone black, "it's hard to predict,
-// maybe something loading"): Safari caps the canvases a page holds all told, and past it a new one comes out blank (a rig built then: black). Bitmaps aren't
-// counted, and the texture reloads from one just as from a canvas. Tried once first (flipped the way the textures need it): where that doesn't work, canvases as ever
-let BMP_OK = null;
-(function bmpTest() {
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") { BMP_OK = false; return; }
-  BMP_OK = "wait"; const c = document.createElement("canvas"); c.width = 1; c.height = 2; const g = c.getContext("2d"); if (!g) { BMP_OK = false; return; }
-  g.fillStyle = "#ff0000"; g.fillRect(0, 0, 1, 1); g.fillStyle = "#0000ff"; g.fillRect(0, 1, 1, 1);
-  createImageBitmap(c, { imageOrientation: "flipY", premultiplyAlpha: "none" }).then(b => { const d = document.createElement("canvas"); d.width = 1; d.height = 2; const h = d.getContext("2d");
-    h.drawImage(b, 0, 0); const top = h.getImageData(0, 0, 1, 1).data; BMP_OK = top[2] > 200 && top[0] < 60; if (b.close) b.close(); d.width = d.height = c.width = c.height = 0; settleRun(); })
-    .catch(() => { BMP_OK = false; settleQ.length = 0; });
-})();
-const settleQ = [];
-function settleTex(t) { if (BMP_OK !== false && t && t.image instanceof HTMLCanvasElement) { settleQ.push(t); if (BMP_OK === true) settleRun(); } return t; }
+// a character's picture, once drawn, kept as plain pixels in the page's own memory and its canvas let go. The user, 2026-11-02, three times: characters' textures
+// gone black (after the TEAM box; dropping from A3 to B3). Safari caps the canvases a page holds all told, and when its GPU process is reset (memory: a busy pan,
+// a picture taken) the 3D picture is lost and comes back with every texture sent again from its source: canvases and ImageBitmaps live in that process too and
+// come back blank, so whoever was built before it stays black. Pixels in the page's memory always come back. A few at a time, between frames
+let BMP_OK = true, LOSS_EP = 0;                      // (BMP_OK: kept for bmpOK(); LOSS_EP: one more each time the 3D picture comes back, so what's painted live paints again)
+const settleQ = []; let settleOn = false;
+function settleTex(t) { if (t && t.image instanceof HTMLCanvasElement) { settleQ.push(t); if (!settleOn) { settleOn = true; setTimeout(settleRun, 0); } } return t; }
 function settleRun() {
-  if (BMP_OK !== true) { if (BMP_OK === false) settleQ.length = 0; return; }
-  while (settleQ.length) { const t = settleQ.shift(), c = t.image; if (t.__gone || !(c instanceof HTMLCanvasElement) || !c.width) continue;
-    createImageBitmap(c, { imageOrientation: "flipY", premultiplyAlpha: "none" }).then(b => { if (t.__gone || t.image !== c) { if (b.close) b.close(); return; }
-      t.image = b; t.flipY = false; t.needsUpdate = true; freeCanvas(c); }).catch(() => {}); }
+  const t0 = performance.now(); while (settleQ.length && performance.now() - t0 < 8) settleOne(settleQ.shift());
+  if (settleQ.length) setTimeout(settleRun, 16); else settleOn = false;
+}
+function settleOne(t) {                              // its pixels (an ImageData, the page's own memory) as the texture's source, uploaded as the canvas was (flipped the same)
+  const c = t.image; if (t.__gone || !(c instanceof HTMLCanvasElement) || !c.width || !c.height) return;
+  let D = null; try { const g = c.getContext("2d"); D = g && g.getImageData(0, 0, c.width, c.height); } catch (e) { D = null; } if (!D) return;   // (one Safari won't read back: left a canvas)
+  t.image = D; t.needsUpdate = true; freeCanvas(c);
 }
 const canvasTex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
-function cv2(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; }
+function cv2(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d", { willReadFrequently: true })]; }   // (kept in the page's memory, not the GPU's: read back for settleTex in a tenth of the time, and never lost with it)
 function fillPoly(g, pts, col) { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); }
 function star(g, x, y, ro, ri, col) {
   g.beginPath();
@@ -1350,7 +1346,7 @@ function propLife(pr, g) {                         // the weapon's life rebuilt 
 function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff runs back up the forearm (+y)
   const outer = group(parent), g = group(outer, 0, GAUNT_UP, 0), [cv, x] = cv2(64, 8);
   x.fillStyle = Q.main; x.fillRect(0, 0, 64, 8); x.fillStyle = Q.trim; for (let i = 0; i < 8; i++) x.fillRect(i * 8, 0, 3, 8);
-  const tex = canvasTex(cv); tex.wrapS = THREE.RepeatWrapping;
+  const tex = settleTex(canvasTex(cv)); tex.wrapS = THREE.RepeatWrapping;   // (the cuff's band: settled as a character's pictures are)
   const prof = [[.078, -.02], [.086, .08], [.12, .2], [.16, .3]].map(([a, b]) => new THREE.Vector2(a, b < 0 ? b : b * GAUNT_CUFF));   // (the flare as it was, a shorter run up the arm)
   const mCuff = M("#ffffff", { map: tex, side: THREE.DoubleSide }); g.add(P(new THREE.LatheGeometry(prof, 28), mCuff));          // flared cuff
   const n = Math.round(Q.rings || 3), extra = n - 3;                                                    // a ring per heart: the usual three, and any more stacked on above them, up the cuff
@@ -1495,7 +1491,7 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
     G.tube.curve.getPoint(uc, _gv); G.tube.curve.getTangent(uc, _gu); R.position.copy(_gv); R.quaternion.setFromUnitVectors(ZAX, _gu); R.scale.setScalar(G.prof(uc) * 1.03); });
   const uB = clamp(u - GIANT_BASE / L, .08, .8);      // (the base above them: short; above that, her arm)
   G.uB = G.uB === undefined ? uB : G.uB + (uB - G.uB) * .35;
-  if (Math.abs((G.uBp ?? -1) - G.uB) > .006) { G.uBp = G.uB; giantArmPaint(G.tex, pr.Q, G.skin, G.uB, u); }
+  if (G.ep !== LOSS_EP || Math.abs((G.uBp ?? -1) - G.uB) > .006) { G.ep = LOSS_EP; G.uBp = G.uB; giantArmPaint(G.tex, pr.Q, G.skin, G.uB, u); }   // (and again if the 3D picture was lost: painted live, never settled)
 }
 function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
@@ -3785,7 +3781,7 @@ function paintCards(cards, spec) {
     g.beginPath(); g.arc(64, 96, 19, 0, TAU); g.fillStyle = "#ffffff"; g.fill();
     const [face, edge] = m.userData.mats;
     if (face.map) freeTex(face.map);
-    face.map = canvasTex(cv); face.needsUpdate = true; edge.color.set(c.cardEdge);
+    face.map = settleTex(canvasTex(cv)); face.needsUpdate = true; edge.color.set(c.cardEdge);
   });
 }
 function syncCards(cards, p, on = true) {
@@ -3863,7 +3859,7 @@ function shyFace(r) {                           // a copy of the face with full 
   r.faceS = settleTex(wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY)); r.texs.push(r.faceS); return true;
 }
 
-return Object.assign(api, { CUP, settleTex, bmpOK: () => BMP_OK,
+return Object.assign(api, { CUP, settleTex, bmpOK: () => BMP_OK, lostBack: () => { LOSS_EP++; },
   FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
   DBG_RIG, FIDGETS, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
