@@ -21447,12 +21447,38 @@ const E0head = h => tryPv.rigs[h].r.head.getWorldPosition(new THREE.Vector3());
 // the try-on, framed lower for what's worn below (the user, 2026-10-28: "looking at anything on the legs didnt show a closeup of the legs or lower body, it stayed on
 // their heads"): [how far up her, of her height · how far back]
 const TRY_LOW = { legs: [.27, 3.1], socks: [.12, 2.7], shoes: [.07, 2.6] };
+function tryPvMake() {                              // the little stage beside the talk's rows: its own renderer (freed on closeNpc: tryPvFree)
+  const R3 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R3.outputColorSpace = renderer.outputColorSpace; R3.setClearColor(0x000000, 0);
+  const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d); const d2 = new THREE.DirectionalLight("#ffffff", .8); d2.position.set(-5, 3, -2); sc.add(d2);
+  tryPv = { R3, sc, cam: new THREE.PerspectiveCamera(26, 1, .05, 60), rigs: {}, t: 0 }; $("npcTryCv").appendChild(R3.domElement);
+}
+// the bell's look (the user, 2026-11-02: "when you go to the non-playable character that lets you change your buddies out, make it so that a little pop-up shows on the screen
+// that shows a game model of each body as you scroll through that way, you can remember who they are by just looking at them"): the one picked, turning slowly beside the rows
+function callPvRig(P) {                             // a fresh build of its own (the game's cached one may be out there with you): the same build path, the cache left as it was
+  const C = P.A ? ALLY_RIGS : WILD_RIGS, key = P.A ? P.A.id : P.sp + P.w, keep = C[key]; delete C[key]; let r = null;
+  try { r = P.A ? allyRig(P.A) : wildRig(P.w, P.sp); } finally { if (keep) C[key] = keep; else delete C[key]; }
+  return r;
+}
+function callPvTick(row, dt, box) {
+  const P = row && row[3] && row[3].pv ? row[3] : null; if (!P) { if (!box.classList.contains("hidden")) box.classList.add("hidden"); return; }
+  if (!tryPv) tryPvMake(); const V = tryPv; let E = V.rigs[P.pv];
+  if (!E) { const r = callPvRig(P); if (!r) return; V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow); const st = makeState(0, r); st.onGround = true; st.face = 1;
+    E = V.rigs[P.pv] = { r, st }; st.yaw = -Math.PI / 2 + .45; for (let i = 0; i < 12; i++) KIT.updatePose(st, 1 / 30); r.sync(st, r, 0); r.root.visible = true; r.root.updateMatrixWorld(true);
+    const bx = new THREE.Box3().setFromObject(r.root); E.c = bx.getCenter(new THREE.Vector3()); E.sz = bx.getSize(new THREE.Vector3()); }   // (framed once, as it first stands: no jumping about as it breathes)
+  for (const k in V.rigs) { const Q = V.rigs[k]; if (Q !== E && Q && Q.r) Q.r.root.visible = false; }
+  box.classList.remove("hidden"); if ($("npcTryWho").textContent !== P.name) $("npcTryWho").textContent = P.name;
+  const rh = $("npcRows").offsetHeight, hgt = Math.round(clamp(rh - 22, 84, 210)), wid = Math.round(Math.min(hgt * 1.05, $("npc").offsetWidth * .42));   // (as tall as the rows beside it)
+  if (V.w !== wid || V.h !== hgt) { V.w = wid; V.h = hgt; V.R3.setSize(wid, hgt); V.cam.aspect = wid / hgt; V.cam.updateProjectionMatrix(); }
+  V.t += dt; const st = E.st; st.face = 1; st.yaw = -Math.PI / 2 + .45 + Math.sin(V.t * .8) * .4; st.blink = (st.blink ?? 2) - dt; if (st.blink < -.12) st.blink = 2 + Math.random() * 2.5;
+  KIT.updatePose(st, dt); E.r.sync(st, E.r, dt); E.r.root.visible = true;
+  const fit = Math.max(E.sz.y, E.sz.x * .8 / (wid / hgt)) * 1.34, dist = fit / 2 / Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2));
+  V.cam.position.set(E.c.x, E.c.y + .12, E.c.z + dist); V.cam.lookAt(E.c); V.R3.render(V.sc, V.cam);
+}
 function tryOnTick(dt) {
   const U = menuUp === "npc" ? npcUp : null, row = U && U.rows[U.sel], id0 = row && row[3], id = id0 && ACC[id0] ? id0 : null, box = $("npcTry"); if (!box) return;
+  if (U && U.f.npc === "caller") { callPvTick(row, dt, box); return; }   // (the bell: whoever's picked, to look at)
   if (!U || !U.f.road) { if (!box.classList.contains("hidden")) box.classList.add("hidden"); return; }   // (the stand by the road: there the whole talk, so the rows don't jump about; on something else, her as she is)
-  if (!tryPv) { const R3 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R3.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R3.outputColorSpace = renderer.outputColorSpace; R3.setClearColor(0x000000, 0);
-    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#fff1dc", "#7d7090", 1.45)); const d = new THREE.DirectionalLight("#ffffff", 2.3); d.position.set(2, 4, 7); sc.add(d); const d2 = new THREE.DirectionalLight("#ffffff", .8); d2.position.set(-5, 3, -2); sc.add(d2);
-    tryPv = { R3, sc, cam: new THREE.PerspectiveCamera(26, 1, .05, 60), rigs: {}, t: 0 }; $("npcTryCv").appendChild(R3.domElement); }
+  if (!tryPv) tryPvMake();
   const cur = rig && GEAR_HEROES.includes(rig.id) ? rig.id : (story && story.char) || "camila";
   const V = tryPv, A = id ? ACC[id] : { slot: "head" }, heroes = id ? GEAR_HEROES.filter(h => gearFits(id, h)) : [cur], G = gearState();
   box.classList.remove("hidden"); const who = id ? "ON " + heroes.map(h => h === "rose" ? "ROSE" : "CAMILA").join(" AND ") : "PICK ONE TO TRY IT ON"; if ($("npcTryWho").textContent !== who) $("npcTryWho").textContent = who;
@@ -22171,8 +22197,8 @@ function npcRows() {                                 // [label, sub, action]
     ...(U.f.road ? [] : tapesHere().filter(T => T.sell).map(T => [`${ITEM_SVG.tape}<b>${T.name}</b><span class="pr">${ITEM_SVG.coin}${T.sell}</span>`, tapeGot(T.id) ? "YOU'VE GOT THIS ONE" : "A CASSETTE: A SONG FOR THE HEADPHONES", () => buyTape(T)])),   // (a hub's stall: the cassettes it sells)
     ...(U.f.road ? [] : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>BACK</b>", "", () => sellerTab(null)]];   // (by the road: no region's map)
   if (role === "caller") { const C = ["cat", "dog", "axo", "axo2"].flatMap(sp => petsCaught(sp).map(w => [sp, w])), Bd = foundBuds().map(id => ALLIES.find(a => a.id === id)).filter(Boolean);   // (the deep's axolotls too: they travel with you, so the bell calls them anywhere. The user, 2026-10-26: "make the axilotl travel")
-    return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) || / CAT$/.test(petDef(sp, w).coat) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp)]),
-      ...Bd.map(A => [`<b>${A.name}</b>`, `${allyMany(A) ? "BERRY BUDDIES" : "BERRY BUDDY"}${allyWith(A) ? " · WITH YOU NOW" : ""}`, () => callBuddy(A)]), ["<b>LEAVE</b>", "", closeNpc]]; }   // (and the berry buddies you've found: 2026-11-01)
+    return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) || / CAT$/.test(petDef(sp, w).coat) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp), { pv: "pet:" + sp + w, sp, w, name: petDef(sp, w).name }]),
+      ...Bd.map(A => [`<b>${A.name}</b>`, `${allyMany(A) ? "BERRY BUDDIES" : "BERRY BUDDY"}${allyWith(A) ? " · WITH YOU NOW" : ""}`, () => callBuddy(A), { pv: "bud:" + A.id, A, name: A.name }]), ["<b>LEAVE</b>", "", closeNpc]]; }   // (and the berry buddies you've found: 2026-11-01)
   const other = otherHero();
   const nG = bgTotal();
   return [[`<b>SWITCH TO ${other.name.toUpperCase()}</b>`, "", () => swapHero(other)], ...(nG ? [[`<b>BERRY GEARS</b>`, `ROSE ${bgearsOf("rose") + bpowOf("rose")} · CAMILA ${bgearsOf("camila") + bpowOf("camila")} · MOVE THEM: LIFE OR POWER`, () => { closeNpc(); openGears(); }]] : []), [`<b>STAY AS ${rig.name.toUpperCase()}</b>`, "", closeNpc]];
@@ -22188,7 +22214,7 @@ function npcSays() {
 }
 function drawNpc() {
   const U = npcUp; if (!U) return; U.rows = npcRows(); U.sel = clamp(U.sel, 0, U.rows.length - 1);
-  $("npcHint").textContent = window.BERRY_TOUCH ? "TAP ONE, OR ↑ ↓ AND ✕ · □ TO LEAVE" : padUse ? padText("↑ ↓ TO CHOOSE · {j} TO PICK · {sq} TO LEAVE") : "↑ ↓ TO CHOOSE · Z OR ✕ TO PICK · C OR □ TO LEAVE";
+  $("npcHint").textContent = window.BERRY_TOUCH ? "TAP ONE, OR ↑ ↓ AND ✕ · □ TO LEAVE" : padUse ? padText("↑ ↓ TO CHOOSE · {a} TO PICK · {j} TO LEAVE") : "↑ ↓ TO CHOOSE · C OR ENTER TO PICK · X OR ESC TO LEAVE";
   $("npcName").textContent = U.f.name; $("npcRole").textContent = NPC_TITLE[U.f.npc]; $("npcText").textContent = npcSays();
   $("npcRows").innerHTML = U.rows.map(([a, b], i) => `<button data-nr="${i}" class="${i === U.sel ? "on" : ""}"><span class="nl">${a}</span>${b ? `<i>${b}</i>` : ""}</button>`).join("");
   $("npcCoins").innerHTML = U.f.npc === "seller" ? `${ITEM_SVG.coin}<b>${bag().coins}</b>` : "";
