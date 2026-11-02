@@ -79,6 +79,7 @@
   #hint b { font: 13px "Bungee", sans-serif; letter-spacing: 0; background: var(--y); color: var(--s); padding: 2px 6px 0; margin: 0 6px 0 8px; }
   #hint.hide { opacity: 0; }
   #hint { left: calc(66px + env(safe-area-inset-left)); bottom: auto; top: 8px; max-width: calc(100vw - 300px); }   /* (phone: up top between the pause button and the score, clear of the d-pad) */
+  #hint { display: none !important; }   /* the controls strip along the bottom: never shown (the user, 2026-11-02: "don't show the pop up at the bottom that shows controls whenever you go into a new area or start the game") */
   #pop { position: fixed; transform: translate(-50%, -50%) scale(.6); opacity: 0; pointer-events: none; z-index: 55; font: 22px "Bungee", sans-serif; color: var(--s);
     background: var(--y); padding: 4px 12px 1px; transition: transform .14s cubic-bezier(.2, 2.2, .4, 1), opacity .25s; }
   #pop.show { transform: translate(-50%, -50%) scale(1); opacity: 1; }
@@ -195,6 +196,7 @@
   #npcRows .nl { display: flex; align-items: center; gap: 8px; font: 15px "Bungee", sans-serif; width: 100%; } #npcRows .nl svg { width: 24px; height: 24px; }
   #npcRows .pr { margin-left: auto; display: inline-flex; align-items: center; gap: 3px; } #npcRows .pr svg { width: 18px; height: 18px; }
   #npcRows i { font: 600 10px "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 2px; }
+  #npcRows i.about { font-weight: 500; letter-spacing: .08em; line-height: 1.35; white-space: normal; margin-top: 4px; opacity: .85; }
   #npcCoins { position: absolute; right: 12px; top: 12px; } #npcCoins:empty { display: none; }
   .npcMain { display: flex; gap: 12px; align-items: flex-start; } .npcMain #npcRows { flex: 1; min-width: 0; }
   #npcTry { flex: none; border: 3px solid var(--s); background: rgba(47, 59, 67, .06); padding: 3px 3px 2px; pointer-events: none; }   /* (trying it on: the hero in what's picked, beside the rows) */
@@ -666,7 +668,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261102n"></script>
+<script src="charkit.js?v=20261102o"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -758,7 +760,7 @@
 </div></div>
 <div id="dev" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">DEVELOPER</div><div class="bar">FREE PLAY AND TESTING</div></div>
-  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="shade">SHADING MOCKUP</button><button data-d="dexp">DOWNLOAD DEBUG SETTINGS</button><button data-d="dimp">LOAD DEBUG SETTINGS</button><button data-d="back">BACK</button></div>
+  <div class="btns" id="dbtns"><button data-d="select">CHARACTER SELECT</button><button data-d="lvl">LEVEL SELECT</button><button data-d="edit">EDIT CHARACTERS</button><button data-d="cast">ENEMIES &amp; NPCS</button><button data-d="feel">COMBAT FEEL</button><button data-d="shade">SHADING MOCKUP</button><button data-d="text">GAME TEXT EDITOR</button><button data-d="dexp">DOWNLOAD DEBUG SETTINGS</button><button data-d="dimp">LOAD DEBUG SETTINGS</button><button data-d="back">BACK</button></div>
   <small>Any character, any world &middot; nothing here touches your save files</small>
 </div></div>
 <div id="slots" class="mnu"><div class="panel">
@@ -2231,6 +2233,8 @@ function syncFoe(e, r, dt = 0) {
   if (e.chide && e.chide.t > 0) chidePose(e, r);
   settleJoints(r, e, dt);
   if (r.flip) r.tilt.rotation.z += ez(r.flip) * TAU;   // (the back flip over the spring's pose: a whole turn, so landing out of it is seamless)
+  if (e.rollB) r.tilt.rotation.z -= ez(clamp(e.rollB.t / BOSS_ROLL.T, 0, 1)) * TAU * 2;   // (a boss's roll round past you, bossRoll: twice over, forward)
+  if (e.swimB && e.swimB.ph === "flail") r.tilt.rotation.z += Math.sin(e.swimB.t * 13) * .28;   // (flailing about in the water)
   if (r.chains.length) { r.root.updateMatrixWorld(true); updateChains(r, e, dt); }
   hitTint(r.mats, e.flash, .14, e.dead && Math.floor(e.deathT * 16) % 2 === 0 ? .95 : 0, e); armorTint(r.mats, e); if (e.atk === "charge" && e.chargeTot && !e.dead && !(e.flash > 0)) teleTint(r.mats, 1 - e.atkTm / e.chargeTot, e.atkTm);   // (its telegraph's glow)
   const gy = Y(groundBelow(e)), ss = clamp(1 - (Y(e.y) - gy) / 9, .3, 1);
@@ -3277,8 +3281,18 @@ function buildWaves(k = 0, seed = k) {
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, over = overGap(p.x + p.w / 2), foot = footAt(p.x + p.w / 2);
     if (p.kind === "rock" || p.kind === "shelf") {      // a ledge of rock out of the cliff (the user's dark brown: you scale the cliff on them), or the shelf over the underground
       const sh = p.kind === "shelf", th = sh ? 1.5 : .95, dz = sh ? 6.4 : 2.8, zc = sh ? -.3 : -.15;
-      scene.add(at(new THREE.Mesh(jag(new THREE.BoxGeometry(w + .25, th, dz, Math.max(2, Math.round(w / 1.2)), 2, 3), rng, .16), rockM), cx, top - th / 2 - .1, zc));
-      scene.add(at(mk(new THREE.BoxGeometry(w, .16, dz - .15), null, { mat: mSand, ol: 0 }), cx, top - .08, zc));
+      const holes = sh ? LADDERS.filter(L => L.pole && Math.abs(L.top - p.y) < 6 && L.x > p.x + 30 && L.x < p.x + p.w - 30).map(L => X(L.x)).sort((a, b) => a - b) : [];
+      if (!holes.length) {
+        scene.add(at(new THREE.Mesh(jag(new THREE.BoxGeometry(w + .25, th, dz, Math.max(2, Math.round(w / 1.2)), 2, 3), rng, .16), rockM), cx, top - th / 2 - .1, zc));
+        scene.add(at(mk(new THREE.BoxGeometry(w, .16, dz - .15), null, { mat: mSand, ol: 0 }), cx, top - .08, zc));
+      } else {   // a hatch in the shelf over each ladder down into the mine: the rock whole along the front, so it hides you going down, open behind it over the ladder (the user, 2026-11-02: "it looks like it's in the ground and then you clip through the floor ... the character should be hidden by the floor rock when climbing down")
+        const HW = .55, zf = .45, xa = cx - (w + .25) / 2, xb = cx + (w + .25) / 2, zb = zc - dz / 2, ze = zc + dz / 2, slab = (x0, x1, z0, z1) => { const ww = x1 - x0, dd = z1 - z0; if (ww < .05) return;
+          scene.add(at(new THREE.Mesh(jag(new THREE.BoxGeometry(ww, th, dd, Math.max(2, Math.round(ww / 1.2)), 2, 2), rng, .12), rockM), (x0 + x1) / 2, top - th / 2 - .1, (z0 + z1) / 2));
+          scene.add(at(mk(new THREE.BoxGeometry(Math.max(.05, ww - .1), .16, Math.max(.05, dd - .1)), null, { mat: mSand, ol: 0 }), (x0 + x1) / 2, top - .08, (z0 + z1) / 2)); };
+        slab(xa, xb, zf, ze); let x0 = xa; for (const hx of holes) { slab(x0, hx - HW, zb, zf); x0 = hx + HW; } slab(x0, xb, zb, zf);
+        for (const hx of holes) { [-1, 1].forEach(d => scene.add(at(mk(new THREE.BoxGeometry(.16, 1.15, .16), null, { mat: mDeck, ol: .01 }), hx + d * (HW + .02), top + .5, -.95)));   // (its frame up over the hole: the hatch reads from the side too)
+          scene.add(at(mk(new THREE.BoxGeometry(2 * HW + .4, .16, .2), null, { mat: mDeck, ol: .01 }), hx, top + 1.05, -.95)); }
+      }
       continue;
     }
     if (p.kind === "stack" || p.kind === "ledge") {
@@ -4357,7 +4371,7 @@ function wavesSet(P, g, s, rng, R) {
   if (P.k === "posts") {                             // under the clifftop's ledge (C7, C8): its rock seen from below, and the posts it stands on
     const xa = X(P.x0), xb = X(P.x1), w = xb - xa, cx = (xa + xb) / 2, gy = Y(GROUND), sy = Y(135);   // (a little lower than C7's own floor: so it's in view, overhead)
     put(rk(w + .3, 6, 6.8, .3), cx, sy + 3, 0);
-    for (let x = xa + 1.2; x < xb - .6; x += 4.6) [-2.2, 1.9].forEach(zz => post(x + R(0, .4), gy - .05, sy + .05, zz, .24));
+    for (let x = xa + 1.2; x < xb - .6; x += 4.6) [-2.2, 1.9].forEach(zz => { const px = x + R(0, .4); if (P.skip !== undefined && zz < 0 && Math.abs(px - X(P.skip)) < 2.9) return; post(px, gy - .05, sy + .05, zz, .24); });   // (skip: the mine's mouth there, no post in front of it)
     return true;
   }
   if (P.k === "flag") {                              // A8: a big flag with Cuss' photo on it, over his plateau
@@ -4371,6 +4385,20 @@ function wavesSet(P, g, s, rng, R) {
     for (let i = 0; i < pa.count; i++) pa.setZ(i, Math.sin((pa.getX(i) + 3.1) * 1.3) * .22 * (pa.getX(i) + 3.1) / 6.2); fl.geometry.computeVertexNormals();
     put(fl, x + 3.15, gy + h - 2.05, -1.7);
     return true;
+  }
+  if (P.k === "mine") {                              // a mine's mouth in the rock: a timber frame round a dark way in, rails running into it, a lantern (↑ there and in you go: the user, 2026-11-02 "in D7, add a mine opening where the player can press up to go into it, sort of how we had the cannon shoot into the background. we're going to work on this now to expand levels")
+    const x = X(P.x), gy = Y(groundAt(P.x) ?? GROUND), z = P.z ?? -3.2, top = P.top !== undefined ? Y(P.top) : gy + 6.4, aw = 3.2, ah = 3.6, mW = toon("#7a4f2a"), mW2 = toon("#5e3a1e"), mIron = toon("#4a4650");
+    put(rk(10, top - gy + .4, 1.4, .35), x, (gy + top) / 2, z - .75);   // (the rock face it's cut into)
+    const sh = new THREE.Shape(); sh.moveTo(-aw / 2, 0); sh.lineTo(-aw / 2, ah - aw / 2); sh.absarc(0, ah - aw / 2, aw / 2, Math.PI, 0, true); sh.lineTo(aw / 2, 0); sh.closePath();
+    put(new THREE.Mesh(new THREE.ShapeGeometry(sh, 16), new THREE.MeshBasicMaterial({ color: P.out ? "#d8eef2" : "#110e16" })), x, gy, z + .02);   // (out: the way back out, daylight in it)
+    [-1, 1].forEach(d => post(x + d * (aw / 2 + .12), gy - .05, gy + ah + .15, z + .18, .19, mW));   // (the frame: two props and a cap)
+    put(box(aw + 1.1, .38, .5, mW, .02), x, gy + ah + .2, z + .2); put(box(aw + .5, .2, .42, mW2, .02), x, gy + ah - .12, z + .22);
+    put(box(1.5, .5, .1, toon("#e8d9a8"), .02), x, gy + ah + .75, z + .3);   // (a board over it)
+    for (const d of [-1, 1]) put(box(.08, .06, 3.2, mIron), x + d * .42, gy + .03, z + 1.4);   // (the rails, out of it)
+    for (let i = 0; i < 5; i++) put(box(1.15, .07, .2, mW2), x, gy + .01, z + .3 + i * .7);
+    const lan = put(box(.24, .32, .24, toon("#ffd06a")), x + aw / 2 + .55, gy + ah - .5, z + .45); lan.material.emissive = new THREE.Color("#ffb347"); lan.material.emissiveIntensity = .8;
+    for (let i = 0; i < 6; i++) put(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(R(.18, .4), 0), rng, .12), rockM), x + R(-3.2, 3.2) + (i % 2 ? 2.2 : -2.2), gy + R(0, .2), z + R(.4, 1.2));   // (rubble either side)
+    level.mine = { x: P.x }; return true;
   }
   if (P.k === "cannon") { level.cannon = cannonBuild(P, g); return true; }   // (the ship's cannon, and the far cliffs' own: with the shot, by update)
   if (P.k === "wall") {                             // the far cliffs' face, sheer up from the sand (2026-11-02): rock in tall columns, smoothest where the team hits it
@@ -4980,6 +5008,8 @@ function authorWaves() {
     Object.assign(q, { authored: true, noDress: true, elev: ELEV[c[0]], plats: [] }, o); q.set = [...(q.set || []), { k: "rocks" }]; R0[C[c]] = roster || []; return q; };   // (rocks: what of the world's rock is in view, W.rocks)
   const nm = (q, what) => { const scr = (W.screens || SCREENS)[q.h]; q.name = ((scr && scr.name) || "") + " " + what; };
 
+  // (each up-ladder 15 px right of the down one over it, where the rope above is drawn (downX - downWall * 15): the two in line, as C1/B1. The user, 2026-11-02 "the ladder from d5 to c5 are not lined up")
+  const MINE1 = S0.length + 2;   // (the old mine behind D7: pushed after the far cliffs' two)
   // ── row A: the scaffold up top, the sky the zipline crosses, the crow's nest and the sail, the mountain's top, the clifftop and Cuss' plateau
   room("A1", { ground: [[0, -140]], looks: [[-200, 2800, "scaf"]], downX: 950, down: C.B1, noRight: true, exitLeft: true,   // (the scaffold: its left end the way out to Loof's sky, Cuss always on that side, between you and it; the zipline at the right. The user, 2026-10-25)
     boss: true, bossX: 420, bossLeft: true, toWorld: SKY, zip: { x: 2250, y: 150, to: C.B2, ex: 2380, ey: 300, base0: 330, base1: 470 },
@@ -4997,16 +5027,16 @@ function authorWaves() {
 
   // ── row B: the rest stop's scaffold, the deck of the S.S. Pineapple, the mountain, the two-tier scaffold, the cave
   const b1 = room("B1", { ground: [[0, -70], [1150, -70], [1150, -560], [2560, -560]], looks: [[-200, 1150, "scaf"]], rest: true, peace: true, restX: 480,
-    upX: 950, up: C.A1, downX: 170, down: C.C1, noLeft: true, noRight: true }); nm(b1, "REST STOP");   // (ladders up to A1's scaffold and down to C1's rock path)
+    upX: 965, up: C.A1, downX: 170, down: C.C1, noLeft: true, noRight: true }); nm(b1, "REST STOP");   // (ladders up to A1's scaffold and down to C1's rock path)
   room("B2", { ground: [[0, 0]], gaps: [[-200, 1250]], below: C.C2, looks: [[1250, 2800, "deck"]], noLeft: true, next: C.B3, set: [{ k: "ship" }, { k: "zip" }] },
     [["inkling", "orange", 1600]]);
-  room("B3", { ground: [[0, 0]], looks: [[-200, 2800, "deck"]], upX: 1150, up: C.A3, prev: C.B2, next: C.B4, cannon: { x: 2050 },   // (the ship's cannon, aimed at the high cliffs out past her: jump in. The user, 2026-11-02)
+  room("B3", { ground: [[0, 0]], looks: [[-200, 2800, "deck"]], upX: 1165, up: C.A3, prev: C.B2, next: C.B4, cannon: { x: 2050 }, riseFrom: C.C3, riseIn: [[1550, 2560]],   // (riseFrom: up onto the deck with a jump off C3's top scaffold: the user, 2026-11-02 "from c3 you should be able to jump up to the top of the boat in b3 since your jump height can actually reach it")   // (the ship's cannon, aimed at the high cliffs out past her: jump in. The user, 2026-11-02)
     set: [{ k: "ship" }, { k: "cannon", x: 2050 }] }, [["crab", "purple", 650], ["seahorse", "green", 1550]]);
   room("B4", { ground: [[0, 0]], gaps: [[1500, 2760]], below: C.C4, looks: [[-200, 1500, "deck"]], prev: C.B3, noRight: true,   // (off the deck's end: down onto the hub's rock in C4)
     set: [{ k: "ship" }] }, [["kraken", "purple", 800, "mini"]]);
   room("B5", { ground: [[0, 0]], gaps: [[-200, 1700]], below: C.C5, rise: true, noLeft: true, next: C.B6 },
     [["crab", "orange", 2250]]);
-  room("B6", { ground: [[0, 0]], plats: [[180, 260, 2070, "scaf"]], poles: [[2200, 260]], upX: 1150, upY: 260, up: C.A6, prev: C.B5, next: C.B7,   // (the ladder up the scaffold's frame onto its top, in A6)
+  room("B6", { ground: [[0, 0]], plats: [[180, 260, 2070, "scaf"]], poles: [[2200, 260]], upX: 1165, upY: 260, up: C.A6, prev: C.B5, next: C.B7,   // (the ladder up the scaffold's frame onto its top, in A6)
     set: [{ k: "frame", x0: 900, x1: 1450, y0: 260, y1: 30 }] }, [["octo", "orange", 800, "mini"], ["inkling", "red", { plat: 0, x: 600 }], ["starfish", "orange", { plat: 0, x: 1550 }]]);
   room("B7", { dark: true, ground: [[0, 0]], secret: { who: "camila", x: 2150, side: 1, door: true }, prev: C.B6, next: C.B8, set: [{ k: "cave", x0: -200 }] },   // (inside the rock; at the end, the rock only Camila can break)
     [["crab", "purple", 650], ["nautilus", "teal", 1250]]);
@@ -5039,13 +5069,14 @@ function authorWaves() {
     set: [{ k: "ship" }] }, [["inkling", "red", 600], ["seahorse", "aqua", 1450], ["crab", "blue", 2150]]);
   room("D3", { ground: [[0, 0]], looks: [[-200, 2800, "dock"]], lowWaves: true, riseX: 625, plats: [[-40, 265, 340, "scaf"], [400, 185, 450, "scaf"], [1100, 230, 400, "scaf"], [1650, 350, 420, "scaf"]], prev: C.D2, next: C.D4,   // (the stack's top: jump up off it into C3)
     set: [{ k: "ship" }] }, [["crab", "purple", 420], ["inkling", "orange", 1350], ["squidlet", "pink", { plat: 3, x: 1800 }]]);
-  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2120, 182, 440, "rock"]], prev: C.D3, next: C.D5, rockfall: true, set: [{ k: "ship" }] },   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
+  room("D4", { ground: [[0, 0]], gaps: [[1900, 2760]], looks: [[-200, 1900, "dock"]], lowWaves: true, bepNoRight: true, plats: [[2120, 182, 290, "rock"], [2410, 250, 200, "rock"]], prev: C.D3, next: C.D5, rockfall: true, set: [{ k: "ship" }] },   // (its right end a step down level with D5's shelf, 250, so walking in from the shelf you're on it, not in the water: the user, 2026-11-02 "the platform in d5 to d4 is not connected". Rose's jump up from the dock still onto the high part)   // (the dock ends; up there, a jump only Rose can make (a charged jump and a double): on to D5, a way round)
     [["octo", "purple", 750], ["crab", "orange", 1450]]);
-  room("D5", { ground: [[0, 0]], gaps: [[-200, 650]], plats: [[-40, 250, 2600, "shelf"]], poles: [[720, 250]], upX: 1700, upY: 250, up: C.C5, prev: C.D4, next: C.D6, bepNoLeft: true, rockfall: { shelf: true },   // (the shelf, and under it the underground scaffolding)
+  room("D5", { ground: [[0, 0]], gaps: [[-200, 650]], plats: [[-40, 250, 2600, "shelf"]], poles: [[720, 250]], upX: 1715, upY: 250, up: C.C5, prev: C.D4, next: C.D6, bepNoLeft: true, rockfall: { shelf: true },   // (the shelf, and under it the underground scaffolding)
     set: [{ k: "under", x0: 650, x1: 2800 }] }, [["starfish", "red", { plat: 0, x: 1200 }], ["crab", "orange", 1100], ["inkling", "purple", 1900]]);
-  room("D6", { ground: [[0, 0]], plats: [[-40, 250, 2190, "shelf"]], poles: [[2100, 250]], upX: 900, upY: 250, up: C.C6, prev: C.D5, next: C.D7, rockfall: { shelf: true }, set: [{ k: "under", x0: -200, x1: 2150 }] },
+  room("D6", { ground: [[0, 0]], plats: [[-40, 250, 2190, "shelf"]], poles: [[2100, 250]], upX: 915, upY: 250, up: C.C6, prev: C.D5, next: C.D7, rockfall: { shelf: true }, set: [{ k: "under", x0: -200, x1: 2150 }] },
     [["crab", "purple", { plat: 0, x: 500 }], ["inkling", "orange", { plat: 0, x: 1350 }], ["seahorse", "teal", { plat: 0, x: 1800 }], ["clam", "purple", 900, "mini"], ["urchin", "red", 1700]]);
-  room("D7", { ground: [[0, 0]], prev: C.D6, next: C.D8, set: [{ k: "posts", x0: 0, x1: 2560 }] });   // (under C7's ledge, its posts)
+  room("D7", { ground: [[0, 0]], prev: C.D6, next: C.D8, mine: { x: 1280, to: MINE1, tx: 330 }, set: [{ k: "posts", x0: 0, x1: 2560, skip: 1280 }, { k: "mine", x: 1280, top: 135 }] },   // (the mine's way in, mid-room: ↑ at it. The user, 2026-11-02)
+    [["crab", "red", 620], ["inkling", "purple", 1950]]);   // ("add two baddies, one on either side of the new entry. not right next to it but in the space between both screen exits and the door")   // (under C7's ledge, its posts)
   room("D8", { ground: [[0, 0]], gaps: [[2150, 2760]], dive: [2150, 2760], diveTo: DEEP, diveBoss: true, prev: C.D7, noRight: true, boss: true, bossX: 1500, toWorld: DEEP,   // (Cuss at the water's edge; past him, down into the deep)
     set: [{ k: "posts", x0: 0, x1: 1150 }] });
 
@@ -5057,6 +5088,12 @@ function authorWaves() {
   S0.push(farRoom({ ground: [[0, 0], [1350, 0], [1350, -80], [2560, -80]], prev: FAR1, noRight: true, plats: [[600, 300, 240, "stack"], [980, 215, 230, "stack"]], items: [["power", 1095, 215], ["guava", 330]],   // (sea stacks up to a star, a shelf, their cannon)
     cannon: { x: 2130, back: true, to: C.B3 }, set: [{ k: "crag", x0: -300, x1: 2950, top: 60, z: -6.5 }, { k: "cannon", x: 2130, back: true }] }));
   R0[FAR2] = [["octo", "purple", 450], ["starfish", "red", { plat: 1, x: 1080 }], ["crab", "blue", 1700], ["seahorse", "green", 1980]];
+  // the old mine (the user, 2026-11-02: "add a mine opening ... we're going to work on this now to expand levels"): in through D7's mouth, one room for now, its own mouth (daylight in it) the way back out
+  if (S0.length !== MINE1) console.warn("waves: the mine's index is off", S0.length, MINE1);
+  S0.push({ h: S0[C.D7].h, col: 999, foe: S0[C.D7].foe, name: "THE OLD MINE", elev: 0, authored: true, noDress: true, dark: true, ground: [[0, 0]], noLeft: true, noRight: true,
+    plats: [[900, 300, 380, "scaf"], [1560, 230, 330, "scaf"]], items: [["fruit", 1720, 230]], mine: { x: 330, to: C.D7, tx: 1280 },
+    set: [{ k: "cave", x0: -200, x1: 2800, shafts: true }, { k: "mine", x: 330, out: true, top: 120 }] });
+  R0[MINE1] = [["crab", "purple", 1250], ["inkling", "orange", { plat: 0, x: 1100 }], ["starfish", "red", 2150]];
   S0[C.B3].cannon.to = FAR1;
   W.ship = { x0: WORLD + 1250, x1: WORLD * 3 + 1500, y: ROW_H + GROUND, keel: ROW_H * 3 + GROUND + 110, mast: WORLD * 3, fore: WORLD * 2 + 1900, nest: [WORLD * 2 + 640, WORLD * 3 + 640, 300],   // (the S.S. Pineapple, in world px: B2's deck to B4's, her keel down in C3-C4, the crow's nest over A3-A4)
     tip: WORLD * 4 + 1300, anchor: WORLD * 2 + 420, anchorY: ROW_H * 2 + 230, name: WORLD * 2 + 1300, sailTop: ROW_H - 10, sailH: 460 };   // (the sail hung lower, Cuss' face in view from B4's deck: the user, 2026-10-25)
@@ -7364,7 +7401,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
 function writeSave() {
   if (pro || (rideS && rideS.road) || (STAGES[stage] && STAGES[stage].quick)) return;   // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds; nor in QUICK PLAY)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, phones: story.phones || null, tapes: story.tapes || [], cons: !!story.cons, carts: story.carts || [], bgears: story.bgears || null, bgpow: story.bgpow || null, marks: story.marks || null, phonesRep: !!story.phonesRep, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, phones: story.phones || null, tapes: story.tapes || [], cons: !!story.cons, carts: story.carts || [], bgears: story.bgears || null, bgpow: story.bgpow || null, marks: story.marks || null, phonesRep: !!story.phonesRep, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], duo: story.duo || [], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -7620,6 +7657,7 @@ function devChoose(d) {
   else if (d === "ach") showAch();
   else if (d === "edit") { closeMenus(); story = null; showSelect(); openEditor(); }
   else if (d === "cast") openCast();               // (every world's enemies and friends, to look at: the user, 2026-10-23)
+  else if (d === "text") window.open("text-editor.html", "_blank");   // (all the game's words by kind, to change and export for Claude to put in, voices rebuilt: the user, 2026-11-02. The page and its text-catalog.js: berry-tools/text_catalog.py)
   else if (d === "shade") openShading();            // (a look-dev page of its own: the girls and the woods under new shading, nothing in the game changed)
   else if (d === "feel") feelPanelToggle(true);
   else if (d === "dexp") debugFileOut();           // (every debug setting in one file, and back)
@@ -7741,7 +7779,7 @@ function storyLoad(slot, q) { if (q.layout === 14) { const dw = o => { const r =
   if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null, phones: q.phones || null, tapes: q.tapes || [], cons: !!q.cons, carts: q.carts || [], bgears: q.bgears || null, bgpow: q.bgpow || null, marks: q.marks || null, phonesRep: !!q.phonesRep }; storyRun(q.w, fixRests(q.w, q.s), false); }
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), duo: q.duo || [], uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null, phones: q.phones || null, tapes: q.tapes || [], cons: !!q.cons, carts: q.carts || [], bgears: q.bgears || null, bgpow: q.bgpow || null, marks: q.marks || null, phonesRep: !!q.phonesRep }; storyRun(q.w, fixRests(q.w, q.s), false); }
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -9598,7 +9636,7 @@ function goRoom(ns, back) { bigLeave();                          // on into the 
     enterStage(ns, back); spawnEscort(back); if (entrySide === "top" || entrySide === "bottom") clearArrival(player.x);
   });
 }
-function goRoomV(ns, up) { bigLeave();                        // up (or down) a rope ladder into the room above (or below): on, or back the way you came
+function goRoomV(ns, up) { bigLeave(); const fy0 = player.y, rs0 = rowStep(stage, ns);   // up (or down) a rope ladder into the room above (or below): on, or back the way you came
   cine = null; swapPan(up ? "up" : "down", ns, () => {
     const esc = bepRun.escort, from = stage; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
@@ -9607,7 +9645,7 @@ function goRoomV(ns, up) { bigLeave();                        // up (or down) a 
     const foot = !up && STAGES[ns].climbUp ? STAGES[ns].climbUp.x + 230 : 130;   // (down a hatch with stairs back up, no ladder below: at the stairs' foot)
     const R0 = LADDERS.find(q => q.rope === (up ? "down" : "up")) || (!up && LADDERS.find(q => (q.wallClimb === "back" || q.wallClimb === "side") && q.to === from)) || undefined, x = R0 ? R0.x : foot;     // you come in on this room's rope (or Camila's rock face), still climbing
     const sx = R0 ? R0.face + (R0.wall || 0) * 40 : foot, sy = R0 ? (up ? R0.top : R0.bot) : groundAt(foot) ?? GROUND;
-    Object.assign(player, { x, y: R0 ? (up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0, vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
+    Object.assign(player, { x, y: R0 ? (rs0 === (up ? -1 : 1) ? clamp(up ? fy0 + ROW_H : fy0 - ROW_H, R0.top, R0.bot) : up ? R0.bot - 130 : R0.top + 130) : sy, vx: 0,   /* (stitched: on up (or down) from just where you were on the rope, so the pan carries you straight on: the user, 2026-11-02 "d6 to c6 is a totally janky transition moving up". It was 130 px in from the rope's end, a jump of up to 300 px) */ vy: 0, face: 1, onGround: !R0, plat: null, climb: R0 || null, climbAuto: R0 ? (up ? -1 : 1) : 0, climbPh: 0, inv: R0 ? 1.9 : 0,   /* (safe while you climb in: the user, 2026-10-20) */
       carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, safe: { x: sx, y: sy, plat: null } });
     const topL = !up && !R0 && STAGES[ns].climbUp ? PLATFORMS.filter(q => q.kind === "climb").sort((a, b) => a.y - b.y)[0] : null;   // (down a hatch with stairs back up: onto the top of the stairs)
     if (topL) Object.assign(player, { x: topL.x + topL.w / 2, y: topL.y, vx: 0, vy: 0, onGround: true, plat: topL, climb: null, safe: { x: topL.x + topL.w / 2, y: topL.y, plat: topL } });
@@ -9701,7 +9739,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
 }
 function holeAbove(px) {                           // the room above that drops into this one by a hole, and the hole nearest x (in this room's terms: rooms line up)
   if (holeAbove.k !== world + ":" + stage) { holeAbove.k = world + ":" + stage; holeAbove.v = null;
-    STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.cut || q.arena || q.below !== stage) return; const G0 = (q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }
+    STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.cut || q.arena || (q.below !== stage && q.riseFrom !== stage)) return; const G0 = (q.riseFrom === stage ? q.riseIn || [] : q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }   // (riseFrom / riseIn: no hole, but up over its edge from there you can jump: the ship's deck from C3, 2026-11-02)
   const v = holeAbove.v; if (!v) return null;
   const [a, b] = v.gaps.reduce((m, g) => Math.abs((g[0] + g[1]) / 2 - px) < Math.abs((m[0] + m[1]) / 2 - px) ? g : m);
   return { to: v.to, x: (a + b) / 2, a, b };
@@ -9854,12 +9892,17 @@ function ejJoin() {                                  // beaten: up she gets, and
   const b = $("banner"); b.innerHTML = `<div class="blk">${D.name} JOINS YOU</div><div class="bar">SHE'S ON YOUR SIDE · FOR NOW</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
-function ejPlace(x, y, face) { if (!ej || ej.phase !== "partner") return; x = onHeroSpan(shoreX(x), y); if (STAGES[stage].swim) y = groundAt(x) ?? y; const Bp = bridgeAt(x, y); if (Bp) y = Bp.y; Object.assign(ej.st, { x, y, vx: 0, vy: 0, face, onGround: true, plat: Bp, atkT: -1, atkKind: null, wave: 0 }); ej.tgt = null; }
+function ejPlace(x, y, face) { if (!ej || ej.phase !== "partner") return; x = onHeroSpan(shoreX(x), y); if (STAGES[stage].swim) y = groundAt(x) ?? y; const Bp = bridgeAt(x, y); if (Bp) y = Bp.y; Object.assign(ej.st, { x, y, vx: 0, vy: 0, face, onGround: true, plat: Bp, atkT: -1, atkKind: null, lvlLock: false, wave: 0 }); ej.tgt = null; }
 const ejExitDir = x => { const S0 = STAGES[stage], L = !S0.noLeft, R = !S0.noRight; return L && R ? (x < WORLD - x ? -1 : 1) : L ? -1 : R ? 1 : x < WORLD / 2 ? -1 : 1; };   // the nearest way out
 function ejLook(s, dt) {                             // turning and blinking, as the partner cameo does
   spring(s, dt); s.prof = approach(s.prof || 0, s.atkKind ? 1 : s.onGround ? s.gaitAmt || 0 : 0, dt * 5); s.bodyYaw = lerp(.85, .3, s.prof);
   const yT = s.wave > 0 ? -Math.PI / 2 : s.face > 0 ? -s.bodyYaw : -Math.PI + s.bodyYaw; s.yaw = lerp(s.yaw, yT, 1 - Math.exp(-dt * 12));
   s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; updatePose(s, dt);
+}
+function swimAfter(s, p, back, up, dt) {                // a buddy (or EJ) under the deep's water: after you up and down too, as the pets do (the user, 2026-11-02: "in the underwater world, your buddies should also have the bubble helmet but also they keep drowning and do not swim with the player")
+  const want = p.x - p.face * back, wy = p.y - 20 - up, ddx = want - s.x, ddy = wy - s.y, d = Math.hypot(ddx, ddy), spd = d > 260 ? 480 : 340;
+  s.vx = approach(s.vx, d > 16 ? ddx / d * Math.min(spd, d * 5) : 0, 1100 * dt); s.vy = approach(s.vy, d > 16 ? ddy / d * Math.min(spd, d * 5) : 0, 1100 * dt);
+  s.face = Math.abs(s.vx) > 30 ? Math.sign(s.vx) : Math.sign(p.x - s.x) || s.face; s.onGround = false; s.plat = null;
 }
 function updateEJ(dt) {                              // the partner: at your side, hopping up and down after you, and at any baddy that comes near
   if (!ej || ej.phase === "fight") return;
@@ -9872,15 +9915,16 @@ function updateEJ(dt) {                              // the partner: at your sid
   ej.atkCd -= dt; ej.hopT -= dt;
   if (climbWith(s, dt)) { ejLook(s, dt); return; }
   const SET = setOf(r.spec), busy = partHuman(ej, s, dt, { set: SET, sp: (SET.charge || [])[2], col: "#b06cff" });   // (her special: her set's last charged move)
-  if (!busy) partFollow(s, partSlot(s), dt);
-  if (s.onGround && !s.atkKind && !s.block && !s.post) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
+  const wet = world === 13 && deepWetAt(s.y); s.dive = wet;   // (under the deep's water: swimming, its swim pose and its bubble on, not sinking and put back by you over and over)
+  if (wet && !busy && !s.post) swimAfter(s, p, 80, 0, dt); else if (!busy) partFollow(s, partSlot(s), dt);
+  if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ej.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ej.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post) || s.y > SINK + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
-  partGrav(s, dt); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
+  if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
 }
@@ -10563,6 +10607,8 @@ function moveBody(b, dt, halfW) {
   if (g0 !== null && b.vy < 0 && prevY <= g0 + 1) { const gN = groundAt(b.x); if (gN !== null && b.y > gN) b.y = gN; }   // knocked up a slope in the air: carried up it, not through it
   if (CEILS.length && b.vy < 0) { const hh = b.h || (b.rig && b.rig.heightPx) || (b.def && b.def.h) || 90;
     for (const [c0, c1, cy] of CEILS) if (b.x > c0 && b.x < c1 && b.y - hh < cy && prevY - hh >= cy - 8) { b.y = cy + hh; b.vy = 0; } }
+  if (b.vy < 0 && !b.climb && (b === enemy || baddies.includes(b))) { const hh = b.h || (b.rig && b.rig.heightPx) || (b.def && b.def.h) || 90;   // the waves' shelf, from under it: rock, for the baddies down in the mine (knocked up, or jumping: they stay down there. The user, 2026-11-02 "do not let enemies in the mine area get knocked up to the top")
+    for (const q of PLATFORMS) if (q.kind === "shelf" && b.x > q.x && b.x < q.x + q.w) { const cy = q.y + 64; if (b.y - hh < cy && prevY - hh >= cy - 8) { b.y = cy + hh; b.vy = 0; } } }
   b.onGround = false; b.landV = 0;
   if (b.vy >= 0) {
     let surf = null;
@@ -10605,7 +10651,8 @@ function tackleStep(p, dt) {
 }
 // a level every CHARGE_STEP s holding attack (the user, 2026-10-28: "can the charge attacks be made a little faster? does it measure in milliseconds? like maybe 2
 // milliseconds faster": 200 of them each level, 2 wouldn't be seen; 1 s before), the tackle's a little slower than that
-const CHARGE_STEP = .8, TK_CHARGE = .9;              // (the tackle's: 1.3 till 2026-10-21, then 1.1, now .9)
+const CHARGE_STEP = .8, TK_CHARGE = .9, CHG_SPD = 1.2;   // (CHG_SPD: the hero's charged hits play this much faster, wind-up to follow-through: the user, 2026-11-02 "make the heroine's charge attacks a little faster")
+// (TK_CHARGE, the tackle's: 1.3 till 2026-10-21, then 1.1, now .9)
 function startTackleCombo(p, lv) {                  // the charged tackle, let go: as many parts as the charge got to
   const L = KIT.TK_CHARGE, list = p.rig.kind === "cat" ? L.cat : p.rig.spec.move.tackle === "wheel" ? L.wheel : (p.rig.spec.outfit.prop || {}).kind === "sword" ? L.sword : L.other;   // (Rose's: cartwheels, 2026-10-28)
   p.combo = { list, level: lv, idx: 0, tackle: true }; p.comboSpan = p.onGround ? supportSpan(p) : null;   // (like any charged combo: it won't carry you off an edge)
@@ -10678,7 +10725,7 @@ function updatePlayer(dt) {
 
   // drop: two quick taps down while standing on a platform falls through it to the level below
   p.dropT = Math.max(0, (p.dropT || 0) - dt);
-  if (dropReq) { dropReq = false; if (control && p.onGround && p.plat && p.atkT < 0) { p.dropPlat = p.plat; p.dropT = .3; p.onGround = false; p.vy = 140; p.y += 2; p.coyote = 0; p.sq = .12; p.sqv = 0; dust(p.x, p.y, 4); SFX.land(floorUnder(p), .2); } }
+  if (dropReq) { dropReq = false; if (control && p.onGround && p.plat && p.plat.kind !== "shelf" && p.atkT < 0) { p.dropPlat = p.plat; p.dropT = .3; p.onGround = false; p.vy = 140; p.y += 2; p.coyote = 0; p.sq = .12; p.sqv = 0; dust(p.x, p.y, 4); SFX.land(floorUnder(p), .2); } }
   // the tackle: its own button since 2026-10-31 (R: Space, R1), pressed (or just before you land); it does nothing else again till it's let go
   if (held.atk && !p.atkWas) p.atkDownT = time; if (held.block && !p.blkWas) p.blkDownT = time; if (held.tackle && !p.tklWas) p.tklDownT = time; p.atkWas = held.atk; p.blkWas = held.block; p.tklWas = held.tackle;
   if (p.tackleLock && !p.tackle && !held.tackle) p.tackleLock = false;
@@ -10779,7 +10826,7 @@ function updatePlayer(dt) {
     if ((H.up && (p.vy >= -UPHOP_HIT_VY || H.t >= U.go + .5)) || p.hurtT > 0 || p.dead || (!H.up && !p.onGround)) { const k = H.kind, vy = p.vy, q = H.queued; p.upHop = null;
       if (!(p.hurtT > 0) && !p.dead && p.chain) { startStrike(p, k, 1); if (H.up) p.vy = vy; p.queued = !!q; } } }   // (near the top of the jump: the blow, which doesn't push you up again)
   if (p.atkT >= 0 && p.atkKind) {          // keyed moves: the humans' strikes and Tocsin's card moves
-    const S = cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind], pa = p.atkT; p.atkT += dt;
+    const S = cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind], pa = p.atkT; p.atkT += dt * (p === player && p.combo && !p.combo.tackle ? CHG_SPD : 1);   // (her charged hits a touch quicker, CHG_SPD)
     if (S.sfx2 && pa < S.sfx2[0] && p.atkT >= S.sfx2[0] && !SWING_SILENT.has(S.sfx2[1])) SFX[S.sfx2[1]]();   // (its second sound too: the clicks the user still heard, 2026-10-24 "clicking/ switch hitting sound ... almost like you're playing with toys")
     if (S.stepIn && pa < S.stepIn[0] && p.atkT >= S.stepIn[0] && p.onGround) { p.vx = p.face * S.stepIn[1]; dust(p.x, p.y, 3, -p.face); }   // (a step in partway through: the jab loads up first)
     if (S.dive && pa < S.dive[0] && p.atkT >= S.dive[0] && !p.onGround) { p.vy = Math.max(p.vy, S.dive[1]); if (S.diveStill) p.vx = 0; }   // dives drop onto the enemy (the charged tackle's: straight down)
@@ -11719,7 +11766,9 @@ let partInT = -9;                                    // (when you last gave the 
 // 5. "the charge attack of the attacking buddy will be a flaming leap forward where they envelop in flames and can hit several berry baddies in a row" (budLeap)
 // 6. "the charge attack for the blocker in the first stage will be an electric tackle that stuns up to 3 enemies bunched up and they get electricity goind around them and
 //    grow stiff and the player can take advantage and hit them a lot. this works onbosses too but doesnt last as long" (block held: it fills; let go full: defZap)
-const BUD_KIT = { 0: { fire: true, leap: "flame", tackle: "zap" } }, budKit = () => BUD_KIT[world] || BUD_KIT[0];   // (each world's own; Berry Woods' till a world has one)
+const BUD_KIT = { 0: { fire: true, leap: "flame", tackle: "zap" } }, budKit = () => BUD_KIT[world] || BUD_KIT[0];
+const BUD_OWN = { rink: "fire", stilt: "zap" };   // (that kit is Rink's fire and Stilt's lightning, theirs alone: the user, 2026-11-02 "i did it with different buddies and they had properties that dont belong to them like the fire and lightning. they should only have properties of their own")
+const budOwn = (P, what) => { const id = P && P.kind === "ally" && P.a && P.a.A ? P.a.A.id : null; return id ? BUD_OWN[id] === what : what === "fire" ? !!budKit().fire : budKit().tackle === "zap"; };   // (a buddy: its own; a kid partner: the world's, as before)   // (each world's own; Berry Woods' till a world has one)
 // the fighter slot's archetypes (the user, 2026-11-02: "the game will expand exploration by creating opportunities for different character's abilities to open and interact
 // different parts of the environment ... we will use archetypes for the buddies. these will have specific abilities but new ones will be variations on these"): the thief
 // (VINNIE, DORYS), the warrior (EL PICO, BOXCARS), the black mage (THE PLUMBERS), the ninja (VEJI). Each fills its own entry in ARCH; the game asks it at these points:
@@ -11730,6 +11779,16 @@ const BUD_ARCH = { vinnie: "thief", doir: "thief", elpico: "warrior", boxcars: "
 const ARCH = { thief: { blunt: true }, warrior: { blunt: true }, mage: { blunt: false, magic: true }, ninja: { blunt: true } };
 const archOfO = o => (o && o.A && ARCH[BUD_ARCH[o.A.id]]) || null;   // (a buddy's, from its ally: a crew's, from its lead's)
 const archOfP = P => P && P.kind === "ally" ? archOfO(P.a) : null;
+// what each kind of buddy can do, for the bell's list (the user, 2026-11-02: "when choosing a past ally, also show a description of their abilities"): [the kind, what it does]
+const ARCH_ABOUT = { thief: ["THIEF", "QUICK, SLEEK HITS THAT NOW AND THEN STEAL WHAT A BADDY CARRIES. CHARGED: CUTS THROUGH UP TO 3 BUNCHED TOGETHER AND STEALS FROM ALL OF THEM"],
+  warrior: ["WARRIOR", "HEAVY BLOWS THAT KNOCK ALL OF A BADDY'S ARMOR OFF AND SHOVE IT BACK. SMASHES ROCKS, CRATES AND HEAVY THINGS. CHARGED: A HUGE JUMPING SLAM"],
+  mage: ["MAGE", "LIGHTNING, THEN ICE, THEN FIRE AS YOU KEEP ATTACKING. CHARGED: ALL THREE AT ONCE IN A SWIRLING BLAST"],
+  ninja: ["NINJA", "VANISHES IN A PUFF AND HITS FROM IN FRONT, FROM ABOVE OR FROM BEHIND. CHARGED: TELEPORTS THE WHOLE TEAM ONTO THEM"],
+  monk: ["MONK · BLOCKER", "GUARDS THE TEAM. BLOCK AND PUSH FORWARD: THE WHOLE TEAM ROLLS PAST THEM AND TURNS TO FACE THEM"],
+  bmage: ["BLACK MAGE · BLOCKER", "GUARDS THE TEAM. A GUST SHOVES THEM BACK AS THE GUARD GOES UP; A PARRY SPINS THEM ROUND, DIZZY. LAUNCHED AT THEM: A GUST THAT BLOWS THEM FAR BACK"] };
+const BUD_ABOUT = { stilt: ["HEALER · BLOCKER", "GUARDS THE TEAM AND PATCHES YOU UP. CHARGED: AN ELECTRIC TACKLE THAT STUNS UP TO 3 OF THEM STIFF"],
+  rink: ["FIRE", "FIRE PUNCHES THAT SET THEM BURNING. CHARGED: A FLAMING LEAP THROUGH A ROW OF THEM"] };
+const budAbout = A => BUD_ABOUT[A.id] || ARCH_ABOUT[BUD_ARCH[A.id]] || ["FIGHTER", "FIGHTS AT YOUR SIDE"];
 const archOfS = s => { if (!s) return null; const a = allies.find(a => a.st === s || (a.crew || []).some(m => m.st === s)); return a ? archOfO(a) : null; };
 // the blocker slot's archetypes (the user, 2026-11-02): the MONK (FLORA: block and forward, the whole team rolls past them and turns to face them) and the blocker
 // BLACK MAGE (BRISA: a gust that shoves them back as the guard goes up; a parry, a gust that spins them round, dizzy). Their entries: blocker, roll, blockStart(D), parry(D, e, dir)
@@ -11783,7 +11842,7 @@ function rollTeamTick(dt) { partnerList().forEach(P => rollTick(P.q, dt)); [pal,
   else if (p && p.rolled) { p.rolled = false; p.ball = 0; p.rot = 0; } }
 const budBlunt = s => { const AR = archOfS(s); if (AR) return !!AR.blunt; const a = allies.find(a => a.st === s); return !(a && a.A.hit === "slash"); };   // (no archetype: by how it hits; a pet's paws and June's are blunt)
 const BUD_CHARGE = .6;             // (how long to fill: the attack buddy's, after PART_HOLD · the blocker's, the guard held)
-function budPay(P) { const q = P.q, hp = q.php ?? PARTNER_HP; if (hp < 1 || q.worn) { SFX.nope(); return false; } q.php = hp - 1; q.heartT = 2.2; return true; }   // (a heart, each time)
+function budPay(P) { const q = P.q; if (q.worn) { SFX.nope(); return false; } return true; }   // (free: no heart for it, the user 2026-11-02 "make it where buddies dont lose health for doing their charged attack"; worn out, still not. It was a heart each time)
 function budSpent(s) { if ((s.php ?? 1) > 0) return; const P = partnerList().find(P => P.q === s); if (P) partnerRest(P); }   // (that was its last: worn out)
 // the THIEF (the user, 2026-11-02: "they have sleek attack animations but also randomly steal from berries they hit, they'll steal food and other items. charge special: cuts
 // across through up to 3 enemies close together and jumps back to the player, steals from all 3 if they have an item currently"): any buddy given it, the same moves for all
@@ -12183,7 +12242,7 @@ Object.assign(ARCH.mage, {
 function budLeap(P) {                                // the attack buddy's charge: a leap on ahead, wrapped in fire, through whatever's in its way
   const q = P.q; if (!budPay(P)) return; const o = P.kind === "pet" ? q : P.kind === "ally" ? P.a : ej, f = partTarget(q, false), dir = f ? Math.sign(f.x - q.x) || player.face : player.face;
   if (o && o.pact && P.kind !== "pet") partEnd(o, q, true); if (o) { o.pact = o.pcmd = o.pnext = null; } q.pounce = null; postClear(P);
-  q.fleap = { t: 0, dir, hit: new Set(), fire: budKit().leap === "flame", plat: q.onGround ? q.plat : null, air: P.kind === "ally" ? ((KIT.MOVESETS[q.rig && q.rig.spec.move.set] || {}).air || [])[0] : null };
+  q.fleap = { t: 0, dir, hit: new Set(), fire: budKit().leap === "flame" && budOwn(P, "fire"), plat: q.onGround ? q.plat : null, air: P.kind === "ally" ? ((KIT.MOVESETS[q.rig && q.rig.spec.move.set] || {}).air || [])[0] : null };
   q.face = dir; q.vy = -470; q.onGround = false; q.plat = null; q.sq = .3; q.sqv = 0; SFX.dash(); SFX.release(2); dust(q.x, q.y, 6, -dir); budFlare(q);
 }
 function fleapStep(o, s, dt) {
@@ -12200,7 +12259,7 @@ function fleapStep(o, s, dt) {
   return true;
 }
 function defZap(D) {                                 // the blocker's charge: a tackle on ahead, crackling with it
-  const q = D.q; if (!budPay(D)) return; budFlare(q); const dir = defFace(); q.block = false; q.defOn = false; q.dzap = { t: 0, dir, fire: budKit().tackle === "zap" };
+  const q = D.q; if (!budPay(D)) return; budFlare(q); const dir = defFace(); q.block = false; q.defOn = false; q.dzap = { t: 0, dir, fire: budOwn(D, "zap") };
   q.face = dir; q.vy = -160; q.onGround = false; q.plat = null; q.sq = -.2; q.sqv = 0; SFX.dash(); SFX.crackle(); dust(q.x, q.y, 6, -dir);
 }
 function dzapStep(s, dt) {
@@ -12346,6 +12405,18 @@ const partAble = () => partnerList().filter(P => P.q && !P.q.worn && !P.q.tcOn &
 function postOf(P) { return P.q.post || null; }
 function postSet(P, x, y, kind, plat) { const q = P.q; q.post = { x: clamp(x, 40, WORLD - 40), y, kind, plat: plat || null, t: 0, idle: 0 }; q.tagT = Math.max(q.tagT || 0, 1.6); q.tagTxt = chgName(); if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; } else q.pact = q.pcmd = q.pnext = null; }
 function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); } }
+// split levels (the user, 2026-11-02: "if you and the buddies under you (say on a split level area) fight separately, when you want to move ahead and you call your buddies over,
+// let them stay on a platform below you but follow your movements. the only thing that would make them come up to you is if you make them jump up or jump down to get back to
+// your level, otherwise they just follow you there until there's a split"): called back while on another level, a buddy keeps to its own (the floor or platform it's on, end to
+// end), under you or over you, and goes along with you there; △ + ↑ (a jump) or △ + ↓ (down off it) brings it to you, and once it's level with you it's with you as ever
+function lvlLockSet(q) { const p = player; if (!q || !p || q.climb || q.zip) return; const off = Math.abs(q.y - (p.onGround ? p.y : (p.safe && p.safe.y) ?? p.y)) > 40;
+  q.lvlLock = off && (q.onGround || !!q.plat); q.lvlSp = q.lvlLock ? supportSpan(q) : null; }
+function chgDrop(p) {                               // △ with ↓: off what they stand on, down a level, and after you
+  const L = partAble(); if (!L.length) return; let n = 0;
+  L.forEach(P => { const q = P.q; if (q.climb || q.zip) return; postClear(P); q.lvlLock = false;
+    if (q.onGround && q.plat) { Object.assign(q, { dropPlat: q.plat, dropT: .3, onGround: false, vy: 140, plat: null }); q.y += 2; n++; } });
+  if (n) SFX.jump(); chgSignal(p, L, "DOWN!");
+}
 function postsClear() { partnerList().forEach(postClear); }
 function chargeInput(dt) {                          // △: a press (with a way, or none), or held with a way; with ↑, the team's jumps
   const p = player, ok = mode === "play" && !!p && !p.dead && !paused && !menuUp && !modalOpen && !cine && !transit && !(intro && intro.lock), on = ok && held.charge, ax = (held.right ? 1 : 0) - (held.left ? 1 : 0);
@@ -12354,6 +12425,7 @@ function chargeInput(dt) {                          // △: a press (with a way,
   if (on) { chgB.t += dt; if (ax) chgB.dir = ax;
     if (up) { if (chgB.upT < 0) chgB.upT = 0; chgB.upT += dt; chgCoil(chgB.upT); }                     // ↑ held: they crouch, winding it up
     else if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.upT = -1; chgB.jumped = true; }         // let go: off they go, as high as it was wound. Again each time
+    if (held.down && !up && !chgB.dropped) { chgB.dropped = true; chgB.jumped = true; chgDrop(p); }   // ↓: down off what they're on, to you (split levels, 2026-11-02)
     if (!chgB.sortie && !chgB.jumped && chgB.upT < 0 && chgB.t >= CHG_HOLD && chgB.dir) chgStart(p, "sortie"); if (chgB.sortie) chgSortie(p, dt); }
   if (!on && chgB.on) { chgB.on = false; if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.jumped = true; }   // (both let go at once: the jump goes)
     if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped) chgStart(p, chgB.dir ? "go" : "hold"); }
@@ -12377,12 +12449,12 @@ function chgJump(p, t, ax) {                         // let go of ↑: they jump
     if (q.onGround) q.chgAir = 1; else if (q.chgAir > 0) q.chgAir--; else return;
     const vx = ax ? ax * CHG_JUMP.side : 0;
     postSet(P, clamp(q.x + vx * 2 * v / GRAV, 40, WORLD - 40), q.y, "hold", null);
-    Object.assign(q, { vy: -v, vx, onGround: false, plat: null, coilT: 0, coiled: false, crouch: false, sq: .22, sqv: 0, chgFly: true }); dust(q.x, q.y, 3, 0); n++; });
+    Object.assign(q, { vy: -v, vx, onGround: false, plat: null, coilT: 0, coiled: false, crouch: false, sq: .22, sqv: 0, chgFly: true, lvlLock: false }); dust(q.x, q.y, 3, 0); n++; });
   if (n) { SFX.jump(); p.wave = Math.max(p.wave || 0, .3); }
 }
 function chgStart(p, how) {                         // the command: where to, and the signal (your hand up, a whistle, their mark; the rings where they're to be)
   const L = partAble(); if (!L.length) return;
-  if (how === "hold" && L.some(P => P.q.post)) { L.forEach(postClear); chgSignal(p, L, "BACK TO ME"); return; }   // (again, on its own: back to you)
+  if (how === "hold" && L.some(P => P.q.post)) { L.forEach(postClear); L.forEach(P => lvlLockSet(P.q)); chgSignal(p, L, "BACK TO ME"); return; }   // (again, on its own: back to you; one on another level than yours, along it under (or over) you, lvlLock)
   const d = how === "go" || how === "sortie" ? (chgB.dir || p.face) : p.face;
   if (how === "hold") L.forEach(P => postSet(P, P.q.x, P.q.y, "hold", P.q.plat));
   else if (how === "up") { const pl = platAbove(p);   // the platform over you (nearest, up within a good jump): there, side by side
@@ -12467,7 +12539,7 @@ function pointEnd(p, release) {                      // let go: three charges, a
 }
 function partCommand(P, type, button) {             // what you're doing as you press it says what they do (button: yours, a blow of its combo, fire in Berry Woods)
   const p = player, q = P.q, up = !!held.up || upPend >= 0, auto = !!q.pWeak; q.pWeak = false;   // (your button: full blows from now, the one they're at too)
-  const cmd = { type, up: up && !held.down, down: !!held.down, fwd: !!(held.left || held.right), air: !p.onGround, perPress: !!button, fire: !!button && !!budKit().fire && !archOfP(P) };
+  const cmd = { type, up: up && !held.down, down: !!held.down, fwd: !!(held.left || held.right), air: !p.onGround, perPress: !!button, fire: !!button && budOwn(P, "fire") && !archOfP(P) };
   if (up && upPend >= 0) upPend = -1;               // (↑ pressed with it: theirs, not a jump of yours)
   if (P.kind === "pet") { if (q.pact || q.pounce) q.pnext = cmd; else q.pcmd = cmd; return; }
   const o = P.kind === "ally" ? P.a : ej; if (!o) return;
@@ -12629,13 +12701,15 @@ function bridgeKeep(s, dt) {                        // (before its move: its ste
   return B;
 }   // (what you're stood on, edge to edge: once a frame)
 function partFollow(s, k, dt) {                     // its place: a step behind you (the second, two), a little further back from the camera; at your speed; up when you jump
-  const p = player, gap = PART_GAP[k] + ((s.rig && s.rig.heightPx) || 90) * .12, sp = followSpan(s);
+  const p = player, gap = PART_GAP[k] + ((s.rig && s.rig.heightPx) || 90) * .12;
+  if (s.lvlLock && s.onGround && p.onGround && Math.abs(s.y - p.y) < 40) s.lvlLock = false;   // (level with you again: with you)
+  if (s.lvlLock && s.onGround) s.lvlSp = supportSpan(s) || s.lvlSp; const sp = s.lvlLock ? s.lvlSp : followSpan(s);   // (on its own level: what it stands on, end to end)
   const want = shoreX(sp ? clamp(p.x - p.face * gap, sp[0] + 14, sp[1] - 14) : p.x - p.face * gap), dx = want - s.x;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
   const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 12 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
   s.z = approach(s.z || 0, PART_Z[k], .9 * dt);
   if (s.onGround || s.mirrorJ) s.vx = approach(s.vx, s.wave > 0 ? 0 : v, (s.onGround ? 3400 : 1500) * dt); s.sprint = Math.abs(s.vx) > 430;   // (in the air on a hop of its own, over a gap: its own way on)
   s.face = Math.abs(s.vx) > 60 ? Math.sign(s.vx) : p.face;
-  partJump(s, k, dx); return dx;
+  if (!s.lvlLock) partJump(s, k, dx); return dx;   // (on its own level: not your jumps either)
 }
 function partJump(s, k, dx) {                       // you jumped: so does it, a beat after (the second a beat after that), as high; your double jump too
   const c = pJumpCue; if (s.onGround) s.airJ = 1; if (!c) return;
@@ -14027,6 +14101,17 @@ function palsStay() {                              // off into another world: yo
 // you reach it. Then they're with you (as one found fighting joins, meetJoin; not on the hubs' bell for it, as before). Off out of the room first: they come along all
 // the same; off out of the world: they stay in it
 let arrive = [];
+// back in a world: asked whether its two should come along, rather than finding them there again (the user, 2026-11-02: "when entering a world you've revisited, ask the
+// players if they want the local buddies to join them (this would be the two buddies that usually join when you play that area)"). The first time in, they're there as ever
+let budAskUp = false; const freeDuo = [];   // (budAskUp: the question's up, play held · freeDuo: free play's worlds whose two have met you, story.duo a story's)
+function localPairArrive() {
+  if (!player || world === 9 || !WORLDS[world]) return; const met = story ? (story.duo = story.duo || []) : freeDuo;
+  if (!met.includes(world)) { met.push(world); if (story) writeSave(); return worldTeamJoin(); }
+  const { A, A2 } = worldPair(world), L = [A, A2].filter(a => a && !allyWith(a)); if (!L.length || TEAM_MAX - teamCount() < 1) return;   // (both with you already, or no room: nothing to ask)
+  if (menuUp || rideS || paused) { teamFresh = true; return; }   // (a menu or the bus up: asked once it's gone)
+  budAskUp = true; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  rideAsk(y => { budAskUp = false; if (y) worldTeamJoin(); }, { t: L.map(a => a.name).join(" & "), s: "WANT THEM TO JOIN YOU AGAIN?", yes: "YES, COME ALONG", no: "NOT THIS TIME" });
+}
 function worldTeamJoin() {                          // its two (as many as there's room for: a full team brought along, none)
   if (!player || world === 9 || !WORLDS[world]) return; const { A, A2 } = worldPair(world); let free = TEAM_MAX - teamCount();
   arriveDrop(); const L = [];
@@ -14088,7 +14173,7 @@ const onHeroSpan = (x, y) => { const p = player, sp = p && p.onGround && !p.clim
 function allyPlace(x, y, face, ally = allies[0]) { if (!ally) return; const s = ally.st; x = onHeroSpan(shoreX(x), y); if (STAGES[stage].swim) y = groundAt(x) ?? y; { const g = groundAt(clamp(x, 30, WORLD - 30)); if (g !== null && y > g) y = g; } const Bp = bridgeAt(clamp(x, 30, WORLD - 30), y); if (Bp) y = Bp.y; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: Bp, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player;   // (never under the floor: you coming up from below, still rising, 2026-11-02)
   (ally.crew || []).forEach(m => Object.assign(m.st, { x: clamp(shoreX(x - face * m.off), 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 })); }
 function updateAlly(dt) {                          // with you: just behind you (each a step further back), hopping up and down after you, and at any baddy (or the boss) that comes near
-  if (teamFresh && mode === "play" && player && !transit && !hideout && !stronghold && !arena && !(intro && intro.lock)) { teamFresh = false; worldTeamJoin(); }   // (into a world: its two)
+  if (teamFresh && mode === "play" && player && !transit && !hideout && !stronghold && !arena && !(intro && intro.lock)) { teamFresh = false; localPairArrive(); }   // (into a world: its two; back again, asked first)
   if (allyBring !== null && mode === "play" && player && !transit) { const L = Array.isArray(allyBring) ? allyBring : [allyBring]; allyBring = null;   // (a loaded game's: by their names, from any world now)
     L.forEach(id => { const A = ALLIES.find(a => a.id === id) || ALLIES.find(a => a.w === id && a.w === world); if (!A || allyWith(A) || allies.length >= TEAM_MAX) return;
       const r = allyRig(A), a = allyJoin(A, r, makeState(player.x, r), true); allyPlace(player.x - player.face * 90, player.y, player.face, a); }); }
@@ -14121,22 +14206,23 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt; if (s.zipR) return;   // (down the zipline behind you)
   if (stronghold || cine || hideout || opening) { allyHide(ally); ally.away = true; return; }   // (it waits outside)
   const behind = 90 + palsAll().length * 50 + (ejPal() ? 50 : 0) + k * 75;
-  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face, ally); allyShow(ally); }   // (a new room, or back on your feet: at your side)
+  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face, ally); allyShow(ally); s.lvlLock = false; }   // (a new room, or back on your feet: at your side)
   if (campSit(s, allyKey(k), dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); crewStep(ally, dt, false); return; }   // (at a rest stop: on its stump by the fire)
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
   if (climbWith(s, dt)) { ejLook(s, dt); crewStep(ally, dt, false); return; }   // (up a climb after you)
   const SET = setOf(r.spec), busy = partHuman(ally, s, dt, { set: SET, sp: KIT.BUDDY_SP[A.lead || A.id] || (SET.charge || [])[2], plain: (KIT.BUDDY_PLAIN || {})[A.lead || A.id], shoot: A.shoot, col: A.col, crew: ally.crew,
     voice: (sp, i) => { if (sp) SFX.buddy(A.id, "sp"); else if (i === 0 && Math.random() < .35) SFX.buddy(A.id, "atk"); } });   // (its voice: into a special always, a string now and then)
-  if (!busy) partFollow(s, partSlot(s), dt);
-  if (s.onGround && !s.atkKind && !s.block && !s.post) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
+  const wet = world === 13 && deepWetAt(s.y); s.dive = wet;   // (under the deep's water: swimming, its swim pose and its bubble on, not sinking and put back by you over and over)
+  if (wet && !busy && !s.post) swimAfter(s, p, behind, k * 30, dt); else if (!busy) partFollow(s, partSlot(s), dt);
+  if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ally.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ally.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post) || s.y > SINK + 20) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
-  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; partGrav(s, dt); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
+  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
   if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
@@ -14563,10 +14649,13 @@ function bossMove(e, p, D, dt) {
   // your swing coming, close in: sometimes it hops back out of it (or over you, backed into a wall)
   if (!D.chase && p.atkT >= 0 && p.atkT < .08 && adx < 230 && e.dodgeCd <= 0 && Math.random() < BRAIN.dodge * (.6 + (D.jumpy || .3))) {
     e.dodgeCd = BRAIN.dodgeCd; const wall = (e.x < (arena ? arena.l : 0) + 200 && dx > 0) || (e.x > (arena ? arena.r : WORLD) - 200 && dx < 0);
-    if (!wall && !e.plat && groundAt(e.x - Math.sign(dx) * 130) !== null && Math.random() < .5) { bossDash(e, -Math.sign(dx) || -e.dir, 1.15, .24); return; }   // a backstep along the ground, out of reach
+    if (!e.plat && !solidAt(e.x - Math.sign(dx) * 260) && bossRoll(e, p)) return;   // the water (or a drop) at its back: a roll round past you instead, never back into it (TEAL, 2026-11-02)
+    if (!wall && !e.plat && solidAt(e.x - Math.sign(dx) * 260) && Math.random() < .5) { bossDash(e, -Math.sign(dx) || -e.dir, 1.15, .24); return; }   // a backstep along the ground, out of reach (only with firm ground the length of it behind)
+    if (!wall && !e.plat && !solidAt(e.x - Math.sign(dx) * 260)) return;   // (no roll to be had, and nowhere behind to land: it stands its ground)
     e.jumpVy = wall ? -880 : -560; e.jumpVx = (wall ? 1 : -1) * Math.sign(dx) * (wall ? 470 : 380); e.windup = .05; e.sq = -.2; e.sqv = 0; e.dodgeHop = !wall; return;   // (dodgeHop: syncFoe's back flip, an agile one's)
   }
   if (e.onGround && !(e.windup > 0)) e.dodgeHop = false;   // (down again: the flip's done)
+  if (!D.chase && e.onGround && !e.plat && !e.atk && adx < 240 && e.dodgeCd <= 0 && !solidAt(e.x - Math.sign(dx) * 200) && Math.random() < dt * 1.4 && bossRoll(e, p)) { e.dodgeCd = BRAIN.dodgeCd; return; }   // pinned with its back to the water: out round you, now and then (TEAL: "protect himself from the edge")
   e.pounceCd = Math.max(0, (e.pounceCd ?? 2) - dt);
   if (I.kind === "close" && !D.chase && e.onGround && !e.plat && e.pounceCd <= 0 && adx > 520 && adx < 950 && Math.abs(p.y - e.y) < 60) {   // far off: sometimes a leap in, landing in front of you (as a Souls boss closes)
     const ag = (BOSS_IDLE[D.id] || BOSS_IDLE._).agile, tx = p.x - Math.sign(dx) * 210;
@@ -14585,7 +14674,7 @@ function bossMove(e, p, D, dt) {
     const d = tx - e.x, sp = I.kind === "close" && Math.abs(d) > 380 ? BRAIN.sprint : I.kind === "hold" ? .55 : I.kind === "back" ? .9 : 1.15;
     tv = Math.abs(d) < 12 ? 0 : Math.sign(d) * Math.min(base * sp, Math.abs(d) * 5); }
   if (tv && !e.plat && groundAt(e.x + Math.sign(tv) * (D.hw + 34)) === null && groundAt(e.x) !== null) {   // a gap ahead: over it, if that's the way to you
-    if (Math.sign(tv) === Math.sign(dx) || I.kind === "back") { e.jumpVy = -930; e.jumpVx = Math.sign(tv) * 450; e.windup = .1; e.sq = -.2; e.sqv = 0; return; } tv = 0; }
+    if ((Math.sign(tv) === Math.sign(dx) || I.kind === "back") && gapEnd(e.x, Math.sign(tv)) !== null) { e.jumpVy = -930; e.jumpVx = Math.sign(tv) * 450; e.windup = .1; e.sq = -.2; e.sqv = 0; return; } tv = 0; }   // (only with a far side to land on: backing off at D8's sea it leapt out over the water, the user 2026-11-02 "he was throwing himself back into the water")
   if (e.hitWall && Math.sign(tv) === Math.sign(e.hitWall) && I.kind !== "back") { e.jumpVy = -760; e.jumpVx = Math.sign(tv) * 300; e.windup = .1; return; }   // a step up in the way: hop it
   const turning = tv && e.vx && Math.sign(tv) !== Math.sign(e.vx);
   e.vx = approach(e.vx, tv, (tv === 0 || turning ? BRAIN.brake : BRAIN.accel) * dt);       // speeding up, braking, skidding round
@@ -14597,20 +14686,56 @@ function bossMove(e, p, D, dt) {
   if (e.atkCd <= 0 && !p.dead) { const near = !!D.near && adx < ATTACKS[D.near].range && Math.abs(p.y - e.y) < 90, pick = near ? D.near : e.plan || (e.plan = bossPlan(e, D)), A2 = ATTACKS[pick];   // (near: a close-in move of its own, when you're right there)
     if (adx < A2.range * .95 && Math.abs(p.y - e.y) < 170) { const last = e.lastMoves || []; e.move = pick; e.lastMoves = [pick, ...last].slice(0, 2); if (!near) e.plan = null; e.atk = "charge"; e.atkTm = A2.charge * (telOn() ? FEEL.telegraph.length * (1 + FEEL.telegraph.bigK * .5) : 1); e.chargeTot = e.atkTm; SFX.charge(); } }   // (a boss's charge: COMBAT FEEL's telegraph length too)
 }
+// TEAL (and any boss in the waves): the roll, and the sea (the user, 2026-11-02: "give him a roll ability like the player has that allows him to quickly go around you and
+// protect himself from the edge. he should try to avoid falling in the water as much as possible. if the player manages to knock him in the water, he'll flail a little but
+// in the water, then swim under and pop out back onto land but far away from the water. when he's in there, the player should be able to hit him with characters with
+// projectile or by launching your team at him"). In the water he's hittable (no inv) but out of a sword's reach; the buddies' shots and the flung team get him
+const BOSS_ROLL = { T: .44, past: 190 }, BOSS_SWIM = { flail: 1.6, under: .9, pop: .8, out: 160 };
+function bossRoll(e, p) {                          // a quick roll along the ground, round past you to your other side (as yours: ROLL); false if there's no firm ground there
+  const d = Math.sign(p.x - e.x) || e.dir || 1; let x1 = p.x + d * BOSS_ROLL.past; for (let i = 0; i < 4 && !solidAt(x1); i++) x1 -= d * 40;
+  if (!solidAt(x1) || (x1 - e.x) * d < 140 || (arena && (x1 < arena.l + 80 || x1 > arena.r - 80))) return false;
+  Object.assign(e, { rollB: { t: 0, x0: e.x, x1, d }, dir: d, atk: null, windup: 0, dashT: 0, vx: 0, jumpVx: 0, jumpVy: 0, sq: -.25, sqv: 0 }); e.inv = Math.max(e.inv, BOSS_ROLL.T + .05);
+  SFX.whoosh(); dust(e.x, e.y, 5, d); return true;
+}
+function bossRollTick(e, dt) {
+  const R = e.rollB; R.t += dt; const k = clamp(R.t / BOSS_ROLL.T, 0, 1); e.x = lerp(R.x0, R.x1, sstep(0, 1, k)); const g = groundAt(e.x); if (g !== null) e.y = g; e.vx = 0; e.vy = 0; e.onGround = true;
+  if (Math.random() < dt * 20) dust(e.x, e.y, 1, -R.d);
+  if (k >= 1) { e.rollB = null; e.dir = -R.d; e.face = e.dir; e.atkCd = Math.max(e.atkCd || 0, .25); e.sq = .2; e.sqv = 0; }   // (up out of it facing you)
+}
+function bossSwimIn(e) {                           // in: a splash, then flailing at the surface where it went in
+  const g = GAPS.find(([a, b]) => e.x > a && e.x < b) || [e.x - 200, e.x + 200], open = [Math.max(g[0], -100), Math.min(g[1], WORLD + 100)], side = Math.abs(e.x - g[0]) < Math.abs(g[1] - e.x) && g[0] > 0 ? -1 : 1;
+  const x = clamp(e.x, open[0] + 90, open[1] - 90), x2 = g[0] > 0 && g[1] >= WORLD ? Math.min(x, g[0] + 105) : g[1] < WORLD && g[0] <= 0 ? Math.max(x, g[1] - 105) : x;   /* (near the edge he went in by, the sea's open side, where you can still get at him) */ Object.assign(e, { swimB: { t: 0, ph: "flail", g, x: x2, side: g[0] > 0 && g[1] < WORLD ? side : g[0] > 0 ? -1 : 1 }, x: x2, vx: 0, vy: 0, atk: null, windup: 0, dashT: 0, jumpVx: 0, jumpVy: 0, onGround: false, plat: null, inv: 0, dodgeHop: false });
+  SFX.splash(); splash(x2, 1.4); shake = Math.max(shake, 4); popText(x2, WATER - 70, "SPLASH!");
+}
+function bossSwimTick(e, p, dt) {
+  const B = e.swimB; B.t += dt; e.vx = 0; e.vy = 0; e.atk = null; e.windup = 0; e.z = approach(e.z || 0, B.ph === "pop" ? 0 : 2.4, dt * 8); /* (out in front of the rocks in the water, where you can see him) */ e.hurtT = Math.max(e.hurtT, B.ph === "flail" ? .05 : 0);
+  if (B.ph === "flail") { e.x = B.x + Math.sin(B.t * 3.1) * 14; e.y = WATER + ((e.def && e.def.h) || 120) * .5 + Math.sin(B.t * 11) * 7; e.dir = Math.sin(B.t * 2.3) > 0 ? 1 : -1;   // (his head and wings above the water, splashing about)
+    if (Math.random() < dt * 9) splashBits2(e.x + rand(-40, 40), WATER - rand(0, 20));
+    if (B.t > BOSS_SWIM.flail) { B.ph = "under"; B.t = 0; SFX.splash(); splash(e.x, 1); } return; }
+  if (B.ph === "under") { e.y = WATER + ((e.def && e.def.h) || 120) * .5 + 400 * sstep(0, .3, B.t); e.inv = 1; if (B.t > BOSS_SWIM.under) {   // (under, out of sight: off to the shore, the far side from where you are if there's land both sides)
+      const d = B.side, ex = d < 0 ? B.g[0] : B.g[1]; let lx = ex + d * 700; lx = clamp(lx, 160, WORLD - 160); for (let i = 0; i < 12 && (!solidAt(lx) || Math.abs(lx - p.x) < 150); i++) lx -= d * 50;
+      if (!solidAt(lx)) lx = ex + d * BOSS_SWIM.out; B.ph = "pop"; B.t = 0; B.sx = ex - d * 30; B.lx = lx; B.ly = groundAt(lx) ?? GROUND; SFX.splash(); splash(B.sx, 1.5); } return; }
+  const k = clamp(B.t / BOSS_SWIM.pop, 0, 1); e.x = lerp(B.sx, B.lx, k); e.y = lerp(WATER + ((e.def && e.def.h) || 120) * .6, B.ly, k) - Math.sin(k * Math.PI) * 300; e.dir = Math.sign(B.lx - B.sx) || 1; e.inv = 1;   // (up out of the water in a leap, well in on the land)
+  if (k >= 1) { e.swimB = null; e.z = 0; e.y = B.ly; e.onGround = true; e.inv = .4; e.dir = Math.sign(p.x - e.x) || e.dir; e.face = e.dir; e.sq = .3; e.sqv = 0; dust(e.x, e.y, 8); e.atkCd = Math.max(e.atkCd || 0, .6); e.backoff = 0; }
+}
 function foeOffGaps() {                           // a boss never walks (or lands) into a drop: back onto the near edge (rooms with drops, 2026-10-20)
-  if (!GAPS.length || !enemy || enemy.dead || enemy.gone || !overGap(enemy.x) || (!enemy.onGround && enemy.y < GROUND - 10)) return;
+  if (!GAPS.length || !enemy || enemy.dead || enemy.gone || enemy.swimB || !overGap(enemy.x) || (!enemy.onGround && enemy.y < GROUND - 10)) return;
+  if (world === 1 && !STAGES[stage].below) return;   // (the waves' sea: knocked in, it goes in, and swims for it, bossSwimIn. It never goes in of its own accord: its leaps and backsteps look first)
   const g = GAPS.find(([a, b]) => enemy.x > a && enemy.x < b), x = g[1] > WORLD || enemy.x - g[0] < g[1] - enemy.x ? g[0] - 40 : g[1] + 40;
   Object.assign(enemy, { x, y: groundAt(x) ?? GROUND, vx: 0, vy: 0, onGround: true });
 }
 function updateEnemy(dt) {
   const e = enemy, p = arena ? arenaFoeTgt() : duo ? player : foeTgt(e), D = e.def, A = ATTACKS[e.move || D.atk];   // (in the showdown: you, or one of the beps)
   if (e.gone) { e.deathT += dt; return; }
-  if (!e.dead && e.y > SINK + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
+  if (!e.dead && !e.swimB && e.y > SINK + 30 && !(world === 1 && !STAGES[stage].below && overGap(e.x))) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
   if (e.iceT > 0 && !e.dead && !e.leaf && !e.under) { iceStep(e, dt, D.hw + 2); return; }   // (a boss frozen too, not as long: the black mage's ice)
   if (e.zapT > 0 && !e.dead && !e.leaf && !e.under) { e.zapT -= dt; e.vx = approach(e.vx, 0, 4000 * dt); e.atk = null; e.vy = Math.min((e.vy || 0) + 2000 * dt, 1000); moveBody(e, dt, D.hw + 2);   // (the blocker's lightning: a boss stiff with it too, not as long)
     if ((e.zapFxT = (e.zapFxT || 0) - dt) <= 0) { e.zapFxT = .06; zapFx(e); } spring(e, dt); return; }
+  if (e.rollB && !e.dead) { bossRollTick(e, dt); spring(e, dt); return; }
+  if (e.swimB && !e.dead) { bossSwimTick(e, p, dt); spring(e, dt); return; }
+  if (!e.dead && !e.swimB && world === 1 && !STAGES[stage].below && overGap(e.x) && e.y >= WATER) { bossSwimIn(e); return; }
   if (e.under && (e.dead || e.chide)) glosUnderOff(e, 1);
   if (e.backAt !== undefined && time >= e.backAt) stepBack(e, true);   // (a string of your blows taken: a step back out of reach)
   if (e.breakAt !== undefined && time >= e.breakAt) bossBreakOut(e, p);   // (caught in a combo: out of it)
@@ -22964,9 +23089,9 @@ function npcRows() {                                 // [label, sub, action]
     ...consRows(!!U.f.road),   // (the BERRY CONSOLE and its games: at a hub's stall the console and one game, by the road the next game, 2026-10-30)
     ...(U.f.road ? [] : tapesHere().filter(T => T.sell).map(T => [`${ITEM_SVG.tape}<b>${T.name}</b><span class="pr">${ITEM_SVG.coin}${T.sell}</span>`, tapeGot(T.id) ? "YOU'VE GOT THIS ONE" : "A CASSETTE: A SONG FOR THE HEADPHONES", () => buyTape(T)])),   // (a hub's stall: the cassettes it sells)
     ...(U.f.road ? [] : [[`${ITEM_SVG.map}<b>TREASURE MAP</b><span class="pr">${ITEM_SVG.coin}${MAP_PRICE}</span>`, mapOwned(world) ? "YOU HAVE THIS REGION'S" : "THIS REGION: EVERY ROOM, ITS WAYS OUT, ITS CAT AND DOG, DUNGEONS, CHECKPOINTS AND TREASURE", buyMap]]), ["<b>BACK</b>", "", () => sellerTab(null)]];   // (by the road: no region's map)
-  if (role === "caller") { const C = ["cat", "dog", "axo", "axo2"].flatMap(sp => petsCaught(sp).map(w => [sp, w])), Bd = foundBuds().map(id => ALLIES.find(a => a.id === id)).filter(Boolean);   // (the deep's axolotls too: they travel with you, so the bell calls them anywhere. The user, 2026-10-26: "make the axilotl travel")
-    return [...C.map(([sp, w]) => [`<b>${petDef(sp, w).name}</b>`, `THE ${petDef(sp, w).coat}${sp === "dog" || isAxo(sp) || / CAT$/.test(petDef(sp, w).coat) ? "" : " CAT"}${[tamed, tamed2].some(t => t && t.w === w && petSp(t) === sp) ? " · WITH YOU NOW" : ""}`, () => callCat(w, sp), { pv: "pet:" + sp + w, sp, w, name: petDef(sp, w).name }]),
-      ...Bd.map(A => [`<b>${A.name}</b>`, `${allyMany(A) ? "BERRY BUDDIES" : "BERRY BUDDY"}${allyWith(A) ? " · WITH YOU NOW" : ""}`, () => callBuddy(A), { pv: "bud:" + A.id, A, name: A.name }]), ["<b>LEAVE</b>", "", closeNpc]]; }   // (and the berry buddies you've found: 2026-11-01)
+  if (role === "caller") { const Bd = foundBuds().map(id => ALLIES.find(a => a.id === id)).filter(Boolean);   // (the deep's axolotls too: they travel with you, so the bell calls them anywhere. The user, 2026-10-26: "make the axilotl travel")
+    return [   // (berry buddies only, no pets: the user, 2026-11-02 "the calling a friend npc shouldnt show pets. only the berry buddies who join you")
+      ...Bd.map(A => [`<b>${A.name}</b>`, `${allyMany(A) ? "BERRY BUDDIES" : "BERRY BUDDY"} · ${budAbout(A)[0]}${allyWith(A) ? " · WITH YOU NOW" : ""}`, () => callBuddy(A), { pv: "bud:" + A.id, A, name: A.name, about: budAbout(A)[1] }]), ["<b>LEAVE</b>", "", closeNpc]]; }   // (and the berry buddies you've found: 2026-11-01)
   const other = otherHero();
   const nG = bgTotal();
   return [[`<b>SWITCH TO ${other.name.toUpperCase()}</b>`, "", () => swapHero(other)], ...(nG ? [[`<b>BERRY GEARS</b>`, `ROSE ${bgearsOf("rose") + bpowOf("rose")} · CAMILA ${bgearsOf("camila") + bpowOf("camila")} · MOVE THEM: LIFE OR POWER`, () => { closeNpc(); openGears(); }]] : []), [`<b>STAY AS ${rig.name.toUpperCase()}</b>`, "", closeNpc]];
@@ -22977,14 +23102,14 @@ function npcSays() {
   if (role === "seller" && !U.tab) return (U.f.road ? "FRESH FROM THE STAND! " : "WELCOME, FRIEND! ") + "BUYING OR SELLING? YOU'VE GOT " + bag().coins + " P COINS.";
   if (role === "seller" && U.tab === "sell") return sellRows().length > 1 ? "WHAT HAVE YOU GOT FOR ME? I PAY HALF WHAT IT COST. NOT WHAT YOU FOUND, NOR CASSETTES OR BERRY GEARS." : "NOTHING I CAN BUY FROM YOU RIGHT NOW. NOT WHAT YOU FOUND, NOR CASSETTES OR BERRY GEARS.";
   if (role === "seller") return (U.f.road ? "FRESH FROM THE STAND, FOR THE ROAD AHEAD! AND THINGS TO WEAR! " : "WARES FOR THE ROAD! ") + "PAY IN P COINS. YOU'VE GOT " + bag().coins + ".";
-  if (role === "caller") return ["cat", "dog", "axo", "axo2"].some(sp => petsCaught(sp).length) || foundBuds().length ? "ONE RING OF THIS BELL AND A FRIEND YOU'VE MADE OUT THERE COMES RUNNING: A CAT, A DOG, AN AXOLOTL, A BERRY BUDDY. WHO SHALL I CALL?" : "NO PETS TO CALL YET. CATCH ONE, AND I'LL RING IT TO YOU ANYWHERE YOU MEET ME.";
+  if (role === "caller") return foundBuds().length ? "ONE RING OF THIS BELL AND A BERRY BUDDY YOU'VE MET OUT THERE COMES RUNNING. WHO SHALL I CALL?" : "NO BERRY BUDDIES TO CALL YET. MEET ONE OUT THERE, AND I'LL RING THEM TO YOU ANYWHERE YOU MEET ME.";
   return `GREETINGS, ${rig.name.toUpperCase()}. A WORD IN THE RIGHT EAR AND ${otherHero().name.toUpperCase()} TAKES OVER FROM YOU. SHALL I?`;
 }
 function drawNpc() {
   const U = npcUp; if (!U) return; U.rows = npcRows(); U.sel = clamp(U.sel, 0, U.rows.length - 1);
   $("npcHint").textContent = window.BERRY_TOUCH ? "TAP ONE, OR ↑ ↓ AND ✕ · □ TO LEAVE" : padUse ? padText("↑ ↓ TO CHOOSE · {j} TO PICK · {a} TO LEAVE") : "↑ ↓ TO CHOOSE · X OR ENTER TO PICK · C OR ESC TO LEAVE";
   $("npcName").textContent = U.f.name; $("npcRole").textContent = NPC_TITLE[U.f.npc]; $("npcText").textContent = npcSays();
-  $("npcRows").innerHTML = U.rows.map(([a, b], i) => `<button data-nr="${i}" class="${i === U.sel ? "on" : ""}"><span class="nl">${a}</span>${b ? `<i>${b}</i>` : ""}</button>`).join("");
+  $("npcRows").innerHTML = U.rows.map(([a, b, , o], i) => `<button data-nr="${i}" class="${i === U.sel ? "on" : ""}"><span class="nl">${a}</span>${b ? `<i>${b}</i>` : ""}${i === U.sel && o && o.about ? `<i class="about">${o.about}</i>` : ""}</button>`).join("");   // (the picked buddy: what it can do, 2026-11-02)
   $("npcCoins").innerHTML = U.f.npc === "seller" ? `${ITEM_SVG.coin}<b>${bag().coins}</b>` : "";
 }
 function npcNav(d, ok, back) {
@@ -24183,7 +24308,7 @@ function autoPlayer(dt) {
     if (A.t > .45 && !A.fade) { A.fade = true; $("fade").classList.add("on"); setTimeout(enterStronghold, 480); }
   } else if (A.phase === "in") {                 // walking into the hedge, away from you
     p.vx = 150; p.z = lerp(A.from[2], -3, clamp(A.t / 1.2, 0, 1)); p.yaw = lerp(p.yaw, Math.PI / 2, 1 - Math.exp(-dt * 8));
-    if (A.t > .7 && !A.fade) { A.fade = true; $("fade").classList.add("on"); setTimeout(enterHideout, 480); }
+    if (A.t > .7 && !A.fade) { A.fade = true; $("fade").classList.add("on"); setTimeout(A.kind === "mine" ? () => mineGo(A.to, A.tx) : enterHideout, 480); }
   } else if (A.phase === "leap") {               // after them, off the back of the cliff
     const B = bepEv ? bepEv.B : null, top = [A.from[0] + 20, GROUND - 46, -3.05], over = [A.from[0] + 50, GROUND + 260, -5.6];
     p.vx = 0; p.yaw = lerp(p.yaw, Math.PI / 2, 1 - Math.exp(-dt * 8));
@@ -24196,6 +24321,12 @@ function autoPlayer(dt) {
   spring(p, dt); updatePose(p, dt);
 }
 // ── the hideout
+let mineUpPrev = false, mineHint = false;   // (a mine's mouth: ↑ held, its ↑ shown)
+function mineGo(to, x) {                         // (under the fade) through a mine's mouth: into the room it leads to, out of its mouth there
+  if (!player || mode !== "play") { $("fade").classList.remove("on"); return; }
+  cannonRoom(to, x); Object.assign(player, { z: 0, auto: null, face: 1, yaw: -.3 }); mineUpPrev = true; mineHint = true;   // (↑ still held: not straight back in)
+  setTimeout(() => $("fade").classList.remove("on"), 80);
+}
 let freeHide = new Set(), hideNext = false, hideUpPrev = false, hideHint = false;   // (free play's found hideouts) · on the way in from the map · ↑ at the way in, held · its "↑" shown
 const hideIdx = (w, s) => WORLDS[w].stages.filter(q => q.bep).indexOf(WORLDS[w].stages[s]);   // (which of the world's two ways in)
 const hideFound = (w, s) => { const v = story ? (story.hideouts || {})[w] : [...freeHide].filter(k => k[0] === w).map(k => k[1]);   // a hideout of this world (or this one, s): been in it?
@@ -25060,7 +25191,7 @@ function updateBaddy(b, dt) {
       b.think = rand(1.2, 2.6);
       if (near && dy < -60) {                     // you're up on a platform: jump up after you
         const q = PLATFORMS.find(q => p.x > q.x - 10 && p.x < q.x + q.w + 10 && Math.abs(q.y - p.y) < 4 && Math.abs(q.x + q.w / 2 - home) < ZONE + 60);
-        if (q && b.y - q.y < 230) bbJumpTo(b, clamp(p.x, q.x + 24, q.x + q.w - 24), q.y);
+        if (q && q.kind !== "shelf" && b.y - q.y < 230) bbJumpTo(b, clamp(p.x, q.x + 24, q.x + q.w - 24), q.y);   // (never up through the waves' shelf from the mine)
       } else if (!near && Math.random() < (T.jumpy ?? .3)) {
         const opts = PLATFORMS.filter(q => q !== b.plat && q.y < b.y - 30 && b.y - q.y < 200 && Math.abs(q.x + q.w / 2 - b.x) < 320 && Math.abs(q.x + q.w / 2 - home) < ZONE);
         if (opts.length && Math.random() < .6) { const q = opts[Math.floor(Math.random() * opts.length)]; bbJumpTo(b, q.x + q.w / 2 + rand(-40, 40), q.y); }
@@ -25185,7 +25316,7 @@ function bossBreakOut(e, p) {
   Object.assign(e, { hurtT: 0, juggleT: 0, windup: 0, recoil: 0, backoff: 0, brainT: 0, steer: false, dashT: 0 });
   e.inv = Math.max(e.inv, BREAK_INV); e.atkCd = Math.min(e.atkCd, .35); e.dir = Math.sign(dx) || e.dir; e.sq = -.25; e.sqv = 0;
   if (D.swim) { e.vx = d * 560; e.vy = -220; }   // (a swimmer: a kick away through the water)
-  else { const wall = e.x + d * 260 < lo + 80 || e.x + d * 260 > hi - 80 || (!e.plat && groundAt(e.x + d * 220) === null);   // (backed in, or a drop behind it: over your head)
+  else { const wall = e.x + d * 260 < lo + 80 || e.x + d * 260 > hi - 80 || (!e.plat && !solidAt(e.x + d * 330));   // (backed in, or a drop or the water behind it, as far as the leap goes: over your head. Was 220 px for a ~290 px leap: TEAL into D8's sea, 2026-11-02)
     const vx = (wall ? -d : d) * (wall ? 470 : 430), vy = wall ? -920 : -680; e.dodgeHop = !wall;
     if (e.onGround) { e.jumpVx = vx; e.jumpVy = vy; e.windup = .06; e.vx = 0; } else { e.vx = vx; e.vy = Math.min(e.vy, vy * .8); } }   // (on its feet: a quick crouch into the leap; caught up in the air: a twist out of it)
   SFX.whoosh(); puffs(e.x, e.y - D.h * .5, 8, D.hw, 260); dust(e.x, e.y, 6, d);
@@ -25421,7 +25552,10 @@ function teamChargeTick(dt) {                       // (every frame, after the p
     if (s.tcFly) { const F = s.tcFly; F.t += dt; s.face = F.d; if (!s.onGround) s.vy -= GRAV * dt * .55;   // flung: whoever it comes down on (a long flat flight: gravity half its own)
       if (F.fire && Math.floor(F.t / .03) !== Math.floor((F.t - dt) / .03)) { flamesPx(s.x - F.d * 10, s.y - 40, 3, 30, 1.2); fireBurn(s.x, s.y - 40); }   // (on fire as it flies)
       for (const e of partFoesAll()) { if (F.got.has(e) || walled(e.x, s.x)) continue; if (Math.abs(e.x - s.x) < eHW(e) * .5 + 40 && s.y > e.y - eH(e) - 50 && s.y - 90 < e.y) { F.got.add(e); s.pFire = F.fire; partHitFoe(s, e, F.d, "haymaker", true); s.pFire = false; s.vx *= .55;
-        if (F.zap && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .6 : ZAP_T * .5); e.atk = null; for (let i = 0; i < 4; i++) zapFx(e); SFX.crackle(); } } }
+        if (F.zap && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .6 : ZAP_T * .5); e.atk = null; for (let i = 0; i < 4; i++) zapFx(e); SFX.crackle(); }
+        if (F.gust && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)), H = (s.rig && s.rig.heightPx) || 90; e.atk = null; e.windup = 0; e.atkCd = Math.max(e.atkCd || 0, 1);   // (a blocker black mage's own, BRISA's: a gust off her that blows them a long way back. The user, 2026-11-02 "for brisa give it a gust of wind that knocks them back further")
+          for (let i = 0; i < 14; i++) spawn("smoke", X(s.x + F.d * rand(0, 60)), Y(s.y - H * rand(.2, .8)), rand(-.2, .4), V(F.d * rand(8, 14), rand(-1, 1.5), rand(-.6, .6)), rand(.3, .5), rand(.2, .36), { g: 0, drag: 3, spin: 3 }); SFX.whoosh();
+          if (!boss) { e.vx = F.d * GUST.push * 2.1 / (e.wt || 1.2); e.vy = GUST.lift * 1.25; e.onGround = false; e.hurtT = Math.max(e.hurtT || 0, GUST.hold + .3); } else { e.vx = F.d * GUST.push * .8 / (e.wt || 1.2); e.recoil = Math.max(e.recoil || 0, GUST.hold); } popText(e.x, e.y - eH(e) - 30, "WHOOSH!"); } } }
       if ((s.onGround && F.t > .18) || F.t > 1.5) { s.tcFly = null; if (hum) { s.atkKind = null; s.atkT = -1; } } return; }
     if (!lv) { if (s.tcOn) { s.tcOn = false; s.tcRide = 0; if (hum) { s.atkKind = null; s.atkT = -1; } } return; }
     const ride = (k === 0 && lv >= 2) || (k === 1 && lv >= 3); s.tcOn = true; s.vx = 0; s.vy = 0; s.block = false; s.face = p.face;
@@ -25435,11 +25569,11 @@ function teamChargeTick(dt) {                       // (every frame, after the p
       if (hum) { s.atkKind = "tc_hands"; s.atkT = .2; } }
   });
 }
-const budFire = P => { const L = partnerList(), A = L[1] || (L.length === 1 ? L[0] : null); return !!budKit().fire && !!A && A.q === P.q; };   // (the attack buddy's fire, this world's)
-const budZap = P => { const L = partnerList(); return budKit().tackle === "zap" && L.length > 1 && L[0].q === P.q; };   // (the blocker's lightning)
+const budFire = P => budOwn(P, "fire");   // (its own fire: Rink's. It was whoever was in the attack slot, with the woods' kit in every world)
+const budZap = P => budOwn(P, "zap");   // (its own lightning: Stilt's)
 function teamFling(p) {                              // the punch: the team off her arm and her shoulders, on at them
   partnerList().forEach((P, k) => { const s = P.q; if (!s || !s.tcOn) return; s.tcOn = false; s.tcRide = 0;
-    s.tcFly = { t: 0, d: p.face, got: new Set(), fire: budFire(P), zap: budZap(P) }; s.vx = p.face * (1050 + 120 * k); s.vy = -230 + 50 * k;   /* (low and flat: into them, not over them) */
+    s.tcFly = { t: 0, d: p.face, got: new Set(), fire: budFire(P), zap: budZap(P), gust: archOfP(P) === ARCH.bmage }; s.vx = p.face * (1050 + 120 * k); s.vy = -230 + 50 * k;   /* (low and flat: into them, not over them) */
     { const e = foesAlive().filter(e => Math.sign(e.x - s.x) === p.face && Math.abs(e.x - s.x) < 760 && !walled(e.x, s.x)).sort((a, b) => Math.abs(a.x - s.x) - Math.abs(b.x - s.x))[0];   /* aimed: at the nearest one ahead, at its middle */
       if (e) { const T = Math.max(.12, Math.abs(e.x - s.x) / Math.abs(s.vx)), g = GRAV * .45; s.vy = clamp((e.y - eH(e) * .4 - s.y) / T - g * T / 2, -700, 600); } } s.onGround = false; s.plat = null; s.face = p.face;
     if (P.kind !== "pet") { s.atkKind = "tc_hands"; s.atkT = .2; } dust(s.x, s.y, 4, -p.face); });
@@ -26289,6 +26423,11 @@ function update(dt) {
     if (near && up && !hideUpPrev) { player.auto = { x: B.zone, kind: B.kind, t: 0, phase: "walk" }; player.combo = null; player.atkT = -1; player.block = false; player.chargeT = 0; SFX.confirm(); }
     if (near && !hideHint) { hideHint = true; popText(B.zone, (groundAt(B.zone) ?? GROUND) - 170, "↑"); } else if (!near) hideHint = false;
     hideUpPrev = up; }
+  if (mode === "play" && STAGES[stage] && STAGES[stage].mine && !hideout && !stronghold && !transit && !cannonS && player && !player.auto && !player.dead && !player.climb) {   // at a mine's mouth: ↑ and in you go (D7's, and back out of it)
+    const M = STAGES[stage].mine, near = player.onGround && Math.abs(player.x - M.x) < 70, up = !!(keys.ArrowUp || keys.KeyW || pad.u);
+    if (near && up && !mineUpPrev) { player.auto = { x: M.x, kind: "mine", to: M.to, tx: M.tx, t: 0, phase: "walk" }; player.combo = null; player.atkT = -1; player.block = false; player.chargeT = 0; SFX.confirm(); }
+    if (near && !mineHint) { mineHint = true; popText(M.x, (groundAt(M.x) ?? GROUND) - 170, "↑"); } else if (!near) mineHint = false;
+    mineUpPrev = up; }
   if (cheerHold && (cheerHold.t += dt) > cheerHold.dur) cheerHold = null;
   if (opening) { updateOpening(dt); shake = Math.max(0, shake - dt * 40); return; }   // the beach's opening: nobody's playing yet
   if (gift && gift.phase === "in") { updateGift(dt); updateEJ(dt); updateHazards(dt); shake = Math.max(0, shake - dt * 40); return; }   // the bep: everything waits
@@ -26345,8 +26484,11 @@ function fgSeeThru(dt) {                          // a tree in the foreground (t
 }
 function hatchHero() {                             // the user, 2026-10-25: "they have this like hole in the floor that the ladders are meant to bring you in but the character model actually goes
   const p = player, L = p && p.climb;              // OVER that and doesnt actually go through it": everyone's drawn over the scenery; on a rope down through a floor, with any of them below its top, the hero's drawn
-  if (!L || L.rope !== "down" || !(p.y > L.top + 2) || mode !== "play" || pan || peek || !p.rig || !p.rig.root) return null;   // first, against the scenery's own depth, then kept out of the actors' pass (the layers put back after it)
-  const hm = []; p.rig.root.traverse(o => { hm.push([o, o.layers.mask]); o.layers.set(3); }); actors.traverse(o => { if (o.isLight) o.layers.enable(3); });
+  const shelfHatch = L && L.pole && PLATFORMS.some(q => q.kind === "shelf" && Math.abs(q.y - L.top) < 6 && L.x > q.x && L.x < q.x + q.w);   // (a ladder down through the waves' shelf into the mine: the same, 2026-11-02)
+  const heroIn = !(!L || (L.rope !== "down" && !shelfHatch) || !(p.y > L.top + 2) || mode !== "play" || pan || peek || !p.rig || !p.rig.root);
+  const bossWet = mode === "play" && !pan && !peek && !!enemy && !!enemy.swimB && !!foe && !!foe.rig && !!foe.rig.root;   // (a boss in the waves' sea, bossSwimIn: the same, so the water hides what's under it)
+  if (!heroIn && !bossWet) return null;
+  const hm = [], take = R => R.traverse(o => { hm.push([o, o.layers.mask]); o.layers.set(3); }); if (heroIn) take(p.rig.root); if (bossWet) take(foe.rig.root); actors.traverse(o => { if (o.isLight) o.layers.enable(3); });
   camera.layers.set(3); renderer.render(actors, camera); camera.layers.set(0); return hm;
 }
 function render(dt) {
@@ -26441,7 +26583,7 @@ function frame(now) {                              // (the next frame is asked f
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) render(0);   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
