@@ -149,5 +149,13 @@ window.BerryRoots = (() => {
       vine(pts, R(.14, .22), R(.06, .1), c2(i), { hand: true }); }
     return K.merge(o.mat);
   }
-  return { build, tangle };
+  // free-standing vines (the woods' background, the user 2026-11-02: "the vines sprawling the whole side of the room should be the glos style vines, same for all the
+  // other vines in this area"; BA4's "free standing glos like vines" you walk along): her arm along each curve it's given, the lot merged. Units, as tangle's
+  //   BerryRoots.vines(THREE, o) → a THREE.Group (or null): o = { seed, mat: () → material, paths: [{ pts: [[x, y, z], ...], r0, r1, c, hand, swirl, noCuff }] }
+  function vines(THREE, o) {
+    const R0 = rng(o.seed | 0), R = (a, b) => a + R0() * (b - a), K = kit(THREE, R, R0, null), C = [GRN, GRNd, BACK];
+    (o.paths || []).forEach((p, i) => { if (p.pts && p.pts.length > 1) K.limb(p.pts.map(q => K.V3(q[0], q[1], q[2] || 0)), p.r0 ?? .34, p.r1 ?? .24, p.c || C[i % 3], { hand: !!p.hand, swirl: p.swirl || 0, noCuff: !!p.noCuff }); });
+    return K.merge(o.mat);
+  }
+  return { build, tangle, vines };
 })();

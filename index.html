@@ -674,7 +674,7 @@
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
-<script src="roots.js?v=20261102d"></script>
+<script src="roots.js?v=20261102e"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -1144,7 +1144,7 @@ const X = x => x * S, Y = y => (GROUND - y) * S;
 // the stitched worlds' grid (see swapPan): each screen's place in one drawing of its world
 const ROW_H = 440, SEAM_T = 86;                      // a row's height (px), and how far under a room's floor its edge with the room below is (its floor's thickness: the room below's ceiling, buildHoleCeil's, just under it at 90)
 const STITCH = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);   // the worlds built as one piece: all of them (Berry Woods first; the rest the user, 2026-10-25: "then rebuild all the worlds currently with this new screen/world approach")
-const cellOff = s => { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.cell || ""); return m && !q.arena && !q.cut ? { x: (+m[2] - 1) * WX, y: -"ABCD".indexOf(m[1]) * ROW_H * S } : null; };   // a screen's place in the world (3D units)
+const cellOff = s => { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.cell || (q.bgRow ? q.bgCell.slice(1) : "")); return m && !q.arena && !q.cut ? { x: (+m[2] - 1) * WX, y: -"ABCD".indexOf(m[1]) * ROW_H * S } : null; };   // a screen's place in the world (3D units)
 // each world's scenery placed in its one drawing (the user, 2026-10-31: "I thought we had rebuilt it where it's one big continuous space and the game loads screens in chunks,
 // but the world is built together?"): slots along each row of the world, each with its own random, so every screen that can see a slot builds the same thing in it, and what's
 // at the edge two screens share is the same on both. WP: the screen being built's (setScreen); a builder takes its slots in place of its own random x's, its colours its own still
@@ -1152,7 +1152,7 @@ let WP = null;
 function wPlace(s) {
   let apart = false; try { apart = !!stronghold || !!hideout; } catch (e) { }   // (a stronghold's or a hideout's screen: one of its own)
   const q = STAGES[s], c = q && cellOff(s), on = !!c && STITCH.has(world) && !apart;
-  const ox = on ? c.x : 0, row = on ? "ABCD".indexOf(q.cell[0]) : 9, base = (world + 1) * 7919 + row * 104729;
+  const ox = on ? c.x : 0, row = on ? (q.cell ? "ABCD".indexOf(q.cell[0]) : 4 + "ABCD".indexOf(q.bgRow)) : 9, base = (world + 1) * 7919 + row * 104729;
   const slots = (step, m0, m1, salt) => { const o = []; for (let j = Math.floor((ox - m0) / step) - 1; j * step <= ox + WX + m1; j++) o.push({ x: j * step - ox, rs: rngF(base + salt * 131 + j * 977), j, step }); return o; };
   const inside = (m0, m1) => q2 => q2.x >= -m0 && q2.x <= WX + m1;
   return { on, ox, row, slots,
@@ -1198,6 +1198,18 @@ scene.background = FOG;
 scene.fog = new THREE.Fog(FOG, 40, 125);
 const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, .1, 300);
 const CAM_Z = 17.5, CAM_Y = 4.6, LOOK_Y = 3.0;
+// the woods' background (the user, 2026-11-02, rows BA and BB behind A and B: see authorForest): what the camera, the show over its bridges and its pieces need early
+let camZoom = 1; const ZOOM_V = new THREE.Vector3();   // (a room zoomed out, BA4's: "the screen is zoomed out")
+const SIL_FOG = new THREE.Fog("#3a2c34", 0, 40);    // (BA4's team "almost silhouetted": the characters' pass fogged dark, a trace of their colours left; they shade without the lights, so dimming those can't do it)
+function actorFog() { const q = STAGES[stage]; if (!q || !q.sil || camZoom < 1.003 || hideout || arena || stronghold) return scene.fog;
+  const d = camera.getWorldDirection(ZOOM_V), t = -camera.position.z / Math.min(-.05, d.z); SIL_FOG.far = t / Math.max(.02, .86 * clamp((camZoom - 1) / .8, 0, 1)); return SIL_FOG; }   // (as dark as the zoom is out: none of it on the way in)
+const zoomWant = () => (mode === "play" && !hideout && !arena && !stronghold && STAGES[stage] && STAGES[stage].zoom) || 1;
+let bwalkS = null, bwPrev = false, bwHint = false;     // (over a bridge between the woods and its background: the show, the key held, the ↑ shown)
+const BW_DECK = 60, BW_NEAR = 1.6, BW_FAR = 20, BW_STAIR = 2.4, BW_GO = 5.2;   // (the walkway: px over the floor; where its stairs top out, this end and the far one, units back; the stairs' length; walking, units a second)
+const BG_RED = "#b5382d", BG_RED2 = "#93291f", BG_PLANK = "#a5452f", BG_PLANK2 = "#8a3826";   // (the two-tiered bridge: lacquered red, its planks a deeper red-brown)
+const BG_FAR_Z = -22, BG_KINDS = new Set(["deck", "vine", "branch", "crown", "turf"]), SPAN_K = new Set(["bridge", "deck", "vine", "turf", "span"]);   // (BG_KINDS: drawn by the background's pieces; SPAN_K: platforms that run on across a room's edge)                                // (how far back the background is from the woods: their "small version of the background ... in the distance")
+const BG_RINGS = [[620, 470, 280, 170, 0], [1180, 455, 280, 150, 1.3], [1740, 470, 280, 160, 2.6]];   // (BA4's three loops of vine: across, top (px), half wide, half high, a twist)
+let BG_FAR = null;
 // everything renders into this target, then a grading pass gives the soft, chalky pastel palette
 const frameRT = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
 frameRT.texture.colorSpace = THREE.SRGBColorSpace;
@@ -2540,7 +2552,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   // platforms: a limestone slab with a mossy cap, drips and vines (and giant malanga leaves, a shelf of moss and bromeliads on a ceiba, fallen palm trunks, the land above jutting out)
   const barkM = toon("#6b5040"), ringM = toon("#c9a77a"), shelfEdgeM = toon("#5f4c3a");
   for (const p of PLATFORMS) {
-    if (p.kind === "bridge" || p.kind === "camTop" || p.kind === "hole" || p.crumble !== undefined) continue;   // (a bridge, the top of Camila's rock: buildSet's · a breakable one: crumbleRig's)
+    if (p.kind === "bridge" || p.kind === "camTop" || p.kind === "hole" || p.crumble !== undefined || BG_KINDS.has(p.kind)) continue;   // (a bridge, the top of Camila's rock: buildSet's · a breakable one: crumbleRig's)
     const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
     if (p.kind === "shroom") {                      // a giant malanga (yautía) leaf held out flat on its long stalk, a clump of smaller ones at its foot: stand on it
       const sc = (w + 1.7) / 2.1, nx = cx - .55 * sc, x0 = (cx - w / 2 - nx) / sc, x1 = (cx + w / 2 - nx) / sc, lg = new THREE.ExtrudeGeometry(heartShape(), { depth: .16, bevelEnabled: false, curveSegments: 2 }).rotateX(Math.PI / 2);
@@ -3651,6 +3663,8 @@ function setLook(k) {                                // light the clearing for i
     if (tn.air && !night) FOG.lerp(AIR_C, tn.air); FOG.multiplyScalar(tn.fog ?? 1); scene.fog.color.copy(FOG); scene.fog.near *= tn.fogN ?? 1; scene.fog.far *= tn.fogF ?? 1;
     sun.intensity *= tn.sun ?? 1; sun2.intensity *= tn.sun ?? 1; hemi.intensity *= tn.hemi ?? 1; hemi2.intensity *= tn.hemi ?? 1;
     if (tn.sky && level.sky && level.sky.material.color) level.sky.material.color.setScalar(tn.sky); gradeMat.uniforms.dim.value = tn.dim || 0; }
+  if ((STAGES[level.s] || {}).sil && level.w === world) { FOG.set("#f4c58f"); scene.fog.color.copy(FOG); scene.fog.near = 12; scene.fog.far = 64; sun.intensity *= .14; sun2.intensity *= .14; hemi.intensity *= .22; hemi2.intensity *= .22;   // (BA4: "the almost silhouetted player's team", dark against a bright haze: the user, 2026-11-02)
+    if (level.sky && level.sky.material.color) level.sky.material.color.setScalar(1.12); gradeMat.uniforms.dim.value = 0; }
 }
 // ── each map's rows told apart (the user, 2026-10-24: "for each map, I think they need more visually distinct things based on which part of the
 // map you're on so the player can orient themselves better"; the forest's rules: row D "more of that undergrowth vibe and ... generally darker",
@@ -3667,8 +3681,8 @@ const ROW_TONE = {
 const ROW_TONE_W = { 1: { D: { sun: .86, hemi: .9, fog: .9, fogN: .9, fogF: .92, sky: .9, dim: .14 } }, 7: { D: { sun: .84, hemi: .9, fog: .92, fogN: .94, fogF: .96, sky: .92, dim: .12 }, A: { sun: 1.2, hemi: 1.12, fogN: 1.35, fogF: 1.8, air: .4 } },   // (Crux's street, out in the day; its rooftops up in the clear)
   5: { A: { sun: 1.25, hemi: 1.18, fogN: 1.2, fogF: 1.4 }, D: { sun: .8, hemi: .86, fog: .78, fogN: .82, fogF: .86, sky: .72, dim: .26 } } };   // (Kesh's garden: a night garden already; its top row moonlit, its bottom only a little darker)
 function rowTone(s, w) {
-  if (w !== world || s === undefined || s < 0 || hideout || stronghold || arena) return null; const q = STAGES[s]; if (!q || !q.cell) return null;
-  const r = String(q.cell)[0]; return q.tone ? ROW_TONE[q.tone] || null : (ROW_TONE_W[w] || {})[r] || ROW_TONE[r] || null;
+  if (w !== world || s === undefined || s < 0 || hideout || stronghold || arena) return null; const q = STAGES[s]; if (!q || !(q.cell || q.bgRow)) return null;
+  const r = String(q.cell || q.bgRow)[0]; return q.tone ? ROW_TONE[q.tone] || null : (ROW_TONE_W[w] || {})[r] || ROW_TONE[r] || null;
 }
 const ROW_SKY = [];
 function rowSkyTex(k) {                             // the woods up top (row A): the hour's sky bluer and clearer, fair-weather clouds drifting in it
@@ -3748,7 +3762,7 @@ function stripNb(s, sd) { const q = STAGES[s], m = q && /^([A-D])(\d+)$/.exec(q.
 function ceilSpans(gaps, s) {                       // (s: the strip's own room: where the room beside it has none, it ends just inside this one, ragged, not cut off at the edge they share)
   const L = s == null || stripNb(s, -1), Rt = s == null || stripNb(s, 1), E = 240, spans = []; let x = L ? -600 : E;
   for (const [a, b] of gaps) { if (a > x) spans.push([x, Rt ? a : Math.min(a, WORLD - E)]); x = Math.max(x, b); } if (x < (Rt ? WORLD + 600 : WORLD - E)) spans.push([x, Rt ? WORLD + 600 : WORLD - E]); return spans.filter(([a, b]) => b > a); }
-const holeCeilOn = S0 => !(!S0 || world === 9 || S0.deep || S0.arena || S0.cove || (S0.authored && world === 1) || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy"));
+const holeCeilOn = S0 => !(!S0 || world === 9 || S0.noStrip || S0.deep || S0.arena || S0.cove || (S0.authored && world === 1) || (S0.ceils && S0.ceils.length) || (S0.set || []).some(q => q.k === "ceil" || q.k === "canopy"));
 function hardCeils(s) {
   const S0 = STAGES[s], out = []; if (!S0) return out; const gaps = holesAbove(s);
   if (gaps && holeCeilOn(S0) && holeHidden(S0, gaps)) ceilSpans(gaps, s).forEach(([a, b]) => out.push([a, b, 120, 1]));   // the strip (buildHoleCeil's)
@@ -4618,12 +4632,157 @@ function bustOfLossst(par, x, y, z) {               // a bronze bust of Lossst: 
   b.add(at(mk(new THREE.SphereGeometry(.36, 14, 10, 0, TAU, 0, Math.PI * .35), null, { mat: br, ol: 0 }), 0, 1.34, 0)); b.add(at(mk(new THREE.BoxGeometry(.3, .06, .06), null, { mat: br2, ol: 0 }), 0, 1.08, .28));   // (his crown, his frown)
   b.rotation.y = .45; return b;
 }
+// ── Berry Woods' background (the user, 2026-11-02, the map "Berry Woods Background": rows BA and BB, behind A and B): its pieces, buildSet's for the forest
+function bgBox(x0, x1, y0, y1, z0, z1) { return new THREE.BoxGeometry(Math.max(.01, x1 - x0), Math.max(.01, y1 - y0), Math.max(.01, z1 - z0)).translate((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); }   // (units: from-to on each axis)
+function bgRod(a, b, r0, r1, seg = 7) { const d = new THREE.Vector3().subVectors(b, a), L = Math.max(.01, d.length()), q = new THREE.CylinderGeometry(r1, r0, L, seg); q.translate(0, L / 2, 0);   // (a rod from a to b, r0 thick at a)
+  q.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())); return q.translate(a.x, a.y, a.z); }
+function bgBlob(x, y, z, rx, ry, rz, d = 0) { return new THREE.IcosahedronGeometry(1, d).scale(rx, ry, rz).translate(x, y, z); }
+function bgMerge(g, G, ol = 0) {                     // (one mesh a colour: G a Map of colour → geometries)
+  G.forEach((L, c) => { if (!L.length) return; const q = L.length > 1 ? mergeGeometries(L.map(o => o.index ? o.toNonIndexed() : o), false) : L[0]; if (q) g.add(mk(q, null, { mat: toon(c), ol })); });
+}
+const bgHash = i => { const v = Math.sin(i * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };   // (the same plank the same, whichever room draws it)
+function bgRing(cx, top, rx, ry, ph, dy = 0, ox = 0) {   // one of BA4's loops (px across and up, units deep): from its left side up over its top (flat enough to walk along), round under, a little past where it began
+  const o = [], cy = top + 15 + ry;
+  for (let i = 0; i <= 22; i++) { const f = Math.PI - i / 22 * (2 * Math.PI + .5), c = Math.cos(f), sn = Math.sin(f);
+    o.push([ox + cx + rx * Math.sign(c) * Math.pow(Math.abs(c), .4), cy - ry * Math.sign(sn) * Math.pow(Math.abs(sn), .4) + dy, -1.7 * Math.max(0, -sn) + .3 * Math.sin(f * 1.3 + ph) * (1 - Math.max(0, sn))]); }
+  return o;
+}
+function bwGeo(B) {                                  // a bridge walk's end in this room: its stairs' foot (Pa), their top (N), the far end (F): x px, y px, z units
+  const fr = B.side === "front", nx = fr ? B.fx : B.bx, nz = fr ? -BW_NEAR : -BG_FAR_Z - BW_FAR, fx = fr ? B.bx : B.fx, fz = fr ? -BW_FAR : -BG_FAR_Z - BW_NEAR;
+  const du = (fx - nx) * S, dz = fz - nz, L = Math.hypot(du, dz), ux = du / L, uz = dz / L, y = GROUND - BW_DECK;
+  return { N: { x: nx, y, z: nz }, F: { x: fx, y, z: fz }, Pa: { x: nx - ux * BW_STAIR / S, y: GROUND, z: nz - uz * BW_STAIR }, ux, uz, L, zone: nx - ux * BW_STAIR / S };
+}
+function woodsBgSet(P, g, s, rng, R) {
+  const k = P.k, st = STAGES[s], V3 = (a, b, c) => new THREE.Vector3(a, b, c);
+  if (k === "redBridge") {                           // the two-tiered red bridge (BA1-BA3, "the player cannot jump off of this bridge"): the floor its lower deck; the upper deck a jump up; posts between, rails along both; the break ("black mark is broken bridge"), a beam across it
+    const G = new Map([[BG_PLANK, []], [BG_PLANK2, []], [BG_RED, []], [BG_RED2, []]]), put = (c, q) => G.get(c).push(q), ox = (cellOff(s) || { x: 0 }).x;
+    const x0 = X(P.x0), x1 = X(P.x1), gy = Y(GROUND), B = P.brk ? [X(P.brk[0]), X(P.brk[1])] : null, inB = x => !!B && x > B[0] - .05 && x < B[1] + .05, gf = P.gapF ? [X(P.gapF[0]), X(P.gapF[1])] : null;
+    const from = step => Math.ceil((x0 + ox) / step) * step - ox, segs = (a, b) => B ? [[a, B[0]], [B[1], b]] : [[a, b]];
+    for (let x = from(.44) + .22; x < x1; x += .44) { if (inB(x)) continue; const i = Math.round((x + ox) / .44), pl = new THREE.BoxGeometry(.38, .14, 2.3); pl.rotateY((bgHash(i) - .5) * .06); pl.translate(x, gy - .07, 0); put(bgHash(i + 7) < .5 ? BG_PLANK : BG_PLANK2, pl); }
+    if (B) { [[B[0], 1], [B[1], -1]].forEach(([x, sd]) => { for (let i = 0; i < 2; i++) { const pl = new THREE.BoxGeometry(.38, .12, 1.2 - i * .4); pl.rotateZ(-sd * (.45 + i * .25)); pl.translate(x + sd * (.2 + i * .35), gy - .3 - i * .18, (i ? -.5 : .4)); put(BG_PLANK2, pl); } });   // (snapped planks hanging into it)
+      put(BG_RED2, bgBox(B[0] - .3, B[1] + .3, Y(GROUND + 44) - .32, Y(GROUND + 44), -.4, .4)); }   // (the beam left under it: you land on that)
+    [-1, 1].forEach(sd => { segs(x0, x1).forEach(([a, b]) => put(BG_RED2, bgBox(a, b, gy - .42, gy - .14, sd * 1.05 - .1, sd * 1.05 + .1)));   // the beams under the planks
+      put(BG_RED2, bgBox(x0, x1, gy - 2.1, gy - 1.86, sd * 1.05 - .09, sd * 1.05 + .09));   // and the truss under those, its diagonals
+      for (let x = from(2.6); x < x1 - .5; x += 2.6) { put(BG_RED, bgRod(V3(x, gy - 2, sd * 1.05), V3(x + 1.3, gy - .35, sd * 1.05), .07, .07, 5)); put(BG_RED, bgRod(V3(x + 1.3, gy - .35, sd * 1.05), V3(Math.min(x1, x + 2.6), gy - 2, sd * 1.05), .07, .07, 5)); } });
+    const decks = PLATFORMS.filter(q => q.kind === "deck"), hiAt = x => { const q = decks.find(q => x >= X(q.x) - .15 && x <= X(q.x + q.w) + .15); return q ? Y(q.y) : null; };
+    decks.forEach(q => { const a = Math.max(X(q.x), x0 - 5), b = Math.min(X(q.x + q.w), x1 + 5), top = Y(q.y);   // the upper deck: its planks, beams and rails
+      for (let x = Math.ceil((a + ox) / .44) * .44 - ox + .22; x < b; x += .44) { const i = Math.round((x + ox) / .44), pl = new THREE.BoxGeometry(.38, .13, 2.1); pl.translate(x, top - .07, 0); put(bgHash(i + 3) < .5 ? BG_PLANK : BG_PLANK2, pl); }
+      [-1, 1].forEach(sd => { put(BG_RED2, bgBox(a, b, top - .36, top - .13, sd * .98 - .09, sd * .98 + .09)); put(BG_RED, bgBox(a, b, top + .98, top + 1.08, sd * 1.06 - .05, sd * 1.06 + .05)); }); });
+    const fgap = x => !!gf && x > gf[0] && x < gf[1];   // (the front rail open where stairs come up onto it)
+    [-1, 1].forEach(sd => segs(x0, x1).forEach(([a, b]) => { const parts = sd > 0 && gf ? [[a, Math.min(b, gf[0])], [Math.max(a, gf[1]), b]] : [[a, b]]; parts.forEach(([c, d]) => { if (d - c > .05) put(BG_RED, bgBox(c, d, gy + .92, gy + 1.02, sd * 1.12 - .05, sd * 1.12 + .05)); }); }));
+    for (let x = from(2.6); x <= x1 + .01; x += 2.6) { if (inB(x)) continue; const hi = hiAt(x), top = hi !== null ? hi + 1.08 : gy + 1.02;   // the posts: up from the truss to the top rail
+      [-1, 1].forEach(sd => { if (!(sd > 0 && fgap(x))) put(BG_RED, bgBox(x - .11, x + .11, gy - 2.1, top, sd * 1.12 - .11, sd * 1.12 + .11)); }); }
+    for (let x = from(2.6) + 1.3; x < x1; x += 2.6) { if (inB(x)) continue; [-1, 1].forEach(sd => { if (!(sd > 0 && fgap(x))) put(BG_RED2, bgBox(x - .05, x + .05, gy, gy + .95, sd * 1.12 - .05, sd * 1.12 + .05)); }); }
+    if (P.end0 || P.end1) { const ex = P.end0 ? x0 : x1; [-1, 1].forEach(sd => { put(BG_RED, bgBox(ex - .16, ex + .16, gy - 2.1, (hiAt(ex) ?? gy) + 1.35, sd * 1.12 - .16, sd * 1.12 + .16)); put(BG_RED, new THREE.ConeGeometry(.24, .4, 4).translate(ex, (hiAt(ex) ?? gy) + 1.55, sd * 1.12)); }); }   // (its end posts, capped)
+    bgMerge(g, G, .02); return true;
+  }
+  if (k === "bgLand") {                              // a stretch of land (BA3's past the bridge, BA4's last of it, BA5-BA6's high ground; behind BB5-BB6 the same land's face, floor to its top): earth, turf, strata, rocks; roots under a ragged end
+    const C = ["#7a5236", "#5e3f29", "#6c9c44", "#5a8a3a", "#4a3426"], G = new Map(C.map(c => [c, []])), put = (c, q) => G.get(c).push(q);
+    const xa = X(P.x0), xb = X(P.x1), yt = Y(P.top), yb = Y(P.bot), z0 = P.z0 ?? -8, z1 = P.z1 ?? 2.6, rg = P.ragged || 0;
+    put(C[0], bgBox(xa, xb, yb, yt - .12, z0, z1)); put(C[2], bgBox(xa - .05, xb + .05, yt - .32, yt, z0 - .05, z1 + .08));
+    for (let y = yt - .9; y > yb + .3; y -= R(.7, 1.4)) put(C[1], bgBox(xa, xb, y - R(.05, .12), y, z1, z1 + .04));   // (strata on its face)
+    for (let i = 0, n = Math.round((xb - xa) * (yt - yb) * .06); i < n; i++) put(rng() < .5 ? C[1] : C[0], bgBlob(R(xa, xb), R(yb, yt - .6), z1 + R(-.15, .1), R(.25, .55), R(.2, .45), R(.2, .4)));
+    for (let i = 0, n = Math.round((xb - xa) * 1.1); i < n; i++) put(rng() < .5 ? C[2] : C[3], new THREE.ConeGeometry(R(.05, .09), R(.25, .5), 4).translate(R(xa, xb), yt + .15, R(z0 + .3, z1 - .1)));   // (grass)
+    if (rg) { const ex = rg > 0 ? xb : xa;
+      for (let i = 0; i < 9; i++) put(rng() < .5 ? C[1] : C[0], bgBlob(ex + rg * R(-.3, .2), R(yb + .4, yt - .4), R(z0 + .5, z1), R(.4, .8), R(.4, .7), R(.4, .8)));   // (a ragged end)
+      for (let i = 0; i < 16; i++) { const hl = R(.6, 2.8), x = ex - rg * R(0, 3), z = R(z0 + .5, z1 - .2); put(C[4], bgRod(V3(x, yb + .05, z), V3(x + R(-.3, .3), yb - hl, z), .05, .015, 4)); } }   // (roots under it)
+    bgMerge(g, G, .03); return true;
+  }
+  if (k === "treetops") {                            // the tops of trees, the floor (BB3: "the player is walking on top of the tree"), the crowns' bulk under it
+    const LV = ["#3f7a3a", "#4f8a49", "#5f9a52", "#356b33"], G = new Map(LV.map(c => [c, []])), y = Y(P.y ?? GROUND), xa = X(P.x0), xb = X(P.x1);
+    for (let x = xa; x < xb; x += R(.9, 1.5)) for (const [za, zb, ry] of [[-7, -4.5, 1.3], [-4, -1.6, 1.1], [-1.3, 1.1, .85], [1.4, 3.2, .8]]) { const r = R(.8, 1.2); G.get(LV[Math.floor(rng() * 4)]).push(bgBlob(x + R(-.3, .3), y - ry * r * .78 + R(-.12, .08), R(za, zb), R(1.3, 2.1), ry * r, R(1.1, 1.8), 1)); }
+    for (let x = xa; x < xb; x += R(2.4, 3.6)) G.get(LV[Math.floor(rng() * 4)]).push(bgBlob(x, y - R(2.6, 4.4), R(-6, 1), R(2.4, 3.4), R(1.6, 2.4), R(2, 3), 1));
+    bgMerge(g, G, .02); return true;
+  }
+  if (k === "bgTree") {                              // a tree of the background (BB2's, BB3's, the rest stop's): its trunk, a bough under each branch near it you can stand on, a crown
+    const bk = P.col || "#6b5040", bk2 = P.col2 || "#56402f", LV = ["#3f7a3a", "#4f8a49", "#5f9a52"], G = new Map([bk, bk2, ...LV].map(c => [c, []])), put = (c, q) => G.get(c).push(q);
+    const x = X(P.x), z = P.z ?? -1.4, yb = Y(P.base ?? GROUND), yt = Y(P.top), r = P.r || 1;
+    put(bk, bgRod(V3(x, yb, z), V3(x, yt, z), r, r * .72, 12));
+    for (let i = 0; i < Math.round(r * 7); i++) { const a = R(-1.3, 1.3), y0 = R(yb, yt - 1), rr = r * .93; put(bk2, bgBox(x + Math.sin(a) * rr - .05, x + Math.sin(a) * rr + .05, y0, y0 + R(1, 3), z + Math.cos(a) * rr - .05, z + Math.cos(a) * rr + .05)); }   // (its bark's grain)
+    PLATFORMS.filter(q => (q.kind === "branch" || q.kind === "crown") && Math.abs(q.x + q.w / 2 - P.x) < (P.reach || 600)).forEach(q => {
+      const top = Y(q.y), a = X(q.x), b = X(q.x + q.w);
+      if (q.kind === "crown") { for (let xx = a; xx <= b + .01; xx += R(.8, 1.2)) put(LV[Math.floor(rng() * 3)], bgBlob(xx, top - 1, R(-1.4, .6), R(1.3, 1.9), 1.02, R(1.2, 1.8), 1)); for (let i = 0; i < 8; i++) put(LV[i % 3], bgBlob(R(a, b), top - R(1.8, 3.2), R(-2.4, -.4), R(1.4, 2.2), R(1, 1.6), R(1.3, 2), 1)); return; }   // (a crown flat on top: stand on it)
+      const sd = q.x + q.w / 2 > P.x ? 1 : -1, xn = sd > 0 ? a : b, xe = sd > 0 ? b : a, rr = .3;
+      put(bk, bgRod(V3(x, top - rr - .25, z), V3(xn, top - rr, -.25), rr * 1.6, rr * 1.1, 8)); put(bk, bgRod(V3(xn, top - rr, -.25), V3(xe, top - rr * .7, -.15), rr * 1.1, rr * .55, 8));   // (out from the trunk, then along under where you stand)
+      for (let i = 0; i < 3; i++) put(LV[i], bgBlob(xe + sd * R(.1, .5), top + R(-.2, .5), R(-.8, .4), R(.6, .9), R(.45, .7), R(.6, .9), 1)); });
+    if (P.crown) { const cy = Y(P.crown.y), cr = P.crown.r; for (let i = 0; i < Math.round(cr * 4); i++) put(LV[i % 3], bgBlob(x + R(-cr, cr) * .9, cy + R(-.5, .7) * cr * .55, z + R(-cr * .6, cr * .25), R(1, 1.7) * cr * .45, R(.8, 1.2) * cr * .35, R(1, 1.6) * cr * .4, 1)); }
+    bgMerge(g, G, .03); return true;
+  }
+  if (k === "glos") {                                // Glos's arms grown free-standing (the user: "the glos style vines"): along each path (px across, px up, units deep)
+    if (!window.BerryRoots || !window.BerryRoots.vines) return true; const dy = P.dy || 0;
+    const G0 = window.BerryRoots.vines(THREE, { seed: 5150 + s * 7, mat: () => toon("#ffffff", { vertexColors: true }), paths: P.paths.map(p => ({ ...p, pts: p.pts.map(([x, y, z]) => [X(x), Y(y + dy), z || 0]) })) });
+    if (G0) g.add(G0); return true;
+  }
+  if (k === "bwFoot") {                              // a walkway between the woods and its background: stairs up off the floor, then level, off into the distance (or out toward you)
+    const B = st.bwalk; if (!B) return true; const W = bwGeo(B), G = new Map([[BG_PLANK, []], [BG_PLANK2, []], [BG_RED, []], [BG_RED2, []]]), put = (c, q) => G.get(c).push(q);
+    const th = Math.atan2(-W.uz, W.ux), ax = -W.uz, az = W.ux, top = Y(W.N.y), cut = B.side === "front" ? 1 : .5, L = W.L * cut, nx = X(W.N.x);   // (along it; across it)
+    const pt = u => ({ x: nx + W.ux * W.L * u, z: W.N.z + W.uz * W.L * u }), mid = pt(cut / 2), n = Math.max(1, Math.round(L / .45));
+    for (let i = 0; i < n; i++) { const p = pt((i + .5) / n * cut), pl = new THREE.BoxGeometry(.36, .13, 1.7); pl.rotateY(th); pl.translate(p.x, top - .07, p.z); put(i % 2 ? BG_PLANK : BG_PLANK2, pl); }
+    [-1, 1].forEach(sd => { const ox = ax * .85 * sd, oz = az * .85 * sd;
+      const bm = new THREE.BoxGeometry(L, .2, .16); bm.rotateY(th); bm.translate(mid.x + ox, top - .22, mid.z + oz); put(BG_RED2, bm);
+      const rl = new THREE.BoxGeometry(L, .09, .09); rl.rotateY(th); rl.translate(mid.x + ox, top + 1, mid.z + oz); put(BG_RED, rl);
+      for (let u = 0; u <= cut + .001; u += 1.3 / W.L) { const p = pt(u); put(BG_RED, bgBox(p.x + ox - .09, p.x + ox + .09, top - 3.2, top + 1.05, p.z + oz - .09, p.z + oz + .09)); } });
+    const gy = Y(groundAt(W.Pa.x) ?? GROUND), ns = 4, pax = X(W.Pa.x);   // the stairs, up from the floor
+    for (let i = 0; i < ns; i++) { const u = (i + .5) / ns, h = Math.max(.05, (top - gy) * (i + 1) / ns), stp = new THREE.BoxGeometry(BW_STAIR / ns + .06, h, 1.7); stp.rotateY(th); stp.translate(pax + (nx - pax) * u, gy + h / 2, W.Pa.z + (W.N.z - W.Pa.z) * u); put(i % 2 ? BG_PLANK : BG_PLANK2, stp); }
+    [-1, 1].forEach(sd => { const ox = ax * .85 * sd, oz = az * .85 * sd; put(BG_RED, bgRod(V3(pax + ox, gy + 1, W.Pa.z + oz), V3(nx + ox, top + 1, W.N.z + oz), .05, .05, 5)); put(BG_RED, bgBox(pax + ox - .11, pax + ox + .11, gy, gy + 1.2, W.Pa.z + oz - .11, W.Pa.z + oz + .11)); });
+    bgMerge(g, G, .02); return true;
+  }
+  if (k === "woodsFar") {                            // the background, small in the distance (the user: "make sure a small version of the background is visible where applicable in the main map's background, in the distance")
+    const m = /^([A-D])(\d+)$/.exec(st.cell || ""); if (!m) return true;
+    const ox = (+m[2] - 1) * CELL_W, dy = m[1] === "A" ? 0 : -ROW_H, lo = ox - 1000, hi = ox + CELL_W + 1000, zf = BG_FAR_Z - (+m[2] % 2) * .06, G = new Map();
+    const HZ = new THREE.Color("#dbe9e3"), hz = {}, hu = m[1] === "A" ? .4 : .12, haze = c => hz[c] || (hz[c] = "#" + new THREE.Color(c).lerp(HZ, hu).getHexString());   // (paled by the air between: far off, not just small; less so down in the dim underwood, or it reads as the mist)
+    for (const b of bgFar()) { if (b.x1 < lo || b.x0 > hi) continue; const q = b.g(ox, dy, zf), c = haze(b.c); if (!G.has(c)) G.set(c, []); G.get(c).push(q); }
+    bgMerge(g, G, 0); return true;
+  }
+  return false;
+}
+function bgFar() {                                   // the background seen from far off: its pieces, in px across the whole of it and px up as from row A, each built where a room asks
+  if (BG_FAR) return BG_FAR; const L = BG_FAR = [], Gx = (c, x) => (c - 1) * CELL_W + x, U = (x, ox) => X(x - ox), UY = (y, dy) => Y(y + dy), V3 = (a, b, c) => new THREE.Vector3(a, b, c);
+  const box = (x0, x1, y0, y1, z0, z1, c) => L.push({ x0, x1, c, g: (ox, dy, zf) => bgBox(U(x0, ox), U(x1, ox), UY(y1, dy), UY(y0, dy), zf + z0, zf + z1) });   // (y0 its top, y1 its foot: px, down)
+  const rod = (xa, ya, za, xb, yb, zb, r0, r1, c) => L.push({ x0: Math.min(xa, xb) - r0 * 40, x1: Math.max(xa, xb) + r0 * 40, c, g: (ox, dy, zf) => bgRod(V3(U(xa, ox), UY(ya, dy), zf + za), V3(U(xb, ox), UY(yb, dy), zf + zb), r0, r1, 7) });
+  const blob = (x, y, z, rx, ry, rz, c) => L.push({ x0: x - rx * 40, x1: x + rx * 40, c, g: (ox, dy, zf) => bgBlob(U(x, ox), UY(y, dy), zf + z, rx, ry, rz, 0) });
+  const tube = (pts, r, c) => { const xs = pts.map(p => p[0]); L.push({ x0: Math.min(...xs) - 40, x1: Math.max(...xs) + 40, c, g: (ox, dy, zf) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p => V3(U(p[0], ox), UY(p[1], dy), zf + (p[2] || 0)))), Math.max(8, pts.length * 4), r, 5, false) }); };
+  const RED = BG_RED, RED2 = BG_RED2, EA = "#7a5236", EA2 = "#5e3f29", TF = "#6c9c44", LV = ["#3f7a3a", "#4f8a49", "#5f9a52"], VN = "#5cd41c", BK = "#6b5040", PK = "#c98d7a", ST = "#ffd84a", SL = "#a39c8e";
+  let rs = 4242; const rnd = () => (rs = rs * 16807 % 2147483647) / 2147483647;
+  // BA1-BA3: the red bridge, both decks, posts and rails, the break; the stairs down onto it from A1's walkway
+  const D0 = Gx(1, 300), D1 = Gx(3, 1800), U0 = Gx(1, 800), U1 = Gx(3, 1660), K0 = Gx(2, 2260), K1 = Gx(2, 2440);
+  box(D0, K0, 470, 486, -1.1, 1.1, RED2); box(K1, D1, 470, 486, -1.1, 1.1, RED2); box(K0, K1, 512, 520, -.3, .3, RED2); box(U0, U1, 350, 360, -1.05, 1.05, RED2);
+  [-1, 1].forEach(sd => { box(D0, D1, 430, 435, sd * 1.12 - .05, sd * 1.12 + .05, RED); box(U0, U1, 308, 313, sd - .05, sd + .05, RED); box(D0, D1, 550, 556, sd * 1.05 - .08, sd * 1.05 + .08, RED2);
+    for (let x = D0; x <= D1; x += 104) box(x - 5, x + 5, x >= U0 && x <= U1 ? 308 : 430, 556, sd * 1.12 - .1, sd * 1.12 + .1, RED); });
+  for (let i = 0; i < 3; i++) box(Gx(1, 443 + i * 26), Gx(1, 472 + i * 26), 470 - (i + 1) * 20, 470, .56 + i * .48, 1.05 + i * .48, RED2);
+  // BA3: the land past the bridge's end, Glos's vines on it, the ladder down its trunk to BB3's treetops
+  box(Gx(3, 1780), Gx(4, 380), 470, 760, -8, 2.6, EA); box(Gx(3, 1780), Gx(4, 380), 462, 470, -8, 2.6, TF);
+  for (let i = 0; i < 7; i++) { const x = Gx(3, 2180 + i * 55); tube([[x, 472, -2.5 + i * .6], [x + 60 * Math.sin(i), 330, -2.6 + i * .5], [x + 120, 190 + 30 * Math.sin(i * 2), -2.2 + i * .5]], .3, VN); }
+  [1955, 1972].forEach(x => box(Gx(3, x), Gx(3, x + 5), 470, 910, -.45, -.35, BK)); for (let y = 490; y < 910; y += 26) box(Gx(3, 1955), Gx(3, 1977), y, y + 4, -.45, -.35, BK);
+  rod(Gx(3, 2230), 1010, -6.6, Gx(3, 2230), 760, -6.6, 5.4, 5, PK);
+  // BB2-BB4: the treetops (BB3's floor), BB3's small tree and its branch, BB2's big tree (a star at its top), the vine's arch over to it
+  for (let x = Gx(2, 1980); x < Gx(4, 650); x += 55 + rnd() * 40) blob(x, 935, -2 + rnd() * 4, 1.6 + rnd(), .9 + rnd() * .5, 1.4 + rnd(), LV[Math.floor(rnd() * 3)]);
+  rod(Gx(3, 820), 950, -1.5, Gx(3, 820), 630, -1.5, .7, .5, BK); blob(Gx(3, 820), 600, -1.5, 2.4, 1.4, 2, LV[1]); box(Gx(3, 900), Gx(3, 1280), 730, 742, -.4, .2, BK);
+  rod(Gx(2, 560), 1250, -1.8, Gx(2, 560), 660, -1.8, 1.4, 1, BK); for (let i = 0; i < 7; i++) blob(Gx(2, 360 + i * 70), 630 + (i % 2) * 22, -1.2, 1.8, 1.1, 1.6, LV[i % 3]);
+  [[620, 1000, 840], [180, 510, 765], [620, 940, 685]].forEach(([a, b, y]) => box(Gx(2, a), Gx(2, b), y, y + 12, -.4, .2, BK)); blob(Gx(2, 570), 588, 0, .4, .4, .4, ST);
+  tube([[Gx(2, 980), 1240, -.6], [Gx(2, 1130), 910, 0], [Gx(2, 1470), 890, 0], [Gx(2, 1810), 910, 0], [Gx(2, 1960), 1240, .5]], .42, VN);
+  // BA4: the three loops (down into BB4, the star's vine low in the first), on along to BA5's branch and its star
+  BG_RINGS.forEach(r => tube(bgRing(r[0], r[1], r[2], r[3], r[4], 0, Gx(4, 0)), .4, VN));
+  tube([[Gx(4, 1900), 485, 0], [Gx(4, 2560), 486, 0], [Gx(5, 560), 484, 0], [Gx(5, 640), 447, 0], [Gx(5, 1060), 409, 0], [Gx(5, 1420), 404, 0]], .4, VN);
+  tube([[Gx(4, 350), 705, -.1], [Gx(4, 620), 706, .1], [Gx(4, 890), 705, -.1]], .36, VN); blob(Gx(4, 620), 680, 0, .4, .4, .4, ST); blob(Gx(5, 1380), 380, 0, .4, .4, .4, ST);
+  // BA5-BA6: the high land (the rest stop's tree and fire), its face down to BB5-BB6's floor
+  box(Gx(5, 1450), Gx(6, 900), 470, 600, -9, 2.6, EA); box(Gx(5, 1450), Gx(6, 900), 600, 912, -9, -2.2, EA); box(Gx(5, 1450), Gx(6, 900), 462, 470, -9, 2.6, TF);
+  for (let y = 640; y < 900; y += 45) box(Gx(5, 1450), Gx(6, 900), y, y + 5, -2.2, -2.12, EA2);
+  rod(Gx(5, 2300), 470, -2.8, Gx(5, 2300), 200, -2.8, 1.05, .75, BK); for (let i = 0; i < 7; i++) blob(Gx(5, 2300) + (i - 3) * 70, 150 + (i % 2) * 40, -2.8, 2, 1.4, 1.8, LV[i % 3]);
+  blob(Gx(5, 1900), 456, .3, .32, .5, .32, "#ff9a3c");
+  // BB4-BB6: the floor; the ledges up the land's face (BB5's two, the one on into BB6, BB6's steps and last); BB6's stairs up to the walkway out to B6
+  box(Gx(4, 0), Gx(6, 2560), 910, 940, -6, 2.4, TF); box(Gx(4, 0), Gx(6, 2560), 940, 1100, -6, 2.4, EA);
+  [[Gx(5, 1620), Gx(5, 1850), 825], [Gx(5, 1900), Gx(5, 2130), 740], [Gx(5, 2250), Gx(6, 250), 655], [Gx(6, 300), Gx(6, 520), 580], [Gx(6, 490), Gx(6, 670), 690], [Gx(6, 640), Gx(6, 820), 800]].forEach(([a, b, y]) => box(a, b, y, y + 18, -1, 1, SL));
+  for (let i = 0; i < 3; i++) box(Gx(6, 1450 + i * 18), Gx(6, 1478 + i * 18), 910 - (i + 1) * 20, 910, i * .65, .6 + i * .65, RED2);
+  return L;
+}
 function buildSet(s) {
   const st = STAGES[s], objs = [], fg = [], fgSee = [], rng = rngF(9001 + s * 13), R = (a, b) => a + rng() * (b - a), M = tropMats();
   scene.traverse(o => { if (o.isLight) o.layers.enable(1); });   // (the foreground's in the same sun)
   for (const P of st.set) {
     const g = new THREE.Group(); scene.add(g); (P.fg ? fg : objs).push(g); if (P.fg) g.name = "fg";
-    if (world === 1 && level.mats && wavesSet(P, g, s, rng, R)) continue;   // (the hand-made waves' own pieces)
+    if (world === 1 && level.mats && wavesSet(P, g, s, rng, R)) continue;
+    if (world === 0 && woodsBgSet(P, g, s, rng, R)) continue;   // (the woods' background's own)   // (the hand-made waves' own pieces)
     if (P.k === "bridge") {                         // a rope-and-plank bridge: planks across two beams, rope rails at hip height tied down to them, posts where it ends
       const wA = toon("#9a6a3c"), wB = toon("#86562e"), rope = toon("#c8a26a"), post = toon("#6b4126");
       for (const q of PLATFORMS.filter(q => q.kind === "bridge")) {
@@ -4988,6 +5147,76 @@ function authorForest() {
   S0.push({ h: hh, col: 142, cell: "C10", elev: he, foe: 0, ...HOMEK, home: "bedroom", rug: [900, 2000], prev: C9, noRight: true, peace: true,
     plats: [[1300, 390, 560, "bed"], [1080, 375, 130, "stand2"]], items: [["gear", 1145, 330]], homeEnds: [["big"], ["solid"]] });
   R0[C9] = []; R0[C10] = []; nm(S0[C9], "LIBRARY"); nm(S0[C10], "BEDROOM");
+  // ── the background (the user, 2026-11-02, the map "Berry Woods Background": rows BA and BB, behind rows A and B. "a1 will have a bridge that shows the player
+  // begining to walk into it and then shifts to BA1 ... read the map for B. black circles are enemies. stars should be the rarer items"): eleven rooms off the grid,
+  // each named B + the room it's behind and placed as that room is (cellOff's bgRow), so they're one piece with each other. In over A1's walkway (↑ at its foot), out
+  // over BB6's to B6; BA3's ladder down to BB3; through BA4's vines down to BB4; off BA6's edge down to BB6, and back up its ledges. The map and the user's notes:
+  // .claude/berry-tools/woods_map/BERRY_WOODS_BACKGROUND.md
+  const BGC = ["BA1", "BA2", "BA3", "BA4", "BA5", "BA6", "BB2", "BB3", "BB4", "BB5", "BB6"], BG = {}; BGC.forEach((c, i) => { BG[c] = S0.length + i; });
+  const bg = (c, o, roster, what) => { const src = S0[C[c.slice(1)]], i = BG[c]; if (i !== S0.length) console.warn("forest: the background out of order", c);
+    S0.push({ h: src.h, col: 900 + BGC.indexOf(c), bgCell: c, bgRow: c[1], elev: src.elev, foe: src.foe, authored: true, plats: [], ...o }); R0[i] = roster || []; nm(S0[i], what); return S0[i]; };
+  const DECK = GROUND - 120, A1W = { fx: 1500, bx: 520 }, B6W = { fx: 1950, bx: 1500 }, V = (pts, r0, r1, o) => ({ pts, r0, r1, ...o });   // (DECK: the upper deck, "reach the top tier of the bridge with a regular jump")
+  const RINGS = BG_RINGS.map(r => V(bgRing(...r), .42, .36)), LAND = { top: GROUND, bot: GROUND + 290 };
+  // BA1-BA3: "two-tiered bridge", "the player cannot jump off of this bridge": the lower deck the floor all along, the upper one a jump up; broken at BA2's end, a beam under
+  bg("BA1", { open: true, noRoots: true, ground: [[0, 0]], noLeft: true, next: BG.BA2, plats: [[800, DECK, 1840, "deck"]], bwalk: { ...A1W, to: C.A1, side: "back" },
+    set: [{ k: "redBridge", x0: 300, x1: 2900, end0: true, gapF: [380, 620] }, { k: "bwFoot" }] },
+    [["acorn", "rust", { plat: 0, x: 1330 }], ["leafy", "orange", { plat: 0, x: 2120 }], ["twiggy", "olive", 1770]], "RED BRIDGE");
+  bg("BA2", { open: true, noRoots: true, ground: [[0, 0], [2260, 0], [2260, 44], [2440, 44], [2440, 0]], prev: BG.BA1, next: BG.BA3, plats: [[-40, DECK, 2640, "deck"]], items: [["gum", 1110, DECK]],
+    set: [{ k: "redBridge", x0: -300, x1: 2900, brk: [2260, 2440] }] },
+    [["leafy", "leaf", { plat: 0, x: 690 }], ["pinecone", "rust", { plat: 0, x: 1530 }], ["acorn", "rust", 300], ["twiggy", "olive", 1040], ["leafy", "orange", 1830]], "RED BRIDGE");
+  // BA3: the bridge ends, land after it ("that's how the player can approach the vines"); Glos's vines over the far side, "burnable by fire to open the next area";
+  // the ladder down through the land to BB3's treetops
+  bg("BA3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BA2, next: BG.BA4, down: BG.BB3, downX: 1950, plats: [[-40, DECK, 1700, "deck"]],
+    secret: { who: "fire", x: 2240, tall: true, door: true, key: "bgVines" },
+    set: [{ k: "redBridge", x0: -300, x1: 1800, end1: true }, { k: "bgLand", x0: 1780, x1: 2900, ...LAND },
+      { k: "glos", paths: [V([[2150, 470, -3], [2120, 330, -3.4], [2200, 150, -3], [2380, 60, -2.5], [2600, 110, -3]], .5, .26, { hand: true }), V([[2650, 470, -4.2], [2580, 300, -4.6], [2460, 120, -4], [2290, 30, -3.6]], .55, .3, { hand: true }),
+        V([[2200, 472, 2.4], [2300, 400, 2.8], [2420, 350, 2.4], [2600, 410, 2.6]], .26, .18, { hand: true }), V([[2560, 470, -1], [2500, 260, -1.4], [2390, 140, -1], [2330, 180, -.6]], .34, .22, { swirl: .7 })] }] },
+    [["leafy", "leaf", 395], ["acorn", "rust", 890], ["twiggy", "olive", 1380]], "RED BRIDGE");
+  // BA4: "the screen is zoomed out and the almost silhouetted player's team walks on free standing glos like vines": three loops, along their tops; drop through
+  // (double tap down) or fall between them, down into BB4
+  bg("BA4", { open: true, noRoots: true, zoom: 2, sil: true, ground: [[0, 0]], gaps: [[380, 2760]], below: BG.BB4, prev: BG.BA3, next: BG.BA5,
+    plats: [[410, 470, 420, "vine"], [970, 455, 420, "vine"], [1530, 470, 1080, "vine"]],
+    set: [{ k: "bgLand", x0: -300, x1: 380, ...LAND, ragged: 1 }, { k: "glos", paths: [...RINGS, V([[1900, 485, 0], [2200, 487, .15], [2450, 484, -.1], [2700, 486, 0]], .42, .4),
+      V([[380, 480, -.5], [330, 560, -.9], [300, 700, -1.2], [330, 800, -1.4]], .3, .16, { hand: true })] }] }, [], "VINES");
+  // BA5: "this screen will zoom in back to normal": the vine on up to its end, a star at its tip; off it onto the land, "a tree and the fire and chair rest stop"
+  bg("BA5", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 1450]], below: BG.BB5, prev: BG.BA4, next: BG.BA6, rest: true, peace: true, restX: 1900,
+    plats: [[-40, 470, 600, "vine"], [600, 432, 460, "vine"], [1080, 394, 330, "vine"]], items: [["power", 1380, 394]],
+    set: [{ k: "glos", paths: [V([[-200, 485, 0], [250, 487, .15], [560, 484, -.1], [640, 447, 0], [880, 446, .15], [1060, 409, 0], [1250, 408, .1], [1420, 404, 0]], .44, .3, { hand: true })] },
+      { k: "bgLand", x0: 1450, x1: 2900, ...LAND, ragged: -1 }, { k: "bgTree", x: 2300, base: GROUND, top: 170, r: 1.05, z: -2.8, reach: 1, crown: { y: 130, r: 4.6 } }] }, [], "REST STOP");
+  // BA6: the land on to its edge ("they jump off the edge all the way down to BB6"); you can come up onto it from BB6's ledges (its top a platform: up through it)
+  bg("BA6", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 2760]], below: BG.BB6, prev: BG.BA5, noRight: true, plats: [[-60, GROUND, 960, "turf"]],
+    set: [{ k: "bgLand", x0: -300, x1: 900, ...LAND, ragged: 1 }] }, [["acorn", "rust", { plat: 0, x: 250 }], ["leafy", "leaf", { plat: 0, x: 620 }]], "BLUFF");
+  // BB2: "the tree ends and the player jumps on a vine they walk on to another tree with branches and platforms. they jump up to a tree top with a rare item"
+  bg("BB2", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 2000]], noLeft: true, next: BG.BB3,
+    plats: [[620, 400, 380, "branch"], [180, 325, 330, "branch"], [620, 245, 320, "branch"], [330, 160, 480, "crown"], [1150, 435, 640, "vine"]], items: [["power", 570, 160]],
+    set: [{ k: "bgTree", x: 560, base: GROUND + 600, top: 220, r: 1.4, z: -1.8, reach: 600 }, { k: "treetops", x0: 1980, x1: 2900 },
+      { k: "glos", paths: [V([[980, 800, -.6], [1040, 600, -.3], [1130, 470, 0], [1300, 452, .1], [1470, 450, 0], [1640, 452, -.1], [1810, 470, 0], [1900, 600, .3], [1960, 800, .5]], .44, .4)] }] },
+    [["acorn", "rust", { plat: 0, x: 860 }], ["leafy", "leaf", { plat: 1, x: 300 }], ["twiggy", "olive", { plat: 2, x: 820 }], ["pinecone", "rust", { plat: 4, x: 1470 }], ["leafy", "orange", 2250]], "TREETOPS");
+  // BB3: the ladder down from BA3 "ends at the top of a tree. the player is walking on top of the tree. theres a smaller tree that extends high and has a branch"
+  bg("BB3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BB2, next: BG.BB4, up: BG.BA3, upX: 1965, plats: [[900, 290, 380, "branch"]],
+    set: [{ k: "treetops", x0: -300, x1: 2900 }, { k: "bgTree", x: 820, base: GROUND + 120, top: 190, r: .7, z: -1.5, reach: 500, crown: { y: 160, r: 2.8 } },
+      { k: "bgTree", x: 2230, base: GROUND + 200, top: -300, r: 5.4, z: -6.6, col: "#c98d7a", col2: "#a8705f", reach: 1 }] },
+    [["leafy", "leaf", 300], ["acorn", "rust", 1150], ["twiggy", "olive", { plat: 0, x: 1180 }]], "TREETOPS");
+  // BB4: the floor, the vines' loops hanging into it from BA4; "one loop in BB4 has a star and that's another vine the player can actually land on"
+  bg("BB4", { ground: [[0, 0]], prev: BG.BB3, next: BG.BB5, plats: [[380, 250, 480, "vine"]], items: [["power", 620, 250]],
+    set: [{ k: "treetops", x0: -300, x1: 650 }, { k: "glos", dy: -ROW_H, paths: [...RINGS] },
+      { k: "glos", paths: [V([[350, 265, -.1], [480, 262, 0], [620, 266, .1], [760, 262, 0], [890, 265, -.1]], .38, .34), V([[1200, 335, -1.7], [1230, 385, -1.6], [1262, 430, -1.5]], .26, .14, { hand: true }),
+        V([[1880, 370, -1.7], [1930, 410, -1.8], [1915, 448, -1.6]], .26, .14, { hand: true })] }] },
+    [["acorn", "rust", 1310], ["leafy", "orange", 2070]], "FAR WOODS");
+  // BB5-BB6: the land's face behind; up it on ledges (the user's two, "add another one that leads them to bb6 (it extends into bb5 and to bb6", "from bb6 have another
+  // platform higher that they can use to get up to ba6", and steps up to them off the floor, "add an extra platform if they needed to make their way back up there");
+  // "bb6 has a bridge similar to the one in A1 that brings them back to b6"
+  bg("BB5", { ground: [[0, 0]], prev: BG.BB4, next: BG.BB6, noStrip: true, plats: [[1620, 385, 230], [1900, 300, 230], [2250, 215, 560, "span"]],
+    set: [{ k: "bgLand", x0: 1455, x1: 2900, top: GROUND - ROW_H, bot: GROUND + 60, z0: -9, z1: -2.2 }] },
+    [["leafy", "leaf", 500], ["acorn", "rust", 1260], ["twiggy", "olive", { plat: 0, x: 1735 }]], "FAR WOODS");
+  bg("BB6", { ground: [[0, 0]], prev: BG.BB5, noRight: true, noStrip: true, plats: [[-310, 215, 560, "span"], [300, 140, 220], [490, 250, 180], [640, 360, 180]], bwalk: { ...B6W, to: C.B6, side: "back" }, items: [["guava", 1100]],
+    set: [{ k: "bgLand", x0: -300, x1: 900, top: GROUND - ROW_H, bot: GROUND + 60, z0: -9, z1: -2.2 }, { k: "bwFoot" }] },
+    [["leafy", "leaf", 350], ["stumpy", "olive", 850]], "FAR WOODS");
+  // the woods' own ends of the two walkways, and the background seen small from the rooms in front of it ("All you can see some of the background in all the A rows and
+  // b rows from b5 to b6")
+  S0[C.A1].bwalk = { ...A1W, to: BG.BA1, side: "front" }; S0[C.A1].set.push({ k: "bwFoot" });
+  S0[C.B6].bwalk = { ...B6W, to: BG.BB6, side: "front" }; S0[C.B6].set.push({ k: "bwFoot" });
+  ["A1", "A2", "A3", "A4", "A5", "A6", "B5", "B6"].forEach(c => S0[C[c]].set.push({ k: "woodsFar" }));
   // nothing left leading into a room that's gone
   S0.forEach((q, i) => { if (q.cut) return; ["next", "prev", "below", "up", "down", "nextHi"].forEach(k => { if (q[k] !== undefined && S0[q[k]] && S0[q[k]].cut) { console.warn("forest: a way into a cut room", i, q.cell, k); delete q[k]; } });
     if (q.climbUp && S0[q.climbUp.to] && S0[q.climbUp.to].cut) { console.warn("forest: a climb into a cut room", i, q.cell); delete q.climbUp; delete q.climbWall; } });
@@ -5195,8 +5424,8 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
   if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
   if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
   if (world !== 9) level.objs.push(buildDeepBits(s));
-  level.objs.push(buildRowBits(s), buildHoleCeil(s)); if (world === 0 && String(STAGES[s].cell || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
-  if (world === 0 && window.BerryRoots && !STAGES[s].home && !STAGES[s].cove) { const g = window.BerryRoots.build(THREE, { seed: 7700 + s * 31, cell: STAGES[s].cell, width: WORLD, ground: groundAt, plats: PLATFORMS, ladders: LADDERS, ceils: CEILS, gaps: GAPS, climb: STAGES[s].climbUp, mat: () => toon("#ffffff", { vertexColors: true }), S, GROUND }); if (g) { scene.add(g); level.objs.push(g); } }   // (Glos's arms grown as roots all through her woods, roots.js: the user, 2026-11-02)
+  level.objs.push(buildRowBits(s), buildHoleCeil(s)); if (world === 0 && String(STAGES[s].cell || STAGES[s].bgRow || "")[0] === "A" && !level.skyFor) level.skyFor = rowSkyTex;   // (the rows told apart: the undergrowth's drips and puddles; the sky up top)
+  if (world === 0 && window.BerryRoots && !STAGES[s].home && !STAGES[s].cove && !STAGES[s].noRoots) { const g = window.BerryRoots.build(THREE, { seed: 7700 + s * 31, cell: STAGES[s].cell, width: WORLD, ground: groundAt, plats: PLATFORMS, ladders: LADDERS, ceils: CEILS, gaps: GAPS, climb: STAGES[s].climbUp, mat: () => toon("#ffffff", { vertexColors: true }), S, GROUND }); if (g) { scene.add(g); level.objs.push(g); } }   // (Glos's arms grown as roots all through her woods, roots.js: the user, 2026-11-02)
   level.fg = []; level.fgSee = []; if (STAGES[s].set) { const B = buildSet(s); level.objs.push(...B.objs, ...B.fg); level.fg = B.fg; level.fgSee = B.fgSee; }   // (a hand-made room's own pieces; the foreground's drawn over everyone)
   restCamp = STAGES[s].rest ? buildRestCamp(s) : null; if (restCamp) level.objs.push(restCamp.g);
   if (mode === "play" && STAGES[s].toWorld === 12 && !STAGES[s].exitLeft) level.objs.push(buildKpGate());   // (King P's road: its gate)
@@ -9618,16 +9847,16 @@ function lookLerp(a, b, e) {
   hemi2.color.copy(a.hemi2[0]).lerp(b.hemi2[0], e); hemi2.groundColor.copy(a.hemi2[1]).lerp(b.hemi2[1], e); hemi2.intensity = lerp(a.hemi2[2], b.hemi2[2], e);
   U.tintC.value.copy(a.tint).lerp(b.tint, e); U.tintAmt.value = lerp(a.tintAmt, b.tintAmt, e); U.warm.value = lerp(a.warm, b.warm, e); U.dim.value = lerp(a.dim, b.dim, e);
 }
-const spanAt = (x, y) => PLATFORMS.find(q => (q.kind === "bridge" || (world === 1 && (STAGES[stage] || {}).authored)) && x >= q.x - 4 && x <= q.x + q.w + 4 && Math.abs(q.y - y) < 60) || null;   // (a bridge that runs on across the room's edge: the forest's, 2026-10-24)
+const spanAt = (x, y) => PLATFORMS.find(q => (SPAN_K.has(q.kind) || (world === 1 && (STAGES[stage] || {}).authored)) && x >= q.x - 4 && x <= q.x + q.w + 4 && Math.abs(q.y - y) < 60) || null;   // (a bridge that runs on across the room's edge: the forest's, 2026-10-24)
 const chargeKeep = () => held.atk && player ? { chargeT: player.chargeT || 0, chargeLv: player.chargeLv || 0 } : { chargeT: 0, chargeLv: 0 };   // (on into the next screen still holding attack: the charge goes with you, the user 2026-10-28)
 function goRoom(ns, back) { bigLeave();                          // on into the next clearing (or the one before): the screen slides across, and you walk in from that side
-  cine = null; const crawlFrom = !!player.crawl, y0 = player.y, onSpan = !!(player.plat && (player.plat.kind === "bridge" || (world === 1 && STAGES[stage].authored))); swapPan(back ? "left" : "right", ns, () => {
+  cine = null; const crawlFrom = !!player.crawl, y0 = player.y, onSpan = !!(player.plat && (SPAN_K.has(player.plat.kind) || (world === 1 && STAGES[stage].authored))), onG0 = !!player.onGround; swapPan(back ? "left" : "right", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const from = stage;
     if (trail.length > 1 && trail[trail.length - 2] === ns) trail.pop(); else trail.push(ns);   // (back the way you came; or on into a room you hadn't come through, having dropped in from above)
     entrySide = back ? "right" : "left"; clockEnter(ns); setScreen(ns);
     const CRin = crawlFrom ? (STAGES[ns].crawl || []).find(z => z.to === from) : null;   // (through a crawl hole: in at its end, still crawling)
-    const d = back ? -1 : 1, x = back ? WORLD - 40 : 40, span = onSpan ? spanAt(x, y0) : null, jut = CRin ? PLATFORMS.find(q => Math.abs(q.y - CRin.y) < 2 && x >= q.x && x <= q.x + q.w) || null : span || (back && STAGES[ns].nextHi === from ? hiPlat() : null), gy = CRin ? CRin.y : jut ? jut.y : groundAt(x) ?? GROUND;   // back from up top: onto the ledge (or the upper tier) you left by; on a bridge, on along it
+    const d = back ? -1 : 1, x = back ? WORLD - 40 : 40, span = onSpan || (onG0 && groundAt(x) === null) ? spanAt(x, y0) : null, jut = CRin ? PLATFORMS.find(q => Math.abs(q.y - CRin.y) < 2 && x >= q.x && x <= q.x + q.w) || null : span || (back && STAGES[ns].nextHi === from ? hiPlat() : null), gy = CRin ? CRin.y : jut ? jut.y : groundAt(x) ?? GROUND;   // back from up top: onto the ledge (or the upper tier) you left by; on a bridge, on along it
     entryHi = !!jut && !span;
     Object.assign(player, { x, y: gy, vx: 120 * d, vy: 0, face: d, onGround: true, plat: jut, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), safe: world === 1 && STAGES[ns].authored ? safeNear(x) : { x, y: gy, plat: null } });   // (the hand-made waves: never a spot over the water to come back to)
     if (STAGES[ns].deep && (groundAt(x) === null || y0 < gy - 40)) Object.assign(player, { y: clamp(y0, (STAGES[ns].deepTop ?? DEEP_TOP) + 20, groundAt(x) ?? GROUND + 20), onGround: false, vy: player.vy || 0 });   // (the deep: in at the same depth, swimming)
@@ -9726,7 +9955,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
     let x = clamp(fx, 60, WORLD - 60);                                              // straight down: onto the ledge under where you fell (or the ground, or the nearest there is)
     const ledge = PLATFORMS.filter(q => fx > q.x - 420 && fx < q.x + q.w + 420 && q.y < (groundAt(q.x + q.w / 2) ?? GROUND) - 60 && !CEILS.some(([c0, c1, , hd]) => !hd && q.x < c1 && q.x + q.w > c0))
       .sort((a, b) => Math.abs(a.x + a.w / 2 - fx) - Math.abs(b.x + b.w / 2 - fx))[0];
-    if (world === 1 && STAGES[ns].authored) x = clamp(fx, 60, WORLD - 60); else if (ledge) x = clamp(fx, ledge.x + 24, ledge.x + ledge.w - 24); else
+    if ((world === 1 && STAGES[ns].authored) || STAGES[ns].bgRow) x = clamp(fx, 60, WORLD - 60); else if (ledge) x = clamp(fx, ledge.x + 24, ledge.x + ledge.w - 24); else
     for (let d = 0; d < WORLD; d += 10) { const c = [x - d, x + d].find(v => v > 60 && v < WORLD - 60 && [-50, 0, 50].every(k => groundAt(v + k) !== null) && !CEILS.some(([c0, c1, , hd]) => !hd && v > c0 - 50 && v < c1 + 50)); if (c !== undefined) { x = c; break; } }
     const gy = groundAt(x) ?? GROUND, dp = !!STAGES[ns].deep;
     if (dp) x = clamp(fx, 60, WORLD - 60);                                          // (the deep: straight on down through the water, where you were)
@@ -10272,7 +10501,7 @@ function secretChestRig() {
 function secretHit(d, kind) {                        // a blow on the wall: only the right hero's charged combo counts, a part at a time
   const B = secret; if (!B || B.hp <= 0) return false; const p = player, c = p.combo;
   if (!c || p.rig.id !== B.who) { SFX.block(); sparks(B.x, p.y - 60, 4); B.wob = .4;
-    if (!B.said && B.who !== "rose") { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THESE ROCKS" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
+    if (!B.said && B.who !== "rose" && B.who !== "fire") { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THESE ROCKS" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
     return true; }
   if (B.lastC === c && B.lastIdx === c.idx) return true; B.lastC = c; B.lastIdx = c.idx;   // (a part counts once, however many hits it has)
   B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX[B.who === "camila" ? "crack" : "slash"](); puffs(B.x + 20, p.y - 70, 4, 30, 160);
@@ -12290,7 +12519,7 @@ function flames(ux, uy, uz, n, spread, big = 1) {   // (3D units) n flames, lick
 }
 const flamesPx = (x, y, n, spread, big) => flames(X(x), Y(y), .3, n, spread * S, big);   // (game px)
 function fireBurn(x, y, r = 70) {                   // fire here: Rose's tangle, or one of her things, catches if it's this close
-  const B = secret; if (B && B.who === "rose" && B.hp > 0 && !B.burn && Math.abs(x - (B.x + 60)) < r + 50 && y > B.gy - 560) { B.burn = { t: 0 }; SFX.crackle(3); }
+  const B = secret; if (B && (B.who === "rose" || B.who === "fire") && B.hp > 0 && !B.burn && Math.abs(x - (B.x + 60)) < r + 50 && y > B.gy - 560) { B.burn = { t: 0 }; SFX.crackle(3); }
   for (const c of crates) if (!c.gone && c.who === "rose" && !c.burn && Math.abs(x - c.x) < r && Math.abs(y - (c.y - 30)) < r + 40) { c.burn = { t: 0 }; SFX.crackle(2); }
 }
 function partFireFx(dt) {                            // (the attack buddy's fire: flames off both fists as it strikes; anything it's set burning)
@@ -26156,7 +26385,7 @@ function syncWorld(dt) {
     const Hh = FOES[oppSel].h / 40; camX = X(480);
     camera.position.set(camX, Hh * .55 + .4, LINE_Z + 5 + Hh * 1.9); camera.lookAt(camX, Hh * .48, LINE_Z);
   } else {
-    const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
+    camZoom = lerp(camZoom, zoomWant(), 1 - Math.exp(-dt * 1.4)); const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camZoom * camera.aspect;
     const CF = FEEL.camera, camOn = !FEEL.legacy && CF.enabled && !hideout && !(cine && cine.phase === "pan"), moving = Math.abs(player.vx) > 40;
     if (camOn) { camLook = lerp(camLook, moving ? Math.sign(player.vx) * CF.lookahead * 2 * halfW : 0, 1 - Math.exp(-dt * (moving ? 2.2 : CF.catchUp * .6))); }   // (COMBAT FEEL's CAMERA: ahead the way you're moving, back to you when you stop)
     let txc = X(player.x) + camLook + (camOn ? .8 * player.vx * S / Math.max(.5, CF.follow) : 0); /* (no framing a fight any more: the camera's on you alone, the user 2026-11-01: "the camera shouldn't follow enemies. right now i was not moving and an enemy bounced in an our of the screen and the camera jerked back and forth") */
@@ -26186,6 +26415,7 @@ function syncWorld(dt) {
     const ck = accShake ? camKick : 0, pk = accShake ? feelPunch() : 0, px = pk && camPunch ? clamp((X(camPunch.x) - camX) * pk * 3, -.8, .8) : 0, py = pk && camPunch ? clamp((Y(camPunch.y) - (LOOK_Y + camBase)) * pk * 1.5, -.6, .6) : 0;   // (never more than a lean: 2026-11-01)   // (and COMBAT FEEL's punch: a quick lean in at the blow)
     camera.position.set(camX + sx + ck + px, CAM_Y + camBase + camLift + sy + camSit * 1.1 + cy * .9 - camPush * .35 + py + camDip, CAM_Z + camSit * 4.5 - camPush * 1.6 - CAM_Z * pk);
     camera.lookAt(camX + sx + ck * .6 + px, LOOK_Y + camBase + camLift + sy + camSit * .9 + cy * 1.08 - camPush * .2 + py + camDip * .8, 0);
+    if (camZoom > 1.003) { const d = camera.getWorldDirection(ZOOM_V), T = camera.position.clone().addScaledVector(d, -camera.position.z / Math.min(-.05, d.z)); camera.position.sub(T).multiplyScalar(camZoom).add(T); camera.lookAt(T); }   // (back along the way it looks: BA4's, the user 2026-11-02 "the screen is zoomed out")
     if (quickOn() && !cine && !comicCam) { const q = QUICK_CAM, cx = X(1280) + (camX - X(1280)) * q.follow, gy = Y(GROUND);   // QUICK PLAY: the whole stage in view, Smash-like, a little way after you if you go off its sides
       camera.position.set(cx + sx, gy + q.y + sy, CAM_Z * q.z); camera.lookAt(cx + sx * .6, gy + q.look + sy, 0); }
     if (arena) arenaCam(sx, sy);
@@ -26193,6 +26423,7 @@ function syncWorld(dt) {
   const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
   if (cannonS) cannonCam();
+  if (bwalkS) bwalkCam();
   if (pan) { camera.position.copy(pan.pos); camera.quaternion.copy(pan.quat); }   // (between stitched screens: the camera on its way across)
   camLostTick(dt);                                   // (the picture as it'll be drawn: if you're not in it, and nothing should be holding it elsewhere, back on you)
   if (level.sky && STITCH.has(world) && mode === "play") { const K = level.sky.userData; if (K.x0 === undefined) K.x0 = level.sky.position.x; level.sky.position.x = K.x0 + camera.position.x - WX / 2; if (hourEase && hourEase.sky && hourEase.level === level) hourEase.sky.position.x = level.sky.position.x; }   // (a stitched world's sky at infinity: it goes along with the camera, so crossing into the next screen it stays where it was, sun, moon and all; each screen's own was centred on it and jumped a screen's width. The user, 2026-10-25: "things that pop in and out and change as you change screens")
@@ -26425,6 +26656,57 @@ function cannonEnd() {                               // over: everyone back to t
   Object.assign(player, { safe: { x: player.x, y: player.y, plat: null }, inv: Math.max(player.inv || 0, .6) });
   cannonS = null;
 }
+// ── over a bridge between the woods and its background, or back (the user, 2026-11-02: "a1 will have a bridge that shows the player begining to walk into it and then
+// shifts to BA1"; "bb6 has a bridge similar to the one in A1 that brings them back to b6"): ↑ at its foot (at the far end's stairs, ↓), the team walk up it and off along
+// it, the screen goes, and they come down the stairs at its other end. A show of its own, as the cannon's: nothing else moves meanwhile
+const bwLerp = (a, b, u) => ({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, z: a.z + (b.z - a.z) * u });
+function bwalkCheck() {                              // at its foot: the key, and off they go
+  const q = STAGES[stage], B = q && q.bwalk, p = player;
+  if (!B || mode !== "play" || transit || hideout || stronghold || arena || cine || cannonS || !p || p.dead || p.auto || p.climb || p.sit) { bwPrev = false; return; }
+  const W = bwGeo(B), fr = B.side === "front", k = fr ? !!(keys.ArrowUp || keys.KeyW || pad.u) : !!(keys.ArrowDown || pad.d), gy = groundAt(W.zone) ?? GROUND;
+  const near = p.onGround && Math.abs(p.x - W.zone) < 80 && Math.abs(p.y - gy) < 12;
+  if (near && k && !bwPrev && p.atkT < 0 && !p.combo && !p.block) bwalkGo(B, W);
+  if (near && !bwHint) { bwHint = true; popText(W.zone, gy - 170, fr ? "↑" : "↓"); } else if (!near) bwHint = false;
+  bwPrev = k;
+}
+function bwalkPath(m, pts, delay) { m.pts = pts; m.cum = [0]; for (let i = 1; i < pts.length; i++) { const a = pts[i - 1], b = pts[i]; m.cum.push(m.cum[i - 1] + Math.hypot((b.x - a.x) * S, (b.y - a.y) * S, b.z - a.z)); } m.t0 = delay; }
+function bwalkPos(m, t) {                            // where one of them is, t seconds in, and the stretch they're on
+  const d = Math.max(0, t - m.t0) * BW_GO, C = m.cum, P = m.pts, n = P.length; if (d >= C[n - 1]) return { p: P[n - 1], a: P[n - 2], b: P[n - 1], end: true, go: true };
+  let i = 1; while (i < n - 1 && C[i] < d) i++; const u = (d - C[i - 1]) / Math.max(1e-6, C[i] - C[i - 1]);
+  return { p: bwLerp(P[i - 1], P[i], u), a: P[i - 1], b: P[i], end: false, go: t > m.t0 };
+}
+function bwalkGo(B, W) {
+  const team = cannonTeam(), far = bwLerp(W.N, W.F, B.side === "front" ? .32 : .36), gy = groundAt(W.Pa.x) ?? GROUND;
+  team.forEach((m, j) => { const s = m.st, x0 = clamp(s.x, W.Pa.x - 420, W.Pa.x + 420); bwalkPath(m, [{ x: x0, y: groundAt(x0) ?? s.y, z: 0 }, { x: W.Pa.x, y: gy, z: 0 }, { ...W.Pa, y: gy }, W.N, far], j * .3); m.hid = false; });
+  bwalkS = { ph: "out", t: 0, B, team, cam: { p: camera.position.clone(), q: camera.quaternion.clone() } }; cine = null; SFX.confirm();
+}
+function bwalkTick(dt) {                             // the walk, a step at a time
+  const Q = bwalkS; Q.t += dt; const t = Q.t;
+  for (const m of Q.team) { const s = m.st, W = bwalkPos(m, t), dx = (W.b.x - W.a.x) * S, dz = W.b.z - W.a.z, walking = W.go && !W.end;
+    Object.assign(s, { x: W.p.x, y: W.p.y, z: W.p.z, vy: 0, onGround: true, plat: null }); s.vx = walking ? 180 * (Math.abs(dx) > .05 ? Math.sign(dx) : s.face || 1) : 0;
+    const yt = walking && Math.hypot(dx, dz) > .01 ? Math.atan2(-dz, dx) : (s.face > 0 ? -.55 : -Math.PI + .55); if (walking && Math.abs(dx) > .05) s.face = Math.sign(dx);
+    let d = yt - (s.yaw ?? -.55); d = Math.atan2(Math.sin(d), Math.cos(d)); s.yaw = (s.yaw ?? -.55) + d * (1 - Math.exp(-dt * 9));
+    m.hid = Q.ph === "out" ? W.end : !W.go;
+    spring(s, dt); updatePose(s, dt); }
+  if (Q.ph === "out") { const last = Q.team[Q.team.length - 1], dl = Math.max(0, t - last.t0) * BW_GO;
+    if (!Q.fading && (dl > last.cum[last.cum.length - 1] * .6 || t > 7)) { Q.fading = true; swapUnderFade(() => bwalkLand(Q)); } }
+  else if (!Q.over && Q.team.every(m => bwalkPos(m, t).end)) { Q.over = true; bwalkEnd(); }
+}
+function bwalkLand(Q) {                              // (under the fade) at the other end: in, and down its stairs
+  const ns = Q.B.to, back = STAGES[ns] && STAGES[ns].bwalk; if (!back) { bwalkEnd(); return; }
+  const W = bwGeo(back); cannonRoom(ns, W.Pa.x); const gy = groundAt(W.Pa.x) ?? GROUND, far = bwLerp(W.N, W.F, back.side === "front" ? .32 : .36);
+  Q.team.forEach((m, j) => { const ex = clamp(W.Pa.x + (j ? (j % 2 ? 1 : -1) * Math.ceil(j / 2) * 70 : 0), 60, WORLD - 60), ey = groundAt(ex) ?? gy;
+    bwalkPath(m, [far, W.N, { ...W.Pa, y: gy }, { x: W.Pa.x, y: gy, z: 0 }, { x: ex, y: ey, z: 0 }], j * .3); m.hid = true; Object.assign(m.st, { x: far.x, y: far.y, z: far.z }); });
+  Object.assign(Q, { ph: "in", t: 0, fading: false, cam: null });
+}
+function bwalkEnd() {                                // over: everyone themselves again, where they stand
+  const Q = bwalkS; if (!Q) return;
+  Q.team.forEach(m => { const s = m.st; Object.assign(s, { z: 0, vx: 0, vy: 0, onGround: true, plat: null }); if (m.r && m.r.root) m.r.root.visible = true; if (m.a) { m.a.at = allyRoomKey(); m.a.pl = player; m.a.tgt = null; } });
+  Object.assign(player, { safe: { x: player.x, y: player.y, plat: null }, inv: Math.max(player.inv || 0, .6) });
+  bwalkS = null; bwPrev = true;                      // (the key still held from the way in: not another go)
+}
+function bwalkSync() { for (const m of bwalkS.team) { const r = m.r; if (!r || !r.root) continue; r.root.visible = !m.hid; if (r.shadow) r.shadow.visible = !m.hid && Math.abs(m.st.z || 0) < .8 && Math.abs(m.st.y - (groundAt(m.st.x) ?? GROUND)) < 6; } }
+function bwalkCam() { const Q = bwalkS; if (!Q.cam) Q.cam = { p: camera.position.clone(), q: camera.quaternion.clone() }; camera.position.copy(Q.cam.p); camera.quaternion.copy(Q.cam.q); }   // (held still while they go: off, or in)
 function update(dt) {
   time += dt; KIT.time = time;
   if (mode === "select") { updateSelect(dt); return; }
@@ -26454,8 +26736,9 @@ function update(dt) {
     player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideGuests(dt); updateHideout(dt);
     shake = Math.max(0, shake - dt * 40); return;
   }
-  if (cannonS) { cannonTick(dt); shake = Math.max(0, shake - dt * 40); return; }   // (the ship's cannon: its show, nothing else moving meanwhile)
-  cannonCheck(dt);
+  if (cannonS) { cannonTick(dt); shake = Math.max(0, shake - dt * 40); return; }
+  if (bwalkS) { bwalkTick(dt); shake = Math.max(0, shake - dt * 40); return; }   // (over a bridge to or from the woods' background: likewise)   // (the ship's cannon: its show, nothing else moving meanwhile)
+  cannonCheck(dt); bwalkCheck();
   partInput(dt); updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateMeet(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt); heroSane(player);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
@@ -26523,6 +26806,7 @@ function render(dt) {
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) { foe.sync(enemy, foe.rig, dt); if (foe.post) foe.post(enemy, foe.rig, dt); } baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
   if (cannonS) cannonSync();
+  if (bwalkS) bwalkSync();
   if (mode === "play") { syncHeld(); syncFoeDizzy(dt); }
   if (NJ_HIDE.size) ninjaVis();   // (the ninja's puffs: whoever's gone in one, out of sight)
   syncCards(); syncHazards(); syncBubble(dt); syncBudBubbles(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncZaps(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAuras(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
@@ -26538,6 +26822,7 @@ function render(dt) {
   { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } }   // (the characters' own texture, DEBUG · K: an older charkit still cached has none)
   if (SHADE) SHADE.pass(false);                     // (an applied look: the level's settings, then the characters')
   if (pan) panScene(); else if (peek) panScene(peek); else if (level.subs) bigScene(); else renderer.render(scene, camera);
+  actors.fog = actorFog();
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
   if (SHADE) { SHADE.pass(true); SHADE.U.mkGround.value = player ? Y(groundAt(player.x) ?? GROUND) : 0; }
