@@ -9,17 +9,11 @@ window.BerryRoots = (() => {
   const rng = seed => () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
   const lerp = (a, b, t) => a + (b - a) * t, clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  function build(THREE, o) {
-    const R0 = rng(o.seed | 0), R = (a, b) => a + R0() * (b - a), S = o.S, G0 = o.GROUND, W = o.width, X = x => x * S, Y = y => (G0 - y) * S;
-    const parts = [], col = h => new THREE.Color(h), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  // the pieces both share: her arm along a curve (limb) and the lot merged into one mesh (merge), all painted per part
+  function kit(THREE, R, R0, tint) {
+    const parts = [], col = h => tint ? tint(new THREE.Color(h)) : new THREE.Color(h), V3 = (x, y, z) => new THREE.Vector3(x, y, z);
     const paint = (g, c) => { const n = g.attributes.position.count, a = new Float32Array(n * 3); for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; } g.setAttribute("color", new THREE.BufferAttribute(a, 3)); return g; };
     const add = (g, hex) => { g = g.index ? g.toNonIndexed() : g; if (!g.attributes.normal) g.computeVertexNormals(); parts.push(paint(g, col(hex))); };
-    const ground = x => { const y = o.ground(x); return y === null || y === undefined ? null : y; };
-    const ladX = (o.ladders || []).map(l => l.x), climbX = [].concat(o.climb || []).map(c => typeof c === "number" ? c : c && (c.x ?? c[0])).filter(v => typeof v === "number");
-    const nearClimb = x => ladX.some(l => Math.abs(l - x) < 170) || climbX.some(c => Math.abs(c - x) < 220);
-    const flatGround = (x0, x1) => { let lo = 1e9, hi = -1e9; for (let x = x0; x <= x1; x += 40) { const y = ground(x); if (y === null) return null; lo = Math.min(lo, y); hi = Math.max(hi, y); } return hi - lo < 26 ? (lo + hi) / 2 : null; };
-    const ceilAt = x => { let best = null; (o.ceils || []).forEach(c => { if (x >= c[0] && x <= c[1] && (best === null || c[2] > best)) best = c[2]; }); return best; };
-
     // an arm-root along pts: tapering r0 → r1, its cuffs (the ruff), its white bands, and at its free end her hand (or a swirl)
     function limb(pts, r0, r1, c, opt = {}) {
       const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal"), L = curve.getLength(); if (L < .2) return;
@@ -46,6 +40,27 @@ window.BerryRoots = (() => {
         for (let i = 0; i <= 28; i++) { const u = i / 28, a = u * 1.45 * Math.PI * 2, r = rr * (1 - u * .82); sp.push(V3(Math.cos(a) * r, Math.sin(a) * r, 0)); }
         const sg = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(sp), 36, Math.max(.012, rAt(opt.swirl) * .18), 5); sg.applyMatrix4(new THREE.Matrix4().compose(V3(p.x + t.y * rr * .6, p.y - t.x * rr * .6, p.z + .02), new THREE.Quaternion(), V3(1, 1, 1))); add(sg, WH); }
     }
+    function merge(mat) {
+      if (!parts.length) return null;
+      // one mesh: all of it merged (non-indexed, as built), coloured per part
+      let nV = 0; parts.forEach(g => { nV += g.attributes.position.count; });
+      const pos = new Float32Array(nV * 3), nor = new Float32Array(nV * 3), cl = new Float32Array(nV * 3); let off = 0;
+      parts.forEach(g => { pos.set(g.attributes.position.array, off); nor.set(g.attributes.normal.array, off); cl.set(g.attributes.color.array, off); off += g.attributes.position.count * 3; g.dispose(); });
+      const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); geo.setAttribute("color", new THREE.BufferAttribute(cl, 3));
+      geo.computeBoundingSphere();
+      const mesh = new THREE.Mesh(geo, mat()), grp = new THREE.Group(); grp.name = "glosRoots"; grp.add(mesh); grp.userData.verts = nV; return grp;
+    }
+    return { limb, add, merge, V3 };
+  }
+  function build(THREE, o) {
+    const R0 = rng(o.seed | 0), R = (a, b) => a + R0() * (b - a), S = o.S, G0 = o.GROUND, W = o.width, X = x => x * S, Y = y => (G0 - y) * S;
+    const K = kit(THREE, R, R0), limb = K.limb, V3 = K.V3;
+    const ground = x => { const y = o.ground(x); return y === null || y === undefined ? null : y; };
+    const ladX = (o.ladders || []).map(l => l.x), climbX = [].concat(o.climb || []).map(c => typeof c === "number" ? c : c && (c.x ?? c[0])).filter(v => typeof v === "number");
+    const nearClimb = x => ladX.some(l => Math.abs(l - x) < 170) || climbX.some(c => Math.abs(c - x) < 220);
+    const flatGround = (x0, x1) => { let lo = 1e9, hi = -1e9; for (let x = x0; x <= x1; x += 40) { const y = ground(x); if (y === null) return null; lo = Math.min(lo, y); hi = Math.max(hi, y); } return hi - lo < 26 ? (lo + hi) / 2 : null; };
+    const ceilAt = x => { let best = null; (o.ceils || []).forEach(c => { if (x >= c[0] && x <= c[1] && (best === null || c[2] > best)) best = c[2]; }); return best; };
+
     const wob = (n, amp) => Array.from({ length: n }, () => R(-amp, amp));
 
     const row = String(o.cell || "")[0];
@@ -87,14 +102,52 @@ window.BerryRoots = (() => {
       for (let i = 0; i <= k; i++) { const u = i / k; pts.push(V3(X(x0 + len * u), y0 + .04 + Math.sin(u * Math.PI) * R(.08, .18), z + w2[i])); }
       pts.push(V3(pts[k].x + .3, y0 - .3, pts[k].z + .4)); limb(pts, R(.18, .28), .09, GRN, { hand: R0() < .5 }); n++; }
 
-    if (!parts.length) return null;
-    // one mesh: all of it merged (non-indexed, as built), coloured per part
-    let nV = 0; parts.forEach(g => { nV += g.attributes.position.count; });
-    const pos = new Float32Array(nV * 3), nor = new Float32Array(nV * 3), cl = new Float32Array(nV * 3); let off = 0;
-    parts.forEach(g => { pos.set(g.attributes.position.array, off); nor.set(g.attributes.normal.array, off); cl.set(g.attributes.color.array, off); off += g.attributes.position.count * 3; g.dispose(); });
-    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3)); geo.setAttribute("normal", new THREE.BufferAttribute(nor, 3)); geo.setAttribute("color", new THREE.BufferAttribute(cl, 3));
-    geo.computeBoundingSphere();
-    const mesh = new THREE.Mesh(geo, o.mat()), grp = new THREE.Group(); grp.name = "glosRoots"; grp.add(mesh); grp.userData.verts = nV; return grp;
+    return K.merge(o.mat);
   }
-  return { build };
+  // the tangle (the user, 2026-11-02: Rose's grass in the woods "just a huge tangle of vines that look like the boss like everything else", and nothing to say what to do
+  // about it): her arms knotted right across the way, the whole depth of the ground and up past the canopy. Cut (Rose's charged combo): a doorway hacked through it,
+  // the cut ends left raw, stubs on its floor. Units: x across (0 its middle), y up from the ground, z the depth (+ toward you)
+  //   BerryRoots.tangle(THREE, o) → a THREE.Group: o = { seed, cut, mat: () → material, door: { w, h, z } (the gap a cut leaves), burnt }
+  function tangle(THREE, o) {
+    const CHAR = new THREE.Color("#2b2520"), burnt = !!o.burnt;   // (burnt away: charred through, the cut ends glowing)
+    const R0 = rng(o.seed | 0), R = (a, b) => a + R0() * (b - a), K = kit(THREE, R, R0, burnt ? c => c.r > .6 && c.b < .25 ? c : c.lerp(CHAR, .88) : null), V3 = K.V3, D = o.door || { w: 1.35, h: 4.4, z: 1.7 }, CUT = burnt ? "#f0842a" : "#d9f2a6", RING = burnt ? "#ffd060" : "#a8d86a";
+    const gone = p => Math.abs(p.x) < D.w && p.y > .32 && p.y < D.h && p.z > -D.z;   // (what the cut takes: the doorway and all in front of it, a stub left at its foot)
+    const face = (p, t, r) => { const c = new THREE.CircleGeometry(r * 1.02, 10); c.rotateX(-Math.PI / 2); c.applyMatrix4(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), t), V3(1, 1, 1))); K.add(c, CUT);
+      const g = new THREE.RingGeometry(r * .55, r * .7, 10); g.rotateX(-Math.PI / 2); g.translate(0, .003, 0); g.applyMatrix4(new THREE.Matrix4().compose(p, new THREE.Quaternion().setFromUnitVectors(V3(0, 1, 0), t), V3(1, 1, 1))); K.add(g, RING); };
+    const vine = (pts, r0, r1, c, opt = {}) => {
+      if (!o.cut) return K.limb(pts, r0, r1, c, opt);
+      const curve = new THREE.CatmullRomCurve3(pts, false, "centripetal"), n = 48, F = []; for (let i = 0; i <= n; i++) F.push(curve.getPointAt(i / n));
+      if (!F.some(gone)) return K.limb(pts, r0, r1, c, opt);   // (it never crossed the doorway)
+      let a = -1; for (let i = 0; i <= n + 1; i++) { const out = i <= n && !gone(F[i]);   // each piece left outside it, its own limb, raw where it was cut
+        if (out && a < 0) a = i; else if (!out && a >= 0) { const b = i - 1; if (b - a >= 2) { const sub = []; for (let k = a; k <= b; k += Math.max(1, Math.floor((b - a) / 6))) sub.push(F[k]); if (sub[sub.length - 1] !== F[b]) sub.push(F[b]);
+            const ra = r0 + (r1 - r0) * Math.pow(a / n, .85), rb = r0 + (r1 - r0) * Math.pow(b / n, .85), end = b === n; K.limb(sub, ra, rb, c, { ...opt, hand: opt.hand && end, swirl: 0, noCuff: b - a < 10 });
+            if (a > 0) face(F[a], F[a].clone().sub(F[a + 1]).normalize(), ra); if (!end) face(F[b], F[b].clone().sub(F[b - 1]).normalize(), rb); } a = -1; } }
+    };
+    const GRN = "#5cf01c", GRNd = "#3fb811", BACK = "#38a01a", c2 = i => i % 3 === 0 ? GRNd : i % 3 === 1 ? GRN : BACK;
+    // 1. the back of it: great ones up out of the ground behind the way, trunk-thick, up past where you can see
+    for (let i = 0; i < 6; i++) { const x = R(-2.2, 2.2), z = R(-8, -3.4), H = R(8, 12), k = 7, pts = []; for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(x + Math.sin(u * 3 + i) * R(.4, 1.2), -.4 + H * u, z + Math.sin(u * 4 + i * 2) * .5)); }
+      vine(pts, R(.42, .7), R(.18, .3), c2(i), { hand: R0() < .4 }); }
+    // 2. up from the ground across the whole depth, leaning and crossing one another, a hand or a swirl at the top
+    for (let i = 0; i < 12; i++) { const x = R(-2.1, 2.1), z = R(-3.2, 3.2), H = R(4.5, 9), lean = R(-1.8, 1.8), k = 7, pts = [];
+      for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(x + lean * u + Math.sin(u * 5 + i) * .35, -.3 + H * u, z + Math.sin(u * 3.4 + i) * .7)); }
+      pts.push(V3(pts[k].x + (lean > 0 ? .5 : -.5), pts[k].y + .25, pts[k].z)); vine(pts, R(.2, .36), R(.07, .12), c2(i + 1), { hand: R0() < .55, swirl: R0() < .3 ? R(.45, .7) : 0 }); }
+    // 3. the knot across the way: right across it, low to head-high, looping in and out of the depth
+    for (let i = 0; i < 14; i++) { const y = R(.35, 4.3), z = R(-1.6, 1.6), dir = R0() < .5 ? 1 : -1, k = 8, pts = [], ph = R(0, 6);
+      for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(dir * (-2.7 + 5.4 * u), y + Math.sin(u * Math.PI * R(1, 2.2) + ph) * R(.4, 1.1), z + Math.sin(u * 6 + ph) * R(.5, 1.2))); }
+      vine(pts, R(.14, .28), R(.08, .14), c2(i + 2), { hand: R0() < .3 }); }
+    // 4. arches over the way, rooted either side of it
+    for (let i = 0; i < 5; i++) { const z = R(-2, 2.6), top = R(3.4, 6.5), w = R(1.6, 2.3), k = 8, pts = [];
+      for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(-w + 2 * w * u, -.3 + Math.sin(u * Math.PI) * (top + .3), z + Math.sin(u * 7 + i) * .4)); }
+      vine(pts, R(.22, .34), R(.18, .26), c2(i), {}); }
+    // 5. in front: low and thick, creeping over the ground's edge toward you
+    for (let i = 0; i < 4; i++) { const z = R(2, 3.6), k = 6, pts = [], y0 = R(.1, .9);
+      for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(-2.4 + 4.8 * u, y0 + Math.sin(u * Math.PI * 2 + i) * .35, z + Math.sin(u * 5) * .3)); }
+      vine(pts, R(.18, .3), R(.12, .2), c2(i + 1), { hand: R0() < .5 }); }
+    // 6. hanging down from above the canopy, hands at their ends, high over the way
+    for (let i = 0; i < 4; i++) { const x = R(-2, 2), z = R(-3, 2.5), top = R(10.5, 12), len = R(3.5, 6), k = 6, pts = [];
+      for (let j = 0; j <= k; j++) { const u = j / k; pts.push(V3(x + Math.sin(u * 4 + i) * .4, top - len * u, z)); }
+      vine(pts, R(.14, .22), R(.06, .1), c2(i), { hand: true }); }
+    return K.merge(o.mat);
+  }
+  return { build, tangle };
 })();

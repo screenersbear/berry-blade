@@ -664,7 +664,7 @@
 <script src="score.js?v=20261028a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
-<script src="roots.js?v=20261102a"></script>
+<script src="roots.js?v=20261102d"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -5244,8 +5244,9 @@ let parts = [];
 function spawn(kind, x, y, z, v, life, size, opts = {}) {
   let m;
   if (kind === "puff") { m = new THREE.Group(); m.add(PG.puffO.clone()); const yv = PG.puffY.clone(); at(yv, -.25, .3, .45); m.add(yv); }
+  else if (kind === "flame") { m = new THREE.Group(); m.add(PG.flameO.clone()); const yv = PG.flameY.clone(); at(yv, 0, -.08, .3); m.add(yv); }   // (a flame: orange, its yellow heart, upright)
   else m = PG[kind].clone();
-  m.position.set(x, y, z); m.rotation.set(rand(0, TAU), rand(0, TAU), rand(0, TAU)); actors.add(m);
+  m.position.set(x, y, z); if (kind === "flame") m.rotation.set(0, 0, rand(-.25, .25)); else m.rotation.set(rand(0, TAU), rand(0, TAU), rand(0, TAU)); actors.add(m);
   parts.push({ m, v, life, t: 0, size, g: opts.g ?? 0, spin: opts.spin ?? 2, drag: opts.drag ?? 0, kind });
 }
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
@@ -10093,7 +10094,7 @@ function clearSecret() { if (!secret) return; [secret.g, secret.chest && secret.
 function spawnSecret() {
   clearSecret(); const q = STAGES[stage].secret; if (!q || stronghold || hideout || arena) return;
   const k = world + ":" + (q.key || stage) + ":", gy = groundAt(q.x + 60) ?? GROUND; secret = { who: q.who, x: q.x, hp: itemGot(k + "wall") ? 0 : 3, g: null, chest: null, wob: 0, said: false, side: q.side || 1, k, tall: !!q.tall, gy };   // (key: a wall two rooms share, cut from either side)
-  if (secret.hp > 0 || q.tall) { const g = secret.hp > 0 ? (q.tall ? overgrownRig(false) : secretWallRig(q.who, q.door ? secretDoorH(q.x) : 0)) : secretCutRig(); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g; }   // (tall: cut, it stays as a doorway through it)
+  if (secret.hp > 0 || q.tall) { const g = secret.hp > 0 ? (q.tall ? overgrownRig(false) : secretWallRig(q.who, q.door ? secretDoorH(q.x) : 0)) : secretCutRig(itemGot(k + "burnt")); g.position.set(X(q.x + 60), Y(gy), 0); secret.g = g; }   // (tall: cut, it stays as a doorway through it)
   if (!q.door && !itemGot(k + "chest")) { const cx = q.x + 460, cy = groundAt(cx) ?? GROUND, C = secretChestRig(); C.g.position.set(X(cx), Y(cy), -.2);   // the chest behind it
     secret.chest = { g: C.g, lid: C.lid, x: cx, y: cy, open: false }; }
 }
@@ -10118,8 +10119,10 @@ function secretWallRig(who, doorH = 0) {             // (built here and exported
   }
   return g;
 }
-function secretCutRig() { return overgrownRig(true); }
-function overgrownRig(cut) {                         // Rose's grass in the forest (the user, 2026-10-24: "make it cover the whole ground ... really overgrown"): a thicket the whole depth of the ground,
+function secretCutRig(burnt) { return overgrownRig(true, burnt); }
+let TANGLE_M = null;
+function overgrownRig(cut, burnt) {                 // Rose's grass in the forest (the user, 2026-10-24: "make it cover the whole ground ... really overgrown"): a thicket the whole depth of the ground,
+  if (window.BerryRoots && window.BerryRoots.tangle) { const g = group(actors), t = window.BerryRoots.tangle(THREE, { seed: 4241, cut, burnt, mat: () => TANGLE_M || (TANGLE_M = toon("#8c9a86", { vertexColors: true })) }); if (t) g.add(t); return g; }   // (a tangle of Glos's arms now, roots.js: the user, 2026-11-02)
   const g = group(actors), R = rngF(4241), A = [], B = [], D = 4.4;   // wall high behind and over the path, lower in front of it · cut: the doorway she made through it (D: its height), the stubble left on the path
   const behind = z => z < -1.7, blade = (x, z, y0, h, lean, list) => { const c = new THREE.ConeGeometry(.15 + R() * .12, h, 5); c.translate(0, h / 2, 0); c.rotateZ(lean); c.rotateX(R() * .24 - .12); c.translate(x, y0, z); list.push(c); };
   for (let i = 0; i < 460; i++) {
@@ -10139,20 +10142,31 @@ function secretChestRig() {
 function secretHit(d, kind) {                        // a blow on the wall: only the right hero's charged combo counts, a part at a time
   const B = secret; if (!B || B.hp <= 0) return false; const p = player, c = p.combo;
   if (!c || p.rig.id !== B.who) { SFX.block(); sparks(B.x, p.y - 60, 4); B.wob = .4;
-    if (!B.said) { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THESE ROCKS" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
+    if (!B.said && B.who !== "rose") { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THESE ROCKS" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
     return true; }
   if (B.lastC === c && B.lastIdx === c.idx) return true; B.lastC = c; B.lastIdx = c.idx;   // (a part counts once, however many hits it has)
   B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX[B.who === "camila" ? "crack" : "slash"](); puffs(B.x + 20, p.y - 70, 4, 30, 160);
   for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.14, .12, .12), B.who === "camila" ? SECRET_M.rock2 : SECRET_M.grass); m.position.set(X(B.x + 40), Y(p.y - 60) + rand(-.6, .6), .3); actors.add(m);
     parts.push({ m, v: V(rand(-4, 2), rand(3, 8), rand(-2, 2)), life: rand(.5, .9), t: 0, size: rand(.7, 1.2), g: 24, spin: 10, drag: .3, kind: "drop" }); }
-  if (B.hp <= 0) { markGot(B.k + "wall"); actors.remove(B.g); B.g = null; if (B.tall) { B.g = secretCutRig(); B.g.position.set(X(B.x + 60), Y(B.gy), 0); } SFX.slam(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .12);
-    for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, .18), B.who === "camila" ? (i % 2 ? SECRET_M.rock : SECRET_M.rock2) : (i % 2 ? SECRET_M.grass : SECRET_M.grass2)); m.position.set(X(B.x + 60) + rand(-.6, .6), Y(GROUND) + rand(.3, 7), rand(-.4, .4)); actors.add(m);
-      parts.push({ m, v: V(rand(-3, 8), rand(2, 9), rand(-3, 3)), life: rand(.7, 1.3), t: 0, size: rand(.8, 1.5), g: 22, spin: 9, drag: .25, kind: "drop" }); }
-    toast(B.who === "camila" ? "THE ROCKS GIVE WAY!" : "THE THICKET'S CUT THROUGH!", 2600); if (story) writeSave(); }
+  if (B.hp <= 0) secretGone(B, false);
+  return true;
+}
+let EMBER_M = null;
+function secretGone(B, burnt) {                     // the wall's down (cut, smashed, or burnt away): what's left of it stays so, the way through for good
+  B.hp = 0; B.burn = null; markGot(B.k + "wall"); if (burnt) markGot(B.k + "burnt"); actors.remove(B.g); B.g = null; if (B.tall) { B.g = secretCutRig(burnt); B.g.position.set(X(B.x + 60), Y(B.gy), 0); } SFX.slam(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .12);
+  if (burnt && !EMBER_M) EMBER_M = toon("#f08a2a");
+  for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, .18), burnt ? (i % 3 ? SECRET_M.crack : EMBER_M) : B.who === "camila" ? (i % 2 ? SECRET_M.rock : SECRET_M.rock2) : (i % 2 ? SECRET_M.grass : SECRET_M.grass2)); m.position.set(X(B.x + 60) + rand(-.6, .6), Y(GROUND) + rand(.3, 7), rand(-.4, .4)); actors.add(m);
+    parts.push({ m, v: V(rand(-3, 8), rand(2, 9), rand(-3, 3)), life: rand(.7, 1.3), t: 0, size: rand(.8, 1.5), g: 22, spin: 9, drag: .25, kind: "drop" }); }
+  if (burnt) flames(X(B.x + 60), Y(B.gy) + 2.5, .5, 22, 1.8, 1.5);
+  if (B.who === "camila") toast("THE ROCKS GIVE WAY!", 2600); if (story) writeSave();   // (Rose's tangle: not a word, she works it out. The user, 2026-11-02)
   return true;
 }
 function updateSecret(dt) {
   const B = secret; if (!B) return; B.wob = Math.max(0, B.wob - dt * 3); if (B.g) B.g.rotation.z = Math.sin(B.wob * 30) * .03 * B.wob;
+  if (B.burn && B.hp > 0) { const F = B.burn, k = Math.min(1, F.t / 1.3); F.t += dt;   // alight: the flames run up and across it, then it's gone
+    if (Math.random() < dt * (30 + 70 * k)) flames(X(B.x + 60) + rand(-2.6, 2.6) * (.35 + .65 * k), Y(B.gy) + rand(0, 3 + 7 * k), rand(-1.6, 3), 1, .2, 1.5);
+    if (Math.floor(F.t / .3) !== Math.floor((F.t - dt) / .3)) { SFX.crackle(1 + Math.floor(k * 2)); B.wob = Math.max(B.wob, .25); }
+    if (F.t >= 1.6) secretGone(B, true); }
   const C = B.chest, p = player; if (!C || C.open || !p || p.dead) return;
   if (Math.abs(p.x - C.x) < 50 && Math.abs(p.y - C.y) < 60) { C.open = true; C.lid.rotation.x = -1.1; markGot(world + ":" + stage + ":chest"); SFX.gift(); sparks(C.x, C.y - 30, 14);   // walk up to it: open, and what's in it
     dropLoot(C.x, C.y - 40, 10, true); spawnLoot(B.who === "camila" ? "power" : "gum", C.x, C.y - 50, true); toast("A HIDDEN CHEST!", 2200); if (story) writeSave(); }
@@ -10300,6 +10314,9 @@ function hitCrate(c, d) {
   if (c.who === "rose" && player.rig.id !== "rose") { c.wob = .4; SFX.block(); sparks(c.x - d * 20, c.y - 30, 4);   // (Rose's things: from anyone else, it glances off. The crates: either girl, 2026-11-01)
     if (!heroSaid.has(c.who)) { heroSaid.add(c.who); toast(c.who === "camila" ? "ONLY A GAUNTLET COULD SMASH THIS CRATE" : "ONLY A SWORD COULD CUT THROUGH THIS", 2400); } return true; }
   if (--c.hp > 0) { c.wob = 1; SFX.thud(); sparks(c.x - d * 20, c.y - 30, 5); return true; }
+  return crateBreak(c, d);
+}
+function crateBreak(c, d) {                          // broken open (or burnt away): gone for the stay, what was in it out
   c.gone = true; actors.remove(c.g); cratesBroken.add(c.id); SFX[c.who === "rose" ? "slash" : "crack"](); shake = Math.max(shake, c.who === "rose" ? 2 : 4); puffs(c.x, c.y - 26, 4, 30, 160);
   for (let i = 0; i < 14; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.12, .08, .1), toon(c.cols[i % c.cols.length])); m.position.set(X(c.x) + rand(-.3, .3), Y(c.y) + rand(.2, .8), rand(-.2, .3)); actors.add(m);
     parts.push({ m, v: V(rand(-6, 6) + d * 2, rand(4, 10), rand(-3, 3)), life: rand(.6, 1), t: 0, size: rand(.7, 1.3), g: 24, spin: 10, drag: .3, kind: "drop" }); }
@@ -11614,7 +11631,7 @@ function fleapStep(o, s, dt) {
   if (L.plat && (s.x + L.dir * 30 < L.plat.x + 8 || s.x + L.dir * 30 > L.plat.x + L.plat.w - 8)) s.vx = 0;   // (off a bridge: not off the end of it)
   s.face = L.dir; s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14);
   if (L.air && KIT.STRIKES[L.air]) { s.atkKind = L.air; s.atkT = Math.min(L.t, (KIT.STRIKES[L.air].dur || .4) * .5); }   // (its flying blow, held)
-  if (L.fire && Math.floor(L.t / .025) !== Math.floor((L.t - dt) / .025)) puffs(s.x - L.dir * 10, s.y - H * .5, 2, H * .55, 50);   // (wrapped in fire)
+  if (L.fire && Math.floor(L.t / .025) !== Math.floor((L.t - dt) / .025)) { flamesPx(s.x - L.dir * 10, s.y - H * .5, 3, H * .42, 1.25); fireBurn(s.x, s.y - H * .5); }   // (wrapped in fire)
   for (const e of partFoesAll()) { if (L.hit.has(e) || walled(e.x, s.x) || Math.abs(e.x - s.x) > eHW(e) * .5 + 36 || Math.abs((e.y - eH(e) * .5) - (s.y - H * .5)) > eH(e) * .5 + H * .5) continue;
     L.hit.add(e); s.pFire = L.fire; partHitFoe(s, e, L.dir, "launch"); s.pFire = false; hitstop = Math.max(hitstop, .04); shake = Math.max(shake, 3); }
   if (s.onGround && L.t > .2 && Math.random() < dt * 30) dust(s.x, s.y, 1, -L.dir);   // (down, it carries on along the ground, still burning, through the rest of them)
@@ -11638,8 +11655,25 @@ function zapBurst(s, x, y, dir) {                    // what it meets, and up to
   L.forEach(e => { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = boss ? ZAP_BOSS : ZAP_T; e.atk = null; partHitFoe(s, e, dir, "jab"); for (let i = 0; i < 5; i++) zapFx(e); });
   SFX.zap(); SFX.crackle(); hitstop = Math.max(hitstop, .07); shake = Math.max(shake, 6); sparks(x, y - 50, 12);
 }
-function partFireFx(dt) {                            // (the attack buddy's fire: flames off its fists as it strikes)
-  partnerList().forEach(P => { const q = P.q; if (!q.pFire || !(q.atkKind || q.pounce) || Math.random() > dt * 26) return; const H = (q.rig && q.rig.heightPx) || 80; puffs(q.x + (q.face || 1) * H * .3, q.y - H * .55, 1, 14, 30); });
+// fire (the user, 2026-11-02: "have the fire buddy's fire be more prominent and then also let it burn up the same things [that] rose can cut"): real flames now, licking
+// up off its fists as it strikes, wrapped round its leap, a burst where a blow lands and the baddy left burning a moment; and what Rose's blade gets through (the woods'
+// tangle of Glos's vines, her things in the other worlds) catches and burns away
+PG.flameO = mk(new THREE.LatheGeometry([[0, -.5], [.32, -.42], [.46, -.15], [.4, .25], [.22, .7], [.07, 1.05], [0, 1.2]].map(([a, b]) => new THREE.Vector2(a, b)), 10), null, { mat: toon("#ff6a1c"), ol: .1 });
+PG.flameY = new THREE.Mesh(new THREE.LatheGeometry([[0, -.3], [.2, -.24], [.26, -.02], [.18, .3], [.06, .6], [0, .7]].map(([a, b]) => new THREE.Vector2(a, b)), 8), toon("#ffd84a"));
+function flames(ux, uy, uz, n, spread, big = 1) {   // (3D units) n flames, licking up from there
+  for (let i = 0; i < n; i++) spawn("flame", ux + rand(-spread, spread), uy + rand(-spread, spread) * .6, uz + rand(-.15, .25), V(rand(-.4, .4), rand(1.8, 3.2) * big, rand(-.2, .2)), rand(.34, .58), rand(.34, .52) * big, { g: -2.2, drag: 1.8, spin: 0 });
+}
+const flamesPx = (x, y, n, spread, big) => flames(X(x), Y(y), .3, n, spread * S, big);   // (game px)
+function fireBurn(x, y, r = 70) {                   // fire here: Rose's tangle, or one of her things, catches if it's this close
+  const B = secret; if (B && B.who === "rose" && B.hp > 0 && !B.burn && Math.abs(x - (B.x + 60)) < r + 50 && y > B.gy - 560) { B.burn = { t: 0 }; SFX.crackle(3); }
+  for (const c of crates) if (!c.gone && c.who === "rose" && !c.burn && Math.abs(x - c.x) < r && Math.abs(y - (c.y - 30)) < r + 40) { c.burn = { t: 0 }; SFX.crackle(2); }
+}
+function partFireFx(dt) {                            // (the attack buddy's fire: flames off both fists as it strikes; anything it's set burning)
+  partnerList().forEach(P => { const q = P.q; if (!q.pFire || !(q.atkKind || q.pounce)) return; const H = (q.rig && q.rig.heightPx) || 80, hs = (q.rig && q.rig.hands) || [];
+    if (Math.random() < dt * 55) { const h = hs[Math.floor(Math.random() * hs.length)], p = h ? h.getWorldPosition(new THREE.Vector3()) : V(X(q.x + (q.face || 1) * H * .3), Y(q.y - H * .55), .3); flames(p.x, p.y, p.z + .1, 1, .08, 1); }
+    fireBurn(q.x + (q.face || 1) * H * .35, q.y - H * .5); });
+  for (const e of partFoesAll()) if (e.burnT > 0) { e.burnT -= dt; if (Math.random() < dt * 30) flamesPx(e.x + rand(-1, 1) * eHW(e) * .4, e.y - eH(e) * rand(.2, .8), 1, 6, 1.1); }   // (still burning)
+  for (const c of crates) if (c.burn && !c.gone) { c.burn.t += dt; if (Math.random() < dt * 40) flamesPx(c.x + rand(-25, 25), c.y - rand(5, 50), 1, 4, 1); if (c.burn.t > .8) { SFX.crackle(3); crateBreak(c, 1); } }   // (one of Rose's things: up in flames, gone)
 }
 function partInput(dt) {                             // the buddy button: a press, its next blow; held, its charge, let go full: its charge move. The block: see defZap
   chargeInput(dt); { const rk = allyRoomKey(); if (rk !== partInput.rk) { partInput.rk = rk; postsClear(); } }   // (COMMAND; into another room: back with you)
@@ -11894,7 +11928,7 @@ function partTarget(s, air) {                       // the one it goes for: near
   return best;
 }
 let partFire = false;
-function partHitFoe(...a) { partBlow = true; partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && a[0].pFire); try { const r = partHitFoe0(...a); if (r && partFire && a[1]) { const e = a[1]; puffs(e.x, e.y - eH(e) * .55, 5, 30, 140); } return r; } finally { partBlow = false; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)
+function partHitFoe(...a) { partBlow = true; partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && a[0].pFire); try { const r = partHitFoe0(...a); if (r && partFire && a[1]) { const e = a[1]; flamesPx(e.x, e.y - eH(e) * .55, 12, 30, 1.5); puffs(e.x, e.y - eH(e) * .55, 3, 30, 140); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); } return r; } finally { partBlow = false; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)
 function partHitFoe0(s, e, dir, kind, noJug) {             // a blow of theirs landing; up in the air, held at their height the way yours are (the last of an air combo sends it down)
   const D2 = duo && duo.find(d => d.e === e);
   if (D2) { withBoss(D2, () => hitEnemy(dir, kind)); return true; }
@@ -24649,7 +24683,7 @@ function teamChargeTick(dt) {                       // (every frame, after the p
   const p = player; if (!p || mode !== "play") return; const lv = p.tcLv || 0;
   partnerList().forEach((P, k) => { const s = P.q, hum = P.kind !== "pet"; if (!s || s.worn) return;   // (worn out: not this)
     if (s.tcFly) { const F = s.tcFly; F.t += dt; s.face = F.d; if (!s.onGround) s.vy -= GRAV * dt * .55;   // flung: whoever it comes down on (a long flat flight: gravity half its own)
-      if (F.fire && Math.floor(F.t / .03) !== Math.floor((F.t - dt) / .03)) puffs(s.x - F.d * 10, s.y - 40, 2, 34, 50);   // (on fire as it flies)
+      if (F.fire && Math.floor(F.t / .03) !== Math.floor((F.t - dt) / .03)) { flamesPx(s.x - F.d * 10, s.y - 40, 3, 30, 1.2); fireBurn(s.x, s.y - 40); }   // (on fire as it flies)
       for (const e of partFoesAll()) { if (F.got.has(e) || walled(e.x, s.x)) continue; if (Math.abs(e.x - s.x) < eHW(e) * .5 + 40 && s.y > e.y - eH(e) - 50 && s.y - 90 < e.y) { F.got.add(e); s.pFire = F.fire; partHitFoe(s, e, F.d, "haymaker", true); s.pFire = false; s.vx *= .55;
         if (F.zap && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .6 : ZAP_T * .5); e.atk = null; for (let i = 0; i < 4; i++) zapFx(e); SFX.crackle(); } } }
       if ((s.onGround && F.t > .18) || F.t > 1.5) { s.tcFly = null; if (hum) { s.atkKind = null; s.atkT = -1; } } return; }
@@ -25212,7 +25246,7 @@ function syncParticles(dt) {
     q.m.position.addScaledVector(q.v, dt);
     q.m.rotation.x += q.spin * dt; q.m.rotation.y += q.spin * .7 * dt;
     const u = q.t / q.life;
-    const s = q.kind === "zz" ? q.size * Math.min(1, u * 4) * (u > .7 ? (1 - u) / .3 : 1) : q.kind === "puff" ? q.size * (u < .15 ? u / .15 : 1 - (u - .15) * .7) : q.kind === "bolt" ? (u > .85 ? (1 - u) / .15 : 1) : q.size * (1 - u);
+    const s = q.kind === "zz" ? q.size * Math.min(1, u * 4) * (u > .7 ? (1 - u) / .3 : 1) : q.kind === "flame" ? q.size * (u < .12 ? u / .12 : Math.pow(1 - (u - .12) / .88, .7)) : q.kind === "puff" ? q.size * (u < .15 ? u / .15 : 1 - (u - .15) * .7) : q.kind === "bolt" ? (u > .85 ? (1 - u) / .15 : 1) : q.size * (1 - u);
     q.m.scale.setScalar(Math.max(s, .001));
   }
   parts = parts.filter(q => { if (q.t < q.life) return true; actors.remove(q.m); return false; });
