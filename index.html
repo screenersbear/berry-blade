@@ -3133,6 +3133,7 @@ function waveSkyTex(k, tall, bare) {                 // the printed sky for each
   g.restore(); g.globalAlpha = 1;
   if (Q.cloud && !bare) [[260, 170, 300], [1120, 120, 240], [1640, 210, 320], [760, 300, 200], [1900, 330, 180]].forEach(([x, y, w]) => {
     x += (r2() - .5) * 100; if (Math.hypot(x - dx, y - dy) < R + w * .55) x += (x < dx ? -1 : 1) * (R + w * .6);   // keep the disc clear
+    { const m = w * .66, xc = clamp(x, m, 2048 - m); if (xc !== x) x = Math.hypot(xc - dx, y - dy) < R + w * .55 ? dx + (x < dx ? 1 : -1) * (R + w * .6) : xc; }   // (and on the canvas: past its end a cloud was cut off flat, the user 2026-11-02. Back in, or round the disc's other side)
     cloudCanvas(g, x, y, w, Q.cloud, Q.cloudLine, r2); });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (waveSkies[key] = t);
 }
@@ -3141,8 +3142,8 @@ const haloTex = () => haloT || (haloT = tex(64, 64, g => { const r = g.createRad
 const cloudTexes = {};
 function cloudTex(k) {
   if (cloudTexes[k]) return cloudTexes[k];
-  const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 512; c.height = 160; const g = c.getContext("2d");
-  cloudCanvas(g, 256, 100, 440, Q.cloud, Q.cloudLine, rngF(5 + k));
+  const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 640; c.height = 320; const g = c.getContext("2d");   // (room round it for its end puffs and its top: on 512 x 160 they were cut off flat, the user 2026-11-02: "some of the clouds in the background of cuss' waves look incomplete and chopped")
+  cloudCanvas(g, 320, 180, 440, Q.cloud, Q.cloudLine, rngF(5 + k));
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (cloudTexes[k] = t);
 }
 const cloudStrips = {};
@@ -3529,7 +3530,7 @@ function buildWaves(k = 0, seed = k) {
   // drifting clouds in front of the printed sky
   const clouds = [];
   const skyDrop = WY - Y(GROUND + 46);
-  for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(17, 5.3), new THREE.MeshBasicMaterial({ transparent: true, fog: false, depthWrite: false })); at(m, -6 + i * 45, WA ? 16.4 + i * 1.7 + skyDrop : R(15, 19) + skyDrop, -76); scene.add(m); keep.add(m); clouds.push({ m, x0: m.position.x, v: WA ? .3 + i * .1 : R(.25, .45), i }); }
+  for (let i = 0; i < 2; i++) { const m = new THREE.Mesh(new THREE.PlaneGeometry(21.25, 10.625), new THREE.MeshBasicMaterial({ transparent: true, fog: false, depthWrite: false })); at(m, -6 + i * 45, WA ? 16.4 + i * 1.7 + skyDrop : R(15, 19) + skyDrop, -76); scene.add(m); keep.add(m); clouds.push({ m, x0: m.position.x, v: WA ? .3 + i * .1 : R(.25, .45), i }); }   // (21.25 x 10.625: cloudTex's 640 x 320 at the old size, the cloud where it was)
   const tallSky = skyDrop < -.5, sky = new THREE.Mesh(new THREE.PlaneGeometry(150, tallSky ? 72 : 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k, tallSky), fog: false }));
   at(sky, WX / 2, (tallSky ? 30 : 12) + skyDrop, -80); scene.add(sky); keep.add(sky);     // its horizon sits on the sea, however far below
   if (WA) clouds.forEach(c => { sky.add(c.m); c.m.position.y -= sky.position.y; c.m.position.z = 4; });   // (the hand-made waves: the drifting clouds on the sky, which goes along with the camera from screen to screen)
@@ -5082,19 +5083,21 @@ function authorWaves() {
 
   // the far cliffs (the user, 2026-11-02: the cannon "it'll shoot you further into the background ... splat onto the side of a cliff ... then they explore another region there so
   // build about two screens over there once they crash"): two screens of their own, off the drawing, back across the bay behind the ship; their own cannon shoots you back to the deck
-  const FAR1 = S0.length, FAR2 = FAR1 + 1, farRoom = o => ({ h: S0[C.B3].h, col: 999, foe: S0[C.B3].foe, name: "THE FAR CLIFFS", elev: 0, authored: true, noDress: true, far: true, plats: [], ...o });
-  S0.push(farRoom({ ground: [[0, 0]], noLeft: true, next: FAR2, splatAt: [520, 1320], set: [{ k: "wall", x0: -400, x1: 1900, top: 90, z: -2.6, flat: [300, 1550] }, { k: "crag", x0: 1750, x1: 2950, top: 150, z: -5.5 }] }));   // (the cliff they splat on)
-  R0[FAR1] = [["crab", "orange", 1850], ["inkling", "red", 2250]];
-  S0.push(farRoom({ ground: [[0, 0], [1350, 0], [1350, -80], [2560, -80]], prev: FAR1, noRight: true, plats: [[600, 300, 240, "stack"], [980, 215, 230, "stack"]], items: [["power", 1095, 215], ["guava", 330]],   // (sea stacks up to a star, a shelf, their cannon)
+  // Named B (for background) + the room on the grid that shoots you back there (the user, 2026-11-02: "the background area will use B for background as the room
+  // nomenclature. so if it's a6 that shoots you back, the background map would be BA6"): B3's cannon, so BB3 where you land, BB4 the screen on from it
+  const BB3 = S0.length, BB4 = BB3 + 1, farRoom = o => ({ h: S0[C.B3].h, col: 999, foe: S0[C.B3].foe, name: "THE FAR CLIFFS", elev: 0, authored: true, noDress: true, far: true, plats: [], ...o });
+  S0.push(farRoom({ bgCell: "BB3", ground: [[0, 0]], noLeft: true, next: BB4, splatAt: [520, 1320], set: [{ k: "wall", x0: -400, x1: 1900, top: 90, z: -2.6, flat: [300, 1550] }, { k: "crag", x0: 1750, x1: 2950, top: 150, z: -5.5 }] }));   // (the cliff they splat on)
+  R0[BB3] = [["crab", "orange", 1850], ["inkling", "red", 2250]];
+  S0.push(farRoom({ bgCell: "BB4", ground: [[0, 0], [1350, 0], [1350, -80], [2560, -80]], prev: BB3, noRight: true, plats: [[600, 300, 240, "stack"], [980, 215, 230, "stack"]], items: [["power", 1095, 215], ["guava", 330]],   // (sea stacks up to a star, a shelf, their cannon)
     cannon: { x: 2130, back: true, to: C.B3 }, set: [{ k: "crag", x0: -300, x1: 2950, top: 60, z: -6.5 }, { k: "cannon", x: 2130, back: true }] }));
-  R0[FAR2] = [["octo", "purple", 450], ["starfish", "red", { plat: 1, x: 1080 }], ["crab", "blue", 1700], ["seahorse", "green", 1980]];
+  R0[BB4] = [["octo", "purple", 450], ["starfish", "red", { plat: 1, x: 1080 }], ["crab", "blue", 1700], ["seahorse", "green", 1980]];
   // the old mine (the user, 2026-11-02: "add a mine opening ... we're going to work on this now to expand levels"): in through D7's mouth, one room for now, its own mouth (daylight in it) the way back out
   if (S0.length !== MINE1) console.warn("waves: the mine's index is off", S0.length, MINE1);
   S0.push({ h: S0[C.D7].h, col: 999, foe: S0[C.D7].foe, name: "THE OLD MINE", elev: 0, authored: true, noDress: true, dark: true, ground: [[0, 0]], noLeft: true, noRight: true,
     plats: [[900, 300, 380, "scaf"], [1560, 230, 330, "scaf"]], items: [["fruit", 1720, 230]], mine: { x: 330, to: C.D7, tx: 1280 },
     set: [{ k: "cave", x0: -200, x1: 2800, shafts: true }, { k: "mine", x: 330, out: true, top: 120 }] });
   R0[MINE1] = [["crab", "purple", 1250], ["inkling", "orange", { plat: 0, x: 1100 }], ["starfish", "red", 2150]];
-  S0[C.B3].cannon.to = FAR1;
+  S0[C.B3].cannon.to = BB3;
   W.ship = { x0: WORLD + 1250, x1: WORLD * 3 + 1500, y: ROW_H + GROUND, keel: ROW_H * 3 + GROUND + 110, mast: WORLD * 3, fore: WORLD * 2 + 1900, nest: [WORLD * 2 + 640, WORLD * 3 + 640, 300],   // (the S.S. Pineapple, in world px: B2's deck to B4's, her keel down in C3-C4, the crow's nest over A3-A4)
     tip: WORLD * 4 + 1300, anchor: WORLD * 2 + 420, anchorY: ROW_H * 2 + 230, name: WORLD * 2 + 1300, sailTop: ROW_H - 10, sailH: 460 };   // (the sail hung lower, Cuss' face in view from B4's deck: the user, 2026-10-25)
   // the rock behind, as the sheets have it: one formation per row, in world px (top: as the row's own y), each screen drawing what of it it can see. The C4 and D4 rock stands in
@@ -7558,7 +7561,7 @@ function drawPauseMap() {                            // the whole world on the p
   const sig0 = $("pmapKey").dataset.sig, g = mapCanvas(el, W0, H0); drawMapKey($("pmapKey"), drawWorldMap(g, world, cw, padX, padY, clamp(cw / 70, .9, 1.6), asp, true, "all"));
   if ($("pmapKey").dataset.sig !== sig0 && !drawPauseMap.again) { drawPauseMap.again = true; drawPauseMap(); drawPauseMap.again = false; return; }   // (the key changed size: the map fitted again round it)
   if (dbgPick && M.at[dbgPick.sel]) { const [c, r] = M.at[dbgPick.sel]; g.strokeStyle = "#ff3e8a"; g.lineWidth = 3; g.strokeRect(padX + (c - M.c0) * cw + 1.5, padY + (r - M.r0) * cw * asp + 1.5, cw - 3, cw * asp - 3);
-    g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
+    g.fillStyle = "#fff6e0"; g.font = "600 11px Jost, sans-serif"; g.textAlign = "left"; g.fillText((WORLDS[world].stages[dbgPick.sel].cell || WORLDS[world].stages[dbgPick.sel].bgCell || "") + "  " + (WORLDS[world].stages[dbgPick.sel].name || ""), padX, H0 - 3); }
 }
 addEventListener("resize", () => { if (paused && $("pause").classList.contains("show")) { drawPauseMap(); drawPauseWear(); } if (fm) drawFullMap(); });
 // the map, full screen (the user, 2026-10-28: "hitting the triggers on the map should allow you to switch back and forth between the game map and world view. world view
