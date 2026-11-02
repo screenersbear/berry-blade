@@ -1223,6 +1223,29 @@ const gradeMat = new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false,
 });
 gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat));
+// the menus' pictures of the characters through the game's own filter (the user, 2026-11-02: "the character preview in the menu shows the character like without the
+// filter on the actual game?"): the same grade pass, its colours and its paper, keeping the picture's see-through background (premul: for a canvas; else straight, to read back)
+const PV_FS = gradeMat.fragmentShader.replace("uniform sampler2D tex, bgTex;", "uniform sampler2D tex, bgTex; uniform float premul;")
+  .replace("vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));", "vec4 f = texture2D(tex, vUv); float pa = f.a; if (pa < .004) { gl_FragColor = vec4(0.0); return; } vec3 c = toSRGB(max(f.rgb / pa, 0.0));")
+  .replace("gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);", "gl_FragColor = premul > .5 ? vec4(clamp(c, 0.0, 1.0) * pa, pa) : vec4(clamp(c, 0.0, 1.0), pa);");
+function pvGradeMake() { const U = THREE.UniformsUtils.clone(gradeMat.uniforms); U.premul = { value: 1 }; U.bgTex.value = null; const m = new THREE.ShaderMaterial({ uniforms: U, vertexShader: gradeMat.vertexShader, fragmentShader: PV_FS, depthTest: false, depthWrite: false }), s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m)); return { m, s, rt: null }; }
+function pvUniforms(P, tex, w, h, R, premul) { const U = P.m.uniforms, G = gradeMat.uniforms, T = TEXTURES[LOOK.tex] || TEXTURES[0];   // (the game's colour for the hour, as it is now; not the underground's dark)
+  U.tex.value = tex; U.tintC.value.copy(G.tintC.value); U.tintAmt.value = G.tintAmt.value; U.warm.value = G.warm.value; U.ruin.value = G.ruin.value; U.bloom.value = G.bloom.value; U.dim.value = 0; U.bgOn.value = 0;
+  U.ink.value = T[2]; U.tpx.value.set(1 / w, 1 / h); U.pstep.value = R.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.premul.value = premul ? 1 : 0; }
+const _pvSz = new THREE.Vector2();
+function pvRender(R, sc, cam, P) {                  // a preview's own renderer (its canvas see-through): the picture into its target, then through the filter onto the canvas
+  R.getDrawingBufferSize(_pvSz); const w = Math.max(1, _pvSz.x), h = Math.max(1, _pvSz.y);
+  if (!P.rt || P.rt.width !== w || P.rt.height !== h) { if (P.rt) P.rt.dispose(); P.rt = new THREE.WebGLRenderTarget(w, h, { samples: 4 }); P.rt.texture.colorSpace = THREE.SRGBColorSpace; }
+  R.setRenderTarget(P.rt); R.setClearColor(0x000000, 0); R.clear(); R.render(sc, cam); R.setRenderTarget(null);
+  pvUniforms(P, P.rt.texture, w, h, R, true); R.setClearColor(0x000000, 0); R.clear(); R.render(P.s, gradeCam);
+}
+function pvFree(P) { if (!P) return; if (P.rt) P.rt.dispose(); P.m.dispose(); }
+let PV_BAKE = null;
+function pvBake(RT) {                               // (the game's renderer) a picture rendered into RT, through the filter: the target to read it back from, straight alpha
+  const P = PV_BAKE || (PV_BAKE = pvGradeMake()), w = RT.width, h = RT.height;
+  if (!P.rt || P.rt.width !== w || P.rt.height !== h) { if (P.rt) P.rt.dispose(); P.rt = new THREE.WebGLRenderTarget(w, h); }   // (plain bytes: the filter's colours kept as they come out)
+  pvUniforms(P, RT.texture, w, h, renderer, false); const prev = renderer.getRenderTarget(); renderer.setRenderTarget(P.rt); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(P.s, gradeCam); renderer.setRenderTarget(prev); return P.rt;
+}
 // the paper (FINE) is always on now, and a texture to try on the characters themselves (pause, DEBUG, TEXTURE; the user, 2026-10-29: "is there an effect that can be
 // applied to the actual character presentation, along with the papter fine setting ... to make it feel a little more textured? or something added to the filter?
 // the other paper modes were not really doing much"): skin bits for charkit (1 hatch, 2 grain, 4 pigment) and the filter's ink edges. This browser only
@@ -6816,7 +6839,7 @@ function rigHead(r, st) {                            // a rig's head as a pictur
     cam.position.set(hp.x + d * .12, hp.y + d * .04, hp.z + d); cam.lookAt(hp.x, hp.y + sz.y * .06, hp.z);
     const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
     renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(ps, cam);
-    const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(RT, 0, 0, W2, H2, px);
+    const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(pvBake(RT), 0, 0, W2, H2, px);   // (through the game's filter, 2026-11-02)
     renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa); RT.dispose();
     big = document.createElement("canvas"); big.width = W2; big.height = H2; const bg = big.getContext("2d"), img = bg.createImageData(W2, H2);
     for (let y = 0; y < H2; y++) img.data.set(px.subarray((H2 - 1 - y) * W2 * 4, (H2 - y) * W2 * 4), y * W2 * 4);
@@ -7343,7 +7366,7 @@ function heroShot(id, part, sil) {                // a hero as the game draws th
     else { cam.position.set(H * .3, H * .55, H * 3.15); cam.lookAt(0, H * .5, 0); }
     const prev = renderer.getRenderTarget(), pc = renderer.getClearColor(new THREE.Color()), pa = renderer.getClearAlpha();
     renderer.setRenderTarget(RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(ps, cam);
-    const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(RT, 0, 0, W2, H2, px);
+    const W2 = Wd * K, H2 = Ht * K, px = new Uint8Array(W2 * H2 * 4); renderer.readRenderTargetPixels(pvBake(RT), 0, 0, W2, H2, px);   // (through the game's filter, 2026-11-02)
     renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa); RT.dispose();
     const big = document.createElement("canvas"); big.width = W2; big.height = H2; const bg = big.getContext("2d"), img = bg.createImageData(W2, H2);
     for (let y = 0; y < H2; y++) img.data.set(px.subarray((H2 - 1 - y) * W2 * 4, (H2 - y) * W2 * 4), y * W2 * 4);   // (GL's rows run bottom-up)
@@ -21527,7 +21550,7 @@ function wearPreview(into, w, h, only = GEAR_HEROES, frame = "body") {   // (onl
   V.cam.position.set(0, 1.3, d); V.cam.lookAt(0, 1.17, 0);
   if (frame === "head") { const E = V.rigs[only[0]]; if (E && E.r.head && E.hc) { E.r.root.updateMatrixWorld(true);   // (her head, three-quarters on, an ear and its cup to you; room above it for a hat or the tody)
     const hc = E.r.head.localToWorld(E.hc.clone()), dd = E.hs * 3.4; V.cam.position.set(hc.x + dd * .3, hc.y + dd * .06, hc.z + dd); V.cam.lookAt(hc.x, hc.y + E.hs * .02, hc.z); } }
-  V.R2.render(V.sc, V.cam);
+  pvRender(V.R2, V.sc, V.cam, V.pg || (V.pg = pvGradeMake()));
 }
 // the box under the map (the pause menu): whoever you're playing, in what she's got on; no words (the user, 2026-10-27: "dont show any text. just show the character
 // and then the accessories appear on them as they play"). A click: ACCESSORIES
@@ -21659,7 +21682,7 @@ function callPvTick(row, dt, box) {
   V.t += dt; const st = E.st; st.face = 1; st.yaw = -Math.PI / 2 + .45 + Math.sin(V.t * .8) * .4; st.blink = (st.blink ?? 2) - dt; if (st.blink < -.12) st.blink = 2 + Math.random() * 2.5;
   KIT.updatePose(st, dt); E.r.sync(st, E.r, dt); E.r.root.visible = true;
   const fit = Math.max(E.sz.y, E.sz.x * .8 / (wid / hgt)) * 1.34, dist = fit / 2 / Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2));
-  V.cam.position.set(E.c.x, E.c.y + .12, E.c.z + dist); V.cam.lookAt(E.c); V.R3.render(V.sc, V.cam);
+  V.cam.position.set(E.c.x, E.c.y + .12, E.c.z + dist); V.cam.lookAt(E.c); pvRender(V.R3, V.sc, V.cam, V.pg || (V.pg = pvGradeMake()));
 }
 function tryOnTick(dt) {
   const U = menuUp === "npc" ? npcUp : null, row = U && U.rows[U.sel], id0 = row && row[3], id = id0 && ACC[id0] ? id0 : null, box = $("npcTry"); if (!box) return;
@@ -21685,12 +21708,12 @@ function tryOnTick(dt) {
   if (!n) return; tgt.divideScalar(n); if (A.slot === "head" || A.slot === "ears" || A.slot === "hair") tgt.y -= .18; if (A.slot === "weapon" && A.prop !== "gauntlet") tgt.y -= .15;   // (her face and shoulders in it too, not just the piece)
   if (A.slot === "wrist") tgt.lerp(heroes.length > 1 ? tgt : E0head(heroes[0]), .35);   // (her hand and her face both)
   const dist = ((TRY_LOW[A.slot] || [])[1] || { head: 2.9, hat: 3.5, hair: 3, ears: 3, wrist: 3.4, weapon: 3.4 }[A.slot] || 3) * (heroes.length > 1 ? 1.45 * Math.max(1, 1.5 / (wid / hgt)) : 1);   // (the two of them: back far enough that both are in, however narrow it is)
-  V.cam.position.set(tgt.x, tgt.y + .22, tgt.z + dist); V.cam.lookAt(tgt); V.R3.render(V.sc, V.cam);
+  V.cam.position.set(tgt.x, tgt.y + .22, tgt.z + dist); V.cam.lookAt(tgt); pvRender(V.R3, V.sc, V.cam, V.pg || (V.pg = pvGradeMake()));
 }
 function wearTick(dt) {                              // (the big preview breathing while ACCESSORIES is up: the charm and the bandanas move)
   if (menuUp !== "wear" || !wearPv) return; wearPv.t = (wearPv.t || 0) + dt; if (wearPv.t < 1 / 30) return; const s = wearPv.t; wearPv.t = 0;
   for (const id of GEAR_HEROES) { const E = wearPv.rigs[id]; if (E && E.r.root.visible) { E.st.yaw = E.yaw; KIT.updatePose(E.st, s); E.r.sync(E.st, E.r, s); E.r.root.position.x = E.x ?? 0; } }
-  wearPv.R2.render(wearPv.sc, wearPv.cam);
+  pvRender(wearPv.R2, wearPv.sc, wearPv.cam, wearPv.pg || (wearPv.pg = pvGradeMake()));
 }
 // the treasure map (the user, 2026-10-22): the seller's, one per region. On your map from then on: every room of the region, and where its
 // cat, its dungeons (the beps' hideouts, the hatch down to the stronghold), its checkpoints (the rest stops) and its treasure (the gifts,
@@ -21847,7 +21870,7 @@ function bgTick() {                                  // (while it's up: each wea
     if (V.pr.teethX) { const pg = bpowOf(V.id); V.pr.teethX.forEach((X, i) => { const k = pg > i * 2 ? (pg >= i * 2 + 2 ? 1 : KIT.TOOTH_HALF) : 0;   // (its gear teeth, as they'd be: half out, or all the way)
       X.g.scale.setScalar(k); X.g.visible = k > 0; if (X.stud) X.stud.visible = k >= 1; }); }
     renderer.setRenderTarget(V.RT); renderer.setClearColor(0x000000, 0); renderer.clear(); renderer.render(V.sc, V.cam);
-    const px = new Uint8Array(256 * 256 * 4); renderer.readRenderTargetPixels(V.RT, 0, 0, 256, 256, px); const g = V.cv.getContext("2d"), img = g.createImageData(256, 256);
+    const px = new Uint8Array(256 * 256 * 4); renderer.readRenderTargetPixels(pvBake(V.RT), 0, 0, 256, 256, px); const g = V.cv.getContext("2d"), img = g.createImageData(256, 256);
     for (let y = 0; y < 256; y++) img.data.set(px.subarray((255 - y) * 1024, (256 - y) * 1024), y * 1024); g.putImageData(img, 0, 0); });
   renderer.setRenderTarget(prev); renderer.setClearColor(pc, pa);
 }
@@ -22371,7 +22394,7 @@ function openNpc(f) {
 }
 function tryPvFree() { const V = tryPv; if (!V) return; tryPv = null;
   for (const h in V.rigs) { const E = V.rigs[h]; if (E && E.r) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } }
-  try { V.R3.dispose(); V.R3.forceContextLoss(); } catch (e) {} if (V.R3.domElement.parentNode) V.R3.domElement.parentNode.removeChild(V.R3.domElement); }
+  try { pvFree(V.pg); V.R3.dispose(); V.R3.forceContextLoss(); } catch (e) {} if (V.R3.domElement.parentNode) V.R3.domElement.parentNode.removeChild(V.R3.domElement); }
 function closeNpc() { tryPvFree(); npcUp = null; document.body.classList.remove("talking"); if (menuUp === "npc") menuUp = null; $("npc").classList.add("hidden"); jumpBuf = atkBuf = 0; npcBlockPrev = true; if (player) { player.block = false; player.blockHold = 0; } SFX.tick(); }
 function npcRows() {                                 // [label, sub, action]
   const U = npcUp, role = U.f.npc, B = bag();
