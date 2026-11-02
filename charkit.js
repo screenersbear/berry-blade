@@ -1570,9 +1570,19 @@ function giantRoll(r, ang) {                         // her upper body tipped ov
 function giantOff(r) { const G = r.giant; if (!G || !G.on) return; G.on = false; G.grp.visible = false; r.arms.forEach(t => { t.mesh.visible = true; }); if (r.prop) r.prop.group.visible = true; }
 const SWORD_LOW = [[1.24, .085], [1.24, -.085], [.7, .085], [.7, -.085], [.3, .085], [.3, -.085]];
 function swordLow(pr) { pr.group.updateMatrix(); pr.inner.updateMatrix(); _gM.multiplyMatrices(pr.group.matrix, pr.inner.matrix); let lo = 1e9; for (const [x, y] of SWORD_LOW) lo = Math.min(lo, _gv.set(x, y, 0).applyMatrix4(_gM).y); return lo; }
+const SWORD_LEAN = .35, SWORD_LEAN_DN = .3;          // (grown Rose's blade leant out off her: 20 degrees, more pointing down past her legs in the air, giantSword)
+const _sl0 = new THREE.Vector3(), _sl1 = new THREE.Vector3();
 function giantSword(p, r, pr, s) {                   // the blade grown from the hilt (her hand stays on the grip), turned up off the ground where it would go into it: it drags; out from her legs
-  const g = giantOf(p); if (g <= .005) { if (pr.inner.scale.x !== 1) pr.inner.scale.set(1, 1, 1); return; }
+  const g = giantOf(p); if (g <= .005) { if (pr.inner.scale.x !== 1) pr.inner.scale.set(1, 1, 1); pr.inner.rotation.y = 0; return; }
   const c = giantAt(GIANT_SWORD, g), fy = giantFloor(p, r) + .015; pr.inner.scale.set(c.L, c.W, c.T);
+  {                                                  // leant out off her, turned about the hilt: her arm's frame tips the blade in as it rises, so its flat went through her shoulder pad and her head (the user,
+    // 2026-11-02: "sometime the sword has rose's shoulder clip through it"); at least SWORD_LEAN out from her side all the way round a swing (more pointing down past her feet in the air); less pointing out in front, away from her
+    // (leant toward us there, it looked to go into the ground); a scan of every grown move found her pads, head and feet in the blade before; after, only a touch at the grip
+    const w = pr.inner.rotation.z, q = pr.group.quaternion, d0 = _sl0.set(Math.cos(w), Math.sin(w), 0).applyQuaternion(q), n = _sl1.set(0, 0, 1).applyQuaternion(q);
+    const A = s * d0.z, B = s * n.z, R = Math.hypot(A, B), T = Math.sin((SWORD_LEAN * clamp(1.2 - 1.2 * d0.x, .3, 1) + (p.onGround === false ? SWORD_LEAN_DN * Math.max(0, -d0.y) : 0)) * clamp(g, 0, 1)), dl = Math.atan2(B, A);
+    if (A < T && R > 1e-4) { const k = Math.acos(clamp(T / R, -1, 1)), y1 = k - dl, y2 = -k - dl, wrap = v => v - TAU * Math.round(v / TAU); const a1 = wrap(y1), a2 = wrap(y2); pr.inner.rotation.y = Math.abs(a1) < Math.abs(a2) ? a1 : a2; }
+    else pr.inner.rotation.y = 0;
+  }
   for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo >= fy) break;
     pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
@@ -2382,92 +2392,112 @@ const STRIKES = {
 const KZ = (T, ch, S = 1) => { const o = {}; for (const k in ch) o[k] = T.map((t, i) => [+(t * S).toFixed(3), ch[k][i]]); return o; };
 const GH = (t0, t1, kind, S, o = {}) => ({ t0: +(t0 * S).toFixed(3), t1: +(t1 * S).toFixed(3), reach: 120, back: 10, y0: 170, y1: -10, kind, ...o });
 const GA = {                                         // the arm's moves, by what each does (S: the size's time scale; z: how big, 1 2 3)
-  hook: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 110 + 30 * z, sq: .06, sfx: "whoosh", hits: [GH(.22, .34, "hook", S)],   // wound back behind her, swung round through in front at the height of a head
-    keys: KZ([0, .14, .24, .32, .46, .62], { armF: [-.4, -1.05, .75, 1.5, 1.35, .7], elbF: [.05, .15, .3, .1, .2, .15], spF: [.22, .46, .55, .3, .25, .22], twist: [0, .56, -.2, -.56, -.4, -.05],
-      lean: [.15, -.04, .3, .46, .4, .2], bodyY: [-.1, -.16, -.24, -.27, -.22, -.12], fNx: [.3, .26, .4, .45, .42, .32], fFx: [-.34, -.4, -.48, -.52, -.5, -.36] }, S) }),
+  hook: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 110 + 30 * z, sq: .06, sfx: "whoosh", hits: [GH(.25, .36, "hook", S)],   // cocked up behind her head, and whipped over into them in front at the height of a head
+    keys: KZ([0, .12, .2, .26, .34, .46, .62], { armF: [-.4, 1.4, 2.6, 2.0, 1.5, 1.3, .7], elbF: [.05, 1.2, 1.5, .6, .1, .2, .15], spF: [.22, .45, .4, .4, .3, .25, .22], twist: [0, .15, .3, -.1, -.5, -.4, -.05],
+      // (2026-11-02: it was wound back low behind her, and turned three-quarters to us that put it behind her: up where it shows)
+      lean: [.15, -.05, -.12, .25, .45, .4, .2], bodyY: [-.1, -.12, -.12, -.2, -.27, -.22, -.12], fNx: [.3, .28, .26, .38, .45, .42, .32], fFx: [-.34, -.36, -.38, -.46, -.52, -.5, -.36] }, S) }),
   back: (S, z) => ({ dur: .6 * S, chain: .48 * S, step: 90 + 30 * z, sq: .05, sfx: "whoosh", hits: [GH(.18, .3, "sweep", S)],   // and back the other way, low across in front: the backhand
     keys: KZ([0, .1, .2, .3, .44, .6], { armF: [1.3, 1.75, .9, .25, .05, -.3], elbF: [.2, .25, .1, .1, .15, .1], spF: [.3, .2, .45, .42, .3, .22], twist: [-.3, -.52, .2, .48, .36, 0],
       lean: [.3, .25, .42, .32, .26, .18], bodyY: [-.2, -.24, -.27, -.22, -.18, -.12], fNx: [.38, .4, .44, .42, .38, .32], fFx: [-.44, -.46, -.5, -.48, -.42, -.36] }, S) }),
-  slam: (S, z) => ({ dur: .78 * S, chain: .72 * S, step: 60, sq: .1, sfx: "whoosh", sfx2: [.42 * S, "slam"], quake: [.44 * S, z], hits: [GH(.36, .46, "smash", S, { y0: 230, y1: -20 }), GH(.44, .54, "launch", S, { reach: 120 + 30 * z, back: 40 + 20 * z, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .2, .32, .4, .5, .78], { armF: [-.2, 2.7, 3.45, 1.4, .5, .3], elbF: [.1, .5, .25, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], twist: [0, .22, .28, -.26, -.24, 0],   // up over her head (the other hand under it), and down into the ground in front: it shakes
-      lean: [.1, -.26, -.34, .48, .66, .3], arch: [0, -.32, -.4, .18, .24, 0], bodyY: [-.1, 0, .03, -.3, -.4, -.15], fNx: [.36, .3, .3, .46, .5, .38], fFx: [-.4, -.36, -.36, -.5, -.54, -.42] }, S) }),
-  scoop: (S, z) => ({ dur: .8 * S, chain: .66 * S, step: 100, sq: .08, sfx: "whoosh", hits: [GH(.26, .42, "launch", S, { y0: 200, y1: -20 })],   // dragged along the ground and scooped up: up they go
-    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.5, -.85, .2, 1.9, 2.6, 1.6], elbF: [.05, .1, .05, .1, .3, .3], spF: [.25, .3, .4, .3, .2, .22], twist: [0, .4, .14, -.34, -.38, 0],
-      lean: [.2, .52, .55, .05, -.2, .1], arch: [0, .12, .06, -.24, -.3, 0], bodyY: [-.12, -.36, -.4, -.12, .02, -.1], fNx: [.32, .38, .46, .42, .36, .32], fFx: [-.36, -.44, -.5, -.44, -.38, -.36] }, S) }),
+  slam: (S, z) => ({ dur: .78 * S, chain: .72 * S, step: 60, sq: .1, sfx: "whoosh", sfx2: [.4 * S, "slam"], quake: [.42 * S, z], hits: [GH(.33, .44, "smash", S, { y0: 230, y1: -20 }), GH(.42, .52, "launch", S, { reach: 120 + 30 * z, back: 40 + 20 * z, y0: 40, y1: -20, wide: true })],
+    keys: KZ([0, .1, .2, .26, .36, .44, .54, .8], { armF: [-.2, 1.2, 2.8, 3.25, 1.6, 1.15, 1.1, .3], elbF: [.1, 1.5, .55, .3, .05, .05, .05, .1], spF: [.22, .5, .3, .15, .15, .2, .2, .22], twist: [0, .1, .22, .28, -.26, -.24, -.2, 0],   // up over her head (the other hand under it), and down into the ground in front: it shakes
+      // (2026-11-02: brought up bent, not punched straight out first; a shorter hold up there; the fist down out in front of her, not hunched over where it hid)
+      lean: [.1, -.1, -.26, -.32, .3, .38, .36, .2], arch: [0, -.1, -.32, -.38, .12, .16, .14, 0], bodyY: [-.1, -.05, 0, .03, -.26, -.32, -.3, -.15], fNx: [.36, .32, .3, .3, .46, .5, .5, .38], fFx: [-.4, -.36, -.36, -.36, -.5, -.54, -.54, -.42] }, S) }),
+  scoop: (S, z) => ({ dur: .8 * S, chain: .66 * S, step: 100, sq: .08, sfx: "whoosh", hits: [GH(.27, .42, "launch", S, { y0: 200, y1: -20 })],   // dragged along the ground and scooped up: up they go (2026-11-02: swung back up behind her where it shows, and down and up from in front of her feet)
+    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.5, -2.2, .75, 1.9, 2.6, 1.6], elbF: [.05, .5, .05, .1, .3, .3], spF: [.25, .4, .4, .3, .2, .22], twist: [0, .2, .14, -.34, -.38, 0],
+      lean: [.2, .1, .42, .05, -.2, .1], arch: [0, -.1, .06, -.24, -.3, 0], bodyY: [-.12, -.2, -.4, -.12, .02, -.1], fNx: [.32, .38, .46, .42, .36, .32], fFx: [-.36, -.44, -.5, -.44, -.38, -.36] }, S) }),
   sweep: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 70, sq: .06, sfx: "whoosh", sfx2: [.3 * S, "whoosh"], hits: [GH(.2, .55, "sweep", S, { reach: 150 + 25 * z, back: 120 + 25 * z, y0: 150, y1: -10, wide: true })],   // round the whole of her, low: in front and behind
     keys: KZ([0, .18, .5, .62, .9], { spin: [0, 0, TAU, TAU, TAU], armF: [-.3, 1.2, 1.3, .9, .3], elbF: [.1, .05, .05, .1, .1], spF: [.22, .85, .85, .4, .22], lean: [.15, .35, .35, .3, .15],
       bodyY: [-.1, -.3, -.3, -.24, -.1], fNx: [.3, .4, .4, .38, .32], fFx: [-.34, -.44, -.44, -.4, -.36] }, S) }),
   drag: (S, z) => ({ dur: 1.0 * S, chain: .9 * S, step: 50, sq: .12, sfx: "whoosh", sfx2: [.55 * S, "slam"], quake: [.56 * S, z + 1], hits: [GH(.3, .5, "launch", S, { reach: 110, back: 60, y0: 260, y1: -20, wide: true }), GH(.52, .64, "smash", S, { y0: 240, y1: -20 }), GH(.56, .68, "launch", S, { reach: 200, back: 120, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .22, .34, .46, .56, .7, 1.0], { armF: [-.55, -.9, 1.6, 3.6, 1.0, .45, .35], elbF: [.05, .05, .1, .2, .05, .05, .1], spF: [.22, .25, .3, .1, .2, .22, .22], twist: [0, .25, .1, .05, -.2, -.15, 0],   // dragged from behind her up over her head, all of it, and brought down on them
-      lean: [.2, .5, .1, -.3, .55, .7, .3], arch: [0, .1, -.2, -.35, .2, .2, 0], bodyY: [-.12, -.3, -.1, .04, -.36, -.42, -.15], fNx: [.32, .38, .34, .3, .48, .52, .38], fFx: [-.36, -.44, -.38, -.34, -.52, -.56, -.42] }, S) }),
+    keys: KZ([0, .22, .34, .46, .56, .7, 1.0], { armF: [-.55, -2.2, 1.6, 3.6, 1.2, 1.05, .35], elbF: [.05, .4, .1, .2, .05, .05, .1], spF: [.22, .4, .3, .1, .2, .22, .22], twist: [0, .2, .1, .05, -.2, -.15, 0],   // swung back up behind her, down and up through in front, on over her head, and brought down on them
+      // (2026-11-02: it was dragged low behind her, where it hid; the fist down out in front of her, not hunched over it)
+      lean: [.2, .15, .1, -.3, .35, .4, .3], arch: [0, -.05, -.2, -.35, .12, .12, 0], bodyY: [-.12, -.2, -.1, .04, -.3, -.34, -.15], fNx: [.32, .38, .34, .3, .48, .52, .38], fFx: [-.36, -.44, -.38, -.34, -.52, -.56, -.42] }, S) }),
   airSwing: (S, z) => ({ dur: .5 * S, chain: .42 * S, grav: .4, sfx: "whoosh", hits: [GH(.16, .3, "hook", S)],
-    keys: KZ([0, .1, .2, .3, .5], { armF: [-.2, -.6, 1.2, 1.9, 1.2], elbF: [.2, .2, .2, .1, .3], spF: [.3, .4, .5, .3, .3], twist: [0, .32, -.3, -.42, 0], lean: [.1, 0, .3, .36, .15] }, S) }),
+    keys: KZ([0, .1, .2, .3, .5], { armF: [-.2, -2.1, 1.2, 1.9, 1.2], elbF: [.2, .6, .2, .1, .3], spF: [.3, .45, .5, .3, .3], twist: [0, .24, -.3, -.42, 0], lean: [.1, 0, .3, .36, .15] }, S) }),
   airHammer: (S, z) => ({ dur: .58 * S, chain: .5 * S, grav: .45, dive: [.24 * S, 620 + 120 * z], sfx: "whoosh", hits: [GH(.2, .36, "smash", S, { y0: 220, y1: -60 })],   // up over her head, and down on them, taking her down with it
     keys: KZ([0, .14, .24, .34, .58], { armF: [1.0, 3.25, 1.6, .6, .5], elbF: [.2, .3, .05, .05, .2], spF: [.25, .15, .2, .25, .25], twist: [0, .2, -.16, -.22, 0], lean: [.1, -.32, .38, .6, .2], arch: [0, -.28, .12, .24, 0] }, S) }),
   up: (S, z) => ({ dur: .6 * S, hop: -560 - 40 * z, sq: .12, sfx: "whoosh", hits: [GH(.16, .34, "launch", S, { reach: 100, back: 30, y0: 280, y1: 0, wide: true })],   // from the ground, straight up over her: the uppercut that throws them up
-    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, -.7, 1.6, 3.0, 2.2], elbF: [.1, .2, .3, .1, .3], spF: [.25, .3, .3, .2, .25], twist: [0, .34, -.1, -.32, -.05], lean: [.2, .44, .1, -.22, .05], bodyY: [-.12, -.38, -.12, 0, -.05], fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
+    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, .45, 1.6, 3.0, 2.2], elbF: [.1, .2, .3, .1, .3], spF: [.25, .3, .3, .2, .25], twist: [0, .1, -.1, -.32, -.05], lean: [.2, .44, .1, -.22, .05], bodyY: [-.12, -.38, -.12, 0, -.05], fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
   down: (S, z) => ({ dur: 1.1, grav: 1, dive: [.12 * S, 1000 + 100 * z], diveStill: true, landEnd: true, slamLand: true, quake: [9, z], sq: .1, sfx: "whoosh", hits: [GH(.1, 1.1, "smash", 1, { reach: 70 + 15 * z, back: 40 + 15 * z, y0: 60, y1: -80, wide: true })],   // ↓ in the air: fist first, straight down
     keys: KZ([0, .1, .2, 1.1], { armF: [1.0, 2.6, .25, .25], elbF: [.2, .3, .05, .05], spF: [.25, .2, .2, .2], lean: [0, -.2, .5, .5], arch: [0, -.2, .2, .2] }, S) }),
-  haymaker: (S, z) => ({ dur: .6 * S, chain: .5 * S, step: 360 + 40 * z, sq: .08, sfx: "whoosh", hits: [GH(.22, .38, "haymaker", S)],   // charged: a step and the biggest swing she has
-    keys: KZ([0, .16, .26, .36, .6], { armF: [-.5, -1.0, .8, 1.6, 1.2], elbF: [.1, .2, .2, .05, .2], spF: [.25, .45, .5, .3, .25], twist: [0, .5, -.2, -.5, -.2], lean: [.1, 0, .5, .56, .35],
-      bodyY: [-.12, -.2, -.3, -.33, -.2], fNx: [.3, .25, .5, .56, .45], fFx: [-.35, -.4, -.6, -.62, -.5] }, S) }),
+  haymaker: (S, z) => ({ dur: .6 * S, chain: .5 * S, step: 360 + 40 * z, sq: .08, sfx: "whoosh", hits: [GH(.26, .4, "haymaker", S)],   // charged: a step and the biggest swing she has (2026-11-02: cocked up behind her head where it shows, not low behind her)
+    keys: KZ([0, .14, .22, .28, .36, .6], { armF: [-.5, 1.6, 2.9, 2.1, 1.6, 1.2], elbF: [.1, 1.3, 1.5, .5, .05, .2], spF: [.25, .45, .4, .4, .3, .25], twist: [0, .2, .35, -.1, -.5, -.2], lean: [.1, -.1, -.15, .35, .56, .35],
+      bodyY: [-.12, -.14, -.12, -.26, -.33, -.2], fNx: [.3, .28, .26, .45, .56, .45], fFx: [-.35, -.37, -.4, -.55, -.62, -.5] }, S) }),
   spin: (S, z, n = 1) => ({ dur: (.3 + .3 * n) * S, chain: (.25 + .3 * n) * S, step: 140 + 40 * z, sq: .05, sfx: "whoosh", sfx2: [.25 * S, "whoosh"], hits: [GH(.1, .1 + .32 * n, "sweep", S, { reach: 150 + 25 * z, back: 150 + 25 * z, y0: 150, y1: -10, wide: true })],   // round and round, the arm out
     keys: KZ([0, .1, .1 + .32 * n, .3 + .3 * n], { spin: [0, 0, TAU * n, TAU * n], armF: [1.2, 1.5, 1.5, 1.0], elbF: [.1, .05, .05, .2], spF: [.4, .95, .95, .3], lean: [.2, .1, .1, .2], bodyY: [-.14, -.22, -.22, -.14] }, S) }),
-  pound: (S, z) => ({ dur: .72 * S, chain: .66 * S, step: 40, sq: .14, sfx: "whoosh", sfx2: [.42 * S, "slam"], quake: [.44 * S, z + 1], hits: [GH(.38, .48, "smash", S, { y0: 230, y1: -20 }), GH(.44, .58, "launch", S, { reach: 200 + 30 * z, back: 200 + 30 * z, y0: 40, y1: -20, wide: true })],   // up with both hands, and into the ground: it shakes all round her
-    keys: KZ([0, .2, .34, .44, .72], { armF: [1.0, 3.1, 3.4, .45, .4], elbF: [.3, .4, .2, .05, .1], spF: [.2, .1, .1, .2, .22], twist: [0, .2, .24, -.24, 0], lean: [.2, -.3, -.36, .76, .4], arch: [0, -.36, -.4, .24, 0], bodyY: [-.1, .02, .06, -.46, -.2] }, S) }),
+  pound: (S, z) => ({ dur: .72 * S, chain: .66 * S, step: 40, sq: .14, sfx: "whoosh", sfx2: [.4 * S, "slam"], quake: [.42 * S, z + 1], hits: [GH(.34, .45, "smash", S, { y0: 230, y1: -20 }), GH(.42, .56, "launch", S, { reach: 200 + 30 * z, back: 200 + 30 * z, y0: 40, y1: -20, wide: true })],   // up with both hands, and into the ground: it shakes all round her
+    keys: KZ([0, .1, .2, .28, .36, .44, .72], { armF: [1.0, 1.3, 2.9, 3.35, 1.6, 1.1, .4], elbF: [.3, 1.5, .5, .2, .05, .05, .1], spF: [.2, .45, .2, .1, .15, .2, .22], twist: [0, .1, .2, .24, -.2, -.24, 0],   // (2026-11-02: up bent, a shorter hold, the fist down in front of her)
+      lean: [.2, -.05, -.3, -.36, .3, .45, .35], arch: [0, -.1, -.36, -.4, .1, .18, 0], bodyY: [-.1, -.05, .02, .06, -.3, -.4, -.2] }, S) }),
   rocket: (S, z) => ({ dur: .7 * S, chain: .6 * S, step: 520 + 60 * z, sq: .1, sfx: "whoosh", hits: [GH(.2, .44, "haymaker", S)],   // straight out in front, and she goes with it
-    keys: KZ([0, .14, .22, .44, .7], { armF: [-.4, -.85, 1.55, 1.55, 1.1], elbF: [.1, .6, .02, .02, .2], spF: [.25, .3, .05, .05, .2], twist: [0, .48, -.34, -.42, -.1], lean: [.2, -.1, .6, .66, .3], bodyY: [-.12, -.26, -.3, -.32, -.15],
+    keys: KZ([0, .14, .22, .44, .7], { armF: [-.4, -.7, 1.55, 1.55, 1.1], elbF: [.1, 2.5, .02, .02, .2], spF: [.25, .4, .05, .05, .2], twist: [0, .3, -.34, -.42, -.1], lean: [.2, -.1, .6, .66, .3], bodyY: [-.12, -.26, -.3, -.32, -.15],
       fNx: [.32, .28, .56, .56, .4], fFx: [-.36, -.42, -.66, -.66, -.46] }, S) }),
   leap: (S, z) => ({ dur: .95 * S, chain: .9 * S, step: 260, hop: -760, dive: [.4 * S, 1000], diveStill: true, sq: .12, sfx: "whoosh", sfx2: [.5 * S, "slam"], quake: [.5 * S, z + 1],   // up, and down on them with it
     hits: [GH(.4, .54, "smash", S, { y0: 230, y1: -40 }), GH(.5, .64, "launch", S, { reach: 200 + 30 * z, back: 120 + 30 * z, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .14, .34, .46, .62, .95], { armF: [-.3, 2.9, 3.35, .6, .4, .35], elbF: [.1, .4, .25, .05, .05, .1], spF: [.22, .12, .1, .2, .22, .22], twist: [0, .16, .22, -.22, -.16, 0], lean: [.2, -.24, -.34, .74, .62, .3], arch: [0, -.3, -.36, .24, .16, 0],
-      bodyY: [-.1, 0, 0, -.4, -.42, -.12], fNy: [0, .3, .28, 0, 0, 0], fFy: [0, .25, .22, 0, 0, 0] }, S) }),
-  palm: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 160, sq: .12, openHand: true, sfx: "whoosh", sfx2: [.4 * S, "slam"], quake: [.42 * S, z], hits: [GH(.34, .5, "smash", S, { y0: 230, y1: -20 }), GH(.4, .52, "launch", S, { reach: 220, back: 40, y0: 40, y1: -20, wide: true })],   // the hand open, the whole of it brought down flat on them
-    keys: KZ([0, .2, .34, .44, .62, .9], { armF: [-.2, 2.4, 2.95, 1.2, .9, .4], elbF: [.1, .5, .2, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], twist: [0, .24, .28, -.28, -.2, 0], lean: [.15, -.26, -.32, .54, .64, .3], arch: [0, -.22, -.28, .16, .18, 0], bodyY: [-.1, 0, .03, -.34, -.4, -.12] }, S) }),
+    keys: KZ([0, .07, .14, .34, .46, .62, .95], { armF: [-.3, 1.2, 2.9, 3.35, 1.15, 1.05, .35], elbF: [.1, 1.5, .4, .25, .05, .05, .1], spF: [.22, .45, .12, .1, .2, .22, .22], twist: [0, .08, .16, .22, -.22, -.16, 0], lean: [.2, -.1, -.24, -.34, .45, .4, .3], arch: [0, -.12, -.3, -.36, .14, .1, 0],   // (2026-11-02: up bent, the fist down in front)
+      bodyY: [-.1, -.04, 0, 0, -.34, -.34, -.12], fNy: [0, .15, .3, .28, 0, 0, 0], fFy: [0, .12, .25, .22, 0, 0, 0] }, S) }),
+  palm: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 160, sq: .12, openHand: true, sfx: "whoosh", sfx2: [.41 * S, "slam"], quake: [.43 * S, z], hits: [GH(.34, .48, "smash", S, { y0: 230, y1: -20 }), GH(.42, .54, "launch", S, { reach: 220, back: 40, y0: 40, y1: -20, wide: true })],   // the hand open, the whole of it brought down flat on them
+    keys: KZ([0, .1, .2, .28, .38, .46, .62, .9], { armF: [-.2, 1.2, 2.5, 2.95, 1.6, 1.2, 1.1, .4], elbF: [.1, 1.5, .55, .2, .05, .05, .05, .1], spF: [.22, .5, .3, .1, .15, .2, .2, .22], twist: [0, .1, .24, .28, -.28, -.24, -.2, 0],   // (2026-11-02: up bent, a shorter hold, the hand flat out in front of her)
+      lean: [.15, -.1, -.26, -.32, .3, .4, .38, .25], arch: [0, -.1, -.22, -.28, .1, .14, .14, 0], bodyY: [-.1, -.05, 0, .03, -.26, -.32, -.32, -.12] }, S) }),
 };
 const GW = {                                         // the blade's (blade: its angle, 0 out in front, π/2 straight up; grip: both hands on it)
   slash: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 110 + 30 * z, sq: .06, sfx: "slash", hits: [GH(.2, .34, "slash", S)],   // up behind her, and down through in front
-    keys: KZ([0, .14, .22, .32, .62], { armF: [.4, 2.6, 1.6, .7, .5], elbF: [.3, .5, .2, .15, .3], blade: [-2.3, 2.5, .8, -.6, -1.4], grip: [0, 1, 1, 1, .3], twist: [0, .25, -.15, -.3, 0],
+    keys: KZ([0, .14, .22, .32, .62], { armF: [.4, 2.6, 1.6, .7, .5], elbF: [.3, .5, .2, .15, .3], blade: [2.6, 3.05, .9, -.6, -1.1], grip: [0, 1, 1, 1, .3], twist: [0, .25, -.15, -.3, 0],
       lean: [.12, -.12, .3, .45, .2], bodyY: [-.1, -.08, -.22, -.28, -.12], fNx: [.3, .28, .42, .46, .32], fFx: [-.34, -.32, -.48, -.52, -.36] }, S) }),
   back: (S, z) => ({ dur: .6 * S, chain: .48 * S, step: 90 + 30 * z, sq: .05, sfx: "slash", hits: [GH(.18, .3, "slash", S)],   // and back up the other way
-    keys: KZ([0, .1, .2, .3, .6], { armF: [.6, .3, 1.5, 2.4, 1.2], elbF: [.3, .2, .2, .3, .4], blade: [-1.4, -1.9, .4, 1.9, .9], grip: [.4, 1, 1, 1, .4], twist: [0, -.2, .2, .35, 0],
+    keys: KZ([0, .1, .2, .3, .6], { armF: [.6, .3, 1.5, 2.4, 1.2], elbF: [.3, .2, .2, .3, .4], blade: [-1.1, -1.9, .4, 1.9, 2.4], grip: [.4, 1, 1, 1, .4], twist: [0, -.2, .2, .35, 0],
       lean: [.2, .35, .3, .05, .15], bodyY: [-.12, -.26, -.24, -.1, -.1], fNx: [.32, .38, .42, .4, .32], fFx: [-.36, -.44, -.48, -.44, -.36] }, S) }),
   chop: (S, z) => ({ dur: .78 * S, chain: .72 * S, step: 60, sq: .1, sfx: "slash", sfx2: [.42 * S, "slam"], quake: [.44 * S, z], hits: [GH(.34, .46, "cleave", S, { y0: 240, y1: -20 }), GH(.42, .54, "launch", S, { reach: 140 + 30 * z, back: 30, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .2, .32, .4, .5, .78], { armF: [.4, 2.8, 3.1, 1.2, .6, .5], elbF: [.3, .4, .3, .1, .1, .3], blade: [-2.3, 2.6, 2.9, -.2, -.75, -1.2], grip: [0, 1, 1, 1, 1, .4],   // over her head with both hands, and down into the ground in front
+    keys: KZ([0, .2, .28, .38, .5, .78], { armF: [.4, 2.8, 3.1, 1.2, .6, .5], elbF: [.3, .4, .3, .1, .1, .3], blade: [2.6, 2.85, 3.05, -.2, -.75, -1.1], grip: [0, 1, 1, 1, 1, .4],   // over her head with both hands, and down into the ground in front
       lean: [.1, -.2, -.26, .45, .6, .3], arch: [0, -.26, -.3, .15, .2, 0], bodyY: [-.1, 0, .03, -.3, -.4, -.15], fNx: [.36, .3, .3, .46, .5, .38], fFx: [-.4, -.36, -.36, -.5, -.54, -.42] }, S) }),
-  rise: (S, z) => ({ dur: .8 * S, chain: .66 * S, step: 100, sq: .08, sfx: "slash", hits: [GH(.26, .42, "launch", S, { y0: 220, y1: -20 })],   // from dragging behind, up through them: up they go
-    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.4, -.6, .5, 2.2, 2.8, 1.5], elbF: [.2, .2, .2, .3, .4, .4], blade: [-2.5, -2.7, -1.2, 1.5, 2.2, 1.0], grip: [0, 1, 1, 1, .6, .3],
+  rise: (S, z) => ({ dur: .8 * S, chain: .66 * S, step: 100, sq: .08, sfx: "slash", hits: [GH(.3, .44, "launch", S, { y0: 220, y1: -20 })],   // from dragging behind, up through them: up they go (its hit once the blade's come round in front, 2026-11-02)
+    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.4, -.6, .5, 2.2, 2.8, 1.5], elbF: [.2, .2, .2, .3, .4, .4], blade: [-3.68, -2.7, -1.2, 1.5, 2.2, 2.4], grip: [0, 1, 1, 1, .6, .3],
       lean: [.2, .45, .5, .05, -.15, .1], arch: [0, .1, .05, -.2, -.25, 0], bodyY: [-.12, -.3, -.34, -.12, 0, -.1], fNx: [.32, .38, .46, .42, .36, .32], fFx: [-.36, -.44, -.5, -.44, -.38, -.36] }, S) }),
-  sweep: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 70, sq: .06, sfx: "slash", sfx2: [.3 * S, "whoosh"], hits: [GH(.2, .55, "sweep", S, { reach: 160 + 25 * z, back: 130 + 25 * z, y0: 150, y1: -10, wide: true })],   // round the whole of her, low
-    keys: KZ([0, .18, .5, .62, .9], { spin: [0, 0, TAU, TAU, TAU], armF: [.4, 1.3, 1.4, 1.0, .5], elbF: [.3, .1, .1, .2, .3], blade: [-1.6, -.15, -.15, -.4, -1.2], grip: [0, 1, 1, .8, .3], lean: [.15, .35, .35, .3, .15],
-      bodyY: [-.1, -.3, -.3, -.24, -.1], fNx: [.3, .4, .4, .38, .32], fFx: [-.34, -.44, -.44, -.4, -.36] }, S) }),
+  sweep: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 70, sq: .06, sfx: "slash", sfx2: [.22 * S, "whoosh"], hits: [GH(.2, .44, "sweep", S, { reach: 160 + 25 * z, back: 130 + 25 * z, y0: 150, y1: -10, wide: true })],   // round the whole of her, low
+    // (2026-11-02, it read as her turning round holding it: the blade out to the side, side-on to us, through a slow turn): now down behind her off her shoulder, a beat,
+    // then round fast with it level and out in front of her, low along the ground (-3.68 is her shoulder, a turn round, so it comes up in front at the end)
+    keys: KZ([0, .16, .22, .4, .5, .9], { spin: [0, 0, 0, TAU, TAU, TAU], armF: [.4, .9, .9, 1.35, 1.3, .5], elbF: [.3, .2, .2, .05, .1, .3], spF: [.22, .3, .3, .45, .4, .22], blade: [-3.68, -2.98, -2.98, -.1, -.15, -.6], grip: [0, 1, 1, 1, .8, .3],
+      lean: [.15, .35, .35, .3, .25, .15], bodyY: [-.1, -.32, -.32, -.26, -.22, -.1], fNx: [.3, .44, .44, .4, .38, .32], fFx: [-.34, -.48, -.48, -.42, -.4, -.36] }, S) }),
   drag: (S, z) => ({ dur: 1.0 * S, chain: .9 * S, step: 50, sq: .12, sfx: "slash", sfx2: [.55 * S, "slam"], quake: [.56 * S, z + 1], hits: [GH(.3, .5, "launch", S, { reach: 120, back: 60, y0: 260, y1: -20, wide: true }), GH(.52, .64, "cleave", S, { y0: 240, y1: -20 }), GH(.56, .68, "launch", S, { reach: 210, back: 120, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .22, .34, .46, .56, .7, 1.0], { armF: [-.4, -.7, 1.4, 3.2, 1.0, .55, .45], elbF: [.2, .2, .2, .3, .1, .1, .3], blade: [-2.5, -2.8, -.6, 2.8, -.3, -.8, -1.3], grip: [0, 1, 1, 1, 1, 1, .4],   // dragged up from behind her, all the way over, and down: it shakes
+    keys: KZ([0, .16, .3, .46, .56, .7, 1.0], { armF: [-.4, -.7, 1.4, 3.2, 1.0, .55, .45], elbF: [.2, .2, .2, .3, .1, .1, .3], blade: [-3.68, -2.8, -.6, 2.8, -.3, -.8, -1.3], grip: [0, 1, 1, 1, 1, 1, .4],   // dragged up from behind her, all the way over, and down: it shakes
       lean: [.2, .5, .1, -.3, .55, .7, .3], arch: [0, .1, -.2, -.35, .2, .2, 0], bodyY: [-.12, -.3, -.1, .04, -.36, -.42, -.15], fNx: [.32, .38, .34, .3, .48, .52, .38], fFx: [-.36, -.44, -.38, -.34, -.52, -.56, -.42] }, S) }),
   airSwing: (S, z) => ({ dur: .5 * S, chain: .42 * S, grav: .4, sfx: "slash", hits: [GH(.16, .3, "slash", S)],
-    keys: KZ([0, .1, .2, .3, .5], { armF: [1.0, 2.6, 1.5, .7, .9], elbF: [.3, .4, .2, .15, .3], blade: [.6, 2.6, .6, -.7, -.2], grip: [.3, 1, 1, 1, .5], lean: [.1, -.1, .3, .4, .15] }, S) }),
+    keys: KZ([0, .1, .2, .3, .5], { armF: [1.0, 2.6, 1.5, .7, .9], elbF: [.3, .4, .2, .15, .3], blade: [4.38, 2.75, .6, -.7, -.2], grip: [.3, 1, 1, 1, .5], lean: [.1, -.1, .3, .4, .15] }, S) }),
   airChop: (S, z) => ({ dur: .58 * S, chain: .5 * S, grav: .45, dive: [.24 * S, 620 + 120 * z], sfx: "slash", hits: [GH(.2, .36, "cleave", S, { y0: 220, y1: -60 })],
-    keys: KZ([0, .14, .24, .34, .58], { armF: [1.0, 3.0, 1.4, .6, .6], elbF: [.3, .3, .1, .1, .3], blade: [1.0, 2.9, .2, -.9, -.8], grip: [.3, 1, 1, 1, .6], lean: [.1, -.25, .35, .55, .2], arch: [0, -.2, .1, .2, 0] }, S) }),
-  up: (S, z) => ({ dur: .6 * S, hop: -560 - 40 * z, sq: .12, sfx: "slash", hits: [GH(.16, .34, "launch", S, { reach: 100, back: 30, y0: 280, y1: 0, wide: true })],
-    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, -.5, 1.4, 2.9, 2.3], elbF: [.2, .2, .3, .2, .4], blade: [-2.4, -2.6, -.2, 1.7, 1.3], grip: [0, 1, 1, 1, .5], lean: [.2, .38, .1, -.18, .05], bodyY: [-.12, -.32, -.12, 0, -.05],
+    keys: KZ([0, .14, .24, .34, .58], { armF: [1.0, 3.0, 1.4, .6, .6], elbF: [.3, .3, .1, .1, .3], blade: [4.38, 2.95, .2, -.9, -.8], grip: [.3, 1, 1, 1, .6], lean: [.1, -.25, .35, .55, .2], arch: [0, -.2, .1, .2, 0] }, S) }),
+  up: (S, z) => ({ dur: .6 * S, hop: -560 - 40 * z, sq: .12, sfx: "slash", hits: [GH(.2, .36, "launch", S, { reach: 100, back: 30, y0: 280, y1: 0, wide: true })],
+    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, -.5, 1.4, 2.9, 2.3], elbF: [.2, .2, .3, .2, .4], blade: [-3.68, -2.6, -.2, 1.7, 2.2], grip: [0, 1, 1, 1, .5], lean: [.2, .38, .1, -.18, .05], bodyY: [-.12, -.32, -.12, 0, -.05],
       fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
   down: (S, z) => ({ dur: 1.1, grav: 1, dive: [.12 * S, 1000 + 100 * z], diveStill: true, landEnd: true, slamLand: true, quake: [9, z], sq: .1, sfx: "slash", hits: [GH(.1, 1.1, "cleave", 1, { reach: 70 + 15 * z, back: 40 + 15 * z, y0: 60, y1: -80, wide: true })],   // ↓ in the air: point first, straight down
-    keys: KZ([0, .1, .2, 1.1], { armF: [1.2, 2.4, .2, .2], elbF: [.3, .3, .1, .1], blade: [1.0, 2.0, -1.5, -1.5], grip: [.3, 1, 1, 1], lean: [0, -.2, .5, .5], arch: [0, -.2, .2, .2] }, S) }),
+    keys: KZ([0, .1, .2, 1.1], { armF: [1.2, 2.4, .2, .2], elbF: [.3, .3, .1, .1], blade: [-1.9, -1.7, -1.5, -1.5], grip: [.3, 1, 1, 1], lean: [0, -.2, .5, .5], arch: [0, -.2, .2, .2] }, S) }),
   thrust: (S, z) => ({ dur: .66 * S, chain: .56 * S, step: 480 + 60 * z, sq: .08, sfx: "slash", hits: [GH(.2, .42, "haymaker", S)],   // charged: straight out in front, and she goes with it
-    keys: KZ([0, .14, .22, .42, .66], { armF: [.5, .3, 1.55, 1.55, 1.0], elbF: [.4, 1.3, .05, .05, .3], blade: [-1.0, -.1, 0, 0, -.6], grip: [0, 1, 1, 1, .4], lean: [.2, -.05, .6, .62, .3], bodyY: [-.12, -.22, -.3, -.3, -.15],
+    keys: KZ([0, .14, .22, .42, .66], { armF: [.5, .3, 1.55, 1.55, 1.0], elbF: [.4, 1.3, .05, .05, .3], blade: [2.6, .5, 0, 0, -.6], grip: [0, 1, 1, 1, .4], lean: [.2, -.05, .6, .62, .3], bodyY: [-.12, -.22, -.3, -.3, -.15],
       fNx: [.32, .28, .56, .56, .4], fFx: [-.36, -.42, -.66, -.66, -.46] }, S) }),
   spin: (S, z, n = 1) => ({ dur: (.3 + .3 * n) * S, chain: (.25 + .3 * n) * S, step: 140 + 40 * z, sq: .05, sfx: "slash", sfx2: [.25 * S, "whoosh"], hits: [GH(.1, .1 + .32 * n, "sweep", S, { reach: 160 + 25 * z, back: 160 + 25 * z, y0: 150, y1: -10, wide: true })],
-    keys: KZ([0, .1, .1 + .32 * n, .3 + .3 * n], { spin: [0, 0, TAU * n, TAU * n], armF: [1.2, 1.45, 1.45, 1.0], elbF: [.2, .05, .05, .3], blade: [-.3, -.05, -.05, -.8], grip: [.5, 1, 1, .4], lean: [.2, .1, .1, .2], bodyY: [-.14, -.22, -.22, -.14] }, S) }),
+    keys: KZ([0, .1, .1 + .32 * n, .3 + .3 * n], { spin: [0, 0, TAU * n, TAU * n], armF: [1.2, 1.45, 1.45, 1.0], elbF: [.2, .05, .05, .3], blade: [2.6, -.05, -.05, -.8], grip: [.5, 1, 1, .4], lean: [.2, .1, .1, .2], bodyY: [-.14, -.22, -.22, -.14] }, S) }),
   leap: (S, z) => ({ dur: .95 * S, chain: .9 * S, step: 260, hop: -760, dive: [.4 * S, 1000], diveStill: true, sq: .12, sfx: "slash", sfx2: [.5 * S, "slam"], quake: [.5 * S, z + 1],
     hits: [GH(.4, .54, "cleave", S, { y0: 230, y1: -40 }), GH(.5, .64, "launch", S, { reach: 210 + 30 * z, back: 120 + 30 * z, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .14, .34, .46, .62, .95], { armF: [.4, 2.9, 3.1, .6, .5, .5], elbF: [.3, .4, .3, .1, .1, .3], blade: [-1.4, 2.7, 2.9, -.6, -.8, -1.2], grip: [0, 1, 1, 1, 1, .4], lean: [.2, -.2, -.28, .7, .6, .3], arch: [0, -.25, -.3, .2, .15, 0],
+    keys: KZ([0, .14, .34, .46, .62, .95], { armF: [.4, 2.9, 3.1, .6, .5, .5], elbF: [.3, .4, .3, .1, .1, .3], blade: [2.6, 2.95, 3.1, -.6, -.8, -1.2], grip: [0, 1, 1, 1, 1, .4], lean: [.2, -.2, -.28, .7, .6, .3], arch: [0, -.25, -.3, .2, .15, 0],
       bodyY: [-.1, 0, 0, -.4, -.42, -.12], fNy: [0, .3, .28, 0, 0, 0], fFy: [0, .25, .22, 0, 0, 0] }, S) }),
 };
 const GIANT_S = [1, 1, 1.25, 1.55];                  // the moves' time scale by size: heavier, slower
+// (the user, 2026-11-02: "some attacks look like you're not attacking but it's actually loading a long animation"): GIANT_S slowed the whole move, its wind-up too, so the
+// biggest stood there up to half a second before the first hit. Now the wind-up is short at every size (.23 s, .26, .29: a little heavier each size up; a leap's, with its
+// jump, as it was), the swing itself keeps its weight, and the recovery after the last hit is 40% shorter. Every time in the move moves with it (keys, hits, sounds, the quake)
+function giantPace(st, z) {
+  if (st.landEnd || !st.hits || !st.hits.length) return st;
+  const h = Math.min(...st.hits.map(q => q.t0)), e = Math.max(...st.hits.map(q => q.t1)), hT = st.hop || st.dive ? h : Math.min(h, .2 + .03 * z);
+  const f = t => +(t <= h ? t * hT / h : t <= e ? hT + t - h : hT + e - h + (t - e) * .6).toFixed(3);
+  const o = { ...st, dur: f(st.dur), hits: st.hits.map(q => ({ ...q, t0: f(q.t0), t1: f(q.t1) })), keys: {} };
+  for (const k in st.keys) o.keys[k] = st.keys[k].map(([t, v]) => [f(t), v]);
+  if (st.chain) o.chain = f(st.chain); if (st.sfx2) o.sfx2 = [f(st.sfx2[0]), st.sfx2[1]]; if (st.quake && st.quake[0] < 9) o.quake = [f(st.quake[0]), st.quake[1]];
+  if (st.dive) o.dive = [f(st.dive[0]), st.dive[1]]; if (st.fling) o.fling = f(st.fling);
+  return o;
+}
 const GIANT_SETS = { gauntlet: [null], sword: [null] };   // [size]: the set the game plays at that size (and the editor shows)
 const GIANT_NAMES = {};
 [["gauntlet", "gg", GA], ["sword", "gs", GW]].forEach(([kind, pre, T]) => [1, 2, 3].forEach(z => {
-  const S = GIANT_S[z], add = (name, st) => { const k = `${pre}${z + 1}_${name}`; STRIKES[k] = { ...st, wsize: z, giant: kind }; GIANT_NAMES[k] = name; return k; };
+  const S = GIANT_S[z], add = (name, st) => { const k = `${pre}${z + 1}_${name}`; STRIKES[k] = giantPace({ ...st, wsize: z, giant: kind }, z); GIANT_NAMES[k] = name; return k; };
   const A = kind === "gauntlet", one = n => add(n, T[n](S, z));
   const set = z === 1 ? { ground: [one(A ? "hook" : "slash"), one("back"), one(A ? "slam" : "chop")] }
     : z === 2 ? { ground: [one(A ? "scoop" : "rise"), one(A ? "slam" : "chop"), one("sweep")] }
@@ -3024,6 +3054,7 @@ function smoothPose(p, T, dt) {
       p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU);   // a finished turn settles forward, never unwinds back through the turn
       p.pose[key] = lerp(p.pose[key], T[key], k);
     } else {                                             // critically damped: eases out of the old pose and into the new one (no snap at the start, no overshoot at the end)
+      if (key === "wrist") p.pose[key] += TAU * Math.round((T[key] - p.pose[key]) / TAU);   // (the blade's angle: a whole turn is the same angle, so never wound back round through one, 2026-11-02)
       const w = (POSE_W[key] || 26) * (hit ? 1.8 : 1), x = p.pose[key] - T[key], v = p.pv[key] || 0, e = Math.exp(-w * dt), c = v + w * x;
       p.pose[key] = T[key] + (x + c * dt) * e; p.pv[key] = (v - w * c * dt) * e;
     }
@@ -3198,7 +3229,8 @@ function updatePoseHuman(p, dt) {
       let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
       if (TURNS.has(k)) v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round (the cartwheel's wheel too, 2026-10-28)
       o[kk] = lerp(o[kk] ?? 0, v, w); }
-    if (KK.blade) o.wrist = lerp(o.wrist, kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF), w); }
+    if (KK.blade) { let bv = kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF); if (a < SK.dur - (SK.giant ? .3 : .12)) bv += TAU * Math.round((o.wrist - bv) / TAU);   // (eased in the short way from the stance's angle; eased out as keyed, so a blade low in front comes back up in front to her shoulder, not down through the ground)
+      o.wrist = lerp(o.wrist, bv, w); } }
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
     const BB = p.block && a < 0 ? { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }.blade : undefined, bl = BB !== undefined ? BB : ST && ST.blade;
     const PK = a < 0 && (p.pointKind || p.tcPose) && STRIKES[p.pointKind || p.tcPose];
