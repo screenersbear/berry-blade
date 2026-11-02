@@ -658,7 +658,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261102j"></script>
+<script src="charkit.js?v=20261102k"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -6799,7 +6799,8 @@ function teamNow() {                                 // you first, then who's wi
     else if (P.kind === "ally") { const A = P.a.A;
       L.push({ name: A.name, r: P.a.r, st: q, hp, max: PARTNER_HP, role: "BERRY BUDDY" + (WORLDS[A.w] ? " · FROM " + WORLDS[A.w].name : ""), say: A.hi, sp: SP_INFO[A.id] }); }
     else if (P.kind === "ej") L.push({ name: "EVIL JUNE", r: ej.r, st: q, hp, max: PARTNER_HP, role: "ON YOUR SIDE NOW" }); });
-  L.slice(1, 3).forEach((T, i) => { T.role += " · " + partBtnName(i) + (i ? " TO SEND THEM IN, HOLD IT TO KEEP THEM AT IT" : " TO BLOCK: IN FRONT OF YOU ALL"); });   // (the defender on the block button, the attacker on the other: 2026-11-01)   // (each partner's button, 2026-10-31)
+  L.slice(1, 3).forEach((T, i) => { T.role += " · " + partBtnName(i) + (i ? " TO SEND THEM IN, HOLD IT TO KEEP THEM AT IT" : " TO BLOCK: IN FRONT OF YOU ALL"); });
+  if (pal && tamed) { const t = tamed, D = petDef(petSp(t), t.w) || {}; L.push({ name: D.name || petNoun(petSp(t)), r: t.r, st: pal, hp: PARTNER_HP, max: PARTNER_HP, role: "YOUR PET · WITH YOU, NOW AND THEN DIGS SOMETHING UP FOR YOU", sp: SP_INFO[petSp(t)] }); }   // (the pet: besides the two)   // (the defender on the block button, the attacker on the other: 2026-11-01)   // (each partner's button, 2026-10-31)
   return L;
 }
 const teamHearts = (n, m) => "♥".repeat(Math.max(0, Math.min(n, m))) + "♡".repeat(Math.max(0, m - Math.max(0, n)));
@@ -10602,7 +10603,7 @@ function updatePlayer(dt) {
   if (upPend >= 0 && !upAtk && time - upPend >= UPW) { upPend = -1; if (!p.climb && !p.auto && !upFollow(p)) jumpBuf = feelBuf(); }   // ↑ on its own: a jump (a beat late, in case attack was coming; not the ↑ of an up + attack after a launch: that's the crouch and jump up to it)
   const upFresh = () => { const f = p.onGround || time - (p.jumpT ?? -9) < .14; if (f) { jumpBuf = 0; p.coyote = 0; p.jcharging = false; p.jcharge = 0; } return f; };   // (↑ is a jump key too: pressed with attack, the hit's own lift takes the jump's place)
   if (cat) {                              // on the ground the cards swim out in front (tap again: they swirl); in the air, card spin then card dive
-    if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop) {
+    if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop && !brakeHold(p)) {
       if (p.atkT < 0 && !sw && (p.floatB || (!p.onGround && held.down)) && KIT.CAT_DOWN) { atkBuf = 0; p.floatB = false; p.bigJ = 0; startCatMove(p, KIT.CAT_DOWN); }   // floating in the bubble: straight down
       else if (p.atkT < 0 && upAtk && KIT.CAT_UP) { atkBuf = 0; upPend = -1; p.upUsed = true; if (upFresh() && !p.onGround) p.vy = 0; startCatMove(p, KIT.CAT_UP); p.solo = true; }
       else if (p.atkT < 0 && p.onGround && held.down && KIT.CAT_MOVES.cardslash) { atkBuf = 0; startCatMove(p, "cardslash"); p.slideOn = true; }   // (his slide: the card slash)
@@ -10612,7 +10613,7 @@ function updatePlayer(dt) {
     }
   } else {                                // the character's move set: a first strike, then a quick second press for the follow-up (ground and air)
     const list = p.onGround || sw ? SET.ground : SET.air;
-    if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop && !p.upCoil) {
+    if (atkBuf > 0 && control && !p.combo && !p.block && !p.upHop && !p.upCoil && !brakeHold(p)) {   // (braking from full speed: most of it plays first, then a blow can cut in)
       if (p.atkT < 0 && !sw && (p.floatB || (!p.onGround && held.down)) && SET.down) { atkBuf = 0; p.floatB = false; p.bigJ = 0; p.chain = null; startStrike(p, SET.down); }   // floating in the bubble: straight down
       else if (p.atkT < 0 && upAtk && SET.upChain && p.onGround && !sw && upLate(p)) { atkBuf = 0; jumpBuf = 0; upPend = -1; p.upUsed = true; upHopStart(p); }   // ↑ + attack again just after the launcher, the one launched still up there: the crouch and jump up after it (the user, 2026-10-28: "if they press up and attack a second time ... jumps up with the enemy")
       else if (p.atkT < 0 && upAtk && SET.up) { atkBuf = 0; jumpBuf = 0; upPend = -1; p.upUsed = true; const fresh = upFresh(), air = !p.onGround, hop = KIT.STRIKES[SET.up].hop;
@@ -10663,14 +10664,16 @@ function updatePlayer(dt) {
   const mv = p.rig.spec.move, maxV = (p.crawl ? CRAWL_V : attacking ? (cat ? 140 : 100) : p.tkCharge ? 135 : p.tcLv ? 110 : 300 * (p.runK || 1)) * mv.speed * (wet ? .78 : 1);   // (the team charge: a walk, the team with her)   // (crawling: slow)   // (charging the tackle: a slow walk)   // gathering speed the longer you hold it
   const MOV = feelMove(), rate = wet ? (mx && control ? 820 : 420) : mx && control ? (p.onGround ? 2600 * MOV.groundAccel : 1700 * MOV.airControl) : p.hurtT > 0 && p.onGround ? 9000 : (p.onGround ? 2400 * MOV.groundStop : 500 * MOV.airControl);   // (MOVEMENT's multipliers: 1, the game's own)   // (in the water: slow to get going, slow to stop)
   const target = control ? mx * maxV : p.hurtT > 0 && p.onGround ? 0 : p.vx;   // knocked back: once you're down again you stop, no sliding on
+  brakeCheck(p, dt, mx, attacking, control, wet);
   if (p.tackle) tackleStep(p, dt);
+  else if (p.brake) brakeStep(p, dt);                                                  // (a stop from full speed: the slide down to nothing)
   else if (MV && MV.slide && p.atkT < MV.slide) { }                                       // a dash keeps its speed
   else if (p.dodge) { }                                                                   // (the back-step keeps its speed till you land)
   else if (MV && MV.stepIn && p.atkT >= MV.stepIn[0] && p.atkT < MV.stepIn[0] + MV.stepIn[2]) { }   // (and so does the jab's step in, for a moment)
   else if (!cat && MV && attacking && p.onGround && p === player && p.chain && p.chain.kind === "B" && (held.left || held.right) && fwdDrive(p, dt)) { }   // (holding forward: the combo carries you on after what it knocks back)
   else if ((!cat || MV) && attacking && p.onGround) p.vx = approach(p.vx, 0, 2600 * dt);   // humans plant their feet while striking
   else if (!(attacking && Math.abs(p.vx) > maxV && Math.sign(p.vx) === mx)) p.vx = approach(p.vx, target, rate * dt * (attacking ? .5 : 1));
-  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle && !p.dodge) { if (p.face !== ax) { p.turnT = time; p.faceWas = p.face;
+  if (ax && control && !attacking && !p.block && !(p.tpose > 0) && !p.tackle && !p.dodge && !p.brake) { if (p.face !== ax) { p.turnT = time; p.faceWas = p.face;
       if (p === player && !FEEL.legacy && FEEL.turn.enabled && p.onGround && !p.climb) p.pivotT = FEEL.turn.pivotFrames / 60; } p.face = ax; }   // (a turn: COMBAT FEEL's pivot, a few frames; the body turns through it, no instant flip. Nothing waits on it: it's only how she looks)
   if (p.carry > 0) { p.carry -= dt; p.vx = p.carryDir * Math.max(p.carryDir * p.vx, 300); }
 
@@ -11065,6 +11068,21 @@ const SWING_SILENT = new Set(["punch", "kick", "slash"]);
 const ALLY_FIGHT = 1.4;
 const BUDDY_FIGHT = 3.2;                             // (a berry buddy keeps at it longer after your last swing: 2026-10-30)
 const youFight = (win = ALLY_FIGHT) => { const p = player; return !!p && !p.dead && (p.atkT >= 0 || !!p.combo || !!p.tackle || p.chargeT > .15 || time - (p.atkAt ?? -9) < win); };
+// the stop from full speed (the user, 2026-11-02: "give them a sort of breaking animation where they try to stop themselves and their momentum before coming to a stand
+// still. allow them to cancel out of this animation to attack though, though let most of the animation play before the cancel can occur"): let go of the way (or turn
+// back) at a sprint and she digs in and slides to a stop; a blow only cuts in after BRAKE.cut of it. charkit's brakePose draws it (p.brake.u)
+const BRAKE = { T: .55, cut: .65, v: 380 };
+const brakeHold = p => !!(p.brake && p.brake.u < BRAKE.cut);
+function brakeCheck(p, dt, mx, attacking, control, wet) {
+  if (p.brake && (!p.onGround || p.hurtT > 0 || attacking || p.tackle || p.dodge || p.climb || p.dead)) p.brake = null;
+  if (p.brake || p !== player || p.rig.kind === "cat" || !p.onGround || !control || attacking || p.tackle || p.dodge || p.block || wet || p.climb || p.crawl) return;
+  if (Math.abs(p.vx) > BRAKE.v * p.rig.spec.move.speed && (!mx || mx === -Math.sign(p.vx))) { p.brake = { t: 0, u: 0, dir: Math.sign(p.vx), v0: Math.abs(p.vx) }; p.face = p.brake.dir; p.runT = 0; SFX.land && SFX.land(floorUnder(p), .5); }   // (only a sprint gets past BRAKE.v: a run's top is 300)
+}
+function brakeStep(p, dt) {
+  const B = p.brake; B.t += dt; B.u = B.t / BRAKE.T; if (B.u >= 1) { p.brake = null; p.vx = 0; return; }
+  p.vx = B.dir * B.v0 * Math.pow(1 - B.u, 2.2); p.face = B.dir;
+  if (B.u < .7 && Math.random() < dt * 40) dust(p.x + B.dir * 16, p.y, 1, -B.dir);   // (dust off the dug-in foot)
+}
 function startStrike(p, kind, idx = 0) {
   p.atkSpan = p.onGround && !p.dive ? supportSpan(p) : null;   // (a blow begun on your feet: it won't carry you off the end of the bridge or a ledge either. The user, 2026-11-02)
   const S = KIT.STRIKES[kind]; if (p === player) { p.atkAt = time; if (p.pivotT > 0) { p.pivotT = 0; p.pivotSnap = true; } p.fidget = null; p.stillT = 0; }   // (a pivot cut short: facing round at once; a fidget, over)
@@ -11191,14 +11209,68 @@ function palLeap(q, tgt, T, o = {}) {   // (o: { sp, its special; kind, the blow
   const sp = tgt && o.sp; q.pounce.kind = o.kind || "smash";   // (its special when you've charged it: 2026-10-31; every couple of pounces till then)
   if (sp) { q.pounce.sp = sp; q.atkKind = sp; q.atkT = 0; }
 }
-function updatePal(dt) { [pal, pal2].forEach((q, i) => { if (q) updatePalOne(q, i, dt); }); }
+function updatePal(dt) { if (tamed && tamed2) catLeave(null, tamed2); [pal, pal2].forEach((q, i) => { if (q) updatePalOne(q, i, dt); }); }   // (one pet at a time now: an old file's second goes home)
+// the pets (the user, 2026-11-02: "they will no longer be ones you can control ... when they do appear, they will be eating food or digging through something ... and then your
+// character will pet them and they will follow you. so you can have your two buddies and a pet. the pet will attack very sporadically but it will also, very randomly, find
+// something to dig and it'll run off and dig up an item to give you"): found at its bowl or its hole, it stays at it; walk up and pet it (attack, as you talk to anyone)
+const PET_PROP_M = {}; const petPropM = c => PET_PROP_M[c] || (PET_PROP_M[c] = toon(c));
+function wildProp(W0, on = true) {                   // its bowl of fruit, or the hole it's digging and the dirt thrown up
+  if (W0.prop) { actors.remove(W0.prop); W0.prop.traverse(m => { if (m.isMesh && m.geometry) m.geometry.dispose(); }); W0.prop = null; } if (!on || W0.st.dive) return;
+  const g = new THREE.Group(), c = W0.st, f = c.face || 1;
+  if (W0.act === "eat") { g.add(at(mk(cyl(.22, .16, .12, 18), null, { mat: petPropM("#c8763a"), ol: .02 }), 0, .06, 0)); g.add(at(mk(cyl(.19, .19, .02, 18), null, { mat: petPropM("#6b3a1e"), ol: 0 }), 0, .12, 0));
+    [["#ffb02e", -.07, .02], ["#9ccf4a", .07, -.03], ["#7a3e8f", 0, .07]].forEach(([col, x, z]) => g.add(at(mk(ball(.065, 10, 8), null, { mat: petPropM(col), ol: .01 }), x, .16, z))); }
+  else { g.add(at(mk(cyl(.3, .3, .01, 20), null, { mat: petPropM("#3a2414"), ol: 0 }), 0, .01, 0));
+    for (let i = 0; i < 5; i++) g.add(at(mk(new THREE.DodecahedronGeometry(rand(.07, .13), 0), null, { mat: petPropM(i % 2 ? "#74402f" : "#5a3220"), ol: .015 }), -f * rand(.25, .45), rand(.04, .1), rand(-.2, .2))); }
+  g.position.set(X(c.x + f * 34), Y(c.y), (c.z || 0) + .05); actors.add(g); W0.prop = g;
+}
+function petTip(W0) {                                // (near one: PET ITS NAME, the attack button's mark)
+  const T = $("npcTip"); if (!T) return;
+  if (W0) { if (petTip.on !== W0) { petTip.on = W0; T.innerHTML = `<span class="pgw">${padGlyph("o")}${kbUse() ? "<small>C</small>" : ""}</span><b>PET ${petDef(W0.sp, W0.w).name}</b>`; T.classList.remove("hidden"); } }
+  else if (petTip.on) { petTip.on = null; if (!npcNear) T.classList.add("hidden"); }
+}
+function wildBusy(W0, dt, dist) { wildBusy0(W0, dt, dist); if (wild === W0) wildPose(W0, dt); }   // (at it, or being petted: posed and settled each frame as ever)
+function wildPose(W0, dt) { const c = W0.st; if (!c.dive) { c.vy = Math.min(c.vy + GRAV * dt, 1100); moveBody(c, dt, 14); } spring(c, dt); c.prof = approach(c.prof || 0, 0, dt * 5); c.bodyYaw = lerp(.85, .3, c.prof);
+  c.yaw = lerp(c.yaw, c.face > 0 ? -c.bodyYaw : -Math.PI + c.bodyYaw, 1 - Math.exp(-dt * 12)); c.blink -= dt; if (c.blink < -.12) c.blink = 2 + Math.random() * 2.5; updatePose(c, dt); }
+function wildBusy0(W0, dt, dist) {
+  const c = W0.st, p = player; c.vx = 0; if (c.dive) c.vy = 0; c.sit = 0;
+  if (W0.phase === "busy") { c.petAct = W0.act; if (W0.act === "dig" && !c.dive && Math.random() < dt * 9) dust(c.x + (c.face || 1) * 18, c.y, 1, -(c.face || 1));
+    const near = dist < 140 && Math.abs(c.y - p.y) < 100 && !p.dead && !p.auto; petTip(near ? W0 : null);
+    const bp = !!held.atk; if (near && bp && !W0.atkPrev && !p.climb) {   // (attack, near it: a pat, not a swing)
+      W0.phase = "petted"; W0.t = 0; c.petAct = null; c.face = Math.sign(p.x - c.x) || c.face; wildProp(W0, false); petTip(null);
+      const sd = Math.sign(p.x - c.x) || 1; W0.patX = c.x + sd * 56; Object.assign(p, { pat: 1.1, face: -sd, atkT: -1, atkKind: null, combo: null, chargeT: 0, chargeLv: 0, vx: 0 }); atkBuf = 0; petCall(W0.sp, 1.25); }   // (patX: a step in, near enough for the hand to reach its head)
+    W0.atkPrev = bp; return; }
+  p.vx = 0; p.pat = Math.max(0, 1.1 - W0.t); if (W0.patX !== undefined && p.onGround) p.x = approach(p.x, W0.patX, 260 * dt);   // (held a moment while you pat it, stepped in close)
+  if (Math.random() < dt * 6) glyph(HEART_MAT || (HEART_MAT = glyphMat("♥", "#ff7ab0")), X(c.x) + rand(-.3, .3), Y(c.y - 70), .45, V(rand(-.3, .3), 1.2, 0), .9, .45);
+  if (W0.t > 1.1) petJoin(W0);
+}
+function petJoin(W0) {                               // petted: it follows you now (one at a time: the one you had heads home)
+  const c = W0.st; wildProp(W0, false); wild = null; noteCat(W0.w, W0.sp); W0.run.phase = "done"; c.petAct = null; if (player) player.pat = 0; petTip(null);
+  if (tamed) catLeave("% HEADS HOME", tamed); if (tamed2) catLeave(null, tamed2);
+  return petAdd({ w: W0.w, sp: W0.sp, r: W0.r }, c, true);
+}
+function petFind() { const r = Math.random(); return r < .38 ? "guava" : r < .6 ? "chinola" : r < .74 ? "gum" : r < .94 ? "coin" : "fruit"; }   // (what it digs up: mostly the small fruit, coins, now and then a mango)
+function petChore(q, dt) {                           // the pet on its own: now and then a pounce at a baddy near you; once in a long while off to dig, and back with what it found
+  const p = player; if (!p || p.dead || q.pounce || transit || mode !== "play") return false;
+  if (q.dig) { const D = q.dig; D.t += dt;
+    if (D.ph === "go") { const dx = D.x - q.x; q.face = Math.sign(dx) || q.face; q.vx = approach(q.vx, Math.abs(dx) < 10 ? 0 : Math.sign(dx) * 440, 2600 * dt); if (Math.abs(dx) < 16 || D.t > 3) { D.ph = "dig"; D.t = 0; q.vx = 0; } return true; }
+    if (D.ph === "dig") { q.vx = 0; q.petAct = "dig"; if (Math.random() < dt * 10) dust(q.x + (q.face || 1) * 16, q.y, 1, -(q.face || 1)); if (D.t > 1.6) { D.ph = "back"; D.t = 0; q.petAct = null; D.k = petFind(); sparks(q.x, q.y - 24, 8); popText(q.x, q.y - 80, "!"); } return true; }
+    const dx = p.x - q.x; q.face = Math.sign(dx) || q.face; q.vx = approach(q.vx, Math.sign(dx) * 470, 2600 * dt);
+    if (Math.abs(dx) < 80 || D.t > 4) { q.dig = null; if (D.k === "coin") dropLoot(p.x + p.face * 20, p.y - 30, 4, true); else spawnLoot(D.k, p.x + p.face * 26, p.y - 30, true); petCall(petOf(q), 1.3); }
+    return true; }
+  const foes = foesAlive().filter(e => Math.abs(e.x - q.x) < 420 && Math.abs(e.y - q.y) < 200);
+  q.petAtkT = (q.petAtkT ?? rand(6, 12)) - dt; if (foes.length && q.petAtkT <= 0 && !q.pcmd && !q.pact) { q.petAtkT = rand(9, 16); q.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !q.onGround }; }   // (very now and then)
+  q.digT = (q.digT ?? rand(40, 80)) - dt;
+  if (q.digT <= 0 && !foes.length && q.onGround && !q.dive && !q.plat) { q.digT = rand(45, 95); const x = clamp(q.x + (Math.random() < .5 ? -1 : 1) * rand(140, 300), 80, WORLD - 80);
+    if (solidAt(x) && Math.abs((groundAt(x) ?? -1e9) - q.y) < 20) q.dig = { ph: "go", x, t: 0 }; }
+  return false;
+}
 function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the second)
   if (q.zipR) return;                                // (down the zipline behind you: zipRide moves it)
   const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = partSlot(q), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && k === 1 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
   if (!q.pounce && q.atkKind) { q.atkKind = null; q.atkT = -1; }   // (its special's pose, done with)
   if (climbWith(q, dt)) { q.yaw = lerp(q.yaw, q.face > 0 ? -.85 : -Math.PI + .85, 1 - Math.exp(-dt * 12)); q.blink -= dt; if (q.blink < -.12) q.blink = 2 + Math.random() * 2.5; updatePose(q, dt); return; }   // (up a climb after you)
   if (campSit(q, i ? "pal2" : "pal", dt, q.rig) || hideSit(q, i ? "pal2" : "pal", dt)) q.pounce = null; else {   // (at a rest stop: by the fire; in a hideout, sat by you when you sit)
-  const busy = partPet(q, k, dt);                 // (on your command now: 2026-10-31. It used to pounce with your combos, guard you as you charged, and hunt on its own)
+  const busy = petChore(q, dt) || partPet(q, k, dt);   // (its own: a pounce now and then, a dig for you once in a long while, 2026-11-02) (on your command now: 2026-10-31. It used to pounce with your combos, guard you as you charged, and hunt on its own)
   if (deepWetAt(q.y) && !q.pounce) {             // in the deep's water: it swims after you, up and down too
     const want = p.x - p.face * (75 + k * 55), wy = p.y - 20 - k * 30, ddx = want - q.x, ddy = wy - q.y, d = Math.hypot(ddx, ddy), spd = d > 260 ? 470 : 330;
     q.vx = approach(q.vx, d > 16 ? ddx / d * Math.min(spd, d * 5) : 0, 1100 * dt); q.vy = approach(q.vy, d > 16 ? ddy / d * Math.min(spd, d * 5) : 0, 1100 * dt);
@@ -11371,14 +11443,14 @@ const catRoomOK = (s, sp, S = STAGES) => { const S0 = S[s]; return !S0.boss && !
 const PET_CHANCE = .6;                               // (how often each of a world's pets is out, a stay)
 function catStay() {                               // a new stay in this world: which hour its cat (and its dog) are out at (none of the one that's with you)
   wildClear(); catHud(false); petRuns = [];
-  if (world === 9 || (MEET_ON && world !== 13)) return; const here = [...new Set(KIND_AT(world))];   // (only the deep's axolotls turn up as they did: everyone else is found in a fight now, meetStay)
+  if (world === 9) return; const here = [...new Set(KIND_AT(world))];   // (only the deep's axolotls turn up as they did: everyone else is found in a fight now, meetStay)
   for (const sp of Object.keys(PET_DEFS)) { if (!petDef(sp, world) || [tamed, tamed2].some(t => t && t.w === world && petSp(t) === sp)) continue;
     if (Math.random() > PET_CHANCE) continue;      // (not every stay: the user, 2026-10-26, "because we will have a fixed buddy now, let's tone down the frequency of pets a little")
     let kinds = PET_HOURS[sp].filter(k => here.includes(k)); if (!kinds.length) kinds = here;   // (a world without those hours: whenever)
     petRuns.push({ sp, w: world, kind: kinds[Math.floor(Math.random() * kinds.length)], phase: "wait", rooms: 0 }); wildRig(world, sp); }   // (built now, under the fade)
 }
 const isTamedRig = r => [tamed, tamed2].some(t => t && t.r === r);
-function wildClear() { if (wild && !isTamedRig(wild.r)) wild.r.root.visible = wild.r.shadow.visible = false; wild = null; }
+function wildClear() { if (wild) { wildProp(wild, false); wild.st.petAct = null; } if (wild && !isTamedRig(wild.r)) wild.r.root.visible = wild.r.shadow.visible = false; wild = null; if (player) player.pat = 0; petTip(null); }
 function strayClear() { strays.forEach(s => { if (!isTamedRig(s.r)) s.r.root.visible = s.r.shadow.visible = false; }); strays = []; }
 const NO_CATCH_SIGN = true;
 function catHud(on) {
@@ -11406,8 +11478,9 @@ function wildSpawn(run, chasing, at) {
   run.room = stage; run.x = x;                     // (its room, and its spot in it)
   if (!wet && !chasing && at === undefined && Math.random() < .45) { const P = PLATFORMS.find(q => q.w >= 80 && Math.abs(q.x + q.w / 2 - x) < 520 && (q.x + q.w / 2 - player.x) * fwd > 360 && st.y - q.y > 60 && st.y - q.y < 420); if (P) Object.assign(st, { x: P.x + P.w / 2, y: P.y, plat: P }); }   // (now and then napping up on a ledge)
   st.yaw = fwd > 0 ? -Math.PI + .5 : -.5;
-  wild = { w: run.w, sp: run.sp, run, r, st, phase: chasing ? "flee" : "rest", t: 0, fwd, dodgeT: .6, leapT: 0, clearT: 0, threat: 0, sprintT: 0, sprintCd: 0, jukeT: 1.2, wanderT: 0, wanderDir: -fwd };
+  wild = { w: run.w, sp: run.sp, run, r, st, phase: chasing ? "flee" : "busy", act: Math.random() < .5 ? "eat" : "dig", t: 0, fwd, dodgeT: .6, leapT: 0, clearT: 0, threat: 0, sprintT: 0, sprintCd: 0, jukeT: 1.2, wanderT: 0, wanderDir: -fwd };
   r.root.visible = r.shadow.visible = true; if (chasing) puffs(x, st.y - 20, 3, 20, 80);
+  if (wild.phase === "busy") { st.sit = 0; st.petAct = wild.act; st.face = Math.random() < .5 ? 1 : -1; wildProp(wild); }   // (found at it: its bowl, or its hole)
 }
 const wildCatchable = () => wild && ["rest", "startle", "flee", "leave"].includes(wild.phase) && !(wild.phase === "leave" && (wild.st.x < -20 || wild.st.x > WORLD + 20));
 function catStartle() {                            // you've walked in: up it jumps, fur on end (or a yelp), and it's off
@@ -11454,7 +11527,7 @@ function catLeave(msg, t = tamed) {                // a pet of yours goes home: 
 // choose which 2 you want to keep and who will go home"): up to two along of pets (cats, dogs), a berry buddy (or a crew of them) and Noro
 let teamAsk = null;                                // the choice up: { L: [{ name, kind, home, keep? }], sel }
 const TEAM_MAX = 2;                                 // partners along at once, any mix (the user, 2026-10-26: "let's actually keep the max allies to 2, it may be too much because I want them to be more involved"; three for a morning before that)
-const teamCount = () => (tamed ? 1 : 0) + (tamed2 ? 1 : 0) + allies.length + (ejPal() ? 1 : 0);
+const teamCount = () => allies.length + (ejPal() ? 1 : 0);   // (two buddies, and a pet besides: the pets aren't partners now, 2026-11-02)
 // your partners' hearts (the user, 2026-10-25: "let's create a 3 heart system for partners. make them be able to get hit as well. if each individual one gets
 // hit 3 times, they go away to rest. you can of course still bring them back"): three each, full again in a new room (as yours are) or when they rejoin. What
 // lands on a bep lands on them: a baddy's lunge, a shot, the boss's charge or blow. Out of hearts: a pet heads home (the bell calls it back), a berry buddy
@@ -11463,7 +11536,6 @@ const PARTNER_HP = 3;
 function partnerList() {
   const L = [], tOf = q => [tamed, tamed2].find(t => t && q && t.r === q.rig);
   allies.forEach(a => L.push({ q: a.st, kind: "ally", a })); if (ejPal() && ej.st) L.push({ q: ej.st, kind: "ej" });   // (the first: the defender, on the block button; a berry buddy if one's along, 2026-11-01)
-  [pal, pal2].forEach(q => { if (q && tOf(q)) L.push({ q, kind: "pet", t: tOf(q) }); });
   return L;
 }
 // ── your partners, under your command (the user, 2026-10-31: "the character is gonna have an attack button ... a jump button, and the other two buttons will be the way
@@ -11933,7 +12005,7 @@ function partPet(q, k, dt) {                        // a pet on your command: it
   if (q.post && !partBlocking()) { const r = postStep(q, q, dt, true); if (!q.pcmd && !q.pact) return r; }
   if (partBlocking() && !q.pounce) { q.pact = q.pcmd = q.pnext = null; defendStep(q, dt); return true; }
   q.defOn = false;
-  if (partBlocking()) { q.pact = q.pcmd = q.pnext = null; if (!q.pounce) { q.block = true; if (q.onGround) q.vx = approach(q.vx, 0, 2600 * dt); const f = partTarget(q, false); q.face = f ? Math.sign(f.x - q.x) || q.face : p.face; return true; } return false; }
+  if (partBlocking() && partnerList().some(P => P.q === q)) { q.pact = q.pcmd = q.pnext = null; if (!q.pounce) { q.block = true; if (q.onGround) q.vx = approach(q.vx, 0, 2600 * dt); const f = partTarget(q, false); q.face = f ? Math.sign(f.x - q.x) || q.face : p.face; return true; } return false; }
   q.block = false;
   if (!q.pact && q.pcmd && !q.pounce) { const c = q.pcmd; q.pcmd = null; q.pWeak = !!c.weak; q.pFire = !!c.fire; const sp = c.type === "special" ? KIT.PET_SP[petOf(q)] : null, tgt = partTarget(q, true);
     q.pact = { t: 0, tgt, legs: c.type === "special" ? [{ sp, kind: sp ? "smash" : "launch", T: .45 }] : c.up ? [{ kind: "launch", T: .38 }, { kind: "smash", T: .3 }] : c.down && !q.onGround ? [{ kind: "smash", T: .22 }] : [{ kind: "smash", T: c.air || !q.onGround ? .3 : .38 }, { kind: "smash", T: .34 }] };
@@ -12045,7 +12117,7 @@ function syncCats(dt) {
 // when you get to it; it stays only in that world (like your cat), and through knock-outs. Two companions at most: Evil June first, then
 // your cat, then the ally
 const ALLIES = [
-  { id: "burr", name: "BURR", w: 1, hi: "EN GARDE!", hit: "slash", reach: 100, col: "#93c93b" },   // the spiky one with the rapier: the berry woods
+  { id: "burr", name: "BURR", w: 0, hi: "EN GARDE!", hit: "slash", reach: 100, col: "#93c93b" },   // the spiky one with the rapier: the berry woods
   { id: "stilt", name: "STILT", w: 0, hi: "YES WAY!", hit: "punch", reach: 110, col: "#a9dcea", heal: true },   // (the woods' first since 2026-11-02, Burr's the waves': the team's healer, carrying what you've got)  // the lanky one: Cuss' Waves
   { id: "coil", name: "COIL", w: 2, hi: "BZZT! ON IT!", hit: "slash", reach: 100, col: "#7f9cb0" },   // the clockwork knight: Volt Keep
   { id: "elpico", name: "EL PICO", w: 3, hi: "VAMOS!", hit: "punch", reach: 105, col: "#2d5bd6" },   // the luchador, his scarf in the wind: Loof's sky
@@ -12119,101 +12191,113 @@ function buddySpec(id) { const sp = KIT.normalize(allySpec(id)), M = buddyMoves(
 function allySpec(id) {
   const M0 = KIT.merge0, H = KIT.HUMAN_DEFAULT, G = "#93c93b", S = "#a9dcea";
   if (id === "burr") return M0(H, { id, name: "BURR",
-    body: { build: "tall", head: .8, torso: 1.1, girth: 1, shoulders: 1.15, arms: 1.3, legs: 1.4, limbs: .5, hands: .85, feet: .7 },
-    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: G, hair: G },
-    outfit: { top: G, arm: G, leg: G, hand: { style: "bare" }, boot: { col: G, r: .07, len: .2, wide: 1, point: true }, prop: { kind: "sword", side: "right", size: 1 } },
-    move: { set: "sword", bounce: 1.2 } });
+    body: { build: "tall", head: .8, torso: 1.1, girth: 1, shoulders: 1.2, arms: 1.35, legs: 1.35, limbs: .6, hands: 1.05, feet: .8 },
+    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: "#93c93b", hair: "#93c93b" },
+    outfit: { top: "#93c93b", arm: "#93c93b", leg: "#93c93b", hand: { style: "bare" }, boot: { col: "#93c93b", r: .08, len: .24, wide: 1, point: true }, prop: { kind: "sword", side: "right", size: 1 } },
+    move: { set: "sword", bounce: 1.35, swing: 1.2, stride: 1.15, lean: -.03, stance: { lean: -.05, arch: -.08, armF: .45, elbF: .35, armB: 2.55, elbB: .5, spB: .35, headRot: .1, hop: .3 } } });   // (on guard, the other hand up in a wave, as he's drawn)
   const noHair = { mode: "cap", style: "none", spike: 0, bangs: "none" };
-  if (id === "coil") return M0(H, { id, name: "COIL",   // a clockwork knight: cone helmet, goggles, springs, bellows cuffs, a stun baton
-    body: { build: "tall", scale: 1.05, head: .95, torso: 1, girth: 1.1, shoulders: 1.3, arms: 1.15, legs: 1.1, limbs: .85, hands: 1.1, feet: 1 },
+  if (id === "coil") return M0(H, { id, name: "COIL",   // a clockwork knight: a ribbed bullet of a helmet, goggles, a barrel body, bellows cuffs, a stun baton
+    body: { build: "tall", scale: 1.06, head: 1, torso: 1.05, girth: 1.6, shoulders: 1.4, arms: 1.25, legs: 1.05, limbs: 1, hands: 1.3, feet: 1.1 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#c8e09a", hair: "#7f9cb0" },
-    outfit: { top: "#7f9cb0", torsoProf: [[0, .14], [.2, .15], [.45, .15], [.7, .2], [.88, .2], [1, .1]],
-      torso: [{ kind: "poly", pts: [-90, 0, 90, 0, 0, 160], col: "#5f7a8e" }, { kind: "band", y0: 300, y1: 330, col: "#d9a441" }],
-      arm: "#5f6f7a", leg: "#7f9cb0", legBands: [{ v0: .48, v1: .56, col: "#d9a441" }], hand: { style: "glove", col: "#e8e2d6" },
-      boot: { col: "#5f7a8e", r: .1, len: .2, wide: 1.2, cuff: true, cuffCol: "#d9a441" }, pads: { on: true, side: "both", shape: "round", col: "#7f9cb0", size: 1.3 },
-      prop: { kind: "sword", side: "right", size: 1 } }, move: { set: "sword", bounce: .9 } });
-  if (id === "elpico") return M0(H, { id, name: "EL PICO",   // a beaky luchador: a title belt, a scarf flying in the wind
-    body: { build: "tall", scale: 1.05, head: .9, torso: .95, girth: 1.3, shoulders: 1.4, arms: 1.15, legs: 1.05, limbs: 1.3, hands: 1.2, feet: .9 },
+    outfit: { top: "#7f9cb0", torsoProf: [[0, .16], [.18, .24], [.42, .29], [.66, .28], [.86, .22], [1, .1]],
+      torso: [{ kind: "poly", pts: [-90, 0, 90, 0, 0, 160], col: "#5f7a8e" }, { kind: "band", y0: 280, y1: 330, col: "#c9c2b4" }, { kind: "band", y0: 296, y1: 304, col: "#8a8478" }],
+      arm: "#5f6f7a", leg: "#7f9cb0", legBands: [{ v0: .46, v1: .56, col: "#d9a441" }], armProf: [[0, .08], [1, .075]], legProf: [[0, .12], [.5, .1], [.6, .13], [1, .11]], hand: { style: "glove", col: "#e8e2d6" },
+      boot: { col: "#5f7a8e", r: .12, len: .22, wide: 1.25, cuff: true, cuffCol: "#d9a441" }, pads: { on: true, side: "both", shape: "round", col: "#7f9cb0", size: 1.9 },
+      prop: { kind: "sword", side: "right", size: 1 } }, move: { set: "sword", bounce: 1.05, swing: 1.15, stride: 1, lean: .1, stance: { lean: .14, arch: .1, armF: .25, elbF: .3, armB: .18, elbB: .35, headRot: .06, hop: .15 } } });
+  if (id === "elpico") return M0(H, { id, name: "EL PICO",   // a beaky luchador: a title belt, a cape flying in the wind
+    body: { build: "tall", scale: 1.08, head: .85, torso: 1.12, girth: 1.5, shoulders: 1.8, arms: 1.3, legs: 1.0, limbs: 1.65, hands: 1.3, feet: .85 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffd2a0", hair: "#2d5bd6" },
-    outfit: { top: "#2d5bd6", torsoProf: [[0, .17], [.2, .17], [.45, .15], [.7, .21], [.88, .23], [1, .11]], torso: [{ kind: "poly", pts: [-70, 0, 70, 0, 0, 150], col: "skin" }],
-      arm: "skin", leg: "skin", legBands: [{ v0: 0, v1: .32, col: "#e8364a" }, { v0: .12, v1: .16, col: "#ffffff" }, { v0: .22, v1: .26, col: "#ffffff" }],
-      hand: { style: "bare" }, boot: { col: "skin", r: .08, len: .2, wide: 1, point: true, cuff: true, cuffCol: "#f2c230" },
-      scarf: { on: true, col: "#e8364a", len: 2, flow: 2.2, flap: 1.3, ring: false } }, move: { set: "brawler", bounce: 1.1 } });
-  if (id === "oldvic") return M0(H, { id, name: "OLD VIC",   // a wild-eyed old foreman: a V cap with a clock on it, a long beard, sneakers
-    body: { build: "chibi", scale: 1.12, head: 1.15, torso: 1.15, girth: 1.2, shoulders: 1.2, arms: 1.15, legs: .95, limbs: 1.05, hands: 1.1, feet: 1 },
-    face: { style: "chibi", ears: 1.1, eyeSize: .75, iris: .6, pupil: .6, lashes: false, mouth: .9 }, hair: noHair, colors: { skin: "#f2c6a0", hair: "#f4f2ee", eyes: "#3a2a1a" },
-    outfit: { top: "#7a3b8f", torsoProf: [[0, .17], [.2, .19], [.45, .2], [.7, .2], [.9, .16], [1, .09]], torso: [{ kind: "panel", w: 18, y0: 40, y1: 420, col: "#d9d2c4" }],
-      arm: "#7a3b8f", armBands: [{ v0: .8, v1: 1, col: "#5c2a6c" }], leg: "#3a3550", hand: { style: "claw", col: "#f2c6a0" },
-      boot: { col: "#ffffff", r: .1, len: .2, wide: 1.25, sole: true, soleCol: "#e8245a", strap: true, strapCol: "#e8245a", strapCol2: "#e8245a" } }, move: { set: "brawler", bounce: 1.3 } });
-  if (id === "boxcars") return M0(H, { id, name: "BOXCARS",   // a hulking boar: dice for fists, torn shorts
-    body: { build: "tall", scale: 1.12, head: .85, torso: 1.2, girth: 1.45, shoulders: 1.4, arms: 1.25, legs: .85, limbs: 1.6, hands: 1, feet: 1 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#e0a383", hair: "#e0a383" },
-    outfit: { top: "skin", torsoProf: [[0, .16], [.2, .17], [.45, .2], [.7, .25], [.88, .26], [1, .11]],
-      arm: "skin", armProf: [[0, .1], [.35, .13], [.6, .09], [.85, .1], [1, .09]], leg: "skin", hand: { style: "bare" },
-      boot: { col: "#4a3426", r: .1, len: .22, wide: 1.1, shaft: true, shaftH: .3, shaftR: .11, cuff: true, cuffCol: "#6a4a36" }, pads: { on: true, side: "both", shape: "round", col: "skin", size: 1.6 } },
-    move: { set: "boxer", bounce: .8 } });
-  if (id === "pipe" || id === "pipelet") {        // the plumbers: steel pipe (the little one copper), short legs, big work gloves
-    const col = id === "pipe" ? "#9cc3d5" : "#e0965a", base = { id, name: "THE PLUMBERS", face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: col, hair: col },
-      outfit: { top: col, arm: col, leg: col, hand: { style: "bare" }, boot: { col: "#3a3f4a", r: .1, len: .16, wide: 1.2 } }, move: { set: "brawler" } };
-    return M0(H, M0(base, id === "pipe" ? { body: { build: "tall", scale: 1.05, head: 1, torso: 1.4, girth: 1, shoulders: 1.25, arms: 1.05, legs: .6, limbs: 1.25, hands: 1, feet: 1 },
-      outfit: { armProf: [[0, .085], [1, .08]], legProf: [[0, .1], [1, .09]] } } : { body: { build: "chibi", scale: .8, head: 1, torso: 1, girth: 1, shoulders: 1.2, arms: .9, legs: .7, limbs: .9, hands: .8, feet: .8 },
-      outfit: { armProf: [[0, .06], [1, .06]], legProf: [[0, .07], [1, .065]], boot: { col: "#a8643a", r: .08, len: .12, wide: 1 } } }));
+    outfit: { top: "#2d5bd6", torsoProf: [[0, .14], [.25, .16], [.5, .22], [.75, .29], [.9, .28], [1, .13]], torso: [{ kind: "poly", pts: [-70, 0, 70, 0, 0, 150], col: "skin" }],
+      arm: "skin", armProf: [[0, .12], [.22, .15], [.42, .1], [.7, .11], [1, .085]], leg: "skin", legProf: [[0, .17], [.35, .14], [.7, .08], [1, .06]],
+      legBands: [{ v0: 0, v1: .3, col: "#e8364a" }, { v0: .1, v1: .14, col: "#ffffff" }, { v0: .2, v1: .24, col: "#ffffff" }],
+      hand: { style: "bare" }, boot: { col: "skin", r: .07, len: .2, wide: .9, point: true, cuff: true, cuffCol: "#f2c230" },
+      scarf: { on: true, col: "#e8364a", len: 2.3, flow: 2.4, flap: 1.4, ring: false } },
+    move: { set: "brawler", bounce: 1.15, swing: 1.1, stride: 1.05, lean: -.04, stance: { lean: -.06, arch: -.14, armF: 1.45, elbF: 2.2, spF: .25, armB: -.3, elbB: 1.45, spB: .75, headRot: .14, hop: .2 } } });   // (chest out: one fist up at his shoulder, the other on his hip)
+  if (id === "oldvic") return M0(H, { id, name: "OLD VIC",   // a wild-eyed old foreman: a V cap with a clock on it, a long beard, sneakers, a skateboard on his back
+    body: { build: "tall", scale: 1.02, head: 1.3, torso: .95, girth: 1.6, shoulders: 1.45, arms: 1.25, legs: .72, limbs: 1.5, hands: 1.5, feet: 1.15 },
+    face: { style: "chibi", ears: .5, eyeSize: 1.05, iris: .5, pupil: .45, lashes: false, mouth: .9 }, hair: noHair, colors: { skin: "#f2c6a0", hair: "#f4f2ee", eyes: "#3a2a1a" },
+    outfit: { top: "#7a3b8f", torsoProf: [[0, .18], [.25, .23], [.5, .26], [.75, .25], [.92, .19], [1, .1]], torso: [{ kind: "panel", w: 22, y0: 40, y1: 420, col: "#d9d2c4" }],
+      arm: "#7a3b8f", armBands: [{ v0: .8, v1: 1, col: "#5c2a6c" }], armProf: [[0, .11], [.4, .12], [.7, .1], [1, .11]], leg: "#3a3550", legProf: [[0, .12], [1, .1]], hand: { style: "claw", col: "#f4f2ee" },
+      boot: { col: "#ffffff", r: .11, len: .22, wide: 1.25, sole: true, soleCol: "#e8245a", strap: true, strapCol: "#e8245a", strapCol2: "#e8245a" } },
+    move: { set: "brawler", bounce: 1.35, swing: 1.3, stride: .9, lean: .12, stance: { lean: .28, arch: .18, armF: .85, elbF: .35, spF: .3, armB: .55, elbB: .5, spB: .35, headRot: -.18, hop: .3 } } });
+  if (id === "boxcars") return M0(H, { id, name: "BOXCARS",   // a hulking toad: no neck, its head the top of a great wedge of a body, a mouth right across it, dice for fists
+    body: { build: "tall", scale: 1.1, head: .9, torso: 1.2, girth: 1.75, shoulders: 1.55, arms: 1.25, legs: 1.05, limbs: 1.7, hands: 1.05, feet: 1 },
+    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: "#7cc251", hair: "#7cc251" },
+    outfit: { top: "skin", torsoProf: [[0, .15], [.2, .18], [.45, .24], [.7, .31], [.86, .34], [.95, .3], [1, .2]],
+      torso: [{ kind: "poly", pts: [-120, 60, 120, 60, 70, 330, -70, 330], col: "#e6efb0" }],
+      arm: "skin", armProf: [[0, .12], [.3, .15], [.55, .1], [.8, .12], [1, .1]], leg: "skin", legProf: [[0, .11], [.5, .085], [1, .07]], hand: { style: "bare" },
+      boot: { col: "#5a3d2a", r: .1, len: .24, wide: 1.05, point: true, shaft: true, shaftH: .32, shaftR: .1, cuff: true, cuffCol: "#7a573c" }, pads: { on: true, side: "both", shape: "round", col: "skin", size: 1.7 } },
+    move: { set: "boxer", bounce: 1.25, swing: 1.2, stride: .95, lean: .08, stance: { lean: .14, arch: -.06, armF: .5, elbF: .9, armB: .35, elbB: .9, bodyY: -.04, hop: .5 } } });
+  if (id === "pipe" || id === "pipelet") {        // the plumbers (the user's drawing: two flask-bodied pipe men, a great round bottom and a long neck up to a pipe-cap head, chunky pipe arms raised in fists; a little pot on legs)
+    const col = id === "pipe" ? "#9cc3d5" : "#e0965a", base = { id, name: "THE PLUMBERS", face: { ears: 0 }, hair: noHair, colors: { skin: col, hair: col },
+      outfit: { top: col, arm: col, leg: col, hand: { style: "bare" }, boot: { col: "#3a3f4a", r: .1, len: .18, wide: 1.2, point: true } }, move: { set: "brawler" } };
+    return M0(H, M0(base, id === "pipe" ? { body: { build: "tall", scale: 1.06, head: 1, torso: 1.4, girth: 1, shoulders: 1.3, arms: 1.1, legs: .62, limbs: 1.25, hands: 1.1, feet: 1.1 },
+      outfit: { armProf: [[0, .1], [1, .1]], legProf: [[0, .11], [1, .095]], armBands: [{ v0: .47, v1: .53, col: "#6f97ab" }, { v0: 0, v1: .04, col: "#6f97ab" }] },
+      move: { bounce: 1.25, swing: 1.2, stride: .95, stance: { lean: .04, armF: 1.6, elbF: 1.9, spF: .55, armB: 1.6, elbB: 1.9, spB: .55, hop: .25 } } }
+      : { body: { build: "chibi", scale: .82, head: 1, torso: 1, girth: 1.1, shoulders: 1.2, arms: .95, legs: .7, limbs: .9, hands: .8, feet: .8 },
+      outfit: { armProf: [[0, .06], [1, .06]], legProf: [[0, .075], [1, .06]], boot: { col: "#a8643a", r: .07, len: .12, wide: 1, point: true } },
+      move: { bounce: 1.6, swing: 1.4, stride: 1.2, stance: { armF: .5, elbF: .9, spF: .4, armB: .5, elbB: .9, spB: .4, hop: .6 } } }));
   }
-  if (id === "vinnie") return M0(H, { id, name: "VINNIE",   // a hunched blue vampire: long accordion arms, great crimson cuffs, black flares
-    body: { build: "tall", scale: 1.05, head: 1.05, torso: .95, girth: 1.05, shoulders: 1.25, arms: 1.45, legs: .95, limbs: .95, hands: 1.35, feet: 1 },
+  if (id === "vinnie") return M0(H, { id, name: "VINNIE",   // a squat blue vampire imp (the art: a big round head, a little body, long springy arms, great crimson cuffs, black flares splayed wide)
+    body: { build: "chibi", scale: 1.25, head: .82, torso: 1.15, girth: 1.05, shoulders: 1.5, arms: 2.4, legs: 1.6, limbs: 1, hands: 1.05, feet: 1.2 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#8fd6f5", hair: "#5a12a0" },
-    outfit: { top: "#a51fd6", torsoProf: [[0, .15], [.2, .17], [.45, .15], [.7, .19], [.9, .21], [1, .1]], arm: "#2ec8f4", armBands: [{ v0: .1, v1: .16, col: "#9be8ff" }, { v0: .3, v1: .36, col: "#9be8ff" }, { v0: .5, v1: .56, col: "#9be8ff" }],
-      leg: "#121212", legProf: [[0, .12], [.5, .1], [1, .13]], hand: { style: "bare" }, boot: { col: "#121212", r: .08, len: .24, wide: 1, point: true } }, move: { set: "brawler", bounce: 1 } });
+    outfit: { top: "#a51fd6", torsoProf: [[0, .16], [.25, .17], [.5, .16], [.75, .18], [.92, .19], [1, .1]], arm: "#2ec8f4",
+      armBands: [{ v0: .06, v1: .12, col: "#9be8ff" }, { v0: .2, v1: .26, col: "#9be8ff" }, { v0: .34, v1: .4, col: "#9be8ff" }, { v0: .48, v1: .54, col: "#9be8ff" }, { v0: .62, v1: .68, col: "#9be8ff" }, { v0: .76, v1: .82, col: "#9be8ff" }],
+      armProf: [[0, .075], [.5, .07], [1, .07]], leg: "#121212", legProf: [[0, .17], [.45, .13], [1, .1]], hand: { style: "bare" }, boot: { col: "#121212", r: .08, len: .3, wide: 1, point: true } },
+    move: { set: "brawler", bounce: 1.35, swing: 1.4, stride: 1.1, lean: .1, stance: { lean: .16, arch: .1, armF: .12, elbF: .35, spF: .5, armB: .08, elbB: .35, spB: .5, fNz: .2, fFz: .2, headRot: .1, hop: .35 } } });
   if (id === "ocho") return M0(H, { id, name: "OCHO",   // the octopus: a round yellow body, long thin black arms (four of them), short legs, red boots
     body: { build: "chibi", scale: 1.15, head: 1.3, torso: 1.1, girth: 1.45, shoulders: 1.3, arms: 1.45, legs: .75, limbs: .5, hands: 1.2, feet: 1 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffa833", hair: "#ffe600" },
     outfit: { top: "#ffe600", arm: "#141414", leg: "#141414", hand: { style: "bare" }, boot: { col: "#ff1a1a", r: .1, len: .2, wide: 1.15, cuff: true, cuffCol: "#ffffff" } }, move: { set: "brawler", bounce: 1.1 } });
-  if (id === "rink") return M0(H, { id, name: "RINK",   // the punk dog: a big yellow head, long yellow arms, a black shirt and shorts, black shoes, white socks
-    body: { build: "chibi", scale: 1.05, head: 1.35, torso: 1, girth: 1.2, shoulders: 1.1, arms: 1.35, legs: .8, limbs: 1.25, hands: 1.15, feet: 1.1 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#f2ee00", hair: "#f2ee00" },
-    outfit: { top: "#141414", torsoProf: [[0, .16], [.25, .19], [.5, .2], [.75, .18], [.92, .15], [1, .08]], arm: "skin", leg: "#141414", hand: { style: "bare" },
-      boot: { col: "#141414", r: .1, len: .2, wide: 1.2, cuff: true, cuffCol: "#ffffff" } }, move: { set: "brawler", bounce: 1.3 } });
+  if (id === "rink") return M0(H, { id, name: "RINK",
+  body: { build: "chibi", scale: 1.08, head: 1.2, torso: 1.3, girth: 1.35, shoulders: 1.75, arms: 1.05, legs: .95, limbs: 2.3, hands: 1.2, feet: 1.3 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#f2ee00", hair: "#f2ee00" },
+  outfit: { top: "#141414", arm: "skin", leg: "#141414", hand: { style: "ball", col: "#e9e500" }, boot: { col: "#141414", r: .11, len: .21, wide: 1.25, cuff: true, cuffCol: "#ffffff" } },
+  move: { set: "brawler", bounce: 1.5, swing: 1.4, stride: 1.05, lean: .06, stance: { hop: .045, lean: .06, armF: .16, armB: -.08, spF: .18, spB: .18, headRot: -.06 } } });   // the punk dog: a bell of a yellow head, long floppy black ears, long yellow arms, one big black bulb of shorts (a skull, two spots), a striped shirt, black shoes (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   if (id === "bin") return M0(H, { id, name: "BIN & BON",   // a round kid of an alarm clock: peach arms, pink mittens, stubby purple legs (Bon's on his head: dressNew)
     body: { build: "chibi", scale: 1.2, head: 1, torso: .8, girth: 1.1, shoulders: 2.4, arms: 1.1, legs: .48, limbs: 1.15, hands: 1.2, feet: 1.05 },   // (1, legs .6 till 2026-10-28, the user: "bin and bon should be rounder and closer to rose's size")
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffd0ae", hair: "#4a2c1a" },
-    outfit: { top: "#5236b8", arm: "skin", leg: "#5236b8", hand: { style: "ball", col: "#f05a9a" }, boot: { col: "#f05a9a", r: .1, len: .13, wide: 1.25 } }, move: { set: "brawler", bounce: 1.25 } });
-  if (id === "tusker") return M0(H, { id, name: "TUSKER",   // a big upright bean, tusks, a collar with a star, curly toes, a flag on a tall pole: teal and cream, crimson and gold (my colours: "get creative with the colors")
-    body: { build: "chibi", scale: 1.22, head: .9, torso: 1.1, girth: 1.1, shoulders: 1.15, arms: .8, legs: .6, limbs: 1.15, hands: 1, feet: 1.1 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#2a9d8f", hair: "#2a9d8f" },
-    outfit: { top: "#2a9d8f", arm: "#2a9d8f", leg: "#2a9d8f", hand: { style: "bare" }, boot: { col: "#2a9d8f", r: .1, len: .2, wide: 1.25 }, prop: { kind: "sword", side: "right", size: 1 } },
-    move: { set: "sword", bounce: .9 } });
-  if (id === "rotor") return M0(H, { id, name: "ROTOR",   // an egg of a head, tall spiky hair, a great yellow collar, grey suit, a blue propeller gun
-    body: { build: "chibi", scale: .95, head: 1.15, torso: .85, girth: 1.05, shoulders: 1.1, arms: .85, legs: .7, limbs: .95, hands: 1, feet: .9 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#ffcfa8", hair: "#8b4a1f" },
-    outfit: { top: "#4a4a4a", arm: "skin", leg: "#4a4a4a", hand: { style: "bare" }, boot: { col: "#333333", r: .09, len: .15, wide: 1.1 }, prop: { kind: "sword", side: "right", size: .9 } },
-    move: { set: "brawler", bounce: 1.1 } });
-  if (id === "chispa") return M0(H, { id, name: "CHISPA",   // the little orange bep: a figure of eight, a round lime bottom, no legs to see
-    body: { build: "chibi", scale: .72, head: 1.05, torso: .8, girth: 1.1, shoulders: 1, arms: .75, legs: .45, limbs: 1, hands: .8, feet: .8 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#ffb400", hair: "#ffb400" },
-    outfit: { top: "#ffb400", arm: "#ffb400", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .08, len: .1, wide: 1 } }, move: { set: "brawler", bounce: 1.6 } });
-  if (id === "brisa") return M0(H, { id, name: "BRISA",   // the blue bep: a long cape of wings down the front, two thin lime legs
-    body: { build: "chibi", scale: .92, head: .85, torso: 1, girth: 1.5, shoulders: 1.1, arms: .95, legs: .8, limbs: .6, hands: .8, feet: .75 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#00c8ff", hair: "#00c8ff" },
-    outfit: { top: "#00a6dc", arm: "#00c8ff", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .07, len: .14, wide: 1 } }, move: { set: "brawler", bounce: 1.3 } });
+    outfit: { top: "#5236b8", arm: "skin", leg: "#5236b8", hand: { style: "ball", col: "#f05a9a" }, boot: { col: "#4a30a8", r: .11, len: .13, wide: 1.3 } }, move: { set: "brawler", bounce: 1.5, swing: 1.35, stride: 1.1, lean: .04, stance: { hop: .04, lean: .04, headRot: -.04 } } });   // (2026-11-02, to the drawing: purple feet, not pink; a bouncier, rocking waddle. The user: "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  if (id === "tusker") return M0(H, { id, name: "TUSKER",
+  body: { build: "chibi", scale: 1.22, head: .6, torso: 1.3, girth: 1.0, shoulders: 1.1, arms: .62, legs: .8, limbs: 1.05, hands: .9, feet: 1.15 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#2a9d8f", hair: "#2a9d8f" },
+  outfit: { top: "#2a9d8f", arm: "#2a9d8f", leg: "#2a9d8f", hand: { style: "bare" }, boot: { col: "#2a9d8f", r: .1, len: .2, wide: 1.25 }, prop: { kind: "sword", side: "right", size: 1 } },
+  move: { set: "sword", bounce: .7, swing: .7, stride: 1.1, lean: -.06, stance: { lean: -.08, arch: -.06, headRot: .08 } } });   // a tall upright bean of a walrus, his face on its top (a droopy snout, a grin, tusks), a bandana with a star, a pom, a scalloped cream bottom, curly toes, a flag on a tall pole (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  if (id === "rotor") return M0(H, { id, name: "ROTOR",
+  body: { build: "chibi", scale: 1.0, head: 1.05, torso: 1.0, girth: 1.45, shoulders: 1.45, arms: .75, legs: .52, limbs: 1.15, hands: .95, feet: 1.05 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#ffcfa8", hair: "#8b4a1f" },
+  outfit: { top: "#4a4a4a", arm: "skin", leg: "#3a3a3a", hand: { style: "bare" }, boot: { col: "#2e2e2e", r: .1, len: .15, wide: 1.2 }, prop: { kind: "sword", side: "right", size: .9 } },
+  move: { set: "brawler", bounce: 1.25, swing: .85, stride: .95, lean: .05, stance: { hop: .03, lean: .07, headRot: -.08, armF: .1, armB: .05 } } });   // one egg of a boy: his face on its top, tall spiky hair, a great yellow V of a collar round his middle, a round grey bottom, stubby legs, a blue propeller gun (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  if (id === "chispa") return M0(H, { id, name: "CHISPA",
+  body: { build: "chibi", scale: .75, head: 1.1, torso: .75, girth: 1.3, shoulders: 1, arms: .7, legs: .45, limbs: 1, hands: .7, feet: .8 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#ffb400", hair: "#ffb400" },
+  outfit: { top: "#ffb400", arm: "#ffb400", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .08, len: .1, wide: 1 } },
+  move: { set: "brawler", bounce: 1.9, swing: 1.2, stride: .9, lean: .03, stance: { hop: .075, headRot: -.06 } } });   // the little orange bep: a figure of eight, its wings wrapped over the lime bottom, a big grin in their parting, a flame of a curl (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  if (id === "brisa") return M0(H, { id, name: "BRISA",
+  body: { build: "chibi", scale: .95, head: 1.05, torso: 1.0, girth: 1.25, shoulders: 1, arms: .9, legs: 1.55, limbs: .6, hands: .7, feet: .75 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#00c8ff", hair: "#00c8ff" },
+  outfit: { top: BEP_LIME, arm: "#00c8ff", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .07, len: .14, wide: 1 } },
+  move: { set: "brawler", bounce: 1.35, swing: .9, stride: 1.05, lean: .04, stance: { hop: .03, headRot: -.05, lean: .02 } } });   // the blue bep: broad leaf ears in a bow, big round eyes, a cape of wings parted over a lime body, long thin lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   if (id === "pincho") return M0(H, { id, name: "PINCHO",   // a big pink head (the rest in dress1031), a purple sweater, pale purple sleeves, blue gloves, magenta legs
     body: { build: "chibi", scale: 1.0, head: 1.25, torso: 1.0, girth: 1.35, shoulders: 1.15, arms: .95, legs: .8, limbs: 1.4, hands: 1.05, feet: 1.0 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffa6c9", hair: "#ffa6c9" },
     outfit: { top: "#9b3fe0", arm: "#b884f5", leg: "#ff2f8f", hand: { style: "glove", col: "#3cd7ff" }, boot: { col: "#ff2f8f", r: .11, len: .18, wide: 1.2 } },
-    move: { set: "brawler", bounce: 1.2 } });
+    move: { set: "brawler", bounce: 1.45, stride: .8, swing: 1.35, lean: .08, stance: { spF: .12, spB: .12 } } });   // (nervous, sweating: hopping on the spot, quick little steps; 2026-11-02)
   if (id === "caracol") return M0(H, { id, name: "CARACOL",   // a big blue head (the rest in dress1031), a yellow body, magenta arms, blue hands, chunky orange feet
     body: { build: "chibi", scale: .95, head: 1.3, torso: 1.0, girth: 1.45, shoulders: 1.05, arms: .85, legs: .7, limbs: 1.45, hands: 1.0, feet: 1.3 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#18c8ff", hair: "#18c8ff" },
     outfit: { top: "#ffd21c", arm: "#ff3f9a", leg: "#ffd21c", hand: { style: "ball", col: "#18c8ff" }, boot: { col: "#ff9a00", r: .13, len: .2, wide: 1.35 } },
-    move: { set: "brawler", bounce: .9, stride: .85 } });
+    move: { set: "brawler", bounce: .6, stride: .7, swing: .55, lean: .12, stance: { headRot: .05 } } });   // ("SLOW AND STEADY!": a plod, leant into it under his shell, 2026-11-02)
   if (id === "mordi") return M0(H, { id, name: "MORDI",   // its block of a body is dress1031's; lime legs and feet, big pink fists
     body: { build: "chibi", scale: 1.05, head: 1.0, torso: 1.2, girth: 1.6, shoulders: 2.3, arms: 1.45, legs: .6, limbs: 1.45, hands: 2.7, feet: 1.15 },   // (its shoulders out past the block, so the fists swing outside it; big fists, as drawn)
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ff1f8e", hair: "#ff1f8e" },
     outfit: { top: "#ff1f8e", arm: "#ff3fa6", leg: "#c8ef2a", hand: { style: "ball", col: "#ff3fa6" }, boot: { col: "#c8ef2a", r: .12, len: .17, wide: 1.3 } },
-    move: { set: "brawler", bounce: .95, stance: { armF: 1.25, elbF: 1.7, armB: 1.1, elbB: 1.75 } } });   // (its fists up in front, as the art holds the one with the face)
-  if (id === "flora") return M0(H, { id, name: "FLORA",   // the big pink bep: a mantle of wings round a white belly, chunky lime legs
-    body: { build: "chibi", scale: 1.12, head: .85, torso: 1.3, girth: 2, shoulders: 1.3, arms: 1, legs: .75, limbs: 1.55, hands: 1, feet: 1.2 },
-    face: { ears: 0 }, hair: noHair, colors: { skin: "#ff3a8c", hair: "#ff3a8c" },
-    outfit: { top: "#d4126a", arm: "#ff3a8c", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .11, len: .18, wide: 1.3 } }, move: { set: "brawler", bounce: .9 } });
+    move: { set: "brawler", bounce: 1.3, swing: 1.3, stride: 1.1, stance: { hop: .03, armF: 1.25, elbF: 1.7, armB: 1.1, elbB: 1.75 } } });   // (its fists up in front, as the art holds the one with the face. Bigger fists, a bouncier waddle: 2026-11-02, the user: "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  if (id === "flora") return M0(H, { id, name: "FLORA",
+  body: { build: "chibi", scale: 1.1, head: .95, torso: 1.1, girth: 1.8, shoulders: 1.3, arms: .9, legs: 1.35, limbs: 2.15, hands: .8, feet: 1.3 },
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#ff3a8c", hair: "#ff3a8c" },
+  outfit: { top: BEP_LIME, arm: "#ff3a8c", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .12, len: .2, wide: 1.35 } },
+  move: { set: "brawler", bounce: .75, swing: .5, stride: .8, lean: -.02, stance: { lean: -.04, headRot: .06, bodyY: -.02 } } });   // the big pink bep: a crown of petals, one great bell of a cloak from her head, parted in an A over her open mouth and a white belly, chunky lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   // the five of 2026-10-30 (the user's art, refs/batch1030b): TIC and TAC, the X and the O of TIC TAC TOWER ("they will carry and x and o and are from the ticktack
   // game. they swing their symbol to attack and their special is to throw it"); PK and his pencil ("similar attack pattern for PK"); VEJI, the tall red one ("keep him
   // tall so he stands out ... maybe a head taller" than Camila); ESTRELLA, the cat ("make the cat one purple"). Their bodies here, the rest in dress1030. Names: my picks
@@ -12221,43 +12305,57 @@ function allySpec(id) {
     body: { build: "chibi", scale: 1.45, head: .5, torso: .8, girth: 2.0, shoulders: 1.3, arms: 2.0, legs: .55, limbs: .42, hands: .9, feet: 1.15 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#1d1f24", hair: "#1d1f24" },
     outfit: { top: "#1d1f24", arm: "#1d1f24", leg: "#ffffff", hand: { style: "ball", col: "#1d1f24" }, boot: { col: "#ffffff", r: .1, len: .2, wide: 1.3 } },
-    move: { set: "brawler", bounce: 1.3, swing: 0, stance: { armF: 2.75, elbF: .55, armB: 2.75, elbB: .55 } } });
+    move: { set: "brawler", bounce: 1.55, swing: 0, stride: .85, stance: { armF: 2.75, elbF: .55, armB: 2.75, elbB: .55 }, anims: { run: { armF: [[0, 2.7], [.5, 2.62], [1, 2.7]], armB: [[0, 2.62], [.5, 2.7], [1, 2.62]], elbF: [[0, .45], [1, .45]], elbB: [[0, .45], [1, .45]] } } } });   // (and up over its head as it goes too, as the drawing walks it: 2026-11-02)   // (a ball: bouncing on the spot and as it goes, 2026-11-02)
   if (id === "tic") return M0(H, { id, name: "TIC",   // the X: a tall white capsule, black shorts, white arms, black legs and feet; its X held up over its head
     body: { build: "chibi", scale: 1.45, head: .5, torso: .85, girth: 2.0, shoulders: 1.3, arms: 2.0, legs: .62, limbs: .5, hands: .85, feet: 1.05 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffffff", hair: "#ffffff" },
     outfit: { top: "#ffffff", arm: "#ffffff", leg: "#1d1f24", hand: { style: "ball", col: "#ffffff" }, boot: { col: "#1d1f24", r: .1, len: .19, wide: 1.25 } },
-    move: { set: "brawler", bounce: 1.2, swing: 0, stance: { armF: 2.75, elbF: .55, armB: 2.75, elbB: .55 } } });
+    move: { set: "brawler", bounce: 1.3, swing: 0, stride: 1.05, lean: -.04, stance: { armF: 2.75, elbF: .55, armB: 2.75, elbB: .55 }, anims: { run: { armF: [[0, 2.7], [.5, 2.62], [1, 2.7]], armB: [[0, 2.62], [.5, 2.7], [1, 2.62]], elbF: [[0, .45], [1, .45]], elbB: [[0, .45], [1, .45]] } } } });   // (straight-backed, proud of its X, a little spring in it, 2026-11-02)
   if (id === "pk") return M0(H, { id, name: "PK",   // a lime kid in a mop of blue curls, a pink tee and shorts, yellow shoes; his great pencil (and the little black one on his hand)
     body: { build: "chibi", scale: 1.08, head: 1.0, torso: 1.4, girth: 1.3, shoulders: 1.25, arms: 1.2, legs: 1.05, limbs: 1.2, hands: 1.15, feet: 1.2 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#bfe52c", hair: "#4650d8" },
     outfit: { top: "#ff8ac4", arm: "skin", leg: "skin", legBands: [{ v0: 0, v1: .34, col: "#ff8ac4" }], hand: { style: "bare" },
       boot: { col: "#ffe24a", r: .11, len: .2, wide: 1.25, sole: true, soleCol: "#9a9aa4" }, prop: { kind: "sword", side: "right", size: 1 } },
-    move: { set: "sword", bounce: 1.15 } });
+    move: { set: "sword", bounce: 1.35, swing: 1.25, stride: 1.05, lean: .06 } });   // (excitable: bouncing on his toes, arms going, 2026-11-02)
   if (id === "veji") return M0(H, { id, name: "VEJI",   // the tall red one: long thin arms and legs, blue plates, horns, a tail, pointed shoes on yellow soles; a star over his head
-    body: { build: "tall", scale: .98, head: .78, torso: 1.05, girth: .72, shoulders: 1.15, arms: 1.55, legs: 1.55, limbs: .55, hands: 1.1, feet: .85 },
+    body: { build: "tall", scale: .98, head: .8, torso: 1.05, girth: 1.12, shoulders: 1.6, arms: 1.5, legs: 1.55, limbs: .78, hands: 1.45, feet: .9 },   // (the drawing's build, 2026-11-02: shoulders twice his waist, forearms like blocks, big clawed hands, legs like stilts)
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ff1430", hair: "#ff1430" },
-    outfit: { top: "#ff1430", torsoProf: [[0, .14], [.2, .15], [.45, .12], [.7, .17], [.88, .19], [1, .1]],
+    outfit: { top: "#ff1430", torsoProf: [[0, .1], [.2, .095], [.4, .085], [.62, .17], [.84, .25], [1, .11]], armProf: [[0, .075], [.38, .06], [.5, .12], [.6, .17], [.88, .16], [1, .12]], legProf: [[0, .085], [.3, .072], [.6, .055], [1, .05]],
       torso: [{ kind: "band", y0: 150, y1: 182, col: "#12a6ee" }, { kind: "poly", pts: [-64, 215, 64, 215, 0, 258], col: "#12a6ee" }, { kind: "poly", pts: [-52, 270, 52, 270, 0, 308], col: "#12a6ee" }, { kind: "panel", w: 16, y0: 182, y1: 330, col: "#12a6ee" }],
       arm: "skin", armBands: [{ v0: .1, v1: .32, col: "#12a6ee" }, { v0: .5, v1: .74, col: "#12a6ee" }], leg: "skin", legBands: [{ v0: .1, v1: .44, col: "#12a6ee" }],
       hand: { style: "bare" }, boot: { col: "#ff1430", r: .06, len: .3, wide: .9, point: true, sole: true, soleCol: "#ffd21f", cuff: true, cuffCol: "#12a6ee" } },
-    move: { set: "brawler", stride: 1.2, bounce: .85 } });
+    move: { set: "brawler", stride: 1.25, bounce: .7, swing: .75, lean: -.05, stance: { spF: .16, spB: .16, armF: .1, armB: -.06, elbF: .25, elbB: .3, headRot: -.06 } } });   // (cool: chin up, leaning back on his heels, those big arms hanging wide)
   if (id === "estrella") return M0(H, { id, name: "ESTRELLA",   // the cat, purple: a round head, a big bow with its star, a wrap top of lightning bolts, a belt, wide trousers, ribbed boots, her mic
-    body: { build: "chibi", scale: 1.02, head: 1.2, torso: 1.05, girth: 1.35, shoulders: 1.2, arms: 1.0, legs: .85, limbs: 1.4, hands: 1.0, feet: 1.05 },
+    body: { build: "chibi", scale: 1.02, head: 1.32, torso: 1.1, girth: 2.1, shoulders: 1.2, arms: 1.0, legs: .9, limbs: 1.4, hands: 1.0, feet: 1.05 },   // (rounder, as the drawing: a big round head on a pear of a body, 2026-11-02)
     face: { ears: 0 }, hair: noHair, colors: { skin: "#9b5be0", hair: "#6c33b8" },
     outfit: { top: "#ff4fa6", torsoProf: [[0, .16], [.2, .19], [.45, .2], [.7, .22], [.9, .2], [1, .1]], torso: [{ kind: "band", y0: 330, y1: 362, col: "#1d1f24" }],
-      arm: "#ff4fa6", armBands: [{ v0: .5, v1: 1, col: "#9b5be0" }], leg: "#3d2a78", hand: { style: "glove", col: "#1d1f24" },
+      arm: "#ff4fa6", armBands: [{ v0: .5, v1: 1, col: "#9b5be0" }], leg: "#3d2a78", legProf: [[0, .25], [.2, .26], [.42, .21], [.6, .11], [.75, .075], [1, .07]], hand: { style: "glove", col: "#1d1f24" },
       boot: { col: "#f4f2ee", r: .12, len: .2, wide: 1.25, cuff: true, cuffCol: "#c9c6d0" } },
-    move: { set: "brawler", bounce: 1.15 } });
+    move: { set: "brawler", bounce: 1.1, swing: 1.35, stride: .9, lean: -.05, stance: { armB: 2.6, elbB: .85, spB: 1.15, headRot: -.08 } } });   // (a diva: chin up, her mic held high as in the drawing, a sashay in her walk)
   return M0(H, { id, name: "STILT",
-    body: { build: "tall", scale: 1.1, head: .9, torso: 1.15, girth: .92, shoulders: 1.2, arms: 1.6, legs: 1.5, limbs: .55, hands: 1, feet: .8 },
-    face: { ears: 0 }, hair: { mode: "cap", style: "none", spike: 0, bangs: "none" }, colors: { skin: S, hair: "#1d3f8f" },
-    outfit: { top: "#fff1dc", torsoProf: [[0, .14], [.15, .15], [.4, .115], [.65, .18], [.85, .23], [.95, .19], [1, .09]],
+    body: { build: "tall", scale: 1.1, head: 1.0, torso: 1.15, girth: .95, shoulders: 1.2, arms: 1.6, legs: 1.5, limbs: .68, hands: 1.15, feet: .85 },
+    face: { ears: 0 }, hair: noHair, colors: { skin: "#a9dcea", hair: "#1d3f8f" },
+    outfit: { top: "#fff1dc", torsoProf: [[0, .15], [.15, .16], [.4, .12], [.65, .18], [.85, .23], [.95, .19], [1, .09]],
       torso: [{ kind: "poly", pts: [-80, 0, 80, 0, 0, 200], col: "skin" }, { kind: "poly", pts: [-80, 0, -50, 0, 60, 230, 30, 250], col: "#f3dcc0" }, { kind: "band", y0: 285, y1: 335, col: "#ff5a3c" }],
-      arm: "skin", leg: "skin", hand: { style: "bare" }, boot: { col: S, r: .07, len: .22, wide: .9, point: true } },
-    move: { set: "brawler", stride: 1.25, bounce: .8 } });
+      arm: "skin", armProf: [[0, .075], [.5, .065], [1, .07]], leg: "skin", legProf: [[0, .085], [.45, .075], [1, .065]], legBands: [{ v0: 0, v1: .16, col: "#fff1dc" }, { v0: .14, v1: .16, col: "#e6cfae" }],
+      hand: { style: "bare" }, boot: { col: "#a9dcea", r: .08, len: .24, wide: .95, point: true } },
+    move: { set: "brawler", stride: 1.3, bounce: 1.1, swing: 1.35, lean: -.04, stance: { lean: -.08, arch: -.1, armF: .3, elbF: .45, armB: .35, elbB: .55, headRot: .14, hop: .2 } } });   // (a swagger: chin up, chest out, loose arms)
 }
 // the six berry buddies of 2026-10-26 (the user's art): what the kit can't make. Bin's alarm clock with Bon on top, Tusker's bean and flag, Rotor's head, collar
 // and propeller gun, and the three beps (their wings for arms: bepWings). Post steps run after each sync (export/pals.js hands their nodes to the 3DS: allies.cpp allyPost)
+// (2026-11-02, the remodel to the drawings) a smooth sheet of points at(u, v), shared corners so it shades round; a cloak of wings: a bell hung from par, parted in
+// front by gap(v) (v: 0 its hem .. 1 its top), ragged at the hem; and an eased curve through [v, r] points
+function bellSheet(N, R, at) { const P3 = [], I = [];
+  for (let j = 0; j <= R; j++) for (let i = 0; i <= N; i++) P3.push(...at(i / N, j / R));
+  for (let j = 0; j < R; j++) for (let i = 0; i < N; i++) { const a = j * (N + 1) + i, b = a + 1, c = a + N + 2, d = a + N + 1; I.push(a, b, c, a, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(P3, 3)); g.setIndex(I); g.computeVertexNormals(); return g; }
+function cloakOf(r, par, { top, len, rad, gap, col, hem, hemN = 7, N = 36, R = 14 }) {
+  const at = (u, v) => { const g = gap(v), a = g + u * (Math.PI * 2 - 2 * g), rr = rad(v); return [Math.cos(a) * rr, top - len + v * len, Math.sin(a) * rr]; };
+  const m = KIT.util.toonT(col, { side: THREE.DoubleSide }); r.mats.push(m); const c = new THREE.Mesh(bellSheet(N, R, at), m); par.add(c);
+  const hm = KIT.util.toonT(col); r.mats.push(hm);
+  if (hem) for (let k = 0; k < hemN; k++) { const u = (k + .5) / hemN, g = gap(0), a = g + u * (Math.PI * 2 - 2 * g), t = new THREE.Mesh(new THREE.ConeGeometry(hem, hem * 3, 6).rotateZ(Math.PI), hm); t.position.set(Math.cos(a) * rad(0), top - len - hem * 1.2, Math.sin(a) * rad(0)); par.add(t); }
+  return c; }
+const easePts = (pts, v) => { for (let i = 1; i < pts.length; i++) if (v <= pts[i][0]) { const [a, ra] = pts[i - 1], [b, rb] = pts[i], u = (v - a) / (b - a); return ra + (rb - ra) * u * u * (3 - 2 * u); } return pts[pts.length - 1][1]; };
 const DRESS_NEW = ["bin", "tusker", "rotor", "chispa", "brisa", "flora"];
 function bepWings(r, post, make) {                 // a bep's wings for arms: each hangs from its shoulder and swings as its arm does (the arm's tube and hand hidden)
   const down = new THREE.Vector3(0, -1, 0), d = new THREE.Vector3();
@@ -12277,21 +12375,22 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
   if (id === "bin") {
     r.torso.mesh.visible = false;
     const Pu = M("#5236b8"), Yo = M("#ffb81e"), Hp = M("#f0287a"), Lp = M("#ff9ad0"), Gr = M("#a9a9b8"), Ye = M("#ffd21f");
-    const R = .34, FR = .21, FX = Math.sqrt(R * R - FR * FR);   // (head units: the head's scaled up half again. A bigger ball, sat lower, his legs out from under it: rounder, 2026-10-28; was .28, .175, at -.21)
+    const R = .36, FR = .29, FX = Math.sqrt(R * R - FR * FR);   // (head units: the head's scaled up half again. A bigger ball, sat lower, his legs out from under it: rounder, 2026-10-28; was .28, .175, at -.21. .34, .21 till 2026-11-02: his face near fills the front, as drawn)
     const ck = new THREE.Group(); pos(ck, 0, -.28, 0); r.head.add(ck); r.clock = ck;   // the alarm clock he's in: a deep purple ball open in front, a thick gold rim round his face, two bells
     ck.add(P(new THREE.SphereGeometry(R, 28, 20, 0, Math.PI * 2, Math.asin(FR / R), Math.PI - Math.asin(FR / R)).rotateZ(-Math.PI / 2), Pu));
-    ck.add(pos(P(new THREE.TorusGeometry(FR, .036, 10, 32).rotateY(Math.PI / 2), Yo), FX, 0, 0));
+    ck.add(pos(P(new THREE.TorusGeometry(FR, .046, 12, 36).rotateY(Math.PI / 2), Yo), FX, 0, 0));
     const [cv, g] = U.cv2(256, 256); g.fillStyle = "#ffd0ae"; g.fillRect(0, 0, 256, 256);   // his face: a dark brown bob, straight bangs
-    g.fillStyle = "#4a2c1a"; g.fillRect(0, 0, 256, 96); g.beginPath(); g.moveTo(0, 0); g.lineTo(70, 0); g.lineTo(70, 176); g.quadraticCurveTo(64, 214, 30, 214); g.lineTo(0, 214); g.fill();
-    g.beginPath(); g.moveTo(256, 0); g.lineTo(186, 0); g.lineTo(186, 176); g.quadraticCurveTo(192, 214, 226, 214); g.lineTo(256, 214); g.fill();
+    g.fillStyle = "#4a2c1a"; g.beginPath(); g.moveTo(0, 0); g.lineTo(256, 0); g.lineTo(256, 206); g.quadraticCurveTo(236, 214, 222, 196); g.quadraticCurveTo(212, 160, 206, 132);   // (2026-11-02, as drawn: a heavy bob, long bangs parted in the middle to a point, a lock down each side past his eyes)
+    g.quadraticCurveTo(172, 126, 136, 148); g.lineTo(128, 116); g.lineTo(120, 148); g.quadraticCurveTo(84, 126, 50, 132); g.quadraticCurveTo(44, 160, 34, 196); g.quadraticCurveTo(20, 214, 0, 206); g.closePath(); g.fill();
+    g.strokeStyle = "#6e4630"; g.lineWidth = 7; g.lineCap = "round"; [[96, 26, 86, 108], [160, 26, 170, 108], [40, 56, 30, 150], [216, 56, 226, 150]].forEach(([a, b, c, d]) => { g.beginPath(); g.moveTo(a, b); g.quadraticCurveTo((a + c) / 2 + 8, (b + d) / 2, c, d); g.stroke(); });   // (lighter strands)
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(KIT.settleTex(tex));
     ck.add(pos(P(new THREE.CircleGeometry(FR, 32).rotateY(Math.PI / 2), MX("#ffffff", { map: tex })), FX + .002, 0, 0));
-    eye(ck, FX + .004, -.012, -.062, .62, "#7a4422"); eye(ck, FX + .004, -.012, .062, .62, "#7a4422");
-    ck.add(pos(P(new THREE.BoxGeometry(.008, .008, .03), M("#9c4a3a")), FX + .004, -.1, 0));   // a tiny mouth
-    [-1, 1].forEach(s => { const b = new THREE.Group(); pos(b, -.02, R * .86, s * R * .5); b.rotation.x = s * .6; ck.add(b);   // the bells
-      b.add(P(new THREE.CylinderGeometry(.065, .075, .06, 18), Yo)); b.add(pos(P(new THREE.SphereGeometry(.065, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2), Yo), 0, .03, 0)); b.add(pos(P(new THREE.SphereGeometry(.018, 8, 6), Yo), 0, .1, 0)); });
+    eye(ck, FX + .004, -.07, -.105, .85, "#7a4422"); eye(ck, FX + .004, -.07, .105, .85, "#7a4422");   // (big, low and wide apart, as drawn: 2026-11-02)
+    ck.add(pos(P(new THREE.BoxGeometry(.008, .008, .036), M("#9c4a3a")), FX + .004, -.155, 0));   // a tiny mouth
+    const bells = [-1, 1].map(s => { const b = new THREE.Group(); pos(b, -.02, R * .77, s * R * .64); b.rotation.x = s * .7; ck.add(b);   // the bells: two big flat gold drums up on his shoulders, as drawn (2026-11-02; were little domes)
+      b.add(pos(P(new THREE.CylinderGeometry(.112, .118, .08, 28), Yo), 0, .03, 0)); b.add(pos(P(new THREE.CylinderGeometry(.09, .112, .025, 28), M("#ffd76a")), 0, .082, 0)); b.add(pos(P(new THREE.CylinderGeometry(.03, .03, .05, 10), Yo), 0, -.02, 0)); return b; });
     ck.add(pos(P(new THREE.TorusGeometry(.035, .013, 8, 16), Yo), .04, -.15, -R * .87));   // the winder, low on his side
-    const bon = new THREE.Group(); r.bonHome = [-.01, R - .01, 0]; pos(bon, ...r.bonHome); bon.scale.setScalar(.62); ck.add(bon); r.bon = bon;   // Bon, sat on top: a hot pink hood with a spike, a grey face in a yellow visor, a wind-up key
+    const bon = new THREE.Group(); r.bonHome = [-.05, R - .025, 0]; pos(bon, ...r.bonHome); bon.scale.setScalar(.95); ck.add(bon); r.bon = bon;   // Bon, sat on top: a hot pink hood with a spike, a grey face in a yellow visor, a wind-up key
     bon.add(pos(P(new THREE.SphereGeometry(.12, 14, 10).scale(1, .8, 1), Lp), 0, .08, 0));
     [-1, 1].forEach(s => bon.add(pos(P(new THREE.SphereGeometry(.045, 8, 6).scale(1.3, .7, 1), Lp), .06, .01, s * .065)));
     bon.add(pos(P(new THREE.SphereGeometry(.15, 16, 12), Hp), -.01, .25, 0));
@@ -12302,30 +12401,36 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
     const key = new THREE.Group(); pos(key, -.17, .15, 0); bon.add(key); r.bonKey = key;
     key.add(pos(P(new THREE.CylinderGeometry(.015, .015, .08, 6).rotateZ(Math.PI / 2), Ye), .03, 0, 0));
     [-1, 1].forEach(s => key.add(pos(P(new THREE.TorusGeometry(.04, .014, 6, 14), Ye), -.03, s * .04, 0)));
-    post.push(() => { bonPose(r); key.rotation.x = time * 4; });   // (sat there bobbing, or out flying: bonPose)
-  } else if (id === "tusker") {
-    r.torso.mesh.visible = false;
-    const Te = M("#2a9d8f"), TeD = M("#1f7a6f"), Cr = M("#f4e3c1"), Iv = M("#fff6e0"), Rd = M("#d62839"), Au = M("#ffc93c");
-    const body = new THREE.Group(); r.body.add(body); r.bean = body;   // a big upright bean, along his spine
-    body.add(P(new THREE.LatheGeometry([[0, -.16], [.3, -.12], [.43, .06], [.45, .3], [.41, .56], [.33, .78], [.2, .93], [0, .98]].map(([x, y]) => new THREE.Vector2(x, y)), 24), Te));
-    body.add(pos(P(new THREE.SphereGeometry(.3, 18, 12).scale(.5, .62, .95), Cr), .33, .1, 0));   // the cream belly, scalloped along its top
-    for (let k = -2; k <= 2; k++) body.add(pos(P(new THREE.SphereGeometry(.055, 10, 8).scale(.5, 1, 1), Cr), .43 - Math.abs(k) * .035, .28 - Math.abs(k) * .025, k * .095));
-    body.add(pos(P(new THREE.CylinderGeometry(.33, .37, .13, 22, 1, true), MX("#d62839", { side: THREE.DoubleSide })), 0, .74, 0));   // the collar: lightning bolts, a star in front
+    post.push(p => { bonPose(r); key.rotation.x = time * 4;   // (sat there bobbing, or out flying: bonPose. Bon's as big as drawn now, .95 (was .62), 2026-11-02)
+      const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 420) : 0, ring = time % 7 < .7, br = Math.sin(time * 3);   // (every few seconds his alarm goes off: the bells rattle and he shivers)
+      ck.rotation.x = Math.sin(time * 10) * .07 * sp + (ring ? Math.sin(time * 70) * .03 : Math.sin(time * 1.6) * .025); ck.scale.set(1 + .03 * br, 1 - .03 * br, 1 + .03 * br);   // (he rocks side to side on the run, breathes in his clock)
+      bells.forEach((b, i) => { b.rotation.z = ring ? Math.sin(time * 90 + i) * .2 : Math.sin(time * 4 + i * 2) * .05 * (1 + sp * 2); });
+      if (!r.bonFly) { r.bon.rotation.y = Math.sin(time * .8) * .55 + Math.sin(time * 2.1) * .12; r.bon.rotation.z = Math.sin(time * 1.3) * .08 - sp * .2; } });   // (Bon looks round, and leans back into the wind)
+  } else if (id === "tusker") {   // (remodelled to its drawing, 2026-11-02)
+    const K = M("#1d1f24"), MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; };
+    r.torso.mesh.visible = false; r.head.visible = false;   // (his head's the top of the bean: the face is on it)
+    const Te = M("#2a9d8f"), TeD = M("#1f7a6f"), Cr = M("#f4e3c1"), Iv = M("#fff6e0"), Au = M("#ffc93c");
+    const body = new THREE.Group(); r.body.add(body); r.bean = body; const bean = new THREE.Group(); bean.scale.set(1.3, 1, 1.3); body.add(bean);   // a tall upright bean, his face at the top of it: an egg nearly twice as tall as he's wide, as drawn
+    bean.add(P(new THREE.LatheGeometry([[0, -.2], [.27, -.17], [.37, -.02], [.4, .3], [.39, .7], [.35, 1.05], [.28, 1.32], [.16, 1.48], [0, 1.53]].map(([x, y]) => new THREE.Vector2(x, y)), 26), Te));
+    bean.add(pos(P(new THREE.LatheGeometry([[.27, -.17], [.375, -.03], [.4, .1], [.4, .14]].map(([x, y]) => new THREE.Vector2(x, y)), 26), Cr), 0, -.002, 0));   // the cream of his bottom, scalloped round its top edge
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; bean.add(pos(P(new THREE.SphereGeometry(.07, 10, 8).scale(.45, 1, 1), Cr), Math.cos(a) * .395, .16, Math.sin(a) * .395)); }
+    const sc = new THREE.Group(); pos(sc, 0, 1.02, 0); bean.add(sc);   // the bandana round his neck: crimson, lightning bolts, a gold star in front
+    sc.add(P(new THREE.CylinderGeometry(.365, .395, .14, 26, 1, true), MX("#d62839", { side: THREE.DoubleSide })));
     const star = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, q = i % 2 ? .035 : .085; i ? star.lineTo(Math.cos(a) * q, Math.sin(a) * q) : star.moveTo(Math.cos(a) * q, Math.sin(a) * q); }
-    const st = P(new THREE.ExtrudeGeometry(star, { depth: .02, bevelEnabled: false }).rotateY(Math.PI / 2), Au); pos(st, .37, .74, 0); body.add(st);
+    const st = P(new THREE.ExtrudeGeometry(star, { depth: .02, bevelEnabled: false }).rotateY(Math.PI / 2), Au); pos(st, .385, 0, 0); sc.add(st);
     const bolt = new THREE.Shape([[-.03, .05], [.02, .05], [0, .01], [.04, .01], [-.02, -.06], [0, -.01], [-.04, -.01]].map(([x, y]) => new THREE.Vector2(x, y)));
-    [-1, 1].forEach(s => { const b = P(new THREE.ExtrudeGeometry(bolt, { depth: .015, bevelEnabled: false }), Au); b.rotation.y = s * .9 + Math.PI / 2; pos(b, .22, .74, s * .28); body.add(b); });
-    body.add(pos(P(new THREE.SphereGeometry(.11, 14, 10), Au), -.02, .7, -.36));   // the gold pom on one shoulder
-    post.push(() => { const p = r.torso.pts; body.position.copy(p[1]); body.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
-    const hd = new THREE.Group(); r.head.add(hd);   // his face, high on the bean: a droopy snout, two dot eyes, a wide grin, tusks out to the sides
-    hd.add(P(new THREE.SphereGeometry(.27, 18, 14), Te));
-    const sn = P(new THREE.CapsuleGeometry(.085, .16, 6, 12), Te); sn.rotation.z = -1.15; pos(sn, .3, -.07, 0); hd.add(sn);
-    hd.add(pos(P(new THREE.SphereGeometry(.05, 10, 8), TeD), .41, -.15, 0));
-    [-1, 1].forEach(s => hd.add(pos(P(new THREE.SphereGeometry(.035, 8, 6), K), .23, .1, s * .1)));
-    const grin = P(new THREE.TorusGeometry(.13, .014, 4, 16, Math.PI), K); grin.rotation.set(0, Math.PI / 2, Math.PI); pos(grin, .2, -.1, 0); hd.add(grin);
-    [-1, 1].forEach(s => { const t = new THREE.Group(); pos(t, .2, -.13, s * .15); hd.add(t);
-      const c = P(new THREE.CylinderGeometry(.026, .034, .14, 8), Iv); c.rotation.x = s * 1.3; pos(c, 0, .01, s * .06); t.add(c);
-      const tip = P(new THREE.ConeGeometry(.026, .14, 8), Iv); tip.rotation.x = s * .55; pos(tip, 0, .08, s * .16); t.add(tip); });
+    [-1, 1].forEach(s => { const b = P(new THREE.ExtrudeGeometry(bolt, { depth: .015, bevelEnabled: false }), Au); b.rotation.y = s * .9 + Math.PI / 2; pos(b, .3, 0, s * .3); sc.add(b); });
+    bean.add(pos(P(new THREE.SphereGeometry(.12, 14, 10).scale(1 / 1.3, 1, 1 / 1.3), Au), -.02, 1.06, -.38));   // the gold pom on his shoulder
+    const fc = new THREE.Group(); pos(fc, .39, 1.25, 0); fc.scale.setScalar(1.5); body.add(fc);   // his face: two dot eyes, a big droopy snout (nostrils on top), a wide grin under it, a tusk curving up each side
+    [-1, 1].forEach(s => fc.add(pos(P(new THREE.SphereGeometry(.035, 8, 6), K), .02, .1, s * .11)));
+    const sn = new THREE.Group(); pos(sn, .06, .0, 0); fc.add(sn);
+    sn.add(pos(P(new THREE.SphereGeometry(.12, 14, 10).scale(.9, 1.15, 1.25), Te), .04, -.04, 0)); [-1, 1].forEach(s => sn.add(pos(P(new THREE.SphereGeometry(.024, 8, 6), TeD), .1, .04, s * .045)));
+    const grin = P(new THREE.TorusGeometry(.13, .014, 4, 16, Math.PI), K); grin.rotation.set(0, Math.PI / 2, Math.PI); pos(grin, .0, -.12, 0); fc.add(grin);
+    [-1, 1].forEach(s => { const t = new THREE.Group(); pos(t, -.04, -.1, s * .27); fc.add(t);
+      const c = P(new THREE.CylinderGeometry(.028, .036, .14, 8), Iv); c.rotation.x = s * 1.25; pos(c, 0, .01, s * .06); t.add(c);
+      const tip = P(new THREE.ConeGeometry(.028, .15, 8), Iv); tip.rotation.x = s * .35; pos(tip, 0, .09, s * .15); t.add(tip); });
+    post.push(p => { const q = r.torso.pts; body.position.copy(q[1]); body.rotation.z = -Math.atan2(q[4].x - q[1].x, q[4].y - q[1].y);   // (the bean sways with his strut; the snout wobbles)
+      const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0; body.rotation.x = Math.sin(time * (sp > .1 ? 7 : 1.6)) * (.035 + sp * .05); sn.rotation.z = Math.sin(time * 5) * .06; });
     r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);   // little three-fingered hands
       g.add(pos(P(new THREE.SphereGeometry(.07, 12, 10), Te), 0, -.06, 0));
       [-1, 0, 1].forEach(k => { const f = P(new THREE.CapsuleGeometry(.022, .05, 3, 6), Te); pos(f, .02, -.13, k * .035); f.rotation.x = k * .3; g.add(f); }); });
@@ -12342,18 +12447,30 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
       [1, -1].forEach(sd => { const bd = P(new THREE.CircleGeometry(.125, 24), cm); bd.rotation.y = sd < 0 ? Math.PI : 0; pos(bd, -.23, -.18, sd * .004); fl.add(bd);   // (on a cream badge, each side of it)
         const m = P(new THREE.PlaneGeometry(.2, .2 * im.height / im.width), lm); m.rotation.y = sd < 0 ? Math.PI : 0; pos(m, -.23, -.18, sd * .008); fl.add(m); }); };
     logo(); post.push(() => { fl.rotation.x = Math.sin(time * 5) * .3; if (!fl.__logo) logo(); });   // (flapping)
-  } else if (id === "rotor") {
-    const Sk = M("#ffcfa8"), Hr = M("#8b4a1f"), HrD = M("#6e3714"), Bl = M("#3a9aff"), Pu = M("#b030f0"), Dk = M("#2a2f3a");
-    const hd = new THREE.Group(); r.head.add(hd);   // an egg of a head, tall spiky brown hair, cross eyes, a frown
-    hd.add(P(new THREE.SphereGeometry(.33, 20, 16).scale(1, 1.12, 1), Sk));
-    [[-.02, .38, 0, .1, 0, .1, .38], [.1, .34, .1, -.35, .4, .08, .3], [.1, .34, -.1, -.35, -.4, .08, .3], [-.12, .34, .12, .45, .45, .09, .32], [-.12, .34, -.12, .45, -.45, .09, .32], [-.2, .22, 0, 1.1, 0, .09, .3], [.18, .27, 0, -.7, 0, .07, .24]]
-      .forEach(([x, y, z, rz, rx, rr, h], i) => { const c = P(new THREE.ConeGeometry(rr, h, 7), i % 2 ? HrD : Hr); c.rotation.set(rx, 0, rz); pos(c, x, y, z); hd.add(c); });
-    hd.add(pos(P(new THREE.SphereGeometry(.335, 20, 10, 0, Math.PI * 2, 0, Math.PI * .4).scale(1, 1.12, 1), Hr), -.01, .0, 0));
-    eye(hd, .3, .02, -.1, 1, "#7a4422"); eye(hd, .3, .02, .1, 1, "#7a4422");
-    [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .028, .13), HrD); b.rotation.x = -s * .5; pos(b, .315, .12, s * .1); hd.add(b); });   // brows down in the middle
-    const fr = P(new THREE.TorusGeometry(.045, .012, 4, 10, Math.PI), K); fr.rotation.set(0, Math.PI / 2, 0); pos(fr, .325, -.14, 0); hd.add(fr);
-    hd.add(pos(P(new THREE.SphereGeometry(.03, 8, 6), Sk), .34, -.04, 0));
-    r.chest.add(pos(P(new THREE.CylinderGeometry(.52, .2, .38, 24, 1, true, Math.PI / 2 + .55, Math.PI * 2 - 1.1), MX("#f8e84a", { side: THREE.DoubleSide })), -.04, -.04, 0));   // the great yellow collar, open in front
+  } else if (id === "rotor") {   // (remodelled to its drawing, 2026-11-02)
+    const K = M("#1d1f24"), Wh = M("#ffffff"), MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; };
+    const eye = (par, x, y, z, s, iris) => { par.add(pos(P(new THREE.SphereGeometry(.07 * s, 12, 10).scale(.4, 1, 1), Wh), x, y, z)); if (iris) par.add(pos(P(new THREE.SphereGeometry(.05 * s, 10, 8).scale(.4, 1, 1), M(iris)), x + .01 * s, y - .006 * s, z));
+      par.add(pos(P(new THREE.SphereGeometry(.03 * s, 8, 6).scale(.4, 1, 1), K), x + .016 * s, y - .01 * s, z)); par.add(pos(P(new THREE.SphereGeometry(.013 * s, 6, 4), Wh), x + .026 * s, y + .02 * s, z + .014 * s)); };
+    const Sk = M("#ffcfa8"), Hr = M("#8b4a1f"), HrD = M("#6e3714"), Bl = M("#3a9aff"), Pu = M("#b030f0"), Dk = M("#2a2f3a"), Gy = M("#4a4a4a");
+    const hd = new THREE.Group(); pos(hd, 0, -.04, 0); r.head.add(hd);   // the top of the egg he is: his face, tall spiky brown hair swept back, a scowl, little round ears
+    hd.add(P(new THREE.SphereGeometry(.36, 22, 16).scale(1, 1.05, 1.05), Sk));
+    const hair = new THREE.Group(); hd.add(hair);
+    [[-.02, .4, 0, .15, 0, .12, .42], [.12, .36, .12, -.35, .45, .1, .34], [.12, .36, -.12, -.35, -.45, .1, .34], [-.13, .37, .15, .5, .5, .1, .36], [-.13, .37, -.15, .5, -.5, .1, .36], [-.24, .24, 0, 1.15, 0, .1, .34], [.2, .3, 0, -.75, 0, .08, .26], [.04, .4, .2, -.05, .7, .085, .3], [.04, .4, -.2, -.05, -.7, .085, .3]]
+      .forEach(([x, y, z, rz, rx, rr, h], i) => { const c = P(new THREE.ConeGeometry(rr, h, 7), i % 2 ? HrD : Hr); c.rotation.set(rx, 0, rz); pos(c, x, y, z); hair.add(c); });
+    hair.add(pos(P(new THREE.SphereGeometry(.365, 22, 10, 0, Math.PI * 2, 0, Math.PI * .38).scale(1, 1.05, 1.05), Hr), -.015, 0, 0));
+    eye(hd, .33, .02, -.11, 1.05, "#7a4422"); eye(hd, .33, .02, .11, 1.05, "#7a4422");
+    [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .03, .14), HrD); b.rotation.x = -s * .5; pos(b, .345, .13, s * .11); hd.add(b); });   // brows down in the middle: cocky, not cross
+    hd.add(pos(P(new THREE.BoxGeometry(.01, .012, .07), M("#9c4a3a")), .355, -.12, .02));   // a small flat mouth, a little to one side
+    [-1, 1].forEach(s => hd.add(pos(P(new THREE.SphereGeometry(.06, 10, 8).scale(.5, 1, 1), Sk), -.02, .0, s * .37)));
+    r.torso.mesh.visible = false;   // the bottom of the egg: dark grey, round, his stubby legs under it
+    const bod = new THREE.Group(); r.body.add(bod);
+    bod.add(P(new THREE.LatheGeometry([[0, -.18], [.28, -.16], [.42, -.04], [.47, .12], [.45, .28], [.36, .42], [0, .48]].map(([x, y]) => new THREE.Vector2(x, y)), 24).scale(1, 1, 1.05), Gy));
+    post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+    const col = new THREE.Group(); pos(col, -.02, -.24, 0); hd.add(col);   // the great yellow collar: up round his cheeks, open in a V under his chin, flaring out over his body
+    { const P3 = [], N = 48, R = 12, rad = v => .33 + .19 * v * v, gap = v => .06 + 1.0 * v;   // (a flared cone, open in front in a V: shut at its foot, wide at the top; each ring runs edge to edge of the V, so its edges are clean)
+      const at = (u, v) => { const g = gap(v), a = g + u * (Math.PI * 2 - 2 * g), rr = rad(v); return [Math.cos(a) * rr, (v - .5) * .34, Math.sin(a) * rr]; };
+      const cg = bellSheet(N, R, at);
+      col.add(P(cg, MX("#f8e84a", { side: THREE.DoubleSide }))); }
     const other = r.hands.find(h => !r.prop || h !== r.prop.group.parent) || r.hands[0];   // the hand without the gun: wrapped, white dots on black
     const wr = new THREE.Group(); pos(wr, 0, -.05, 0); other.add(wr); wr.add(P(new THREE.CylinderGeometry(.075, .075, .08, 12), K));
     for (let i = 0; i < 5; i++) { const a = i / 5 * Math.PI * 2; wr.add(pos(P(new THREE.SphereGeometry(.013, 6, 4), Wh), Math.cos(a) * .076, 0, Math.sin(a) * .076)); }
@@ -12365,40 +12482,68 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
     pr.inner.add(pos(P(new THREE.ConeGeometry(.05, .1, 12).rotateZ(-Math.PI / 2), Bl), .42, .05, 0));
     const pp = new THREE.Group(); pos(pp, .38, .05, 0); pr.inner.add(pp); r.propeller = pp;
     [-1, 1].forEach(s => pp.add(pos(P(new THREE.SphereGeometry(.05, 10, 8).scale(.25, 2.4, .7), Pu), 0, s * .11, 0)));
-    post.push(() => { pp.rotation.x = time * 22; });   // (always turning)
-  } else if (id === "chispa") {
-    r.torso.mesh.visible = false; r.legs.forEach(l => { l.mesh.visible = false; }); (r.feet || []).forEach(f => f.children.forEach(c => { c.visible = false; }));
-    const Or = M("#ffb400"), Li = M(BEP_LIME);
-    const hd = new THREE.Group(); pos(hd, 0, -.24, 0); hd.scale.setScalar(.68); r.head.add(hd);   // a round orange head (sat low: a figure of eight with the bottom), a twisted curl on top, eyes shut happy, mouth open
-    hd.add(P(new THREE.SphereGeometry(.3, 20, 16), Or));
-    const c1 = P(new THREE.ConeGeometry(.07, .22, 10), Or); c1.rotation.z = .35; pos(c1, -.02, .36, 0); hd.add(c1);
-    const c2 = P(new THREE.ConeGeometry(.042, .17, 8), Or); c2.rotation.z = 1.3; pos(c2, -.12, .46, 0); hd.add(c2);
-    [-1, 1].forEach(s => { const e = P(new THREE.TorusGeometry(.05, .015, 6, 12, Math.PI), K); e.rotation.set(0, Math.PI / 2, 0); pos(e, .285, .06, s * .1); hd.add(e); });
-    const mo = P(new THREE.SphereGeometry(.07, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(.35, 1, 1.1), Wh); pos(mo, .29, -.05, 0); hd.add(mo);
-    hd.add(pos(P(new THREE.TorusGeometry(.075, .012, 4, 14, Math.PI).rotateX(Math.PI).rotateY(Math.PI / 2), K), .292, -.05, 0));
-    r.hips.add(pos(P(new THREE.SphereGeometry(.25, 18, 14).scale(1, .9, 1), Li), 0, -.09, 0));   // the round lime bottom
-    bepWings(r, post, w => { w.add(pos(P(new THREE.SphereGeometry(.1, 12, 10).scale(.6, 2, 1.25), Or), .08, -.2, 0)); });
-  } else if (id === "brisa") {
-    const Cy = M("#00c8ff"), CyD = M("#00a6dc");
-    const hd = new THREE.Group(); r.head.add(hd);   // a cyan head, two tall pointed ears in a bow, big round eyes, a small mouth
-    hd.add(P(new THREE.SphereGeometry(.3, 20, 16), Cy));
-    [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.1, .5, 10).scale(1, 1, .45), Cy); e.rotation.x = s * .6; pos(e, -.03, .4, s * .17); hd.add(e); });
-    eye(hd, .27, .03, -.1, 1.25, null); eye(hd, .27, .03, .1, 1.25, null);
-    hd.add(pos(P(new THREE.SphereGeometry(.025, 8, 6).scale(.4, .7, 1.4), K), .295, -.11, 0));
-    bepWings(r, post, w => { w.add(pos(P(new THREE.SphereGeometry(.15, 14, 12).scale(.55, 2.7, 1.25), Cy), .07, -.36, 0));   // the long cape of wings, ragged at its end
-      [-1, 1].forEach(s => { const c = P(new THREE.ConeGeometry(.05, .16, 6).rotateZ(Math.PI), Cy); pos(c, .07, -.78, s * .07); w.add(c); }); });
-  } else if (id === "flora") {
-    const Pk = M("#ff3a8c"), PkD = M("#d4126a"), Mo = M("#9e0c48"), Li = M(BEP_LIME);
-    const hd = new THREE.Group(); r.head.add(hd);   // a pink head, a crown of petals, squinting eyes, a big open mouth (a lime tongue)
-    hd.add(P(new THREE.SphereGeometry(.34, 20, 16).scale(1, 1.05, 1.05), Pk));
-    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, c = P(new THREE.ConeGeometry(.08, .26, 8), PkD); c.rotation.set(Math.sin(a) * .55, 0, -Math.cos(a) * .55); pos(c, Math.cos(a) * .12, .4, Math.sin(a) * .12); hd.add(c); }
-    [-1, 1].forEach(s => { hd.add(pos(P(new THREE.SphereGeometry(.05, 10, 8).scale(.35, .55, 1), Wh), .31, .08, s * .12)); hd.add(pos(P(new THREE.SphereGeometry(.018, 6, 4), K), .325, .075, s * .12));
-      const l = P(new THREE.BoxGeometry(.03, .03, .12), PkD); l.rotation.x = s * .25; pos(l, .315, .11, s * .12); hd.add(l); });
-    hd.add(pos(P(new THREE.SphereGeometry(.12, 16, 12).scale(.3, 1.05, 1.05), Mo), .3, -.13, 0));
-    hd.add(pos(P(new THREE.SphereGeometry(.05, 10, 8).scale(.4, .6, 1.1), Li), .33, -.21, 0));
-    r.chest.add(pos(P(new THREE.SphereGeometry(.24, 16, 12).scale(.4, 1.15, .85), Wh), .26, -.1, 0));   // the white belly
-    bepWings(r, post, w => { w.add(pos(P(new THREE.SphereGeometry(.26, 16, 12).scale(1.2, 1.7, .75), Pk), -.02, -.34, 0)); });   // the great mantle of wings
-  }
+    post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 420) : 0; pp.rotation.x = time * (22 + sp * 30);   // (always turning; faster on the run) the hair bouncing with each step
+      hair.position.y = Math.abs(Math.sin(time * (sp > .1 ? 11 : 3))) * (.012 + sp * .02); hair.rotation.z = sp * .12 + Math.sin(time * 2.2) * .02; });
+  } else if (id === "chispa") {   // (remodelled to its drawing, 2026-11-02)
+    const K = M("#1d1f24"), Wh = M("#ffffff"), Or = M("#ffb400"), Li = M(BEP_LIME), Mo = M("#7a3a10");
+    r.torso.mesh.visible = false; r.arms.forEach(a => { a.mesh.visible = false; }); r.hands.forEach(h => hideKids(h)); r.legs.forEach(l => { l.mesh.visible = false; }); (r.feet || []).forEach(f => f.children.forEach(c => { c.visible = false; }));
+    const hd = new THREE.Group(); pos(hd, 0, -.2, 0); r.head.add(hd);   // a figure of eight: a round orange head, eyes shut happy, a twisted flame of a curl on top...
+    hd.add(P(new THREE.SphereGeometry(.3, 22, 16), Or));
+    const curl = new THREE.Group(); pos(curl, -.02, .28, 0); hd.add(curl);
+    const c1 = P(new THREE.SphereGeometry(.09, 12, 10).scale(1, 2, .8), Or); c1.rotation.z = .3; pos(c1, -.02, .14, 0); curl.add(c1);
+    const c2 = P(new THREE.SphereGeometry(.06, 10, 8).scale(1, 2.2, .7), Or); c2.rotation.z = -.5; c2.rotation.y = .6; pos(c2, .06, .2, .03); curl.add(c2);
+    [-1, 1].forEach(s => { const e = P(new THREE.TorusGeometry(.05, .016, 6, 12, Math.PI), K); e.rotation.set(0, Math.PI / 2, 0); pos(e, .29, .03, s * .1); hd.add(e); });
+    const bot = new THREE.Group(); pos(bot, 0, -.5, 0); hd.add(bot);   // ...and a round lime bottom, the wings wrapped over its top, parted in front over her big open grin
+    bot.add(P(new THREE.SphereGeometry(.27, 20, 14), Li));
+    const mo = new THREE.Group(); pos(mo, .23, .06, 0); bot.add(mo); mo.add(P(new THREE.SphereGeometry(.1, 12, 10).scale(.35, .8, 1.1), Mo)); mo.add(pos(P(new THREE.SphereGeometry(.07, 10, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(.3, .8, 1.1), Wh), .012, -.005, 0));
+    const wg = new THREE.Group(); pos(wg, 0, .27, 0); bot.add(wg);
+    cloakOf(r, wg, { top: .04, len: .36, rad: v => easePts([[0, .285], [.5, .31], [1, .25]], v), gap: v => .62 * (1 - v) + .04, col: "#ffb400" });
+    post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0, t = time;   // (a happy hop: the curl flickers like a flame, the wings flap, the bottom squashes as she lands)
+      curl.rotation.z = Math.sin(t * 7) * .12 - sp * .3; curl.rotation.x = Math.sin(t * 5.3) * .08; wg.rotation.z = Math.sin(t * (6 + sp * 8)) * (.05 + sp * .08); mo.scale.y = 1 + Math.sin(t * 4) * .12;
+      const h = Math.abs(Math.sin(t * 6.5)); bot.scale.set(1 + (1 - h) * .05, 1 - (1 - h) * .06, 1 + (1 - h) * .05); });
+  } else if (id === "brisa") {   // (remodelled to its drawing, 2026-11-02)
+    const K = M("#1d1f24"), Wh = M("#ffffff"), Cy = M("#00c8ff"), Li = M(BEP_LIME);
+    r.arms.forEach(a => { a.mesh.visible = false; }); r.hands.forEach(h => hideKids(h)); r.torso.mesh.visible = false;
+    const hd = new THREE.Group(); r.head.add(hd);   // a round cyan head, two broad leaf ears in a bow, big round eyes, no mouth to see
+    hd.add(P(new THREE.SphereGeometry(.31, 22, 16), Cy));
+    const ears = [-1, 1].map(s => { const g = new THREE.Group(); pos(g, -.02, .24, s * .1); g.rotation.x = s * .62; hd.add(g);
+      g.add(pos(P(new THREE.SphereGeometry(.14, 14, 10).scale(.3, 1.9, 1), Cy), 0, .25, 0)); const tip = P(new THREE.ConeGeometry(.06, .16, 8).scale(.3, 1, 1), Cy); pos(tip, 0, .55, 0); g.add(tip); return g; });
+    [-1, 1].forEach(s => { hd.add(pos(P(new THREE.SphereGeometry(.085, 14, 12).scale(.4, 1.1, 1), Wh), .27, .02, s * .12)); hd.add(pos(P(new THREE.TorusGeometry(.085, .012, 6, 18).scale(1, 1.1, 1).rotateY(Math.PI / 2), K), .285, .02, s * .12));
+      hd.add(pos(P(new THREE.SphereGeometry(.035, 10, 8).scale(.4, 1, 1), K), .305, .02, s * .12)); });
+    const bod = new THREE.Group(); r.body.add(bod);   // her lime body (a little white mouth peeping out of the wings' parting)
+    bod.add(P(new THREE.LatheGeometry([[0, -.12], [.18, -.1], [.24, .05], [.24, .25], [.18, .42], [0, .46]].map(([x, y]) => new THREE.Vector2(x, y)), 18), Li));
+    const mo = P(new THREE.SphereGeometry(.06, 10, 8).scale(.4, 1.2, 1), Wh); pos(mo, .23, .3, 0); bod.add(mo);
+    post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+    const wg = new THREE.Group(); pos(wg, 0, -.24, 0); hd.add(wg);   // the long cape of her wings, from under her chin nearly to her feet, parted in front, ragged at the hem
+    cloakOf(r, wg, { top: 0, len: .6, rad: v => easePts([[0, .35], [.35, .36], [.7, .3], [1, .17]], v), gap: v => .14 + .85 * (1 - v), col: "#00c8ff", hem: .045, hemN: 8 });
+    post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0, t = time, air = p && !p.onGround;   // (a breeze: the cape trails and flutters as she goes, lifts as she jumps; the ears sway like leaves)
+      wg.rotation.z = sp * .35 + (air ? .2 : 0) + Math.sin(t * (3 + sp * 9)) * (.03 + sp * .07); const f = 1 + sp * .08 + Math.sin(t * 3.4) * .03; wg.scale.set(f, 1, f);
+      ears.forEach((g, i) => { g.rotation.z = Math.sin(t * 2.4 + i * 1.3) * .12 - sp * .25; }); });
+  } else if (id === "flora") {   // (remodelled to her drawing, 2026-11-02)
+    const K = M("#1d1f24"), Wh = M("#ffffff"), Pk = M("#ff3a8c"), PkD = M("#d4126a"), Mo = M("#9e0c48"), Li = M(BEP_LIME);
+    r.arms.forEach(a => { a.mesh.visible = false; }); r.hands.forEach(h => hideKids(h)); r.torso.mesh.visible = false;
+    const hd = new THREE.Group(); r.head.add(hd);   // a pink dome of a head, a crown of petals, sleepy eyes; the great cloak of her wings hangs from it
+    hd.add(P(new THREE.SphereGeometry(.34, 22, 16).scale(1, 1.05, 1.08), Pk));
+    const crown = new THREE.Group(); pos(crown, -.02, .33, 0); hd.add(crown);
+    [[0, 0, .3, PkD], [-.6, .25, .26, Pk], [.6, .25, .26, Pk], [-1.1, .2, .22, Pk], [1.1, .2, .22, Pk]].forEach(([rx, rz, h, m]) => { const pe = P(new THREE.SphereGeometry(.07, 10, 8).scale(1, h / .14, .55), m); pe.rotation.set(rx, 0, -.15 + rz * .3); pos(pe, 0, h * .45, Math.sin(rx) * .06); crown.add(pe); });
+    [-1, 1].forEach(s => { hd.add(pos(P(new THREE.SphereGeometry(.055, 10, 8).scale(.35, .55, 1), Wh), .31, .1, s * .12)); hd.add(pos(P(new THREE.SphereGeometry(.02, 6, 4), K), .33, .095, s * .12));
+      const l = P(new THREE.SphereGeometry(.058, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(.4, .55, 1.05), Pk); pos(l, .312, .105, s * .12); hd.add(l); });   // (heavy lids: a sleepy, unbothered look)
+    const mo = new THREE.Group(); pos(mo, .26, -.2, 0); hd.add(mo);   // the big open mouth in the cloak's parting, a lime tongue at its tip
+    mo.add(P(new THREE.ConeGeometry(.15, .26, 3).rotateY(Math.PI / 6).scale(.35, 1, 1), Mo)); mo.add(pos(P(new THREE.ConeGeometry(.04, .07, 3).rotateY(Math.PI / 6).scale(.4, 1, 1), Li), .015, .1, 0));
+    const bod = new THREE.Group(); r.body.add(bod);   // her lime body, a big white belly
+    bod.add(P(new THREE.LatheGeometry([[0, -.18], [.3, -.16], [.4, -.02], [.42, .16], [.36, .34], [.24, .46], [0, .5]].map(([x, y]) => new THREE.Vector2(x, y)), 22), Li));
+    bod.add(pos(P(new THREE.SphereGeometry(.27, 16, 12).scale(.38, 1.1, 1), Wh), .35, .14, 0));
+    post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+    const cloak = new THREE.Group(); pos(cloak, 0, .02, 0); hd.add(cloak);   // the cloak of her wings: one great bell from her head nearly to the ground, parted in front in an A (narrow at her mouth, wide at the hem)
+    { const RP = [[0, .5], [.22, .58], [.48, .57], [.72, .47], [.9, .34], [1, .27]], rad = v => { for (let i = 1; i < RP.length; i++) if (v <= RP[i][0]) { const [a, ra] = RP[i - 1], [b, rb] = RP[i], u = (v - a) / (b - a); return ra + (rb - ra) * u * u * (3 - 2 * u); } return .27; };
+      const gap = v => .2 + .85 * (1 - v), at = (u, v) => { const g = gap(v), a = g + u * (Math.PI * 2 - 2 * g), rr = rad(v); return [Math.cos(a) * rr, -.94 + v * .98, Math.sin(a) * rr * 1.05]; };
+      const cg = bellSheet(44, 16, at);
+      const MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }; cloak.add(P(cg, MX("#ff3a8c", { side: THREE.DoubleSide })));
+      for (let k = 0; k < 9; k++) { const u = .08 + k * .105, g = gap(0), a = g + u * (Math.PI * 2 - 2 * g), c = P(new THREE.ConeGeometry(.05, .15, 6).rotateZ(Math.PI), Pk); pos(c, Math.cos(a) * .47, -.98, Math.sin(a) * .49); cloak.add(c); } }   // (ragged at the hem)
+    post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0, t = time;   // (the cloak sways with her shuffle and flares as she hurries, settles when she stops; the crown wobbles; the mouth breathes)
+      cloak.rotation.z = sp * .22 + Math.sin(t * (2.2 + sp * 6)) * (.03 + sp * .06); cloak.rotation.x = Math.sin(t * 1.7) * .03; const f = 1 + sp * .1 + Math.sin(t * 2.2) * .02; cloak.scale.set(f, 1, f);
+      crown.rotation.x = Math.sin(t * 2.6) * .06; crown.rotation.z = Math.sin(t * 1.9) * .05 + sp * .1; mo.scale.y = 1 + Math.sin(t * 1.6) * .08; });
+    }
 }
 // Bon: sat on Bin's clock, bobbing; out flying (glow kind "bon", set by bonThrow): wherever the throw has him (r.bonFly: world units), turning over and over
 function bonPose(r) {
@@ -12460,14 +12605,21 @@ function tossPose(r) {                             // (out flying: where the thr
   const q = new THREE.Quaternion(); par.getWorldQuaternion(q); b.quaternion.copy(q.invert().multiply(new THREE.Quaternion().setFromAxisAngle(ZAX, F.a))); return true;
 }
 // TIC's X and TAC's ring, held up over the head in both hands (the user's drawing): each frame between the hands, a little above them, tilted the way the arms point
-function symHold(r, sym, post, lift) {   // (lift: world units)
+function symHold(r, sym, post, lift, tilt = .3) {   // (lift: world units; tilt: its face tipped back toward the sky, as the drawing holds it)
   const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), q = new THREE.Quaternion(), d = new THREE.Vector3();
   const where = w => { r.hands[0].getWorldPosition(a); r.hands[1].getWorldPosition(b); r.chest.getWorldPosition(c); w.addVectors(a, b).multiplyScalar(.5); d.subVectors(w, c);
     if (d.lengthSq() < 1e-8) d.set(0, 1, 0); d.normalize(); return w.addScaledVector(d, lift); };
   r.toss = { obj: sym, home: w => where(w) };
+  const n = new THREE.Vector3(), x = new THREE.Vector3(), z = new THREE.Vector3(), cw = new THREE.Vector3(), B = new THREE.Matrix4();
   post.push(() => { if (tossPose(r)) return; r.root.updateMatrixWorld(true); where(sym.position); r.root.worldToLocal(sym.position);
-    r.root.getWorldQuaternion(q); d.applyQuaternion(q.invert()); sym.quaternion.setFromUnitVectors(up, d); });
+    r.root.getWorldQuaternion(q); d.applyQuaternion(q.invert());   // (d: up out of its hands, in the rig's own space)
+    camera.getWorldPosition(cw); r.root.worldToLocal(cw); n.subVectors(cw, sym.position).addScaledVector(d, -n.subVectors(cw, sym.position).dot(d)); if (n.lengthSq() < 1e-8) n.set(1, 0, 0); n.normalize();   // (its face turned to you: the X and the O as the drawing shows them, not flat and edge on. The user, 2026-11-02)
+    n.addScaledVector(d, tilt).normalize(); z.copy(d).addScaledVector(n, -d.dot(n)).normalize(); x.crossVectors(n, z); B.makeBasis(x, n, z); sym.quaternion.setFromRotationMatrix(B); });
 }
+function idleHop(r, post, amp, hz, sharp = 1) {   // (stood about: a bounce on the spot, its own beat; the kit keeps the body's height, so last frame's lift comes off first. 2026-11-02)
+  let up = 0, k = 0; post.push(p => { if (!p || !r.body) return; const still = p.onGround && Math.abs(p.vx || 0) < 25 && !(p.atkT >= 0) && !p.block && !(p.hurtT > 0) && !p.sit;
+    k += ((still ? 1 : 0) - k) * .12; const s = Math.abs(Math.sin(time * hz * Math.PI)), u = amp * k * Math.pow(s, sharp);
+    r.body.position.y += u - up; up = u; }); }
 function dress1030(r, id, post, { M, P, pos, hideKids }) {
   const U = KIT.util, MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }, K = M("#1d1f24"), Wh = M("#ffffff"), LK = new THREE.LineBasicMaterial({ color: 0x000000 });
   const eye = (par, x, y, z, s, iris, lid) => {      // a big round eye: white, an iris, a black pupil, a glint (lid: a lid of that colour over its top)
@@ -12492,13 +12644,13 @@ function dress1030(r, id, post, { M, P, pos, hideKids }) {
       bd.position.copy(cw).add(off.clone().applyQuaternion(bd.quaternion)); });
     const sym = new THREE.Group(); r.root.add(sym);
     const g = O ? tttRingG() : tttXG(), m = P(g, O ? [Kb, Wh] : [Wh, Kb]); m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g, O ? 35 : 20), LK)); m.scale.setScalar(TTT_BODY[id].sym * k); sym.add(m);
-    symHold(r, sym, post, .05);
+    symHold(r, sym, post, .05, O ? .62 : .32); idleHop(r, post, O ? .06 : .03, O ? 2.2 : 1.5, O ? .7 : 1);   // (TAC bounces like a ball; TIC a proud little spring)
   } else if (id === "pk") {
     const Li = M("#bfe52c"), LiD = M("#9cc21c"), Bl = M("#4650d8"), BlD = M("#343cb4"), Pk = M("#ff6fb3"), Ye = M("#ffd21f"), Mo = M("#7a1238");
     const hd = new THREE.Group(); r.head.add(hd);   // a lime head under a mop of blue curls: droopy eyes, blue brows, a big nose, a great open mouth, his tongue out
-    hd.add(P(new THREE.SphereGeometry(.32, 20, 16).scale(1, 1.12, 1), Li));
+    hd.add(P(new THREE.SphereGeometry(.32, 20, 16).scale(.96, 1.34, .95), Li));   // (a tall oval, as the drawing: 2026-11-02)
     for (let i = 0; i < 48; i++) { const a = i * 2.399963, y = .66 - (i / 48) * 1.3, rr = Math.sqrt(Math.max(.08, 1 - y * y)), d = new THREE.Vector3(Math.cos(a) * rr, y, Math.sin(a) * rr);
-      if (d.x > .42 && d.y < .5) continue; hd.add(pos(P(new THREE.SphereGeometry(.085 + (i % 3) * .018, 10, 8), i % 4 ? Bl : BlD), d.x * .38 - .07, d.y * .44 + .1, d.z * .43)); }   // (the curls: round the top, the back and the sides, his face left clear)
+      if (d.x > .42 && d.y < .5) continue; hd.add(pos(P(new THREE.SphereGeometry(.095 + (i % 3) * .02, 10, 8), i % 4 ? Bl : BlD), d.x * .4 - .08, d.y * .52 + .12, d.z * .5)); }   // (the curls: round the top, the back and the sides, his face left clear)
     eye(hd, .29, .06, -.1, 1.05, "pale", Li); eye(hd, .29, .06, .1, 1.05, "pale", Li);
     [-1, 1].forEach(s => { const b = P(new THREE.CapsuleGeometry(.018, .09, 4, 8).rotateX(Math.PI / 2), BlD); b.rotation.x = s * .25; pos(b, .31, .15, s * .1); hd.add(b); });
     const no = P(new THREE.CapsuleGeometry(.05, .12, 6, 10), LiD); no.rotation.z = -1.25; pos(no, .36, -.02, 0); hd.add(no);
@@ -12522,7 +12674,7 @@ function dress1030(r, id, post, { M, P, pos, hideKids }) {
     pen.add(pos(P(new THREE.ConeGeometry(.06, .2, 6).rotateZ(Math.PI / 2), M("#f2d6a8")), -.34, 0, 0));
     pen.add(pos(P(new THREE.ConeGeometry(.025, .08, 8).rotateZ(Math.PI / 2), M("#ff3a6e")), -.42, 0, 0));
     r.toss = { obj: pen, home: w => { pen.parent.updateWorldMatrix(true, false); return pen.parent.getWorldPosition(w); } };
-    post.push(() => { if (!tossPose(r)) { pen.position.set(0, 0, 0); pen.quaternion.identity(); } });
+    post.push(() => { if (!tossPose(r)) { pen.position.set(0, 0, 0); pen.quaternion.identity(); } }); idleHop(r, post, .035, 2.6, .8);   // (on his toes, can't keep still)
   } else if (id === "veji") {
     const Rd = M("#ff1430"), Bl = M("#12a6ee"), Ye = M("#ffd21f"), Gr = M("#5cd65c");
     const hd = new THREE.Group(); r.head.add(hd);   // a long red head: crescent horns, yellow slits for eyes, a green mouth, spikes hanging down each side; a blue drop at his throat
@@ -12569,7 +12721,7 @@ function dress1030(r, id, post, { M, P, pos, hideKids }) {
     mic.add(pos(P(new THREE.CylinderGeometry(.035, .028, .3, 10), K), 0, .06, 0)); mic.add(pos(P(new THREE.SphereGeometry(.075, 14, 12), M("#cfd3da")), 0, .24, 0)); mic.add(pos(P(new THREE.TorusGeometry(.04, .01, 6, 12).rotateX(Math.PI / 2), Ye), 0, .2, 0));
     const tc = new THREE.CatmullRomCurve3([[0, 0, 0], [-.18, -.08, 0], [-.34, .05, 0], [-.4, .3, 0], [-.3, .45, 0]].map(p => new THREE.Vector3(...p)));   // her tail, curled up behind
     const tg = new THREE.Group(); pos(tg, -.16, -.05, 0); r.hips.add(tg); tg.add(P(new THREE.TubeGeometry(tc, 24, .04, 6), Pu));
-    post.push(() => { tg.rotation.y = Math.sin(time * 2) * .25; });
+    post.push(() => { tg.rotation.y = Math.sin(time * 2) * .25; }); idleHop(r, post, .015, .9, 1.5);   // (a slow, showy breath)
   }
 }
 // the three of 2026-10-31 (refs/batch1031): what the kit can't make. PINCHO's head: one big ear up off the back with a loop at its root, the needle of a nose, star eyes,
@@ -12584,8 +12736,8 @@ function dress1031(r, id, post, { M, P, pos }) {
     const hd = new THREE.Group(); r.head.add(hd);
     hd.add(P(new THREE.SphereGeometry(.36, 20, 16).scale(1, .95, 1.05), Pk));   // the big round head
     const ear = new THREE.Group(); pos(ear, -.12, .26, 0); ear.rotation.z = .55; hd.add(ear);   // one big ear up off the back of the head, leaning back; a loop at its root
-    ear.add(pos(P(new THREE.SphereGeometry(.3, 18, 14).scale(.78, 1.3, .22), Pk), 0, .4, 0));
-    ear.add(pos(P(new THREE.TorusGeometry(.08, .03, 8, 18), Pk), .14, .05, 0));
+    ear.add(pos(P(new THREE.SphereGeometry(.34, 20, 16).scale(.92, 1.24, .26), Pk), 0, .45, 0));   // (near as big as his head, as the drawing: 2026-11-02)
+    ear.add(pos(P(new THREE.TorusGeometry(.11, .036, 8, 20), Pk), .16, .05, 0));
     const ng = new THREE.Group(); pos(ng, .3, -.02, 0); ng.rotation.z = .12; hd.add(ng);   // the needle of a nose, straight out of the middle of the face, tipped up a touch
     ng.add(pos(P(new THREE.ConeGeometry(.05, .72, 10).rotateZ(-Math.PI / 2), Pk), .34, 0, 0));
     const star4 = (rO, rI) => { const sh = new THREE.Shape(); for (let i = 0; i < 8; i++) { const a = Math.PI / 2 + i * Math.PI / 4, q = i % 2 ? rI : rO; i ? sh.lineTo(Math.cos(a) * q, Math.sin(a) * q) : sh.moveTo(Math.cos(a) * q, Math.sin(a) * q); } return new THREE.ExtrudeGeometry(sh, { depth: .012, bevelEnabled: false }).rotateY(Math.PI / 2); };
@@ -12595,6 +12747,7 @@ function dress1031(r, id, post, { M, P, pos }) {
     const mo = P(new THREE.TorusGeometry(.05, .012, 4, 10, Math.PI), K); mo.rotation.set(0, Math.PI / 2, Math.PI); pos(mo, .32, -.12, .02); hd.add(mo);   // a grin, a buck tooth
     hd.add(pos(P(new THREE.BoxGeometry(.014, .04, .032), Wh), .335, -.135, .03));
     hd.add(pos(P(new THREE.TorusGeometry(.2, .075, 10, 20).rotateX(Math.PI / 2), Pu), -.02, -.32, 0));   // his sweater's rolled collar
+    idleHop(r, post, .03, 4.2, .6);   // (nervous: a quick jittery hop on the spot, 2026-11-02)
   } else if (id === "caracol") {
     const Bl = M("#18c8ff"), Gn = M("#8ee23a"), Or = M("#ff9a00"), OrD = M("#d86a00");
     const hd = new THREE.Group(); r.head.add(hd);
@@ -12611,26 +12764,28 @@ function dress1031(r, id, post, { M, P, pos }) {
     const Mg = M("#ff1f8e"), MgD = M("#8a1257"), Li = M("#c8ef2a"), Lr = M("#9ad82a"), Gn = M("#4fd33a");
     r.torso.mesh.visible = false;
     const bk = new THREE.Group(); pos(bk, 0, -.02, 0); r.chest.add(bk);
-    bk.add(pos(P(new THREE.BoxGeometry(.64, .32, .74), Li), 0, -.06, 0));   // its lime bottom (short: its legs show under it)
+    bk.add(pos(P(new RoundedBoxGeometry(.64, .32, .74, 3, .07), Li), 0, -.06, 0));   // its lime bottom (short: its legs show under it)
     const halfG = sg => { const pts = sg > 0 ? [[0, 0], [.37, 0], [.42, .62], [0, .24]] : [[0, 0], [0, .24], [-.42, .62], [-.37, 0]];   // a half of the M (front on: z across, y up), a block .62 deep
-      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: .62, bevelEnabled: false }); g.rotateY(-Math.PI / 2); g.translate(.31, 0, 0); return g; };
+      const g = new THREE.ExtrudeGeometry(new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(z, y))), { depth: .54, bevelEnabled: true, bevelThickness: .04, bevelSize: .035, bevelSegments: 3 }); g.rotateY(-Math.PI / 2); g.translate(.27, 0, 0); return g; };   // (bevelled round, as drawn: 2026-11-02)
     const halves = [-1, 1].map(sg => { const h = new THREE.Group(); pos(h, 0, .1, 0); bk.add(h); h.add(P(halfG(sg), Mg));   // each half on its hinge at the bottom of the notch
-      for (let k = 0; k < 3; k++) { const u = .2 + k * .27, t = P(new THREE.ConeGeometry(.035, .09, 6), Wh); t.rotation.x = sg * Math.PI / 2; pos(t, .2 - k * .2, .24 + .38 * u - .03, sg * (.42 * u - .03)); h.add(t); }   // its teeth down the inside of the V
-      const e = new THREE.Group(); pos(e, .12, .24, sg * .375); h.add(e);   // an eye on its outer side: white, a green ring, a dark pupil
+      for (let k = 0; k < 3; k++) { const u = .2 + k * .27, t = P(new THREE.ConeGeometry(.035, .09, 6), Wh); t.rotation.x = sg * Math.PI / 2; pos(t, .2 - k * .2, .24 + .38 * u - .004, sg * (.42 * u - .054)); h.add(t); }   // its teeth down the inside of the V
+      const e = new THREE.Group(); pos(e, .12, .24, sg * .425); h.add(e);   // an eye on its outer side: white, a green ring, a dark pupil
       const fz = g => g.rotateX(Math.PI / 2); e.add(pos(P(fz(new THREE.CylinderGeometry(.085, .085, .02, 18)), Wh), 0, 0, sg * .006)); e.add(pos(P(new THREE.TorusGeometry(.085, .018, 6, 18), Gn), 0, 0, sg * .012)); e.add(pos(P(fz(new THREE.CylinderGeometry(.034, .034, .02, 12)), K), 0, 0, sg * .018));
       return h; });
     const mouth = new THREE.Shape([[-.37, .6], [.37, .6], [0, .24]].map(([z, y]) => new THREE.Vector2(z, y)));   // the dark at the back of the notch, the inside of its mouth
     bk.add(pos(P(new THREE.ExtrudeGeometry(mouth, { depth: .05, bevelEnabled: false }).rotateY(-Math.PI / 2).translate(-.25, 0, 0), MgD), 0, .1, 0));   // (a plate at the back of the V: the notch reads as one, its walls the inside of the jaws)
-    [-1, 1].forEach(sg => bk.add(pos(P(new THREE.TorusGeometry(.14, .05, 8, 18), Lr), .02, .12, sg * .39)));   // the lime ring at each shoulder
+    [-1, 1].forEach(sg => bk.add(pos(P(new THREE.TorusGeometry(.14, .05, 8, 18), Lr), .02, .12, sg * .43)));   // the lime ring at each shoulder
     const fin = new THREE.Shape([[0, .02], [-.34, .2], [-.26, -.16]].map(([x, y]) => new THREE.Vector2(x, y)));   // a fin of a tail, low on its back
-    bk.add(pos(P(new THREE.ExtrudeGeometry(fin, { depth: .05, bevelEnabled: false }).translate(0, 0, -.025), Mg), -.3, -.1, 0));
-    r.hands.forEach(h => { [-1, 1].forEach(sg => { const f = new THREE.Group(); pos(f, 0, -.05, sg * .056); h.add(f);   // a face on each fist: two dots of eyes and a little cat's mouth
+    bk.add(pos(P(new THREE.ExtrudeGeometry(fin, { depth: .03, bevelEnabled: true, bevelThickness: .012, bevelSize: .012, bevelSegments: 2 }).translate(0, 0, -.015), Mg), -.3, -.1, 0));
+    r.hands.forEach(h => { h.add(pos(P(new THREE.SphereGeometry(.1, 22, 16), M("#ff3fa6")), 0, -.05, 0)); [-1, 1].forEach(sg => { const f = new THREE.Group(); pos(f, 0, -.05, sg * .101); f.scale.setScalar(1.8); h.add(f);   // a face on each fist: two dots of eyes and a little cat's mouth (fists as big as drawn, 2026-11-02: a .1 ball over the kit's, whose hands top out near 3)
       [-1, 1].forEach(q => f.add(pos(P(new THREE.SphereGeometry(.007, 6, 4), K), q * .016, .016, 0)));
       [-1, 1].forEach(q => { const m = P(new THREE.TorusGeometry(.009, .0025, 4, 8, Math.PI), K); m.rotation.z = Math.PI; pos(m, q * .009, -.006, 0); f.add(m); }); }); });
     const JAW = [[0, 0], [.12, .25], [.3, 1], [.38, 1], [.44, 0], [.96, 0]];   // the bite: open as it winds back, wide on the lunge, snapped shut on them
     const jawAt = t => { for (let i = 1; i < JAW.length; i++) if (t <= JAW[i][0]) { const [t0, v0] = JAW[i - 1], [t1, v1] = JAW[i]; return v0 + (v1 - v0) * (t - t0) / (t1 - t0); } return 0; };
     post.push(p => { const bite = p && p.atkT >= 0 && p.atkKind === "mordi_chomp", o = bite ? jawAt(p.atkT) : Math.pow(Math.max(0, Math.sin(time * 2.3)), 14) * .22;   // (idle: a little clack of its jaws now and then)
-      halves[0].rotation.x = -o * .55; halves[1].rotation.x = o * .55; });
+      halves[0].rotation.x = -o * .55; halves[1].rotation.x = o * .55;
+      const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 420) : 0, br = Math.sin(time * 2.2);   // (2026-11-02: a waddle, side to side on the run; it breathes)
+      bk.rotation.x = Math.sin(time * 9) * .08 * sp + Math.sin(time * 1.7) * .02; bk.position.y = -.02 + Math.abs(Math.sin(time * 9)) * .03 * sp; bk.scale.set(1 + .02 * br, 1 - .025 * br, 1 + .02 * br); });
   }
 }
 function dressAlly(r, id) {                        // what the kit can't make: Burr's spiky body, column head, pleated shorts and rapier; Stilt's head and hands
@@ -12638,29 +12793,31 @@ function dressAlly(r, id) {                        // what the kit can't make: B
   const hideKids = g => g.children.forEach(c => { c.visible = false; });
   hideKids(r.head); const post = [];
   if (id === "burr") {
-    const G = M("#93c93b"), K = M("#1d1f24");
+    const head = new THREE.Group(); r.head.add(head);
+    const G = M("#93c93b"), GD = M("#79ad2c"), K = M("#1d1f24");
     r.torso.mesh.visible = false;                  // his body: a big spiky burr, along his spine
-    const ball = new THREE.Group(); r.body.add(ball); ball.add(P(new THREE.IcosahedronGeometry(.4, 3), G));
-    for (let i = 0, N = 22; i < N; i++) {
-      const y = 1 - (i + .5) / N * 1.7, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.399963, d = new THREE.Vector3(Math.cos(th) * rr, y, Math.sin(th) * rr).normalize();
-      if (d.y < -.55) continue;
-      const s = P(new THREE.ConeGeometry(.06, .2, 6), G); s.position.copy(d).multiplyScalar(.44); s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); ball.add(s);
+    const ball = new THREE.Group(); r.body.add(ball); ball.add(P(new THREE.IcosahedronGeometry(.46, 3), G));
+    for (let i = 0, N = 34; i < N; i++) {
+      const y = 1 - (i + .5) / N * 1.8, rr = Math.sqrt(Math.max(0, 1 - y * y)), th = i * 2.399963, d = new THREE.Vector3(Math.cos(th) * rr, y, Math.sin(th) * rr).normalize();
+      if (d.y < -.6) continue; const L = .2 + (i % 3) * .07;
+      const s = P(new THREE.ConeGeometry(.075, L, 6), i % 4 ? G : GD); s.position.copy(d).multiplyScalar(.46 + L / 2 - .04); s.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); ball.add(s);
     }
     post.push(() => { const p = r.torso.pts; ball.position.lerpVectors(p[1], p[3], .55); ball.rotation.z = -Math.atan2(p[3].x - p[1].x, p[3].y - p[1].y); });
-    const head = new THREE.Group(); r.head.add(head);   // his head: a little column, a crown of spikes, a tiny face
-    head.add(pos(P(new THREE.CylinderGeometry(.17, .2, .62, 16), G), 0, .02, 0));
-    head.add(pos(P(new THREE.SphereGeometry(.17, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), G), 0, .33, 0));
-    [[0, .26, 0, 0], [.1, .2, .12, .35], [.1, .2, -.12, -.35], [-.08, .18, .12, .35], [-.08, .18, -.12, -.35]].forEach(([x, h, z, t]) => {
-      const s = P(new THREE.ConeGeometry(.05, h, 6), G); pos(s, x, .38 + h / 2, z); s.rotation.x = t; s.rotation.z = -x * 2; head.add(s); });
-    [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.028, 8, 6).scale(.6, 1.3, 1), K), .18, .2, s * .06)));
-    const mouth = P(new THREE.TorusGeometry(.04, .01, 4, 10, Math.PI), K); mouth.rotation.set(0, Math.PI / 2, Math.PI); pos(mouth, .19, .1, 0); head.add(mouth);
-    const sh = new THREE.Group(); r.hips.add(sh);  // pleated shorts and a belt
+    head.position.y = -.3;                         // his head: a stalk straight up out of the burr (no gap), a crown of spikes, a tiny face
+    const col = new THREE.Group(); head.add(col);
+    col.add(pos(P(new THREE.CylinderGeometry(.16, .2, .9, 16), G), 0, -.06, 0));
+    col.add(pos(P(new THREE.SphereGeometry(.16, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), G), 0, .39, 0));
+    [[0, .3, 0, 0], [.1, .22, .12, .4], [.1, .22, -.12, -.4], [-.09, .2, .12, .4], [-.09, .2, -.12, -.4], [-.12, .16, 0, 0]].forEach(([x, h, z, t]) => {
+      const s = P(new THREE.ConeGeometry(.055, h, 6), G); pos(s, x, .44 + h / 2, z); s.rotation.x = t; s.rotation.z = -x * 2.4; col.add(s); });
+    [-1, 1].forEach(s => col.add(pos(P(new THREE.SphereGeometry(.03, 8, 6).scale(.6, 1.3, 1), K), .17, .26, s * .06)));
+    const mouth = P(new THREE.TorusGeometry(.04, .01, 4, 10, Math.PI), K); mouth.rotation.set(0, Math.PI / 2, Math.PI); pos(mouth, .175, .16, 0); col.add(mouth);
+    const sh = new THREE.Group(); r.hips.add(sh);  // puffed pleated shorts and a belt
     const [cv, g] = U.cv2(256, 64); g.fillStyle = "#7b4bb8"; g.fillRect(0, 0, 256, 64); g.fillStyle = "#b48be0"; for (let i = 0; i < 16; i++) g.fillRect(i * 16, 0, 5, 64);
     const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(KIT.settleTex(tex));
     const sm = U.toonT("#ffffff", { map: tex, side: THREE.DoubleSide }); r.mats.push(sm);
-    sh.add(P(new THREE.LatheGeometry([[.2, .02], [.26, -.12], [.31, -.28]].map(([x, y]) => new THREE.Vector2(x, y)), 16), sm));
-    sh.add(pos(P(new THREE.TorusGeometry(.205, .035, 6, 20).rotateX(Math.PI / 2), M("#6b3f1e")), 0, .02, 0));
-    sh.add(pos(P(new THREE.BoxGeometry(.03, .07, .1), M("#f2c230")), .21, .02, 0));
+    sh.add(P(new THREE.LatheGeometry([[.2, .03], [.29, -.06], [.36, -.18], [.36, -.28], [.31, -.36]].map(([x, y]) => new THREE.Vector2(x, y)), 18), sm));
+    sh.add(pos(P(new THREE.TorusGeometry(.205, .04, 6, 20).rotateX(Math.PI / 2), M("#6b3f1e")), 0, .03, 0));
+    sh.add(pos(P(new THREE.BoxGeometry(.03, .08, .12), M("#f2c230")), .22, .03, 0));
     const pr = r.prop; pr.inner.children.slice().forEach(c => pr.inner.remove(c));   // his rapier: a thin blade, a cup guard, a gem on the pommel
     const Au = M("#f2c230");
     pr.inner.add(pos(P(new THREE.CylinderGeometry(.012, .016, 1.05, 6).rotateZ(-Math.PI / 2), M("#e9eef2")), .6, 0, 0));
@@ -12668,130 +12825,155 @@ function dressAlly(r, id) {                        // what the kit can't make: B
     pr.inner.add(pos(P(new THREE.CylinderGeometry(.022, .022, .16, 8).rotateZ(Math.PI / 2), M("#6b3f1e")), -.05, 0, 0));
     pr.inner.add(pos(P(new THREE.TorusGeometry(.03, .01, 6, 12).rotateY(Math.PI / 2), Au), -.14, 0, 0));
     pr.inner.add(pos(P(new THREE.OctahedronGeometry(.06, 0).scale(1.3, 1, 1), M("#e8264a")), -.21, 0, 0));
+    post.push(p => { const t = time, mv = Math.min(1, Math.abs(p.vx || 0) / 250); col.rotation.z = Math.sin(t * 2.2) * .05 + Math.sin(t * 9) * .05 * mv; ball.rotation.y = Math.sin(t * 1.4) * .12; });   // (his stalk sways, the burr turns a little as he goes)
   } else if (id === "coil" || id === "elpico" || id === "oldvic" || id === "boxcars") {
     const MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }, K = M("#1d1f24"), Wh = M("#ffffff");
     const eye = (par, x, y, z, s = 1) => { par.add(pos(P(new THREE.SphereGeometry(.07 * s, 10, 8).scale(.5, 1, 1), Wh), x, y, z)); par.add(pos(P(new THREE.SphereGeometry(.03 * s, 8, 6).scale(.5, 1, 1), K), x + .025 * s, y, z)); };
     const head = new THREE.Group(); r.head.add(head);
     if (id === "coil") {
       const St = M("#7f9cb0"), StD = M("#5f7a8e"), Br = M("#d9a441"), Sk = M("#c8e09a"), Gl = M("#bfe8ff");
-      head.add(pos(P(new THREE.SphereGeometry(.26, 16, 12).scale(1, 1.05, .9), Sk), .03, -.04, 0));                 // the face under the helmet
-      head.add(pos(P(new THREE.CylinderGeometry(.06, .3, .62, 8, 1), St), -.02, .28, 0)); head.add(pos(P(new THREE.SphereGeometry(.06, 8, 6), St), -.02, .6, 0));   // the ribbed cone helmet
-      [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.05, .26, 6), St); e.rotation.x = s * 1.3; e.rotation.z = .3; pos(e, -.05, .3, s * .3); head.add(e); });   // fins for ears
-      [-1, 1].forEach(s => { const g = new THREE.Group(); pos(g, .24, .02, s * .1); head.add(g);                       // goggles
+      const face = new THREE.Group(); head.add(face);
+      face.add(pos(P(new THREE.SphereGeometry(.27, 16, 12).scale(1, 1, .92), Sk), .03, -.06, 0));                    // the face under the helmet
+      const hel = P(new THREE.LatheGeometry([[.3, -.02], [.3, .1], [.285, .26], [.24, .42], [.17, .54], [.08, .62], [0, .645]].map(([x, y]) => new THREE.Vector2(x, y)), 8), St);   // the ribbed bullet of a helmet (eight facets for its ribs)
+      pos(hel, 0, .02, 0); head.add(hel); head.add(pos(P(new THREE.TorusGeometry(.3, .025, 6, 8).rotateX(Math.PI / 2).rotateY(Math.PI / 8), StD), 0, .0, 0));
+      const ears = [-1, 1].map(s => { const e = P(new THREE.ConeGeometry(.05, .24, 6).scale(1, 1, .4), Sk); e.rotation.x = s * 1.25; e.rotation.z = .35; pos(e, -.03, .0, s * .3); head.add(e); return e; });   // little pointed ears out of its sides
+      [-1, 1].forEach(s => { const g = new THREE.Group(); pos(g, .25, -.02, s * .1); face.add(g);                     // goggles
         g.add(P(new THREE.TorusGeometry(.065, .018, 6, 14).rotateY(Math.PI / 2), Br)); g.add(pos(P(new THREE.CircleGeometry(.055, 14).rotateY(Math.PI / 2), Gl), .005, 0, 0)); g.add(pos(P(new THREE.SphereGeometry(.022, 6, 6), K), .01, 0, 0)); });
-      head.add(pos(P(new THREE.ConeGeometry(.04, .14, 8).rotateZ(-Math.PI / 2), Sk), .3, -.06, 0));
-      const grin = P(new THREE.TorusGeometry(.12, .022, 6, 16, Math.PI), K); grin.rotation.set(0, Math.PI / 2, Math.PI); pos(grin, .25, -.1, 0); head.add(grin);
-      for (let i = 0; i < 3; i++) r.chest.add(pos(P(new THREE.TorusGeometry(.09, .025, 6, 14).rotateX(Math.PI / 2), Br), 0, .22 + i * .045, 0));   // a spring for a neck
-      [[.21, .1, .12], [.21, .1, -.12], [.22, -.05, .14], [.22, -.05, -.14]].forEach(([x, y, z]) => r.chest.add(pos(P(new THREE.SphereGeometry(.025, 6, 6), Br), x, y, z)));   // rivets
+      face.add(pos(P(new THREE.SphereGeometry(.04, 8, 6), Sk), .3, -.08, 0));                                          // a round nose
+      const grin = P(new THREE.TorusGeometry(.13, .022, 6, 16, Math.PI), K); grin.rotation.set(0, Math.PI / 2, Math.PI); pos(grin, .25, -.13, 0); face.add(grin);
+      face.add(pos(P(new THREE.SphereGeometry(.12, 12, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2).scale(.25, .55, 1), M("#e86a6a")), .27, -.14, 0));   // its tongue, in the grin
+      const neck = []; for (let i = 0; i < 3; i++) { const n = P(new THREE.TorusGeometry(.09, .025, 6, 14).rotateX(Math.PI / 2), Br); pos(n, 0, .02 + i * .045, 0); r.chest.add(n); neck.push(n); }   // a spring for a neck
+      [[-1, 1], [1, 1]].forEach(([s]) => { const st = P(new THREE.BoxGeometry(.03, .5, .05), StD); pos(st, .26, -.22, s * .12); st.rotation.x = s * .08; r.chest.add(st); });   // its braces, down the front
+      [[.27, -.02, .12], [.27, -.02, -.12], [.27, -.42, .14], [.27, -.42, -.14]].forEach(([x, y, z]) => r.chest.add(pos(P(new THREE.SphereGeometry(.03, 6, 6), Br), x, y, z)));   // rivets
       for (let i = 0; i < 3; i++) r.hips.add(pos(P(new THREE.TorusGeometry(.2 - i * .01, .03, 6, 18).rotateX(Math.PI / 2), Br), 0, .14 + i * .05, 0));   // a spring at the waist
       const ruff = (par, rad, n, y0) => { for (let i = 0; i < n; i++) par.add(pos(P(new THREE.CylinderGeometry(rad * (i % 2 ? .82 : 1), rad * (i % 2 ? 1 : .82), .035, 12, 1, true), MX(i % 2 ? "#e8e2d6" : "#c9c2b4", { side: THREE.DoubleSide })), 0, y0 + i * .034, 0)); };
-      r.hands.forEach(h => ruff(h, .095, 5, .02)); [-1, 1].forEach(s => { const g = new THREE.Group(); pos(g, 0, -.12, s * .14); r.hips.add(g); ruff(g, .13, 5, -.08); });   // bellows at the wrists and the tops of the legs
+      r.hands.forEach(h => ruff(h, .1, 5, .02)); [-1, 1].forEach(s => { const g = new THREE.Group(); pos(g, 0, -.12, s * .15); r.hips.add(g); ruff(g, .14, 5, -.08); });   // bellows at the wrists and the tops of the legs
       const pr = r.prop; pr.inner.children.slice().forEach(c => pr.inner.remove(c));                                // the stun baton
       pr.inner.add(pos(P(new THREE.CylinderGeometry(.035, .035, .9, 10).rotateZ(-Math.PI / 2), M("#2c3038")), .38, 0, 0)); pr.inner.add(pos(P(new THREE.CylinderGeometry(.05, .05, .14, 10).rotateZ(-Math.PI / 2), StD), -.08, 0, 0));
       pr.inner.add(pos(P(new THREE.ConeGeometry(.035, .1, 8).rotateZ(-Math.PI / 2), Br), .88, 0, 0)); pr.inner.add(pos(P(new THREE.SphereGeometry(.03, 8, 6), MX("#9ef0ff", { emissive: "#4ad8ff", emissiveIntensity: .8 })), .94, 0, 0));
+      post.push(p => { const t = time, tick = Math.floor(t * 2) / 2, k = Math.sin(tick * 2.7); face.rotation.x = k * .06; hel.rotation.y = k * .04;   // (clockwork: its head ticks round in little jerks, the spring of its neck bouncing)
+        neck.forEach((n, i) => { n.position.y = .02 + i * (.045 + Math.sin(t * 9) * .006); }); ears.forEach((e, i) => { e.rotation.y = Math.sin(t * 4 + i) * .15; }); });
     } else if (id === "elpico") {
       const Sk = M("#ffd2a0"), Bl = M("#2d5bd6"), Au = M("#f2c230");
-      head.add(pos(P(new THREE.ConeGeometry(.24, .9, 16).scale(.9, 1, .8), Sk), -.02, .22, 0));                     // the tall pointed head
-      const beak = P(new THREE.ConeGeometry(.06, .34, 10).rotateZ(Math.PI), Sk); beak.rotation.z = Math.PI - .5; pos(beak, .2, -.06, 0); head.add(beak);   // a long beak of a nose
+      head.add(pos(P(new THREE.ConeGeometry(.24, .95, 16).scale(.9, 1, .8), Sk), -.03, .24, 0));                     // the tall pointed head, tipped back a little
+      const beak = P(new THREE.ConeGeometry(.06, .36, 10).rotateZ(Math.PI), Sk); beak.rotation.z = Math.PI - .45; pos(beak, .21, -.06, 0); head.add(beak);   // a long beak of a nose
       eye(head, .17, .06, -.08, .9); eye(head, .17, .06, .08, .9);
-      [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.025, .025, .1), K); b.rotation.x = -s * .5; pos(b, .19, .13, s * .08); head.add(b); });
-      const frown = P(new THREE.TorusGeometry(.05, .012, 4, 10, Math.PI), K); frown.rotation.set(0, Math.PI / 2, 0); pos(frown, .2, -.18, 0); head.add(frown);
-      head.add(pos(P(new THREE.CylinderGeometry(.205, .215, .07, 18, 1, true), Bl), -.02, .14, 0));                 // the headband, knotted each side
-      [-1, 1].forEach(s => { const k = P(new THREE.TorusGeometry(.05, .02, 6, 10), Bl); k.rotation.y = Math.PI / 2; pos(k, -.02, .14, s * .23); head.add(k); });
-      const belt = new THREE.Group(); r.hips.add(belt); belt.add(pos(P(new THREE.CylinderGeometry(.24, .24, .1, 20), Au), 0, .1, 0));   // the title belt
+      [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.025, .028, .11), K); b.rotation.x = -s * .55; pos(b, .19, .13, s * .08); head.add(b); });
+      const frown = P(new THREE.TorusGeometry(.055, .013, 4, 10, Math.PI), K); frown.rotation.set(0, Math.PI / 2, 0); pos(frown, .2, -.19, 0); head.add(frown);
+      head.add(pos(P(new THREE.CylinderGeometry(.205, .215, .075, 18, 1, true), Bl), -.02, .14, 0));                 // the headband, knotted each side
+      const knots = [-1, 1].map(s => { const k = P(new THREE.TorusGeometry(.055, .022, 6, 10), Bl); k.rotation.y = Math.PI / 2; pos(k, -.02, .14, s * .235); head.add(k); return k; });
+      const belt = new THREE.Group(); r.hips.add(belt); belt.add(pos(P(new THREE.CylinderGeometry(.27, .27, .11, 22), Au), 0, .1, 0));   // the title belt
       const [cv, g] = U.cv2(128, 96); g.fillStyle = "#f2c230"; g.beginPath(); g.ellipse(64, 48, 62, 46, 0, 0, Math.PI * 2); g.fill(); g.fillStyle = "#b8860b"; g.beginPath(); g.ellipse(64, 48, 52, 38, 0, 0, Math.PI * 2); g.fill();
       g.fillStyle = "#fff6d0"; g.beginPath(); g.arc(64, 42, 18, 0, Math.PI * 2); g.fill(); g.fillRect(54, 52, 20, 12); g.fillStyle = "#3a2a10"; g.beginPath(); g.arc(57, 42, 5, 0, Math.PI * 2); g.arc(71, 42, 5, 0, Math.PI * 2); g.fill();
       [[30, 30], [98, 30], [34, 70], [94, 70]].forEach(([x, y]) => { g.fillStyle = "#fff6d0"; g.fillRect(x - 3, y - 3, 6, 6); });
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(KIT.settleTex(tex));
-      belt.add(pos(P(new THREE.CircleGeometry(.14, 20).scale(1, .75, 1).rotateY(Math.PI / 2), MX("#ffffff", { map: tex })), .245, .1, 0));
+      belt.add(pos(P(new THREE.CircleGeometry(.16, 20).scale(1, .75, 1).rotateY(Math.PI / 2), MX("#ffffff", { map: tex })), .275, .1, 0));
+      post.push(p => { const t = time; knots.forEach((k, i) => { k.rotation.x = Math.sin(t * 6 + i) * .3; }); });   // (the headband's knots flutter)
     } else if (id === "oldvic") {
       r.head.children.forEach(c => { c.visible = c !== r.cap && c !== head; }); head.visible = true;               // (his own face, the kit's)
       const Cap = M("#e8245a"), Bd = M("#f4f2ee");
-      head.add(pos(P(new THREE.SphereGeometry(.33, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .8, 1.02), Cap), -.02, .1, 0));   // the cap: a V on the front, a clock on the side
-      head.add(pos(P(new THREE.CylinderGeometry(.22, .22, .03, 18, 1, false, -Math.PI / 2, Math.PI), Cap), .2, .1, 0));
+      head.add(pos(P(new THREE.SphereGeometry(.34, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .82, 1.03), Cap), -.02, .1, 0));   // the cap: a V on the front, a clock on the side
+      head.add(pos(P(new THREE.CylinderGeometry(.24, .24, .03, 18, 1, false, -Math.PI / 2, Math.PI), Cap), .21, .1, 0));
       const v = new THREE.Shape(); v.moveTo(-.07, .06); v.lineTo(-.04, .06); v.lineTo(0, -.02); v.lineTo(.04, .06); v.lineTo(.07, .06); v.lineTo(0, -.07); v.closePath();
-      const vm = P(new THREE.ShapeGeometry(v), MX("#ffffff", { side: THREE.DoubleSide })); vm.rotation.y = Math.PI / 2; pos(vm, .3, .24, 0); head.add(vm);
-      const clk = new THREE.Group(); pos(clk, .12, .26, .24); clk.rotation.x = -.6; head.add(clk);
-      clk.add(P(new THREE.CylinderGeometry(.055, .055, .03, 14).rotateX(Math.PI / 2), M("#d9a441"))); clk.add(pos(P(new THREE.CircleGeometry(.045, 14), Wh), 0, 0, .017));
-      clk.add(pos(P(new THREE.BoxGeometry(.006, .035, .005), K), 0, .012, .02)); clk.add(pos(P(new THREE.BoxGeometry(.025, .006, .005), K), .01, 0, .02));
-      const beard = P(new THREE.ConeGeometry(.15, .46, 12).rotateZ(Math.PI).scale(.7, 1, 1.1), Bd); pos(beard, .17, -.4, 0); beard.rotation.z = -.12; head.add(beard);   // a long beard
-      [-1, 1].forEach(s => { const m = P(new THREE.CapsuleGeometry(.04, .24, 4, 8), Bd); m.rotation.x = s * 1.2; m.rotation.z = .4; pos(m, .27, -.13, s * .1); head.add(m); });   // a big moustache
-      head.add(pos(P(new THREE.SphereGeometry(.04, 8, 6).scale(1.4, .6, 1), M("#ff7a9a")), .28, -.22, 0));          // his tongue out
-      r.chest.add(pos(P(new THREE.CylinderGeometry(.015, .015, .5, 6), M("#d9d2c4")), .2, .1, 0));                  // the jacket's zip
+      const vm = P(new THREE.ShapeGeometry(v), MX("#ffffff", { side: THREE.DoubleSide })); vm.rotation.y = Math.PI / 2; pos(vm, .31, .24, 0); head.add(vm);
+      const clk = new THREE.Group(); pos(clk, .12, .27, .25); clk.rotation.x = -.6; head.add(clk);
+      clk.add(P(new THREE.CylinderGeometry(.06, .06, .03, 14).rotateX(Math.PI / 2), M("#d9a441"))); clk.add(pos(P(new THREE.CircleGeometry(.05, 14), Wh), 0, 0, .017));
+      const hand = pos(P(new THREE.BoxGeometry(.006, .04, .005), K), 0, .014, .02); clk.add(hand); clk.add(pos(P(new THREE.BoxGeometry(.028, .006, .005), K), .011, 0, .02));
+      const beard = P(new THREE.ConeGeometry(.2, .62, 14).rotateZ(Math.PI).scale(.65, 1, 1.15), Bd); pos(beard, .16, -.46, 0); beard.rotation.z = -.16; head.add(beard);   // a long beard, down over his chest
+      const mus = [-1, 1].map(s => { const m = P(new THREE.ConeGeometry(.05, .4, 10), Bd); m.rotation.x = s * 1.35; m.rotation.z = .2; pos(m, .29, -.12, s * .17); head.add(m); return m; });   // a great pointed moustache
+      const tg = P(new THREE.SphereGeometry(.045, 8, 6).scale(1.4, .6, 1), M("#ff7a9a")); pos(tg, .29, -.24, 0); head.add(tg);   // his tongue out
+      r.chest.add(pos(P(new THREE.CylinderGeometry(.016, .016, .55, 6), M("#d9d2c4")), .22, -.2, 0));                 // the jacket's zip
+      const sk = new THREE.Group(); pos(sk, -.32, -.18, .02); sk.rotation.set(.25, 0, -.55); r.chest.add(sk);           // his skateboard, slung on his back
+      sk.add(P(new THREE.CapsuleGeometry(.13, .55, 4, 10).scale(1, 1, .18).rotateY(Math.PI / 2), M("#9aa3a8"))); [-.26, .26].forEach(y => [-.08, .08].forEach(x => sk.add(pos(P(new THREE.CylinderGeometry(.035, .035, .03, 10).rotateX(Math.PI / 2), M("#f2c230")), x, y, -.05))));
+      post.push(p => { const t = time, mv = Math.min(1, Math.abs(p.vx || 0) / 200); beard.rotation.z = -.16 + Math.sin(t * 5) * .06 * mv + Math.sin(t * 1.3) * .03; tg.position.y = -.24 + Math.sin(t * 7) * .008; hand.rotation.z = -t * 2;
+        mus.forEach((m, i) => { m.rotation.x = (i ? 1 : -1) * (1.35 + Math.sin(t * 2.1 + i) * .06); }); });   // (his beard swings as he goes, his moustache twitches, the clock ticks round)
     } else {
-      const Sk = M("#e0a383"), SkD = M("#c27f62"), Dw = M("#fbfaf6");
-      head.add(pos(P(new THREE.SphereGeometry(.3, 16, 12).scale(1.05, .9, 1), Sk), 0, -.02, 0));                     // a boar's head: a broad snout, little eyes and ears
-      head.add(pos(P(new THREE.CylinderGeometry(.15, .18, .16, 14).rotateZ(Math.PI / 2), SkD), .3, -.06, 0));
-      [-1, 1].forEach(s => head.add(pos(P(new THREE.CapsuleGeometry(.025, .05, 3, 6).rotateX(Math.PI / 2).rotateZ(Math.PI / 2), K), .385, -.06, s * .055)));
-      eye(head, .24, .1, -.13, .7); eye(head, .24, .1, .13, .7);
-      [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.07, .16, 6), Sk); e.rotation.x = s * .5; pos(e, -.04, .27, s * .17); head.add(e); });
-      const mouth = P(new THREE.TorusGeometry(.13, .016, 4, 14, Math.PI), K); mouth.rotation.set(0, Math.PI / 2, Math.PI); pos(mouth, .27, -.17, 0); head.add(mouth);
+      const Sk = M("#7cc251"), SkD = M("#5a9a38"), Bl = M("#e6efb0"), Dw = M("#fbfaf6");
+      head.position.y = -.2;                                                                                              // (sunk into the body: no neck)
+      head.add(pos(P(new THREE.SphereGeometry(.34, 18, 12).scale(1.3, .7, 1.4), Sk), 0, -.02, 0));                     // the head: the broad flat top of the wedge
+      head.add(pos(P(new THREE.SphereGeometry(.3, 16, 10, 0, Math.PI * 2, Math.PI * .5, Math.PI * .5).scale(1.2, .9, 1.22), Bl), .02, -.06, 0));   // its pale throat under the mouth
+      const sac = P(new THREE.SphereGeometry(.17, 14, 10).scale(.8, .75, 1.1), Bl); pos(sac, .26, -.25, 0); head.add(sac);   // the throat sac, puffing now and then
+      const eyes = [-1, 1].map(s => { const e = new THREE.Group(); pos(e, .2, .17, s * .2); head.add(e);                   // eyes up on top, bulging, either side of the nostrils
+        e.add(P(new THREE.SphereGeometry(.11, 14, 10), Sk)); e.add(pos(P(new THREE.SphereGeometry(.08, 12, 10), Wh), .05, .02, 0)); const pu = P(new THREE.SphereGeometry(.04, 8, 6), K); pos(pu, .115, .025, 0); e.add(pu);
+        const lid = P(new THREE.SphereGeometry(.112, 14, 8, 0, Math.PI * 2, 0, Math.PI * .42), SkD); lid.rotation.z = -.5; e.add(lid); e.userData.lid = lid; return e; });   // (heavy lids: a bouncer's look)
+      [-1, 1].forEach(s => { const n = P(new THREE.ConeGeometry(.06, .15, 6), SkD); n.rotation.x = s * .55; pos(n, -.05, .23, s * .3); head.add(n); });   // the two little horns at its top corners
+      [-1, 1].forEach(s => { const n = P(new THREE.CapsuleGeometry(.018, .06, 3, 6), K); n.rotation.z = -.9; pos(n, .4, .1, s * .05); head.add(n); });   // two long nostrils, up front
+      head.add(pos(P(new THREE.TorusGeometry(.44, .02, 4, 28, Math.PI * .75).rotateZ(-Math.PI * .375).rotateX(Math.PI / 2), K), 0, -.09, 0));   // the mouth, right round the front
+      [[-.3, -.15, .12], [-.32, -.3, -.1], [-.28, -.48, .18], [-.25, -.2, -.25], [-.22, -.55, -.05]].forEach(([x, y, z], i) => r.chest.add(pos(P(new THREE.SphereGeometry(.035 + i % 2 * .015, 8, 6), SkD), x, y, z)));   // warts on its back
       const pip = (par, x, y, z, ry) => { const d = P(new THREE.CircleGeometry(.022, 10), K); pos(d, x, y, z); d.rotation.y = ry; par.add(d); };
-      r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);                                    // dice for fists, a bracelet of beads, claws
-        g.add(pos(P(new THREE.BoxGeometry(.24, .24, .24), Dw), 0, -.14, 0));
-        [[0, -.14, .121, 0], [-.06, -.08, .121, 0], [.06, -.2, .121, 0], [0, -.14, -.121, Math.PI], [.121, -.08, -.06, Math.PI / 2], [.121, -.2, .06, Math.PI / 2], [-.121, -.14, 0, -Math.PI / 2]].forEach(([x, y, z, ry]) => pip(g, x, y, z, ry));
-        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.add(pos(P(new THREE.SphereGeometry(.028, 6, 6), M(i % 2 ? "#f2c230" : "#e8e2d6")), Math.cos(a) * .1, 0, Math.sin(a) * .1)); }
-        [-.06, .06].forEach(z => { const c = P(new THREE.ConeGeometry(.02, .1, 5), M("#efe6cf")); c.rotation.z = Math.PI + .5; pos(c, .1, -.28, z); g.add(c); }); });
-      const sh = new THREE.Group(); r.hips.add(sh);                                                                  // torn shorts, jagged at the hem
-      const [cv, g] = U.cv2(256, 64); g.fillStyle = "#3b2a5a"; g.beginPath(); g.moveTo(0, 0); g.lineTo(256, 0); for (let x = 256; x >= 0; x -= 16) g.lineTo(x, x % 32 ? 44 : 64); g.closePath(); g.fill();
+      r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);                                          // dice for fists, a bracelet of beads, claws
+        g.add(pos(P(new THREE.BoxGeometry(.26, .26, .26), Dw), 0, -.15, 0));
+        [[0, -.15, .131, 0], [-.065, -.085, .131, 0], [.065, -.215, .131, 0], [0, -.15, -.131, Math.PI], [.131, -.085, -.065, Math.PI / 2], [.131, -.215, .065, Math.PI / 2], [-.131, -.15, 0, -Math.PI / 2]].forEach(([x, y, z, ry]) => pip(g, x, y, z, ry));
+        for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.add(pos(P(new THREE.SphereGeometry(.03, 6, 6), M(i % 2 ? "#f2c230" : "#e8e2d6")), Math.cos(a) * .11, 0, Math.sin(a) * .11)); }
+        [-.07, .07].forEach(z => { const c = P(new THREE.ConeGeometry(.022, .12, 5), M("#efe6cf")); c.rotation.z = Math.PI + .5; pos(c, .11, -.3, z); g.add(c); }); });
+      const sh = new THREE.Group(); r.hips.add(sh);                                                                        // torn shorts, jagged at the hem
+      const [cv, g] = U.cv2(256, 64); g.fillStyle = "#5b3a7a"; g.beginPath(); g.moveTo(0, 0); g.lineTo(256, 0); for (let x = 256; x >= 0; x -= 16) g.lineTo(x, x % 32 ? 44 : 64); g.closePath(); g.fill();
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(KIT.settleTex(tex));
-      sh.add(P(new THREE.LatheGeometry([[.24, .06], [.3, -.12], [.33, -.3]].map(([x, y]) => new THREE.Vector2(x, y)), 18), MX("#ffffff", { map: tex, side: THREE.DoubleSide, transparent: true, alphaTest: .5 })));
-      sh.add(pos(P(new THREE.TorusGeometry(.245, .035, 6, 20).rotateX(Math.PI / 2), M("#2a1c40")), 0, .06, 0)); sh.add(pos(P(new THREE.ConeGeometry(.05, .1, 3).rotateZ(Math.PI), M("#f2c230")), .25, .03, 0));
+      sh.add(P(new THREE.LatheGeometry([[.24, .06], [.3, -.08], [.33, -.18]].map(([x, y]) => new THREE.Vector2(x, y)), 18), MX("#ffffff", { map: tex, side: THREE.DoubleSide, transparent: true, alphaTest: .5 })));
+      sh.add(pos(P(new THREE.TorusGeometry(.25, .035, 6, 20).rotateX(Math.PI / 2), M("#3a2450")), 0, .06, 0)); sh.add(pos(P(new THREE.ConeGeometry(.05, .1, 3).rotateZ(Math.PI), M("#f2c230")), .26, .03, 0));
+      post.push(p => { const t = time, puff = Math.max(0, Math.sin(t * 1.3)) ** 6, bl = (t % 4.3) < .13 ? 1 : 0; sac.scale.set(.8 + .25 * puff, .75 + .35 * puff, 1.1 + .3 * puff);   // (now and then it puffs its throat out; a slow blink)
+        eyes.forEach(e => { e.userData.lid.rotation.z = bl ? .4 : -.5; }); });
     }
   } else if (id === "pipe" || id === "pipelet") {
+    const head = new THREE.Group(); r.head.add(head);
     r.torso.mesh.visible = false; const K = M("#1d1f24"), Wh = M("#ffffff"), Hm = M("#ff5a7a"), Gl = M("#f7f4ee");
     const heart = s => { const h = new THREE.Shape(); h.moveTo(0, -.5); h.bezierCurveTo(-.15, -.3, -.55, -.1, -.5, .2); h.bezierCurveTo(-.45, .5, -.08, .55, 0, .28); h.bezierCurveTo(.08, .55, .45, .5, .5, .2); h.bezierCurveTo(.55, -.1, .15, -.3, 0, -.5);
       return new THREE.ExtrudeGeometry(h, { depth: .12, bevelEnabled: false }).translate(0, 0, -.06).scale(s, s, s); };
     const eye = (par, x, y, z, s = 1) => { par.add(pos(P(new THREE.SphereGeometry(.06 * s, 10, 8).scale(.5, 1, 1), Wh), x, y, z)); par.add(pos(P(new THREE.SphereGeometry(.032 * s, 8, 6).scale(.5, 1, 1), K), x + .02 * s, y, z)); };
-    const glove = (h, s) => { hideKids(h); const g = new THREE.Group(); h.add(g); g.scale.setScalar(s);   // a big blocky work glove with a cuff
-      g.add(pos(P(new THREE.CylinderGeometry(.075, .085, .08, 10), Gl), 0, -.02, 0)); g.add(pos(P(new THREE.BoxGeometry(.17, .2, .13), Gl), 0, -.15, 0));
-      const t = P(new THREE.BoxGeometry(.06, .11, .07), Gl); t.rotation.z = .5; pos(t, .1, -.12, 0); g.add(t); };
+    const glove = (h, s) => { hideKids(h); const g = new THREE.Group(); h.add(g); g.scale.setScalar(s);   // a big blocky work glove with a cuff, the thumb up
+      g.add(pos(P(new THREE.CylinderGeometry(.08, .09, .09, 10), Gl), 0, -.02, 0)); g.add(pos(P(new THREE.BoxGeometry(.19, .21, .15), Gl), 0, -.15, 0));
+      const t = P(new THREE.BoxGeometry(.065, .12, .075), Gl); t.rotation.z = .5; pos(t, .11, -.12, 0); g.add(t); [-.045, 0, .045].forEach(z => g.add(pos(P(new THREE.BoxGeometry(.2, .006, .006), M("#c9c2b4")), 0, -.2, z))); };
     const body = new THREE.Group(); r.body.add(body);   // the body, along the spine
     post.push(() => { const p = r.torso.pts; body.position.copy(p[1]); body.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
-    const head = new THREE.Group(); r.head.add(head);
     if (id === "pipe") {
-      const S = M("#9cc3d5"), SD = M("#6f97ab"), C = M("#c4dde8"), H = 1.22;
-      body.add(P(new THREE.LatheGeometry([[0, -.22], [.2, -.2], [.36, -.08], [.43, .12], [.41, .36], [.33, .62], [.22, .86], [.17, 1.02], [.17, H + .02]].map(([x, y]) => new THREE.Vector2(x, y)), 22), S));   // swelling out like a vase
-      body.add(pos(P(new THREE.TorusGeometry(.415, .018, 6, 28).rotateX(Math.PI / 2), SD), 0, .3, 0));   // the seam round its middle
-      body.add(pos(P(new THREE.CylinderGeometry(.21, .21, .06, 20), SD), 0, H, 0));                       // the flange at the top of its neck
-      const ht = P(heart(.2), Hm); ht.rotation.y = Math.PI / 2; pos(ht, .37, .52, 0); body.add(ht);
-      head.position.y = -.12;                     // its head: a pipe cap with a spout and two eyes
-      head.add(pos(P(new THREE.BoxGeometry(.4, .3, .5), C), 0, -.05, 0)); head.add(pos(P(new THREE.BoxGeometry(.44, .06, .54), SD), 0, .12, 0));
-      head.add(pos(P(new THREE.CylinderGeometry(.075, .075, .1, 14).rotateZ(Math.PI / 2), SD), .23, -.06, 0)); head.add(pos(P(new THREE.CircleGeometry(.05, 14).rotateY(Math.PI / 2), K), .285, -.06, 0));
-      eye(head, .2, 0, -.15); eye(head, .2, 0, .15); r.hands.forEach(h => glove(h, 1.25));
+      const S = M("#9cc3d5"), SD = M("#6f97ab"), C = M("#c4dde8"), Hh = 1.2;
+      body.add(P(new THREE.LatheGeometry([[0, -.24], [.26, -.22], [.44, -.1], [.52, .1], [.49, .32], [.38, .52], [.24, .7], [.17, .86], [.16, Hh + .02]].map(([x, y]) => new THREE.Vector2(x, y)), 24), S));   // a flask: a great round bottom, a long neck
+      body.add(pos(P(new THREE.TorusGeometry(.5, .02, 6, 28).rotateX(Math.PI / 2), SD), 0, .2, 0));                // the seam round its middle
+      body.add(pos(P(new THREE.CylinderGeometry(.2, .2, .06, 20), SD), 0, Hh, 0));                               // the flange at the top of its neck
+      const ht = P(heart(.22), Hm); ht.rotation.y = Math.PI / 2; pos(ht, .3, .62, 0); body.add(ht);
+      head.position.y = -.12;                     // its head: a pipe cap, wider than its neck, a fitting and two eyes
+      head.add(pos(P(new THREE.CylinderGeometry(.27, .27, .3, 20).scale(.85, 1, 1.05), C), 0, -.05, 0)); head.add(pos(P(new THREE.CylinderGeometry(.29, .29, .06, 20).scale(.85, 1, 1.05), SD), 0, .12, 0));
+      head.add(pos(P(new THREE.CylinderGeometry(.08, .08, .1, 14).rotateZ(Math.PI / 2), SD), .25, -.05, 0)); head.add(pos(P(new THREE.CircleGeometry(.05, 14).rotateY(Math.PI / 2), K), .305, -.05, 0));
+      eye(head, .21, .01, -.15); eye(head, .21, .01, .15); r.hands.forEach(h => glove(h, 1.45));
+      post.push(p => { const t = time; head.rotation.x = Math.sin(t * 1.7) * .05; ht.scale.setScalar(1 + Math.max(0, Math.sin(t * 5)) ** 8 * .25); });   // (its heart beats; its head bobs)
     } else {
       const Cu = M("#e0965a"), CD = M("#a8643a");
-      body.add(pos(P(new THREE.SphereGeometry(.42, 22, 14, 0, Math.PI * 2, Math.PI * .28, Math.PI * .72), Cu), 0, .2, 0));   // a round pot, open at the top
-      body.add(pos(P(new THREE.CircleGeometry(.36, 22).rotateX(-Math.PI / 2), K), 0, .45, 0)); body.add(pos(P(new THREE.TorusGeometry(.36, .03, 6, 24).rotateX(Math.PI / 2), CD), 0, .46, 0));
-      const ht = P(heart(.16), Hm); ht.rotation.y = Math.PI / 2; ht.rotation.z = -.25; pos(ht, .38, .3, 0); body.add(ht);
+      body.add(pos(P(new THREE.SphereGeometry(.44, 22, 14, 0, Math.PI * 2, Math.PI * .28, Math.PI * .72), Cu), 0, .2, 0));   // a round pot, open at the top
+      body.add(pos(P(new THREE.CircleGeometry(.38, 22).rotateX(-Math.PI / 2), K), 0, .46, 0)); body.add(pos(P(new THREE.TorusGeometry(.38, .035, 6, 24).rotateX(Math.PI / 2), CD), 0, .47, 0));
+      const ht = P(heart(.16), Hm); ht.rotation.y = Math.PI / 2; ht.rotation.z = -.25; pos(ht, .4, .3, 0); body.add(ht);
+      [[.22, .2], [-.22, .2], [.22, -.2], [-.22, -.2]].forEach(([x, z]) => { const l = P(new THREE.ConeGeometry(.05, .2, 8).rotateZ(Math.PI), CD); pos(l, x, -.25, z); body.add(l); });   // four little feet under the pot
       head.add(pos(P(new THREE.CylinderGeometry(.13, .13, .3, 16), Cu), -.08, -.05, 0));                  // its head: an elbow of pipe, its open end to the front
       const el = P(new THREE.TorusGeometry(.17, .13, 12, 18, Math.PI / 2), Cu); el.rotation.set(0, 0, Math.PI / 2); pos(el, .09, .1, 0); head.add(el);
       head.add(pos(P(new THREE.CylinderGeometry(.16, .16, .07, 16).rotateZ(Math.PI / 2), CD), .11, .27, 0)); head.add(pos(P(new THREE.CircleGeometry(.12, 16).rotateY(Math.PI / 2), K), .15, .27, 0));
-      eye(head, .07, -.02, -.12, .9); eye(head, .07, -.02, .12, .9); r.hands.forEach(h => glove(h, .8));
+      eye(head, .07, -.02, -.12, .95); eye(head, .07, -.02, .12, .95); r.hands.forEach(h => glove(h, .85));
+      post.push(p => { const t = time; head.rotation.z = Math.sin(t * 3.3) * .08; });   // (its elbow of a head nods about)
     }
   } else if (id === "vinnie" || id === "ocho" || id === "rink") {
     const MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }, K = M("#1d1f24"), Wh = M("#ffffff");
     const eye = (par, x, y, z, s = 1) => { par.add(pos(P(new THREE.SphereGeometry(.07 * s, 10, 8).scale(.5, 1, 1), Wh), x, y, z)); par.add(pos(P(new THREE.SphereGeometry(.03 * s, 8, 6).scale(.5, 1, 1), K), x + .025 * s, y, z)); };
     const head = new THREE.Group(); r.head.add(head);
     if (id === "vinnie") {
-      const Sk = M("#8fd6f5"), SkD = M("#5ab4e0"), Hr = M("#5a12a0"), HrL = M("#8a2ad8"), Au = M("#ffd21f"), Cr = M("#c8195f");
-      head.add(pos(P(new THREE.SphereGeometry(.3, 18, 14).scale(1, 1.05, 1), Sk), .02, .02, 0));                       // a round blue head, a pig's snout
-      head.add(pos(P(new THREE.CylinderGeometry(.1, .11, .1, 14).rotateZ(Math.PI / 2), SkD), .3, -.05, 0));
-      [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.026, 8, 6).scale(.5, 1.2, 1), K), .353, -.05, s * .04)));
-      [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.08, .34, 8), Sk); e.rotation.x = s * 1.35; pos(e, -.02, .08, s * .35); head.add(e); });   // pointed ears, out to the sides
-      eye(head, .25, .07, -.12, .85); eye(head, .25, .07, .12, .85);
-      [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.03, .035, .17), Hr); b.rotation.x = s * .5; pos(b, .26, .17, s * .12); head.add(b); });   // a scowl
-      head.add(pos(P(new THREE.BoxGeometry(.012, .012, .12), K), .29, -.13, 0)); head.add(pos(P(new THREE.ConeGeometry(.02, .06, 4).rotateZ(Math.PI), Wh), .29, -.155, .05));   // a fang
-      head.add(pos(P(new THREE.SphereGeometry(.32, 18, 10, 0, Math.PI * 2, 0, Math.PI * .55).scale(1.02, .95, 1.05), Hr), -.02, .07, 0));   // the purple hair: swept down over his brow, a curl on top
-      [-.13, 0, .13].forEach((z, i) => { const f = P(new THREE.ConeGeometry(.08, .32, 6), i === 1 ? HrL : Hr); f.rotation.z = -2.2; f.rotation.x = z * 2.2; pos(f, .2, .2, z); head.add(f); });
-      [[.07, -.06, .42, 0], [.05, .02, .46, .8]].forEach(([rad, x, y, rz]) => { const c = P(new THREE.TorusGeometry(rad, .026, 6, 12, Math.PI * 1.5), Hr); c.rotation.set(0, Math.PI / 2, rz); pos(c, x, y, 0); head.add(c); });
-      const er = P(new THREE.TorusGeometry(.05, .014, 6, 12, Math.PI * 1.5), Au); pos(er, .0, -.1, .37); head.add(er);   // a gold crescent earring
-      r.chest.add(pos(P(new THREE.CylinderGeometry(.24, .16, .16, 18, 1, true, Math.PI / 2 + .6, Math.PI * 2 - 1.2), MX("#3a0a5a", { side: THREE.DoubleSide })), -.02, .24, 0));   // the high vampire collar, open at the front
-      [[.16, 0], [.09, -.065], [.09, .065], [.02, 0]].forEach(([y, z]) => { const d = P(new THREE.BoxGeometry(.012, .06, .06), Au); d.rotation.x = Math.PI / 4; pos(d, .21, y, z); r.chest.add(d); });   // gold diamonds on his top
-      r.hands.forEach((h, i) => { const g = new THREE.Group(); h.add(g);                                               // great crimson cuffs, a black ring in each, a gold G on one
-        g.add(pos(P(new THREE.CylinderGeometry(.08, .12, .18, 14), Cr), 0, .08, 0)); g.add(pos(P(new THREE.TorusGeometry(.035, .014, 6, 12).rotateY(Math.PI / 2), K), .105, .08, 0));
-        if (i === 0) { const G = new THREE.Group(); pos(G, .09, .1, .07); G.rotation.y = .6; G.scale.setScalar(.7); g.add(G); G.add(P(new THREE.TorusGeometry(.04, .013, 5, 12, Math.PI * 1.6).rotateZ(.3), Au)); G.add(pos(P(new THREE.BoxGeometry(.012, .012, .04), Au), 0, -.005, .02)); } });
-      [[-.06, -.12], [.02, -.15]].forEach(([y, z]) => { const d = P(new THREE.BoxGeometry(.012, .07, .07), Au); d.rotation.x = Math.PI / 4; pos(d, .22, y - .1, z); r.hips.add(d); });   // and two on his flares
+      const Sk = M("#8fd6f5"), SkD = M("#5ab4e0"), Hr = M("#5a12a0"), HrL = M("#8a2ad8"), Au = M("#ffd21f"), Cr = M("#c8195f"), Mi = M("#9cc8e0");
+      head.add(pos(P(new THREE.SphereGeometry(.34, 20, 16).scale(1, 1.02, 1.05), Sk), .02, .02, 0));                     // a big round blue head, a pig's snout
+      head.add(pos(P(new THREE.CylinderGeometry(.11, .12, .11, 16).rotateZ(Math.PI / 2), SkD), .34, -.06, 0));
+      [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.03, 8, 6).scale(.5, 1.25, 1), K), .397, -.06, s * .045)));
+      const ears = [-1, 1].map(s => { const e = P(new THREE.ConeGeometry(.1, .4, 8), Sk); e.rotation.x = s * 1.25; pos(e, -.02, .1, s * .4); head.add(e); return e; });   // big pointed ears, out to the sides
+      [-1, 1].forEach(s => { head.add(pos(P(new THREE.SphereGeometry(.085, 12, 10).scale(.45, .7, 1.15), Wh), .3, .07, s * .13)); head.add(pos(P(new THREE.SphereGeometry(.035, 8, 6).scale(.5, 1, 1), M("#2a6fe0")), .335, .065, s * .12));   // narrowed eyes, blue, a scowl over them
+        const b = P(new THREE.BoxGeometry(.04, .045, .2), Hr); b.rotation.x = s * .55; pos(b, .31, .14, s * .13); head.add(b); });
+      head.add(pos(P(new THREE.BoxGeometry(.012, .012, .14), K), .32, -.16, 0)); head.add(pos(P(new THREE.ConeGeometry(.024, .07, 4).rotateZ(Math.PI), Wh), .32, -.19, .055));   // a fang
+      head.add(pos(P(new THREE.SphereGeometry(.36, 20, 12, 0, Math.PI * 2, 0, Math.PI * .42).scale(1.03, .95, 1.06), Hr), -.03, .08, 0));   // the purple hair: swept down over his brow, a curl on top
+      [[-.16, .26], [.02, .3], [.17, .27]].forEach(([z, y], i) => { const f = P(new THREE.ConeGeometry(.085, .3, 6), i === 1 ? HrL : Hr); f.rotation.z = -2.35; f.rotation.x = z * 2.4; pos(f, .23, y, z); head.add(f); });
+      const curl = new THREE.Group(); pos(curl, -.04, .44, 0); head.add(curl);
+      [[.08, -.04, 0, 0], [.06, .02, .06, .8]].forEach(([rad, x, y, rz]) => { const c = P(new THREE.TorusGeometry(rad, .03, 6, 12, Math.PI * 1.5), Hr); c.rotation.set(0, Math.PI / 2, rz); pos(c, x, y, 0); curl.add(c); });
+      const er = P(new THREE.TorusGeometry(.06, .016, 6, 12, Math.PI * 1.5), Au); pos(er, .0, -.12, .42); head.add(er);   // a gold crescent earring
+      r.chest.add(pos(P(new THREE.CylinderGeometry(.27, .17, .17, 18, 1, true, Math.PI / 2 + .6, Math.PI * 2 - 1.2), MX("#3a0a5a", { side: THREE.DoubleSide })), -.02, .02, 0));   // the high vampire collar, open at the front
+      [[-.06, 0], [-.13, -.07], [-.13, .07], [-.2, 0]].forEach(([y, z]) => { const d = P(new THREE.BoxGeometry(.012, .07, .07), Au); d.rotation.x = Math.PI / 4; pos(d, .19, y, z); r.chest.add(d); });   // gold diamonds on his top
+      r.hands.forEach((h, i) => { hideKids(h); const g = new THREE.Group(); h.add(g);                                   // great crimson cuffs, a black ring in each, a gold G on one; pale blue mitts
+        g.add(pos(P(new THREE.CylinderGeometry(.07, .13, .2, 16), Cr), 0, .06, 0)); g.add(pos(P(new THREE.TorusGeometry(.035, .013, 6, 12).rotateY(Math.PI / 2), K), .105, .06, 0));
+        g.add(pos(P(new THREE.SphereGeometry(.1, 12, 10).scale(.8, 1.15, .9), Mi), 0, -.12, 0)); [-.05, 0, .05].forEach(z => g.add(pos(P(new THREE.CapsuleGeometry(.03, .06, 3, 6), Mi), .02, -.22, z)));
+        if (i === 0) { const G = new THREE.Group(); pos(G, .11, .08, .08); G.rotation.y = .6; G.scale.setScalar(.8); g.add(G); G.add(P(new THREE.TorusGeometry(.04, .013, 5, 12, Math.PI * 1.6).rotateZ(.3), Au)); G.add(pos(P(new THREE.BoxGeometry(.012, .012, .04), Au), 0, -.005, .02)); } });
+      [[-.06, -.13], [.02, -.16]].forEach(([y, z]) => { const d = P(new THREE.BoxGeometry(.012, .08, .08), Au); d.rotation.x = Math.PI / 4; pos(d, .25, y - .1, z); r.hips.add(d); });   // and two on his flares
+      post.push(p => { const t = time; curl.rotation.x = Math.sin(t * 3.1) * .25; ears.forEach((e, i) => { e.rotation.y = Math.sin(t * 2.3 + i * 2) * .12 + (Math.sin(t * .7) > .97 ? .35 : 0); }); });   // (the curl bobs; an ear twitches now and then)
     } else if (id === "ocho") {
       const Or = M("#ffa833"), OrD = M("#ff5a00"), Rd = M("#ff1a1a"), Ye = M("#ffe600");
       head.add(pos(P(new THREE.SphereGeometry(.34, 18, 14).scale(1, .82, 1.15), Or), 0, -.02, 0));                     // a broad orange face
@@ -12815,51 +12997,65 @@ function dressAlly(r, id) {                        // what the kit can't make: B
       const extra = [-1, 1].map(s => { const g = new THREE.Group(); pos(g, -.05, .15, s * .24); r.chest.add(g);         // and two more arms, from behind, swaying
         g.add(P(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(0, 0, 0), V(-.06, .06, s * .35), V(-.03, -.22, s * .62), V(.05, -.52, s * .7)]), 18, .035, 6), K)); hand(g, .05, -.6, s * .72, .95); return g; });
       post.push(() => extra.forEach((g, i) => { g.rotation.x = Math.sin(time * 3.2 + i * 1.7) * .25; g.rotation.z = Math.sin(time * 2.4 + i) * .15; }));
-    } else {
-      const Yl = M("#f2ee00"), Rd = M("#ee1144"), Tg = M("#ff1010"), Si = M("#c8c8cc");
-      head.add(pos(P(new THREE.SphereGeometry(.36, 18, 14).scale(1, 1.02, 1.12), Yl), 0, .04, 0));                      // a big round yellow head, a tuft on top
-      [[-.02, .45, -.05, .3, .06, .2], [.08, .43, .04, -.4, .05, .16]].forEach(([x, y, z, rz, rr, h]) => { const t = P(new THREE.ConeGeometry(rr, h, 6), Yl); t.rotation.z = rz; pos(t, x, y, z); head.add(t); });
-      [-1, 1].forEach(s => { const e = P(new THREE.SphereGeometry(.12, 12, 10).scale(.5, 1.9, 1), K); e.rotation.x = s * .25; pos(e, -.04, -.12, s * .38); head.add(e); });   // long black floppy ears
-      eye(head, .3, .06, -.13, .8);                                                                                       // one eye, and one in a black patch
-      head.add(pos(P(new THREE.SphereGeometry(.12, 12, 10).scale(.35, .85, 1.1), K), .31, .06, .14)); head.add(pos(P(new THREE.SphereGeometry(.06, 10, 8).scale(.5, .6, 1), Wh), .35, .06, .14)); head.add(pos(P(new THREE.SphereGeometry(.022, 6, 6), K), .37, .07, .14));
-      [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .02, .1), s < 0 ? K : Wh); b.rotation.x = s * .45; pos(b, .335, .13, s * .13); head.add(b); });   // a scowl
-      head.add(pos(P(new THREE.SphereGeometry(.045, 10, 8).scale(.6, .7, 1.1), K), .36, -.05, 0));                       // the nose, rosy cheeks
-      [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.07, 10, 8).scale(.35, 1, 1), Rd), .3, -.1, s * .25)));
-      const tg = P(new THREE.SphereGeometry(.09, 12, 10).scale(.45, 1.3, 1), Tg); pos(tg, .3, -.34, 0); tg.rotation.z = .2; head.add(tg);   // his big red tongue, hanging out
-      const sk = new THREE.Group(); pos(sk, .22, .02, 0); r.chest.add(sk);                                                // a cat skull on his shirt
-      sk.add(P(new THREE.SphereGeometry(.12, 12, 10).scale(.3, .9, 1.05), Wh));
-      [-1, 1].forEach(s => { sk.add(pos(P(new THREE.SphereGeometry(.035, 8, 6).scale(.4, 1, 1), K), .03, .02, s * .05)); const e = P(new THREE.ConeGeometry(.04, .09, 4), Wh); pos(e, 0, .12, s * .08); e.rotation.x = -s * .4; sk.add(e); });
-      sk.add(pos(P(new THREE.SphereGeometry(.02, 6, 6), K), .035, -.05, 0));
-      [-1, 1].forEach(s => r.hips.add(pos(P(new THREE.SphereGeometry(.07, 10, 8).scale(.35, 1, 1), Wh), .24, -.12, s * .14)));   // white spots on his shorts
-      const bd = new THREE.Group(); pos(bd, 0, .16, 0); r.hands[0].add(bd); bd.add(P(new THREE.TorusGeometry(.11, .035, 6, 16).rotateX(Math.PI / 2), Si));   // a spiked band
-      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, c = P(new THREE.ConeGeometry(.025, .07, 5), Si); c.position.set(Math.cos(a) * .135, 0, Math.sin(a) * .135); c.lookAt(Math.cos(a) * 2, 0, Math.sin(a) * 2); c.rotateX(Math.PI / 2); bd.add(c); }
-      const tl = new THREE.Group(); pos(tl, -.26, .06, 0); r.hips.add(tl);                                               // a tail with a red zigzag at the tip, wagging
-      tl.add(pos(P(new THREE.ConeGeometry(.1, .5, 10).rotateZ(.9), Yl), -.18, .17, 0));
-      const zz = new THREE.Shape([[0, 0], [.08, .05], [.03, .08], [.11, .14], [.02, .1], [.06, .06], [-.02, .04]].map(([x, y]) => new THREE.Vector2(x, y)));
-      tl.add(pos(P(new THREE.ExtrudeGeometry(zz, { depth: .06, bevelEnabled: false }).translate(0, 0, -.03), Rd), -.42, .27, 0));
-      post.push(() => { tl.rotation.x = Math.sin(time * 9) * .35; });
-      (r.feet || []).forEach(f => [-1, 1].forEach(s => { const b = P(new THREE.ConeGeometry(.04, .09, 4), Rd); b.rotation.x = s * Math.PI / 2; pos(b, .06, .1, s * .05); f.add(b); }));   // red bows on his shoes
+    } else {   // (Rink, remodelled to his drawing, 2026-11-02)
+      const Yl = M("#f2ee00"), YlD = M("#d9d400"), Rd = M("#ee1144"), Tg = M("#ff1010"), Si = M("#c8c8cc"), Bl = M("#1f6fe0"), Bk = M("#141414");
+      const hp = [[0, -.33], [.27, -.32], [.37, -.24], [.4, -.1], [.38, .06], [.33, .2], [.24, .32], [.12, .39], [0, .41]];   // a bell of a head: wide jowls, a round top (the drawing's)
+      head.add(pos(P(new THREE.LatheGeometry(hp.map(([x, y]) => new THREE.Vector2(x, y)), 28).scale(.95, 1, 1.12), Yl), 0, .02, 0));
+      [[-.03, .44, -.05, .32, .065, .22], [.07, .42, .04, -.42, .055, .18]].forEach(([x, y, z, rz, rr, h]) => { const t = P(new THREE.ConeGeometry(rr, h, 6), Yl); t.rotation.z = rz; pos(t, x, y, z); head.add(t); });   // the tuft
+      const ears = [-1, 1].map(s => { const g = new THREE.Group(); pos(g, -.13, .16, s * .35); head.add(g);   // long floppy black ears, down past his jaw to his chest
+        const e = P(new THREE.SphereGeometry(.13, 14, 12).scale(.4, 2.35, 1.55), K); pos(e, -.02, -.27, s * .08); g.add(e); return g; });
+      eye(head, .32, .03, -.14, .85);                                                                                       // one eye, the other in a black patch
+      head.add(pos(P(new THREE.SphereGeometry(.13, 12, 10).scale(.35, .85, 1.15), K), .33, .04, .15)); head.add(pos(P(new THREE.SphereGeometry(.062, 10, 8).scale(.5, .6, 1), Wh), .37, .04, .15)); head.add(pos(P(new THREE.SphereGeometry(.022, 6, 6), K), .39, .05, .15));
+      [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .02, .11), s < 0 ? K : Wh); b.rotation.x = s * .45; pos(b, .355, .12, s * .14); head.add(b); });   // a scowl
+      head.add(pos(P(new THREE.SphereGeometry(.05, 10, 8).scale(.6, .65, 1.15), K), .39, -.1, 0));                       // the nose, rosy cheeks
+      [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.09, 10, 8).scale(.35, 1, 1), Rd), .3, -.14, s * .28)));
+      const tg = new THREE.Group(); pos(tg, .3, -.3, 0); head.add(tg);                                                   // his big red tongue, out and hanging down over his shirt
+      tg.add(pos(P(new THREE.SphereGeometry(.085, 12, 10).scale(.45, 1.35, 1), Tg), .02, -.1, 0)); tg.add(pos(P(new THREE.BoxGeometry(.01, .13, .006), M("#b80000")), .06, -.1, 0));
+      r.torso.mesh.visible = false;                                                                                     // his shorts: one big black bulb from his chest to his knees, a cat skull on it, two white spots
+      const bod = new THREE.Group(); r.body.add(bod);
+      bod.add(P(new THREE.LatheGeometry([[0, -.2], [.3, -.17], [.42, -.02], [.43, .14], [.36, .32], [.26, .46], [.2, .55], [0, .57]].map(([x, y]) => new THREE.Vector2(x, y)), 26).scale(1.05, 1.02, 1.12), Bk));
+      [0, 1, 2].forEach(k => bod.add(pos(P(new THREE.CylinderGeometry(.23 - k * .005, .235 - k * .005, .04, 22), k % 2 ? Bk : Bl), 0, .64 + k * .04, 0)));   // the blue striped shirt over it
+      const sk = new THREE.Group(); pos(sk, .43, .32, 0); bod.add(sk);
+      sk.add(P(new THREE.SphereGeometry(.13, 12, 10).scale(.3, .85, 1.05), Wh));
+      [-1, 1].forEach(s => { sk.add(pos(P(new THREE.SphereGeometry(.036, 8, 6).scale(.4, 1, 1), K), .03, .02, s * .05)); const e = P(new THREE.ConeGeometry(.045, .1, 4), Wh); pos(e, 0, .13, s * .09); e.rotation.x = -s * .4; sk.add(e); });
+      sk.add(pos(P(new THREE.SphereGeometry(.022, 6, 6), K), .035, -.05, 0));
+      [-1, 1].forEach(s => bod.add(pos(P(new THREE.SphereGeometry(.12, 12, 10).scale(.3, 1, 1), Wh), .44, -.02, s * .24)));
+      post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+      r.hands.forEach(h => { const g = new THREE.Group(); h.add(g); [-1, 0, 1].forEach(k => g.add(pos(P(new THREE.SphereGeometry(.055, 10, 8), Yl), .02, -.11, k * .06))); });   // the paws' scalloped ends
+      const bd = new THREE.Group(); pos(bd, 0, .18, 0); r.hands[0].add(bd); bd.add(P(new THREE.TorusGeometry(.12, .038, 6, 16).rotateX(Math.PI / 2), Si));   // a spiked band
+      for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, c = P(new THREE.ConeGeometry(.026, .075, 5), Si); c.position.set(Math.cos(a) * .148, 0, Math.sin(a) * .148); c.lookAt(Math.cos(a) * 2, 0, Math.sin(a) * 2); c.rotateX(Math.PI / 2); bd.add(c); }
+      const tl = new THREE.Group(); pos(tl, -.3, .05, 0); r.hips.add(tl);                                               // a fat curl of a tail, a red zigzag at its tip, wagging
+      tl.add(P(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([V(0, 0, 0), V(-.16, .12, 0), V(-.22, .34, 0), V(-.12, .5, 0)]), 16, .085, 8), Yl));
+      const zz = new THREE.Shape([[0, 0], [.1, .06], [.04, .1], [.14, .18], [.02, .13], [.07, .07], [-.03, .05]].map(([x, y]) => new THREE.Vector2(x, y)));
+      tl.add(pos(P(new THREE.ExtrudeGeometry(zz, { depth: .09, bevelEnabled: false }).translate(-.03, 0, -.045), Rd), -.16, .46, 0));
+      (r.feet || []).forEach(f => [-1, 1].forEach(s => { const b = P(new THREE.ConeGeometry(.045, .1, 4), Rd); b.rotation.x = s * Math.PI / 2; pos(b, .07, .1, s * .055); f.add(b); f.add(pos(P(new THREE.SphereGeometry(.014, 6, 4), Wh), .1, .1, s * .055)); }));   // red bows, white dots
+      post.push(p => { const t = time, sp = p ? Math.min(1, Math.abs(p.vx || 0) / 420) : 0, air = p && !p.onGround ? Math.max(-1, Math.min(1, (p.vy || 0) / 600)) : 0;   // (ears flop with the step, trail when he runs, fly up as he drops; tail and tongue wag)
+        ears.forEach((g, i) => { g.rotation.z = .1 + sp * .55 - air * .5 + Math.sin(t * (6 + sp * 8) + i) * (.06 + sp * .12); g.rotation.x = (i ? 1 : -1) * (.12 + Math.abs(Math.sin(t * 3.1 + i * 2)) * .06); });
+        tl.rotation.x = Math.sin(t * (9 + sp * 6)) * (.4 + sp * .2); tg.rotation.z = Math.sin(t * 7) * .08 - sp * .25; });
     }
   } else if (DRESS_NEW.includes(id)) dressNew(r, id, post, { M, P, pos, hideKids });
   else if (DRESS_1030.includes(id)) dress1030(r, id, post, { M, P, pos, hideKids });
   else if (DRESS_1031.includes(id)) dress1031(r, id, post, { M, P, pos, hideKids });
   else {
+    const head = new THREE.Group(); r.head.add(head);
     const Sk = M("#a9dcea"), Hr = M("#1d3f8f"), K = M("#1d1f24");
-    const head = new THREE.Group(); r.head.add(head);   // a long V of a face, pointed ears, a tall quiff swept back, a fang
-    head.add(pos(P(new THREE.ConeGeometry(.27, .7, 18).rotateZ(Math.PI).scale(1, 1, .85), Sk), .02, -.05, 0));
-    head.add(pos(P(new THREE.SphereGeometry(.27, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .45, .85), Sk), .02, .3, 0));
-    const q = P(new THREE.ConeGeometry(.15, .85, 10).scale(1.3, 1, .7), Hr); q.rotation.z = .28; pos(q, -.04, .7, 0); head.add(q);
-    const q2 = P(new THREE.ConeGeometry(.08, .32, 8).scale(1.4, 1, .7), Hr); q2.rotation.z = .9; pos(q2, .02, .78, 0); head.add(q2);
-    [-1, 1].forEach(s => { const e = P(new THREE.ConeGeometry(.06, .3, 8), Sk); e.rotation.x = s * 1.25; pos(e, -.02, .22, s * .3); head.add(e); });
-    [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.03, 8, 6).scale(.6, 1, 1.2), K), .22, .14, s * .085)));
-    [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .02, .09), K); b.rotation.x = -s * .4; pos(b, .23, .2, s * .09); head.add(b); });
-    head.add(pos(P(new THREE.BoxGeometry(.02, .015, .1), K), .2, .02, 0));
-    head.add(pos(P(new THREE.ConeGeometry(.012, .04, 4).rotateZ(Math.PI), M("#ffffff")), .205, 0, .03));
+    head.add(pos(P(new THREE.ConeGeometry(.29, .76, 18).rotateZ(Math.PI).scale(1, 1, .85), Sk), .02, -.06, 0));      // a long V of a face, pointed ears, a tall quiff swept back, a fang
+    head.add(pos(P(new THREE.SphereGeometry(.29, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, .45, .85), Sk), .02, .32, 0));
+    const crest = new THREE.Group(); pos(crest, -.04, .3, 0); head.add(crest);
+    const q = P(new THREE.ConeGeometry(.16, .9, 10).scale(1.3, 1, .7), Hr); q.rotation.z = .3; pos(q, 0, .42, 0); crest.add(q);
+    const q2 = P(new THREE.ConeGeometry(.085, .34, 8).scale(1.4, 1, .7), Hr); q2.rotation.z = .95; pos(q2, .06, .5, 0); crest.add(q2);
+    const ears = [-1, 1].map(s => { const e = P(new THREE.ConeGeometry(.065, .32, 8), Sk); e.rotation.x = s * 1.25; pos(e, -.02, .23, s * .32); head.add(e); return e; });
+    [-1, 1].forEach(s => head.add(pos(P(new THREE.SphereGeometry(.032, 8, 6).scale(.6, 1, 1.2), K), .24, .15, s * .09)));
+    [-1, 1].forEach(s => { const b = P(new THREE.BoxGeometry(.02, .022, .1), K); b.rotation.x = -s * .4; pos(b, .25, .21, s * .095); head.add(b); });
+    head.add(pos(P(new THREE.BoxGeometry(.02, .015, .11), K), .22, .02, 0));
+    head.add(pos(P(new THREE.ConeGeometry(.013, .045, 4).rotateZ(Math.PI), M("#ffffff")), .225, 0, .035));
     r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);   // great big hands
-      g.add(pos(P(new THREE.SphereGeometry(.1, 12, 10).scale(1, 1.25, .55), Sk), 0, -.11, 0));
-      [-.06, -.02, .02, .06].forEach((x, i) => { const f = P(new THREE.CapsuleGeometry(.025, .14 - Math.abs(i - 1.5) * .02, 3, 6), Sk); pos(f, x * .9, -.29, 0); f.rotation.z = x * .6; g.add(f); });
-      const t = P(new THREE.CapsuleGeometry(.025, .09, 3, 6), Sk); pos(t, .1, -.13, 0); t.rotation.z = .9; g.add(t); });
-    const tl = P(new THREE.BoxGeometry(.05, .26, .1), M("#ff5a3c")); pos(tl, .02, -.05, .12); tl.rotation.x = .15; r.hips.add(tl);   // the sash's tail
+      g.add(pos(P(new THREE.SphereGeometry(.11, 12, 10).scale(1, 1.25, .55), Sk), 0, -.12, 0));
+      [-.065, -.022, .022, .065].forEach((x, i) => { const f = P(new THREE.CapsuleGeometry(.028, .16 - Math.abs(i - 1.5) * .02, 3, 6), Sk); pos(f, x * .9, -.31, 0); f.rotation.z = x * .6; g.add(f); });
+      const t = P(new THREE.CapsuleGeometry(.028, .1, 3, 6), Sk); pos(t, .11, -.14, 0); t.rotation.z = .9; g.add(t); });
+    const tl = P(new THREE.BoxGeometry(.05, .28, .1), M("#ff5a3c")); pos(tl, .02, -.06, .13); tl.rotation.x = .15; r.hips.add(tl);   // the sash's tail
+    post.push(p => { const t = time, mv = Math.min(1, Math.abs(p.vx || 0) / 250); crest.rotation.z = Math.sin(t * 2.6) * .06 + mv * .12; tl.rotation.x = .15 + Math.sin(t * 6) * .25 * (.3 + mv);
+      ears.forEach((e, i) => { e.rotation.y = Math.sin(t * 1.9 + i * 3) * .1; }); });   // (his crest rakes back as he goes, the sash flicks, his ears twitch)
   }
   const s0 = r.sync; r.sync = (p, rr, dt) => { s0(p, rr, dt); post.forEach(f => f(p)); };   // (p: its state, for a post step that follows its moves: MORDI's jaws)
 }
@@ -12939,7 +13135,7 @@ function meetStay() {                               // a new stay in this world:
   const buds = ALLIES.filter(A => !allyWith(A) && (!(A.id in BUDDY_ONLY) || BUDDY_ONLY[A.id] === world));
   const rooms = STAGES.map((q, i) => i).filter(meetRoomOK); if (!rooms.length || (!pets.length && !buds.length)) return;
   for (let n = 0; n < MEET_PER_STAY && rooms.length && (pets.length || buds.length); n++) {
-    const pet = pets.length && (!buds.length || Math.random() < .4), M = { kind: pet ? "pet" : "ally", w: world, room: rooms.splice(Math.floor(Math.random() * rooms.length), 1)[0], u: Math.random(), phase: "wait", seen: false };
+    const pet = false, M = { kind: pet ? "pet" : "ally", w: world, room: rooms.splice(Math.floor(Math.random() * rooms.length), 1)[0], u: Math.random(), phase: "wait", seen: false };
     if (pet) { M.sp = pets.splice(Math.floor(Math.random() * pets.length), 1)[0]; wildRig(world, M.sp); } else M.A = buds.splice(Math.floor(Math.random() * buds.length), 1)[0];   // (no one twice)
     meetQ.push(M); }
 }
@@ -13049,7 +13245,9 @@ function allyLeave(msg, a = allies[0]) {           // it heads home: off out of 
 // stay in the level. but new ones that you find can be called up to any level"; asked: the world's berry buddy and its cat (or dog); "the two buddies that start the level
 // can only play with you in that level. but the ones you find on your own can be called from hubs to join you in any other level"). Into a world: its two join you
 // (teamFresh); out of it: the team stays behind. One you found (found fighting): the hub's bell-ringer calls it to you anywhere after
-const worldPair = w => ({ A: ALLIES.find(a => a.w === w && (!(a.id in BUDDY_ONLY) || BUDDY_ONLY[a.id] === w)) || null, sp: petDef("cat", w) ? "cat" : petDef("dog", w) ? "dog" : null });
+const WORLD_DUO = { 0: ["stilt", "burr"] };   // (a world's own two berry buddies: the woods' healer and its fighter, once the pets stopped being partners, 2026-11-02)
+const worldPair = w => { const D = WORLD_DUO[w], A = D ? ALLIES.find(a => a.id === D[0]) || null : ALLIES.find(a => a.w === w && (!(a.id in BUDDY_ONLY) || BUDDY_ONLY[a.id] === w)) || null;
+  return { A, A2: D ? ALLIES.find(a => a.id === D[1]) || null : null, sp: petDef("cat", w) ? "cat" : petDef("dog", w) ? "dog" : null }; };
 let teamFresh = false;
 // (2026-11-01, later: "remove the restriction on buddies leaving with you. all buddies you have, the ones who start the map with you and the ones who you find randomly
 // should be able to travel on la guagua with you to the next level": the whole team goes where you go, and the next world's two fill any place left on it)
@@ -13065,10 +13263,10 @@ function palsStay() {                              // off into another world: yo
 // the same; off out of the world: they stay in it
 let arrive = [];
 function worldTeamJoin() {                          // its two (as many as there's room for: a full team brought along, none)
-  if (!player || world === 9 || !WORLDS[world]) return; const { A, sp } = worldPair(world); let free = TEAM_MAX - teamCount();
+  if (!player || world === 9 || !WORLDS[world]) return; const { A, A2 } = worldPair(world); let free = TEAM_MAX - teamCount();
   arriveDrop(); const L = [];
   if (A && !allyWith(A) && free > 0) { L.push({ kind: "ally", A, w: world }); free--; }
-  if (sp && free > 0 && !(tamed && tamed2) && ![tamed, tamed2].some(t => t && t.w === world && petSp(t) === sp)) L.push({ kind: "pet", sp, w: world });
+  if (A2 && !allyWith(A2) && free > 0) { L.push({ kind: "ally", A: A2, w: world }); free--; }   // (its second buddy; its pet's out somewhere, eating or digging, to be found and petted: 2026-11-02)
   const f = Math.random() < .5 ? 0 : 1; (f ? [1, 0] : [0, 1]).forEach((i, j) => { if (L[i]) arrivePlace(L[i], j === 0, j); });   // (one of them at a berry if there is one, placed first; the other sat; which, by chance)
   partSeen = new Set();
 }
@@ -13348,6 +13546,7 @@ function updateWild(dt) {
   if (stronghold) { catHud(false); wildClear(); return; }   // (down a hatch: it doesn't follow, it stays in its room)
   W0.t += dt; W0.dodgeT -= dt; W0.leapT -= dt; W0.perchT = (W0.perchT || 0) - dt; if (exitOpen) W0.clearT += dt;
   const dx = c.x - p.x, dist = Math.abs(dx);
+  if (W0.phase === "busy" || W0.phase === "petted") return wildBusy(W0, dt, dist);   // (found eating or digging: it stays at it till you pet it, 2026-11-02)
   if (deepWetAt(c.y) && W0.phase !== "away") return wildSwim(W0, dt);   // (in the deep's water: it swims from you)
   if (W0.phase === "rest") { c.vx = 0; c.face = -W0.fwd; if (W0.t > 1.4 || dist < 520) catStartle(); }
   else if (W0.phase === "startle") { if (c.onGround && W0.t > .3) W0.phase = "flee"; }

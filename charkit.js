@@ -2096,6 +2096,12 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
   if (p.wave > 0) { T.armF = 2.85; T.spF = .55; T.elbF = .45 + .45 * Math.sin(t * 15); T.headRot = .05; }   // the near hand up, waving
   if (p.eat > 0) { const b = p.eatB ?? Math.max(0, Math.sin(t * 2.4)) ** 2, A = p.eatFar ? ["armB", "elbB", "spB"] : ["armF", "elbF", "spF"];   // eating: the near hand lifts the fruit to the mouth now and then (Berry Blade's opening, 2026-10-18)
     T[A[0]] = 1.25 + .5 * b; T[A[1]] = 1.7 + .65 * b; T[A[2]] = .32; T.headRot = .02 + .07 * b; }   // (an item from your bag: eatB, the game's bites; eatFar, the far hand: the near one has your weapon)
+  if (p.petAct === "eat") { const b = Math.max(0, Math.sin(t * 7.5)), c = Math.sin(t * 15) * .04;   // a pet found eating (the user, 2026-11-02): down over its bowl, a paw to its mouth, chewing, the head bobbing
+    Object.assign(T, { lean: .3 + c, arch: .1, bodyY: -.15, headRot: .3 - .2 * b, armF: 1.05 + .45 * b, elbF: 1.75, spF: -.2, armB: .65, elbB: 1.4, spB: -.15 }); }
+  else if (p.petAct === "dig") { const s = Math.sin(t * 17), c2 = Math.cos(t * 17);   // and found digging: nose down, both paws scrabbling at the ground in turn, the dirt flung back
+    Object.assign(T, { lean: .62, arch: .2, bodyY: -.2 + .02 * Math.abs(s), headRot: .38, armF: .55 + .75 * s, elbF: .35 + .3 * Math.max(0, c2), spF: -.1, armB: .55 - .75 * s, elbB: .35 + .3 * Math.max(0, -c2), spB: -.1 }); }
+  if (p.pat > 0 && !cat) { const b = Math.sin(t * 12);   // petting one (the user, 2026-11-02): down a little, the near hand on its head, patting
+    Object.assign(T, { lean: .5, arch: .12, bodyY: -.24, headRot: .22, armF: .78 + .22 * b, elbF: .12 + .1 * Math.max(0, b), spF: -.12, armB: -.2, elbB: .5 }); }   // (down to it, the near hand open on its head, patting)
   if (p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // an armful carried (the healer, 2026-11-02: the bag's fruit and gum): the near arm under it; both, once it's more than a handful
     T.armF = lerp(T.armF ?? 0, CUP.arm, k); T.elbF = lerp(T.elbF ?? 0, CUP.elb, k); T.spF = lerp(T.spF ?? 0, CUP.sp, k);
     if (two > 0) { T.armB = lerp(T.armB ?? 0, CUP.arm, two); T.elbB = lerp(T.elbB ?? 0, CUP.elb, two); T.spB = lerp(T.spB ?? 0, CUP.sp, two); } }
@@ -2993,8 +2999,18 @@ const GATHER = .18;
 // a hard stop out of a run carries the body on past upright, back, and settles (HALT: a damped sway, the lead foot planted out in front to stop on); a landing sinks
 // into the knees and stands back up out of them, a touch tall at the end (LAND). Every charkit body: the heroines, buddies, June, the pets
 const HALT = { T: .7, w: TAU / .52, z: 5 }, LAND = { T: .5, dn: .07 };
+// a stop from full speed (the user, 2026-11-02: "when the character is running at full speed, give them a sort of breaking animation where they try to stop themselves
+// and their momentum before coming to a stand still"): thrown back over a lead foot dug in ahead, the arms flung up and wheeling for balance, sliding on it, a wobble
+// forward as it bites, then upright. p.brake.u: how far through it (the game's)
+function brakePose(p, t) {
+  const u = clamp(p.brake.u || 0, 0, 1), dig = sstep(0, .14, u) * (1 - sstep(.62, .9, u)), tip = sstep(.6, .78, u) * (1 - sstep(.82, 1, u)), wob = Math.sin(t * 34) * .03 * dig;
+  const wheel = Math.sin(u * 15) * .35 * (1 - sstep(.55, .85, u));
+  return { lean: -.42 * dig + .2 * tip + wob, arch: -.16 * dig, bodyY: -.09 * dig - .03 * tip, headRot: .14 * dig - .05 * tip,
+    armF: lerp(.1, -.95 + .35 * wheel, dig) + .3 * tip, elbF: lerp(.2, .35, dig), spF: .45 * dig, armB: lerp(-.1, 1.35 - .35 * wheel, dig) + .25 * tip, elbB: lerp(.2, .4, dig), spB: .4 * dig,   // (the near arm flung back, the far one out ahead, wheeling: never up over her face)
+    fNx: lerp(0, .42, dig) + .08 * tip, fNy: .02 * dig, fP: .45 * dig, fFx: lerp(0, -.2, dig) - .05 * tip, fFy: .05 * dig };
+}
 function momentum(p, dt, sp) {                         // (the triggers: a landing, a run stopped short)
-  const busy = p.atkT >= 0 || p.hurtT > 0 || p.climb || p.sit || p.consSit || p.crawl || p.dodge || p.tackle || p.zip || p.skid || p.swim || p.dive;
+  const busy = p.atkT >= 0 || p.hurtT > 0 || p.climb || p.sit || p.consSit || p.crawl || p.dodge || p.tackle || p.zip || p.skid || p.brake || p.swim || p.dive;
   if (!p.onGround) { p.mAirVy = Math.max(p.mAirVy || 0, p.vy || 0); p.mWasG = false; return; }
   if (p.mWasG === false) { const v = p.mAirVy || 0; if (v > 240 && !busy) { p.mLandT = 0; p.mLandK = clamp((v - 160) / 1000, .25, 1); } p.mAirVy = 0; }
   p.mWasG = true;
@@ -3048,7 +3064,8 @@ function updatePoseHuman(p, dt) {
     else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .24, fNy: .5, fFx: -.2, fFy: .4, fP: -.55, fNz: .07, fFz: .05 }), layPose(T, m.top, p);   // the top: both knees up, tucked, still a stride apart
     else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: lerp(.26, .3, fk) + sway - drift, fNy: lerp(.4, .46, fk), fFx: lerp(-.3, -.36, fk) - sway - drift, fFy: lerp(.3, .38, fk), fP: lerp(-.5, -.55, fk), fNz: .09, fFz: .07 }), layPose(T, m.fall, p);   // dropping: both knees bent, the front one up, the back foot tucked up behind, swaying (they're turned to us, so heights read, front and back don't: hung straight down they looked stood in mid-air)
     airSplay(p, T, ST);                              // (the stance's spread, if it's wider: the user, 2026-10-26)
-  } else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
+  } else if (p.brake) Object.assign(T, brakePose(p, t));
+  else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
   else if (sp > 30) Object.assign(T, D.run ? (pumpRun ? { lean: lerp(.5 + .14 * sk, .1, wk), arch: lerp(.32, 0, wk), bodyY: 0, armF: .02, elbF: lerp(1.4, .35, wk), armB: .02, elbB: lerp(1.4, .35, wk), headRot: lerp(-.18, -.04, wk) }
     : { lean: lerp(.58 + .2 * sk, .1, wk), bodyY: 0, armF: lerp(-1.4, .1, wk), elbF: .3, armB: lerp(-1.4, .05, wk), elbB: .3, headRot: lerp(-.28, -.04, wk) }) : { lean: .12, bodyY: -.07, armF: .05, elbF: 1.1, armB: .05, elbB: 1.1 });
@@ -3073,7 +3090,7 @@ function updatePoseHuman(p, dt) {
   if (p.hurtT <= 0) T.lean += m.lean;
   smoothPose(p, T, dt);
   // run: alternating legs with the stride locked to distance travelled, arms pumping opposite
-  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && a < 0 && !p.crouch && !p.crawl && !p.upHop && !p.block && !m.float, L = Bd.legs * m.stride;
+  const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && !p.brake && a < 0 && !p.crouch && !p.crawl && !p.upHop && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
   const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .3 * sk);   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
