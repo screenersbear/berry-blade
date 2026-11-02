@@ -1502,7 +1502,7 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
     if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } } };   // her legs: it keeps out to her side of them   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = 0;   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open") G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));
+  G.fist = 0; G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fyK + .06 * hs - A[6].y) / hl;                // near the ground it bends at the wrist to lie along it (dragged), never into it
@@ -1570,7 +1570,7 @@ const DRAG_LEAN = .78, DRAG_YANK = [.2, .5], DRAG_HAUL = [.16, .62, .55];   // (
 const DRAG_EASE = { gauntlet: .74, sword: .7 };   // (Rose's again, 2026-11-01: "rose is still leaning way too far back, almost like 90 degrees backwards with the heavy sword": about upright at the fourth size, her turn's yank as much less)
 const DRAG_TURN_EASE = { sword: .7 };   // (how much of that each girl's run takes, so both run about 3° back at the fourth size: the user, 2026-11-01 "camila leans too far back even in level 4. it wasnt as dramatic before" (12° it was), then "ease rose's lean too" (7°))
 function giantDrag(p, o, g, run, air) {
-  const k = clamp((g - 1) / 2, 0, 1), f = p.face || 1, now = api.time;   // (from the third size on, half; at the fourth, all of it: the user, 2026-11-01 "the lean back shouldnt start happening until level 3 for both girls")
+  const k = g < 2 ? .5 * sstep(1.8, 2, g) : clamp((g - 1) / 2, 0, 1), f = p.face || 1, now = api.time;   // (from the third size on, half; at the fourth, all of it: the user, 2026-11-01 "the lean back shouldnt start happening until level 3 for both girls"; none at all below it, not even growing toward it: 2026-11-02 "camila shouldnt be leaning back while walking until 50% is hit at least")
   if (p.dragF !== f) { if (p.dragF !== undefined && !air && Math.abs(p.vx || 0) > 120 && k > .05) p.dragTurn = now; p.dragF = f; }   // (turned round at speed: the two beats)
   if (air || k <= .001) return;
   if (p.atkT >= 0 || p.tackle || p.hurtT > 0 || p.dodge || p.slideOn) return;   // (never on top of a move, a hit, a back-step or a slide: it stacked with their own lean back)
@@ -1619,7 +1619,7 @@ function giantPose(p, o) {                           // not in a move: too heavy
   for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
   for (const k in S) { const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }
   if (pr.kind === "sword" && (G.blade !== undefined || G.armF !== undefined || G.elbF !== undefined)) o.wrist = lerp(o.wrist ?? -.6, (G.blade ?? G0.blade) - (o[A] + o[E]), st);   // (the blade at its angle: hers if she has one, else back over her shoulder)
-  if (pr.kind === "gauntlet" && ["armB", "elbB", "spB", "rlB"].some(k => G[k] !== undefined)) p.gripFree = true;   // (her other arm posed: it lets go of the grown one)
+  // (her other arm posed in it: still holding the grown arm, where and as she posed it, holdSolve. It let go before, 2026-11-01, and her posed hand ended up by her chin facing the other way)
 }
 
 function buildHuman(R) {
@@ -2349,17 +2349,17 @@ const KZ = (T, ch, S = 1) => { const o = {}; for (const k in ch) o[k] = T.map((t
 const GH = (t0, t1, kind, S, o = {}) => ({ t0: +(t0 * S).toFixed(3), t1: +(t1 * S).toFixed(3), reach: 120, back: 10, y0: 170, y1: -10, kind, ...o });
 const GA = {                                         // the arm's moves, by what each does (S: the size's time scale; z: how big, 1 2 3)
   hook: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 110 + 30 * z, sq: .06, sfx: "whoosh", hits: [GH(.22, .34, "hook", S)],   // wound back behind her, swung round through in front at the height of a head
-    keys: KZ([0, .14, .24, .32, .46, .62], { armF: [-.4, -.9, .75, 1.5, 1.35, .7], elbF: [.05, .15, .3, .1, .2, .15], spF: [.22, .42, .55, .3, .25, .22], twist: [0, .42, -.2, -.48, -.36, -.05],
-      lean: [.15, .02, .3, .42, .38, .2], bodyY: [-.1, -.16, -.24, -.27, -.22, -.12], fNx: [.3, .26, .4, .45, .42, .32], fFx: [-.34, -.4, -.48, -.52, -.5, -.36] }, S) }),
+    keys: KZ([0, .14, .24, .32, .46, .62], { armF: [-.4, -1.05, .75, 1.5, 1.35, .7], elbF: [.05, .15, .3, .1, .2, .15], spF: [.22, .46, .55, .3, .25, .22], twist: [0, .56, -.2, -.56, -.4, -.05],
+      lean: [.15, -.04, .3, .46, .4, .2], bodyY: [-.1, -.16, -.24, -.27, -.22, -.12], fNx: [.3, .26, .4, .45, .42, .32], fFx: [-.34, -.4, -.48, -.52, -.5, -.36] }, S) }),
   back: (S, z) => ({ dur: .6 * S, chain: .48 * S, step: 90 + 30 * z, sq: .05, sfx: "whoosh", hits: [GH(.18, .3, "sweep", S)],   // and back the other way, low across in front: the backhand
     keys: KZ([0, .1, .2, .3, .44, .6], { armF: [1.3, 1.75, .9, .25, .05, -.3], elbF: [.2, .25, .1, .1, .15, .1], spF: [.3, .2, .45, .42, .3, .22], twist: [-.3, -.52, .2, .48, .36, 0],
       lean: [.3, .25, .42, .32, .26, .18], bodyY: [-.2, -.24, -.27, -.22, -.18, -.12], fNx: [.38, .4, .44, .42, .38, .32], fFx: [-.44, -.46, -.5, -.48, -.42, -.36] }, S) }),
   slam: (S, z) => ({ dur: .78 * S, chain: .72 * S, step: 60, sq: .1, sfx: "whoosh", sfx2: [.42 * S, "slam"], quake: [.44 * S, z], hits: [GH(.36, .46, "smash", S, { y0: 230, y1: -20 }), GH(.44, .54, "launch", S, { reach: 120 + 30 * z, back: 40 + 20 * z, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .2, .32, .4, .5, .78], { armF: [-.2, 2.7, 3.4, 1.4, .5, .3], elbF: [.1, .5, .25, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], twist: [0, .1, .12, -.15, -.15, 0],   // up over her head (the other hand under it), and down into the ground in front: it shakes
-      lean: [.1, -.2, -.26, .45, .62, .3], arch: [0, -.26, -.3, .15, .2, 0], bodyY: [-.1, 0, .03, -.3, -.4, -.15], fNx: [.36, .3, .3, .46, .5, .38], fFx: [-.4, -.36, -.36, -.5, -.54, -.42] }, S) }),
+    keys: KZ([0, .2, .32, .4, .5, .78], { armF: [-.2, 2.7, 3.45, 1.4, .5, .3], elbF: [.1, .5, .25, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], twist: [0, .22, .28, -.26, -.24, 0],   // up over her head (the other hand under it), and down into the ground in front: it shakes
+      lean: [.1, -.26, -.34, .48, .66, .3], arch: [0, -.32, -.4, .18, .24, 0], bodyY: [-.1, 0, .03, -.3, -.4, -.15], fNx: [.36, .3, .3, .46, .5, .38], fFx: [-.4, -.36, -.36, -.5, -.54, -.42] }, S) }),
   scoop: (S, z) => ({ dur: .8 * S, chain: .66 * S, step: 100, sq: .08, sfx: "whoosh", hits: [GH(.26, .42, "launch", S, { y0: 200, y1: -20 })],   // dragged along the ground and scooped up: up they go
-    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.5, -.75, .2, 1.9, 2.6, 1.6], elbF: [.05, .1, .05, .1, .3, .3], spF: [.25, .3, .4, .3, .2, .22], twist: [0, .3, .1, -.25, -.3, 0],
-      lean: [.2, .45, .5, .05, -.15, .1], arch: [0, .1, .05, -.2, -.25, 0], bodyY: [-.12, -.3, -.34, -.12, 0, -.1], fNx: [.32, .38, .46, .42, .36, .32], fFx: [-.36, -.44, -.5, -.44, -.38, -.36] }, S) }),
+    keys: KZ([0, .16, .28, .38, .55, .8], { armF: [-.5, -.85, .2, 1.9, 2.6, 1.6], elbF: [.05, .1, .05, .1, .3, .3], spF: [.25, .3, .4, .3, .2, .22], twist: [0, .4, .14, -.34, -.38, 0],
+      lean: [.2, .52, .55, .05, -.2, .1], arch: [0, .12, .06, -.24, -.3, 0], bodyY: [-.12, -.36, -.4, -.12, .02, -.1], fNx: [.32, .38, .46, .42, .36, .32], fFx: [-.36, -.44, -.5, -.44, -.38, -.36] }, S) }),
   sweep: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 70, sq: .06, sfx: "whoosh", sfx2: [.3 * S, "whoosh"], hits: [GH(.2, .55, "sweep", S, { reach: 150 + 25 * z, back: 120 + 25 * z, y0: 150, y1: -10, wide: true })],   // round the whole of her, low: in front and behind
     keys: KZ([0, .18, .5, .62, .9], { spin: [0, 0, TAU, TAU, TAU], armF: [-.3, 1.2, 1.3, .9, .3], elbF: [.1, .05, .05, .1, .1], spF: [.22, .85, .85, .4, .22], lean: [.15, .35, .35, .3, .15],
       bodyY: [-.1, -.3, -.3, -.24, -.1], fNx: [.3, .4, .4, .38, .32], fFx: [-.34, -.44, -.44, -.4, -.36] }, S) }),
@@ -2369,9 +2369,9 @@ const GA = {                                         // the arm's moves, by what
   airSwing: (S, z) => ({ dur: .5 * S, chain: .42 * S, grav: .4, sfx: "whoosh", hits: [GH(.16, .3, "hook", S)],
     keys: KZ([0, .1, .2, .3, .5], { armF: [-.2, -.6, 1.2, 1.9, 1.2], elbF: [.2, .2, .2, .1, .3], spF: [.3, .4, .5, .3, .3], twist: [0, .32, -.3, -.42, 0], lean: [.1, 0, .3, .36, .15] }, S) }),
   airHammer: (S, z) => ({ dur: .58 * S, chain: .5 * S, grav: .45, dive: [.24 * S, 620 + 120 * z], sfx: "whoosh", hits: [GH(.2, .36, "smash", S, { y0: 220, y1: -60 })],   // up over her head, and down on them, taking her down with it
-    keys: KZ([0, .14, .24, .34, .58], { armF: [1.0, 3.2, 1.6, .6, .5], elbF: [.2, .3, .05, .05, .2], spF: [.25, .15, .2, .25, .25], lean: [.1, -.25, .35, .55, .2], arch: [0, -.2, .1, .2, 0] }, S) }),
+    keys: KZ([0, .14, .24, .34, .58], { armF: [1.0, 3.25, 1.6, .6, .5], elbF: [.2, .3, .05, .05, .2], spF: [.25, .15, .2, .25, .25], twist: [0, .2, -.16, -.22, 0], lean: [.1, -.32, .38, .6, .2], arch: [0, -.28, .12, .24, 0] }, S) }),
   up: (S, z) => ({ dur: .6 * S, hop: -560 - 40 * z, sq: .12, sfx: "whoosh", hits: [GH(.16, .34, "launch", S, { reach: 100, back: 30, y0: 280, y1: 0, wide: true })],   // from the ground, straight up over her: the uppercut that throws them up
-    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, -.6, 1.6, 3.0, 2.2], elbF: [.1, .2, .3, .1, .3], spF: [.25, .3, .3, .2, .25], lean: [.2, .38, .1, -.18, .05], bodyY: [-.12, -.32, -.12, 0, -.05], fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
+    keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, -.7, 1.6, 3.0, 2.2], elbF: [.1, .2, .3, .1, .3], spF: [.25, .3, .3, .2, .25], twist: [0, .34, -.1, -.32, -.05], lean: [.2, .44, .1, -.22, .05], bodyY: [-.12, -.38, -.12, 0, -.05], fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
   down: (S, z) => ({ dur: 1.1, grav: 1, dive: [.12 * S, 1000 + 100 * z], diveStill: true, landEnd: true, slamLand: true, quake: [9, z], sq: .1, sfx: "whoosh", hits: [GH(.1, 1.1, "smash", 1, { reach: 70 + 15 * z, back: 40 + 15 * z, y0: 60, y1: -80, wide: true })],   // ↓ in the air: fist first, straight down
     keys: KZ([0, .1, .2, 1.1], { armF: [1.0, 2.6, .25, .25], elbF: [.2, .3, .05, .05], spF: [.25, .2, .2, .2], lean: [0, -.2, .5, .5], arch: [0, -.2, .2, .2] }, S) }),
   haymaker: (S, z) => ({ dur: .6 * S, chain: .5 * S, step: 360 + 40 * z, sq: .08, sfx: "whoosh", hits: [GH(.22, .38, "haymaker", S)],   // charged: a step and the biggest swing she has
@@ -2380,16 +2380,16 @@ const GA = {                                         // the arm's moves, by what
   spin: (S, z, n = 1) => ({ dur: (.3 + .3 * n) * S, chain: (.25 + .3 * n) * S, step: 140 + 40 * z, sq: .05, sfx: "whoosh", sfx2: [.25 * S, "whoosh"], hits: [GH(.1, .1 + .32 * n, "sweep", S, { reach: 150 + 25 * z, back: 150 + 25 * z, y0: 150, y1: -10, wide: true })],   // round and round, the arm out
     keys: KZ([0, .1, .1 + .32 * n, .3 + .3 * n], { spin: [0, 0, TAU * n, TAU * n], armF: [1.2, 1.5, 1.5, 1.0], elbF: [.1, .05, .05, .2], spF: [.4, .95, .95, .3], lean: [.2, .1, .1, .2], bodyY: [-.14, -.22, -.22, -.14] }, S) }),
   pound: (S, z) => ({ dur: .72 * S, chain: .66 * S, step: 40, sq: .14, sfx: "whoosh", sfx2: [.42 * S, "slam"], quake: [.44 * S, z + 1], hits: [GH(.38, .48, "smash", S, { y0: 230, y1: -20 }), GH(.44, .58, "launch", S, { reach: 200 + 30 * z, back: 200 + 30 * z, y0: 40, y1: -20, wide: true })],   // up with both hands, and into the ground: it shakes all round her
-    keys: KZ([0, .2, .34, .44, .72], { armF: [1.0, 3.1, 3.35, .45, .4], elbF: [.3, .4, .2, .05, .1], spF: [.2, .1, .1, .2, .22], lean: [.2, -.25, -.3, .72, .4], arch: [0, -.3, -.32, .2, 0], bodyY: [-.1, .02, .05, -.42, -.2] }, S) }),
+    keys: KZ([0, .2, .34, .44, .72], { armF: [1.0, 3.1, 3.4, .45, .4], elbF: [.3, .4, .2, .05, .1], spF: [.2, .1, .1, .2, .22], twist: [0, .2, .24, -.24, 0], lean: [.2, -.3, -.36, .76, .4], arch: [0, -.36, -.4, .24, 0], bodyY: [-.1, .02, .06, -.46, -.2] }, S) }),
   rocket: (S, z) => ({ dur: .7 * S, chain: .6 * S, step: 520 + 60 * z, sq: .1, sfx: "whoosh", hits: [GH(.2, .44, "haymaker", S)],   // straight out in front, and she goes with it
-    keys: KZ([0, .14, .22, .44, .7], { armF: [-.4, -.7, 1.55, 1.55, 1.1], elbF: [.1, .6, .02, .02, .2], spF: [.25, .3, .05, .05, .2], lean: [.2, -.05, .6, .62, .3], bodyY: [-.12, -.22, -.3, -.3, -.15],
+    keys: KZ([0, .14, .22, .44, .7], { armF: [-.4, -.85, 1.55, 1.55, 1.1], elbF: [.1, .6, .02, .02, .2], spF: [.25, .3, .05, .05, .2], twist: [0, .48, -.34, -.42, -.1], lean: [.2, -.1, .6, .66, .3], bodyY: [-.12, -.26, -.3, -.32, -.15],
       fNx: [.32, .28, .56, .56, .4], fFx: [-.36, -.42, -.66, -.66, -.46] }, S) }),
   leap: (S, z) => ({ dur: .95 * S, chain: .9 * S, step: 260, hop: -760, dive: [.4 * S, 1000], diveStill: true, sq: .12, sfx: "whoosh", sfx2: [.5 * S, "slam"], quake: [.5 * S, z + 1],   // up, and down on them with it
     hits: [GH(.4, .54, "smash", S, { y0: 230, y1: -40 }), GH(.5, .64, "launch", S, { reach: 200 + 30 * z, back: 120 + 30 * z, y0: 40, y1: -20, wide: true })],
-    keys: KZ([0, .14, .34, .46, .62, .95], { armF: [-.3, 2.9, 3.3, .6, .4, .35], elbF: [.1, .4, .25, .05, .05, .1], spF: [.22, .12, .1, .2, .22, .22], lean: [.2, -.2, -.28, .7, .6, .3], arch: [0, -.25, -.3, .2, .15, 0],
+    keys: KZ([0, .14, .34, .46, .62, .95], { armF: [-.3, 2.9, 3.35, .6, .4, .35], elbF: [.1, .4, .25, .05, .05, .1], spF: [.22, .12, .1, .2, .22, .22], twist: [0, .16, .22, -.22, -.16, 0], lean: [.2, -.24, -.34, .74, .62, .3], arch: [0, -.3, -.36, .24, .16, 0],
       bodyY: [-.1, 0, 0, -.4, -.42, -.12], fNy: [0, .3, .28, 0, 0, 0], fFy: [0, .25, .22, 0, 0, 0] }, S) }),
   palm: (S, z) => ({ dur: .9 * S, chain: .8 * S, step: 160, sq: .12, openHand: true, sfx: "whoosh", sfx2: [.4 * S, "slam"], quake: [.42 * S, z], hits: [GH(.34, .5, "smash", S, { y0: 230, y1: -20 }), GH(.4, .52, "launch", S, { reach: 220, back: 40, y0: 40, y1: -20, wide: true })],   // the hand open, the whole of it brought down flat on them
-    keys: KZ([0, .2, .34, .44, .62, .9], { armF: [-.2, 2.4, 2.9, 1.2, .9, .4], elbF: [.1, .5, .2, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], lean: [.15, -.2, -.25, .5, .6, .3], bodyY: [-.1, 0, .02, -.3, -.36, -.12] }, S) }),
+    keys: KZ([0, .2, .34, .44, .62, .9], { armF: [-.2, 2.4, 2.95, 1.2, .9, .4], elbF: [.1, .5, .2, .05, .05, .1], spF: [.22, .15, .1, .15, .2, .22], twist: [0, .24, .28, -.28, -.2, 0], lean: [.15, -.26, -.32, .54, .64, .3], arch: [0, -.22, -.28, .16, .18, 0], bodyY: [-.1, 0, .03, -.34, -.4, -.12] }, S) }),
 };
 const GW = {                                         // the blade's (blade: its angle, 0 out in front, π/2 straight up; grip: both hands on it)
   slash: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 110 + 30 * z, sq: .06, sfx: "slash", hits: [GH(.2, .34, "slash", S)],   // up behind her, and down through in front
@@ -2860,8 +2860,28 @@ function keySnap(tr, t) {
   if (d < h0) { const v = d / h0; return y0 + (y1 - y0) * SNAP_DRIFT * v * v; }
   const u = (d - h0) / sn, e = 1 - (1 - u) * (1 - u) * (1 - u); return y0 + (y1 - y0) * (SNAP_DRIFT + (1 - SNAP_DRIFT) * e);
 }
+// the grown weapons' moves (the user, 2026-11-02: "camila's big hand animations all look very dull. can we make them more dynamic while keeping the weight?"): held
+// and snapped like every blow they were, so the wind-up was a dead hold and the blow stopped dead where it landed. Now, keyed the same (the editor's keys, as ever):
+// into the wind-up the whole way, slow out of the start and hanging at its top; the blow snapped, as fast as it was; and after it, carried on past where it landed by a
+// part of the swing (the weight going on through) before it eases back out, slowly, into the rest of the move
+const HEAVY_OS = .3, HEAVY_SNAP = .07, HEAVY_DRIFT = .15;   // (how far on through it's carried: a part of the blow's own swing · the snap into it, a touch longer than a light blow's · how far it creeps on as it hangs at the top)
+function keyHeavy(tr, t, hits) {                    // hits: the move's (each blow's start, t0; two starting close together, a slam and its shockwave, count once)
+  const n = tr.length; if (!n) return 0; if (t <= tr[0][0]) return tr[0][1]; if (t >= tr[n - 1][0]) return tr[n - 1][1];
+  let i = 1; while (i < n - 1 && t > tr[i][0]) i++;
+  const lands = new Set(); let last = -9;
+  for (const h of hits) { if (h.t0 - last < .16) continue; last = h.t0; let j = 1; while (j < n - 1 && tr[j][0] <= h.t0 + 1e-4) j++; lands.add(j); }   // (the key each blow lands on: the first after it starts)
+  const blow = j => j >= 1 && lands.has(j) && Math.abs(tr[j][1] - tr[j - 1][1]) > .12, first = Math.min(...lands);
+  const [x0, y0] = tr[i - 1], [x1, y1] = tr[i], L = (x1 - x0) || 1e-6, u = (t - x0) / L;
+  if (blow(i)) { const sn = Math.min(HEAVY_SNAP, L * .7), hd = L - sn, d = t - x0;                     // a blow: hung at the top, then snapped in, arriving at full speed
+    if (d < hd) { const v = d / hd; return y0 + (y1 - y0) * HEAVY_DRIFT * v * v; }
+    const w = (d - hd) / sn; return y0 + (y1 - y0) * (HEAVY_DRIFT + (1 - HEAVY_DRIFT) * w * w); }
+  if (blow(i - 1)) return y0 + (y1 - y0) * (1 - (1 - u) * (1 - u) * (1 - u)) + (y0 - tr[i - 2][1]) * HEAVY_OS * Math.sin(Math.PI * Math.min(1, u * 1.7)) * Math.exp(-2.2 * u);   // after one: on at speed, carried on past it, easing out
+  if (i < first) { const e = u < .5 ? 2 * u * u : 1 - 2 * (1 - u) * (1 - u); return y0 + (y1 - y0) * e; }   // the wind-up: never still, slow out and slow in
+  return keyvS(tr, t);                                                                                     // the rest: flowing on through its keys
+}
 const FLOW = new Set(["wheel", "rise"]);              // (channels that flow through their keys, not snap between them: a cartwheel's turn and lift; a move's own flow: its list)
-const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind], tr = own && own[k] ? own[k] : K[k], S = STRIKES[p.atkKind]; const v = FLOW.has(k) || (S && S.flow && S.flow.includes(k)) ? keyvS(tr, a) : keySnap(tr, a);
+const kv = (p, K, k, a) => { const A = p.rig.spec.move.anims, own = A && A[p.atkKind], tr = own && own[k] ? own[k] : K[k], S = STRIKES[p.atkKind], H = S && S.giant && S.hits && S.hits[0];
+  const v = FLOW.has(k) || (S && S.flow && S.flow.includes(k)) ? keyvS(tr, a) : H ? keyHeavy(tr, a, S.hits) : keySnap(tr, a);   // (a grown weapon's: the heavy curve)
   const h = FEEL_KIT.antic !== 1 && S && S.hits && S.hits[0], t0 = h ? h.t0 : 0; if (!h || !(t0 > 0) || a <= 0 || a >= t0 || !tr || !tr.length) return v;
   return tr[0][1] + (v - tr[0][1]) * (1 + (FEEL_KIT.antic - 1) * Math.sin(Math.PI * a / t0)); };   // (COMBAT FEEL's anticipation: the way into a blow's first hit pulled further, easing back to the keys by the time it lands)
 function layPose(T, P, p) {                       // a character's own pose over a built-in one (lead / rear named, like the stance)
@@ -3086,7 +3106,10 @@ function updatePoseHuman(p, dt) {
   if (p.worn && a < 0) { const k = .85, sw = Math.sin(t * 2.2); o.lean += .36 * k; o.arch += .12 * k; o.headRot += (.34 + .04 * sw) * k; o.bodyY -= .05 * k;   // worn out (a partner out of hearts, 2026-11-01): bent over, head hung, arms dangling, a sway
     o.armF = lerp(o.armF, .1 + .05 * sw, k); o.elbF = lerp(o.elbF, .2, k); o.armB = lerp(o.armB, .06 - .05 * sw, k); o.elbB = lerp(o.elbB, .2, k); o.spF = lerp(o.spF || 0, .05, k); o.spB = lerp(o.spB || 0, .05, k); }
   const SK = a >= 0 && STRIKES[p.atkKind];
-  if (SK && SK.keys && !SK.screen) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / .12), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (the punch and kick, keyed from their old drawn poses: eased in through the pose as they always were, not laid on raw)   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
+  p.gSq = 0;                                                 // (a grown weapon's blow: stretched up into it, squashed down under it as it lands, a rebound; syncHuman adds it to her squash)
+  if (SK && SK.giant && SK.hits && SK.hits[0]) { const tI = SK.hits[0].t0, wS = Math.min(.26, tI * .85), z = .7 + .15 * clamp(giantOf(p), 1, 3), bump = (b0, b1) => a > b0 && a < b1 ? Math.sin(Math.PI * (a - b0) / (b1 - b0)) : 0;
+    p.gSq = z * (.07 * bump(tI - wS, tI + .02) - .11 * bump(tI, tI + .17) + .035 * bump(tI + .17, tI + .36)); }
+  if (SK && SK.keys && !SK.screen) { const w = p.keysFull ? 1 : clamp(Math.min(a / .045, (SK.dur - a) / (SK.giant ? .3 : .12)), 0, 1), sw = leadFar(p), KK = keysOf(p, SK);   // (the punch and kick, keyed from their old drawn poses: eased in through the pose as they always were, not laid on raw)   // (eased in and out over longer: a combo's blows flow on, 2026-10-22)
     for (const k in KK) { if (k === "blade") continue; const kk = sw ? SWAP[k] || k : k; if (p.airLegs && LEG_CH.has(kk) && kk !== "bodyY") continue;   // (in the air: the tuck's legs, strikeLegs)
       let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
       if (TURNS.has(k)) v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round (the cartwheel's wheel too, 2026-10-28)
@@ -3228,6 +3251,41 @@ function armOut(a, sp, s) {                        // the turn that swings an ar
 }
 const _gp = new THREE.Vector3(), _gt = new THREE.Vector3(), _gS = new THREE.Vector3(), _zAx = new THREE.Vector3(0, 0, 1), _qi = new THREE.Quaternion(), _tq = new THREE.Quaternion(), _qr = new THREE.Quaternion();
 const GAUNT = { inward: .42, flex: .5, turn: 1.2 };   // the gauntlet arm, bent (the user, 2026-10-17: not straight up "like a trophy"): turned in at the shoulder, the wrist curled, the fingers toward you
+// her other hand holding the grown arm (the user, 2026-11-02: "camila's arm still doesnt bend and gets lost in her body when holding her arm"): the straight reach to
+// the gauntlet's rim it was (out of reach running, so the arm went straight, through her chest, the hand up by her chin). Now: where her own grown pose (spec.move.gstance,
+// the user's file) puts that hand and elbow, the spot on the grown arm nearest that hand that she reaches with the elbow bent, below her chin and out of her body, and the
+// elbow on its circle nearest where the pose has it, out of her body too: the user's pose itself where it already holds the arm, a hold like it either way she faces
+const HOLD_HINT = { armB: .3, elbB: 1.45, spB: .15, rlB: .5 };   // (no pose of her own: the elbow out and down, the forearm in across her)
+const _kE = new THREE.Vector3(), _kW = new THREE.Vector3(), _kT = new THREE.Vector3(), _kG = new THREE.Vector3(), _kO = new THREE.Vector3(), _kD = new THREE.Vector3(), _kN = new THREE.Vector3(), _kN2 = new THREE.Vector3(), _kA = new THREE.Vector3(), _kB = new THREE.Vector3(), _kM = new THREE.Vector3(), _kq = new THREE.Quaternion(), _kR = new THREE.Quaternion();
+function fkArm(S, a, e, sp, rl, s, UA, FA, E, W) {   // where these angles put the elbow and wrist, as syncHuman builds an arm
+  _kq.copy(armOut(a, sp, s)); _kD.set(Math.sin(a), -Math.cos(a), 0).applyQuaternion(_kq);
+  E.copy(S).addScaledVector(_kD, UA); E.z += s * .03; E.sub(S).setLength(UA).add(S);
+  if (Math.abs(rl) > 1e-4) _kq.premultiply(_kR.setFromAxisAngle(_kD, -s * rl));
+  _kN.set(Math.sin(a + e), -Math.cos(a + e), 0).applyQuaternion(_kq); W.copy(E).addScaledVector(_kN, FA); W.z += s * .02; W.sub(E).setLength(FA).add(E);
+}
+function holdSolve(p, r, s, isNear, S, UA, FA, D) {
+  const G = r.giant, Cv = G.tube.curve, gs = (p.rig.spec.move || {}).gstance || {}, H = k => gs[k] !== undefined ? gs[k] : HOLD_HINT[k];
+  fkArm(S, H("armB"), H("elbB"), H("spB"), H("rlB"), s, UA, FA, _kE, _kW);   // (her pose's elbow and hand: the rear arm, the one not holding the weapon)
+  const rT = .2 * r.spec.body.girth * D.chest, hipC = r.hips.position, chC = r.chest.position, chinY = S.y - .04, reach = (UA + FA) * .88;
+  const inBody = (v, pad) => { _kA.subVectors(chC, hipC); const t = clamp(_kB.subVectors(v, hipC).dot(_kA) / Math.max(1e-6, _kA.lengthSq()), 0, 1); return Math.hypot(v.x - (hipC.x + _kA.x * t), v.z - (hipC.z + _kA.z * t)) < rT + pad && v.y < chC.y + .12; };
+  const uB = clamp((G.uB ?? .5) + .035, .2, .8); let bu = uB, bs = 1e9;
+  for (let i = 0; i <= 16; i++) { const u = lerp(.1, uB, i / 16); Cv.getPoint(u, _kT); const rr = G.prof(u);   // from high on its upper arm down to the gauntlet's rim
+    const sc = Math.max(0, _kT.distanceTo(_kW) - rr) + 4 * Math.max(0, _kT.distanceTo(S) - reach) + 6 * Math.max(0, _kT.y - chinY) + (inBody(_kT, 0) ? .3 : 0); if (sc < bs) { bs = sc; bu = u; } }
+  Cv.getPoint(bu, _kT); Cv.getTangent(bu, _kG);
+  _kO.subVectors(_kW, _kT); _kO.addScaledVector(_kG, -_kG.dot(_kO)); if (_kO.lengthSq() < 1e-6) _kO.set(1, .4, s); _kO.normalize(); if (_kO.x < .25) { _kO.x = .25; _kO.addScaledVector(_kG, -_kG.dot(_kO)).normalize(); }   // (on its surface, on the side toward her hand: its front, so it shows)
+  _kT.addScaledVector(_kO, G.prof(bu) * .95); if (_kT.y > chinY) _kT.y = chinY;
+  for (let i = 0; i < 6 && inBody(_kT, .07); i++) _kT.x += .05;   // (the hand never in her chest: out in front of it)
+  _kD.subVectors(_kT, S); const L0 = Math.max(1e-4, _kD.length()), L = clamp(L0, Math.abs(UA - FA) * 1.02 + .01, (UA + FA) * .998); _kD.divideScalar(L0);
+  const al = Math.acos(clamp((UA * UA + L * L - FA * FA) / (2 * UA * L), -1, 1));
+  _kN.subVectors(_kE, S); _kN.addScaledVector(_kD, -_kN.dot(_kD)); if (_kN.lengthSq() < 1e-8) _kN.set(.3, -1, s * .6).addScaledVector(_kD, -_kD.dot(_kN)); _kN.normalize(); _kN2.crossVectors(_kD, _kN);
+  _kW.copy(S).addScaledVector(_kD, L);
+  for (let k = 0; k < 49; k++) {                    // round the circle the elbow can be on, nearest her pose's first: the first that's out of her body, its forearm too
+    const th = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * TAU / 48;
+    _kE.copy(S).addScaledVector(_kD, Math.cos(al) * UA).addScaledVector(_kN, Math.sin(al) * UA * Math.cos(th)).addScaledVector(_kN2, Math.sin(al) * UA * Math.sin(th));
+    if (!inBody(_kE, .06) && !inBody(_kM.lerpVectors(_kE, _kW, .5), .03)) break; }
+  const v = armFromPts(p, r, s, isNear, S, _kE, _kW, UA, FA);
+  return { a: v.a, e: clamp(v.e, -.05, 2.8), sp: clamp(v.sp, POSE_CH.spF[0], POSE_CH.spF[1]), rl: clamp(v.rl, POSE_CH.rlF[0], POSE_CH.rlF[1]) };
+}
 function gripIK(S, T, UA, FA, s) {                  // the arm angles (a, e, sp) that put the hand exactly on T: the bend sets the reach, sp tilts the arm's plane out (or in, across the chest)
   const dx = T.x - S.x, dy = T.y - S.y, dz = (T.z - S.z) * s, L = clamp(Math.hypot(dx, dy, dz), Math.abs(UA - FA) * 1.02 + .01, (UA + FA) * .998);
   const e = Math.PI - Math.acos(clamp((UA * UA + FA * FA - L * L) / (2 * UA * FA), -1, 1)), al = UA + FA * Math.cos(e), be = FA * Math.sin(e);
@@ -3454,7 +3512,7 @@ function syncHuman(p, r, dt = 0) {
   // the sword and the head, mid-flip shearing them) is gone. The body takes it: the spine shorter (or longer), the torso wider by 1/sqrt to keep its volume, the
   // hips down into bent knees, a gentle squash of the head; limbs, hands and props keep their length and girth. A move's keyed arm stretch (aS / bS: punches up
   // to twice the arm) is a lunge of the body now, its reach the same
-  const sqq = DBG_RIG.noSquash ? 0 : clamp(p.sq || 0, -.45, .5), kS = 1 + sqq, kL = 1 / Math.sqrt(kS), kV = 1 + sqq * .5, kH = 1 / Math.sqrt(kV);
+  const sqq = DBG_RIG.noSquash ? 0 : clamp((p.sq || 0) + (p.gSq || 0), -.45, .5), kS = 1 + sqq, kL = 1 / Math.sqrt(kS), kV = 1 + sqq * .5, kH = 1 / Math.sqrt(kV);
   const lunge = DBG_RIG.noStretch ? 0 : clamp(Math.max(o.aS || 0, o.bS || 0), 0, 1.4) * (H_UA + H_FA) * .5;
   r.lungePx = lunge * sc * 40;
   r.root.position.set(X(p.x) + fs * lunge * sc, Y(p.y) + (p.seatLift || 0), p.z || 0);
@@ -3485,7 +3543,8 @@ function syncHuman(p, r, dt = 0) {
   const tU = (o.twistU || 0) * fs, tH = (o.twistH || 0) * fs;
   r.hips.position.copy(_P[1]); r.hips.rotation.z = -ang[0] * .6; r.hips.rotation.y = tH;
   r.chest.position.copy(_SB); r.chest.rotation.set(0, tU, -ang[1]);   // (all three: giantRoll tips it about x, and that has to start from nothing each frame, or it adds up and turns her chest round and round)
-  r.head.position.set(p.neck.x + Math.sin(ang[2]) * D.headOff * Bd.head, p.neck.y + Math.cos(ang[2]) * D.headOff * Bd.head, 0);
+  const hb = r.prop && r.prop.kind === "gauntlet" ? clamp(giantOf(p), 0, 1) : 0, a2 = ang[2] < 0 ? ang[2] * (1 - .6 * hb) : ang[2], hu = hb * Math.min(.14, Math.max(0, .27 * (Math.sin(.22) - Math.sin(ang[1]))));   // her arm grown: her head held up out of her tall collar (its front rises as she stands up out of her boxer's lean, .22, or leans back under the weight: up by as much), and over it, not sunk back behind it (the user, 2026-11-02: "look at how camila's head sinks into her body")
+  r.head.position.set(p.neck.x + Math.sin(a2) * D.headOff * Bd.head, p.neck.y + Math.cos(a2) * D.headOff * Bd.head + hu, 0);
   r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)
   if (r.eyes3d) r.eyes3d.forEach(e => { e.scale.y = p.blink < 0 ? .12 : 1; });   // (carved eyes: shut with the face)
@@ -3525,7 +3584,7 @@ function syncHuman(p, r, dt = 0) {
       a = lerp(a, g[0], grip); e = lerp(e, g[1], grip); sp = lerp(sp, g[2], grip); rl = lerp(rl, 0, grip);
     }
     if (gArm && s !== propS && r.giant && r.giant.grip && !p.gripFree) {           // the other hand holds the grown arm up (the user, 2026-11-01: "love camila holding her arm as it gets bigger")
-      const g = gripIK(_S, r.giant.grip, H_UA * lk, H_FA * lk, s), k = clamp(giantOf(p), 0, 1); g[0] += TAU * Math.round((a - g[0]) / TAU); a = lerp(a, g[0], k); e = lerp(e, g[1], k); sp = lerp(sp, g[2], k); rl = lerp(rl, 0, k); }
+      const v = holdSolve(p, r, s, isNear, _S, H_UA * lk, H_FA * lk, D), k = clamp(giantOf(p), 0, 1); v.a += TAU * Math.round((a - v.a) / TAU); a = lerp(a, v.a, k); e = lerp(e, v.e, k); sp = lerp(sp, v.sp, k); rl = lerp(rl, v.rl, k); }   // (holdSolve: where her own pose puts it, the elbow bent, out of her body, 2026-11-02)
     e = clamp(e, -.05, 2.8);   // (an elbow bends one way only, never back: 2026-10-31)
     const fa = a + e, fk = pr && pr.fist && s === propS ? clamp((e - .8) / .8, 0, 1) : 0; let qa = armOut(a, sp, s);   // fk: how bent the gauntlet arm is (a punch straightens it all out)
     _E.copy(_S).addScaledVector(_ad.set(Math.sin(a), -Math.cos(a), 0).applyQuaternion(qa), H_UA * lk * (1 + st)); _E.z += s * .03; _E.sub(_S).setLength(H_UA * lk).add(_S);   // (the elbow nudged out, the upper arm still its own length)
