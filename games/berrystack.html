@@ -162,6 +162,12 @@ function tone(f0, f1, dur, type = 'sine', vol = .15, delay = 0) {
   v.gain.setValueAtTime(.0001, t); v.gain.exponentialRampToValueAtTime(vol, t + .012); v.gain.exponentialRampToValueAtTime(.0001, t + dur);
   o.connect(v).connect(a.destination); o.start(t); o.stop(t + dur + .03);
 }
+function squish(dur, f0, vol, delay = 0) {   // a berry squished: noise through a narrow band sliding down, like a squelch
+  if (FXOFF) return; const a = ac(); if (!a) return; const t = a.currentTime + delay, n = Math.ceil(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n) ** 2;
+  const s = a.createBufferSource(), f = a.createBiquadFilter(), v = a.createGain(); s.buffer = buf; f.type = 'bandpass'; f.Q.value = 5; f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f0 * .26, t + dur * .85);
+  v.gain.setValueAtTime(.0001, t); v.gain.exponentialRampToValueAtTime(vol, t + .01); v.gain.exponentialRampToValueAtTime(.0001, t + dur); s.connect(f).connect(v).connect(a.destination); s.start(t); s.stop(t + dur + .02);
+}
 function hiss(dur, vol, f = 1500, q = 1, delay = 0) {
   if (FXOFF) return; const a = ac(); if (!a) return; const t = a.currentTime + delay, n = Math.ceil(a.sampleRate * dur), buf = a.createBuffer(1, n, a.sampleRate), d = buf.getChannelData(0);
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
@@ -176,7 +182,7 @@ const SFX = {
   bump: () => { tone(170, 90, .09, 'sine', .14); },
   poof: () => { hiss(.18, .1, 2400, .7); },
   whoosh: () => { hiss(.35, .1, 1200, .6); },
-  pierce: i => { hiss(.05, .16, 3600, 1.4); tone(820 + i * 140, 360, .09, 'sine', .16); },
+  pierce: i => { squish(.17, 1250 + i * 150, .32); tone(230 + i * 30, 85, .12, 'sine', .14, .012); },   // (the stick going through: a wet squish and a soft blub under it, each one a little higher)
   score: () => { tone(880, 880, .12, 'triangle', .14); tone(1320, 1320, .22, 'triangle', .14, .1); tone(1760, 1760, .25, 'sine', .07, .18); },
   door: () => { tone(210, 270, .16, 'square', .025); },
   meow: () => { tone(560, 900, .11, 'triangle', .12); tone(900, 520, .24, 'triangle', .12, .1); },
@@ -206,8 +212,8 @@ function drop() {
 }
 function land(b, bx) {
   const n = stack.length;
-  stack.push({ k: b.k, bx: clamp(bx, -R * 1.1, R * 1.1), s: 0, ds: -5.5, face: 'happy', ft: .7 });
-  stack.forEach((q, i) => { if (i < n) q.ds -= 2.2 * (i + 1) / (n + 1); });   // (the whole stack squishes down under it, then springs back)
+  stack.push({ k: b.k, bx: clamp(bx, -R * 1.1, R * 1.1), s: 0, ds: 4.2, face: 'happy', ft: .7 });
+  stack.forEach((q, i) => { if (i < n) q.kick = { t: .035 * (n - 1 - i), v: 3.4 - .5 * (n - 1 - i) + rand(0, .4) }; });   // (the stack squashes under it, a thick jiggle that goes on down from the one it landed on: the user, 2026-11-02, "jiggle a little more, but a thicker jiggle not watery")
   const off = n ? bx - stack[n - 1].bx : bx; sway.w += off * .014 + b.vx * .0016 + rand(-.05, .05);
   b.gone = true; SFX.plop(n);
   const p = stackPos(n); for (let i = 0; i < 6; i++) parts.push({ k: 'dot', x: p.x + rand(-R, R), y: p.y + R * .8, vx: rand(-90, 90), vy: rand(-160, -60), r: rand(1.5, 3), c: '#ffffff', life: .45, t: 0 });
@@ -224,7 +230,7 @@ function startDelivery() {
   stack = []; skewer = null; plate.up = 0; doorTo = 1; SFX.door(); SFX.whoosh(); return true;
 }
 function poof(x, y, c) { for (let i = 0; i < 9; i++) { const a = i / 9 * Math.PI * 2; parts.push({ k: 'puff', x: x + Math.cos(a) * 8, y: y + Math.sin(a) * 8, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60 - 20, r: rand(5, 9), c, life: .5, t: 0 }); } SFX.poof(); }
-function juice(x, y, c) { for (let i = 0; i < 10; i++) parts.push({ k: 'drop', x, y, vx: rand(-160, 160), vy: rand(-260, -60), r: rand(1.8, 3.6), c, life: .7, t: 0, g: 900 }); }
+function juice(x, y, c) { for (let i = 0; i < 5; i++) parts.push({ k: 'drop', x, y, vx: rand(-70, 70), vy: rand(-170, -70), r: rand(1, 1.9), c, life: .45, t: 0, g: 900 }); }   // (a little pop of juice where the stick goes in, very small: the user, 2026-11-02)
 
 // ── each step
 function update(dt) {
@@ -295,7 +301,7 @@ function updStack(dt) {
   const c = lean(), over = c - clamp(c, -SUP, SUP), n = stack.length;
   sway.w += (-(over ? 6 : 32) * sway.th - 2.5 * sway.w + over * (.35 + .1 * n)) * dt; sway.th = clamp(sway.th + sway.w * dt, -.5, .5);
   if (Math.abs(sway.th) > TIP && !skewer) { topple(Math.sign(sway.th)); return; }
-  for (const q of stack) { spring(q, dt); if (q.ft > 0 && (q.ft -= dt) <= 0) q.face = 'calm'; if (over && n > 1) q.face = 'eek'; }
+  for (const q of stack) { if (q.kick && (q.kick.t -= dt) <= 0) { q.ds += q.kick.v; q.kick = null; } spring(q, dt, 150, 12); if (q.ft > 0 && (q.ft -= dt) <= 0) q.face = 'calm'; if (over && n > 1) q.face = 'eek'; }
   if (settle > 0 && !over && (settle -= dt) <= 0 && stack.length === 4) { stacks++; startSkewer(); }   // (not while it's going: it has to stand)
 }
 function topple(dir) {                                  // over it goes: off the plate and down, one after the other, the top furthest
@@ -311,7 +317,7 @@ function updSkewer(dt) {
   S.tip = lerp(GY0 - 280, end, u * u); S.spread = clamp((u - .15) / .7, 0, 1);
   for (const q of stack) q.bx = lerp(q.bx, S.x - PLATE_X, Math.min(1, dt * 9));
   sway.th *= Math.pow(.01, dt); sway.w *= Math.pow(.01, dt);
-  for (let i = stack.length - 1; i >= 0; i--) { const q = stack[i], p = stackPos(i); if (!q.pierced && S.tip >= p.y) { q.pierced = true; q.ds += 3.5; q.face = 'ouch'; q.ft = .45; juice(p.x, p.y, q.k.c); SFX.pierce(3 - i); } }
+  for (let i = stack.length - 1; i >= 0; i--) { const q = stack[i], p = stackPos(i); if (!q.pierced && S.tip >= p.y) { q.pierced = true; q.ds += 3.5; q.face = 'ouch'; q.ft = .45; if (i === stack.length - 1) juice(p.x, p.y - R + 3, q.k.c); SFX.pierce(3 - i); } }
   if (u >= 1 && !S.done) { S.done = true; S.dt = 0; pops.push({ x: S.x + (S.x < PLATE_X + 40 ? 64 : -64), y: PLATE_Y - 3 * KSTEP, s: '+1', t: 0 }); SFX.score(); for (let i = 0; i < 14; i++) parts.push({ k: 'star', x: S.x + rand(-40, 40), y: PLATE_Y - rand(20, 200), vx: rand(-60, 60), vy: rand(-120, -20), r: rand(3, 5), c: pick(['#ffd34d', '#f06aa8', '#5aa9e6', '#7cc443']), life: .8, t: 0, g: 200 }); }
   if (S.done && (S.dt += dt) > .35) startDelivery();
 }
@@ -497,7 +503,7 @@ function draw() {
     if (stack.length) { const t = stackPos(stack.length - 1); if (Math.abs(B.x - t.x) < R * 1.6) sy = t.y - R + 3; } else if (Math.abs(B.x - PLATE_X) < PLATE_W / 2) sy = PLATE_Y;
     ell(x, B.x, sy, 15, 4); x.fillStyle = 'rgba(58,49,64,.13)'; x.fill();
   }
-  stack.forEach((q, i) => { const p = stackPos(i); drawBerry(x, p.x, p.y, q.k, { s: q.s, face: q.face, rot: sway.th * .6 }); });
+  { let sink = 0; stack.forEach((q, i) => { const p = stackPos(i); drawBerry(x, p.x, p.y + sink, q.k, { s: q.s, face: q.face, rot: sway.th * .6 }); sink += (q.s > 0 ? 1.6 : 1) * q.s * R * .8; }); }   // (each one sat down into the one under it as that squashes: the stack gives as a whole)
   for (const b of flying) drawBerry(x, b.x, b.y, b.k, { s: b.s, rot: b.rot, face: b.face, a: b.mode === 'floor' ? clamp((1.1 - b.t) * 3, 0, 1) : 1 });
   drawClaw(x);
   x.restore();
