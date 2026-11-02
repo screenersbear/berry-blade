@@ -658,7 +658,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261102k"></script>
+<script src="charkit.js?v=20261102l"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -4324,6 +4324,17 @@ function wavesSet(P, g, s, rng, R) {
     put(fl, x + 3.15, gy + h - 2.05, -1.7);
     return true;
   }
+  if (P.k === "cannon") { level.cannon = cannonBuild(P, g); return true; }   // (the ship's cannon, and the far cliffs' own: with the shot, by update)
+  if (P.k === "wall") {                             // the far cliffs' face, sheer up from the sand (2026-11-02): rock in tall columns, smoothest where the team hits it
+    const zf = P.z ?? -2.6, top = Y(P.top), bot = Y(GROUND) - .5;
+    for (let x = P.x0; x < P.x1;) { const w = R(170, 300), xc = x + w / 2, fl = !!P.flat && xc > P.flat[0] && xc < P.flat[1], h = top + R(-1.1, 1.1) - bot, d = R(4, 6), zc = zf - d / 2 + (fl ? R(-.12, 0) : R(-.45, .05));
+      put(rk(w * S + .35, h, d, fl ? .12 : .32), X(xc), bot + h / 2, zc); x += w * R(.85, .95);
+      put(mk(new THREE.BoxGeometry(w * S + .45, .32, d + .1), null, { mat: WM.mGrass, ol: .02 }), X(xc), bot + h + .06, zc);   // (turf on its top, tufts along the edge)
+      for (let i = 0; i < 4; i++) { const tf = mk(new THREE.ConeGeometry(.07, R(.3, .55), 3), null, { mat: WM.mGrass, ol: 0 }); tf.rotation.z = R(-.4, .4); put(tf, X(xc) + R(-w * S / 2, w * S / 2), bot + h + .3, zc + d / 2 - R(0, .4)); } }
+    for (let x = P.x0 + R(40, 160); x < P.x1; x += R(260, 520)) { if (P.flat && x > P.flat[0] + 120 && x < P.flat[1] - 120) continue; const r = R(.35, .75);   // (boulders fallen at its foot, none where they'll land)
+      put(new THREE.Mesh(jag(new THREE.DodecahedronGeometry(r, 0), rng, r * .3), WM.rockM), X(x), Y(GROUND) + r * .45, zf + r * .6); }
+    return true;
+  }
   return false;
 }
 // ── Glos's home (the forest's C8, C9, C10; the user, 2026-10-28): in through a hole in C7's wall, crawling, onto a lip of a ledge in C8 ("a room that looks more like a
@@ -4934,8 +4945,8 @@ function authorWaves() {
     upX: 950, up: C.A1, downX: 170, down: C.C1, noLeft: true, noRight: true }); nm(b1, "REST STOP");   // (ladders up to A1's scaffold and down to C1's rock path)
   room("B2", { ground: [[0, 0]], gaps: [[-200, 1250]], below: C.C2, looks: [[1250, 2800, "deck"]], noLeft: true, next: C.B3, set: [{ k: "ship" }, { k: "zip" }] },
     [["inkling", "orange", 1600]]);
-  room("B3", { ground: [[0, 0]], looks: [[-200, 2800, "deck"]], upX: 1150, up: C.A3, prev: C.B2, next: C.B4,
-    set: [{ k: "ship" }] }, [["crab", "purple", 650], ["seahorse", "green", 1550]]);
+  room("B3", { ground: [[0, 0]], looks: [[-200, 2800, "deck"]], upX: 1150, up: C.A3, prev: C.B2, next: C.B4, cannon: { x: 2050 },   // (the ship's cannon, aimed at the high cliffs out past her: jump in. The user, 2026-11-02)
+    set: [{ k: "ship" }, { k: "cannon", x: 2050 }] }, [["crab", "purple", 650], ["seahorse", "green", 1550]]);
   room("B4", { ground: [[0, 0]], gaps: [[1500, 2760]], below: C.C4, looks: [[-200, 1500, "deck"]], prev: C.B3, noRight: true,   // (off the deck's end: down onto the hub's rock in C4)
     set: [{ k: "ship" }] }, [["kraken", "purple", 800, "mini"]]);
   room("B5", { ground: [[0, 0]], gaps: [[-200, 1700]], below: C.C5, rise: true, noLeft: true, next: C.B6 },
@@ -4983,6 +4994,15 @@ function authorWaves() {
   room("D8", { ground: [[0, 0]], gaps: [[2150, 2760]], dive: [2150, 2760], diveTo: DEEP, diveBoss: true, prev: C.D7, noRight: true, boss: true, bossX: 1500, toWorld: DEEP,   // (Cuss at the water's edge; past him, down into the deep)
     set: [{ k: "posts", x0: 0, x1: 1150 }] });
 
+  // the far cliffs (the user, 2026-11-02: the cannon "it'll shoot you further into the background ... splat onto the side of a cliff ... then they explore another region there so
+  // build about two screens over there once they crash"): two screens of their own, off the drawing, back across the bay behind the ship; their own cannon shoots you back to the deck
+  const FAR1 = S0.length, FAR2 = FAR1 + 1, farRoom = o => ({ h: S0[C.B3].h, col: 999, foe: S0[C.B3].foe, name: "THE FAR CLIFFS", elev: 0, authored: true, noDress: true, far: true, plats: [], ...o });
+  S0.push(farRoom({ ground: [[0, 0]], noLeft: true, next: FAR2, splatAt: [520, 1320], set: [{ k: "wall", x0: -400, x1: 1900, top: 90, z: -2.6, flat: [300, 1550] }, { k: "crag", x0: 1750, x1: 2950, top: 150, z: -5.5 }] }));   // (the cliff they splat on)
+  R0[FAR1] = [["crab", "orange", 1850], ["inkling", "red", 2250]];
+  S0.push(farRoom({ ground: [[0, 0], [1350, 0], [1350, -80], [2560, -80]], prev: FAR1, noRight: true, plats: [[600, 300, 240, "stack"], [980, 215, 230, "stack"]], items: [["power", 1095, 215], ["guava", 330]],   // (sea stacks up to a star, a shelf, their cannon)
+    cannon: { x: 2130, back: true, to: C.B3 }, set: [{ k: "crag", x0: -300, x1: 2950, top: 60, z: -6.5 }, { k: "cannon", x: 2130, back: true }] }));
+  R0[FAR2] = [["octo", "purple", 450], ["starfish", "red", { plat: 1, x: 1080 }], ["crab", "blue", 1700], ["seahorse", "green", 1980]];
+  S0[C.B3].cannon.to = FAR1;
   W.ship = { x0: WORLD + 1250, x1: WORLD * 3 + 1500, y: ROW_H + GROUND, keel: ROW_H * 3 + GROUND + 110, mast: WORLD * 3, fore: WORLD * 2 + 1900, nest: [WORLD * 2 + 640, WORLD * 3 + 640, 300],   // (the S.S. Pineapple, in world px: B2's deck to B4's, her keel down in C3-C4, the crow's nest over A3-A4)
     tip: WORLD * 4 + 1300, anchor: WORLD * 2 + 420, anchorY: ROW_H * 2 + 230, name: WORLD * 2 + 1300, sailTop: ROW_H - 10, sailH: 460 };   // (the sail hung lower, Cuss' face in view from B4's deck: the user, 2026-10-25)
   // the rock behind, as the sheets have it: one formation per row, in world px (top: as the row's own y), each screen drawing what of it it can see. The C4 and D4 rock stands in
@@ -25174,7 +25194,7 @@ function syncParticles(dt) {
 
 let camLostT = 0;
 function camLostTick(dt) {                           // you off the picture over a second, nothing on that should be showing elsewhere: whatever's holding the camera let go, and it's back on you
-  const p = player; if (mode !== "play" || !p || p.dead || pan || panFade > 0 || cine || comicUp || tutor || rideS || intro || pro || tale || hideout || transit || paused || menuUp || p.cons || arena || window.__cam) { camLostT = 0; return; }
+  const p = player; if (mode !== "play" || !p || p.dead || pan || panFade > 0 || cine || comicUp || tutor || rideS || intro || pro || tale || hideout || transit || paused || menuUp || p.cons || arena || cannonS || window.__cam) { camLostT = 0; return; }
   const hH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z, hW = hH * camera.aspect, py = Y(p.y - 50);
   const seen = Math.abs(X(p.x) - camera.position.x) < hW * 1.05 && py > camera.position.y - CAM_Y + LOOK_Y - hH * 1.3 && py < camera.position.y - CAM_Y + LOOK_Y + hH * 1.3;
   camLostT = seen ? 0 : camLostT + dt; if (camLostT < 1.1) return;
@@ -25227,6 +25247,7 @@ function syncWorld(dt) {
   }
   const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
+  if (cannonS) cannonCam();
   if (pan) { camera.position.copy(pan.pos); camera.quaternion.copy(pan.quat); }   // (between stitched screens: the camera on its way across)
   camLostTick(dt);                                   // (the picture as it'll be drawn: if you're not in it, and nothing should be holding it elsewhere, back on you)
   if (level.sky && STITCH.has(world) && mode === "play") { const K = level.sky.userData; if (K.x0 === undefined) K.x0 = level.sky.position.x; level.sky.position.x = K.x0 + camera.position.x - WX / 2; if (hourEase && hourEase.sky && hourEase.level === level) hourEase.sky.position.x = level.sky.position.x; }   // (a stitched world's sky at infinity: it goes along with the camera, so crossing into the next screen it stays where it was, sun, moon and all; each screen's own was centred on it and jumped a screen's width. The user, 2026-10-25: "things that pop in and out and change as you change screens")
@@ -25252,6 +25273,213 @@ function updateSelect(dt) {
   });
   selRing.position.set(X(lineup[sel].x), .04, LINE_Z); selRing.scale.setScalar(1 + .07 * Math.sin(time * 6));
 }
+// ── the ship's cannon (the user, 2026-11-02: "we are going to be playing with the foreground and background and adding new room so you can walk into and I wanna test
+// it out first by building a Cannon on the boat in cuss' waves. And basically it'll shoot you further into the background when the character jumps in it. All three buddies
+// will go and get shot out there and the characters are gonna splat onto the side of a cliff in a very cartoony way, and then slide down and fall down onto the floor and then
+// they explore another region there so build about two screens over there once they crash"). Jump into its mouth: in you go, the team hops in after you, the fuse fizzes and
+// BOOM, one after another, high over the bay into the distance, onto the far cliffs (two screens of their own, behind the ship). A cannon there shoots you back to the deck
+const CANNON = { el: .7, az: 1.05, azB: -2.35, z: -1.6, zB: -3, piv: 1.15, fwd: 3, back: 1.5, rB: .78, rM: .6, far: [18, 2, -30], T: 1.35 };   // (far: where the shot comes down, from the mouth: on the high cliffs out past the ship)
+let cannonS = null;
+PG.smoke = mk(new THREE.IcosahedronGeometry(1, 1), null, { mat: toon("#ece6dc"), ol: .12 });
+SFX.boomC = big => { SFX.explode(true); tone(70, 28, big ? .9 : .5, { type: "sine", vol: big ? .34 : .22 }); noise(.5, { vol: .16, f0: 400, f1: 80 }); };   // (the cannon: a big low boom)
+SFX.fizz = () => { noise(.9, { vol: .07, f0: 5200, f1: 3600, type: "bandpass", q: 2.5 }); noise(.9, { vol: .04, f0: 2400, f1: 2000, type: "bandpass", q: 4, delay: .05 }); };   // (its fuse)
+SFX.plunk = () => { tone(260, 90, .16, { type: "sine", vol: .2 }); tone(520, 300, .06, { type: "triangle", vol: .06 }); };   // (one more in)
+SFX.splat = () => { noise(.2, { vol: .3, f0: 1400, f1: 220 }); tone(150, 55, .22, { type: "sine", vol: .3 }); noise(.12, { vol: .12, f0: 3000, f1: 900, type: "bandpass", q: 1.2, delay: .03 }); };   // (flat on the rock)
+SFX.skid = () => { tone(880, 420, 1.05, { type: "triangle", vol: .05 }); noise(1.05, { vol: .05, f0: 1800, f1: 700, type: "bandpass", q: 1.5 }); };   // (sliding down it)
+SFX.whistle = () => tone(1600, 520, .8, { type: "sine", vol: .07 });   // (dropping out of the sky)
+function cannonAim(P) {                              // where its barrel is, in the room's 3D units: its foot, the way it points, the mouth (and the mouth in px)
+  const K = CANNON, az = P.back ? K.azB : K.az, d = new THREE.Vector3(Math.cos(K.el) * Math.cos(az), Math.sin(K.el), -Math.cos(K.el) * Math.sin(az));
+  const piv = new THREE.Vector3(X(P.x), Y(groundAt(P.x) ?? GROUND) + K.piv, P.back ? K.zB : K.z), mouth = piv.clone().addScaledVector(d, K.fwd);
+  return { az, d, piv, mouth, mx: mouth.x / S, my: GROUND - mouth.y / S };
+}
+function cannonBuild(P, g) {                         // an iron barrel banded in the ship's yellow, on a red carriage with two big spoked wheels, a few balls stacked by it
+  const A = cannonAim(P), K = CANNON, iron = toon("#2c3140"), iron2 = toon("#3d4456"), band = toon("#f2c84b"), wood = toon("#a8402f"), wood2 = toon("#6e2a22"), hubM = toon("#d8ae5a");
+  const add = (par, m, x, y, z) => { m.position.set(x, y, z); par.add(m); return m; };
+  const root = new THREE.Group(); root.position.set(A.piv.x, A.piv.y - K.piv, A.piv.z); root.rotation.y = A.az; g.add(root);   // (at the deck, turned the way it points)
+  const tilt = add(root, new THREE.Group(), 0, K.piv, 0); tilt.rotation.z = K.el;   // (on the axle, up at its elevation: the barrel along its +x)
+  [-1, 1].forEach(sd => { const ch = mk(new THREE.BoxGeometry(2.5, .95, .18), null, { mat: wood, ol: .02 }); add(root, ch, -.45, .72, sd * .6); ch.rotation.z = .2; });   // (the carriage's cheeks)
+  add(root, mk(new THREE.BoxGeometry(2.3, .28, 1.05), null, { mat: wood2, ol: .02 }), -.6, .36, 0);   // (its bed, down to the deck behind)
+  add(root, mk(new THREE.CylinderGeometry(.09, .09, 1.95, 8).rotateX(Math.PI / 2), null, { mat: iron2, ol: .01 }), 0, .9, 0);   // (the axle)
+  [-1, 1].forEach(sd => { const w = add(root, new THREE.Group(), 0, .9, sd * .86);   // the wheels: an iron tyre, a red rim, spokes, a brass hub
+    w.add(mk(new THREE.TorusGeometry(.84, .1, 8, 28), null, { mat: iron, ol: .02 })); w.add(mk(new THREE.TorusGeometry(.72, .07, 6, 24), null, { mat: wood, ol: .01 }));
+    for (let i = 0; i < 6; i++) { const sp = mk(new THREE.BoxGeometry(.1, 1.46, .07), null, { mat: wood, ol: .01 }); sp.rotation.z = i * Math.PI / 6; w.add(sp); }
+    w.add(mk(new THREE.CylinderGeometry(.2, .2, .26, 12).rotateX(Math.PI / 2), null, { mat: hubM, ol: .02 })); });
+  const bar = add(tilt, new THREE.Group(), 0, 0, 0), L = K.fwd + K.back, rAt = x => K.rB + (K.rM - K.rB) * (x + K.back) / L;   // the barrel: thick at the breech, flared at the muzzle
+  add(bar, mk(new THREE.CylinderGeometry(K.rM, K.rB, L, 22, 1, true).rotateZ(-Math.PI / 2), null, { mat: iron, ol: .03 }), (K.fwd - K.back) / 2, 0, 0);   // (open at the muzzle: the bore shows)
+  add(bar, mk(new THREE.CircleGeometry(K.rB, 22).rotateY(-Math.PI / 2), null, { mat: iron, ol: 0 }), -K.back, 0, 0);
+  add(bar, mk(new THREE.CylinderGeometry(K.rM * 1.2, K.rM * 1.02, .55, 22, 1, true).rotateZ(-Math.PI / 2), null, { mat: iron2, ol: .03 }), K.fwd - .27, 0, 0);
+  add(bar, mk(new THREE.TorusGeometry(K.rM * 1.14, .1, 8, 26).rotateY(Math.PI / 2), null, { mat: iron2, ol: .02 }), K.fwd, 0, 0);   // (the lip)
+  const boreM = new THREE.MeshBasicMaterial({ color: "#0c0b10", side: THREE.BackSide });
+  add(bar, new THREE.Mesh(new THREE.CylinderGeometry(K.rM * .92, K.rM * .92, .9, 20, 1, true).rotateZ(-Math.PI / 2), boreM), K.fwd - .44, 0, 0);   // (dark inside)
+  add(bar, new THREE.Mesh(new THREE.CircleGeometry(K.rM * .92, 20).rotateY(Math.PI / 2), new THREE.MeshBasicMaterial({ color: "#0c0b10" })), K.fwd - .6, 0, 0);
+  [-K.back + .45, .55, K.fwd - .95].forEach(x => add(bar, mk(new THREE.TorusGeometry(rAt(x) + .015, .075, 6, 24).rotateY(Math.PI / 2), null, { mat: band, ol: .015 }), x, 0, 0));   // (its yellow bands)
+  add(bar, mk(new THREE.SphereGeometry(.3, 14, 10), null, { mat: iron, ol: .02 }), -K.back - .18, 0, 0);   // (the knob at its back)
+  const fuse = add(bar, mk(new THREE.CylinderGeometry(.035, .035, .34, 6), null, { mat: toon("#d9c49a"), ol: .01 }), -K.back + .2, rAt(-K.back + .2) + .14, 0); fuse.rotation.z = -.5;
+  const tip = add(fuse, new THREE.Object3D(), 0, .18, 0);
+  const balls = new THREE.Group(); balls.position.set(A.piv.x - (P.back ? -1.9 : 2.2), A.piv.y - K.piv, A.piv.z + .5); g.add(balls);   // (a little pile of cannonballs by it)
+  [[-.31, .3, 0], [.31, .3, 0], [0, .3, .52], [0, .8, .18]].forEach(([x, y, z]) => add(balls, mk(new THREE.SphereGeometry(.31, 12, 9), null, { mat: iron, ol: .02 }), x, y, z));
+  return { P, A, root, bar, tip, base: root.position.clone(), rec: 0, bulge: 0, wisp: 1 };
+}
+function cannonTeam() {                              // who goes in: you first, then your buddies (and their crews), June if she's with you, your pets
+  const L = [{ st: player, r: rig, k: "hero" }];
+  allies.forEach(a => { if (!a.away) [a, ...(a.crew || [])].forEach(m => { if (m.st && m.r) L.push({ st: m.st, r: m.r, k: "ally", a }); }); });
+  if (ejPal() && ej.st && ej.r && !ej.away) L.push({ st: ej.st, r: ej.r, k: "ej" });
+  palsAll().forEach(q => { if (q.rig) L.push({ st: q, r: q.rig, k: "pet" }); });
+  L.forEach((m, i) => { m.i = i; m.hid = false; m.sc = null; m.tip = 0; Object.assign(m.st, { vx: 0, vy: 0, atkT: -1, atkKind: null, combo: null, block: false, chargeT: 0, brake: null, tcFly: null, hurtT: 0, climb: null, ball: 0, splat: 0, splatW: 0, rot: 0 }); });
+  return L;
+}
+const cSet = (m, ux, uy, uz) => { m.st.x = ux / S; m.st.y = GROUND - uy / S; m.st.z = uz; };   // (a member placed in 3D units)
+function cannonCheck(dt) {                           // jumped into its mouth? (and now and then a wisp of smoke out of it)
+  const C = STAGES[stage] && STAGES[stage].cannon, L = level.cannon, p = player;
+  if (!C || !L || C.to === undefined || mode !== "play" || transit || pan || !p || p.dead) return;
+  if ((L.wisp -= dt) < 0) { L.wisp = rand(1.2, 2.2); const M = L.A.mouth; spawn("smoke", M.x, M.y + .2, M.z, V(rand(-.2, .2), rand(.6, 1), 0), rand(.9, 1.3), rand(.12, .2), { g: -.3, drag: .6, spin: 1 }); }
+  if (p.onGround || !(p.vy > 0) || p.auto || p.climb || p.zip || p.sit || p.crawl || hideout || stronghold || arena || rideS || intro || cine || gift || tutor) return;
+  if (Math.abs(p.x - L.A.mx) > 52 || p.y < L.A.my - 36 || p.y > L.A.my + 34) return;
+  cannonGo(C, L);
+}
+function cannonGo(C, L) {                            // in she goes: the team hops in after her
+  const team = cannonTeam(), A = L.A; cine = null; SFX.plunk();
+  team.forEach((m, j) => { const s = m.st; m.from = { x: s.x, y: s.y, z: s.z || 0 }; m.t0 = j ? .3 + (j - 1) * .3 : 0; m.dur = j ? .55 : .17; m.ph = "go"; s.face = s.x < A.mx ? 1 : -1; });
+  const tf = team.length > 1 ? .3 + (team.length - 2) * .3 + .55 + .25 : .45;
+  cannonS = { ph: "load", t: 0, C, L, A, team, back: !!C.back, tFuse: tf, tBoom: tf + .85, cam: { p: camera.position.clone(), l: camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(CAM_Z)) }, camK: 0, camK1: 1, stars: [], marks: [] };
+  cannonS.cam.p0 = cannonS.cam.p.clone(); cannonS.cam.l0 = cannonS.cam.l.clone();
+}
+function cannonIn(m) { const A = cannonS.A, L = cannonS.L; m.hid = true; m.ph = "in"; SFX.plunk(); L.bulge = 1; spawn("smoke", A.mouth.x, A.mouth.y + .1, A.mouth.z, V(0, 1.2, 0), .6, .22, { g: -.5, drag: 2, spin: 2 }); }
+function cannonTick(dt) {                            // the whole show, a step at a time: nothing else moves meanwhile
+  const Q = cannonS; Q.t += dt; const t = Q.t;
+  Q.camK = approach(Q.camK, Q.camK1, dt * 1.6);
+  for (const m of Q.team) { const s = m.st; s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; }
+  if (Q.ph === "load" || Q.ph === "fire") cannonLoadTick(Q, dt);
+  else if (Q.ph === "far") cannonFarTick(Q, dt);
+  else if (Q.ph === "drop") cannonDropTick(Q, dt);
+  const L = Q.L; if (L && L.root && L.root.parent) {   // the cannon itself: swelling with each one in, trembling at the fuse, kicking back at each shot
+    L.bulge = Math.max(0, L.bulge - dt * 5); L.rec = Math.max(0, L.rec - dt * 3.2); const sh = Q.ph === "load" && t > Q.tFuse ? (t - Q.tFuse) * .06 : 0, e = L.bulge * L.bulge;
+    L.bar.scale.set(1 + e * .08, 1 + e * .22, 1 + e * .22);
+    L.root.position.set(L.base.x - Math.cos(L.A.az) * L.rec * .55 + rand(-sh, sh), L.base.y + rand(0, sh * .5), L.base.z + Math.sin(L.A.az) * L.rec * .55 + rand(-sh, sh)); }
+  for (const m of Q.team) { spring(m.st, dt); updatePose(m.st, dt); }
+  if (Q.done && Q.t > Q.done) cannonEnd();
+}
+function cannonLoadTick(Q, dt) {
+  const t = Q.t, A = Q.A, M = A.mouth, K = CANNON;
+  for (const m of Q.team) { const s = m.st;
+    if (m.ph === "go" && t >= m.t0) { const u = Math.min(1, (t - m.t0) / m.dur), f = m.from, x1 = A.mx, y1 = A.my - 8, H = m.i ? 120 : 30;   // a hop up into the mouth
+      const ux = lerp(X(f.x), X(x1), u), uy = lerp(Y(f.y), Y(y1), u) + H * S * 4 * u * (1 - u), uz = lerp(f.z, M.z, u * u);
+      cSet(m, ux, uy, uz); s.onGround = false; s.vy = u < .5 ? -300 : 300; s.ball = u > .55 ? (u - .55) / .45 : 0; s.yaw = lerp(s.yaw ?? -.8, Q.back ? -Math.PI / 2 : Math.PI / 2, u * .6);
+      if (u >= 1) cannonIn(m); } }
+  if (Q.ph === "load" && t >= Q.tFuse && !Q.fuseOn) { Q.fuseOn = true; SFX.fizz(); }
+  if (Q.fuseOn && Q.ph === "load" && Math.floor(t / .045) !== Math.floor((t - dt) / .045)) { const p = Q.L.tip.getWorldPosition(new THREE.Vector3()); spawn("spark", p.x, p.y, p.z, V(rand(-2, 2), rand(1.5, 4), rand(-1, 1)), rand(.2, .35), rand(.06, .1), { g: 9, spin: 8 }); }
+  if (Q.ph === "load" && t >= Q.tBoom) { Q.ph = "fire"; Q.team.forEach((m, j) => { m.tShot = Q.tBoom + j * .26; m.ph = "wait"; }); Q.camK1 = 1; }
+  if (Q.ph !== "fire") return;
+  for (const m of Q.team) { const s = m.st;
+    if (m.ph === "wait" && t >= m.tShot) { m.ph = "fly"; m.hid = false; SFX.boomC(m.i === 0); shake = Math.max(shake, m.i ? 5 : 8); Q.L.rec = 1; Q.L.bulge = .8;   // BOOM
+      for (let i = 0; i < 16; i++) spawn(i < 7 ? "puff" : "smoke", M.x, M.y, M.z, A.d.clone().multiplyScalar(rand(3, 11)).add(V(rand(-2, 2), rand(-.5, 2), rand(-2, 2))), rand(.55, 1.1), rand(.3, .65) * (m.i ? .8 : 1), { g: -1, drag: 2.6, spin: 2 });
+      for (let i = 0; i < 6; i++) spawn("spark", M.x, M.y, M.z, A.d.clone().multiplyScalar(rand(6, 12)).add(V(rand(-3, 3), rand(-1, 3), rand(-3, 3))), rand(.25, .4), rand(.1, .16), { g: 10, spin: 10 });
+      const j = m.i, sp = (j - (Q.team.length - 1) / 2);
+      if (!Q.back) { const D = new THREE.Vector3(K.far[0] + sp * 2.6, K.far[1] + (j % 2) * 1.4, K.far[2] + j * .8), T = K.T + j * .05, hd = Math.hypot(D.x, D.z), vy = hd / T * Math.tan(K.el);
+        m.fl = { T, v: new THREE.Vector3(D.x / T, vy, D.z / T), g: 2 * (D.y - vy * T) / (T * T), o: M.clone() }; }
+      else { const c = camera.position, D = new THREE.Vector3(c.x - 3.5 + sp * 2.2 - M.x, c.y + 2.6 + (j % 2) * .8 - M.y, c.z + 5 - M.z), T = .8 + j * .04, hd = Math.hypot(D.x, D.z), vy = hd / T * Math.tan(K.el) * .7;
+        m.fl = { T, v: new THREE.Vector3(D.x / T, vy, D.z / T), g: 2 * (D.y - vy * T) / (T * T), o: M.clone() }; } }
+    if (m.ph === "fly") { const F = m.fl, u = t - m.tShot, k = Math.min(u, F.T);   // out over the water (or out at you), tumbling, tucked in a ball
+      cSet(m, F.o.x + F.v.x * k, F.o.y + F.v.y * k + .5 * F.g * k * k, F.o.z + F.v.z * k); s.onGround = false; s.vy = 300; s.ball = 1; s.yaw = Q.back ? -Math.PI / 2 : Math.PI / 2; s.face = 1; s.rot += dt * 13;
+      if (u >= F.T) { m.ph = "gone"; m.hid = true; if (!Q.back) { const p = new THREE.Vector3(F.o.x + F.v.x * F.T, F.o.y + F.v.y * F.T + .5 * F.g * F.T * F.T, F.o.z + F.v.z * F.T); for (let i = 0; i < 4; i++) spawn("smoke", p.x, p.y, p.z, V(rand(-2, 2), rand(-1, 2), rand(-1, 1)), .7, rand(.7, 1.1), { g: 0, drag: 2, spin: 1 }); } } } }
+  const fl = Q.team.filter(m => m.ph === "fly"); if (fl.length) {   // the camera after them: back a little, looking up and out the way they've gone
+    const c = new THREE.Vector3(); fl.forEach(m => c.add(V(X(m.st.x), Y(m.st.y), m.st.z))); c.multiplyScalar(1 / fl.length);
+    const P0 = Q.cam.p0, L0 = Q.cam.l0, k = Q.back ? .12 : .28; Q.cam.l.lerp(L0.clone().lerp(c, k), 1 - Math.exp(-dt * 3)); Q.cam.p.lerp(P0.clone().add(V(0, Q.back ? 0 : .6, Q.back ? 0 : 2)), 1 - Math.exp(-dt * 2)); }
+  if (Q.team.every(m => m.ph === "gone") && !Q.leave) { Q.leave = t + (Q.back ? .1 : .35); }
+  if (Q.leave && t >= Q.leave && !Q.fading) { Q.fading = true; const C = Q.C; swapUnderFade(() => Q.back ? cannonDrop(C) : cannonLand(C)); }
+}
+function cannonRoom(ns, x) {                         // (under the fade) into a room that isn't next door: as goRoom does, without the slide
+  const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
+  if (trail.length > 1 && trail[trail.length - 2] === ns) trail.pop(); else trail.push(ns);
+  entrySide = "left"; entryHi = false; clockEnter(ns); setScreen(ns);
+  const gy = groundAt(x) ?? GROUND; Object.assign(player, { x, y: gy, vx: 0, vy: 0, face: 1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, safe: { x, y: gy, plat: null } });
+  palsPut({ x: x - 60, y: gy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null }); ejPlace(x - 110, gy, 1);
+  camX = X(x); camLook = 0; camStand = camBase = Y(gy); camLift = 0; exitOpen = false; $("exitCue").classList.add("hidden");
+  enterStage(ns, false);
+}
+function cannonLand(C) {                             // across the bay: the far cliffs, and here they all come, out of the sky at the rock face
+  const Q = cannonS, team = Q.team, ns = C.to, wall = STAGES[ns].splatAt || [600, 1300], mid = (wall[0] + wall[1]) / 2, xs = [0, -220, 220, -430, 430, -620, 620], xp = [110, -110, 330, -330];
+  cannonRoom(ns, mid);
+  const cx = X(mid + 20), gy = Y(GROUND);
+  Object.assign(Q, { ph: "far", t: 0, L: null, cam: { p: V(cx, gy + 5.6, CAM_Z + 5.5), l: V(cx, gy + 3.5, -2) }, camK: 1, camK1: 1, done: 0 });
+  let nH = 0, nP = 0; team.forEach((m, j) => { const s = m.st, pet = m.k === "pet", H = (m.r.heightPx || 100);
+    m.wx = mid + (pet ? xp[nP++ % xp.length] : xs[nH++ % xs.length]); m.wy = GROUND - (pet ? 105 : 150) - [0, 30, 12, 42, 22, 8, 36][j % 7]; m.t0 = .55 + j * .34; m.ph = "wait"; m.hid = true; m.H = H;
+    Object.assign(s, { x: m.wx, y: m.wy, z: -2.3, onGround: false, vy: 300, face: 1, yaw: Math.PI / 2, ball: 1, splat: 0, rot: 0 }); });
+}
+function cannonMark(m) {                             // the splat on the rock where it hit, and (sliding) its smear down the face
+  const SZ = m.H * S * 1.35, M1 = new THREE.MeshBasicMaterial({ map: splatTex(), color: "#34302e", transparent: true, opacity: .42, depthWrite: false });
+  const d = new THREE.Mesh(new THREE.PlaneGeometry(SZ, SZ), M1); d.position.set(X(m.wx), Y(m.wy) + SZ * .42, -2.56); d.rotation.z = rand(0, TAU); scene.add(d); level.objs.push(d);
+  const M2 = new THREE.MeshBasicMaterial({ map: smearTex(), color: "#34302e", transparent: true, opacity: .38, depthWrite: false }), sm = new THREE.Mesh(new THREE.PlaneGeometry(SZ * .55, 1), M2);
+  sm.position.set(X(m.wx), Y(m.wy) + SZ * .42, -2.565); sm.scale.y = .001; scene.add(sm); level.objs.push(sm); m.smear = { sm, y0: Y(m.wy) + SZ * .42 };
+}
+let SPLAT_TEX = null, SMEAR_TEX = null;
+const splatTex = () => SPLAT_TEX || (SPLAT_TEX = tex(256, 256, (c, w, h) => { c.fillStyle = "#fff"; c.beginPath(); const N = 11;   // a star-shaped splat, flecks thrown round it
+  for (let i = 0; i <= N * 2; i++) { const a = i / (N * 2) * TAU, r = (i % 2 ? .2 + .05 * Math.sin(i * 1.9) : .4 + .06 * Math.sin(i * 2.7)) * w; c.lineTo(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r); } c.closePath(); c.fill();
+  for (let i = 0; i < 10; i++) { const a = i * 2.39, r = w * (.38 + .05 * (i % 3)); c.beginPath(); c.arc(w / 2 + Math.cos(a) * r, h / 2 + Math.sin(a) * r, w * (.018 + .012 * (i % 2)), 0, TAU); c.fill(); } }));
+const smearTex = () => SMEAR_TEX || (SMEAR_TEX = tex(32, 128, (c, w, h) => { const G = c.createLinearGradient(0, 0, 0, h); G.addColorStop(0, "rgba(255,255,255,1)"); G.addColorStop(.7, "rgba(255,255,255,.7)"); G.addColorStop(1, "rgba(255,255,255,0)");
+  c.fillStyle = G; c.fillRect(4, 0, w - 8, h); }));
+function cannonFarTick(Q, dt) {
+  const t = Q.t;
+  for (const m of Q.team) { const s = m.st, u0 = t - m.t0;
+    if (m.ph === "wait" && u0 >= 0) { m.ph = "in"; m.hid = false; SFX.whoosh(); }
+    if (m.ph === "in") { const u = Math.min(1, u0 / .45), x0 = m.wx - 430, y0 = GROUND - 600;   // flying in over your shoulder at the rock, tumbling
+      s.x = lerp(x0, m.wx, u); s.y = lerp(y0, m.wy, u) - 70 * 4 * u * (1 - u); s.z = lerp(9, -2.3, u); s.rot += dt * 14; s.ball = 1;
+      if (u >= 1) { m.ph = "stuck"; m.ts = t; s.rot = 0; s.ball = 0; s.splat = 1; s.splatW = 1; SFX.splat(); shake = Math.max(shake, 5); popText(m.wx, m.wy - m.H * .9, "SPLAT!"); cannonMark(m);
+        for (let i = 0; i < 6; i++) spawn("dust", X(m.wx) + rand(-.6, .6), Y(m.wy) + m.H * S * .5 + rand(-.6, .6), -2.2, V(rand(-3, 3), rand(-2, 3), rand(.5, 2)), rand(.4, .6), rand(.08, .14), { g: 6, spin: 6, drag: 1.5 }); } }
+    const ut = m.ts !== undefined ? t - m.ts : 0;
+    if (m.ph === "stuck") { const e = Math.min(1, ut / .22); m.sc = [lerp(1.32, 1.06, e), lerp(1.18, 1.03, e), lerp(.36, .7, e)]; s.splatW = Math.max(0, 1 - ut / .5);   // flat on it, quivering
+      if (ut > .55) { m.ph = "slide"; m.ts = t; SFX.skid(); } }
+    else if (m.ph === "slide") { const u = Math.min(1, ut / 1.1), e = Math.pow(u, 2.1), y1 = GROUND - 28;   // sliding down the face, faster as it goes
+      s.y = lerp(m.wy, y1, e); m.sc = [1.06, 1.03, .7]; if (m.smear) { const top = m.smear.y0, now = Y(s.y) + m.H * S * .42 * 1.35; m.smear.sm.scale.y = Math.max(.001, top - now); m.smear.sm.position.y = (top + now) / 2; }
+      if (Math.random() < dt * 14) spawn("dust", X(s.x) + rand(-.4, .4), Y(s.y) + rand(0, .5), -2.25, V(rand(-1, 1), rand(.5, 1.5), rand(.3, 1)), .4, rand(.05, .09), { g: 5, spin: 6, drag: 1.5 });
+      if (u >= 1) { m.ph = "peel"; m.ts = t; m.y0 = s.y; } }
+    else if (m.ph === "peel") { const u = Math.min(1, ut / .5), e = u * u;   // peeling off it, over backwards, flat on the sand
+      m.tip = 1.42 * e; s.z = lerp(-2.3, -.3, e); s.y = lerp(m.y0, GROUND, e); m.sc = [lerp(1.06, 1, u), lerp(1.03, 1, u), lerp(.7, 1, u)];
+      if (u >= 1) { m.ph = "lie"; m.ts = t; SFX.thud(); shake = Math.max(shake, 3); dust(s.x, GROUND, 6); dust(s.x, GROUND, 4, 1); cannonStars(Q, m); } }
+    else if (m.ph === "lie") { m.tip = 1.42 + Math.sin(ut * 30) * .04 * Math.max(0, 1 - ut * 3); if (ut > .6) { m.ph = "up"; m.ts = t; } }
+    else if (m.ph === "up") { const u = Math.min(1, ut / .45), e = 1 - Math.pow(1 - u, 2);   // and up, shaking it off, turned to go on
+      m.tip = 1.42 * (1 - e); s.y = GROUND - Math.sin(Math.PI * u) * 34; s.z = lerp(-.3, 0, e); s.yaw = lerp(Math.PI / 2, -.75, e); s.splat = Math.max(0, 1 - u * 2); s.onGround = u > .9;
+      if (u >= 1) { m.ph = "ok"; s.splat = 0; s.onGround = true; s.y = GROUND; s.vy = 0; } } }
+  Q.stars.forEach(sp => { const m = sp.userData.m, a = Q.t * 6 + sp.userData.k * TAU / 3, on = m.ph === "lie" || m.ph === "up"; sp.visible = on;   // (stars round their heads)
+    if (on) sp.position.set(X(m.st.x) + Math.cos(a) * .55, Y(m.st.y) + .5 + (m.ph === "up" ? m.H * S * (1 - m.tip / 1.42) : 0), m.st.z + m.H * S * Math.sin(m.tip) * .85 + Math.sin(a) * .4); });
+  if (!Q.done && Q.team.every(m => m.ph === "ok")) { Q.done = t + .75; Q.camK1 = 0; }
+}
+function cannonStars(Q, m) { for (let k = 0; k < 3; k++) { const sp = new THREE.Sprite(STAR_MAT || (STAR_MAT = glyphMat("★", "#ffd75a"))); sp.scale.setScalar(.42); sp.userData = { m, k }; actors.add(sp); Q.stars.push(sp); } }
+let STAR_MAT = null;
+function cannonDrop(C) {                             // back on the deck: out of the sky, one after another, thump
+  const Q = cannonS, team = Q.team, x0 = STAGES[C.to].cannon ? STAGES[C.to].cannon.x - 420 : 1500, xs = [0, -170, 160, -330, 300, -480, 450];
+  cannonRoom(C.to, x0);
+  Object.assign(Q, { ph: "drop", t: 0, L: level.cannon || null, cam: null, camK: 0, camK1: 0, done: 0 });
+  team.forEach((m, j) => { const s = m.st; m.wx = x0 + xs[j % xs.length]; m.t0 = .5 + j * .3; m.ph = "wait"; m.hid = true; m.sc = null; m.tip = 0;
+    Object.assign(s, { x: m.wx, y: GROUND - 640, z: 0, vy: 0, onGround: false, face: 1, yaw: -.75, ball: 1, rot: 0 }); });
+}
+function cannonDropTick(Q, dt) {
+  const t = Q.t;
+  for (const m of Q.team) { const s = m.st, gy = groundAt(m.wx) ?? GROUND;
+    if (m.ph === "wait" && t >= m.t0) { m.ph = "fall"; m.hid = false; SFX.whistle(); }
+    if (m.ph === "fall") { s.vy += GRAV * dt; s.y += s.vy * dt; s.rot += dt * 11; s.ball = 1;
+      if (s.y >= gy) { s.y = gy; s.vy = 0; s.rot = 0; m.ph = "land"; m.ts = t; s.onGround = true; s.sq = -.45; SFX.thud(); SFX.land("wood", 1); shake = Math.max(shake, 4); dust(s.x, gy, 7); dust(s.x, gy, 4, 1); } }
+    else if (m.ph === "land") { const u = Math.min(1, (t - m.ts) / .4); s.ball = 1 - u; if (u >= 1) m.ph = "ok"; } }
+  if (!Q.done && Q.team.every(m => m.ph === "ok")) Q.done = t + .3;
+}
+function cannonSync() {                              // (render) who's showing, squashed flat or tipped over as the show has them
+  for (const m of cannonS.team) { const r = m.r; if (!r || !r.root) continue; r.root.visible = !m.hid; if (r.shadow) r.shadow.visible = !m.hid && m.st.onGround && !(m.st.z < -.5);
+    if (m.sc) r.root.scale.multiply(V(m.sc[0], m.sc[1], m.sc[2])); r.root.rotation.x = m.tip || 0;
+    if (m.tip) r.root.position.y += Math.sin(m.tip) * .28 * (m.H || 100) / 100; }
+}
+function cannonCam() {                               // (after the game's camera) eased between it and the show's own
+  const Q = cannonS, c = Q.cam, k = Q.camK; if (!c || k <= 0) return; const e = k * k * (3 - 2 * k);
+  const L0 = camera.position.clone().add(camera.getWorldDirection(new THREE.Vector3()).multiplyScalar(CAM_Z));
+  camera.position.lerp(c.p, e); camera.lookAt(L0.lerp(c.l, e));
+}
+function cannonEnd() {                               // over: everyone back to themselves, where they are
+  const Q = cannonS; if (!Q) return;
+  Q.team.forEach(m => { const s = m.st; Object.assign(s, { z: 0, rot: 0, ball: 0, splat: 0, splatW: 0, vx: 0, vy: 0, onGround: true, plat: null }); if (m.r && m.r.root) { m.r.root.rotation.x = 0; m.r.root.visible = true; }
+    if (m.a) { m.a.at = allyRoomKey(); m.a.pl = player; m.a.tgt = null; } });
+  Q.stars.forEach(sp => actors.remove(sp));
+  Object.assign(player, { safe: { x: player.x, y: player.y, plat: null }, inv: Math.max(player.inv || 0, .6) });
+  cannonS = null;
+}
 function update(dt) {
   time += dt; KIT.time = time;
   if (mode === "select") { updateSelect(dt); return; }
@@ -25276,6 +25504,8 @@ function update(dt) {
     player.x = clamp(player.x, hideout.cx - 452, hideout.cx + 450); updatePal(dt); updateHideGuests(dt); updateHideout(dt);
     shake = Math.max(0, shake - dt * 40); return;
   }
+  if (cannonS) { cannonTick(dt); shake = Math.max(0, shake - dt * 40); return; }   // (the ship's cannon: its show, nothing else moving meanwhile)
+  cannonCheck(dt);
   partInput(dt); updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateMeet(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt); heroSane(player);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
@@ -25339,6 +25569,7 @@ function render(dt) {
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) { foe.sync(enemy, foe.rig, dt); if (foe.post) foe.post(enemy, foe.rig, dt); } baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
+  if (cannonS) cannonSync();
   syncCards(); syncHazards(); syncBubble(dt); syncBudBubbles(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncZaps(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAuras(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }

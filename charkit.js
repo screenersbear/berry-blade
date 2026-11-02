@@ -2057,6 +2057,11 @@ function wallPose(p) {                             // up a bare wall: its keys (
     fNx: .14, fNy: .03 + .2 * b, fFx: .1, fFy: .03 + .2 * a, fP: -.22 };   // (the legs hanging under her, a knee coming up in turn: they were folded up into her chest, the user 2026-10-24)
 }
 const TPOSE = { lean: 0, arch: 0, bodyY: 0, headRot: -.08, armF: 0, elbF: .04, armB: 0, elbB: .04, spF: 1.52, spB: 1.52, fNx: .1, fFx: -.1, fNy: 0, fFy: 0 };
+// shot out of the ship's cannon (the user, 2026-11-02): tucked up in a ball through the air; then splat on the far cliff, spread out flat like a star
+const BALL_H = { lean: .55, arch: .45, bodyY: -.2, headRot: .38, armF: 1.15, elbF: 2.3, spF: .12, armB: 1.05, elbB: 2.4, spB: .12, fNx: .24, fNy: .44, fFx: .18, fFy: .42, fNz: .06, fFz: .06, fP: 0 };
+const BALL_C = { lean: .95, arch: .6, bodyY: -.25, headRot: .3, armF: 1.25, elbF: 1.8, armB: 1.15, elbB: 1.8, fNx: .22, fNy: .3, fFx: -.12, fFy: .3, tailBase: .4, tailCurl: .9 };
+const SPLAT_H = { lean: 0, arch: -.14, bodyY: .03, headRot: -.14, armF: .2, elbF: .08, spF: 2.15, armB: .2, elbB: .08, spB: 2.15, fNx: 0, fNy: .05, fFx: 0, fFy: .05, fNz: 1.0, fFz: 1.0, fP: 0 };
+const SPLAT_C = { lean: 0, arch: -.1, bodyY: .02, headRot: -.12, armF: 2.5, elbF: .08, armB: 2.3, elbB: .08, fNx: .26, fFx: -.26, fNy: .06, fFy: .06, tailBase: 1.3, tailCurl: -.3 };
 const TIRED_H = { lean: .62, arch: .2, bodyY: -.14, headRot: .32, armF: .78, elbF: .18, armB: .68, elbB: .18, spF: .05, spB: .05, fNx: .18, fFx: -.16 };   // bent over, hands on knees
 const TIRED_C = { lean: 1.05, arch: .5, bodyY: -.2, headRot: .2, armF: .9, elbF: .3, armB: .8, elbB: .3, fNx: .2, fFx: -.2, tailBase: .35, tailCurl: -.3, hatTilt: .32 };
 // a cartwheel's keys, a turn over a0 → a1 (dur: the move's), facing you all the way round: arms up and out, legs apart, up off the ground over her hands
@@ -2102,6 +2107,9 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
     Object.assign(T, { lean: .62, arch: .2, bodyY: -.2 + .02 * Math.abs(s), headRot: .38, armF: .55 + .75 * s, elbF: .35 + .3 * Math.max(0, c2), spF: -.1, armB: .55 - .75 * s, elbB: .35 + .3 * Math.max(0, -c2), spB: -.1 }); }
   if (p.pat > 0 && !cat) { const b = Math.sin(t * 12);   // petting one (the user, 2026-11-02): down a little, the near hand on its head, patting
     Object.assign(T, { lean: .5, arch: .12, bodyY: -.24, headRot: .22, armF: .78 + .22 * b, elbF: .12 + .1 * Math.max(0, b), spF: -.12, armB: -.2, elbB: .5 }); }   // (down to it, the near hand open on its head, patting)
+  if (p.ball > 0) { const k = Math.min(1, p.ball), B = cat ? BALL_C : BALL_H; for (const key in B) T[key] = lerp(T[key] ?? 0, B[key], k); }   // out of the cannon: a ball
+  if (p.splat > 0) { const k = Math.min(1, p.splat), w = Math.sin(t * 26) * .06 * (p.splatW || 0), B = cat ? SPLAT_C : SPLAT_H;   // splat on the cliff, spread out flat, quivering (splatW) as it sticks
+    for (const key in B) T[key] = lerp(T[key] ?? 0, B[key] + (key === "spF" || key === "spB" || key === "fNz" || key === "fFz" ? w : 0), k); }
   if (p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // an armful carried (the healer, 2026-11-02: the bag's fruit and gum): the near arm under it; both, once it's more than a handful
     T.armF = lerp(T.armF ?? 0, CUP.arm, k); T.elbF = lerp(T.elbF ?? 0, CUP.elb, k); T.spF = lerp(T.spF ?? 0, CUP.sp, k);
     if (two > 0) { T.armB = lerp(T.armB ?? 0, CUP.arm, two); T.elbB = lerp(T.elbB ?? 0, CUP.elb, two); T.spB = lerp(T.spB ?? 0, CUP.sp, two); } }
