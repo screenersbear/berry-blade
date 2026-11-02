@@ -1471,7 +1471,7 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
   const A = G.tube.pts; let L = 0; for (let i = 1; i < A.length; i++) L += A[i].distanceTo(A[i - 1]); if (!Number.isFinite(L)) return; L = Math.max(L, .05);   // (an arm on a bad number: left as it was this frame, never a throw that stops the whole frame, the camera with it)
   let u = GIANT_WRIST;
   G.rings.forEach(R => { const h = (R.userData.split ? .5 : 1) * GIANT_RING_T * 1.03, th = 2 * h * G.prof(u - h * G.prof(u) / L) / L;   // (its thickness along the arm, where it sits)
-    const uc = u - th / 2; R.userData.u = uc; u -= th;
+    const uc = clamp(u - th / 2, 0, 1); R.userData.u = uc; u -= th;   // (on the arm: a short one's rings past its end threw, 2026-11-02)
     G.tube.curve.getPoint(uc, _gv); G.tube.curve.getTangent(uc, _gu); R.position.copy(_gv); R.quaternion.setFromUnitVectors(ZAX, _gu); R.scale.setScalar(G.prof(uc) * 1.03); });
   const uB = clamp(u - GIANT_BASE / L, .08, .8);      // (the base above them: short; above that, her arm)
   G.uB = G.uB === undefined ? uB : G.uB + (uB - G.uB) * .35;
@@ -2061,6 +2061,7 @@ function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; c
   for (const key in TK) { let v = TK[key]; if (TURNS.has(key)) v += TAU * Math.round(((o[key] ?? 0) - v) / TAU); o[key] = lerp(o[key] ?? 0, v, k); } }   // (a turn counted the short way round from the body: Rose's cartwheel, over, a whole turn, eased out of as
 // none, not unwound back through it; the user, 2026-10-28: "when you finish doing a carthweel, she also kind of flips herself back into place" · "when you start charging it, she does a flip")
 const TURNS = new Set(["spin", "flip", "wheel"]);
+const CUP = { arm: .1, elb: 1.5, sp: -.25 };   // (the armful's hold: api.CUP to tune)
 function extraPoses(p, T, cat) {                  // laid over whatever pose came before
   const t = api.time;
   if (p.block || p.tpose > 0) {                   // the guard, hands drawn in close, opening out to the T as it's held
@@ -2075,6 +2076,9 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
   if (p.wave > 0) { T.armF = 2.85; T.spF = .55; T.elbF = .45 + .45 * Math.sin(t * 15); T.headRot = .05; }   // the near hand up, waving
   if (p.eat > 0) { const b = p.eatB ?? Math.max(0, Math.sin(t * 2.4)) ** 2, A = p.eatFar ? ["armB", "elbB", "spB"] : ["armF", "elbF", "spF"];   // eating: the near hand lifts the fruit to the mouth now and then (Berry Blade's opening, 2026-10-18)
     T[A[0]] = 1.25 + .5 * b; T[A[1]] = 1.7 + .65 * b; T[A[2]] = .32; T.headRot = .02 + .07 * b; }   // (an item from your bag: eatB, the game's bites; eatFar, the far hand: the near one has your weapon)
+  if (p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // an armful carried (the healer, 2026-11-02: the bag's fruit and gum): the near arm under it; both, once it's more than a handful
+    T.armF = lerp(T.armF ?? 0, CUP.arm, k); T.elbF = lerp(T.elbF ?? 0, CUP.elb, k); T.spF = lerp(T.spF ?? 0, CUP.sp, k);
+    if (two > 0) { T.armB = lerp(T.armB ?? 0, CUP.arm, two); T.elbB = lerp(T.elbB ?? 0, CUP.elb, two); T.spB = lerp(T.spB ?? 0, CUP.sp, two); } }
   if (p.popB > 0) {                               // in the bubble, block held to pop it from inside: its keys (STRIKES / CAT_MOVES pop_sword, pop_reach), trembling with the effort as it gives
     const kind = p.popSword && !cat ? "pop_sword" : "pop_reach", M = (cat ? CAT_MOVES : STRIKES)[kind], k = Math.min(1, p.popB), u = k * M.dur, w = Math.min(1, k * 5), sh = Math.sin(t * 31) * .025 * k;
     const P = poseKeys(p, kind, u) || {}, own = p.rig.spec.move.anims && p.rig.spec.move.anims[kind], bl = (own && own.blade) || M.keys.blade; if (bl) P.blade = keyvS(bl, u);   // (poseKeys leaves the blade out)
@@ -3092,6 +3096,9 @@ function updatePoseHuman(p, dt) {
     sn[0] = N.fx * dir / ds; sn[1] = Math.max(0, hip - N.dy) / ds; sn[2] = N.pt;
     sf[0] = F2.fx * dir / ds; sf[1] = Math.max(0, hip - F2.dy) / ds; sf[2] = F2.pt;
   }
+  if (p.cup > 0 && a < 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // (an armful held through the stride too: those arms don't swing, 2026-11-02)
+    o.armF = lerp(o.armF, CUP.arm, k); o.elbF = lerp(o.elbF, CUP.elb, k); o.spF = lerp(o.spF || 0, CUP.sp, k);
+    if (two > 0) { o.armB = lerp(o.armB, CUP.arm, two); o.elbB = lerp(o.elbB, CUP.elb, two); o.spB = lerp(o.spB || 0, CUP.sp, two); } }
   o.fNx = lerp(o.fNx, sn[0], g); o.fNy = lerp(o.fNy, sn[1], g); o.pN = lerp(o.fP, sn[2], g); o.sN = 0;
   const env = (t, a0, a1, b0, b1) => t < a0 || t > b1 ? 0 : t < a1 ? easeOut((t - a0) / (a1 - a0)) : t < b0 ? 1 : 1 - (t - b0) / (b1 - b0);
   const jab = a >= 0 && p.atkKind === "punch" ? env(a, .04, .08, .18, .27) : 0;
@@ -3811,7 +3818,7 @@ function shyFace(r) {                           // a copy of the face with full 
   r.faceS = wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY); r.texs.push(r.faceS); return true;
 }
 
-return Object.assign(api, {
+return Object.assign(api, { CUP,
   FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
   DBG_RIG, FIDGETS, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
