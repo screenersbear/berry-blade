@@ -74,7 +74,27 @@ function skinCompile(sh) {
 // many rebuilds had a black head and body, its two biggest pictures. The user, 2026-10-29: "the orange tabby in berry woods head and body were black but his
 // arms and legs were fine"). A canvas emptied to 0 x 0 gives its memory back at once, not whenever it's collected
 const freeCanvas = c => { if (c && c.getContext && c.width) { c.width = 0; c.height = 0; } };
-const freeTex = t => { if (!t) return; const im = t.image; t.dispose(); freeCanvas(im); };
+const freeTex = t => { if (!t) return; const im = t.image; t.__gone = true; t.dispose(); freeCanvas(im); if (im && typeof im.close === "function") im.close(); };
+// a character's picture, once drawn, kept as an ImageBitmap and its canvas let go (the user, 2026-11-02: characters' textures gone black, "it's hard to predict,
+// maybe something loading"): Safari caps the canvases a page holds all told, and past it a new one comes out blank (a rig built then: black). Bitmaps aren't
+// counted, and the texture reloads from one just as from a canvas. Tried once first (flipped the way the textures need it): where that doesn't work, canvases as ever
+let BMP_OK = null;
+(function bmpTest() {
+  if (typeof createImageBitmap !== "function" || typeof document === "undefined") { BMP_OK = false; return; }
+  BMP_OK = "wait"; const c = document.createElement("canvas"); c.width = 1; c.height = 2; const g = c.getContext("2d"); if (!g) { BMP_OK = false; return; }
+  g.fillStyle = "#ff0000"; g.fillRect(0, 0, 1, 1); g.fillStyle = "#0000ff"; g.fillRect(0, 1, 1, 1);
+  createImageBitmap(c, { imageOrientation: "flipY", premultiplyAlpha: "none" }).then(b => { const d = document.createElement("canvas"); d.width = 1; d.height = 2; const h = d.getContext("2d");
+    h.drawImage(b, 0, 0); const top = h.getImageData(0, 0, 1, 1).data; BMP_OK = top[2] > 200 && top[0] < 60; if (b.close) b.close(); d.width = d.height = c.width = c.height = 0; settleRun(); })
+    .catch(() => { BMP_OK = false; settleQ.length = 0; });
+})();
+const settleQ = [];
+function settleTex(t) { if (BMP_OK !== false && t && t.image instanceof HTMLCanvasElement) { settleQ.push(t); if (BMP_OK === true) settleRun(); } return t; }
+function settleRun() {
+  if (BMP_OK !== true) { if (BMP_OK === false) settleQ.length = 0; return; }
+  while (settleQ.length) { const t = settleQ.shift(), c = t.image; if (t.__gone || !(c instanceof HTMLCanvasElement) || !c.width) continue;
+    createImageBitmap(c, { imageOrientation: "flipY", premultiplyAlpha: "none" }).then(b => { if (t.__gone || t.image !== c) { if (b.close) b.close(); return; }
+      t.image = b; t.flipY = false; t.needsUpdate = true; freeCanvas(c); }).catch(() => {}); }
+}
 const canvasTex = c => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t; };
 function cv2(w, h) { const c = document.createElement("canvas"); c.width = w; c.height = h; return [c, c.getContext("2d")]; }
 function fillPoly(g, pts, col) { g.beginPath(); g.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) g.lineTo(pts[i], pts[i + 1]); g.closePath(); g.fillStyle = col; g.fill(); }
@@ -824,7 +844,7 @@ function dogHelmet(head, M, P, c) {
 function buildCat(R) {
   const S = R.spec, c = S.colors, mats = [], texs = [];
   const M = (col, extra) => { const m = toonT(col, extra); mats.push(m); return m; };
-  const T = t => { texs.push(t); return t; };
+  const T = t => { texs.push(t); return settleTex(t); };   // (drawn once: kept as a bitmap, its canvas let go)
   const mY = M(c.fur), mG = M(c.gloves), mHat = M(c.hat), mBand = M(c.hatBand), mShoe = M(c.shoes), mSole = M(c.soles);
   const ec = S.face.ears > .15 ? c.ears : null, bk = catBackArt(S), faceO = T(wrapFront(catFaceArt(S, false), ec, S.face.faceY, bk)), faceB = T(wrapFront(catFaceArt(S, true), ec, S.face.faceY, bk));
   const mFace = M("#ffffff", { map: faceO }), mGlove = M("#ffffff", { map: T(gloveArt(S)) });
@@ -1626,7 +1646,7 @@ function buildHuman(R) {
   const S = R.spec, c = S.colors, O = S.outfit, mats = [], texs = [], D = BUILDS[S.body.build] || BUILDS.chibi;
   const col = v => v === "skin" ? c.skin : v === "hair" ? c.hair : v;
   const M = (k, extra) => { const m = toonT(col(k), extra); mats.push(m); return m; };
-  const T = t => { texs.push(t); return t; };
+  const T = t => { texs.push(t); return settleTex(t); };   // (drawn once: kept as a bitmap, its canvas let go)
   const P = (geo, mat, ol, smooth = true) => mk(geo, null, { mat, smooth });
   const root = group(PARENT), yaw = group(root), spin = group(yaw, 0, .85, 0), body = group(spin, 0, -.85, 0);
   const art = S.face.style === "chibi" ? humanFaceArt : drawnFaceArt, e3 = carvedOn(S);
@@ -3815,10 +3835,10 @@ const CAT_UP = "up_cards", CAT_DOWN = "dn_cards";
 { const seen = new Set(); ["slash", "rise", "spin", "chop", "sw_c1", "sw_c2", "sw_c3", "up_sword", "dn_sword"].forEach(k => (STRIKES[k].hits || []).forEach(h => { if (!seen.has(h)) { seen.add(h); h.reach += 12; } })); }   // the longer blade reaches a little further
 function shyFace(r) {                           // a copy of the face with full blush (Evil June, told off by a boss); made once, the first time
   if (r.faceS || !r.faceArt) return !!r.faceS; const S = r.spec, S2 = { ...S, face: { ...S.face, blush: 1 } };
-  r.faceS = wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY); r.texs.push(r.faceS); return true;
+  r.faceS = settleTex(wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY)); r.texs.push(r.faceS); return true;
 }
 
-return Object.assign(api, { CUP,
+return Object.assign(api, { CUP, settleTex, bmpOK: () => BMP_OK,
   FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
   DBG_RIG, FIDGETS, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
