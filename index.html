@@ -162,7 +162,7 @@
   #holdTip b { display: block; font: 600 11px "Jost", sans-serif; letter-spacing: .26em; }
   #holdTip span { display: block; font: 18px "Bungee", sans-serif; margin-top: 2px; }
   /* coins, the items popup (over the game, not darkening it), the hub beps' talk box */
-  #coinHud { position: fixed; left: 16px; top: 14px; z-index: 6; display: flex; align-items: center; gap: 6px; background: var(--s); color: var(--y); font: 17px "Bungee", sans-serif; padding: 5px 12px 3px 6px; }
+  #coinHud { position: fixed; left: 16px; top: 14px; z-index: 6; display: flex; align-items: center; gap: 6px; color: var(--y); font: 17px "Bungee", sans-serif; padding: 5px 0 3px; text-shadow: 0 2px 0 #2f3b43; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .45)); }   /* (no box round it: the user, 2026-11-02 "for the money. don't display it with the black border around it"; a shadow under it, as the HUD's, to read over the level) */
   #life:not(.wpn):not(.hidden) ~ #coinHud { top: 72px; } body.talking #hint { display: none; }
   #coinHud .cn, #pCoins .cn { width: 22px; height: 22px; border-radius: 50%; background: #ffc93a; border: 2.5px solid #d8952a; box-sizing: border-box; display: flex; align-items: center; justify-content: center; }
   #coinHud .cn::after, #pCoins .cn::after { content: "P"; font: 11px/1 "Bungee", sans-serif; color: #a8620e; margin-top: 2px; }
@@ -6441,6 +6441,28 @@ function weaponSvg(r, hp, pow, g = bgearsOf(r.id), pg = bpowOf(r.id)) {   // (g:
     <g transform="rotate(70 70 ${cy})"><rect x="63" y="${cy - 52}" width="14" height="34" rx="7" fill="#e3141c"/></g>${ring}
     <circle cx="70" cy="${cy}" r="32" fill="${Q.orb}"/><circle cx="70" cy="${cy}" r="13" fill="#8e0008"/><circle cx="66" cy="${cy - 4}" r="21" fill="none" stroke="#fff" stroke-width="5" opacity=".95"/><circle cx="58" cy="${cy - 13}" r="4" fill="#fff"/></svg>`;
 }
+// the HUD's health since 2026-11-02: only the weapon's colour part, now its size changes (the user, from the HUD mockup's option B: "for the weapon hud, let's do
+// option B, but make rose's split boxes still a little thicker since they get too thin"). Rose's boxes from the hilt (bottom) up, Camila's rings flat with the hand's
+// end on top, navy-edged; a lost piece pale; a berry gear splits one in two. The whole weapon (weaponSvg) stays for the berry gears menu. No ATK notches or gear
+// teeth on it: the uprising bar beside it shows the weapon's size. LIFE_HUD: its height, a share of the HUD's (as the mockup had them)
+const LIFE_HUD = { sword: .76, gauntlet: .51 };
+function lifeSvg(r, hp, g = bgearsOf(r.id)) {
+  const Q = r.spec.outfit.prop, box = (x, y, w, h, rx, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${Math.min(rx, w / 2, h / 2)}" fill="${fill}" stroke="#2f3b43" stroke-width="3.5"/>`;
+  let k = 0, o = "";
+  const piece = (slot, col, lost) => { const on = !slot && k < hp; if (!slot) k++; return on ? col : lost; };   // (a split row's second half not yours yet: pale, not a piece)
+  if (Q.kind === "sword") {
+    const rows = KIT.lifeLayout("sword", 3, g), bw = 32, bh = 50, gp = 7, half = (bw - 3.5) / 2;   // (bw 32: was 26 in the mockup, its split strips too thin)
+    rows.forEach((rw, i) => { const y = (rows.length - 1 - i) * (bh + gp) + 4;
+      if (!rw.split) o += box(4, y, bw, bh, 8, piece(false, Q.fill, "#ece6c4"));
+      else [[4, false], [4 + half + 3.5, rw.slot]].forEach(([x, slot]) => { o += box(x, y, half, bh, 6, piece(slot, Q.fill, "#ece6c4")); }); });
+    return `<svg viewBox="0 0 ${bw + 8} ${rows.length * (bh + gp) + 4}" xmlns="http://www.w3.org/2000/svg">${o}</svg>`;
+  }
+  const n = Math.round(Q.rings || 3), extra = n - 3, cols = Array.from({ length: n }, (_, i) => i < extra ? Q.c4 : [Q.c1, Q.c2, Q.c3][i - extra]), w = 76, h = 19, gp = 6, half = (w - 6) / 2;
+  KIT.lifeLayout("gauntlet", n, g).forEach((rw, i) => { const y = (n - 1 - i) * (h + gp) + 4;
+    if (!rw.split) o += box(4, y, w, h, h / 2, piece(false, cols[i], "#ffffff"));
+    else [[4, false], [4 + half + 6, rw.slot]].forEach(([x, slot]) => { o += box(x, y, half, h, h / 2, piece(slot, cols[i], "#ffffff")); }); });
+  return `<svg viewBox="0 0 ${w + 8} ${n * (h + gp) + 4}" xmlns="http://www.w3.org/2000/svg">${o}</svg>`;
+}
 const upBarEl = document.getElementById("upBar"); let upBarKey = "", upBarT = -1;
 function syncUpBar(on, H) {                          // the uprising bar: this world's, beside the weapon (none where there isn't one: the beach)
   const show = on && upOn(world); upBarEl.classList.toggle("show", show); document.body.classList.toggle("upHud", show); if (!show) return;
@@ -6456,8 +6478,8 @@ function syncWeapon(dt) {
   const on = mode === "play" && !!p && (pk === "sword" || pk === "gauntlet") && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && !castUp && !lvlOpen;   // (in play, whatever you're doing; not over a cutscene or a card)
   if (on) { const H = Math.round(clamp(innerHeight * .3, 140, 232)),   // (a little bigger: the user, 2026-10-24; .24, 112-186 before)
              key = rig.id + "|" + p.hp + "|" + (p.power || 0) + "|" + pk + "|" + H + "|" + bgearsOf(rig.id) + "|" + bpowOf(rig.id);
-    if (key !== weaponKey) { const hurt = weaponKey.startsWith(rig.id + "|") && p.hp < weaponHp; weaponKey = key; weaponHp = p.hp; weaponEl.innerHTML = weaponSvg(rig, p.hp, p.power || 0, bgearsOf(rig.id));   // (no number on it: the user, 2026-11-02, "the berry weapon hud should not show a life percentage")
-      const sv = weaponEl.firstElementChild, vb = sv.viewBox.baseVal, W = Math.round(H * vb.width / vb.height); sv.style.height = H + "px"; sv.style.width = W + "px"; document.body.style.setProperty("--wpnW", W + "px");
+    if (key !== weaponKey) { const hurt = weaponKey.startsWith(rig.id + "|") && p.hp < weaponHp; weaponKey = key; weaponHp = p.hp; weaponEl.innerHTML = lifeSvg(rig, p.hp, bgearsOf(rig.id));   // (no number on it: the user, 2026-11-02, "the berry weapon hud should not show a life percentage") (the colour part only, lifeSvg: was weaponSvg, the whole weapon)
+      const sv = weaponEl.firstElementChild, vb = sv.viewBox.baseVal, LH = Math.round(H * LIFE_HUD[pk]), W = Math.round(LH * vb.width / vb.height); sv.style.height = LH + "px"; sv.style.width = W + "px"; document.body.style.setProperty("--wpnW", W + "px");
       if (hurt) { weaponEl.classList.remove("hit"); void weaponEl.offsetWidth; weaponEl.classList.add("hit"); } } }   // (a heart lost: it jolts, as the hearts pop)
   weaponEl.classList.toggle("show", on); document.body.classList.toggle("wpnHud", on);
   syncUpBar(on, Math.round(clamp(innerHeight * .3, 140, 232)));
