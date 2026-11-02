@@ -1296,7 +1296,7 @@ let viewW = innerWidth, viewH = innerHeight;
 function fitView() { const w = innerWidth, h = innerHeight; if (!w || !h || (w === viewW && h === viewH)) return; viewW = w; viewH = h;
   renderer.setSize(w, h); sizeRT(); camera.aspect = w / h; camera.updateProjectionMatrix(); const C = document.getElementById("cons"); if (C && C.classList.contains("on")) consLayout(); }
 const fitLater = () => [80, 300, 700, 1400].forEach(t => setTimeout(fitView, t));
-addEventListener("resize", () => { fitView(); fitLater(); if ($("cons") && $("cons").classList.contains("on")) consLayout(); }); addEventListener("orientationchange", fitLater); addEventListener("pageshow", fitLater);
+addEventListener("resize", () => { fitView(); fitLater(); if ($("cons") && $("cons").classList.contains("on")) { consLayout(); consFitLater(); } }); addEventListener("orientationchange", () => { fitLater(); consFitLater(); }); addEventListener("pageshow", fitLater);
 document.addEventListener("fullscreenchange", fitLater); document.addEventListener("webkitfullscreenchange", fitLater); if (window.visualViewport) visualViewport.addEventListener("resize", fitView);
 setInterval(fitView, 400);
 
@@ -22996,12 +22996,20 @@ function quadCSS(W, H, q) {                           // a W x H box's CSS matri
   return `matrix3d(${[t[0], t[3], 0, t[6], t[1], t[4], 0, t[7], 0, 0, 1, 0, t[2], t[5], 0, t[8]].join(",")})`;
 }
 const CONS_SCR_W = 480;                              // (the LCD's own box, px wide: warped onto the model's screen)
-function consLayout() {                              // (shown, and whenever the page changes size while it's up)
-  const el = $("cons"), w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight, V = consViewDraw(false, w, h, .99, CONS_TILT, true);
+let consAt = "", consChk = 0;                        // (the size it was last laid out for, and when that was last looked at)
+function consLayout(fresh) {                         // (shown, and whenever the page changes size while it's up; fresh: after a turn, its screen's layer made anew and the game told to fit itself again)
+  const el = $("cons"), w = el.clientWidth || innerWidth, h = el.clientHeight || innerHeight, V = consViewDraw(false, w, h, .99, CONS_TILT, true); consAt = w + "x" + h;
   const at = (x, y) => { const v = new THREE.Vector3(x, y, CONS_SCREEN.z + .001); V.M.flip.localToWorld(v); v.project(V.cam); return [(v.x * .5 + .5) * w, (.5 - v.y * .5) * h]; };
   const sw = CONS_SCREEN.w / 2, sh = CONS_SCREEN.h / 2, W = CONS_SCR_W, H = Math.round(W * CONS_SCREEN.h / CONS_SCREEN.w);
-  Object.assign(el.querySelector(".scr").style, { left: "0px", top: "0px", width: W + "px", height: H + "px", transformOrigin: "0 0", transform: quadCSS(W, H, [at(-sw, sh), at(sw, sh), at(-sw, -sh), at(sw, -sh)]) });
+  const s = el.querySelector(".scr"); if (fresh) { s.style.transform = "none"; void s.offsetWidth; }
+  Object.assign(s.style, { left: "0px", top: "0px", width: W + "px", height: H + "px", transformOrigin: "0 0", transform: quadCSS(W, H, [at(-sw, sh), at(sw, sh), at(-sw, -sh), at(sw, -sh)]) });
+  if (fresh && consFr) try { consFr.f.contentWindow.dispatchEvent(new Event("resize")); } catch (e) { }
 }
+// a phone turned (the user, 2026-11-02: "the screen console gets warped and ruined whenever you turn your phones orientation"): Safari can give the page its new size
+// before the console's own box has it, so the console was laid out for the old shape and stretched, and nothing looked again. So while it's up its box is measured a few
+// times a second (consDraw) and laid out again when that has changed, and after a turn or a resize it's laid out afresh a few more times as the phone settles
+function consFitCheck() { const n = performance.now(); if (n - consChk < 200) return; consChk = n; const el = $("cons"); if ((el.clientWidth || innerWidth) + "x" + (el.clientHeight || innerHeight) !== consAt) consLayout(true); }
+function consFitLater() { [120, 400, 900, 1600].forEach(t => setTimeout(() => { if ($("cons").classList.contains("on")) consLayout(true); }, t)); }
 function consPic() {                                 // (the pause menu's: shut, the cover on)
   if (consPicURL) return consPicURL; const V = consViewDraw(true, 480, 320, 1.1); consPicURL = V.R.domElement.toDataURL("image/png");
   if ($("cons").classList.contains("on")) consLayout(); return consPicURL;
@@ -23105,7 +23113,7 @@ function consLogoDraw(g, x, y, s, ink, acc) {         // the console's logo (202
   g.restore();
 }
 function consDraw() {                                // (every frame while it's up)
-  const P = player && player.cons; if (!P || !$("cons").classList.contains("on")) return;
+  const P = player && player.cons; if (!P || !$("cons").classList.contains("on")) return; consFitCheck();
   const cv = $("consCv"), g = cv.getContext("2d"), L = CONS_LCD, fr = P.scr === "game" && consFr;
   g.clearRect(0, 0, 320, 240);   // (every screen, not only over a game: the games' list drew over what was there, and the menu you'd left a game by stayed behind it, the user 2026-11-02)
   if (fr) { fr.f.style.pointerEvents = P.menu ? "none" : ""; if (fr.menu !== !!P.menu) { fr.menu = !!P.menu; const w = fr.f.contentWindow; if (w) w.postMessage({ bb: "pause", on: fr.menu }, "*"); } }   // (a game that runs on a clock stops under the menu) else { g.fillStyle = L.bg; g.fillRect(0, 0, 320, 240); }
