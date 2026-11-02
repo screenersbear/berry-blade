@@ -2768,10 +2768,46 @@ STRIKES.fwdslide = { dur: .4, pose: true, keys: {   // (the user, 2026-10-31: "c
   spin: [[0, 0], [.14, 0], [.36, -2.45], [.4, -2.54]], headRot: [[0, 0], [.06, .15], [.34, .1], [.4, 0]] } };
 const FIDGETS = { camila: ["fidget_hood", "fidget_look", "fidget_flex"], rose: ["fidget_hood", "fidget_look", "fidget_blade"], all: ["fidget_hood", "fidget_look", "fidget_stretch"] };
 Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
+// the archetypes' own moves, the same for every buddy of one (the user, 2026-11-02: "we will use archetypes for the buddies"; the thief's "sleek attack animations"):
+// the THIEF: a low claw swipe whipped up across, a snatch (in fast, the hand flicked up, back to the chest), the dashing knife-hand; its charge special's dash, held
+Object.assign(STRIKES, {
+  th_swipe: { dur: .3, chain: .2, step: 170, sq: -.06, sfx: "slash", hits: [{ t0: .06, t1: .14, reach: 92, back: 10, y0: 120, y1: 20, kind: "slash" }],   // the thief's claw swipe: low behind, whipped up across, the body turning into it
+    keys: { armF: [[0, -.5], [.03, -.7], [.08, 1.9], [.13, 2.4], [.2, 1.0], [.3, .4]], elbF: [[0, 1.4], [.03, 1.6], [.08, .3], [.13, .2], [.2, .9], [.3, 1.2]],
+      aS: [[0, 0], [.04, -.1], [.08, 1.05], [.13, .95], [.18, -.05], [.23, 0]], gF: [[0, 0], [.04, -.15], [.08, .55], [.14, .5], [.19, -.08], [.25, 0]],
+      armB: [[0, .3], [.08, -.7], [.2, -.4], [.3, .3]], elbB: [[0, 1.2], [.08, .6], [.3, 1.2]], twist: [[0, .3], [.05, .35], [.1, -.4], [.2, -.2], [.3, 0]],
+      lean: [[0, .25], [.06, .55], [.18, .4], [.3, .2]], bodyY: [[0, -.04], [.07, -.14], [.2, -.08], [.3, 0]], fNx: [[0, .25], [.07, .48], [.22, .4], [.3, .25]], fFx: [[0, -.25], [.07, -.48], [.22, -.4], [.3, -.25]] } },
+  th_flick: { dur: .34, chain: .24, step: 130, sq: -.08, sfx: "punch", hits: [{ t0: .06, t1: .13, reach: 98, back: -6, y0: 115, y1: 35, kind: "jab" }],   // the snatch: in fast and low, the hand flicked up, back to the chest
+    keys: { armF: [[0, .4], [.05, 1.3], [.11, 1.5], [.19, .7], [.34, .4]], elbF: [[0, 1.2], [.05, .1], [.11, .05], [.19, 1.9], [.27, 1.6], [.34, 1.2]],
+      aS: [[0, 0], [.04, -.1], [.07, 1.2], [.12, 1.1], [.17, -.08], [.23, 0]], gF: [[0, 0], [.05, -.2], [.09, .5], [.15, 0]],
+      armB: [[0, .4], [.06, -.45], [.34, .4]], elbB: [[0, 1.2], [.34, 1.2]], twist: [[0, 0], [.05, .25], [.19, -.15], [.34, 0]],
+      lean: [[0, .2], [.06, .62], [.16, .32], [.34, .2]], bodyY: [[0, 0], [.06, -.16], [.2, -.05], [.34, 0]], fNx: [[0, .2], [.06, .52], [.2, .3], [.34, .25]], fFx: [[0, -.2], [.06, -.52], [.2, -.3], [.34, -.25]] } },
+  th_dash: { dur: .5, step: 0, sq: -.12, sfx: "whoosh", hits: [],   // its charge special's dash: low and long, the cutting hand out ahead, the other swept back (the game drives the cuts)
+    keys: { armF: [[0, 1.4], [.5, 1.5]], elbF: [[0, .05], [.5, .05]], aS: [[0, .6], [.5, .7]], armB: [[0, -1.0], [.5, -1.1]], elbB: [[0, .3], [.5, .3]], twist: [[0, -.25], [.5, -.25]],
+      lean: [[0, .78], [.5, .82]], bodyY: [[0, -.22], [.5, -.24]], fNx: [[0, .6], [.5, .62]], fFx: [[0, -.62], [.5, -.64]], headRot: [[0, -.2], [.5, -.2]] } },
+});
+api.ARCH_MOVES = Object.assign(api.ARCH_MOVES || {}, { thief: { name: "THIEF", ground: ["th_swipe", "th_flick", "kn_c1"], groundB: ["kn_c1", "th_swipe"], air1: ["tornado", "flipaxe"], air2: ["flipaxe"], charge: "th_dash" } });   // (by archetype: index.html ARCH, the editor's buddy moves)
 // the pets' specials (the user, 2026-10-26: "can you also give the pets a special attack? although it can be the same for all cats and then the same one for all
 // dogs"): every couple of landed pounces (work.html palLeap). The cat: onto it and curled into a pinwheel of claws, three blows; the dog: a tackle, then a bark
 // that sends a ring of sound on ahead (work.html petBark). Keyed on the pets' own build (the chibi Tocsin); no cards
 const PET_SP = { cat: "pet_pinwheel", dog: "pet_bark" }, noCards = a => ({ dist: 34, up: -6, r: .55, al: 0, s: .01 });
+// the black mage archetype's (the user, 2026-11-02: "shoots lightning attack, ice, and fire attack in order as you keep attacking ... charge special: all three elements come out
+// swirling in a big blast"): any buddy's, a human build's and a cat build's. No hits of their own: the spell leaves the palms at .16 s (mage_cast) and the storm's thrown at .84 s
+Object.assign(STRIKES, {
+  mage_cast: { dur: .5, step: 0, sq: -.06, sfx: "whoosh",   // both hands up and pushed out at them, the spell off the palms, a little kick back
+    keys: { armF: [[0, .3], [.1, 2.2], [.16, 1.5], [.3, 1.45], [.5, .3]], elbF: [[0, 1.2], [.1, 1.6], [.16, .05], [.3, .1], [.5, 1.2]], armB: [[0, .3], [.1, 2.0], [.17, 1.4], [.3, 1.35], [.5, .3]], elbB: [[0, 1.2], [.1, 1.7], [.17, .08], [.3, .12], [.5, 1.2]],
+      spF: [[0, 0], [.1, .25], [.17, .1], [.5, 0]], spB: [[0, 0], [.1, .25], [.17, .1], [.5, 0]], lean: [[0, 0], [.1, -.15], [.17, .22], [.3, .1], [.5, 0]], headRot: [[0, 0], [.1, -.1], [.17, .05], [.5, 0]] } },
+  mage_storm: { dur: 1.2, step: 0, sq: -.08, sfx: "jcharge",   // both arms up over the head, the three elements gathering, then flung out ahead
+    keys: { armF: [[0, .3], [.2, 2.9], [.7, 3.0], [.84, 1.4], [1.0, 1.4], [1.2, .3]], elbF: [[0, 1.2], [.2, .3], [.7, .25], [.84, .05], [1.2, 1.2]], armB: [[0, .3], [.2, 2.8], [.7, 2.95], [.86, 1.3], [1.0, 1.3], [1.2, .3]], elbB: [[0, 1.2], [.2, .35], [.7, .3], [.86, .08], [1.2, 1.2]],
+      spF: [[0, 0], [.2, .45], [.7, .55], [.84, .15], [1.2, 0]], spB: [[0, 0], [.2, .45], [.7, .55], [.86, .15], [1.2, 0]], lean: [[0, 0], [.2, -.25], [.7, -.3], [.84, .25], [1.0, .15], [1.2, 0]], bodyY: [[0, 0], [.2, .04], [.7, .06], [.84, -.06], [1.2, 0]], headRot: [[0, 0], [.2, -.25], [.7, -.3], [.84, .05], [1.2, 0]] } },
+});
+Object.assign(CAT_MOVES, {
+  mage_cast: { dur: .5, sfx: "whoosh", ring: noCards,   // (a cat's build: up on its hind legs, both paws pushed out)
+    keys: { lean: [[0, .3], [.1, .05], [.17, .45], [.3, .35], [.5, .3]], arch: [[0, .2], [.1, -.1], [.17, .3], [.5, .2]], bodyY: [[0, 0], [.1, .06], [.17, -.04], [.5, 0]], headRot: [[0, 0], [.1, -.15], [.17, .05], [.5, 0]],
+      armF: [[0, 1.0], [.1, 2.4], [.17, 1.55], [.3, 1.5], [.5, 1.0]], elbF: [[0, .6], [.1, 1.2], [.17, .05], [.3, .1], [.5, .6]], armB: [[0, 1.0], [.1, 2.3], [.18, 1.45], [.3, 1.4], [.5, 1.0]], elbB: [[0, .6], [.1, 1.2], [.18, .08], [.3, .12], [.5, .6]] } },
+  mage_storm: { dur: 1.2, sfx: "jcharge", ring: noCards,
+    keys: { lean: [[0, .3], [.2, -.1], [.7, -.15], [.84, .5], [1.0, .4], [1.2, .3]], arch: [[0, .2], [.2, -.2], [.7, -.25], [.84, .3], [1.2, .2]], bodyY: [[0, 0], [.2, .1], [.7, .12], [.84, -.06], [1.2, 0]], headRot: [[0, 0], [.2, -.3], [.7, -.35], [.84, .05], [1.2, 0]],
+      armF: [[0, 1.0], [.2, 3.0], [.7, 3.1], [.84, 1.5], [1.0, 1.5], [1.2, 1.0]], elbF: [[0, .6], [.2, .2], [.84, .05], [1.2, .6]], armB: [[0, 1.0], [.2, 2.9], [.7, 3.0], [.86, 1.4], [1.0, 1.4], [1.2, 1.0]], elbB: [[0, .6], [.2, .25], [.86, .08], [1.2, .6]] } },
+});
 Object.assign(CAT_MOVES, {
   pet_pinwheel: { dur: .7, sfx: "whoosh", hits: [{ t0: .1, t1: .6, kind: "slash" }], ring: noCards,
     keys: { flip: turnKeys(.08, .56, 2, .7), lean: [[0, .3], [.08, .8], [.56, .8], [.7, .3]], arch: [[0, .1], [.08, .5], [.56, .5], [.7, .1]], bodyY: [[0, 0], [.08, -.15], [.56, -.15], [.62, -.25], [.7, 0]],

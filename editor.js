@@ -177,7 +177,7 @@ const moveDef = (kind, sp = cur.spec) => (sp.base === "cat" ? KIT.CAT_MOVES : KI
 const MOVE_NAMES = { slash: "slash", rise: "rising slash", spin: "spin", chop: "chop", onetwo: "one-two", haymaker: "haymaker", hammer: "hammer", dive2: "dive",
   palm: "palm strike", spinkick: "spin kick", flykick: "flying kick", flipaxe: "flip axe kick", chop2: "double chop", sweep: "sweep", tornado: "tornado kick",
   sw_c1: "thrust", sw_c2: "whirlwind", sw_c3: "crash", bx_c1: "rush", bx_c2: "backfist", bx_c3: "rocket uppercut", nj_c1: "dash palm", nj_c2: "hurricane kick", nj_c3: "rising knee",
-  kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
+  th_swipe: "claw swipe (thief)", th_flick: "snatch (thief)", th_dash: "thief's dash (charge special)", kn_c1: "dash chop", kn_c2: "split kick", kn_c3: "cartwheel", cardswim: "card swim", cardswirl: "card swirl", carddash: "card dash", cardspin: "card spin", carddive: "card dive", cardslash: "card slash", cardcyclone: "card cyclone", cardstorm: "card storm",
   clunge: "lunge hook + one-two", chayhook: "classic one-two", chay: "haymaker", cjab: "jab", chook: "hook", rslash: "slash", rrise: "rising slash", rcleave: "cleave",
   cpunch: "punch", ccross: "cross", csmash: "smash", upperhook: "uppercut + hook", gu_fist: "rising swipe", up_fist: "rising uppercut", gu_sword: "rising swipe", up_sword: "rising cut",
   tk_left: "tackle, left", tk_right: "tackle, right", tk_hammer: "tackle, hammer", tk_sword: "tackle, sword", tk_wheel: "cartwheel", tk_wheel2: "second cartwheel", tk_wheelfall: "up off it, spinning, sword crashing down", tackle_wheel: "cartwheel tackle", tkdig_wheel: "dig in (held): loose, turned to you", slide: "slide", flykick: "flying kick",
@@ -212,11 +212,13 @@ function movesFor(sp) {                                          // every move t
     add("Down + attack", "cardslash", "", C); list("Charge (hold attack)", KIT.CAT_CHARGE, C); add("Attack while running at full speed", "carddash", "", C);
     at("tk", null); add("Tackle (V / □)", "tackle", "", C); add("Charged tackle (hold V / □)", "tkdig", "", C); list("Charged tackle (hold V / □)", TK.cat, C); add("Back-step (block held, back)", "backstep", "", C);
     at("etc", null); add("In a bubblegum bubble: hold block to pop it", "pop_reach", "", C);
+    (cur && cur.buddy && cur.spec === sp && G.buddyArchMoves ? G.buddyArchMoves(sp.id) : []).forEach(([lab, k]) => add(lab, k, "", C));   // (a cat-built buddy's archetype moves: the black mage's cast and storm, 2026-11-02)
     return out; }
   const S = setFor(sp), T = KIT.STRIKES, B = KIT.MOVESETS;       // (as the game picks them: work.html updatePlayer / startCombo / startTackleCombo)
   const bsp = (KIT.BUDDY_SP || {})[sp.id];                       // (a berry buddy's special, every couple of plain hits: work.html updateAllyOne)
   const team = () => { at("pt", null); add("Team charge (her weapon at full size)", "tc_hands", "", T); add("Team charge (her weapon at full size)", "tc_ride", "", T); };   // (a partner's part in it: work.html, the team charge's partners)
-  if (cur && cur.buddy && cur.spec === sp) { list("Attack", (KIT.BUDDY_PLAIN || {})[sp.id] || ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); team(); return out; }   // (its own plain hits: Rotor's shot)
+  const archM = id => G.buddyArch ? G.buddyArch(String(id).split(":")[0]) : null, archList = (AM, pre) => { list(pre + "Attack (" + AM.name + ")", AM.ground, T); list(pre + "Forward + attack", AM.groundB, T); list(pre + "Attack in the air", AM.air1, T); list(pre + "Forward + attack in the air", AM.air2, T); add(pre + "Charge special (hold the buddy button)", AM.charge, "", T); };   // (an archetype's moves, the same for every buddy of one: index.html ARCH, charkit ARCH_MOVES)
+  if (cur && cur.buddy && cur.spec === sp) { const AM = archM(cur.buddy); if (AM) archList(AM, ""); else list("Attack", (KIT.BUDDY_PLAIN || {})[sp.id] || ((B[sp.move.set] || B.brawler).ground), T); add("Special (every couple of hits)", bsp, "", T); (G.buddyArchMoves ? G.buddyArchMoves(sp.id) : []).forEach(([lab, k]) => add(lab, k, "", T)); team(); return out; }   // (its own plain hits: Rotor's shot)
   at("atk", 0);                                                  // (the first size's attacks; a grown weapon's, its own: below)
   list("Attack", S.ground, T); list("Forward + attack", S.groundB || S.ground, T);
   list("Attack in the air", S.air1 || S.air, T); list("Forward + attack in the air", S.air2 || S.air, T);
@@ -233,6 +235,7 @@ function movesFor(sp) {                                          // every move t
   add("Through a low hole (C7's wall into C8)", "crawl", "", T);   // (on hands and knees, one cycle of crawlPh: 2026-10-28)
   add("Playing the BERRY CONSOLE (sat, legs out in front)", "console_sit", "", T);   // (pause, the BERRY CONSOLE: sat on the ground with it, 2026-10-30)
   at("pt", null); add("As a berry buddy: special", bsp, "", T); if (bsp) team();   // (a hero who's a partner too: Noro, Dorys)
+  { const AM = archM(sp.id); if (AM) archList(AM, "As a berry buddy: "); }
   const wk = ((sp.outfit || {}).prop || {}).kind, GS = (KIT.GIANT_SETS || {})[wk];   // the weapon grown (every 3 baddies won back: 2026-11-01), by size: as the game picks them (work.html KIT.giantSet)
   if (GS) [1, 2, 3].forEach(z => { const g = GS[z]; if (!g) return; at("atk", z);
     list("Attack", g.ground, T); list("Forward + attack", g.groundB, T); list("Attack in the air", g.air1, T);

@@ -658,7 +658,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261102m"></script>
+<script src="charkit.js?v=20261102n"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261031d"></script>
 <script src="score.js?v=20261028a"></script>
@@ -882,7 +882,7 @@
   <small data-pad="← → to choose &nbsp;·&nbsp; {j} to pick">Tap to pick</small>
 </div></div>
 <script src="touch.js"></script>
-<script src="editor.js?v=20261101f"></script>
+<script src="editor.js?v=20261102a"></script>
 <script type="module">
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
@@ -6903,6 +6903,8 @@ window.BerryGame = { store, shippedSpecs, gameSpecs, toast, THREE, setOf, KIT,
       return true; },
   },
   buddySpecial: id => KIT.BUDDY_SP[id] || null,
+  buddyArchMoves: id => { const A = ALLIES.find(a => a.id === id || a.lead === id || (a.crew || []).includes(id)), AR = A && ARCH[BUD_ARCH[A.id]]; return (AR && AR.edit) || []; },   // (its archetype's own moves, for the editor's list)
+  buddyArch: id => { const A = ALLIES.find(a => a.id === id || a.lead === id || (a.crew || []).includes(id)), k = A && BUD_ARCH[A.id], M = k && (KIT.ARCH_MOVES || {})[k]; return M ? { k, ...M } : null; },   // (its archetype's moves, the same for all of one: the editor lists them)
   runAttackOf: sp => runAtkOf(sp),                   // (the running attack: a hero's, by their move set)     // (a hero's spec id too: Doir's, a buddy at the castle)
   villains: {                                     // for the character editor
     list() { const F = WORLDS.flatMap(W => W.foes()).filter(f => !f.kit); F.forEach(applyVillainLook);
@@ -9709,7 +9711,7 @@ function fillRoom() {                                // a new room fills up with
   }
   if (S0.peace) { const first = !roomsDone.has(stage); roomsDone.add(stage); clearBaddies(); bossIn = false; exitOpen = true; spawnGifts(); if (S0.rest) restArrive();   // no fighting here (the castle gate)
     if (first && S0.castle && !cineSeen.has(world) && !freedNow()) { cineSeen.add(world); startCine(); } else wayCue(); return true; }
-  const done = roomsDone.has(stage); spawnBaddies(stage, done); spawnGifts();
+  const done = roomsDone.has(stage); spawnBaddies(stage, done); holdItems(); spawnGifts();
   if (done) { bossIn = false; exitOpen = true; wayCue(); }
   return done;
 }
@@ -10411,8 +10413,10 @@ function spawnStatue() {
   B.g.position.set(X(x), Y(gy), -1.9);
   statue = { ...B, x, gy, n, hp: STATUE_HP, inv: 0, wob: 0, up: n < STATUE_MAX, rubble: [] };
 }
-function hitStatue(d) {
-  const T = statue; if (!T || !T.up || T.inv > 0) return false; T.inv = .15; T.wob = 1;
+function hitStatue(d, blunt = !swordOn()) {          // (only a blunt blow breaks her: fists, feet, a club; a sword or magic glances off. The user, 2026-11-02)
+  const T = statue; if (!T || !T.up || T.inv > 0) return false; T.inv = .15;
+  if (!blunt) { T.wob = .35; sparks(T.x - d * 30, T.gy - 160, 3); SFX.block(); return true; }
+  T.wob = 1;
   sparks(T.x - d * 30, T.gy - 160, 6); SFX.clash();
   if (--T.hp > 0) return true;
   T.up = false; SFX.crack(); SFX.impact(true); shake = Math.max(shake, 7); puffs(T.x, T.gy - 140, 8, 60, 160);   // down she comes
@@ -10633,7 +10637,7 @@ function updatePlayer(dt) {
   // block: hold C. Stops you, locks your facing, and turns away anything that comes at you from the front
   p.gbT = Math.max(0, (p.gbT || 0) - dt);           // (a guard broken by a big one: a moment before it'll go up again, guardBreak)
   p.block = held.block && control && p.atkT < 0 && !p.combo && !p.tackle && !p.tackleLock && !p.dodge && !(p.gbT > 0);
-  if (p.block && !p.wasBlock) p.blockAt = time; p.wasBlock = p.block;            // when the guard went up: block just as a shot arrives and it's a parry
+  if (p.block && !p.wasBlock) { p.blockAt = time; blkArch("blockStart"); } p.wasBlock = p.block;            // when the guard went up: block just as a shot arrives and it's a parry
   // held, it's just the guard (it opened out to a T and a pink bubble once, gone 2026-11-01). A big one's blow breaks it (guardBreak). The bubblegum's bubble: with it up you can't block
   p.tired = Math.max(0, (p.tired || 0) - dt);
   // in the bubble, hold block to pop it from inside, as long as it took to make (the user, 2026-10-27): Rose pushes her sword slowly out through it, Camila goes up on tiptoe and pushes up at it (charkit: popB, popSword)
@@ -10655,6 +10659,8 @@ function updatePlayer(dt) {
     const bkEdge = bk && !p.backWas; if (bkEdge) p.backDownT = time; p.backWas = bk; p.dodgeCd = Math.max(0, (p.dodgeCd || 0) - dt);
     const both = bk && held.block && (bkEdge || (p.blkDownT === time && time - (p.backDownT ?? -9) < .15));   // (holding block, back pressed; or block pressed just after back)
     if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p);
+    { const fw = p.face > 0 ? held.right : held.left, fwEdge = fw && !p.fwWas; p.fwWas = fw;   // (the monk along: block and forward, the team roll, 2026-11-02)
+      if (fwEdge && held.block && monkOn() && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startRoll(p); }
     // (forward with the guard up was a slide, yours or the defender's: gone, 2026-11-01. Back only)
   }
   // sprint: two quick taps the same way, then keep holding
@@ -11612,7 +11618,7 @@ const teamCount = () => allies.length + (ejPal() ? 1 : 0);   // (two buddies, an
 const PARTNER_HP = 3;
 function partnerList() {
   const L = [], tOf = q => [tamed, tamed2].find(t => t && q && t.r === q.rig);
-  allies.forEach(a => L.push({ q: a.st, kind: "ally", a })); if (ejPal() && ej.st) L.push({ q: ej.st, kind: "ej" });   // (the first: the defender, on the block button; a berry buddy if one's along, 2026-11-01)
+  [...allies].sort((x, y) => blkRank(y) - blkRank(x)).forEach(a => L.push({ q: a.st, kind: "ally", a })); if (ejPal() && ej.st) L.push({ q: ej.st, kind: "ej" });   // (the first: the defender, on the block button; a berry buddy if one's along, 2026-11-01)
   return L;
 }
 // ── your partners, under your command (the user, 2026-10-31: "the character is gonna have an attack button ... a jump button, and the other two buttons will be the way
@@ -11656,9 +11662,463 @@ let partPressT = -9;                                 // (when you last sent your
 // 6. "the charge attack for the blocker in the first stage will be an electric tackle that stuns up to 3 enemies bunched up and they get electricity goind around them and
 //    grow stiff and the player can take advantage and hit them a lot. this works onbosses too but doesnt last as long" (block held: it fills; let go full: defZap)
 const BUD_KIT = { 0: { fire: true, leap: "flame", tackle: "zap" } }, budKit = () => BUD_KIT[world] || BUD_KIT[0];   // (each world's own; Berry Woods' till a world has one)
+// the fighter slot's archetypes (the user, 2026-11-02: "the game will expand exploration by creating opportunities for different character's abilities to open and interact
+// different parts of the environment ... we will use archetypes for the buddies. these will have specific abilities but new ones will be variations on these"): the thief
+// (VINNIE, DORYS), the warrior (EL PICO, BOXCARS), the black mage (THE PLUMBERS), the ninja (VEJI). Each fills its own entry in ARCH; the game asks it at these points:
+//   blunt: its blows are blunt (fists, feet, a club: what only blunt breaks, Glos's statue) · magic: its blows are magic · moves(SET, o): its own strings in place of its set's
+//   press(o, s, cmd, X): your press (true: answered, no melee string) · hit(s, e, dir, kind): one of its blows landed · charge(P): your charge let go (true: answered, budPay its
+//   own heart) · tick(o, s, dt, X): every frame it's with you (true: busy, its following and strings wait). A buddy with none fights as before, with the world's kit (the fire)
+const BUD_ARCH = { vinnie: "thief", doir: "thief", elpico: "warrior", boxcars: "warrior", plumbers: "mage", veji: "ninja" };
+const ARCH = { thief: { blunt: true }, warrior: { blunt: true }, mage: { blunt: false, magic: true }, ninja: { blunt: true } };
+const archOfO = o => (o && o.A && ARCH[BUD_ARCH[o.A.id]]) || null;   // (a buddy's, from its ally: a crew's, from its lead's)
+const archOfP = P => P && P.kind === "ally" ? archOfO(P.a) : null;
+const archOfS = s => { if (!s) return null; const a = allies.find(a => a.st === s || (a.crew || []).some(m => m.st === s)); return a ? archOfO(a) : null; };
+// the blocker slot's archetypes (the user, 2026-11-02): the MONK (FLORA: block and forward, the whole team rolls past them and turns to face them) and the blocker
+// BLACK MAGE (BRISA: a gust that shoves them back as the guard goes up; a parry, a gust that spins them round, dizzy). Their entries: blocker, roll, blockStart(D), parry(D, e, dir)
+// and the rest (the user: "randomly assign these types and the same moveset for now for all the other buddies that have not been assigned one"): picked at random once,
+// written down here so each keeps its own. Stilt (the healer) and Rink (the woods' fire) keep their own kits
+Object.assign(BUD_ARCH, { flora: "monk", brisa: "bmage", burr: "bmage", coil: "mage", oldvic: "warrior", noro: "bmage", bin: "bmage", tusker: "monk", rotor: "monk", chispa: "ninja", tic: "ninja", tac: "warrior", pk: "warrior", estrella: "mage", pincho: "bmage", caracol: "bmage", mordi: "warrior" });
+Object.assign(ARCH, { monk: { blocker: true, blunt: true, roll: true }, bmage: { blocker: true, magic: true, blunt: false, blockStart: D => gustPush(D, false), parry: (D, e, dir) => gustPush(D, true, e, dir) } });
+const blkRank = a => (a && a.A && (a.A.heal || (ARCH[BUD_ARCH[a.A.id]] || {}).blocker)) ? 1 : 0;   // (a blocker type, or the healer: the block button's, the first of the two)
+function blkArch(name, ...a) { const D = partDefender(), AR = D && archOfP(D); if (AR && AR[name]) AR[name](D, ...a); }
+const parrySide = (p, e) => Math.sign(e.x - p.x) || p.face || 1;
+let foeDizzy = [];   // [{ e, sp: [stars], t }]
+function offBalance(e, dir, T = 1.4, dizzy = false) {   // knocked off balance (a parry, the user 2026-11-02: "there's a delay as they get knock back so you can get a couple free hits in"): back a step, reeling, no attacking
+  if (!e || e.dead || e.gone) return; e.atk = null; e.windup = 0; e.atkCd = Math.max(e.atkCd || 0, T + .5); e.hurtT = Math.max(e.hurtT || 0, T); e.offBal = Math.max(e.offBal || 0, T); e.flash = .12;
+  e.vx = dir * 430 / (e.wt || 1.2); if (e !== enemy) { e.vy = -240; e.onGround = false; }
+  if (dizzy) { let d = foeDizzy.find(q => q.e === e); if (!d) { d = { e, sp: [0, 1, 2].map(() => { const s = new THREE.Sprite(STAR_MAT || (STAR_MAT = glyphMat("★", "#ffd75a"))); s.scale.setScalar(.42); actors.add(s); return s; }) }; foeDizzy.push(d); } d.t = T; }
+}
+function syncFoeDizzy(dt) {                         // (render) the stars round a dizzy one's head
+  foeDizzy = foeDizzy.filter(d => { d.t -= dt; const e = d.e, on = d.t > 0 && !e.dead && !e.gone && (e === enemy || baddies.includes(e)); if (!on) { d.sp.forEach(s => actors.remove(s)); return false; }
+    d.sp.forEach((s, k) => { const a = time * 5 + k * TAU / 3; s.position.set(X(e.x) + Math.cos(a) * .7, Y(e.y - eH(e) - 16), (e.z || 0) + Math.sin(a) * .5 + .3); }); return true; });
+}
+function parryMelee(p, e, d) {                      // a blow parried (blocked just as it came: the user, 2026-11-02 "make parrying knock opponent's off balance so players are more incentivized to try it")
+  const dir = parrySide(p, e); offBalance(e, dir, 1.5); sparks(p.x + dir * 30, p.y - (p.rig.heightPx || 92) * .55, 12); SFX.parry(); popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "PARRY!");
+  hitstop = Math.max(hitstop, .09); shake = Math.max(shake, 5); blkArch("parry", e, dir);
+}
+function gustPush(D, parried, e0, dir0) {           // the blocker black mage's gust: off it, the way you face; the guard going up: them shoved back to make room; a parry: spun round, dizzy
+  const p = player, s = D.q, dir = dir0 || defFace(), ox = Number.isFinite(s.x) ? s.x : p.x, H = (s.rig && s.rig.heightPx) || 90;
+  const L = parried ? [e0].filter(Boolean) : partFoesAll().filter(e => !walled(e.x, ox) && (e.x - p.x) * dir > -20 && Math.abs(e.x - p.x) < 340 && Math.abs(e.y - p.y) < 160);
+  for (let i = 0; i < 12; i++) spawn("smoke", X(ox + dir * rand(10, 60)), Y(s.y - H * rand(.2, .8)), rand(-.2, .4), V(dir * rand(9, 16), rand(-1, 1.5), rand(-.6, .6)), rand(.35, .55), rand(.18, .32), { g: 0, drag: 3, spin: 3 });
+  SFX.whoosh(); noise(.35, { vol: .14, f0: 900, f1: 300, type: "bandpass", q: .8 }); s.wave = Math.max(s.wave || 0, .4);
+  for (const e of L) { if (parried) { offBalance(e, dir, 2.2, true); if (e === enemy) e.dir = -(e.dir || dir); else e.dir = dir; e.face = e.dir; popText(e.x, e.y - eH(e) - 30, "WHOOSH!"); }   // (turned right round, away from you)
+    else { e.atk = null; e.atkCd = Math.max(e.atkCd || 0, .8); e.hurtT = Math.max(e.hurtT || 0, .3); e.vx = dir * 720 / (e.wt || 1.2); if (e !== enemy) { e.vy = -300; e.onGround = false; } } }
+}
+const monkOn = () => { const D = partDefender(), AR = D && archOfP(D); return !!(AR && AR.roll); };
+const ROLL = { T: .46, v: 980, team: 230 };
+function startRoll(p) {                             // the monk's: block and forward, a roll on past them, turned round to face them at the end; the whole team rolls with you
+  Object.assign(p, { dodge: { t: 0, fwd: true, roll: true }, dodgeCd: .6, vx: p.face * ROLL.v, block: false, blockHold: 0, tpose: 0, chargeT: 0, chargeLv: 0, sq: -.15, sqv: 0 });
+  p.inv = Math.max(p.inv || 0, ROLL.T + .1); SFX.dash(); dust(p.x, p.y, 6, -p.face); const dir = p.face;
+  partnerList().forEach(P => { const s = P.q; if (!s || s.worn || s.post) return; let x1 = clamp(s.x + dir * ROLL.team, 40, WORLD - 40); const g0 = groundAt(s.x), g1 = groundAt(x1);
+    if (g1 === null || (g0 !== null && Math.abs(g1 - g0) > 40)) x1 = s.x; s.roll = { t: 0, x0: s.x, x1, dir }; s.block = false; s.defOn = false; });
+  [pal, pal2].forEach(q => { if (q && !q.roll) { const x1 = clamp(q.x + dir * ROLL.team, 40, WORLD - 40); q.roll = { t: 0, x0: q.x, x1: groundAt(x1) === null ? q.x : x1, dir }; } });
+}
+function rollTick(s, dt) {                          // a frame of a roll (the hero's rides her dodge; a partner's, its own here): tucked, turning over, turned round at the end
+  const R = s.roll; if (!R) return; R.t += dt; const u = Math.min(1, R.t / ROLL.T); s.block = false; s.defOn = false; s.x = lerp(R.x0, R.x1, 1 - Math.pow(1 - u, 2)); s.vx = 0; s.face = R.dir; s.ball = Math.sin(Math.PI * u) * 1.1; s.rot = R.dir * TAU * u;
+  if (u >= 1) { s.roll = null; s.ball = 0; s.rot = 0; s.face = -R.dir; }
+}
+function rollTeamTick(dt) { partnerList().forEach(P => rollTick(P.q, dt)); [pal, pal2].forEach(q => { if (q) rollTick(q, dt); });
+  const p = player; if (p && p.dodge && p.dodge.roll) { const u = Math.min(1, p.dodge.t / .4); p.ball = Math.sin(Math.PI * u) * 1.1; p.rot = p.face * TAU * u; p.rolled = true; }
+  else if (p && p.rolled) { p.rolled = false; p.ball = 0; p.rot = 0; } }
+const budBlunt = s => { const AR = archOfS(s); if (AR) return !!AR.blunt; const a = allies.find(a => a.st === s); return !(a && a.A.hit === "slash"); };   // (no archetype: by how it hits; a pet's paws and June's are blunt)
 const BUD_CHARGE = .6;             // (how long to fill: the attack buddy's, after PART_HOLD · the blocker's, the guard held)
 function budPay(P) { const q = P.q, hp = q.php ?? PARTNER_HP; if (hp < 1 || q.worn) { SFX.nope(); return false; } q.php = hp - 1; q.heartT = 2.2; return true; }   // (a heart, each time)
 function budSpent(s) { if ((s.php ?? 1) > 0) return; const P = partnerList().find(P => P.q === s); if (P) partnerRest(P); }   // (that was its last: worn out)
+// the THIEF (the user, 2026-11-02: "they have sleek attack animations but also randomly steal from berries they hit, they'll steal food and other items. charge special: cuts
+// across through up to 3 enemies close together and jumps back to the player, steals from all 3 if they have an item currently"): any buddy given it, the same moves for all
+// (charkit ARCH_MOVES.thief: the claw swipe, the snatch, the dashing knife-hand). Its charge: low and fast through them, a cut and a theft each as it passes, every one cut
+// again at once as it stops, then a hop back to you. A cat-shaped one keeps its own moves; a crew's lead dashes, the rest follow
+const THIEF = { steal: .35, reach: 300, max: 3, speed: 1300, far: 560, mark: .5, back: 640 };   // (steal: a chance a landed blow takes what it carries · reach: how close together the ones it cuts through · speed px/s · far: no further from you · mark: the cuts all land, after it stops · back: its hop home)
+let TH_STREAK = new Map();
+function thiefStreak(s, col) {                       // (a streak of its colour left in the air behind it as it dashes: shrinks away)
+  let M = TH_STREAK.get(col); if (!M) { M = new THREE.MeshBasicMaterial({ color: col || "#ffffff", transparent: true, opacity: .5, depthWrite: false, fog: false }); TH_STREAK.set(col, M); }
+  const H = (s.rig && s.rig.heightPx) || 90, m = new THREE.Mesh(TH_STREAK_G || (TH_STREAK_G = new THREE.BoxGeometry(2.4, .5, .04)), M);
+  m.position.set(X(s.x - s.face * 50), Y(s.y - H * rand(.3, .7)), (s.z || 0) - .1); actors.add(m); parts.push({ m, v: V(0, 0, 0), life: rand(.16, .26), t: 0, size: rand(.7, 1.1), g: 0, spin: 0, drag: 0, kind: "streak" });
+}
+let TH_STREAK_G = null;
+const thiefOwner = s => allies.find(a => a.st === s) || null;
+function thiefFlourish(s) {                          // (a theft: the loot held up a moment, a glint)
+  const a = thiefOwner(s); if (a && !s.atkKind) { s.wave = .45; a.waveT = .45; }
+  const H = (s.rig && s.rig.heightPx) || 90; sparks(s.x + (s.face || 1) * 20, s.y - H * .7, 5);
+}
+function thiefCharge(P) {
+  const q = P.q, o = P.a; if (!q || !budPay(P)) return true;   // (no heart to give: nothing, but answered)
+  if (o) { if (o.pact) partEnd(o, q, true); o.pact = o.pcmd = o.pnext = null; o.stay = null; } postClear(P); q.pounce = null; q.fleap = null;
+  const p = player, f0 = partTarget(q, false), L = partFoesAll().filter(e => !walled(e.x, q.x) && Math.abs(e.y - q.y) < 230 && Math.abs(e.x - p.x) < THIEF.far + 200);
+  const first = f0 && L.includes(f0) ? f0 : L.slice().sort((a, b) => Math.abs(a.x - q.x) - Math.abs(b.x - q.x))[0] || null;
+  const dir = first ? Math.sign(first.x - q.x) || p.face || 1 : p.face || 1;
+  const path = first ? L.filter(e => Math.abs(e.x - first.x) < THIEF.reach && (e.x - q.x) * dir > -40).sort((a, b) => (a.x - b.x) * dir).slice(0, THIEF.max) : [];   // (the bunch it's going for, in the order it meets them)
+  const last = path[path.length - 1], endX = clamp(last ? last.x + dir * (eHW(last) * .5 + 70) : q.x + dir * 300, Math.max(40, p.x - THIEF.far), Math.min(WORLD - 40, p.x + THIEF.far));
+  q.thDash = { t: 0, ph: "dash", dir, path, hit: [], endX, gt: 0, col: (o && o.A && o.A.col) || "#ffffff" };
+  Object.assign(q, { face: dir, vx: dir * THIEF.speed, atkKind: KIT.STRIKES.th_dash ? "th_dash" : null, atkT: 0, sq: -.2, sqv: 0 }); SFX.dash(); SFX.whoosh(); budFlare(q);
+  return true;
+}
+function thiefDashStep(o, s, dt) {                   // (true while it's at it: the following, and its strings, wait)
+  const D = s.thDash, p = player; if (!p || p.dead) { s.thDash = null; s.atkKind = null; s.atkT = -1; return false; } D.t += dt; const H = (s.rig && s.rig.heightPx) || 90;
+  if (D.ph === "dash") {
+    const left = (D.endX - s.x) * D.dir; s.face = D.dir; s.vx = left > 0 ? D.dir * Math.min(THIEF.speed, left / dt) : 0; if (KIT.STRIKES.th_dash) { s.atkKind = "th_dash"; s.atkT = Math.min(D.t, .4); }
+    if ((D.gt -= dt) <= 0) { D.gt = .03; thiefStreak(s, D.col); }
+    for (const e of D.path) { if (D.hit.includes(e) || e.dead || e.gone) continue; if ((s.x - e.x) * D.dir >= -eHW(e) * .45) { D.hit.push(e); stealFrom(e, s); partHitFoe(s, e, D.dir, "slash"); slashFlair(e.x, e.y - eH(e) * .55, false); SFX.slash(); hitstop = Math.max(hitstop, .03); } }
+    if (left <= 4 || D.t > .75 || walled(s.x, s.x + D.dir * 30) || Math.abs(s.vx) < 1 && D.t > .12) { D.ph = "mark"; D.t = 0; s.vx = 0; s.sq = .18; s.sqv = 0; }   // (there: a stop, a beat)
+    return true; }
+  if (D.ph === "mark") { s.vx = 0; if (D.t < THIEF.mark * .5) return true;   // the cuts all land at once, as it straightens up
+    if (!D.cut) { D.cut = true; let n = 0; D.hit.forEach(e => { if (e.dead || e.gone) return; partHitFoe(s, e, D.dir, "launch"); slashFlair(e.x, e.y - eH(e) * .55, true); n++; });
+      if (n) { SFX.slam(); shake = Math.max(shake, 5); hitstop = Math.max(hitstop, .08); } }
+    if (D.t < THIEF.mark) return true;
+    D.ph = "back"; D.t = 0; s.atkKind = null; s.atkT = -1; s.vy = -THIEF.back; s.onGround = false; s.plat = null; s.sq = .25; s.sqv = 0; SFX.jump(); return true; }
+  if (D.ph === "back") {                            // a hop back, landing just behind you
+    const tx = p.x - (p.face || 1) * 80; s.face = Math.sign(tx - s.x) || s.face; s.vx = clamp((tx - s.x) * 3, -820, 820);
+    if ((s.onGround && D.t > .15) || D.t > 1.4) { s.thDash = null; s.vx *= .2; budSpent(s); return false; }
+    return true; }
+  s.thDash = null; return false;
+}
+Object.assign(ARCH.thief, {
+  moves: (SET, o) => { const M = (KIT.ARCH_MOVES || {}).thief, r = o && (o.r || (o.st && o.st.rig)); if (!M || (r && r.kind === "cat")) return SET;   // (a cat-shaped one: its own)
+    const ok = L => (L || []).filter(k => KIT.STRIKES[k]), g = ok(M.ground); if (!g.length) return SET; const gb = ok(M.groundB), a1 = ok(M.air1), a2 = ok(M.air2);
+    return { ...SET, ground: g, groundB: gb.length ? gb : g, air1: a1.length ? a1 : SET.air1 || SET.air, air2: a2.length ? a2 : SET.air2 || SET.air, air: a1.length ? a1 : SET.air }; },
+  hit: (s, e) => { if (e && e.item && !s.thDash && Math.random() < THIEF.steal && stealFrom(e, s)) thiefFlourish(s); },   // (now and then, what it carries: the dash's take is its own)
+  charge: P => thiefCharge(P),
+  tick: (o, s, dt) => s.thDash ? thiefDashStep(o, s, dt) : false,
+});
+// the WARRIOR (the user, 2026-11-02: "warrior: breaks armor and heavy things easily or breaks them period. big arms or big weapon. Pico and box cards fit here. give box cars
+// a blunt weapon. charge special: huge jumping swing with weapon or body"): heavy strings (with a weapon, its overheads and big arcs; bare-handed, haymakers and a
+// hammer-fist), a blow takes all of a baddy's iron off at once and shoves it back hard; what only Camila could break (her rocks, her crates; the world's boxes too) and
+// Glos's statue go down to it. Sent with nobody to fight, it goes to the nearest heavy thing and smashes it. Let go full: up high and down in a slam, the weapon or its
+// whole body, a shockwave both ways. Any buddy can be one (the user, later: one archetype at random for each): a weapon, the weapon's; none, the body's; a cat-shaped
+// one keeps its own blows and slams tucked in a ball
+const WARS = { walk: 300, reach: 300, near: 560, vy: -1050, fallG: 2.1, rec: .42, stand: 110 };
+const warWeapon = r => !!(r && r.prop && r.prop.kind === "sword");
+const warCat = r => !!(r && r.kind === "cat");
+function warHeavy(s) {                              // the heavy thing nearest you, near enough and in sight: her rocks, a crate, Glos's statue (null: none)
+  const p = player; if (!p) return null; const L = [];
+  if (secret && secret.who === "camila" && secret.hp > 0) L.push({ x: secret.x + 60, k: "wall" });
+  for (const c of crates) if (!c.gone && c.who !== "rose") L.push({ x: c.x, k: "crate", c });
+  if (statue && statue.up) L.push({ x: statue.x, k: "statue" });
+  return L.filter(h => Math.abs(h.x - p.x) < WARS.near && Math.abs(h.x - s.x) < WARS.near + 300 && onScreen(h.x, p.y - 60, -3)).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0] || null;
+}
+function warWall(B, d, s) {                         // a warrior's blow on Camila's rocks: a piece of the wall each blow, as her charged combo takes it
+  if (!B || B.hp <= 0 || (B.wInv || 0) > time) return; B.wInv = time + .2; B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX.crack(); puffs(B.x + 20, s.y - 70, 4, 30, 160);
+  for (let i = 0; i < 6; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.14, .12, .12), SECRET_M.rock2); m.position.set(X(B.x + 40), Y(s.y - 60) + rand(-.6, .6), .3); actors.add(m);
+    parts.push({ m, v: V(rand(-4, 2) * d, rand(3, 8), rand(-2, 2)), life: rand(.5, .9), t: 0, size: rand(.7, 1.2), g: 24, spin: 10, drag: .3, kind: "drop" }); }
+  if (B.hp <= 0) secretGone(B, false);
+}
+function warThings(s, box, got) {                   // (partStrikeStep) its blow on the heavy things in its swing
+  const B = secret; if (B && B.who === "camila" && B.hp > 0 && !got.includes(B) && box(B.x + 60, B.gy ?? GROUND, 160, 600)) { got.push(B); warWall(B, s.face, s); }
+  for (const c of crates) { if (c.gone || c.who === "rose" || got.includes(c)) continue; const big = c.who === "camila"; if (!box(c.x, c.y, big ? 84 : 46, big ? 76 : 52)) continue; got.push(c); crateBreak(c, s.face); }
+}
+function warSlam(o, s, dt) {                        // its charge special, a frame at a time: crouch, up high, down hard, the shockwave, back up
+  const W = s.wslam, kind = W.cat ? null : W.w ? "tk_sword" : "tk_hammer"; W.t += dt;
+  const pose = a => { if (kind) { s.atkKind = kind; s.atkT = a; } };
+  if (W.ph === "crouch") { s.vx = 0; s.vy = 0; pose(.02); if (W.t >= .16) { W.ph = "up"; W.t = 0; s.vy = WARS.vy; s.onGround = false; s.plat = null; s.vx = clamp((W.tx - s.x) / .78, -560, 560); SFX.jump(); SFX.whoosh(); dust(s.x, s.y, 6, 0); } return true; }
+  if (W.ph === "up" || W.ph === "down") {
+    s.vy = Math.min(s.vy + GRAV * (W.ph === "down" ? WARS.fallG : 1) * dt, 2000); if (Math.abs(X(s.x + Math.sign(s.vx) * 50) - camX) > Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect - .4) s.vx = 0;   // (not off the side of the screen; high up over its top is fine)
+    moveBody(s, dt, 14); s.face = W.dir;
+    if (W.ph === "up") { pose(Math.min(.38, .1 + W.t * .5)); if (W.cat) s.ball = Math.min(1, W.t * 3); if (s.vy > -80) { W.ph = "down"; W.t = 0; s.vy = Math.max(s.vy, 600); } }
+    else pose(Math.min(.52, .4 + W.t * .4));
+    if (s.onGround && (W.ph === "down" || W.t > .15)) warLand(o, s, W);
+    else if (W.t > 2.5) { W.ph = "rec"; W.t = 0; }   // (never landed: let it go)
+    return true; }
+  s.vx = 0; pose(Math.min(.95, .55 + W.t)); if (W.cat) s.ball = Math.max(0, 1 - W.t * 4);
+  if (W.t >= WARS.rec) { s.wslam = null; s.atkKind = null; s.atkT = -1; s.ball = 0; budSpent(s); }
+  return true;
+}
+function warLand(o, s, W) {                         // down: everything near it knocked flying, armor off, the heavy things broken, a shockwave on both ways
+  W.ph = "rec"; W.t = 0; s.vx = 0; s.sq = -.4; s.sqv = 0; shake = Math.max(shake, 10); hitstop = Math.max(hitstop, .08); SFX.slam(); SFX.impact(true);
+  dust(s.x, s.y, 10, 1); dust(s.x, s.y, 10, -1); puffs(s.x, s.y - 20, 6, 80, 200);
+  const got = []; for (const e of partFoesAll()) { if (Math.abs(e.x - s.x) > WARS.reach || Math.abs(e.y - s.y) > 170 || walled(e.x, s.x)) continue; got.push(e); partHitFoe(s, e, Math.sign(e.x - s.x) || s.face, "launch"); }
+  glowShot("wave", s, (o.A && o.A.col) || "#ffd27a", true, got);   // (the shockwave: on along the ground both ways, past the ones the slam hit)
+  const B = secret; if (B && B.who === "camila" && B.hp > 0 && Math.abs(B.x + 60 - s.x) < WARS.reach + 40) { B.hp = 1; B.wInv = 0; warWall(B, s.face, s); }   // (her rocks: all down at once)
+  for (const c of crates) if (!c.gone && c.who !== "rose" && Math.abs(c.x - s.x) < WARS.reach && Math.abs(c.y - s.y) < 150) crateBreak(c, Math.sign(c.x - s.x) || 1);
+  if (statue && statue.up && Math.abs(statue.x - s.x) < WARS.reach + 40) { statue.hp = Math.min(statue.hp, 1); statue.inv = 0; hitStatue(Math.sign(statue.x - s.x) || 1, true); }
+}
+Object.assign(ARCH.warrior, {
+  moves(SET, o) { const r = o && o.r; if (!r || warCat(r)) return SET;   // (a cat-shaped one: its own blows)
+    return warWeapon(r) ? { ...SET, ground: ["chop", "slash"], groundB: ["slash", "chop"], air: ["chop"], air1: ["chop"], air2: ["spin", "chop"], upChain: ["rise", "chop"], up: "rise" }
+      : { ...SET, ground: ["haymaker", "upperhook"], groundB: ["upperhook", "haymaker"], air: ["hammer"], air1: ["hammer"], air2: ["hammer"], upChain: ["upperhook"], up: "hammer" }; },
+  press(o, s, cmd) { if (o.wAt) { o.wAt = false; return false; } if (!cmd.perPress || cmd.up || cmd.down || partTarget(s, false)) return false;   // (a baddy to go for: its string, as ever)
+    const H = warHeavy(s); if (!H) return false; o.wGo = { H, t: 0, cmd }; return true; },   // (nobody: off to the heavy thing, to smash it)
+  hit(s, e, dir) { if (e.armor > 0) { e.armor = 0; armorOff(e); }   // (all the iron off at once)
+    const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); if (!boss && !e.dead) e.vx = (e.vx || 0) + dir * 260 / (e.wt || 1); },   // (and shoved back hard)
+  things: warThings,
+  charge(P) { const q = P.q, o = P.kind === "ally" ? P.a : null; if (!o) return false; if (!budPay(P)) return true;
+    if (o.pact) partEnd(o, q, true); o.pact = o.pcmd = o.pnext = null; o.stay = null; o.wGo = null; postClear(P);
+    const f = partTarget(q, false), H = f ? null : warHeavy(q), tx = f ? f.x : H ? H.x : q.x + (player.face || 1) * 240, dir = Math.sign(tx - q.x) || player.face || 1;
+    q.wslam = { t: 0, ph: "crouch", dir, tx, w: warWeapon(o.r), cat: warCat(o.r) }; q.face = dir; q.sq = .3; q.sqv = 0; q.atkT = -1; budFlare(q); SFX.dash(); return true; },
+  tick(o, s, dt, X) {
+    if (s.wslam) return warSlam(o, s, dt);
+    const G = o.wGo; if (!G) return false;
+    if (s.worn || s.post || !player || player.dead || (G.H.k === "wall" ? !(secret && secret.hp > 0) : G.H.k === "crate" ? G.H.c.gone : !(statue && statue.up))) { o.wGo = null; return false; }
+    G.t += dt; const hx = G.H.x, side = Math.sign(s.x - hx) || -(player.face || 1), stand = hx + side * WARS.stand;
+    if (Math.abs(s.x - stand) > 14 && G.t < 2.4) { const d = Math.sign(stand - s.x); s.vx = d * WARS.walk; s.face = d; s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); return true; }
+    o.wGo = null; s.vx = 0; s.face = Math.sign(hx - s.x) || s.face; o.wAt = true; partStart(o, s, { ...G.cmd, perPress: true }, X); return true; },   // (there: its string at it)
+});
+// ── the ninja (the user, 2026-11-02: "disappears and reappears when attacking in a puff cloud, either in front of the enemy, falling from above and crashing down, or appearing
+// from behind to hit. charge special: teleports the whole team who do a team crushing attack appearing from above or behind the enemy"). Any buddy given it, a person or a cat;
+// a crew goes and comes with its lead. Pressed: a puff, gone, out again by it (in front, over it, behind it, by turns as there's room) and its string on it. Charged: the team
+// gone in puffs, out over it and behind it, all down on it at once, then back in puffs where you were, on your feet
+const NJ = { out: .14, gap: .14, every: .8, fallH: 170, fallV: 260, reach: 900, crushR: 170, teamOut: .3, teamCrush: .7, teamHold: .35, teamBack: .2 };
+const NJ_HIDE = new Map();   // st → { r, until }: the ones gone in a puff this moment (ninjaVis puts them out of sight after everyone's sync)
+const njHide = (st, r, sec) => { if (st && r) NJ_HIDE.set(st, { r, until: time + sec }); }, njShow = st => { NJ_HIDE.delete(st); };
+function ninjaVis() {                                // (render) the ones in a puff: out of sight, their shadows too; never longer than they were meant to be
+  for (const [st, h] of NJ_HIDE) { if (time > h.until) { NJ_HIDE.delete(st); continue; } if (h.r && h.r.root) h.r.root.visible = false; if (h.r && h.r.shadow) h.r.shadow.visible = false; }
+}
+function njPuff(x, y, big = 1) {                     // (game px) the cloud it goes in and comes out of
+  for (let i = 0; i < Math.round(7 * big); i++) spawn("smoke", X(x) + rand(-.5, .5) * big, Y(y) + rand(0, 1.5) * big, rand(-.2, .5), V(rand(-1.8, 1.8), rand(.4, 2.2), rand(-.6, .6)), rand(.45, .7), rand(.3, .52) * big, { g: -.6, drag: 2.4, spin: 1.5 });
+  SFX.whoosh();
+}
+const njMembers = o => [{ st: o.st, r: o.r }, ...(o.crew || []).map(m => ({ st: m.st, r: m.r }))];
+const njCeil = x => { let c = null; for (const C of CEILS) if (!C[3] && x > C[0] && x < C[1] && (c === null || C[2] > c)) c = C[2]; return c; };   // (the lowest roof over x, if any)
+function njSpot(e, way, s, k = 0) {                  // where it comes out by e: { x, y, air, plat } or null (no room there: a wall, a gap, a roof)
+  const fd = e.dir || Math.sign((player ? player.x : s.x) - e.x) || 1, hw = eHW(e) * .5, H = (s && s.rig && s.rig.heightPx) || 90;
+  if (way === "above") { const x = clamp(e.x - fd * 12 + k * 26, 40, WORLD - 40), y = e.y - eH(e) - NJ.fallH - k * 30, c = njCeil(x); if (c !== null && y - H < c + 10) return null; return { x, y, air: true, plat: null }; }
+  const sd = way === "front" ? fd : -fd, x = e.x + sd * (hw + 38 + k * 44); if (x < 40 || x > WORLD - 40 || walled(x, e.x)) return null;
+  const P = e.plat; if (P && e.onGround !== false) { if (x < P.x + 8 || x > P.x + P.w - 8) return null; return { x, y: P.y, air: false, plat: P }; }
+  const g = groundAt(x); if (g === null || Math.abs(g - e.y) > 40) return null; return { x, y: g, air: false, plat: null };
+}
+function njFoe(x, y, reach) {                        // the nearest one to (x, y) you can see, not behind a wall
+  let best = null, bd = 1e9; for (const f of partFoesAll()) { if (walled(f.x, x) || !onScreen(f.x, f.y - eH(f) * .5)) continue; const d = Math.abs(f.x - x) + Math.abs(f.y - y) * .5; if (d < bd && d < reach) { bd = d; best = f; } } return best;
+}
+function njPress(o, s, cmd, X) {                     // your press (or its own stay): gone in a puff, at it (false: its plain string, as before)
+  if (o.njSkip) return false; if (o.nj || o.njTeam) return true;   // (its own string, after it's out: not again · gone already: this press waits)
+  if (time - (o.njLast ?? -9) < NJ.every) return false;   // (not every blow: a vanish, a string, a vanish)
+  const e = partTarget(s, false) || stayFoe(s); if (!e || Math.abs(e.x - s.x) > NJ.reach) return false;
+  const order = ["front", "above", "behind"], k0 = o.njWay = ((o.njWay ?? -1) + 1) % 3; let way = null;
+  for (let i = 0; i < 3 && !way; i++) { const w = order[(k0 + i) % 3]; if (njSpot(e, w, s)) way = w; }
+  if (!way) return false;
+  o.nj = { ph: "out", t: 0, e, way, per: !!cmd.perPress, rk: allyRoomKey() }; o.njLast = time;
+  Object.assign(s, { vx: 0, atkKind: null, atkT: -1, sprint: false }); njPuff(s.x, s.y); njMembers(o).forEach(m => njHide(m.st, m.r, NJ.out + NJ.gap + .3));
+  return true;
+}
+function njTick(o, s, dt, X) {                       // (every frame: true while it's gone, its following waits)
+  if (o.njTeam) return njTeamTick(o, s, dt, X);
+  const N = o.nj; if (!N) return false;
+  if (s.worn || s.hurtT > 0 || N.rk !== allyRoomKey()) { njMembers(o).forEach(m => njShow(m.st)); o.nj = null; return false; }   // (worn out, knocked, a new room: out where it is)
+  N.t += dt; const e0 = N.e && !N.e.dead && !N.e.gone ? N.e : null;
+  if (N.ph === "out") { s.vx = 0; if (N.t < NJ.out + NJ.gap) return true;
+    const e = e0 || stayFoe(s); let way = N.way, sp = e && njSpot(e, way, s);
+    if (e && !sp) for (const w of ["behind", "front", "above"]) if ((sp = njSpot(e, w, s))) { way = w; break; }
+    if (!e || !sp) { njMembers(o).forEach(m => njShow(m.st)); njPuff(s.x, s.y, .8); o.nj = null; return false; }   // (nobody there now: back out where it went in)
+    Object.assign(s, { x: sp.x, y: sp.y, vx: 0, vy: sp.air ? NJ.fallV : 0, onGround: !sp.air, plat: sp.plat, face: Math.sign(e.x - sp.x) || s.face, climb: null, pinv: Math.max(s.pinv || 0, .4) });
+    (o.crew || []).forEach((m, j) => Object.assign(m.st, { x: clamp(sp.plat ? clamp(sp.x - s.face * (m.off || 40 * (j + 1)), sp.plat.x + 8, sp.plat.x + sp.plat.w - 8) : sp.x - s.face * (m.off || 40 * (j + 1)), 40, WORLD - 40), y: sp.y, vx: 0, vy: s.vy, onGround: !sp.air, plat: sp.plat, face: s.face }));
+    njMembers(o).forEach(m => njShow(m.st)); njPuff(sp.x, sp.air ? sp.y + 40 : sp.y, 1.1); SFX.blop();
+    o.njSkip = true; try { partStart(o, s, { type: "tap", up: false, down: sp.air, fwd: false, air: sp.air, perPress: N.per, fire: false }, X); } finally { o.njSkip = false; }   // (its own string, from there)
+    if (o.pact) { o.pact.tgt = e; o.pact.had = true; }
+    if (sp.air) { N.ph = "fall"; N.t = 0; N.e = e; return false; }   // (down out of the air onto it)
+    o.nj = null; return false; }
+  if (N.ph === "fall") { if (s.onGround || N.t > 1.2) { o.nj = null; if (s.onGround) njCrash(s); } return false; }
+  return false;
+}
+function njCrash(s) {                                // (down from above) the dust, and a knock to whatever it came down on
+  dust(s.x, s.y, 8); dust(s.x, s.y, 5, 1); shake = Math.max(shake, 4); SFX.thud();
+  for (const e of partFoesAll()) { if (walled(e.x, s.x) || Math.abs(e.x - s.x) > eHW(e) * .5 + 70 || Math.abs(e.y - s.y) > eH(e) + 40) continue; e.inv = 0; partHitFoe(s, e, Math.sign(e.x - s.x) || s.face, "launch"); }
+}
+function njCharge(P) {                               // your charge let go: the whole team in puffs, out over it and behind it, down on it all at once, then back where you were
+  const q = P.q, o = P.a, p = player; if (!o || !p || p.dead || o.njTeam || p.climb || p.zip || p.cons) return true;
+  if (o.nj) { njMembers(o).forEach(m => njShow(m.st)); o.nj = null; }   // (a vanish of its own still going: cut short for this)
+  const e = (q && partTarget(q, false)) || njFoe(p.x, p.y, NJ.reach); if (!e) { SFX.nope(); return true; }   // (nobody to go for: no heart spent)
+  if (!budPay(P)) return true;
+  const M = [], add = (k, st, r, ex) => { if (st && r && !M.some(m => m.st === st)) M.push({ k, st, r, x0: st.x, y0: st.y, g0: !!st.onGround, plat0: st.onGround ? st.plat || null : null, ...ex }); };
+  add("hero", p, rig);
+  allies.forEach(a => { if (a.away || !a.st || !a.r) return; add("ally", a.st, a.r, { a }); (a.crew || []).forEach(m => add("crew", m.st, m.r, { a })); });
+  if (ejPal() && ej && ej.st && ej.r && !ej.away) add("ej", ej.st, ej.r);
+  palsAll().forEach(t => add("pet", t, t.rig));
+  o.njTeam = { t: 0, ph: "out", e, M, dir: Math.sign(e.x - p.x) || p.face || 1, face0: p.face || 1, rk: allyRoomKey() }; o.nj = null; o.stay = null; if (o.pact) partEnd(o, q, true);
+  M.forEach(m => { njPuff(m.st.x, m.st.y, m.k === "hero" ? 1.3 : 1); njHide(m.st, m.r, 3); m.st.vx = 0; if (m.k !== "hero") m.st.pinv = Math.max(m.st.pinv || 0, 2.6); });
+  Object.assign(p, { safeT: Math.max(p.safeT || 0, 2.6), combo: null, chain: null, atkT: -1, atkKind: null }); SFX.release(2);
+  return true;
+}
+function njTeamTick(o, s, dt, X) {
+  const T = o.njTeam, p = player; T.t += dt;
+  if (!p || p.dead || T.rk !== allyRoomKey()) { T.M.forEach(m => njShow(m.st)); o.njTeam = null; return false; }   // (knocked out, a new room: out where everyone is)
+  if (T.ph === "out") { s.vx = 0; if (T.t < NJ.teamOut) return true;
+    const e = T.e && !T.e.dead && !T.e.gone ? T.e : njFoe(p.x, p.y, NJ.reach); if (!e) { njTeamBack(o, T); return false; }
+    T.e = e; T.ph = "crush"; T.t = 0; let ka = 0, kb = 0;
+    T.M.forEach((m, i) => { const want = m.k === "hero" || m.st === s || i % 2 === 0 ? "above" : "behind";
+      let way = want, sp = njSpot(e, want, m.st, want === "above" ? ka : kb);
+      if (!sp) for (const w of ["behind", "above", "front"]) { if (w !== want && (sp = njSpot(e, w, m.st, 0))) { way = w; break; } }
+      if (!sp) { m.skip = true; return; }   // (no room by it for this one: it sits it out, back with you after)
+      if (way === "above") ka++; else kb++; m.way = way;
+      Object.assign(m.st, { x: sp.x, y: sp.y, vx: 0, vy: sp.air ? NJ.fallV : 0, onGround: !sp.air, plat: sp.plat, face: Math.sign(e.x - sp.x) || m.st.face });
+      if (m.k === "hero") Object.assign(p, { climb: null, crawl: null, chain: null, combo: null });
+      njShow(m.st); njPuff(sp.x, sp.air ? sp.y + 40 : sp.y, m.k === "hero" ? 1.3 : 1);
+      if (m.k === "hero" && sp.air) { const SET = setOf(rig.spec) || {}; if (SET.down && KIT.STRIKES[SET.down]) startStrike(p, SET.down); }   // (her own blow down on it)
+      else if ((m.k === "ally" || m.k === "ej") && sp.air) m.st.tcFly = { t: 0, d: m.st.face, got: new Set(), fire: false, zap: false };   // (a buddy down on it: whoever it lands on, teamChargeTick)
+      else if (m.k === "ally" && m.a && m.a !== o) { m.a.pact = null; m.a.pcmd = { type: "tap", up: false, down: false, fwd: false, air: false, perPress: false, fire: false }; } });   // (behind it: its string)
+    SFX.whoosh(); return true; }
+  if (T.ph === "crush") { if (p.onGround || T.t > NJ.teamCrush) { T.ph = "hold"; T.t = 0; njTeamCrush(s, T); } return true; }
+  if (T.ph === "hold") { if (T.t > NJ.teamHold) { T.ph = "back"; T.t = 0; T.M.forEach(m => { njPuff(m.st.x, m.st.y, m.k === "hero" ? 1.2 : .9); njHide(m.st, m.r, 1); }); } return true; }
+  if (T.ph === "back") { if (T.t < NJ.teamBack) return true; njTeamBack(o, T); return false; }
+  return true;
+}
+function njTeamCrush(s, T) {                         // all of them down on it at once: the big one, on it and whatever's right by it
+  const e0 = T.e, cx = e0 && !e0.gone ? e0.x : player.x, cy = e0 && !e0.gone ? e0.y : player.y;
+  shake = Math.max(shake, 10); hitstop = Math.max(hitstop, .1); SFX.slam(); SFX.impact(true); dust(cx, cy, 14); dust(cx, cy, 8, 1); dust(cx, cy, 8, -1); popText(cx, cy - 150, "CRUSH!");
+  for (const e of partFoesAll()) { if (Math.abs(e.x - cx) > NJ.crushR + eHW(e) * .5 || Math.abs(e.y - cy) > 220 || walled(e.x, cx)) continue; const d = Math.sign(e.x - player.x) || T.dir;
+    for (const k of ["haymaker", "haymaker", "haymaker", "launch"]) { if (e.dead || e.gone) break; e.inv = 0; partHitFoe(s, e, d, k); } }
+}
+function njTeamBack(o, T) {                          // back in puffs where you started, on your feet; the rest of them beside you
+  const p = player, h = T.M.find(m => m.k === "hero"); let hx, hy, hp;
+  if (h && h.g0) { hx = h.x0; hy = h.y0; hp = h.plat0; } else { const sf = p.safe || { x: p.x, y: groundAt(p.x) ?? GROUND, plat: null }; hx = sf.x; hy = sf.y; hp = sf.plat || null; }
+  const spot = x => { x = clamp(x, 40, WORLD - 40); if (hp) return clamp(x, hp.x + 10, hp.x + hp.w - 10); const g = groundAt(x); return g !== null && Math.abs(g - hy) < 30 && !walled(x, hx) ? x : hx; };
+  let i = 0; const f = T.face0 || 1;
+  T.M.forEach(m => { const st = m.st, x = m.k === "hero" ? hx : spot(hx - f * (60 + i++ * 50));
+    Object.assign(st, { x, y: hy, vx: 0, vy: 0, onGround: true, plat: hp, tcFly: null, climb: null, face: f });
+    if (m.k !== "hero") { st.atkKind = null; st.atkT = -1; if (m.a) { m.a.pact = m.a.pcmd = m.a.pnext = m.a.stay = null; } if (m.k === "pet") st.pounce = null; }
+    njShow(st); njPuff(x, hy, m.k === "hero" ? 1.1 : .8); });
+  Object.assign(p, { atkT: -1, atkKind: null, combo: null, chain: null, safe: { x: hx, y: hy, plat: hp }, safeT: Math.max(p.safeT || 0, .5) });
+  o.njTeam = null; o.stay = null; SFX.blop();
+}
+Object.assign(ARCH.ninja, { press: njPress, tick: njTick, charge: njCharge });
+// ── the BLACK MAGE (the user, 2026-11-02: "a fighter because it's offensive. shoots lightning attack, ice, and fire attack in order as you keep attacking. let's have the
+// plumbers be this, all three representing the different attacks. charge special: all three elements come out swirling in a big blast"). Any buddy given it: each of your
+// presses, the next spell in turn, lightning (a bolt: stiff with it, zapT), ice (a shard: frozen a moment, iceT) and fire (a fireball: burning, and Rose's things and the
+// woods' tangle catch); a crew of three, one spell each (THE PLUMBERS: the little one's the lightning, the leader the ice, the other the fire). Its magic breaks nothing blunt
+const MAGE = { order: ["bolt", "ice", "fire"], col: { bolt: "#ffe14a", ice: "#8fe6ff", fire: "#ff7a2a" }, who: { bolt: 0, ice: -1, fire: 1 }, spd: { ice: 980, fire: 760 }, life: { ice: .85, fire: 1 },
+  stun: 1.3, freeze: 1.8, bossK: .45, cast: .16, storm: { gather: .65, fly: 1.15, end: 1.6, R: 250 }, shots: [], rk: "", upd: -1 };
+const mageOf = o => o.mage || (o.mage = { n: 0, cast: null, storm: null });
+const mageMove = (s, kind) => ((s.rig && s.rig.kind === "cat" ? KIT.CAT_MOVES : KIT.STRIKES)[kind]) || KIT.STRIKES[kind];
+const mageBoss = e => e === enemy || !!(duo && duo.some(d => d.e === e));
+const mageTgt = cs => partTarget(cs, false) || partFoesAll().filter(e => !walled(e.x, cs.x) && Math.abs(e.x - cs.x) < 760 && Math.abs(e.y - cs.y) < 260).sort((a, b) => Math.abs(a.x - cs.x) - Math.abs(b.x - cs.x))[0] || null;   // (the one it goes for; one just off the screen's edge too)
+function mageHand(cs) {                               // (the caster's palms, in 3D units: where a spell leaves from)
+  const r = cs.rig, h = (r && r.heightPx) || 90, v = new THREE.Vector3();
+  if (r && r.hands && r.hands.length && r.root && r.root.visible) { r.hands[0].getWorldPosition(v); if (r.hands[1]) { const w = new THREE.Vector3(); r.hands[1].getWorldPosition(w); v.add(w).multiplyScalar(.5); } }
+  else v.set(X(cs.x + (cs.face || 1) * h * .3), Y(cs.y - h * .55), .3);
+  return v;
+}
+function mageCasters(o, s, X) {                       // who casts which: a crew of three, one each; anyone else, all three itself
+  const C = (X && X.crew) || o.crew || [], L = { bolt: s, ice: s, fire: s }, M = {};
+  if (C.length >= 2) MAGE.order.forEach(el => { const i = MAGE.who[el]; if (i >= 0 && C[i]) { L[el] = C[i].st; M[el] = C[i]; } });
+  return { L, M };
+}
+function mageStrike(cs, m, kind) {                    // (a caster into its move: a crew member's run by crewStep, the leader's by the tick)
+  if (cs.rig && cs.rig.kind === "cat") startCatMove(cs, kind); else startStrike(cs, kind);
+  if (m) { m.tgt = null; m.hit = true; m.spOn = false; m.go = 0; }
+}
+function mageCast(o, s, X, weak) {                   // your press: the next spell in turn
+  const M = mageOf(o), el = MAGE.order[M.n++ % 3], { L, M: CM } = mageCasters(o, s, X), cs = L[el], tgt = mageTgt(cs);
+  cs.face = tgt ? Math.sign(tgt.x - cs.x) || cs.face : (player.face || cs.face);   // (at it; nobody about: the way you're facing)
+  mageStrike(cs, CM[el], "mage_cast"); M.cast = { el, t: 0, cs, lead: cs === s, tgt, fired: false, weak: !!weak };
+  if (o.A && Math.random() < .5) SFX.buddy(o.A.id, "atk");
+}
+function mageShotHit(sh, e) {                         // a spell landing on one
+  const s = sh.s, dir = Math.sign(e.x - sh.x0) || sh.dir, boss = mageBoss(e), pw = s.pWeak, pf = s.pFire;
+  s.pWeak = sh.weak; s.pFire = sh.el === "fire"; let ok = false;
+  try { ok = partHitFoe(s, e, dir, sh.el === "fire" ? "haymaker" : "jab"); } finally { s.pWeak = pw; s.pFire = pf; }
+  if (sh.el === "bolt") { e.zapT = Math.max(e.zapT || 0, MAGE.stun * (boss ? MAGE.bossK : 1)); e.atk = null; for (let i = 0; i < 4; i++) zapFx(e); SFX.zap(); SFX.crackle(2); }
+  else if (sh.el === "ice") { freezeFoe(e, MAGE.freeze * (boss ? MAGE.bossK : 1)); }
+  return ok;
+}
+function mageFire(o, C) {                              // the spell off the palms
+  const cs = C.cs, from = mageHand(cs), col = MAGE.col[C.el], f = cs.face || 1, s = o.st, x0 = from.x / S, y0 = GROUND - from.y / S;
+  let tgt = C.tgt && !C.tgt.dead && !C.tgt.gone ? C.tgt : mageTgt(cs);
+  if (C.el === "bolt") {                              // lightning: straight to it, crackling a moment (or out ahead at nothing)
+    const tx = tgt ? tgt.x : x0 + f * 300, ty = tgt ? tgt.y - eH(tgt) * .55 : y0 - 6;
+    const sh = { el: "bolt", s, weak: C.weak, x0, dir: f, t: 0, life: .26, ax: from.x, ay: from.y, az: from.z, tx, ty, arc: makeArc(col), arc2: makeArc("#ffffff") };
+    MAGE.shots.push(sh); if (tgt && !walled(tgt.x, x0)) mageShotHit(sh, tgt); else SFX.zap();
+    sparks(tx, ty, 6); return; }
+  const sp = MAGE.spd[C.el], tx = tgt ? tgt.x : x0 + f * 600, ty = tgt ? tgt.y - eH(tgt) * .55 : y0, d = Math.hypot(tx - x0, ty - y0) || 1;   // ice, fire: on their way at it
+  const sh = { el: C.el, s, weak: C.weak, x0, x: x0, y: y0, vx: (tx - x0) / d * sp, vy: (ty - y0) / d * sp * .6, dir: f, t: 0, life: MAGE.life[C.el], hit: [],
+    halo: glowMesh(col), core: glowMesh("#ffffff"), tr: [0, 1, 2].map(() => glowMesh(col)) };
+  if (Math.abs(sh.vx) < sp * .5) sh.vx = f * sp * .5;   // (never straight up or down: on at them)
+  if (C.el === "ice") { sh.gem = mk(new THREE.OctahedronGeometry(1, 0), null, { mat: toon("#c9f6ff"), ol: .06 }); actors.add(sh.gem); SFX.whoosh(); tone(1900, 2600, .14, { type: "triangle", vol: .05 }); }
+  else { SFX.whoosh(); noise(.3, { vol: .1, f0: 600, f1: 260 }); }
+  MAGE.shots.push(sh);
+}
+function mageShotsStep(dt) {                          // every spell on its way (once a frame, whichever mage's tick comes first)
+  if (MAGE.upd === time) return; MAGE.upd = time;
+  const rk = allyRoomKey(); if (rk !== MAGE.rk) { MAGE.rk = rk; MAGE.shots.forEach(mageShotEnd); MAGE.shots = []; }
+  iceSweep();
+  MAGE.shots = MAGE.shots.filter(sh => { sh.t += dt;
+    if (sh.el === "bolt") { const u = sh.t / sh.life, a = (1 - u) * (.7 + .3 * Math.random());
+      arcSet(sh.arc, sh.ax, sh.ay, sh.az, X(sh.tx), Y(sh.ty), .4, .14, .5, dt); sh.arc.mesh.material.uniforms.al.value = a;
+      arcSet(sh.arc2, sh.ax, sh.ay, sh.az + .01, X(sh.tx), Y(sh.ty), .41, .05, .5, dt); sh.arc2.mesh.material.uniforms.al.value = a;
+      if (sh.t >= sh.life) { mageShotEnd(sh); return false; } return true; }
+    const x0 = sh.x; sh.x += sh.vx * dt; sh.y += sh.vy * dt;
+    let done = sh.t >= sh.life || sh.x < -40 || sh.x > WORLD + 40;
+    if (!done && walled(x0, sh.x)) { done = true; if (sh.el === "fire") fireBurn(sh.x, sh.y, 90); }   // (a hero's wall: it stops there; a fireball sets Rose's tangle alight)
+    if (!done) for (const e of partFoesAll()) { if (sh.hit.includes(e) || Math.abs(e.x - sh.x) > eHW(e) * .5 + 34 || sh.y < e.y - eH(e) - 24 || sh.y > e.y + 24) continue;
+      sh.hit.push(e); mageShotHit(sh, e); done = true; break; }
+    if (sh.el === "fire") { fireBurn(sh.x, sh.y, 50); if (Math.floor(sh.t / .03) !== Math.floor((sh.t - dt) / .03)) flames(X(sh.x - sh.vx * .02), Y(sh.y), .3, 1, .1, .8); }
+    else if (Math.random() < dt * 30) spawn("spark", X(sh.x), Y(sh.y), .35, V(rand(-1, 1), rand(-1, 1), 0), .25, rand(.06, .1), { g: 2, spin: 6 });
+    if (done) { if (sh.el === "ice") { for (let i = 0; i < 6; i++) spawn("spark", X(sh.x), Y(sh.y), .4, V(rand(-4, 4), rand(-2, 4), rand(-1, 1)), .35, rand(.08, .14), { g: 8, spin: 9 }); tone(2600, 1500, .12, { type: "triangle", vol: .06 }); }
+      else { flames(X(sh.x), Y(sh.y), .3, 5, .3, 1.1); SFX.explode(false); } mageShotEnd(sh); return false; }
+    const fl = 1 + .14 * Math.sin(sh.t * 52), x = X(sh.x), y = Y(sh.y), big = sh.el === "fire" ? 1.25 : .9;
+    sh.halo.position.set(x, y, .35); sh.halo.scale.set(big * fl, big * fl, 1); sh.halo.material.opacity = .9;
+    sh.core.position.set(x, y, .36); sh.core.scale.setScalar(big * .42); sh.core.material.opacity = 1;
+    sh.tr.forEach((m, i) => { const b = (i + 1) * .02; m.position.set(X(sh.x - sh.vx * b), Y(sh.y - sh.vy * b), .34); m.scale.setScalar(big * (.8 - i * .18)); m.material.opacity = .5 * (1 - i * .28); });
+    if (sh.gem) { sh.gem.position.set(x, y, .4); sh.gem.scale.set(.42, .2, .2); sh.gem.rotation.set(sh.t * 14, 0, Math.atan2(-sh.vy, sh.vx)); }
+    return true; });
+}
+function mageShotEnd(sh) {
+  [sh.halo, sh.core, ...(sh.tr || [])].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } });
+  if (sh.gem) { actors.remove(sh.gem); sh.gem.traverse(m => { if (m.geometry) m.geometry.dispose(); }); }
+  if (sh.arc) arcEnd(sh.arc); if (sh.arc2) arcEnd(sh.arc2);
+}
+// frozen (the ice): stopped where it stands a moment, no blows, hit all you like; in a shell of ice (on its rig, so it goes where it goes)
+const rigOfFoe = e => { const D2 = duo && duo.find(d => d.e === e); return D2 ? D2.D.rig : e === enemy ? (foe && foe.rig) : e.r; };
+let iceOn = [];   // [{ e, g, r }]
+function freezeFoe(e, T) {
+  e.iceT = Math.max(e.iceT || 0, T); e.atk = null; e.vx = 0; const r = rigOfFoe(e); if (!r || !r.root) return;
+  let I = iceOn.find(q => q.e === e); if (I && I.g.parent !== r.root) { if (I.g.parent) I.g.parent.remove(I.g); iceOn = iceOn.filter(q => q !== I); I = null; }
+  if (!I) { const g = new THREE.Group(), sc = r.root.scale.x || 1, W = Math.max(eHW(e) * S * .62, eH(e) * S * .34) / sc, H = eH(e) * S * .6 / sc;   // (never a thin slab: a boss with a narrow box)
+    const shell = new THREE.Mesh(jag(new THREE.IcosahedronGeometry(1, 1), Math.random, .14), new THREE.MeshBasicMaterial({ color: "#bff1ff", transparent: true, opacity: .42, depthWrite: false }));
+    shell.scale.set(W, H, W * .85); shell.position.y = H * .95; g.add(shell);
+    for (let i = 0; i < 5; i++) { const sp = new THREE.Mesh(new THREE.ConeGeometry(.12, .5, 4), new THREE.MeshBasicMaterial({ color: "#e8fbff", transparent: true, opacity: .7, depthWrite: false })); sp.scale.setScalar(Math.max(W, H) * .45);
+      const a = i / 5 * TAU; sp.position.set(Math.cos(a) * W * .85, H * (.4 + (i % 3) * .55), Math.sin(a) * W * .6); sp.rotation.set(Math.sin(a) * .9, 0, -Math.cos(a) * 1.1); g.add(sp); }
+    r.root.add(g); I = { e, g, r }; iceOn.push(I); }
+  SFX.block(); tone(2200, 3200, .18, { type: "triangle", vol: .06 }); for (let i = 0; i < 6; i++) spawn("spark", X(e.x + rand(-1, 1) * eHW(e) * .4), Y(e.y - eH(e) * rand(.2, .9)), .4, V(rand(-2, 2), rand(0, 3), rand(-1, 1)), .4, rand(.08, .13), { g: 4, spin: 8 });
+}
+function iceStep(e, dt, hw) {                          // (a frame of it, in place of its own: updateBaddy / updateEnemy)
+  e.iceT -= dt; e.vx = approach(e.vx || 0, 0, 3000 * dt); e.atk = null; e.atkCd = Math.max(e.atkCd || 0, .5); e.vy = Math.min((e.vy || 0) + 2000 * dt, 1000); moveBody(e, dt, hw); spring(e, dt);
+  if (e.iceT <= 0) { e.iceT = 0; iceSweep(); SFX.crack && SFX.crack(); for (let i = 0; i < 8; i++) spawn("spark", X(e.x + rand(-1, 1) * eHW(e) * .4), Y(e.y - eH(e) * rand(.1, .9)), .4, V(rand(-4, 4), rand(1, 5), rand(-1, 1)), .4, rand(.08, .14), { g: 9, spin: 9 }); }
+}
+function iceSweep() { iceOn = iceOn.filter(I => { const e = I.e; if (e.iceT > 0 && !e.dead && !e.gone && I.g.parent) return true; if (I.g.parent) I.g.parent.remove(I.g); I.g.traverse(m => { if (m.isMesh) { m.geometry.dispose(); m.material.dispose(); } }); return false; }); }
+// the charge: all three come out of them and swirl up together into one storm, flung at them, bursting over everyone near it with all three at once
+function mageStormGo(P) {
+  const o = P.a, s = P.q; if (!o) return false; if (!budPay(P)) return true;
+  const M = mageOf(o), X0 = { crew: o.crew }, { L, M: CM } = mageCasters(o, s, X0), tgt = mageTgt(s);
+  if (M.cast && M.cast.lead) { s.atkKind = null; s.atkT = -1; } M.cast = null;
+  const tx = tgt ? tgt.x : s.x + (player.face || s.face || 1) * 340, ty = tgt ? tgt.y - eH(tgt) * .5 : s.y - 90;
+  const casters = [...new Set(Object.values(L))]; casters.forEach(cs => { cs.face = Math.sign(tx - cs.x) || cs.face; mageStrike(cs, Object.values(CM).find(m => m.st === cs) || null, "mage_storm"); });
+  M.storm = { t: 0, tx, ty, casters, lead: casters.includes(s), orbs: MAGE.order.map(el => ({ el, halo: glowMesh(MAGE.col[el]), core: glowMesh("#ffffff"), from: L[el] })), burst: false, ring: null };
+  budFlare(s); SFX.buddy(o.A.id, "sp"); return true;
+}
+function mageStormStep(o, s, M, dt) {
+  const T = M.storm, K = MAGE.storm; T.t += dt; const t = T.t;
+  const cx0 = T.casters.reduce((a, c) => a + c.x, 0) / T.casters.length, cy0 = Math.min(...T.casters.map(c => c.y - ((c.rig && c.rig.heightPx) || 90))) - 70;
+  let cx, cy, rad; if (t < K.gather) { const u = t / K.gather; cx = cx0; cy = cy0 + 40 * (1 - u); rad = 90 * (1 - u * .35); }
+  else { const u = Math.min(1, (t - K.gather) / (K.fly - K.gather)), e = u * u * (3 - 2 * u); cx = cx0 + (T.tx - cx0) * e; cy = cy0 + (T.ty - cy0) * e - Math.sin(u * Math.PI) * 60; rad = 58 * (1 - u * .4); }
+  T.orbs.forEach((b, i) => { if (!b.halo) return; const a = t * 9 + i * TAU / 3, fl = 1 + .15 * Math.sin(t * 40 + i);
+    let x = cx + Math.cos(a) * rad, y = cy + Math.sin(a) * rad * .7;
+    if (t < .3) { const h = mageHand(b.from), u = t / .3; x = lerp(h.x / S, x, u); y = lerp(GROUND - h.y / S, y, u); }   // (off each one's palms first)
+    const big = t < K.gather ? 1.3 + t * 1.8 : 2.4 + Math.min(1, (t - K.gather) / (K.fly - K.gather)) * .8; b.halo.position.set(X(x), Y(y), .4); b.halo.scale.setScalar(big * fl); b.halo.material.opacity = .92; b.core.position.set(X(x), Y(y), .41); b.core.scale.setScalar(big * .36); b.core.material.opacity = 1;   // (growing as it gathers, bigger still on its way)
+    if (Math.random() < dt * 30) { if (b.el === "fire") flames(X(x), Y(y), .4, 1, .1, .8); else if (b.el === "bolt") spawn("zap", X(x), Y(y), .4, V(rand(-2, 2), rand(-2, 2), 0), .12, rand(.6, .9), { spin: 40 }); else spawn("spark", X(x), Y(y), .4, V(rand(-1, 1), rand(-1, 1), 0), .3, rand(.07, .11), { g: 2, spin: 6 }); } });
+  if (!T.burst && t >= K.fly) { T.burst = true; T.orbs.forEach(b => { [b.halo, b.core].forEach(m => { actors.remove(m); m.material.dispose(); }); b.halo = b.core = null; });   // the burst: everyone near it, all three at once
+    const R = K.R, L = partFoesAll().filter(e => !walled(e.x, T.tx) && Math.abs(e.x - T.tx) < R + eHW(e) * .5 && Math.abs((e.y - eH(e) * .5) - T.ty) < R * .8);
+    L.forEach(e => { const boss = mageBoss(e), pf = s.pFire; s.pFire = true; try { partHitFoe(s, e, Math.sign(e.x - T.tx) || s.face, "launch"); } finally { s.pFire = pf; }
+      e.zapT = Math.max(e.zapT || 0, MAGE.stun * .8 * (boss ? MAGE.bossK : 1)); for (let i = 0; i < 3; i++) zapFx(e); freezeFoe(e, MAGE.freeze * .7 * (boss ? MAGE.bossK : 1)); });
+    fireBurn(T.tx, T.ty, 170); flames(X(T.tx), Y(T.ty), .4, 16, 1.6, 1.5); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU; spawn("zap", X(T.tx) + Math.cos(a) * 1.2, Y(T.ty) + Math.sin(a) * 1.2, .4, V(Math.cos(a) * 6, Math.sin(a) * 6, 0), .2, rand(.8, 1.2), { spin: 40 }); spawn("spark", X(T.tx), Y(T.ty), .4, V(Math.cos(a) * 8, Math.sin(a) * 8 + 2, rand(-1, 1)), .5, rand(.12, .2), { g: 6, spin: 8 }); }
+    T.ring = MAGE.order.map(el => glowMesh(MAGE.col[el])); SFX.explode(true); SFX.zap(); SFX.crackle(3); tone(2400, 1200, .3, { type: "triangle", vol: .07 }); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .06); }
+  if (T.ring) { const u = Math.min(1, (t - K.fly) / (K.end - K.fly)); T.ring.forEach((m, i) => { m.position.set(X(T.tx), Y(T.ty), .38 + i * .01); m.scale.setScalar(1.5 + u * (7 + i * 1.6)); m.material.opacity = .85 * (1 - u); }); }
+  if (t >= K.end) { (T.ring || []).forEach(m => { actors.remove(m); m.material.dispose(); }); T.orbs.forEach(b => [b.halo, b.core].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } }));
+    M.storm = null; if (T.lead) { s.atkKind = null; s.atkT = -1; } budSpent(s); return false; }
+  return true;
+}
+Object.assign(ARCH.mage, {
+  edit: [["Cast (each press: lightning, then ice, then fire)", "mage_cast"], ["Charge (hold the buddy button): the three elements swirling into one storm", "mage_storm"]],   // (the web anim editor's list for any buddy that's this)
+  press(o, s, cmd, X) { const M = mageOf(o); if (M.cast || M.storm) { if (cmd.perPress) M.next = { weak: !!cmd.weak }; return true; } mageCast(o, s, X, !!cmd.weak); return true; },   // (busy: a press of yours waits as its next)
+  charge(P) { const o = P.a; if (!o || mageOf(o).storm) return !!o; return mageStormGo(P); },
+  tick(o, s, dt, X) {
+    mageShotsStep(dt); const M = mageOf(o);
+    if (M.storm) { s.vx = approach(s.vx || 0, 0, 2000 * dt); if (M.storm.lead && s.atkKind === "mage_storm") s.atkT += dt; return mageStormStep(o, s, M, dt); }
+    const C = M.cast; if (!C) return false;
+    C.t += dt; if (C.lead) { s.vx = approach(s.vx || 0, 0, 2000 * dt); if (s.atkKind === "mage_cast") s.atkT += dt; }
+    if (!C.fired && C.t >= MAGE.cast) { C.fired = true; mageFire(o, C); }
+    const D = (mageMove(C.cs, "mage_cast") || {}).dur || .5;
+    if (C.t >= D) { M.cast = null; if (C.lead && s.atkKind === "mage_cast") { s.atkKind = null; s.atkT = -1; } if (M.next) { const nx = M.next; M.next = null; mageCast(o, s, X, nx.weak); return M.cast.lead; } return false; }
+    return C.lead;   // (a crew member casting: the leader carries on as it was)
+  },
+});
 function budLeap(P) {                                // the attack buddy's charge: a leap on ahead, wrapped in fire, through whatever's in its way
   const q = P.q; if (!budPay(P)) return; const o = P.kind === "pet" ? q : P.kind === "ally" ? P.a : ej, f = partTarget(q, false), dir = f ? Math.sign(f.x - q.x) || player.face : player.face;
   if (o && o.pact && P.kind !== "pet") partEnd(o, q, true); if (o) { o.pact = o.pcmd = o.pnext = null; } q.pounce = null; postClear(P);
@@ -11724,7 +12184,7 @@ function partInput(dt) {                             // the buddy button: a pres
     const on = ok && held.part(i), P0 = L[i] || (L.length === 1 ? L[0] : null), P = P0 && !P0.q.worn && !(P0.kind === "ally" && P0.a && P0.a.A.heal) ? P0 : null, q = P && P.q;   // (the healer: not on your attack button)   // (one along: it's on this one too)   // (worn out: its button does nothing)
     if (on && !B.on) { B.t = 0; B.full = false; if (q) { postClear(P); q.tagT = Math.max(q.tagT || 0, 1); if (!bl) { partPressT = time; partCommand(P, "tap", true); } } }   // (a press: its next blow)
     if (on && q && !bl && !q.fleap) { B.t += dt; const k = clamp((B.t - PART_HOLD) / BUD_CHARGE, 0, 1); q.pcharge = k; if (k >= 1 && !B.full) { B.full = true; SFX.jcharge(); } }   // (filling: the orb round it, as yours, syncBudAura)
-    if (B.on && !on && B.full && q && ok && !bl) budLeap(P);   // (let go full: its charge move)
+    if (B.on && !on && B.full && q && ok && !bl) { const AR = archOfP(P); if (!(AR && AR.charge && AR.charge(P))) budLeap(P); }   // (an archetype's charge special, else the world's leap)   // (let go full: its charge move)
     { const Dd = bl ? partDefender() : null, dq = Dd && Dd.q && !Dd.q.post && !Dd.q.worn && !Dd.q.dzap && (Dd.q.php ?? PARTNER_HP) > 0 ? Dd.q : null;   // guarding, this button held: the BLOCKER's charge (the guard alone never: 2026-11-02)
       if (on && dq) { B.dt = (B.dt || 0) + dt; const k = clamp((B.dt - PART_HOLD) / BUD_CHARGE, 0, 1); dq.zapK = k; if (k >= 1 && !dq.zapFull) { dq.zapFull = true; SFX.jcharge(); }
         if (dq.zapFull && (dq.zapFxT = (dq.zapFxT || 0) - dt) <= 0) { dq.zapFxT = .09; zapFx(dq); } }
@@ -11807,7 +12267,7 @@ function defParry(s, D) {                            // its slide meets a baddy 
   const W = (s.rig && s.rig.heightPx) || 80;
   for (const e of [...(bossIn && enemy && !enemy.dead && !enemy.gone ? [enemy] : []), ...baddies.filter(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.under)]) {
     if (s.defHit.has(e) || walled(e.x, s.x) || Math.abs(e.x - s.x) > eHW(e) * .5 + 30 || Math.abs((e.y - eH(e) * .5) - (s.y - W * .5)) > eH(e) * .5 + W * .5) continue;
-    s.defHit.add(e); const d = s.defDir; e.atk = null; e.hurtT = Math.max(e.hurtT || 0, .6); e.atkCd = Math.max(e.atkCd || 0, 1.4); e.flash = .12; e.vx = d * 380 / (e.wt || 1.2); if (e !== enemy) { e.vy = -240; e.onGround = false; }
+    s.defHit.add(e); const d = s.defDir; offBalance(e, d, 1.4);
     sparks(s.x + d * 20, s.y - W * .5, 10); SFX.parry(); popText(s.x, s.y - W - 18, "PARRY!"); hitstop = Math.max(hitstop, .06); shake = Math.max(shake, 4); }
 }
 // CHARGE! (the user, 2026-11-01): "this will send both buddies to a position. if you press it by itself they will stay in position and you can move without them, and
@@ -11906,8 +12366,8 @@ function postRing(s, on) {                           // (its place, a ring on th
 // own, in front of you), nothing walks through: a baddy (or the boss) coming at it stops against it, on the side it came from (sliding out, the defender shoves them)
 function blockWall() {
   const p = player; if (!p || mode !== "play" || transit) return; const W = [];
-  if (p.block || (p.blockHold || 0) > 0 || p.bubble) W.push({ x: p.x, y: p.y, k: "p" });
-  const D = partDefender(); if (D && D.q.block && D.q.defOn && Number.isFinite(D.q.x) && Number.isFinite(D.q.y)) W.push({ x: D.q.x, y: D.q.y, k: "d" });
+  if ((p.block || (p.blockHold || 0) > 0 || p.bubble) && !(p.dodge && p.dodge.roll)) W.push({ x: p.x, y: p.y, k: "p" });
+  const D = partDefender(); if (D && D.q.block && D.q.defOn && !D.q.roll && !(p.dodge && p.dodge.roll) && Number.isFinite(D.q.x) && Number.isFinite(D.q.y)) W.push({ x: D.q.x, y: D.q.y, k: "d" });   // (rolling past them: no wall, 2026-11-02)
   const L = [...baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined), ...(bossIn && enemy && !enemy.dead && !enemy.gone && !duo ? [enemy] : [])];
   for (const e of L) { if (!W.length || !Number.isFinite(e.x)) { e.blkSide = null; continue; } const side = e.blkSide || (e.blkSide = {}), hw = eHW(e) + 18;
     for (const w of W) { const dx = e.x - w.x;
@@ -11944,7 +12404,7 @@ function pointEnd(p, release) {                      // let go: three charges, a
 }
 function partCommand(P, type, button) {             // what you're doing as you press it says what they do (button: yours, a blow of its combo, fire in Berry Woods)
   const p = player, q = P.q, up = !!held.up || upPend >= 0, auto = !!q.pWeak; q.pWeak = false;   // (your button: full blows from now, the one they're at too)
-  const cmd = { type, up: up && !held.down, down: !!held.down, fwd: !!(held.left || held.right), air: !p.onGround, perPress: !!button, fire: !!button && !!budKit().fire };
+  const cmd = { type, up: up && !held.down, down: !!held.down, fwd: !!(held.left || held.right), air: !p.onGround, perPress: !!button, fire: !!button && !!budKit().fire && !archOfP(P) };
   if (up && upPend >= 0) upPend = -1;               // (↑ pressed with it: theirs, not a jump of yours)
   if (P.kind === "pet") { if (q.pact || q.pounce) q.pnext = cmd; else q.pcmd = cmd; return; }
   const o = P.kind === "ally" ? P.a : ej; if (!o) return;
@@ -11968,7 +12428,7 @@ function partTarget(s, air) {                       // the one it goes for: near
   return best;
 }
 let partFire = false;
-function partHitFoe(...a) { partBlow = true; partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && a[0].pFire); try { const r = partHitFoe0(...a); if (r && partFire && a[1]) { const e = a[1]; flamesPx(e.x, e.y - eH(e) * .55, 12, 30, 1.5); puffs(e.x, e.y - eH(e) * .55, 3, 30, 140); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); } return r; } finally { partBlow = false; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)
+function partHitFoe(...a) { partBlow = true; partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && a[0].pFire); try { const r = partHitFoe0(...a); if (r && partFire && a[1]) { const e = a[1]; flamesPx(e.x, e.y - eH(e) * .55, 12, 30, 1.5); puffs(e.x, e.y - eH(e) * .55, 3, 30, 140); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); } if (r && a[1]) { const AR = archOfS(a[0]); if (AR && AR.hit) AR.hit(a[0], a[1], a[2], a[3]); } return r; } finally { partBlow = false; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)
 function partHitFoe0(s, e, dir, kind, noJug) {             // a blow of theirs landing; up in the air, held at their height the way yours are (the last of an air combo sends it down)
   const D2 = duo && duo.find(d => d.e === e);
   if (D2) { withBoss(D2, () => hitEnemy(dir, kind)); return true; }
@@ -11989,6 +12449,8 @@ function partStrikeStep(o, s, dt) {                 // a frame of one of its str
       if (e && d > -20 && d < 90 && Math.abs(e.y - s.y) < 120) { if (partHitFoe(s, e, s.face, "jab")) A.landed = A.any = true; } else { glowShot("pellet", s, o.col, true, []); A.landed = A.any = true; } } return; }
   (S.hits || []).forEach((h, i) => { if (t < h.t0 || t > h.t1) return; const got = o.phit[i] || (o.phit[i] = []);
     const box = (x, y, hw, hh) => { const d = (x - s.x) * s.face; return d > -h.back - hw * .5 - 10 && d < h.reach + hw * .5 + 20 && y > s.y - h.y0 - 40 && y - hh < s.y - h.y1 + 40; };
+    if (statue && statue.up && !got.includes(statue) && box(statue.x, statue.gy, 120, 260)) { got.push(statue); hitStatue(s.face, budBlunt(s)); }   // (Glos's statue: a buddy's blunt blow breaks it too, a blade or magic glances off)
+    { const AR = archOfS(s); if (AR && AR.things) AR.things(s, box, got); }   // (an archetype's blow on the things only it can break: the warrior's rocks and crates)
     for (const e of partFoesAll()) { if (got.includes(e) || walled(e.x, s.x) || !box(e.x, e.y, eHW(e), eH(e))) continue;
       got.push(e); const dir = h.wide ? Math.sign(e.x - s.x) || s.face : s.face;
       if (partHitFoe(s, e, dir, h.kind)) { A.landed = A.any = true; if (!s.onGround && (A.kind === "air" || A.kind === "up") && A.idx < A.list.length - 1) partHang(s); } } });
@@ -12008,14 +12470,15 @@ function stayStep(o, s, dt, X) {                    // (true while it's staying:
 function partEnd(o, s, drop) { o.pact = null; o.spOn = false; s.pFire = false; s.atkKind = null; s.atkT = -1; s.pLast = false; s.hangT = 0; s.sprint = false; o.pcmd = drop ? null : o.pnext; o.pnext = null; if (drop) o.pcmd = null; }
 function partStart(o, s, cmd, X) {                  // a command: which string of moves, and at whom
   s.pWeak = !!cmd.weak; s.pFire = !!cmd.fire;       // (one they've gone in with on their own: lighter blows · your button's, in Berry Woods: fire)
-  const SET = X.set, air = !s.onGround || cmd.air; let kind, list;
+  const AR = archOfO(o); if (AR && AR.press && cmd.type !== "special" && AR.press(o, s, cmd, X)) { if (cmd.perPress) o.stay = { until: time + STAY.max, gap: STAY.gap[0], lost: 0, fire: false, rk: allyRoomKey() }; return; }   // (an archetype's own answer to your press: casting, vanishing)
+  const SET = AR && AR.moves ? AR.moves(X.set, o) : X.set, air = !s.onGround || cmd.air; let kind, list;
   if (cmd.type === "special") { kind = "special"; list = [X.sp]; }
   else if (cmd.up && !air && SET.upChain) { kind = "up"; list = SET.upChain; }
   else if (cmd.up && air && SET.up) { kind = "air"; list = [SET.up]; }
   else if (cmd.down && air && SET.down) { kind = "air"; list = [SET.down]; }
   else if (air) { kind = "air"; list = (cmd.fwd ? SET.air2 : SET.air1) || SET.air; }
   else if (cmd.down && KIT.STRIKES.slide) { kind = "ground"; list = ["slide"]; }
-  else { kind = "ground"; list = (!cmd.fwd && X.plain) || (cmd.fwd ? SET.groundB : SET.ground) || SET.ground; }
+  else { kind = "ground"; list = (!cmd.fwd && !(AR && AR.moves) && X.plain) || (cmd.fwd ? SET.groundB : SET.ground) || SET.ground; }
   list = (list || []).filter(k => KIT.STRIKES[k]); if (!list.length) return;
   const tgt = partTarget(s, kind !== "ground"); o.pact = { kind, list, idx: -1, ph: "go", t: 0, t2: 0, tgt, had: !!tgt, landed: false, any: false, up: false, perPress: !!cmd.perPress, want: 1 };   // (perPress: one blow a press, as yours)
   if (cmd.perPress) o.stay = { until: time + STAY.max, gap: STAY.gap[0], lost: 0, fire: !!cmd.fire, rk: allyRoomKey() };   // (sent in by you: it stays at it a while after, stayStep)
@@ -12031,7 +12494,8 @@ function partStrike(o, s, i, X) {                   // the next strike of the st
 }
 // a buddy (or Noro) on your command: true while it's busy (blocking, or on a string of moves), when its following waits. X: { set, sp, plain, shoot, col, crew, voice }
 function partHuman(o, s, dt, X) {
-  const p = player; if (s.fleap) return fleapStep(o, s, dt); if (s.dzap) return dzapStep(s, dt);   // (its charge move going: the flaming leap, the electric tackle)
+  const p = player; if (s.fleap) return fleapStep(o, s, dt); if (s.dzap) return dzapStep(s, dt);
+  { const AR = archOfO(o); if (AR && AR.tick && AR.tick(o, s, dt, X)) return true; }   // (an archetype's own going on: a cast, a vanish, its charge special)   // (its charge move going: the flaming leap, the electric tackle)
   if (s.worn) { o.pact = o.pcmd = o.pnext = o.stay = null; s.block = false; s.defOn = false; return false; }   // (worn out: it only follows, slowly)
   if (s.tcOn || s.tcFly) return true;   // (Camila's team charge: where it puts them, teamChargeTick)
   if (chgHold(s, dt)) return true;                   // (winding up for CHARGE! + ↑)
@@ -12346,8 +12810,8 @@ function allySpec(id) {
     outfit: { top: "skin", torsoProf: [[0, .15], [.2, .18], [.45, .24], [.7, .31], [.86, .34], [.95, .3], [1, .2]],
       torso: [{ kind: "poly", pts: [-120, 60, 120, 60, 70, 330, -70, 330], col: "#e6efb0" }],
       arm: "skin", armProf: [[0, .12], [.3, .15], [.55, .1], [.8, .12], [1, .1]], leg: "skin", legProf: [[0, .11], [.5, .085], [1, .07]], hand: { style: "bare" },
-      boot: { col: "#5a3d2a", r: .1, len: .24, wide: 1.05, point: true, shaft: true, shaftH: .32, shaftR: .1, cuff: true, cuffCol: "#7a573c" }, pads: { on: true, side: "both", shape: "round", col: "skin", size: 1.7 } },
-    move: { set: "boxer", bounce: 1.25, swing: 1.2, stride: .95, lean: .08, stance: { lean: .14, arch: -.06, armF: .5, elbF: .9, armB: .35, elbB: .9, bodyY: -.04, hop: .5 } } });
+      boot: { col: "#5a3d2a", r: .1, len: .24, wide: 1.05, point: true, shaft: true, shaftH: .32, shaftR: .1, cuff: true, cuffCol: "#7a573c" }, pads: { on: true, side: "both", shape: "round", col: "skin", size: 1.7 }, prop: { kind: "sword", side: "right", size: 1 } },   // (his mallet, a big die for its head: the warrior's blunt weapon, 2026-11-02)
+    move: { set: "sword", bounce: 1.25, swing: 1.2, stride: .95, lean: .08, stance: { lean: .14, arch: -.06, armF: .9, elbF: 1.5, armB: .35, elbB: .9, bodyY: -.04, hop: .5, blade: 2.2 } } });
   if (id === "pipe" || id === "pipelet") {        // the plumbers (the user's drawing: two flask-bodied pipe men, a great round bottom and a long neck up to a pipe-cap head, chunky pipe arms raised in fists; a little pot on legs)
     const col = id === "pipe" ? "#9cc3d5" : "#e0965a", base = { id, name: "THE PLUMBERS", face: { ears: 0 }, hair: noHair, colors: { skin: col, hair: col },
       outfit: { top: col, arm: col, leg: col, hand: { style: "bare" }, boot: { col: "#3a3f4a", r: .1, len: .18, wide: 1.2, point: true } }, move: { set: "brawler" } };
@@ -13107,11 +13571,21 @@ function dressAlly(r, id) {                        // what the kit can't make: B
       head.add(pos(P(new THREE.TorusGeometry(.44, .02, 4, 28, Math.PI * .75).rotateZ(-Math.PI * .375).rotateX(Math.PI / 2), K), 0, -.09, 0));   // the mouth, right round the front
       [[-.3, -.15, .12], [-.32, -.3, -.1], [-.28, -.48, .18], [-.25, -.2, -.25], [-.22, -.55, -.05]].forEach(([x, y, z], i) => r.chest.add(pos(P(new THREE.SphereGeometry(.035 + i % 2 * .015, 8, 6), SkD), x, y, z)));   // warts on its back
       const pip = (par, x, y, z, ry) => { const d = P(new THREE.CircleGeometry(.022, 10), K); pos(d, x, y, z); d.rotation.y = ry; par.add(d); };
-      r.hands.forEach(h => { hideKids(h); const g = new THREE.Group(); h.add(g);                                          // dice for fists, a bracelet of beads, claws
+      r.hands.forEach((h, hi) => { hideKids(h); const g = new THREE.Group(); h.add(g);                                          // dice for fists, a bracelet of beads, claws
+        if (hi === 1 && r.prop) { g.add(pos(P(new THREE.SphereGeometry(.13, 14, 10).scale(1, 1.05, 1.15), Sk), 0, -.12, 0)); [-.06, 0, .06].forEach(z => g.add(pos(P(new THREE.SphereGeometry(.045, 8, 6), Sk), .09, -.16, z))); return; }   // (the mallet hand: a fist round its handle, no die)
         g.add(pos(P(new THREE.BoxGeometry(.26, .26, .26), Dw), 0, -.15, 0));
         [[0, -.15, .131, 0], [-.065, -.085, .131, 0], [.065, -.215, .131, 0], [0, -.15, -.131, Math.PI], [.131, -.085, -.065, Math.PI / 2], [.131, -.215, .065, Math.PI / 2], [-.131, -.15, 0, -Math.PI / 2]].forEach(([x, y, z, ry]) => pip(g, x, y, z, ry));
         for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; g.add(pos(P(new THREE.SphereGeometry(.03, 6, 6), M(i % 2 ? "#f2c230" : "#e8e2d6")), Math.cos(a) * .11, 0, Math.sin(a) * .11)); }
         [-.07, .07].forEach(z => { const c = P(new THREE.ConeGeometry(.022, .12, 5), M("#efe6cf")); c.rotation.z = Math.PI + .5; pos(c, .11, -.3, z); g.add(c); }); });
+      if (r.prop && r.prop.inner) { const pr = r.prop, In = pr.inner; In.children.slice().forEach(c => In.remove(c));   // his mallet (the warrior's blunt weapon, 2026-11-02): a stout handle, gold bands, and for its head a big die
+        const Wd = M("#9a6a3c"), Au = M("#f2c230"), D = .5;
+        In.add(pos(P(new THREE.CylinderGeometry(.045, .055, 1.0, 10).rotateZ(-Math.PI / 2), Wd), .33, 0, 0)); In.add(pos(P(new THREE.CylinderGeometry(.06, .06, .16, 10).rotateZ(-Math.PI / 2), M("#3a2450")), -.04, 0, 0));   // (the handle, a wrapped grip)
+        In.add(pos(P(new THREE.SphereGeometry(.07, 10, 8), Au), -.15, 0, 0)); [.78, .86].forEach(x => In.add(pos(P(new THREE.CylinderGeometry(.075, .075, .05, 12).rotateZ(-Math.PI / 2), Au), x, 0, 0)));
+        const hd = new THREE.Group(); pos(hd, .88 + D / 2, 0, 0); In.add(hd); hd.add(P(new THREE.BoxGeometry(D, D, D), Dw));   // (the head: a die, the six faces pipped)
+        const pipF = (n, ax, sg) => { const L = { 1: [[0, 0]], 2: [[-1, -1], [1, 1]], 3: [[-1, -1], [0, 0], [1, 1]], 4: [[-1, -1], [1, -1], [-1, 1], [1, 1]], 5: [[-1, -1], [1, -1], [0, 0], [-1, 1], [1, 1]], 6: [[-1, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [1, 1]] }[n];
+          L.forEach(([u, v]) => { const d = P(new THREE.CircleGeometry(.05, 12), n === 1 ? M("#e8245a") : K), o = D / 2 + .004, a = u * .14, b = v * .14;
+            if (ax === "x") { d.position.set(sg * o, a, b); d.rotation.y = sg * Math.PI / 2; } else if (ax === "y") { d.position.set(a, sg * o, b); d.rotation.x = -sg * Math.PI / 2; } else { d.position.set(a, b, sg * o); d.rotation.y = sg > 0 ? 0 : Math.PI; } hd.add(d); }); };
+        pipF(6, "x", 1); pipF(1, "x", -1); pipF(5, "y", 1); pipF(2, "y", -1); pipF(3, "z", 1); pipF(4, "z", -1); }
       const sh = new THREE.Group(); r.hips.add(sh);                                                                        // torn shorts, jagged at the hem
       const [cv, g] = U.cv2(256, 64); g.fillStyle = "#5b3a7a"; g.beginPath(); g.moveTo(0, 0); g.lineTo(256, 0); for (let x = 256; x >= 0; x -= 16) g.lineTo(x, x % 32 ? 44 : 64); g.closePath(); g.fill();
       const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; r.texs.push(KIT.settleTex(tex));
@@ -14071,6 +14545,7 @@ function updateEnemy(dt) {
   if (!e.dead && e.y > SINK + 30) { const x = clamp(p.x + (p.x < WORLD / 2 ? 260 : -260), 160, WORLD - 160), gx = groundAt(x) !== null ? x : p.x; Object.assign(e, { x: gx, y: -60, vy: 200, vx: 0, onGround: false, plat: null }); }   // in the water: it drops back in near you
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
+  if (e.iceT > 0 && !e.dead && !e.leaf && !e.under) { iceStep(e, dt, D.hw + 2); return; }   // (a boss frozen too, not as long: the black mage's ice)
   if (e.zapT > 0 && !e.dead && !e.leaf && !e.under) { e.zapT -= dt; e.vx = approach(e.vx, 0, 4000 * dt); e.atk = null; e.vy = Math.min((e.vy || 0) + 2000 * dt, 1000); moveBody(e, dt, D.hw + 2);   // (the blocker's lightning: a boss stiff with it too, not as long)
     if ((e.zapFxT = (e.zapFxT || 0) - dt) <= 0) { e.zapFxT = .06; zapFx(e); } spring(e, dt); return; }
   if (e.under && (e.dead || e.chide)) glosUnderOff(e, 1);
@@ -21788,6 +22263,23 @@ function spawnLoot(kind, x, y, pop, id) {            // pop: it bursts out (of a
   loot.push({ kind, g, x, y: pop ? y : gy, gy, vy: pop ? rand(-760, -520) : 0, vx: pop ? rand(-110, 110) : 0, t: Math.random() * 6, id, age: 0, plat: null });
 }
 function clearLoot() { loot.forEach(q => { actors.remove(q.g); }); loot = []; }
+// what a berry baddy's carrying (the user, 2026-11-02: the thief "randomly steal[s] from berries they hit, they'll steal food and other items ... randomize when enemies have
+// items to either drop or to steal"): now and then one carries something, bobbing over its head; beaten, it drops it; a thief's blow can take it first
+const HELD = { chance: .3, kinds: [["guava", .34], ["chinola", .2], ["coin", .24], ["gum", .1], ["fruit", .12]] };
+let heldOn = [];   // [{ b, g }]: the ones showing
+function holdItems() { baddies.forEach(b => { if (b.item || b.sad || b.npc || b.type === "friend" || b.dead || b.gone || Math.random() >= HELD.chance) return; let r = Math.random(), k = HELD.kinds[0][0]; for (const [kk, w] of HELD.kinds) { if ((r -= w) < 0) { k = kk; break; } } b.item = { k }; }); }
+function heldMesh(b) { const h = heldOn.find(q => q.b === b); if (h) { actors.remove(h.g); heldOn = heldOn.filter(q => q !== h); } }
+function dropHeld(b) { if (!b || !b.item) return; const k = b.item.k; b.item = null; heldMesh(b); if (k === "coin") dropLoot(b.x, b.y - (b.h || 60) * .6, 5, true); else spawnLoot(k, b.x, b.y - (b.h || 60) * .6, true); }
+function stealFrom(b, s) {                          // a thief's: what it carries, off it and on its way to you (true: something taken)
+  if (!b || !b.item) return false; const k = b.item.k, x = b.x, y = b.y - (b.h || 60) - 20; b.item = null; heldMesh(b);
+  const n0 = loot.length; if (k === "coin") for (let i = 0; i < 5; i++) spawnLoot("coin", x + (i - 2) * 14, y, true); else spawnLoot(k, x, y, true);
+  loot.slice(n0).forEach(q => { q.steal = true; q.vy = -420; }); popText(x, y - 20, "STOLEN!"); SFX.coin(); sparks(x, y, 6); return true;
+}
+function syncHeld() {                               // (render) each one carried, over its carrier's head
+  heldOn = heldOn.filter(h => { if (h.b.item && !h.b.dead && !h.b.gone && baddies.includes(h.b)) return true; actors.remove(h.g); return false; });
+  for (const b of baddies) { if (!b.item || b.dead || b.gone) continue; let h = heldOn.find(q => q.b === b); if (!h) { h = { b, g: lootRig(b.item.k) }; h.g.scale.setScalar(.72); heldOn.push(h); }
+    const vis = !!(b.r && b.r.root && b.r.root.visible) && !b.under; h.g.visible = vis; if (vis) { h.g.position.set(X(b.x), Y(b.y - (b.h || 60)) + .62 + Math.sin(time * 3 + b.x) * .08, (b.z || 0) + .35); h.g.rotation.y = time * 1.6; } }
+}
 function dropLoot(x, y, n, boss) {                   // a beaten berry's coins (or, now and then, an item instead)
   if (!boss && Math.random() < 1 / 300) { spawnLoot("gum", x, y, true); return; }
   if (!boss) { const r = Math.random(); if (r < 1 / 30) spawnLoot("fruit", x, y, true); else if (r < 1 / 30 + 1 / 5) spawnLoot(Math.random() < .35 ? "chinola" : "guava", x, y, true); }   // (fruit far more often now, and along with the coins: the user, 2026-11-02 "have enemies drop more fruits")
@@ -21797,7 +22289,7 @@ function updateLoot(dt) {
   const p = player; if (!p) return;
   for (const q of loot) {
     q.t += dt; q.age += dt; const hy = (p.rig.heightPx || 92) * .5;
-    if (q.kind === "coin" && q.age > .35 && !p.dead && Math.hypot(p.x - q.x, p.y - hy - q.y) < 190) {   // (near enough: it flies to you)
+    if ((q.kind === "coin" || q.steal) && q.age > (q.steal ? .22 : .35) && !p.dead && (q.steal || Math.hypot(p.x - q.x, p.y - hy - q.y) < 190)) {   // (near enough: it flies to you; a thief's, from anywhere)
       q.mag = true; const dx = p.x - q.x, dy = p.y - hy - q.y, d = Math.hypot(dx, dy) || 1; q.vx = dx / d * 620; q.vy = dy / d * 620; q.x += q.vx * dt; q.y += q.vy * dt; }
     else if (q.vy || q.y < q.gy - .5 || q.plat === null && groundAt(q.x) !== null && q.y < (groundAt(q.x) ?? q.y) - .5) {
       const y0 = q.y; q.vy = Math.min(q.vy + 2000 * dt, 900); q.y += q.vy * dt; q.x = clamp(q.x + q.vx * dt, 30, WORLD - 30);
@@ -24434,6 +24926,7 @@ function updateBaddy(b, dt) {
   bbEvade(b, p);
   if (b.hurtT > 0 && b.onGround && Math.abs(b.vx) > 110 && (b.skidT = (b.skidT || 0) - dt) <= 0) { b.skidT = .07; dust(b.x - Math.sign(b.vx) * b.hw * .4, b.y, 2, -Math.sign(b.vx)); }   // knocked back along the ground: a skid
   if (b.sleep) { b.vx = 0; spring(b, dt); if ((b.zT -= dt) <= 0) { b.zT = rand(.9, 1.4); zzz(b); } return; }
+  if (b.iceT > 0 && !b.dead) { iceStep(b, dt, b.hw); return; }   // (frozen: the black mage's ice, iceStep)
   if (b.zapT > 0 && !b.dead) { b.zapT -= dt; b.vx = approach(b.vx, 0, 2600 * dt); b.atk = null; b.atkCd = Math.max(b.atkCd || 0, .5); b.vy = Math.min((b.vy || 0) + 2000 * dt, 1000); moveBody(b, dt, b.hw);   // stiff with lightning (the blocker's charge): nowhere going, no blows, hit all you like
     if ((b.zapFxT = (b.zapFxT || 0) - dt) <= 0) { b.zapFxT = .06; zapFx(b); } spring(b, dt); return; }
   if (b.flee) { updateFlee(b, dt); spring(b, dt); return; }
@@ -24732,6 +25225,7 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   return true;
 }
 function popBaddy(b) {                           // beaten: won back into a weapon (captureBaddy); the player's ATK power goes up one
+  dropHeld(b);
   if (!b.npc && b.type !== "friend" && !hideout) { dropLoot(b.x, b.y - (b.h || 60) * .6, b.T.size === "B" || b.T.size === "G" ? 2 : 1); dropFrom(b); }   // (its coins: one, a big one two · and what it carries, perhaps)
   if (b.spot && sadSpots.has(b.spot)) sadFate[sadHome.get(b.spot)] = "killed";   // (the sad one: no beps from that hideout this time)
   if (b.r.segs) { b.r.segRoot.visible = false; b.r.segs.forEach(g => puffs(g.position.x / S, GROUND - g.position.y / S, 1, 10, 120)); }
@@ -25243,7 +25737,8 @@ function hurtPlayer(d, src) {
   }
   const overhead = src && ((src.vy > 200 && Math.abs(src.vx) < 60) || src.nob);   // drops from above (and geysers from below) can't be blocked
   if (p.block && p.face === -d && !overhead) {
-    if (src && src.m && !src.reflected && time - (p.blockAt ?? -9) < PARRY_WIN && Math.abs(src.vx) + Math.abs(src.vy) > 60) { parry(p, src, d); return false; }   // just in time: sent back
+    if (src && src.m && !src.reflected && time - (p.blockAt ?? -9) < PARRY_WIN && Math.abs(src.vx) + Math.abs(src.vy) > 60) { parry(p, src, d); { const e = src.owner || partFoesAll().filter(f => (f.x - p.x) * p.face > 0).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0]; if (e) blkArch("parry", e, parrySide(p, e)); } return false; }   // just in time: sent back
+    if (!src && hurtBy && !hurtBy.dead && time - (p.blockAt ?? -9) < PARRY_WIN) { parryMelee(p, hurtBy, d); return false; }   // a blow, just in time: parried, them off balance (2026-11-02)
     if (guardBreaker(hurtBy || (src && src.owner))) { guardBreak(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // a big one's: the guard breaks
     blockHit(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // guarded
   if (src && src.daze) { src.life = Math.min(src.life, src.t); dazePlayer(p); return true; }   // Crux's city: the dizzy swirl only scrambles you
@@ -25744,7 +26239,7 @@ function update(dt) {
   partInput(dt); updateIntro(dt); updateCine(dt); updateCameo(dt); updateEJ(dt); updateAlly(dt); updateAllyHere(dt); updateMeet(dt); updateNpcs(dt); catCallTick(dt);
   if (player.auto) autoPlayer(dt); else if (player.sit) sitPlayer(dt); else updatePlayer(dt); heroSane(player);   // (sat in a chair by a rest stop's fire: any button to get up. It was only ever read in a hideout: stuck sat there, running on the spot, the user 2026-10-27)
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
-  updatePal(dt); teamChargeTick(dt); partnerTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); blockWall(); quickTick(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
+  updatePal(dt); teamChargeTick(dt); partnerTick(dt); rollTeamTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); blockWall(); quickTick(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
   if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
@@ -25805,6 +26300,8 @@ function render(dt) {
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) { foe.sync(enemy, foe.rig, dt); if (foe.post) foe.post(enemy, foe.rig, dt); } baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }
   if (cannonS) cannonSync();
+  if (mode === "play") { syncHeld(); syncFoeDizzy(dt); }
+  if (NJ_HIDE.size) ninjaVis();   // (the ninja's puffs: whoever's gone in one, out of sight)
   syncCards(); syncHazards(); syncBubble(dt); syncBudBubbles(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncZaps(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAuras(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
