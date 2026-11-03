@@ -52,6 +52,7 @@
   #tPad, #tBtns, #tCorner, #tLT, .tSh { transition: opacity .7s; }
   #touch.sit #tPad, #touch.sit #tBtns, #touch.sit #tCorner, #touch.sit #tLT, #touch.sit .tSh { opacity: 0; pointer-events: none; }   /* (sitting in the beps' hideout: the controls fade away) */
   #touch.cons #tPad, #touch.cons #tBtns, #touch.cons #tLT, #touch.cons .tSh { opacity: 0; pointer-events: none; }   /* (a BERRY CONSOLE game that's a page, Tic Tac Tower: you tap its screen; the corner opens its menu) */
+  #touch.cpad #tLT, #touch.cpad .tSh { opacity: 0; pointer-events: none; }   /* (one you walk about in, Tidy Up!: the pad and the buttons stay, as well as tapping its screen) */
   #tSit { position: absolute; inset: 0; pointer-events: auto; touch-action: none; display: none; } #touch.sit #tSit { display: block; }
   #tCorner.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
   #tTurn { position: fixed; inset: 0; z-index: 90; display: none; background: #2f3b43; color: #ffde00; align-items: center; justify-content: center;
@@ -184,12 +185,12 @@
   let was = "";
   setInterval(() => {
     const U = window.BERRY_UI; if (!U) return;
-    const s = U.state;                            // "play" | "sit" | "cons" | "back" | "menu" | "none"
+    const s = U.state;                            // "play" | "sit" | "cons" | "conspad" | "back" | "menu" | "none"
     if (s === was) return; was = s;
-    T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "cons" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit"); T.classList.toggle("cons", s === "cons");
-    if (s !== "play") { padPtr.clear(); btnPtr.clear(); sync(); }
+    T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "cons" && s !== "conspad" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit"); T.classList.toggle("cons", s === "cons"); T.classList.toggle("cpad", s === "conspad");
+    if (s !== "play" && s !== "conspad") { padPtr.clear(); btnPtr.clear(); sync(); }
     if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { key(code, false); document.getElementById(id).classList.remove("on"); }); }
-    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "cons" && s !== "menu"); C.textContent = s === "play" || s === "sit" || s === "cons" ? "❚❚" : "‹";
+    const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "cons" && s !== "conspad" && s !== "menu"); C.textContent = s === "play" || s === "sit" || s === "cons" || s === "conspad" ? "❚❚" : "‹";
   }, 120);
 
   // ── offline, and updating itself (sw.js keeps every file on the phone). Whenever it's online it looks for a new version: on opening,

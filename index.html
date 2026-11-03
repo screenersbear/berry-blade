@@ -6153,7 +6153,7 @@ addEventListener("keydown", e => {
   startMusic();
   if (titleUp) { dismissTitle(); return; }
   if (statsUp) { if (!e.repeat) { e.preventDefault(); statsUp.ask ? askKey(e.code) : statsGo(); } return; }
-  if (mode === "play" && player && player.cons && !paused && !menuUp) { e.preventDefault(); if (!e.repeat) { const K = CONS_KEYS[e.code]; if (K) consInput(K); } return; }   // (the BERRY CONSOLE's buttons)   // the stats card between worlds: any key goes on (or answers its question)
+  if (mode === "play" && player && player.cons && !paused && !menuUp) { e.preventDefault(); consDown[e.code] = 1; if (!e.repeat) { const K = CONS_KEYS[e.code]; if (K) consInput(K); } return; }   // (the BERRY CONSOLE's buttons)   // the stats card between worlds: any key goes on (or answers its question)
   if (transit && mode !== "play") return;
   if (achOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyX", "KeyZ", "KeyT"].includes(e.code)) { e.preventDefault(); closeAch(); } return; }
   if (teamOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyX", "KeyZ", "KeyT"].includes(e.code)) { e.preventDefault(); closeTeam(); } return; }
@@ -6234,8 +6234,8 @@ addEventListener("keydown", e => {
     if (e.code === "ArrowDown") tapDown(); }
   keys[e.code] = true;
 });
-addEventListener("keyup", e => { keys[e.code] = false; if (e.code === "Slash") closeItems(); });
-addEventListener("blur", () => { for (const k in keys) keys[k] = false; closeItems(); });
+addEventListener("keyup", e => { keys[e.code] = false; delete consDown[e.code]; if (e.code === "Slash") closeItems(); });
+addEventListener("blur", () => { for (const k in keys) keys[k] = false; for (const k in consDown) delete consDown[k]; closeItems(); });
 let pad = { l: false, r: false, j: false, a: false }, padPrev = { j: false, a: false };
 // ── controllers on the computer (the user, 2026-10-23: "add controller support to computer versions"): every screen answers a pad (the
 // level select, the achievements and a knockout's buttons too; the enemies & npcs viewer has its own), and while you're on one the prompts
@@ -23249,7 +23249,8 @@ const CARTS = [{ id: "cart1", name: "TIC TAC TOWER", hub: true, page: "games/tic
     help: { touch: "HOLD A PANEL, LET GO TO PLACE · SWIPE ONE OF YOURS TO PUSH IT (HOLD IT: ARROWS) · SWIPE ALONG A TIER'S SIDE TO TURN IT · DRAG UNDER IT TO LOOK ROUND · TAP THE BUBBLE: PLAY THE COMPUTER", pad: "{lb} / {rb}: THE TIERS · {j}: PLACE · {j} ON ONE OF YOURS, THEN A WAY: PUSH IT · {sq}: PICK UP THE TIER, THEN ← →: TURN IT · {tk}: TURN THE VIEW · START: MENU", keys: "← → ↑ ↓ MOVE · Q / E: THE TIERS · X: PLACE · X ON ONE OF YOURS, THEN A WAY: PUSH IT · V: PICK UP THE TIER, THEN ← →: TURN IT · Z: TURN THE VIEW · ESC: MENU" } },
   { id: "cart2", name: "BERRY STACK", road: true, tune: true, page: "games/berrystack.html?v=20261102g",   // (the user's, 2026-11-02: a toy claw machine; four berries on the plate, skewered, out to a cat or a dog)
     help: { touch: "TAP TO DROP THE BERRY · STACK 4 ON THE PLATE", pad: "{j}: DROP THE BERRY · STACK 4 ON THE PLATE · START: MENU", keys: "X: DROP THE BERRY · STACK 4 ON THE PLATE · ESC: MENU" } },
-  { id: "cart3", name: "MINI-GAME 3", road: true },
+  { id: "cart3", name: "TIDY UP!", road: true, hold: true, pad: true, page: "games/tidyup.html?v=20261103a",   // (the user's, 2026-11-03: a kid's room on a little round world, everything into its box before the clock runs out. hold: it's told which way's held · pad: the phone keeps its pad up)
+    help: { touch: "TAP OR THE PAD TO WALK · TAP A THING OR ✕: PICK IT UP · TAP ITS BOX OR ✕ BY IT: PUT IT IN", pad: "D-PAD: WALK · {j}: PICK UP · {j} BY ITS BOX: PUT IT IN · START: MENU", keys: "← → ↑ ↓ WALK · X: PICK UP · X BY ITS BOX: PUT IT IN · ESC: MENU" } },
   { id: "cart4", name: "MINI-GAME 4", road: true }, { id: "cart5", name: "MINI-GAME 5", w: 4 }, { id: "cart6", name: "MINI-GAME 6", w: 7 }];   // (hub: every hub's stall · road: the stands by the road, the next one you haven't got · w: lying in a room of that world · page: a game that's a page of its own)
 // a game's song (TIC TAC TOWER's came in the user's own file, free to publish (the user, 2026-10-30): the phone build plays it too)
 const CART_BGM = { cart1: "games/tictactower-bgm.m4a" };   // (cart2: BERRY STACK's song, a borrowed recording, the user 2026-11-02: the PC page only, build_phone.py takes it out)
@@ -23416,7 +23417,7 @@ function consStep(p, dt) {                           // (updatePlayer, while she
   const C = consModel();
   if (P.ph === "sit" && P.t >= CONS_T.sit) { P.ph = "flip"; P.t = 0; SFX.tick(); }
   else if (P.ph === "flip") { const u = Math.min(1, P.t / CONS_T.flip), e = u * u * (3 - 2 * u); C.flip.rotation.y = Math.PI * (1 - e); if (u >= 1) { P.ph = "on"; P.t = 0; C.screenM.color.set(CONS_SCREEN.on); $("cons").classList.add("on"); consLayout(); SFX.confirm(); } }
-  else if (P.ph === "on") { if (P.scr === "game" && !P.menu) consGameStep(P, dt); }
+  else if (P.ph === "on") { if (P.scr === "game" && !P.menu) consGameStep(P, dt); consHeld(); }
   else if (P.ph === "shut") { const u = Math.min(1, P.t / CONS_T.shut), e = u * u * (3 - 2 * u); C.flip.rotation.y = Math.PI * e; C.screenM.color.set(CONS_SCREEN.off); if (u >= 1) { P.ph = "up"; P.t = 0; p.consSit = 0; C.G.visible = false; } }
   else if (P.ph === "up" && P.t >= CONS_T.up) consEnd(p);
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
@@ -23463,11 +23464,19 @@ function consFrame(P) {
 }
 function consFrameOff() { if (consFr) { try { const w = consFr.f.contentWindow; if (w && w.eval) w.eval("typeof rend !== 'undefined' && rend.forceContextLoss && (rend.forceContextLoss(), rend.dispose())"); } catch (e) { } consFr.f.src = "about:blank"; consFr.f.remove(); consFr = null; } }   // (its 3D let go at once: left for the browser to collect, a few games opened and closed and it dropped the game's own picture, the oldest, 2026-11-01)
 function consFrameKey(k) { const w = consFr && consFr.f.contentWindow; if (w) w.postMessage({ bb: "key", k }, "*"); }
+const consDown = {};                                  // (the keys held down while the console's up: its buttons only pass on presses)
+function consHeld() {                                 // a game you walk about in (TIDY UP!) is told which way's held, each time that changes: the keys, the pad's stick and its d-pad
+  const C = consFr && CARTS.find(q => q.id === consFr.id); if (!C || !C.hold) return;
+  const P = player && player.cons, H = { up: 0, down: 0, left: 0, right: 0 };
+  if (P && P.scr === "game" && !P.menu && !paused && !menuUp) { for (const c in consDown) { const k = CONS_KEYS[c]; if (k in H) H[k] = 1; } if (pad.u) H.up = 1; if (pad.d) H.down = 1; if (pad.l) H.left = 1; if (pad.r) H.right = 1; }
+  const s = `${H.up}${H.down}${H.left}${H.right}`; if (s === consFr.hold) return; consFr.hold = s; const w = consFr.f.contentWindow; if (w) w.postMessage({ bb: "hold", ...H }, "*");
+}
 function consFrameSound() { const w = consFr && consFr.f.contentWindow; if (!w) return; const src = CART_BGM[consFr.id]; w.postMessage({ bb: "sound", mute: !!bgm.dataset.muted || (!src && !(CARTS.find(q => q.id === consFr.id) || {}).tune), fx: sfxOn, vol: MUSIC_VOL, src: src ? new URL(src, location.href).href : "" }, "*"); }   // (as loud as the game's own recordings; off with the music setting, or ?mute)
 addEventListener("message", e => { const d = e.data, F = consFr; if (!F || !d || e.source !== F.f.contentWindow) return;
-  if (d.bb === "ready") consFrameSound();
+  if (d.bb === "ready") { F.hold = null; consFrameSound(); }
   else if (d.bb === "cpu") F.cpu = !!d.on;                // (whether it's playing the computer: its row in the menu)
-  else if (d.bb === "key" && d.type === "keydown" && !d.rep && player && player.cons && !paused && !menuUp) { const K = CONS_KEYS[d.code]; if (K) consInput(K); } });
+  else if (d.bb === "key" && d.type === "keyup") delete consDown[d.code];
+  else if (d.bb === "key" && d.type === "keydown" && player && player.cons && !paused && !menuUp) { consDown[d.code] = 1; if (d.rep) return; const K = CONS_KEYS[d.code]; if (K) consInput(K); } });
 function consLogoDraw(g, x, y, s, ink, acc) {         // the console's logo (2026-10-31, was HOP): the berry blade crossed with the gauntlet, in two inks
   g.save(); g.translate(x, y); g.scale(s, s);
   g.save(); g.rotate(Math.PI / 4); g.fillStyle = ink; g.fillRect(-3.5, -24, 7, 32); g.beginPath(); g.moveTo(-3.5, -24); g.lineTo(0, -31); g.lineTo(3.5, -24); g.fill();   // the blade, its point up to the right
@@ -27368,7 +27377,7 @@ warmUp().catch(() => {}).finally(() => { warming = false; $("title").classList.r
 window.BERRY_UI = { get state() {           // (phone build: what's on screen, for touch.js)
   if (titleUp || comicUp || opening || edOpen || (modalOpen && koScr)) return "none";
   if (menuUp || achOpen || lvlOpen || paused || modalOpen || statsUp) return "menu";   // (the menus: the pad shows, to move through them; the corner goes back)
-  return mode === "play" ? (hideout && player && player.sit ? "sit" : player && player.cons && consFr && !player.cons.menu ? "cons" : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
+  return mode === "play" ? (hideout && player && player.sit ? "sit" : player && player.cons && consFr && !player.cons.menu ? ((CARTS.find(q => q.id === consFr.id) || {}).pad ? "conspad" : "cons") : "play") : mode === "world" || mode === "opp" || (mode === "select" && lookPick) ? "back" : "none"; },
   get idle() { return !edOpen && (titleUp || (menuUp && menuUp !== "map") || (mode === "select" && !lookPick && !story)); } };   // (nothing lost by reloading into an update: the story saves in every room)
 window.__game = { scoreHour, PC_REC, goWorldNow, arrivalRoom, get patrol() { return patrol; }, maybePatrol, patrolSpotted, get patrolOff() { return patrolOff; }, get patrolLock() { return patrolLock; }, get npcs() { return npcs; }, get loot() { return loot; }, bag, openItems, closeItems, useItem, openNpc, closeNpc, get npcUp() { return npcUp; }, get itemsUp() { return itemsUp; }, dropLoot, itemPlan, swapHero, callCat, get gl() { return { renderer, scene, actors, camera }; }, get audio() { return { ac, sfxBus, sfxOn, bgm, SFX, bugs, smp }; }, get uprise() { return { goal: upGoal, pct: upPct, store: upStore, runPts: upRunPts, caps }; }, get skirmish() { return skirmish; }, setUpOverride(v) { upOverride = v; }, maybeSkirmish, get restCamp() { return restCamp; }, CRATE_AT, get feel() { return { hitstop, slowMo, camKick, camPush, chainN }; }, get warming() { return warming; }, perf() { const n = PERF.n || 1, o = { update: +(PERF.u / n).toFixed(2), render: +(PERF.r / n).toFixed(2), frameMs: +(PERF.dt / n * 1000).toFixed(1), calls: renderer.info.render.calls, tris: renderer.info.render.triangles, px: renderer.getPixelRatio() }; PERF.u = PERF.r = PERF.n = PERF.dt = 0; return o; },
   get player() { return player; }, get enemy() { return enemy; }, get mode() { return mode; }, get rig() { return rig; }, get foe() { return foe; }, get beaten() { return beaten; }, get audioState() { return ac ? ac.state : "none"; }, get hz() { return hz; }, update, render, hitEnemy, camera, scene, get roster() { return roster; }, get lineup() { return lineup; }, KIT, rebuildRoster, pick, showSelect, FOES, showOpp, setOpp, pickOpp, setScreen, get baddies() { return baddies; }, get bossIn() { return bossIn; }, spawnBaddies, bossArrive, BB_TYPES, makeBaddy, syncBugs, syncMusic, easing, get pal() { return pal; }, get pets() { return pets; },
