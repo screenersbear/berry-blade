@@ -6676,10 +6676,6 @@ const bgState = () => story ? (story.bgears || (story.bgears = { rose: 0, camila
 const bpState = () => story ? (story.bgpow || (story.bgpow = { rose: 0, camila: 0 })) : freeBp;
 const bgearsOf = id => (id === "rose" || id === "camila") ? Math.min(bgMax(id), bgState()[id] || 0) : 0;
 const bpowOf = id => (id === "rose" || id === "camila") ? Math.min(BPOW_MAX, bpState()[id] || 0) : 0;
-// a gear's worth of power (the user: "each extra tooth multiplies damage but by a fraction of the usual multiplier at 3 ... whatever amount of damage is multiplied when
-// your weapon is maxed out on teeth in the base level, a full tooth more would up it by a half of that amount, and a half a tooth more would multiply it a half of the
-// extra tooth's half"): the three teeth put 3 on a blow, so a whole gear tooth 1.5 more, half a one (a gear) .75
-const TOOTH3 = 3, GEAR_DMG = TOOTH3 / 2 / 2;
 const maxHp = (r = rig) => ((r && HEARTS[r.id]) || 3) + (r ? bgearsOf(r.id) : 0);
 function fillHearts(n) { heartsEl.innerHTML = Array.from({ length: n }, () =>
   `<svg viewBox="0 0 22 20"><path d="M11 18.5 L3 10.5 Q-.5 6 3.2 2.6 Q7.5 -.6 11 4.2 Q14.5 -.6 18.8 2.6 Q22.5 6 19 10.5 Z" fill="#ffd203"/></svg>`).join(""); }
@@ -10957,6 +10953,7 @@ function updatePlayer(dt) {
   if (p.landLockT > 0) p.landLockT -= dt;
   if (p.point) pointTick(p, dt);
   cmdPointTick(p, dt);   // (pointing the team on: a moment, or as long as you hold it)
+  if (p.pupT > 0) p.pupT = Math.max(0, p.pupT - dt);   // (the power-up's glow running out)
   const control = p.hurtT <= 0 && !p.dead && !(intro && intro.lock) && !cine && !cheerHold && !(p.landLockT > 0) && !p.grow && !p.point && !(p.cmdPt > 0), cat = p.rig.kind === "cat";   // (p.point: pointing a partner at them, held there)   // (p.grow: its weapon bursting bigger, 2026-11-01)   // (landLockT: MOVEMENT's landing recovery)
   if (p.combo && p.atkT < 0) p.combo = null;   // safety net: a combo with no move playing would lock jump, attack, charge and block for good
   if (ax && hintShown && time > 4) { hintShown = false; setTimeout(() => document.getElementById("hint").classList.add("hide"), 5000); }
@@ -21884,7 +21881,7 @@ const ITEMS = [
   { k: "guava", name: "GUAYABA", price: 25, desc: "A HEART BACK, FOR EVERYONE", pad: "r1", key: "KeyB", kb: "B" },   // (2026-11-02: a heart · two · all of them)
   { k: "chinola", name: "CHINOLA", price: 40, desc: "TWO HEARTS BACK, FOR EVERYONE", pad: "tri", key: "KeyV", kb: "V" },
   { k: "fruit", name: "MANGO", price: 60, desc: "EVERYONE'S HEARTS FULL", pad: "x", key: "KeyZ", kb: "Z" },   // (prices doubled: the user, 2026-10-26. Were 30, 70, 45)
-  { k: "power", name: "POWER-UP", price: 140, desc: "FILLS YOUR POWER", pad: "o", key: "KeyX", kb: "X" },
+  { k: "power", name: "POWER-UP", price: 140, desc: "A GLOW: DOUBLE DAMAGE FOR 20 SECONDS", pad: "o", key: "KeyX", kb: "X" },
   { k: "gum", name: "BUBBLEGUM", price: 90, desc: "A BIG BUBBLE THAT TAKES 3 HITS", pad: "sq", key: "KeyC", kb: "C" },
 ];
 const BAG_MAX = 9;
@@ -23457,7 +23454,7 @@ function useItem(k) {
   if (!B[k] && !itemsInf) { SFX.nope(); if (card) { card.classList.remove("shake"); void card.offsetWidth; card.classList.add("shake"); } return; }
   if (!itemsInf) B[k]--; const H = p.rig.heightPx || 92;   // (DEBUG's UNLIMITED ITEMS: none used up)
   if (HEAL_AMT[k]) { healTeam(k); popText(p.x, p.y - H - 30, k === "fruit" ? "HEARTS FULL" : HEAL_AMT[k] > 1 ? "+2 HEARTS" : "+1 HEART"); }   // (everyone's: you and the team, the worn out up again. The user, 2026-11-02 "healing items heal everyone")
-  else if (k === "power") { growWeapon(p, 3); sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER FULL"); }
+  else if (k === "power") { p.pupT = PUP.t; pupAura.burst = .35; sparks(p.x, p.y - H * .6, 16); SFX.heal(true); popText(p.x, p.y - H - 30, "POWER UP!"); }   // (a glow round you, PUP.t seconds: your blows ×PUP.k)
   else { if (p.bubble) { actors.remove(p.bubble.m); p.bubble.m.geometry.dispose(); p.bubble = null; } makeBubble(p, 3); partnerList().forEach(P => budBubble(P.q, 3)); }   // (the team's each in one too)
   startEat(p, k); drawItems(k); if (k !== "gum") voice("heal"); if (story) writeSave();
 }
@@ -25858,10 +25855,11 @@ function stepBack(e, boss) {                         // the step back itself: al
 // a hit more damage than rose": a hit's 2, so hers are 3)
 // the weapon's size is its power now (the user, 2026-11-01: "in terms of damage, we'll use percentages. basic level is 25% and it increases damage as that goes";
 // asked, a power meter: 25 / 50 / 75 / 100%, a blow as it was the 25%, the biggest four times as hard). p.power: the size, 0–3. A partner's blow (partBlow): +1 a size, as it was
+const PUP = { t: 20, k: 2, warn: 3 };   // the power-up (the user, 2026-11-02: "change the powerup item to be just a glow that comes around your character for a time and they do more damage during that time"): its seconds, your blows ×k, blinking its last few
 const POWER_PCT = [25, 50, 75, 100]; let partBlow = false, partWeak = false;   // (partWeak: a blow of one they went in with on their own, partAuto)
 const wKB = () => partBlow ? 1 : 1 + .15 * (player.power || 0);   // (and its blows knock them further, the bigger it is)
-const CAMILA_EXTRA = 1, heroDmg = kind => { const z = player.power || 0; if (kind === "stomp") return 2; if (partBlow) return partWeak ? 1 + Math.floor(z / 2) : 2 + z;   // (theirs: on your command, 2 + the size; on their own, lighter)
-  return (2 + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + (((player.atkT >= 0 && KIT.STRIKES[player.atkKind]) || {}).dmg || 0)) * (1 + z) + (z >= 3 ? GEAR_DMG * (player.powG || 0) : 0); };   // (+ the blow's own dmg: Rose's charged cartwheels, 2026-10-28)   // (+ the berry gears' teeth, at full power)
+const CAMILA_EXTRA = 1, heroDmg = kind => { const z = player.power || 0, pk = player.pupT > 0 ? PUP.k : 1; if (kind === "stomp") return 2 * pk; if (partBlow) return partWeak ? 1 + Math.floor(z / 2) : 2 + z;   // (theirs: on your command, 2 + the size; on their own, lighter)
+  return (2 + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + (((player.atkT >= 0 && KIT.STRIKES[player.atkKind]) || {}).dmg || 0)) * (1 + z) * pk; };   // (+ the blow's own dmg: Rose's charged cartwheels, 2026-10-28)   // (× the power-up's, while its glow lasts: PUP)
 // GLOS'S ROOTS ROUND HER BERRIES (the user, 2026-11-02): "put thin roots that look like glos' arms around all the enemies. the player can break these by just attacking,
 // similar to when berries have armor, but the fire attack will break it quicker" · "the player needs to hit with two combos to break it, however much damage that is, but
 // only one hit of the fire attack buddy to break the vines. then their damage is normal, but they can just break the vines faster". Every berry in Berry Woods (not a sad one)
@@ -26535,7 +26533,16 @@ function syncGuard(dt) {
   const flick = .85 + .15 * Math.sin(time * 30);
   G.mat.opacity = Math.min(1, (.5 * G.show + G.hit * 2) * flick + (G.brk > 0 ? 1.2 * (1 - bu) : 0)); G.fillM.opacity = .1 * G.show + G.hit * .6 + (G.brk > 0 ? .35 * (1 - bu) : 0);
 }
-function syncAuras(dt) { syncAura(dt); syncBudAura(dt); }
+const pupAura = newAura(), PUP_COL = ["#ffd203", "#ff6a3d"].map(c => new THREE.Color(c)), pupC = new THREE.Color();
+function syncPupAura(dt) {                           // the power-up's glow round you while it lasts (PUP): the item's gold and its bolt's orange, back and forth; blinking at the end
+  const p = player, A = pupAura, left = mode === "play" && p && !p.dead ? p.pupT || 0 : 0, blink = left > 0 && left < PUP.warn, on = left > 0 && !(blink && Math.sin(time * 18) < 0);
+  A.lv = 2; A.show = approach(A.show, on ? .85 : 0, dt * (blink ? 24 : 5)); A.burst = Math.max(0, A.burst - dt);
+  A.g.visible = mode === "play" && !!p && (A.show > .01 || A.burst > 0); if (!A.g.visible) return;
+  auraDraw(A, p.x, p.y, p.z || 0, p.rig.heightPx || 92);
+  pupC.copy(PUP_COL[0]).lerp(PUP_COL[1], .5 + .5 * Math.sin(time * 4)); [A.shell, A.ring, A.flash].forEach(m => m.material.color.copy(pupC));
+  A.core.material.color.copy(pupC).lerp(WHITE_C, .5); A.sparkM.color.copy(pupC).lerp(WHITE_C, .4);
+}
+function syncAuras(dt) { syncAura(dt); syncBudAura(dt); syncPupAura(dt); }
 function syncAura(dt) {
   const p = player, A = aura;
   const on = mode === "play" && !!p && !p.dead && ((p.chargeT || 0) > .2 || (p.tkCharge && p.tkCharge.t > .2));   // (charging an attack, or the tackle)
