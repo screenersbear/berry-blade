@@ -3796,16 +3796,16 @@ function syncHuman(p, r, dt = 0) {
   });
   if (pr && pr.rings) pr.rings.forEach((m, i) => { const on = i < hp; m.visible = true;              // gauntlet rings = health: a lost one stays, gone white (the user: not vanished) (a split ring: two, one piece each)
     if (m.userData.on !== on) { m.userData.on = on; m.material.color.set(on ? m.userData.col0 || "#ffffff" : "#ffffff"); } });
-  if (pr && pr.teeth) {                                               // sword teeth / gauntlet spikes = ATK power (0–3): each one pops out with a little overshoot, or shrinks away
-    const n = p.power || 0, h = Math.min(dt || 0, .1), T = r.teethS || (r.teethS = pr.teeth.map(() => ({ x: 0, v: 0 })));
+  if (pr && pr.teeth) {                                               // sword teeth: your hero's all out (p.wTeeth), else by ATK power (0–3), each popping out with a little overshoot or shrinking away; the gauntlet's spikes: none (the user, 2026-11-02: "keep the teeth all on the sword but remove them from the glove visually")
+    const glove = pr.kind === "gauntlet", n = glove ? 0 : p.wTeeth ?? (p.power || 0), h = Math.min(dt || 0, .1), T = r.teethS || (r.teethS = pr.teeth.map((_, i) => ({ x: i < n ? 1 : 0, v: 0 })));
     pr.teeth.forEach((g, i) => {
       const s = T[i], want = i < n ? 1 : 0;
       for (let k = 0, m = Math.ceil(h * 120); k < m; k++) { s.v += (260 * (want - s.x) - 14 * s.v) * h / m; s.x += s.v * h / m; }
       if (s.x < 0) { s.x = 0; s.v = 0; }
       g.scale.setScalar(s.x); g.visible = s.x > .01;
     });
-    if (pr.teethX) { const pg = p.powG || 0, TX = r.teethXS || (r.teethXS = pr.teethX.map(() => ({ x: 0, v: 0 })));   // (the berry gears' teeth: only at full power; a gear: half out, two: all the way)
-      pr.teethX.forEach((X, i) => { const s = TX[i], want = n >= 3 && pg > i * 2 ? (pg >= i * 2 + 2 ? 1 : TOOTH_HALF) : 0;
+    if (pr.teethX) { const pg = glove ? 0 : p.powG || 0, TX = r.teethXS || (r.teethXS = pr.teethX.map(() => ({ x: 0, v: 0 })));   // (the berry gears' teeth, at any size since 2026-11-02: a gear half out, two all the way)
+      pr.teethX.forEach((X, i) => { const s = TX[i], want = pg > i * 2 ? (pg >= i * 2 + 2 ? 1 : TOOTH_HALF) : 0;
         for (let k = 0, m = Math.ceil(h * 120); k < m; k++) { s.v += (260 * (want - s.x) - 14 * s.v) * h / m; s.x += s.v * h / m; }
         if (s.x < 0) { s.x = 0; s.v = 0; }
         if (X.stud) X.stud.visible = pg >= i * 2 + 2; X.g.scale.setScalar(s.x); X.g.visible = s.x > .01; }); }
