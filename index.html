@@ -1052,7 +1052,7 @@ const stepXs = () => PROFILE.filter((q, i) => i && PROFILE[i - 1][0] === q[0]).m
 function setPlatforms(s) {
   if (STAGES[s] && STAGES[s].big) return bigPlatforms(STAGES[s]);
   WORLD = CELL_W; PLATFORMS.length = 0; GAPS.length = 0; PROFILE.length = 0; const S = STAGES[s];
-  (S.plats || SCREENS[S.h][S.boss ? "plats" : "plats2"]).forEach(([x, y, w, kind], i) => { if (S.crumble && crumbleGone.has(world + ":" + s + ":" + i)) return; PLATFORMS.push(S.crumble ? { x, y, w, kind, crumble: i } : { x, y, w, kind }); });   // (a room's breakable platforms: the broken ones gone till you're back in the world)
+  (S.plats || SCREENS[S.h][S.boss ? "plats" : "plats2"]).forEach(([x, y, w, kind, o], i) => { if (S.crumble && crumbleGone.has(world + ":" + s + ":" + i)) return; PLATFORMS.push(S.crumble ? { x, y, w, kind, crumble: i } : { x, y, w, kind, ...(o || {}) }); });   // (o: its own, { sky: true } only from above)   // (a room's breakable platforms: the broken ones gone till you're back in the world)
   (S.gaps || []).forEach(g => GAPS.push(g));
   let d = 0; (S.steps || []).forEach(([x, dy]) => { PROFILE.push([x, d], [x, dy]); d = dy; });   // steps: [x, dy] → a sheer step at x
   (S.ground || []).forEach(q => PROFILE.push(q)); PROFILE.sort((a, b) => a[0] - b[0]);
@@ -5174,7 +5174,7 @@ function authorForest() {
     [["leafy", "leaf", 395], ["acorn", "rust", 890], ["twiggy", "olive", 1380]], "RED BRIDGE");
   // BA4: "the screen is zoomed out and the almost silhouetted player's team walks on free standing glos like vines": three loops, along their tops; drop through
   // (double tap down) or fall between them, down into BB4
-  bg("BA4", { open: true, noRoots: true, zoom: 2, sil: true, ground: [[0, 0]], gaps: [[380, 2760]], below: BG.BB4, prev: BG.BA3, next: BG.BA5,
+  bg("BA4", { open: true, noRoots: true, zoom: 2, sil: true, ground: [[0, 0]], gaps: [[380, 2760]], below: BG.BB4, dropOnly: true, prev: BG.BA3, next: BG.BA5,   // (dropOnly: down into BB4 only, never up out of it: the user 2026-11-02, "you should not be able to jump into the vines from the bottom and then climb up onto the screen with the silhoutted zoomed out look")
     plats: [[410, 470, 420, "vine"], [970, 455, 420, "vine"], [1530, 470, 1080, "vine"]],
     set: [{ k: "bgLand", x0: -300, x1: 380, ...LAND, ragged: 1 }, { k: "glos", paths: [...RINGS, V([[1900, 485, 0], [2200, 487, .15], [2450, 484, -.1], [2700, 486, 0]], .42, .4),
       V([[380, 480, -.5], [330, 560, -.9], [300, 700, -1.2], [330, 800, -1.4]], .3, .16, { hand: true })] }] }, [], "VINES");
@@ -5197,10 +5197,11 @@ function authorForest() {
     set: [{ k: "treetops", x0: -300, x1: 2900 }, { k: "bgTree", x: 820, base: GROUND + 120, top: 190, r: .7, z: -1.5, reach: 500, crown: { y: 160, r: 2.8 } },
       { k: "bgTree", x: 2230, base: GROUND + 200, top: -300, r: 5.4, z: -6.6, col: "#c98d7a", col2: "#a8705f", reach: 1 }] },
     [["leafy", "leaf", 300], ["acorn", "rust", 1150], ["twiggy", "olive", { plat: 0, x: 1180 }]], "TREETOPS");
-  // BB4: the floor, the vines' loops hanging into it from BA4; "one loop in BB4 has a star and that's another vine the player can actually land on"
-  bg("BB4", { ground: [[0, 0]], prev: BG.BB3, next: BG.BB5, plats: [[380, 250, 480, "vine"]], items: [["power", 620, 250]],
+  // BB4: the floor, the vines' loops hanging into it from BA4; "one loop in BB4 has a star and that's another vine the player can actually land on". Up high, just under where
+  // you fall in from BA4, and yours to land on only from above (sky): "it should hafve the vines much higher and you should not be able to jump into the vines from the bottom" (2026-11-02)
+  bg("BB4", { ground: [[0, 0]], prev: BG.BB3, next: BG.BB5, plats: [[380, 110, 480, "vine", { sky: true }]], items: [["power", 620, 110]],
     set: [{ k: "treetops", x0: -300, x1: 650 }, { k: "glos", dy: -ROW_H, paths: [...RINGS] },
-      { k: "glos", paths: [V([[350, 265, -.1], [480, 262, 0], [620, 266, .1], [760, 262, 0], [890, 265, -.1]], .38, .34), V([[1200, 335, -1.7], [1230, 385, -1.6], [1262, 430, -1.5]], .26, .14, { hand: true }),
+      { k: "glos", paths: [V([[350, 125, -.1], [480, 122, 0], [620, 126, .1], [760, 122, 0], [890, 125, -.1]], .38, .34), V([[1200, 335, -1.7], [1230, 385, -1.6], [1262, 430, -1.5]], .26, .14, { hand: true }),
         V([[1880, 370, -1.7], [1930, 410, -1.8], [1915, 448, -1.6]], .26, .14, { hand: true })] }] },
     [["acorn", "rust", 1310], ["leafy", "orange", 2070]], "FAR WOODS");
   // BB5-BB6: the land's face behind; up it on ledges (the user's two, "add another one that leads them to bb6 (it extends into bb5 and to bb6", "from bb6 have another
@@ -7694,17 +7695,22 @@ let mapSeen = {};                                    // the rooms you've been in
 const seenOf = w => mapSeen[w] || (mapSeen[w] = new Set());
 const MAP_TOP = -90, MAP_BOT = 640;                  // the slice of a room the map's marks are placed in (px, y down: over the highest ledges to under the ground)
 const mapGridC = new Map();
+// the woods' background on the map (the user, 2026-11-02: "it doesnt show up on the main hud with the letter and number of the room you'r ein, and on the main menu it doesnt
+// blink or mark the room you're in"): BA and BB, a band of their own over the A row, a little apart from it; the map grows to it once you've been in one of them
+const BG_MAP_ROW = { A: -2.25, B: -1.25 };
 function mapGrid(w) {                                // where each room sits (its column, and its row: A top, B, C, D bottom), and how far the world goes
-  if (mapGridC.has(w)) return mapGridC.get(w);
+  const S = WORLDS[w].stages, seen = seenOf(w), bg = !!dbgPick || mapOwned(w) || S.some((q, s) => q.bgRow && seen.has(s)), key = w + (bg ? ":bg" : "");
+  if (mapGridC.has(key)) return mapGridC.get(key);
   const at = []; let c0 = 99, c1 = -99, r0 = 9, r1 = -9;
-  WORLDS[w].stages.forEach((q, s) => { const m = /^([A-D])(\d+)$/.exec(q.cell || ""); if (!m || q.arena) return; const c = +m[2], r = "ABCD".indexOf(m[1]); at[s] = [c, r]; c0 = Math.min(c0, c); c1 = Math.max(c1, c); r0 = Math.min(r0, r); r1 = Math.max(r1, r); });
-  const G0 = { at, c0, c1, r0, r1 }; mapGridC.set(w, G0); return G0;
+  S.forEach((q, s) => { const b = q.bgRow && !q.cut && /^B([AB])(\d+)$/.exec(q.bgCell || ""), m = b || /^([A-D])(\d+)$/.exec(q.cell || ""); if (!m || q.arena) return;
+    const c = +m[2], r = b ? BG_MAP_ROW[b[1]] : "ABCD".indexOf(m[1]); at[s] = [c, r]; if (b && !bg) return; c0 = Math.min(c0, c); c1 = Math.max(c1, c); r0 = Math.min(r0, r); r1 = Math.max(r1, r); });
+  const G0 = { at, c0, c1, r0, r1 }; mapGridC.set(key, G0); return G0;
 }
 function treasureMarks(w) {                          // the treasure map's marks, room by room: { [room]: ["exit" | "cat" | "dog" | "dungeon" | "rest" | "loot", ...] }
   const S0 = WORLDS[w].stages, out = {}, add = (s, kind) => { if (s === undefined || s === null || !S0[s]) return; const L = out[s] || (out[s] = []); if (!L.includes(kind)) L.push(kind); };
   if (w === world) for (const run of petRuns) { if (run.w !== w) continue;
     if (run.phase === "wait" && run.room === undefined) {   // (not turned up yet: the map knows where it'll be)
-      const ok = S0.map((q, i) => i).filter(i => i > 0 && catRoomOK(i, run.sp, S0) && mapGrid(w).at[i] && !petRuns.some(o => o !== run && o.room === i)); if (ok.length) run.room = ok[Math.floor(Math.random() * ok.length)]; }
+      const ok = S0.map((q, i) => i).filter(i => i > 0 && catRoomOK(i, run.sp, S0) && mapGrid(w).at[i] && !S0[i].bgRow && !petRuns.some(o => o !== run && o.room === i)); if (ok.length) run.room = ok[Math.floor(Math.random() * ok.length)]; }
     if (run.room !== undefined && run.phase !== "done") add(run.room, run.sp); }
   S0.forEach((q, s) => { if (q.toWorld != null && mapGrid(w).at[s]) add(s, mapGrid(w).at[s][0] <= mapGrid(w).c0 ? "exitL" : "exit"); if (q.bep) add(s, "dungeon"); if (q.rest) add(s, restReached(w, s) ? "rest" : "restx"); if (q.hub === 1) add(s, "hub");   // (the ways out of the world too: the user, 2026-10-23)
     if ((q.gifts || []).some((g0, i) => !(w === world && giftsTaken.has(w + ":" + s + ":" + i)))) add(s, "loot"); if (q.secret && !q.secret.door && !itemGot(w + ":" + s + ":chest")) add(s, "loot"); });
@@ -7738,8 +7744,8 @@ function drawWorldMap(g, w, cw, ox, oy, k, asp = 1, marks = true, cells = null) 
   for (const s of rooms) { const a = M.at[s]; if (!a) continue; const [c, r] = a, bx = ox + (c - M.c0) * cw, by = oy + (r - M.r0) * ch;
     if (bx > VW || by > VH || bx + cw < 0 || by + ch < 0) continue;   // (off the little map: not drawn)
     const gap = Math.max(2, cw * .08); g.fillStyle = s === cur ? "#ffd203" : seen.has(s) ? "#55636c" : "#36424a"; g.fillRect(bx + gap / 2, by + gap / 2, cw - gap, ch - gap); drawn.add(s === cur ? "you" : seen.has(s) ? "been" : "unseen");
-    const q = WORLDS[w].stages[s]; if (DEV_CELLS && cells && q && q.cell && (s === cur || (cells === "all" && seen.has(s)))) { const fs = Math.max(8, Math.min(cw * .3, ch * .34, 15));   // (its name in the corner)
-      g.font = `bold ${fs.toFixed(1)}px Bungee, sans-serif`; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = s === cur ? "#2f3b43" : "#ffd203"; g.fillText(q.cell, bx + gap / 2 + fs * .25, by + gap / 2 + fs * .2); } }
+    const q = WORLDS[w].stages[s], nm = q && (q.cell || q.bgCell); if (DEV_CELLS && cells && nm && (s === cur || (cells === "all" && seen.has(s)))) { const fs = Math.max(8, Math.min(cw * .3, ch * .34, 15));   // (its name in the corner)
+      g.font = `bold ${fs.toFixed(1)}px Bungee, sans-serif`; g.textAlign = "left"; g.textBaseline = "top"; g.fillStyle = s === cur ? "#2f3b43" : "#ffd203"; g.fillText(nm, bx + gap / 2 + fs * .25, by + gap / 2 + fs * .2); } }
   const MK = !marks ? {} : owned ? treasureMarks(w) : {}, z = Math.min(cw * .19, 9 * k);   // the treasure map's marks, in a row across the middle of each room
   if (marks) for (const s of seen) { const q = WORLDS[w].stages[s]; if (!q) continue; const L = MK[s] || (MK[s] = []);   // (and, map or no map, what's in a room you've been in: a rest stop you've reached, the hub)
     if (q.rest && restReached(w, s) && !L.includes("rest")) L.push("rest"); if (q.hub === 1 && !L.includes("hub")) L.push("hub"); if (!L.length) delete MK[s]; }
@@ -7851,8 +7857,8 @@ $("fmTabs").addEventListener("click", e => { const b = e.target.closest("[data-f
 $("fmCtl").addEventListener("click", e => { const b = e.target.closest("[data-mk]"); if (b && fm) fmMark(b.dataset.mk); else if (fm && e.target.closest("span") && /BACK/.test(e.target.closest("span").textContent)) closeFullMap(); });
 $("fmBox").addEventListener("click", e => { if (!fm) return;
   if (fm.view === "island") { const n = e.target.closest("[data-w]"); if (n) { fm.isle = +n.dataset.w; fmIsleOpen(); } return; }
-  const cv = $("fmCv"), R = cv.getBoundingClientRect(), M = mapGrid(fm.w), nc = M.c1 - M.c0 + 1, cw = (R.width - 44) / nc, c = Math.floor((e.clientX - R.left - 22) / cw) + M.c0, r = Math.floor((e.clientY - R.top - 22) / cw) + M.r0;
-  const s = fmRooms(fm.w).find(q => M.at[q][0] === c && M.at[q][1] === r); if (s !== undefined) { fm.sel = s; SFX.tick(); drawFullMap(); } });
+  const cv = $("fmCv"), R = cv.getBoundingClientRect(), M = mapGrid(fm.w), nc = M.c1 - M.c0 + 1, cw = (R.width - 44) / nc, c = (e.clientX - R.left - 22) / cw + M.c0, r = (e.clientY - R.top - 22) / cw + M.r0;
+  const s = fmRooms(fm.w).find(q => c >= M.at[q][0] && c < M.at[q][0] + 1 && r >= M.at[q][1] && r < M.at[q][1] + 1); if (s !== undefined) { fm.sel = s; SFX.tick(); drawFullMap(); } });   // (the box clicked in: the background's rows are a little off the grid's)
 // every menu fits the screen (the user, 2026-10-26: "please check all menus the load in mobile. almost everything is too big and not fitting the screen"): each open
 // panel shrunk, as a whole, to what's really showing (a phone's browser bars and notch taken off), never grown. Looked at a few times a second, and on a turn
 const FIT_ALL = "#pause .panel, #menu > .panel, #dev > .panel, #settings > .panel";   // (lists of options: all of them shown, shrunk to fit, never a scroll box. The phone's .panel max-height counted in the shrunk size cut their last ones off: 2026-10-31, "the menu and debug menu were still too big for the boxes they were in")
@@ -9764,7 +9770,7 @@ function peekWant(s) {                             // the room above s, if it's 
 }
 function upWant(s) {                               // the room above s, if one opens into it (a hole, or no floor): built ahead, for a look up into it off a jump
   if (!STITCH.has(world) || s < 0 || !STAGES[s] || STAGES[s].deep) return -1;
-  const i = STAGES.findIndex(q => q && !q.cut && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD));
+  const i = STAGES.findIndex(q => q && !q.cut && !q.dropOnly && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD));
   return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
 }
 const UP_SEE = 200;                                  // (this high, under the opening, the room above is put up: before the camera lifts to it)
@@ -9960,7 +9966,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
     const gy = groundAt(x) ?? GROUND, dp = !!STAGES[ns].deep;
     if (dp) x = clamp(fx, 60, WORLD - 60);                                          // (the deep: straight on down through the water, where you were)
     const ceilY = CEILS.reduce((m, [c0, c1, cy]) => x > c0 && x < c1 ? Math.max(m, cy) : m, -1e9);   // (never in a ceiling: just under it, where there's one over you)
-    Object.assign(player, { x, y: dp ? DEEP_TOP + 40 : Math.max(rs === 1 ? Math.min(fy - ROW_H, gy - 60) : gy - 430, ceilY + 2), vx: 0, vy: dp ? Math.min(vy, 240) : vy,   /* (stitched: on down from where you were, a row's height up the room below) */ face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+    Object.assign(player, { footY: -1e9, x, y: dp ? DEEP_TOP + 40 : Math.max(rs === 1 ? Math.min(fy - ROW_H, gy - 60) : gy - 430, ceilY + 2), vx: 0, vy: dp ? Math.min(vy, 240) : vy,   /* (stitched: on down from where you were, a row's height up the room below) */ face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, sunkT: 0, sunk: false, hurtT: 0,
       safeT: 1, safe: world === 1 && STAGES[ns].authored ? safeNear(x) : { x, y: gy, plat: null } });   // (in a new room: a moment's protection, not shown: no blink, the user 2026-10-22)
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
@@ -9971,7 +9977,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
 }
 function holeAbove(px) {                           // the room above that drops into this one by a hole, and the hole nearest x (in this room's terms: rooms line up)
   if (holeAbove.k !== world + ":" + stage) { holeAbove.k = world + ":" + stage; holeAbove.v = null;
-    STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.cut || q.arena || (q.below !== stage && q.riseFrom !== stage)) return; const G0 = (q.riseFrom === stage ? q.riseIn || [] : q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }   // (riseFrom / riseIn: no hole, but up over its edge from there you can jump: the ship's deck from C3, 2026-11-02)
+    STAGES.forEach((q, i) => { if (holeAbove.v || !q || q.cut || q.arena || q.dropOnly || (q.below !== stage && q.riseFrom !== stage)) return; const G0 = (q.riseFrom === stage ? q.riseIn || [] : q.gaps || []).filter(([a, b]) => b > 0 && a < WORLD); if (G0.length) holeAbove.v = { to: i, gaps: G0 }; }); }   // (riseFrom / riseIn: no hole, but up over its edge from there you can jump: the ship's deck from C3, 2026-11-02)
   const v = holeAbove.v; if (!v) return null;
   const [a, b] = v.gaps.reduce((m, g) => Math.abs((g[0] + g[1]) / 2 - px) < Math.abs((m[0] + m[1]) / 2 - px) ? g : m);
   return { to: v.to, x: (a + b) / 2, a, b };
@@ -10848,8 +10854,8 @@ function moveBody(b, dt, halfW) {
     if (gy !== null && (b.y >= gy || (wasGround && !b.plat && gy - b.y < 9)) && (prevY <= gy + (wasGround ? 8 : 1) || (g0 !== null && prevY <= g0 + 1))) surf = { y: gy, p: null };   // (on a slope: keep to it, up or down; and the ground that's come up under you catches you)
     else if (b === player && gy !== null && !b.climb && !b.auto && !b.sunk && b.y - gy > 24 && b.y - gy < 320 && prevY - gy > 24) surf = { y: gy, p: null };   // (the player, ever left inside the ground: back on top of it)
     for (const p of PLATFORMS)
-      if (!(b.dropT > 0 && p === b.dropPlat) && prevY <= p.y + .5 && b.y >= p.y && b.x > p.x - 6 && b.x < p.x + p.w + 6 && (!surf || p.y < surf.y)) surf = { y: p.y, p };   // dropping through: ignore that one
-    if (surf) { if (!wasGround) b.landV = b.vy; b.y = surf.y; b.vy = 0; b.onGround = true; b.plat = surf.p; }
+      if (!(b.dropT > 0 && p === b.dropPlat) && !(p.sky && b === player && !(b.footY <= p.y + 2)) && prevY <= p.y + .5 && b.y >= p.y && b.x > p.x - 6 && b.x < p.x + p.w + 6 && (!surf || p.y < surf.y)) surf = { y: p.y, p };   // dropping through: ignore that one · one only from above (sky): yours only if you were last stood as high, or fell in from the room above
+    if (surf) { if (!wasGround) b.landV = b.vy; b.y = surf.y; b.vy = 0; b.onGround = true; b.plat = surf.p; if (b === player) b.footY = surf.y; }
   }
   return prevY;
 }
@@ -10945,9 +10951,9 @@ function updatePlayer(dt) {
     if (L.rope && !ropeOpen(L)) continue;
     if (L.camila && p.rig.id !== "camila") continue;   // (a bare wall: only her gauntlet grips it)
     const fromBot = !L.noBot && upHeld && Math.abs(p.x - L.x) < 26 && p.y > L.top + 2 && p.y <= L.bot + 2;
-    const fromTop = !L.noTop && held.down && p.onGround && Math.abs(p.y - L.top) < 4 && Math.abs(p.x - (L.face + L.wall * 24)) < 30;
+    const fromTop = !L.noTop && held.down && p.onGround && Math.abs(p.y - L.top) < 4 && (Math.abs(p.x - (L.face + L.wall * 24)) < 30 || (L.rope === "down" && !L.rock && Math.abs(p.x - L.x) < 40));   // (or stood on its hatch, where there's ground over it: BA3's, the user 2026-11-02 "hard to go down into")
     const fromFall = L.rope === "down" && !L.rock && !p.onGround && p.vy > 60 && Math.abs(p.x - L.x) < 44 && p.y > L.top + 24 && p.y < L.bot - 90;   // dropping off the dock beside it: you catch it (the user, 2026-10-19: jumping down next to it, you fell)
-    if (fromBot || fromTop || fromFall) { upPend = -1; Object.assign(p, { climb: L, climbPh: 0, vx: 0, vy: 0, onGround: false, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0 }); jumpBuf = 0; if (fromTop) p.y = L.top + 14; break; }
+    if (fromBot || fromTop || fromFall) { upPend = -1; Object.assign(p, { climb: L, climbDir: fromBot ? -1 : 1, climbPh: 0, vx: 0, vy: 0, onGround: false, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0 }); jumpBuf = 0; if (fromTop) p.y = L.top + 14; break; }
   }
   if (p.climb) { climbStep(p, dt); return; }
   if (p.cons) { consStep(p, dt); return; }   // (the BERRY CONSOLE in her hands: sat still, the game takes the buttons)
@@ -11326,6 +11332,7 @@ function zipPan(ns) {                                // on down the line into th
 }
 function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ climb, jump lets go; over the top (or at the foot) you step off
   const L = p.climb, upHeld = keys.ArrowUp || keys.KeyW || pad.u, dir = p.climbAuto || ((held.down ? 1 : 0) - (upHeld ? 1 : 0));   // (climbAuto: climbing on in from the room before)
+  if (dir) p.climbDir = dir;                         // (the way you're going on it: the team after you, up or down, climbWith)
   p.x = approach(p.x, L.x, 300 * dt); p.vx = 0; p.vy = dir * (L.wallClimb ? 150 : 200); p.y += p.vy * dt; p.onGround = false;
   const ph0 = p.climbPh || 0; p.climbPh += Math.abs(p.vy) * dt * (L.wallClimb ? .045 : .06);
   const crossed = k => Math.floor(ph0 / TAU - k) !== Math.floor(p.climbPh / TAU - k), WH = KIT.WALL_HIT ?? .24;   // (where in her climb's cycle: STRIKES.wallclimb)
@@ -14443,31 +14450,39 @@ function updateAlly(dt) {                          // with you: just behind you 
   allies.slice().forEach((a, k) => { if (allies.includes(a)) updateAllyOne(a, k, dt); });
 }
 // up after her (the user, 2026-11-02: "buddies should climb with camila"): she's on a ladder, a rope, a rock face, a wall; the team at its foot goes up it after her,
-// one under the other, the same climb, and over the top after her as she steps off it (into another room: they're with you there as ever)
+// one under the other, the same climb, and over the top after her as she steps off it (into another room: they're with you there as ever). And down one after you
+// ("your partnes should get on the ladder after you", 2026-11-02): at its top as you go down it, they get on and come down over you, one over the other
 const CLIMB_V = 260;
 function climbWith(s, dt) {
   const p = player, L = p && !p.dead && mode === "play" ? p.climb : null;
   if (!s.climbW) {
-    if (!L || L.rope === "down" || s.post || s.worn || s.tcOn || s.tcFly || s.fleap || s.dzap || s.pounce || s.zipR || !s.onGround) return false;
-    if (Math.abs(s.x - L.x) > 260 || !(s.y > p.y + 30) || s.y < L.top || Math.abs(s.y - L.bot) > 60) return false;   // (near its foot, below her)
-    s.climbW = { L, st: stage, up: false };
+    if (!L || s.post || s.worn || s.tcOn || s.tcFly || s.fleap || s.dzap || s.pounce || s.zipR || !s.onGround || Math.abs(s.x - L.x) > 260) return false;
+    const dir = p.climbDir || 0;
+    if (L.rope !== "down" && dir <= 0 && s.y > p.y + 30 && s.y >= L.top && Math.abs(s.y - L.bot) < 60) s.climbW = { L, st: stage, up: false };   // (near its foot, below her: up after her)
+    else if (!L.wallClimb && dir >= 0 && s.y < p.y - 30 && Math.abs(s.y - L.top) < 30) s.climbW = { L, st: stage, up: false, dn: true };   // (at its top, over her as she goes down: down after her)
+    else return false;
   }
   const C = s.climbW;
   if (L !== C.L || stage !== C.st) { s.climbW = null; s.climb = null;
     if (stage === C.st && !L && p.y < s.y - 20) { s.y = Math.max(Math.min(s.y, C.L.top + 30), p.y + 10); s.vy = -Math.sqrt(2 * GRAV * Math.max(80, s.y - p.y + 70)); s.vx = clamp((p.x - s.x) * 2.2, -320, 320); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; }   // (over the top after her)
     return false; }
-  const n = partSlot(s), tx = L.x + (L.wallClimb ? 0 : (n % 2 ? 16 : -16)), ty = clamp(p.y + 72 + n * 62, L.top + 10, L.bot), y0 = s.y;
+  const n = partSlot(s), tx = L.x + (L.wallClimb ? 0 : (n % 2 ? 16 : -16)), ty = clamp(C.dn ? p.y - 72 - n * 62 : p.y + 72 + n * 62, L.top + 10, L.bot), y0 = s.y;
   if (!C.up) { const d = tx - s.x; s.vx = Math.sign(d) * Math.min(330, Math.abs(d) / dt); s.x += s.vx * dt; s.face = Math.sign(d) || s.face; s.vy = 0; s.onGround = true; s.sprint = false;   // (across to its foot first)
     if (Math.abs(tx - s.x) < 4) { C.up = true; s.vx = 0; } return true; }
   s.x = approach(s.x, tx, 300 * dt); s.y = approach(s.y, ty, CLIMB_V * dt); s.climbPh = (s.climbPh || 0) + Math.abs(s.y - y0) * .045;
   Object.assign(s, { vx: 0, vy: 0, onGround: false, plat: null, climb: L, atkKind: null, atkT: -1, block: false, defOn: false, face: L.wall || p.face, sprint: false });
   return true;
 }
+function climbArrive(s) {                            // (into a room on a ladder, you still on it: they come in on it with you, over you going down, under you going up; no room on it, by you as ever)
+  const p = player, L = p && p.climb; s.climbW = null; s.climb = null; if (!L || L.wallClimb) return;
+  const n = partSlot(s), dn = (p.climbDir || 0) > 0, y = dn ? p.y - 72 - n * 62 : p.y + 72 + n * 62; if (y < L.top + 10 || y > L.bot) return;
+  Object.assign(s, { x: L.x + (n % 2 ? 16 : -16), y, vx: 0, vy: 0, onGround: false, plat: null, climb: L }); s.climbW = { L, st: stage, up: true, dn };
+}
 function updateAllyOne(ally, k, dt) {              // (k: its place in the line behind you)
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt; if (s.zipR) return;   // (down the zipline behind you)
   if (stronghold || cine || hideout || opening) { allyHide(ally); ally.away = true; return; }   // (it waits outside)
   const behind = 90 + palsAll().length * 50 + (ejPal() ? 50 : 0) + k * 75;
-  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face, ally); allyShow(ally); s.lvlLock = false; }   // (a new room, or back on your feet: at your side)
+  if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face, ally); allyShow(ally); s.lvlLock = false; climbArrive(s); }   // (a new room, or back on your feet: at your side)
   if (campSit(s, allyKey(k), dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); crewStep(ally, dt, false); return; }   // (at a rest stop: on its stump by the fire)
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
