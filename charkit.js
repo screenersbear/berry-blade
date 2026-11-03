@@ -1618,7 +1618,8 @@ function giantPose(p, o) {                           // not in a move: too heavy
   p.gripFree = false; p.gPoseK = 0; const F = p.fidget, FS = F && STRIKES[F.kind], OA = FS && FS.ownArms, own0 = OA ? clamp(Math.min((F.t - OA[0]) / .3, (OA[1] - F.t) / .3), 0, 1) : 0, fh = !!(FS && FS.freeHand && F.t > FS.freeHand[0] && F.t < FS.freeHand[1]);   // (own0: a big idle's own arms, Camila's handstand on the grown fist, the user 2026-11-02 "even with big hands")
                    // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
-  if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose) return;
+  if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose || p.restK > .5) return;
+  if (p.cheerK > .25) { p.gPoseK = clamp((p.cheerK - .25) / .4, 0, 1); p.gripFree = true; return; }   // (the cheer: the grown arm up with her own, both hands up)
   const w = clamp(g, 0, 1) * (1 - own0), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
   const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); }, armPosed = P => !!P && ["armF", "elbF", "spF", "rlF"].some(c => P[c] !== undefined);
@@ -2105,6 +2106,11 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
   }
   if (p.tkDig > 0) { const k = p.tkDig, D = poseKeys(p, tkKind(p, "tkdig"), p.tkCharge ? p.tkCharge.t : 9) || (cat ? TKDIG_C : TKDIG_H); for (const key in D) T[key] = lerp(T[key] ?? 0, D[key], k); T.bodyY += Math.sin(t * 38) * .008 * k; }   // (trembling with it)
   if (p.tired > 0) { Object.assign(T, cat ? TIRED_C : TIRED_H); T.bodyY += Math.sin(t * 10) * .014; T.arch += Math.sin(t * 10) * .03; }   // panting
+  if (p.restK > .01 && !cat) { const k = sstep(0, 1, p.restK), b = Math.sin(t * 3.4);   // getting her breath back (□ held, the team out fighting): hands on her knees, slow deep breaths
+    for (const key in TIRED_H) T[key] = lerp(T[key] ?? 0, TIRED_H[key] + (key === "bodyY" ? .022 * b : key === "arch" ? .06 * b : key === "headRot" ? -.05 * b : 0), k); }
+  if (p.cheerK > .01 && !cat) { const k = sstep(0, 1, p.cheerK), w = Math.sin(t * 22) * .05 * k;   // the cheer: both hands up high, her energy off them to the team
+    T.lean = lerp(T.lean ?? 0, -.14, k); T.headRot = lerp(T.headRot ?? 0, -.24, k); T.arch = lerp(T.arch ?? 0, -.1, k); T.bodyY = lerp(T.bodyY ?? 0, .03, k);
+    T.armF = lerp(T.armF ?? 0, 2.95 + w, k); T.armB = lerp(T.armB ?? 0, 2.95 - w, k); T.elbF = lerp(T.elbF ?? 0, .12, k); T.elbB = lerp(T.elbB ?? 0, .12, k); T.spF = lerp(T.spF ?? 0, .32, k); T.spB = lerp(T.spB ?? 0, .32, k); }
   if (p.startle > 0) { const k = Math.min(1, p.startle * 4); T.lean = lerp(T.lean, -.28, k); T.bodyY = lerp(T.bodyY, .06, k); T.armF = lerp(T.armF, 2.5, k); T.armB = lerp(T.armB, 2.3, k); T.elbF = lerp(T.elbF, .35, k); T.elbB = lerp(T.elbB, .35, k); T.spF = lerp(T.spF ?? 0, .7, k); T.spB = lerp(T.spB ?? 0, .7, k); T.headRot = lerp(T.headRot, -.18, k); }   // startled: jumps back, hands flung up
   if (p.shy > 0) { const k = Math.min(1, p.shy * 3); T.lean = lerp(T.lean, .16, k); T.armF = lerp(T.armF, 1.75, k); T.elbF = lerp(T.elbF, 2.35, k); T.armB = lerp(T.armB, 1.6, k); T.elbB = lerp(T.elbB, 2.4, k); T.spF = lerp(T.spF ?? 0, -.25, k); T.spB = lerp(T.spB ?? 0, -.25, k); T.headRot = lerp(T.headRot, .3 + Math.sin(t * 9) * .03, k); }   // shy: head down, hands up to the face
   if (p.wave > 0) { T.armF = 2.85; T.spF = .55; T.elbF = .45 + .45 * Math.sin(t * 15); T.headRot = .05; }   // the near hand up, waving
@@ -3273,6 +3279,8 @@ function updatePoseHuman(p, dt) {
   o.fFx = lerp(o.fFx, sf[0], g); o.fFy = lerp(o.fFy, sf[1], g); o.pF = lerp(o.fP, sf[2], g); o.sF = 0;
   runLayer(p, o, ph / TAU, g);
   giantPose(p, o);                                           // (a grown weapon: hanging, dragged; a move eases out of it and back)
+  if (p.wearyK > .01 && a < 0 && p.hurtT <= 0 && !p.climb) { const k = p.wearyK * (1 - (p.restK || 0)) * (1 - (p.cheerK || 0)), b = Math.sin(t * 8);   // worn out by a grown weapon (the game's nrgTick, 2026-11-03): stooped, head down, panting (after giantPose, or its stance hides it)
+    o.lean += .24 * k; o.headRot += .24 * k; o.bodyY += (-.05 + .016 * b) * k; o.arch += (.08 + .05 * b) * k; }
   if (p.worn && a < 0) { const k = .85, sw = Math.sin(t * 2.2); o.lean += .36 * k; o.arch += .12 * k; o.headRot += (.34 + .04 * sw) * k; o.bodyY -= .05 * k;   // worn out (a partner out of hearts, 2026-11-01): bent over, head hung, arms dangling, a sway
     o.armF = lerp(o.armF, .1 + .05 * sw, k); o.elbF = lerp(o.elbF, .2, k); o.armB = lerp(o.armB, .06 - .05 * sw, k); o.elbB = lerp(o.elbB, .2, k); o.spF = lerp(o.spF || 0, .05, k); o.spB = lerp(o.spB || 0, .05, k); }
   const SK = a >= 0 && STRIKES[p.atkKind];
