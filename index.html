@@ -684,7 +684,7 @@
 <script src="ambience.js?v=20261018a" defer></script>
 <script src="sfx.js?v=20261102a" defer></script>
 <script src="voices.js?v=20261023g" defer></script>
-<script src="cries.js?v=20261102a" defer></script>
+<!-- cries.js (the battle cries in the heroes' voices, cry()): off for now. The user, 2026-11-03: "for the command voices, they're too literal and long. let's remove the voices for that for now" -->
 <script src="shading-mockup.js?v=20261031e" defer></script>
 <script type="importmap">
 { "imports": {
@@ -9786,10 +9786,19 @@ function upSee(p) {                                  // up off a jump under an o
   const R = holeAbove(p.x); if (!R) return;
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
-  if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120) startPeek(R.to, true);
+  if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
   p.y = sy - ROW_H - 1; goRoomRise(R.to);            // (landed up there: into it, onto what you came down on)
+}
+function upReach(p, R) {                             // will this jump get up there? The top of it, as it's going (p.vy, the jump cut if you've let go), up past the floor beside the hole up there, or a ledge over it
+  // (the user, 2026-11-03: "in berry woods c5 to b5 is a weird transition. if you jump at the opening in c5, it immediately shows b5 even if you didnt jump high enough and then you land and b5 part disappears": C5's top step is 200 px under B5's floor, a jump 157, UP_SEE 30 px over it)
+  const L = upLandOf(R.to); let fy = -1e9;
+  for (const x of [R.a - 40, R.b + 40]) { const g = upFloorY(L, x); if (g !== null) fy = Math.max(fy, g); }
+  for (const q of L.P) if (q.x < R.b + 120 && q.x + q.w > R.a - 120) fy = Math.max(fy, q.y);
+  if (fy === -1e9) return true;
+  const MO = feelMove(); let g = GRAV * WEIGHT * MO.weight; if (!held.jump && p.bounceT < 0 && !p.fullJump) g *= MO.jumpCut;
+  const top = p.vy < 0 ? p.y - p.vy * p.vy / (2 * g) : p.y; return top < fy - ROW_H + 12;
 }
 function upLandOf(s) {                               // a room's floor and ledges, as setPlatforms has them, without leaving this one (kept for the room you're in)
   const k = world + ":" + stage + ":" + s; if (upLandOf.k === k) return upLandOf.v;
@@ -9799,12 +9808,15 @@ function upLandOf(s) {                               // a room's floor and ledge
   finally { PLATFORMS.splice(0, PLATFORMS.length, ...keep.P); GAPS.splice(0, GAPS.length, ...keep.G); PROFILE.splice(0, PROFILE.length, ...keep.PR); CEILS.splice(0, CEILS.length, ...keep.C); LADDERS.splice(0, LADDERS.length, ...keep.L); WORLD = keep.W; FLOOR_LOW = keep.FL; SINK = keep.SK; WATER = keep.WA; }
   upLandOf.k = k; upLandOf.v = v; return v;
 }
+function upFloorY(L, x) {                            // its floor at x (its y): null over a pit
+  if (L.G.some(([g0, g1]) => x > g0 && x < g1)) return null; const P = L.PR; let g = GROUND;
+  if (P.length) { g = GROUND + P[0][1]; for (let i = P.length - 1; i >= 0; i--) if (x >= P[i][0]) { const nx = P[i + 1]; g = GROUND + (nx && nx[0] > P[i][0] ? lerp(P[i][1], nx[1], (x - P[i][0]) / (nx[0] - P[i][0])) : P[i][1]); break; } }
+  return g;
+}
 function upLandY(L, x, a, b) {                       // the first of its floor and ledges come down onto between a and b (its y), at x: null if none
   let y = null; const hit = t => { if (t >= a - 1 && t <= b + 1 && (y === null || t < y)) y = t; };
   for (const q of L.P) if (x >= q.x && x <= q.x + q.w) hit(q.y);
-  if (!L.G.some(([g0, g1]) => x > g0 && x < g1)) { const P = L.PR; let g = GROUND;
-    if (P.length) { g = GROUND + P[0][1]; for (let i = P.length - 1; i >= 0; i--) if (x >= P[i][0]) { const nx = P[i + 1]; g = GROUND + (nx && nx[0] > P[i][0] ? lerp(P[i][1], nx[1], (x - P[i][0]) / (nx[0] - P[i][0])) : P[i][1]); break; } }
-    hit(g); }
+  const g = upFloorY(L, x); if (g !== null) hit(g);
   return y;
 }
 function landAbove(hu, px) {                       // is there somewhere up there to come out onto (goRoomUp's lip), near enough above you?
@@ -11732,7 +11744,7 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
     if (SD ? !P2.latch && ((q.onGround && P2.t >= SD.dur) || P2.t > 1.4) : (q.onGround && P2.t > .12) || (q.dive && P2.t > .7)) { q.pounce = null; q.atkKind = null; q.atkT = -1; }
   } else if (busy) {                             // (blocking with you, or about to pounce)
   } else if (q.onGround) {                       // follow: at its place a step behind you, at your speed, up when you jump; hop up after you, drop down after you
-    const sp = followSpan(q), want = shoreX(sp ? clamp(p.x - p.face * (PART_GAP[k] + 6), sp[0] + 14, sp[1] - 14) : p.x - p.face * (PART_GAP[k] + 6)), dx = want - q.x, dir = Math.sign(dx) || q.face;   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
+    const sp = followSpan(q), want = shoreX(partWant(k, sp, PART_GAP[k] + 6)), dx = want - q.x, dir = Math.sign(dx) || q.face;   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
     q.vx = approach(q.vx, Math.abs(dx) < 12 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), q.worn ? -120 : -700, q.worn ? 120 : 700), 3400 * dt); partJump(q, k, dx); q.z = approach(q.z || 0, PART_Z[k], .9 * dt);
     if (Math.abs(dx) > 18 && !q.plat && !footAhead(q.x, dir * 40) && q.hopT <= 0) {   // a pit (or the water) ahead: over it, never into it (the user 2026-10-22)
       const land = gapEnd(q.x, dir), gy = groundAt(p.x);
@@ -11987,11 +11999,14 @@ function partnerList() {
 // nearest baddy (or the boss) and plays a whole string of the hero's kind of moves on its own, then back to its place: on the ground its combo (← → held as you press:
 // the forward one), ↑ held the launcher and up after it for the rest, ↓ the slide, and in the air (it jumps when you do) its air combo (↓: down at them). A pet
 // pounces the same ways. Held on, one stage of charge (its glow), and let go, its special. Never on its own. While you block they all block, and their buttons wait
-const PART_CHARGE = .6, PART_REACH = 560, PART_GAP = [78, 142, 202, 254], PART_Z = [-.3, -.6, -.12, -.42];   // (2, 3: a pet's places, behind the buddies)
+const PART_CHARGE = .6, PART_REACH = 560, PART_GAP = [78, 142, 206, 262, 316], PART_Z = [-.3, -.6, -.12, -.45, -.24];   // (0-2: the buddies' places, 3, 4: a pet's, behind them. Five since 2026-11-03: the third buddy had the second's)
 const partBtn = [0, 1, 2].map(() => ({ on: false, t: 0, full: false }));   // (the block's, the two attackers')
 let pJumpCue = null, partRoomK = "", partSeen = new Set();   // (pJumpCue: your last jump, for them to jump with you: { t, vy, dbl })
 const partBlocking = () => !teamM && !!player && !player.dead && mode === "play" && (!!player.block || (player.blockHold || 0) > 0 || (player.gbT > 0 && held.block));   // (yours broken: theirs stays up, 2026-11-01)
-const partSlot = q => { const L = partnerList(), i = L.findIndex(P => P.q === q); if (i >= 0) return Math.min(i, 1); const j = [pal, pal2].indexOf(q); return j < 0 ? 0 : Math.min(Math.min(L.length, 2) + j, 3); };   // (a pet: the next place free after the buddies, never on one of theirs. The user, 2026-11-02 "the cat joined our team and he was overlapping with the berry buddies")
+const partSlot = q => { const L = partnerList(), i = L.findIndex(P => P.q === q); if (i >= 0) return Math.min(i, 2); const j = [pal, pal2].indexOf(q); return j < 0 ? 0 : Math.min(Math.min(L.length, 3) + j, 4); };   // (a buddy: its own place, each of the three. Was Math.min(i, 1): the second and third shared one, walking inside each other. The user, 2026-11-03: "the buddies should all be staggered and not walking and clipping over each other")   // (a pet: the next place free after the buddies, never on one of theirs. The user, 2026-11-02 "the cat joined our team and he was overlapping with the berry buddies")
+const partCount = () => Math.min(partnerList().length, 3) + (pal ? 1 : 0) + (pal2 ? 1 : 0);
+const partWant = (k, sp, gap) => { const p = player, w = p.x - p.face * gap; if (!sp) return w;   // (its place, on what you're stood on: at an end of it, still a step apart from the others, the furthest back nearest the end, and behind you)
+  const e = 14 + Math.max(0, partCount() - 1 - k) * 40, lo = Math.min(sp[0] + e, Math.max(sp[0] + 14, p.x - 30)), hi = Math.max(sp[1] - e, Math.min(sp[1] - 14, p.x + 30)); return clamp(w, lo, hi); };
 const partCol = P => P.kind === "ally" ? P.a.A.col || "#ffffff" : P.kind === "pet" ? (petSp(P.t) === "dog" ? "#9fe8ff" : "#ff9ad0") : "#b06cff";
 const partBtnName = i => window.BERRY_TOUCH ? ["L", "△", "□"][i] || "△" : padUse ? padName(["blk", "p2", "tkl"][i] || "p2") : ["S", "Z", "V"][i] || "Z";   // (the block's, the first attacker's, the second's: 2026-11-02)
 const chgName = () => window.BERRY_TOUCH ? "R" : padUse ? padName("ch") : "D";   // (CHARGE!'s button: its mark over their heads)
@@ -12699,11 +12714,12 @@ function cmdPoint(p, L) {
 function cmdPointTick(p, dt) { if (!(p.cmdPt > 0)) return; p.cmdPt -= dt; p.vx = approach(p.vx, 0, 3000 * dt); if (p.cmdPt <= 0 || !p.onGround || p.hurtT > 0) { p.cmdPt = 0; if (!p.point) p.pointKind = null; } }
 const CRY = { camila: { together: ["TOGETHER!", "AGAIN!", "HIT THEM HARD!"], power: ["POWER UP!"], now: ["NOW! LET IT RIP!"], split: ["SPLIT UP!", "TAKE ONE EACH!"], spread: ["SPREAD OUT!"], line: ["LINE UP BEHIND THE SHIELD!"], push: ["PUSH!", "BREAK THROUGH!"] },
   rose: { together: ["ALL TOGETHER!", "AGAIN!", "GET THEM!"], power: ["CHARGE IT UP!"], now: ["NOW! GO, GO, GO!"], split: ["SPLIT UP!", "EVERYBODY PICK ONE!"], spread: ["SPREAD OUT, EVERYBODY!"], line: ["GET BEHIND THE SHIELD!"], push: ["PUSH!", "BREAK THROUGH!"] } };   // (cries.js: the same lines in their voices, cries1102.sh)
-const CRY_VOL = .5; let cryB = { t: 0 }, cryN = {};
+const CRY_VOL = .5, CRY_VOICE = false; let cryB = { t: 0 }, cryN = {};   // (CRY_VOICE: the lines heard in their voices, cries.js; off since 2026-11-03, the user: "too literal and long")
 function cry(k, i) {                                  // her line for it (i: which; none, the next in turn), heard and in a bubble over her
   const p = player, who = rig && VOICE_OF[rig.id], T = who && CRY[who] && CRY[who][k]; if (!p || !T) return;
   if (i === undefined) i = (cryN[k] = ((cryN[k] ?? -1) + 1)) % T.length;
   const el = $("cryB"); if (el) { el.textContent = T[i]; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); cryB.t = 1.1; cryTick(0); }
+  if (!CRY_VOICE) return;   // (no voices for now: the bubble only)
   if (vox.state === "idle") voiceInit(); const L = vox.bank[who + "_cry_" + k], b = L && L[i]; if (!b || !live() || !sfxOn) return;
   if (vox.src) try { vox.src.stop(); } catch (e) { }
   const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = CRY_VOL; src.connect(g); g.connect(sfxBus); src.start(ac.currentTime); vox.src = src;
@@ -13165,7 +13181,7 @@ function partFollow(s, k, dt) {                     // its place: a step behind 
   const p = player, gap = PART_GAP[k] + ((s.rig && s.rig.heightPx) || 90) * .12;
   if (s.lvlLock && s.onGround && p.onGround && Math.abs(s.y - p.y) < 40) s.lvlLock = false;   // (level with you again: with you)
   if (s.lvlLock && s.onGround) s.lvlSp = supportSpan(s) || s.lvlSp; const sp = s.lvlLock ? s.lvlSp : followSpan(s);   // (on its own level: what it stands on, end to end)
-  const want = shoreX(sp ? clamp(p.x - p.face * gap, sp[0] + 14, sp[1] - 14) : p.x - p.face * gap), dx = want - s.x;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
+  const want = shoreX(partWant(k, sp, gap)), dx = want - s.x;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
   const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 12 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
   s.z = approach(s.z || 0, PART_Z[k], .9 * dt);
   if (s.onGround || s.mirrorJ) s.vx = approach(s.vx, s.wave > 0 ? 0 : v, (s.onGround ? 3400 : 1500) * dt); s.sprint = Math.abs(s.vx) > 430;   // (in the air on a hop of its own, over a gap: its own way on)
@@ -22952,6 +22968,7 @@ function updateLoot(dt) {
   const p = player; if (!p) return;
   for (const q of loot) {
     q.t += dt; q.age += dt; const hy = (p.rig.heightPx || 92) * .5;
+    if (q.full && (Math.abs(p.x - q.x) > 140 || Math.abs(p.y - q.y) > 180)) q.full = false;   // (walked off from it: BAG FULL again next time)
     if ((q.kind === "coin" || q.steal) && q.age > (q.steal ? .22 : .35) && !p.dead && (q.steal || Math.hypot(p.x - q.x, p.y - hy - q.y) < 190)) {   // (near enough: it flies to you; a thief's, from anywhere)
       q.mag = true; const dx = p.x - q.x, dy = p.y - hy - q.y, d = Math.hypot(dx, dy) || 1; q.vx = dx / d * 620; q.vy = dy / d * 620; q.x += q.vx * dt; q.y += q.vy * dt; }
     else if (q.vy || q.y < q.gy - .5 || q.plat === null && groundAt(q.x) !== null && q.y < (groundAt(q.x) ?? q.y) - .5) {
@@ -22975,7 +22992,7 @@ function takeLoot(q) {
   if (q.kind === "charm") { const id = q.id.slice(6), A = ACC[id], G = gearState(); if (A && !G.own.includes(id)) G.own.push(id);   // (a drop charm: hers to wear)
     SFX.gift(); sparks(q.x, q.y - 20, 14); popText(q.x, q.y - 60, "A CHARM!"); if (A) toast(`THE ${A.name}: FOR ${A.hero.toUpperCase()} · PAUSE, ACCESSORIES TO PUT IT ON`, 4600); if (story) writeSave(); return; }
   if (q.id) markGot(q.id);
-  const it = ITEMS.find(i => i.k === q.kind); if (B[q.kind] >= BAG_MAX) { SFX.nope(); popText(q.x, q.y - 50, "BAG FULL"); q.got = false; q.y -= 1; return; }
+  const it = ITEMS.find(i => i.k === q.kind); if (B[q.kind] >= BAG_MAX) { if (!q.full) { SFX.nope(); popText(q.x, q.y - 50, "BAG FULL"); } q.full = true; q.got = false; q.y -= 1; return; }   // (said once, till you've walked off from it: q.full, updateLoot. The user, 2026-11-03: "the bag full shouldnt play the error sound more than once when you try to pick something up and you havent moved far from it")
   B[q.kind]++; carryAdd(q.kind); SFX.gift(); sparks(q.x, q.y - 20, 10); popText(q.x, q.y - 60, it.name + "!");
   if (!(story ? story.itemTip : freeBag.tip)) { if (story) story.itemTip = true; else freeBag.tip = true; toast(`${it.name} · HOLD ${window.BERRY_TOUCH ? "L2" : "L2 OR /"} TO USE YOUR ITEMS`, 4200); }
   if (story) writeSave();
