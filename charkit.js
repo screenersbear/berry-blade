@@ -2512,6 +2512,7 @@ const GIANT_NAMES = {};
   set.charge = z === 1 ? [add("c1", (A ? T.haymaker : T.thrust)(S, z)), add("c2", T.spin(S, z, 1)), add("c3", A ? T.pound(S, z) : T.leap(S, z))]
     : z === 2 ? [add("c1", A ? T.rocket(S, z) : T.thrust(S * 1.1, z)), add("c2", T.spin(S, z, 2)), add("c3", T.leap(S, z))]
     : [add("c1", A ? T.palm(S, z) : T.thrust(S * 1.2, z)), add("c2", T.spin(S, z, 2)), add("c3", A ? T.pound(S * 1.2, z + 1) : T.leap(S * 1.15, z + 1))];
+  if (!A && (z === 1 || z === 2)) set.ground = set.groundB = set.charge.slice();   // (the sword at sizes 2 and 3: Rose's charge combo is her combo now, the user, 2026-11-02: "take rose's current charge animation combo and make it her main combo for the 2nd and 3rd step of her sword powerup")
   GIANT_SETS[kind][z] = set;
 }));
 
