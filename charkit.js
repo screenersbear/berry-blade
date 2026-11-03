@@ -3292,6 +3292,9 @@ function updatePoseHuman(p, dt) {
     if (PK && PK.keys.blade) { const sw = leadFar(p); o.wrist = keyvS(PK.keys.blade, api.time % PK.dur) - (sw ? o.armB + o.elbB : o.armF + o.elbF); }   // (pointing: the blade's own angle)
     else if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
   }
+  if (SK && p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // (kicking with an armful, the healer's basket: the arms stay round it and the legs do the work, 2026-11-03)
+    o.armF = lerp(o.armF, CUP.arm, k); o.elbF = lerp(o.elbF, CUP.elb, k); o.spF = lerp(o.spF || 0, CUP.sp, k);
+    if (two > 0) { o.armB = lerp(o.armB, CUP.arm, two); o.elbB = lerp(o.elbB, CUP.elb, two); o.spB = lerp(o.spB || 0, CUP.sp, two); } }
   // starting to run: a gather before the first stride (the user, 2026-10-22: "bring their torso up and forward and almost step up before
   // crouching down into the full run, almost like winding it up"): up onto the toes leaning in, arms drawn back, then down into the run
   if (moving && !p.wasMoving && p.gaitAmt < .35 && a < 0) p.gatherT = 0;

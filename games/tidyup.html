@@ -78,16 +78,12 @@ function scribble(x, x0, x1, y0, y1, col, n, seed, w = 2, a = .5) {   // loose l
   x.restore();
 }
 
-// ── the little world: a room's floor is X, Y from -1 to 1 (its back walls on X = -1 and Y = -1), laid over the top of a ball RS across, turned 45° and seen
-// from above at TILT. Heights go out along the ball's own up, so the edges drop away and draw in, and what stands near them leans out
-const CX = 320, CY = 222, K = 166, TILT = .66, CT = Math.cos(TILT), ST = Math.sin(TILT), RS = 2.3, WALL_H = .5, WALL_T = .07;
-function P3(X, Y, h = 0) {
-  const r = Math.hypot(X, Y), a = r / RS, k = r > 1e-6 ? Math.sin(a) / r : 1 / RS, R2 = RS + h;
-  const x = X * k * R2, y = Y * k * R2, z = Math.cos(a) * R2 - RS, xr = (x - y) * Math.SQRT1_2, yr = (x + y) * Math.SQRT1_2;
-  return [CX + xr * K, CY + (yr * CT - z * ST) * K];
-}
-function unP(sx, sy) { let X = 0, Y = 0; for (let i = 0; i < 16; i++) { const [px, py] = P3(X, Y), a = (sx - px) / K, b = (sy - py) / (K * CT); X += (a + b) * Math.SQRT1_2; Y += (b - a) * Math.SQRT1_2; } return [X, Y]; }   // (the floor under a point of the stage)
-function lean(X, Y) { const A = P3(X, Y, 0), B = P3(X, Y, .1); return Math.atan2(B[0] - A[0], A[1] - B[1]); }   // (how far what stands there tips over, on the stage)
+// ── the room: its floor X, Y from -1 to 1 (its back walls on X = -1 and Y = -1), turned 45° and seen from the isometric angle, as big as the screen lets it (the user,
+// 2026-11-03: "the world view thing didnt really work and it just looks like the room is on a ball. remove that and just make the room isometric normally. make sure it
+// takes up as much of the berry console screen as possible"). SPR: how much bigger the drawn things are than they were made, so they keep their size to the room
+const CX = 320, CY = 280, K = 208, CT = .6, ST = .8, SPR = K / 166, WALL_H = .5, WALL_T = .07, SLAB = .08;
+function P3(X, Y, h = 0) { return [CX + (X - Y) * Math.SQRT1_2 * K, CY + ((X + Y) * Math.SQRT1_2 * CT - h * ST) * K]; }
+function unP(sx, sy) { const a = (sx - CX) / K, b = (sy - CY) / (K * CT); return [(a + b) * Math.SQRT1_2, (b - a) * Math.SQRT1_2]; }   // (the floor under a point of the stage)
 function seg(a, b, n = 6) { const o = []; for (let i = 0; i < n; i++) { const t = i / n; o.push([lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2] || 0, b[2] || 0, t)]); } return o; }
 const ring = (...C) => C.flatMap((c, i) => seg(c, C[(i + 1) % C.length]));
 function path3(x, pts, close = true) { x.beginPath(); pts.forEach((p, i) => { const [sx, sy] = P3(p[0], p[1], p[2] || 0); i ? x.lineTo(sx, sy) : x.moveTo(sx, sy); }); if (close) x.closePath(); }
@@ -114,14 +110,14 @@ function cyl(x, X, Y, r, h0, h1, col, o = {}) {       // a round thing standing 
 
 // ── the kids whose rooms they are: each its own wallpaper, bed, rug and floor, and the little world under it
 const KIDS = [
-  { n: 'LUNA', wall: '#f7bfd4', trim: '#d9739c', motif: 'heart', mc: '#e85d93', poster: 'rainbow', bed: '#f06aa8', rug: '#b48be8', rug2: '#fff3c4', floor: 'wood', wood: '#e0b27a', planet: '#c9b6f0', sky: '#d9e8fb' },
-  { n: 'MILO', wall: '#4a5f8f', trim: '#2c3c64', motif: 'star', mc: '#f5c542', poster: 'rocket', bed: '#5aa9e6', rug: '#f5b631', rug2: '#4a5f8f', floor: 'carpet', carpet: '#8fb4d9', wood: '#c9925a', planet: '#9fc7ef', sky: '#e7e2fb', dim: 1 },
-  { n: 'OSCAR', wall: '#c4e6a8', trim: '#6aa84f', motif: 'paw', mc: '#79b356', poster: 'dino', bed: '#6cbf5c', rug: '#f39a4a', rug2: '#fff3c4', floor: 'wood', wood: '#d19c62', planet: '#f7c98f', sky: '#fff0d6' },
-  { n: 'PIA', wall: '#ffe39a', trim: '#e0a93a', motif: 'flower', mc: '#f08a4b', poster: 'sun', bed: '#ff9b54', rug: '#2fb8a8', rug2: '#fffaf0', floor: 'carpet', carpet: '#f1c4a2', wood: '#caa06e', planet: '#b9e6a0', sky: '#e3f4fb' },
-  { n: 'TEO', wall: '#b3def2', trim: '#3a8fd6', motif: 'stripe', mc: '#e6f5fc', poster: 'ball', bed: '#3a8fd6', rug: '#6cbf5c', rug2: '#fffaf0', floor: 'wood', wood: '#b9875a', planet: '#a9e0c9', sky: '#fdebd7' },
-  { n: 'ROSA', wall: '#dcc6f2', trim: '#8a63c4', motif: 'berry', mc: '#9a6bd6', poster: 'berry', bed: '#9a6bd6', rug: '#f06aa8', rug2: '#fff3c4', floor: 'wood', wood: '#e3b98a', planet: '#f6b8d2', sky: '#e9f6e4' },
-  { n: 'NICO', wall: '#d3dde2', trim: '#6d8794', motif: 'bolt', mc: '#f5b631', poster: 'robot', bed: '#f5b631', rug: '#ef6a4c', rug2: '#fffaf0', floor: 'carpet', carpet: '#a7b6bd', wood: '#a7835e', planet: '#ffd58a', sky: '#e5ecfb' },
-  { n: 'IVY', wall: '#bdeee5', trim: '#2fa596', motif: 'wave', mc: '#4fb8d8', poster: 'fish', bed: '#2fb8a8', rug: '#ff8f7a', rug2: '#fffaf0', floor: 'wood', wood: '#dcae7c', planet: '#a8d8f5', sky: '#fff2e0' },
+  { n: 'LUNA', wall: '#f7bfd4', trim: '#d9739c', motif: 'heart', mc: '#e85d93', poster: 'rainbow', bed: '#f06aa8', rug: '#b48be8', rug2: '#fff3c4', floor: 'wood', wood: '#e0b27a', sky: '#d9e8fb' },
+  { n: 'MILO', wall: '#4a5f8f', trim: '#2c3c64', motif: 'star', mc: '#f5c542', poster: 'rocket', bed: '#5aa9e6', rug: '#f5b631', rug2: '#4a5f8f', floor: 'carpet', carpet: '#8fb4d9', wood: '#c9925a', sky: '#e7e2fb', dim: 1 },
+  { n: 'OSCAR', wall: '#c4e6a8', trim: '#6aa84f', motif: 'paw', mc: '#79b356', poster: 'dino', bed: '#6cbf5c', rug: '#f39a4a', rug2: '#fff3c4', floor: 'wood', wood: '#d19c62', sky: '#fff0d6' },
+  { n: 'PIA', wall: '#ffe39a', trim: '#e0a93a', motif: 'flower', mc: '#f08a4b', poster: 'sun', bed: '#ff9b54', rug: '#2fb8a8', rug2: '#fffaf0', floor: 'carpet', carpet: '#f1c4a2', wood: '#caa06e', sky: '#e3f4fb' },
+  { n: 'TEO', wall: '#b3def2', trim: '#3a8fd6', motif: 'stripe', mc: '#e6f5fc', poster: 'ball', bed: '#3a8fd6', rug: '#6cbf5c', rug2: '#fffaf0', floor: 'wood', wood: '#b9875a', sky: '#fdebd7' },
+  { n: 'ROSA', wall: '#dcc6f2', trim: '#8a63c4', motif: 'berry', mc: '#9a6bd6', poster: 'berry', bed: '#9a6bd6', rug: '#f06aa8', rug2: '#fff3c4', floor: 'wood', wood: '#e3b98a', sky: '#e9f6e4' },
+  { n: 'NICO', wall: '#d3dde2', trim: '#6d8794', motif: 'bolt', mc: '#f5b631', poster: 'robot', bed: '#f5b631', rug: '#ef6a4c', rug2: '#fffaf0', floor: 'carpet', carpet: '#a7b6bd', wood: '#a7835e', sky: '#e5ecfb' },
+  { n: 'IVY', wall: '#bdeee5', trim: '#2fa596', motif: 'wave', mc: '#4fb8d8', poster: 'fish', bed: '#2fb8a8', rug: '#ff8f7a', rug2: '#fffaf0', floor: 'wood', wood: '#dcae7c', sky: '#fff2e0' },
 ];
 
 // ── what's lying about, and the four boxes it goes in
@@ -258,9 +254,9 @@ const DRAW = {
     x.beginPath(); x.moveTo(3, -24); x.lineTo(4, -31); x.lineTo(8, -33); pen(x, 2.4, .95, '#ef6a4c'); pen(x, .8, .6);
   },
 };
-function drawItem(x, it, sx, sy, s = 1, ln = 0) {     // a thing to tidy, drawn again with the next tile every 1/BOIL s (its strokes wriggle) and nudged a hair each time
+function drawItem(x, it, sx, sy, s = 1, rot = 0) {     // a thing to tidy, drawn again with the next tile every 1/BOIL s (its strokes wriggle) and nudged a hair each time
   const v = Math.floor(T * BOIL + it.ph) % 3, J = it.jit[v]; BV = v;
-  x.save(); x.translate(sx + J[0], sy + J[1]); x.rotate(ln + J[2] + it.rot); x.scale(s * it.flip, s); DRAW[it.k](x, it.c); x.restore(); BV = 0;
+  x.save(); x.translate(sx + J[0], sy + J[1]); x.rotate(rot + J[2] + it.rot); x.scale(s * it.flip * SPR, s * SPR); DRAW[it.k](x, it.c); x.restore(); BV = 0;
 }
 
 // ── the rooms: furniture against the walls, a rug, the four boxes round the edges, and the mess, all placed afresh each time (none of it where you can't reach)
@@ -305,8 +301,8 @@ function layout(kid, R, n, bare, force) {
   const N = Math.min(26, 10 + 3 * n), cats = shuffle(Array.from({ length: N }, (_, i) => CAT_IDS[i % 4]), R), items = [];   // (the mess: as many of each kind, more every room)
   for (const cat of cats) {
     for (let i = 0; i < 140; i++) { const X = rr(-.92, .92), Y = rr(-.92, .92);
-      if (!clear(X, Y, .05) || Math.hypot(X - start[0], Y - start[1]) < .18 || items.some(o => Math.hypot(o.X - X, o.Y - Y) < .14) || bins.some(b => distBox(b, X, Y) < .1)) continue;
-      if (!reach((a, b) => Math.hypot(a - X, b - Y) < GRAB_R * .8)) continue;
+      if (!clear(X, Y, .05) || Math.hypot(X - start[0], Y - start[1]) < .18 || items.some(o => Math.hypot(o.X - X, o.Y - Y) < .16) || bins.some(b => distBox(b, X, Y) < .1)) continue;
+      if (!reach((a, b) => Math.hypot(a - X, b - Y) < GRAB_R * .8) || hiddenAt(X, Y, bins, obs)) continue;   // (none under a box's tag or tucked behind something: the user, 2026-11-03)
       const k = KINDS[cat][Math.floor(R() * KINDS[cat].length)], P = ITEM_COL[k], a = P[Math.floor(R() * P.length)], bb = BRIGHT.filter(q => q !== a)[Math.floor(R() * 7)];
       items.push({ cat, k, X, Y, c: { a, b: bb, j: k === 'paper' ? Array.from({ length: 11 }, (_, q) => (q % 2 ? 8.5 : 11) + R() * 1.6) : null }, flip: R() < .5 ? -1 : 1, rot: rr(-.22, .22), ph: R() * 3,
         jit: [0, 1, 2].map(() => [rr(-.6, .6), rr(-.6, .6), rr(-.035, .035)]), state: 'floor', t: 0, hop: 0 }); break; }
@@ -315,37 +311,31 @@ function layout(kid, R, n, bare, force) {
   const spans = w => furn.filter(f => f.w === w && f.h > .25).map(f => w === 'A' ? [-f.y1, -f.y0] : [f.x0, f.x1]);   // (what stands tall against a wall: the window and the poster go where it isn't)
   const spot = (w, len) => { for (let i = 0; i < 30; i++) { const s0 = rr(-.9, .9 - len); if (spans(w).every(([a, b]) => s0 + len < a - .03 || s0 > b + .03)) return s0; } return rr(-.9, .9 - len); };
   const winW = R() < .5 ? 'A' : 'B', ws = spot(winW, .46), postW = winW === 'A' ? 'B' : 'A', ps = spot(postW, .3);
-  return { kid, furn, bins, items, start, obs, floor: kid.floor, floorCol: kid.floor === 'wood' ? kid.wood : kid.carpet,
+  const canLie = (X, Y) => clear(X, Y, .05) && !bins.some(b => distBox(b, X, Y) < .06) && reach((a, b) => Math.hypot(a - X, b - Y) < GRAB_R * .8) && !hiddenAt(X, Y, bins, obs);   // (where a dropped or bounced thing may land: as the mess was laid out)
+  return { kid, furn, bins, items, start, obs, canLie, floor: kid.floor, floorCol: kid.floor === 'wood' ? kid.wood : kid.carpet,
     rug: { cx: rr(-.35, .25), cy: rr(-.35, .25), rx: rr(.34, .5), ry: rr(.3, .46), oval: R() < .5, pat: ['dots', 'stripes', 'plain'][Math.floor(R() * 3)] },
     win: { w: winW, s0: ws, s1: ws + .46, h0: .17, h1: .42 }, post: { w: postW, s0: ps, s1: ps + .3, h0: .15, h1: .41 } };
 }
 
-// ── the still parts, drawn once a room: the paper and its sky, the round of ground under the floor, the floor, the rug, the walls; each piece of furniture its own picture
+// ── the still parts, drawn once a room: the paper and its wash, the floor's slab, the floor, the rug, the walls; each piece of furniture its own picture
 function layer(w = W, h = H) { const c = document.createElement('canvas'); c.width = w * PR; c.height = h * PR; const x = c.getContext('2d'); x.scale(PR, PR); return [c, x]; }
 function buildBG(Rm) {
   const [c, x] = layer(); Rm.bg = c; BV = 0; const kd = Rm.kid, Rn = rng(Rm.seed ^ 0x9e37);
   x.fillStyle = PAPER; x.fillRect(0, 0, W, H); x.beginPath(); x.rect(-10, -10, W + 20, H + 20); cfill(x, kd.sky, { light: .62, dens: .7, ang: -.35 });
-  for (let i = 0; i < 18; i++) { const px = Rn() * W, py = Rn() * H, k = Rn(); x.save(); x.translate(px, py); x.rotate(Rn() * 6); x.globalAlpha = .55;   // (doodles in the sky round the little world)
+  for (let i = 0; i < 18; i++) { const px = Rn() * W, py = Rn() * H, k = Rn(); x.save(); x.translate(px, py); x.rotate(Rn() * 6); x.globalAlpha = .55;   // (doodles on the paper round the room)
     if (k < .45) { star(x, 0, 0, 4 + Rn() * 5); cfill(x, '#f5c542', { light: .3 }); }
     else if (k < .75) { x.beginPath(); for (let a = 0; a < 11; a += .3) x.lineTo(Math.cos(a) * a * .9, Math.sin(a) * a * .9); pen(x, 1.6, .7, kd.trim); }
     else { [[-6, 0, 6], [0, -3, 7], [6, 0, 5.5]].forEach(([a, b, r]) => { circ(x, a, b, r); x.fillStyle = '#ffffff'; x.fill(); }); }
     x.restore(); }
-  planet(x, Rm); floorDraw(x, Rm, Rn); rugDraw(x, Rm); wallsDraw(x, Rm);
+  slab(x, Rm); floorDraw(x, Rm, Rn); rugDraw(x, Rm); wallsDraw(x, Rm);
   [...Rm.furn, ...Rm.bins].forEach(f => { path3(x, ring([f.x0 - .015, f.y0 - .015], [f.x1 + .035, f.y0 - .015], [f.x1 + .035, f.y1 + .035], [f.x0 - .015, f.y1 + .035])); x.fillStyle = 'rgba(58,49,64,.14)'; x.fill(); });   // (a soft shadow round their feet)
   Rm.furn.forEach(bakePiece);
 }
-function planet(x, Rm) {                              // the little world it's on: a round of ground under the floor's front edges, a strip of the floor's own edge, grass along the top
-  const kd = Rm.kid, S = .07, front = [...seg([-1, 1], [1, 1], 20), ...seg([1, 1], [1, -1], 20), [1, -1, 0]];
-  const Lb = P3(-1, 1, -S), Rb = P3(1, -1, -S), Fb = P3(1, 1, -S), deep = 150, hw = (Rb[0] - Lb[0]) / 2, BR = hw * 1.12, BX = (Lb[0] + Rb[0]) / 2, BY = Lb[1] + Math.sqrt(BR * BR - hw * hw);
-  const a0 = Math.atan2(Rb[1] - BY, Rb[0] - BX), a1 = Math.atan2(Lb[1] - BY, Lb[0] - BX) + Math.PI * 2;   // (a round ball, through the floor's side corners)
-  const ground = () => { x.beginPath(); front.forEach((p, i) => { const [sx, sy] = P3(p[0], p[1], -S); i ? x.lineTo(sx, sy) : x.moveTo(sx, sy); }); x.arc(BX, BY, BR, a0, a1); x.closePath(); };
-  ground(); cfill(x, kd.planet, { light: .4, ang: -.5 });
-  x.save(); ground(); x.clip(); scribble(x, Lb[0] - 40, Rb[0], Lb[1] + 10, Fb[1] + deep, dark(kd.planet, .25), 9, Rm.seed, 2.4, .35);
-  const Rn = rng(Rm.seed ^ 0x51); for (let i = 0; i < 6; i++) { const px = lerp(Lb[0] + 30, Rb[0] - 30, Rn()), py = lerp(Lb[1] + 40, Fb[1] + 60, Rn()), r = 6 + Rn() * 10; ell(x, px, py, r, r * .6); x.fillStyle = mix(dark(kd.planet, .2), .35); x.fill(); pen(x, 1.2, .5); }
-  x.restore(); ground(); pen(x, 2, .85);
-  x.beginPath(); front.forEach((p, i) => { const [sx, sy] = P3(p[0], p[1], 0); i ? x.lineTo(sx, sy) : x.moveTo(sx, sy); }); for (let i = front.length - 1; i >= 0; i--) { const [sx, sy] = P3(front[i][0], front[i][1], -S); x.lineTo(sx, sy); } x.closePath();
-  cfill(x, dark(Rm.floorCol, .3), { light: .35, ang: .3 }); pen(x, 1.6, .85);
-  for (let i = 0; i < front.length - 1; i++) { const [sx, sy] = P3(front[i][0], front[i][1], -S); for (let k = 0; k < 2; k++) { const gx = sx + k * 6; x.beginPath(); x.moveTo(gx - 3, sy); x.quadraticCurveTo(gx, sy + 7, gx + 3, sy); x.fillStyle = mix('#6cbf5c', .15); x.fill(); } }
+function slab(x, Rm) {                                // the floor's thickness along its two open sides (under the walls' ends too), and its shadow on the paper
+  const S = SLAB, e = -1 - WALL_T, col = Rm.floorCol;
+  x.save(); x.translate(7, 12); path3(x, ring([e, e, -S], [1, e, -S], [1, 1, -S], [e, 1, -S])); x.fillStyle = 'rgba(58,49,64,.13)'; x.fill(); x.restore();
+  path3(x, ring([e, 1, 0], [1, 1, 0], [1, 1, -S], [e, 1, -S])); cfill(x, dark(col, .22), { light: .35, ang: .3 }); pen(x, 1.6, .85);
+  path3(x, ring([1, 1, 0], [1, e, 0], [1, e, -S], [1, 1, -S])); cfill(x, dark(col, .38), { light: .35, ang: -.7 }); pen(x, 1.6, .85);
 }
 function floorDraw(x, Rm, Rn) {
   const col = Rm.floorCol, fl = [...seg([-1, -1], [1, -1], 20), ...seg([1, -1], [1, 1], 20), ...seg([1, 1], [-1, 1], 20), ...seg([-1, 1], [-1, -1], 20)], wood = Rm.floor === 'wood';
@@ -467,18 +457,18 @@ const DRAWF = {
   },
   plant(x, f) {
     const cx = (f.x0 + f.x1) / 2, cy = (f.y0 + f.y1) / 2; cyl(x, cx, cy, .055, 0, .11, '#d9774a'); const [sx, sy] = P3(cx, cy, .11);
-    for (let i = 0; i < 7; i++) { const a = (i - 3) * .42, L2 = 17 + (i % 2) * 7; x.save(); x.translate(sx, sy); x.rotate(a); ell(x, 0, -L2 / 2, 4.6, L2 / 2); cfill(x, i % 2 ? '#5fae6b' : '#7cc46a', { light: .35 }); pen(x, 1.2, .8); x.restore(); }
+    for (let i = 0; i < 7; i++) { const a = (i - 3) * .42, L2 = 17 + (i % 2) * 7; x.save(); x.translate(sx, sy); x.scale(SPR, SPR); x.rotate(a); ell(x, 0, -L2 / 2, 4.6, L2 / 2); cfill(x, i % 2 ? '#5fae6b' : '#7cc46a', { light: .35 }); pen(x, 1.2, .8); x.restore(); }
   },
   bean(x, f) {
-    const [sx, sy] = P3((f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2);
-    x.beginPath(); x.moveTo(sx - 27, sy + 2); x.bezierCurveTo(sx - 30, sy - 28, sx + 27, sy - 33, sx + 27, sy); x.bezierCurveTo(sx + 21, sy + 11, sx - 21, sy + 11, sx - 27, sy + 2); x.closePath(); cfill(x, f.col, { light: .35 }); pen(x, 1.8, .85);
-    x.beginPath(); x.moveTo(sx - 11, sy - 15); x.quadraticCurveTo(sx, sy - 9, sx + 11, sy - 16); pen(x, 1.2, .6);
+    const [sx, sy] = P3((f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2); x.save(); x.translate(sx, sy); x.scale(SPR, SPR);
+    x.beginPath(); x.moveTo(-27, 2); x.bezierCurveTo(-30, -28, 27, -33, 27, 0); x.bezierCurveTo(21, 11, -21, 11, -27, 2); x.closePath(); cfill(x, f.col, { light: .35 }); pen(x, 1.8, .85);
+    x.beginPath(); x.moveTo(-11, -15); x.quadraticCurveTo(0, -9, 11, -16); pen(x, 1.2, .6); x.restore();
   },
 };
 function bakePiece(f) {
   let a = 1e9, b = 1e9, c = -1e9, d = -1e9;
   for (const X of [f.x0, f.x1]) for (const Y of [f.y0, f.y1]) for (const h of [0, f.h]) { const [sx, sy] = P3(X, Y, h); a = Math.min(a, sx); b = Math.min(b, sy); c = Math.max(c, sx); d = Math.max(d, sy); }
-  a = Math.floor(a - 22); b = Math.floor(b - 30); c = Math.ceil(c + 22); d = Math.ceil(d + 14);
+  a = Math.floor(a - 22 * SPR); b = Math.floor(b - 30 * SPR); c = Math.ceil(c + 22 * SPR); d = Math.ceil(d + 14 * SPR);
   const [cv2, x] = layer(c - a, d - b); x.translate(-a, -b); BV = 0; DRAWF[f.k](x, f); Object.assign(f, { img: cv2, ix: a, iy: b, iw: c - a, ih: d - b });
 }
 
@@ -510,7 +500,16 @@ function drawBin(x, b) {
     x.beginPath(); x.ellipse(T2[0], T2[1], rx + 1.5, ry + 1, 0, 0, Math.PI * 2); pen(x, 3, .9, dark('#5fae6b', .25)); }
   x.restore();
 }
-function tagPos(b) { const [cx, cy] = binC(b), [sx, sy] = P3(cx, cy, BIN_H[b.k] + (b.k === 'chest' ? .17 : 0)); return [sx, sy - 34 + Math.sin(T * 2.2 + b.ph) * 2]; }
+const binTop = b => BIN_H[b.k] + (b.k === 'chest' ? .17 : 0);   // (its lid up, the chest)
+function tagPos(b) { const [cx, cy] = binC(b), [sx, sy] = P3(cx, cy, binTop(b)); return [sx, sy - 34 * SPR + Math.sin(T * 2.2 + b.ph) * 2]; }
+function tagBox(b) { const [cx, cy] = binC(b), [sx, sy] = P3(cx, cy, binTop(b)), ty = sy - 34 * SPR; return [sx - 30, ty - 25, sx + 30, ty + 32]; }   // (a tag on the stage, its stem, its bob, a little over)
+const itemBox = (X, Y) => { const [sx, sy] = P3(X, Y); return [sx - 17 * SPR, sy - 36 * SPR, sx + 17 * SPR, sy + 4]; };
+function standBox(o) { let a = 1e9, b = 1e9, c = -1e9, d = -1e9; for (const X of [o.x0, o.x1]) for (const Y of [o.y0, o.y1]) for (const h of [0, o.h ?? binTop(o)]) { const [sx, sy] = P3(X, Y, h); a = Math.min(a, sx); b = Math.min(b, sy); c = Math.max(c, sx); d = Math.max(d, sy); } return [a, b, c, d]; }
+const overlap = (A, B) => Math.max(0, Math.min(A[2], B[2]) - Math.max(A[0], B[0])) * Math.max(0, Math.min(A[3], B[3]) - Math.max(A[1], B[1]));
+function hiddenAt(X, Y, bins, obs) {                  // (would a thing lying there be hard to see: under a box's tag, or behind something that stands in front of it)
+  const I = itemBox(X, Y), area = (I[2] - I[0]) * (I[3] - I[1]); if (bins.some(b => overlap(I, tagBox(b)) > 0)) return true;
+  return obs.some(o => (X + .04 <= o.x0 || Y + .04 <= o.y0) && !(o.x1 <= X - .04 || o.y1 <= Y - .04) && overlap(I, standBox(o)) > area * .15);
+}
 function drawTag(x, b, hl) {
   const [tx, ty] = tagPos(b), C = CAT[b.cat], s = hl ? 1.16 + Math.sin(T * 9) * .04 : 1;
   x.save(); x.translate(tx, ty); x.scale(s, s);
@@ -647,10 +646,15 @@ function act() {
 }
 function itemNear() { let best2 = null, bd = GRAB_R; for (const it of room.items) if (it.state === 'floor') { const d = Math.hypot(it.X - pl.X, it.Y - pl.Y); if (d < bd) { bd = d; best2 = it; } } return best2; }
 function binNear() { let best2 = null, bd = BIN_R; for (const b of room.bins) { const d = distBox(b, pl.X, pl.Y); if (d < bd) { bd = d; best2 = b; } } return best2; }
-function headPos() { const [sx, sy] = P3(pl.X, pl.Y), ln = lean(pl.X, pl.Y), mv = clamp(Math.hypot(pl.vX, pl.vY) / SPEED, 0, 1), bob = Math.abs(Math.cos(pl.walk)) * 2.2 * mv; return [sx + Math.sin(ln) * 46, sy - Math.cos(ln) * 46 - bob]; }
+function headPos() { const [sx, sy] = P3(pl.X, pl.Y), mv = clamp(Math.hypot(pl.vX, pl.vY) / SPEED, 0, 1), bob = Math.abs(Math.cos(pl.walk)) * 2.2 * mv * SPR; return [sx, sy - 46 * SPR - bob]; }
 function grab(it) { it.state = 'lift'; it.t = 0; pl.hold = it; pl.sqv -= 3; tgt = null; SFX.grab(); }
 function putIn(b) { const it = pl.hold; pl.hold = null; Object.assign(it, { state: 'fly', t: 0, dur: .34, from: headPos(), to: binMouth(b), bin: b }); pl.sqv += 2.5; SFX.toss(); }
-function freeSpot(X, Y) {                             // (somewhere a thing can lie near there: on the floor, off the furniture)
+function freeSpot(X0, Y0) {                           // (somewhere a thing can lie near there: on the floor, off the furniture, where you can reach it, not hidden)
+  for (const r of [0, .06, .12, .18, .24, .32, .42, .54, .7, .9]) for (let i = 0; i < (r ? 12 : 1); i++) { const P = pushOut(X0 + Math.cos(i * Math.PI / 6) * r, Y0 + Math.sin(i * Math.PI / 6) * r); if (room.canLie(P[0], P[1])) return P; }
+  for (const it of room.items) if (it.state === 'floor' && room.canLie(it.X, it.Y)) return pushOut(it.X + .02, it.Y);   // (none near: by another thing that's lying fine)
+  return [room.start[0], room.start[1]];   // (or where you started)
+}
+function pushOut(X, Y) {
   for (let k = 0; k < 6; k++) { X = clamp(X, -.92, .92); Y = clamp(Y, -.92, .92);
     for (const b of room.obs) { const cx = clamp(X, b.x0, b.x1), cy = clamp(Y, b.y0, b.y1), dx = X - cx, dy = Y - cy, d = Math.hypot(dx, dy); if (d < .06) { if (d > 1e-6) { X = cx + dx / d * .06; Y = cy + dy / d * .06; } else { const m = [[b.x0 - .06, Y, X - b.x0], [b.x1 + .06, Y, b.x1 - X], [X, b.y0 - .06, Y - b.y0], [X, b.y1 + .06, b.y1 - Y]].sort((p, q) => p[2] - q[2])[0]; X = m[0]; Y = m[1]; } } } }
   return [clamp(X, -.92, .92), clamp(Y, -.92, .92)];
@@ -725,10 +729,10 @@ function order(L) {                                   // back to front, the came
 }
 const KIDC = { skin: '#f3c9a1', hair: '#5a3a2a', shirt: '#ef6a4c', pants: '#5b84c4', shoe: '#fbf7ee' };
 function drawKid(x) {                                 // the one tidying up, in crayon too, the thing she's carrying held up over her head
-  const [sx, sy] = P3(pl.X, pl.Y), ln = lean(pl.X, pl.Y), mv = clamp(Math.hypot(pl.vX, pl.vY) / SPEED, 0, 1), sw = Math.sin(pl.walk) * mv, bob = Math.abs(Math.cos(pl.walk)) * 2.2 * mv, up = !!pl.hold, s = pl.sq;
-  ell(x, sx, sy, 12, 4.4); x.fillStyle = 'rgba(58,49,64,.2)'; x.fill();
+  const [sx, sy] = P3(pl.X, pl.Y), mv = clamp(Math.hypot(pl.vX, pl.vY) / SPEED, 0, 1), sw = Math.sin(pl.walk) * mv, bob = Math.abs(Math.cos(pl.walk)) * 2.2 * mv, up = !!pl.hold, s = pl.sq;
+  ell(x, sx, sy, 12 * SPR, 4.4 * SPR); x.fillStyle = 'rgba(58,49,64,.2)'; x.fill();
   BV = Math.floor(T * BOIL + .5) % 3;
-  x.save(); x.translate(sx, sy); x.rotate(ln); x.scale(pl.face * (1 + s * .6), 1 - s * .6); x.translate(0, -bob);
+  x.save(); x.translate(sx, sy); x.scale(SPR * pl.face * (1 + s * .6), SPR * (1 - s * .6)); x.translate(0, -bob);
   for (const k of [-1, 1]) { const fx = k * 4 + sw * k * 3.5; x.beginPath(); x.moveTo(k * 3.2, -13); x.lineTo(fx, -3); x.lineCap = 'round'; x.lineWidth = 5.5; x.strokeStyle = KIDC.pants; x.stroke(); ell(x, fx + k * .8, -2, 3.8, 2.6); cf(x, KIDC.shoe, { light: .2 }); ink(x, 1.2); }
   x.beginPath(); x.moveTo(-7, -25.5); x.quadraticCurveTo(-9.5, -15, -8.5, -11); x.lineTo(8.5, -11); x.quadraticCurveTo(9.5, -15, 7, -25.5); x.quadraticCurveTo(0, -28, -7, -25.5); x.closePath(); cf(x, KIDC.shirt); ink(x);
   for (const k of [-1, 1]) { const hx = up ? k * 7.5 : k * 9 - sw * k * 2.5, hy = up ? -46 : -13.5; x.beginPath(); x.moveTo(k * 6.5, -23); x.lineTo(hx, hy); x.lineCap = 'round'; x.lineWidth = 4.4; x.strokeStyle = KIDC.shirt; x.stroke(); circ(x, hx, hy, 2.6); cf(x, KIDC.skin, { light: .2 }); ink(x, 1); }
@@ -742,13 +746,13 @@ function drawKid(x) {                                 // the one tidying up, in 
   x.restore(); BV = 0;
   if (pl.hold) { const it = pl.hold, H2 = headPos(); let px = H2[0], py = H2[1], s2 = .86;
     if (it.state === 'lift') { const u = ease(clamp(it.t / LIFT, 0, 1)), [fx, fy] = P3(it.X, it.Y); px = lerp(fx, px, u); py = lerp(fy, py, u) - Math.sin(u * Math.PI) * 10; s2 = lerp(1, .86, u); }
-    drawItem(x, it, px, py, s2, ln); }
+    drawItem(x, it, px, py, s2); }
 }
 function drawFloorItem(x, it, hint) {
-  const [sx, sy] = P3(it.X, it.Y), ln = lean(it.X, it.Y);
-  ell(x, sx, sy, 13, 4.5); x.fillStyle = 'rgba(58,49,64,.16)'; x.fill();
-  if (hint) { ell(x, sx, sy, 17 + Math.sin(T * 8) * 1.5, 6.5); pen(x, 2, .75, '#f5b631'); }   // (the one ✕ would pick up)
-  drawItem(x, it, sx, sy - (it.hop > 0 ? Math.sin(it.hop * Math.PI) * 6 : 0), 1, ln);
+  const [sx, sy] = P3(it.X, it.Y);
+  ell(x, sx, sy, 13 * SPR, 4.5 * SPR); x.fillStyle = 'rgba(58,49,64,.16)'; x.fill();
+  if (hint) { ell(x, sx, sy, (17 + Math.sin(T * 8) * 1.5) * SPR, 6.5 * SPR); pen(x, 2, .75, '#f5b631'); }   // (the one ✕ would pick up)
+  drawItem(x, it, sx, sy - (it.hop > 0 ? Math.sin(it.hop * Math.PI) * 6 : 0));
 }
 function drawAir(x, it) {                             // (on its way into a box, or back out of one, or down onto the floor)
   const u = clamp(it.t / it.dur, 0, 1), px = lerp(it.from[0], it.to[0], u), py = lerp(it.from[1], it.to[1], u) - Math.sin(u * Math.PI) * (it.state === 'fly' ? 44 : 30);
@@ -782,7 +786,7 @@ function card(x, lines, o = {}) {                     // a paper card in the mid
 const TOUCH = matchMedia('(pointer: coarse)').matches, actKey = () => TOUCH ? 'TAP' : EMB ? '✕' : 'SPACE';
 function signsRow(x, cx, y) { CAT_IDS.forEach((c, i) => { const px = cx + (i - 1.5) * 64; x.save(); x.translate(px, y + 4); x.scale(.72, .72); BV = Math.floor(T * BOIL + i) % 3; DRAW[CAT[c].sign](x, SIGN_COL[c]); BV = 0; x.restore(); x.font = FONT(8); x.fillStyle = CAT[c].c; x.textAlign = 'center'; x.fillText(CAT[c].n, px, y + 16); }); }
 function draw() {
-  const x = g; x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = PAPER; x.fillRect(0, 0, cv.width, cv.height);
+  const x = g; x.setTransform(1, 0, 0, 1, 0, 0); x.fillStyle = mix(room.kid.sky, .62); x.fillRect(0, 0, cv.width, cv.height);   // (round the stage, the room's own wash)
   x.setTransform(SC * DPR, 0, 0, SC * DPR, OX * DPR, OY * DPR);
   if (!room.bg) buildBG(room); x.drawImage(room.bg, 0, 0, W, H);
   const hint = state === 'play' && !pl.hold ? itemNear() : null, hb = state === 'play' && pl.hold && pl.hold.state === 'held' ? binNear() : null, L = [];
@@ -799,7 +803,8 @@ function draw() {
     else if (p.k === 'star') { x.translate(p.x, p.y); x.rotate(p.t * 6); star(x, 0, 0, p.r); x.fillStyle = p.c; x.fill(); }
     else { x.translate(p.x, p.y); x.rotate(p.rot); x.beginPath(); x.rect(-p.r, -p.r * .5, p.r * 2, p.r); x.fillStyle = p.c; x.fill(); }
     x.restore(); }
-  room.bins.forEach(b => drawTag(x, b, b === hb));
+  { const [kx, ky] = P3(pl.X, pl.Y), U = [[kx - 15 * SPR, ky - (pl.hold ? 84 : 52) * SPR, kx + 15 * SPR, ky], ...room.items.filter(it => it.state === 'floor').map(it => itemBox(it.X, it.Y))];
+    room.bins.forEach(b => { const R = tagBox(b), see = U.some(B => overlap(R, B) > 0); x.save(); if (see) x.globalAlpha = b === hb ? .62 : .32; drawTag(x, b, b === hb); x.restore(); }); }   // (see-through over her, or over a thing put down under it)
   for (const p of pops) { if (p.t < 0) continue; x.save(); x.globalAlpha = clamp(1.4 - p.t * 1.3, 0, 1); label(x, p.s, p.x, p.y - p.t * 34, p.f, p.c, 'center'); x.restore(); }
   hud(x);
   const kd = room.kid;
@@ -828,9 +833,9 @@ function key(k) {
 function tap(sx, sy) {                                // (a stage point: a thing, its box, you, or just the floor to walk to)
   if (state !== 'play') { act(); return; }
   if (pl.hold) { const b = room.bins.find(b2 => { const [mx, my] = binMouth(b2), [tx, ty] = tagPos(b2); return Math.hypot(sx - mx, sy - my) < 34 || (Math.abs(sx - tx) < 28 && Math.abs(sy - ty) < 24); }); if (b) { tgt = { bin: b }; return; } }
-  let best2 = null, bd = 26; for (const it of room.items) if (it.state === 'floor') { const [ix, iy] = P3(it.X, it.Y), d = Math.hypot(sx - ix, sy - (iy - 12)); if (d < bd) { bd = d; best2 = it; } }
+  let best2 = null, bd = 26 * SPR; for (const it of room.items) if (it.state === 'floor') { const [ix, iy] = P3(it.X, it.Y), d = Math.hypot(sx - ix, sy - (iy - 14 * SPR)); if (d < bd) { bd = d; best2 = it; } }
   if (best2 && !pl.hold) { tgt = { item: best2 }; return; }
-  const [kx, ky] = P3(pl.X, pl.Y); if (pl.hold && Math.hypot(sx - kx, sy - (ky - 26)) < 22) { putDown(); return; }
+  const [kx, ky] = P3(pl.X, pl.Y); if (pl.hold && Math.hypot(sx - kx, sy - (ky - 26 * SPR)) < 22 * SPR) { putDown(); return; }
   const [X, Y] = unP(sx, sy); tgt = { X: clamp(X, -.95, .95), Y: clamp(Y, -.95, .95) };
 }
 addEventListener('message', e => { const d = e.data; if (!d || d.bb == null || e.source !== window.parent) return;
