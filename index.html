@@ -1059,7 +1059,7 @@ function setPlatforms(s) {
   CEILS.length = 0; (S.ceils || []).forEach(c => CEILS.push(c)); if (!stronghold && ceilsLive) CEILS.push(...hardCeils(s));
   LADDERS.length = 0; (S.ladders || []).forEach(([face, wall]) => LADDERS.push({ face, wall, x: face - wall * 15, top: groundAt(face + wall * 20) ?? GROUND, bot: groundAt(face - wall * 30) ?? GROUND }));   // ladders: [the cliff face's x, its side]
   (S.poles || []).forEach(([x, top]) => LADDERS.push({ face: x, wall: 0, x, top, bot: groundAt(x) ?? GROUND, pole: true }));   // ladders up to a platform: [x, the platform's top] (the forest's bridge)
-  if (S.upX !== undefined) { const g = S.upY ?? groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - 360, bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
+  if (S.upX !== undefined) { const g = S.upY ?? groundAt(S.upX) ?? GROUND; LADDERS.push({ rope: "up", to: S.up, face: S.upX, wall: 0, x: S.upX, top: g - (S.upLen || 360), bot: g }); }   // rope ladders to the rooms above and below (Loof's sky)
   if (S.downX !== undefined && S.downCam) { const g = groundAt(S.downX) ?? GROUND, t = g - (S.camTop || 0); LADDERS.push({ rope: "down", rock: true, camila: true, to: S.down, face: S.downX, wall: 0, x: S.downX, top: t, bot: S.camTop ? g + 130 : g + 220, noBot: !!S.camTop });
     if (S.camTop) LADDERS.push({ wallClimb: "back", ledge: true, noTop: true, camila: true, face: S.downX, wall: 0, x: S.downX, top: t, bot: g }); }   // (the rock's top standing up out of the floor: down it from its top, or up its face onto it)   // (Camila's way down a rock face, from a patch of it in the floor: the forest, 2026-10-24)
   else if (S.downX !== undefined) { const w = S.downWall || -1, g = S.downY ?? groundAt(S.downX + w * 20) ?? GROUND; LADDERS.push({ rope: "down", to: S.down, face: S.downX, wall: w, x: S.downX - w * 15, top: g, bot: g + 360, onPlat: S.downY !== undefined }); }
@@ -1674,8 +1674,11 @@ function buildFurnace() {
 const cyl = (rt, rb, h, seg = 32, open = false, ts = 0, tl = TAU) => new THREE.CylinderGeometry(rt, rb, h, seg, 1, open, ts, tl);
 const sph = (r, w = 18, h = 14) => new THREE.SphereGeometry(r, Math.max(w, 30), Math.max(h, 22));
 const bx = (x, y, z) => new RoundedBoxGeometry(x, y, z, 4, Math.min(x, y, z) * .24);   // soft edges, never sharp blocks
+// (and each, once painted, settled as a character's pictures are: its pixels kept in the page's memory, its canvas let go. The user, 2026-11-02, a fourth
+// time: "going unto a save spot room caused the restores [textures] to go black again". The skies alone were some 70-90 MB of canvases Safari keeps with
+// the 3D picture's own memory, so a big room's build could get its GPU reset; and what's settled always comes back after one)
 const TEX_LIVE = new Set(); let texAdds = 0;          // (every tex() picture, by a weak hold: painted again when the 3D picture's lost and comes back, texRepaint)
-const tex = (w, h, paint) => { const [c, g] = cv2(w, h); paint(g, w, h); const t = canvasTex(c); if (typeof WeakRef === "function") { t.userData.paint = paint; TEX_LIVE.add(new WeakRef(t)); if (++texAdds % 256 === 0) TEX_LIVE.forEach(R => { if (!R.deref()) TEX_LIVE.delete(R); }); } return t; };
+const tex = (w, h, paint) => { const [c, g] = cv2(w, h); paint(g, w, h); const t = canvasTex(c); if (typeof WeakRef === "function") { t.userData.paint = paint; TEX_LIVE.add(new WeakRef(t)); if (++texAdds % 256 === 0) TEX_LIVE.forEach(R => { if (!R.deref()) TEX_LIVE.delete(R); }); } return KIT.settleTex(t); };
 function texCachesDrop() {                          // (and the kept skies, discs and portraits forgotten: the room built again makes them anew)
   [skyCache, waveSkies, duneSkies, keshSkies, keshDiscs, candySkies, cruxSkies, lakeSkies, bazSkies, casSkies, kpSkies, portraitCache].forEach(C => { for (const k in C) delete C[k]; });
   ROW_SKY.length = 0; DEEP_SKY = [];
@@ -2490,8 +2493,8 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const mGrass = toon("#6c9c44"), mDirt = toon("#74402f"), mStone = toon("#a39d93"), mMoss = toon("#6e9c48");   // (red earth, like El Yunque's; mossy limestone, like the karst country's)
   const gAt = x => Y(groundAt(x / S) ?? GROUND);                                   // the ground's height (3D) at x (3D)
   const M = tropMats(), bushMs0 = ["#4f8a49", "#3f7a40", "#5f9a52"].map(c => toon(c)), barkPitM = toon("#6b5040");
-  const bgY = (st.elev ?? 1) >= 2 ? -14 : (1 - (st.elev ?? 1)) * ROW_RISE * S;     // the forest round about: up above us in the ravine (row C), its canopy far below up top (row A)
-  const FB = STITCH.has(world) ? -(SEAM_T - 6) * S : -12, fy = y => Math.max(Y(y), FB + .1);   // the floor's underside: a stitched world's floors are slabs, the room below's ceiling, above the edge it shares with it
+  const bgY = ((st.elev ?? 1) >= 2 ? -14 : (1 - (st.elev ?? 1)) * ROW_RISE * S) - (st.drop || 0) * S;     // the forest round about: up above us in the ravine (row C), its canopy far below up top (row A) (and down with a lower floor: st.drop)
+  const FB = STITCH.has(world) ? -(SEAM_T - 6 + (st.drop || 0)) * S : -12, fy = y => Math.max(Y(y), FB + .1);   // (st.drop: a room with none under it, its floor that much lower: the woods' background row BB)   // the floor's underside: a stitched world's floors are slabs, the room below's ceiling, above the edge it shares with it
   // ground
   const pitKeep = new Set();
   if (st.open) { }                                   // (open: high in the trees, nothing underfoot but the bridge; the forest's A2 and A3, 2026-10-24)
@@ -2630,7 +2633,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     for (const sl of W.scatter(Math.round(12 * WS), 12, 12, 2104)) inSlot(sl, x => { const g = tropGroundFern(scene, M, x, R(.8, bgY - .6), -9, rng, R(.8, 1.2)); g.rotation.x = 1.15; });   // ferns growing out of the wall
     for (const sl of W.steps(.5, 1.3, 14, 16, 2105)) inSlot(sl, x => { const hl = R(.6, 2.6), v = mk(new THREE.CylinderGeometry(.04, .02, hl, 4), null, { mat: rng() < .6 ? mMoss : toon("#6b5040"), ol: .012 }); at(v, x, bgY - hl / 2, -9.1); scene.add(v); });
   } else if (bgY < -.5) {                            // up high: our ground ends in a cliff at the back, the forest's canopy far below
-    for (const sl of W.steps(.9, 1.8, 14, 16, 2106)) inSlot(sl, x => { const r = R(.6, 1.3); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .03 }), x, R(-3, -.6), -9.1)); });
+    for (const sl of W.steps(.9, 1.8, 14, 16, 2106)) inSlot(sl, x => { const r = R(.6, 1.3), y = R(-3, -.6); if (!st.bgRow) scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: mStone, ol: .03 }), x, y, -9.1)); });   // (not in the woods' background: no cliff's edge behind its bridges, vines and drops, so they hung in the air. The user, 2026-11-02: "in BA6(?) where you can jump down, there's like rocks and stuff up floating in the air")
   }
   // the rainforest round about: sierra palms in clumps, giant tree ferns, yagrumos, tabonucos, royal palms standing tall at the back, flamboyanes in
   // flower; one great ceiba; lianas hanging; mogotes far off. Deeper = foggier
@@ -3147,7 +3150,7 @@ function waveSkyTex(k, tall, bare) {                 // the printed sky for each
     x += (r2() - .5) * 100; if (Math.hypot(x - dx, y - dy) < R + w * .55) x += (x < dx ? -1 : 1) * (R + w * .6);   // keep the disc clear
     { const m = w * .66, xc = clamp(x, m, 2048 - m); if (xc !== x) x = Math.hypot(xc - dx, y - dy) < R + w * .55 ? dx + (x < dx ? 1 : -1) * (R + w * .6) : xc; }   // (and on the canvas: past its end a cloud was cut off flat, the user 2026-11-02. Back in, or round the disc's other side)
     cloudCanvas(g, x, y, w, Q.cloud, Q.cloudLine, r2); });
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (waveSkies[key] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (waveSkies[key] = KIT.settleTex(t));
 }
 let haloT = null;
 const haloTex = () => haloT || (haloT = tex(64, 64, g => { const r = g.createRadialGradient(32, 32, 2, 32, 32, 31); r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.35, "rgba(255,255,255,.35)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 64, 64); }));
@@ -3164,7 +3167,7 @@ function cloudStripTex(k) {                          // the hour's swirl clouds 
   const Q = WAVE_SCREENS[k].sky, c = document.createElement("canvas"); c.width = 2048; c.height = 512; const g = c.getContext("2d"), r2 = rngF(611 + k);
   for (let i = 0; i < 5; i++) { const x = (i + .25 + r2() * .5) * 2048 / 5, y = 160 + r2() * 240, w = 260 + r2() * 170, sd = 700 + k * 17 + i;
     [-2048, 0, 2048].forEach(dx => cloudCanvas(g, x + dx, y, w, Q.cloud, Q.cloudLine, rngF(sd))); }   // (each drawn again a strip's length either side: no seam where it wraps)
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return (cloudStrips[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.anisotropy = 4; return (cloudStrips[k] = KIT.settleTex(t));
 }
 const cloudStrip = k => { const t = cloudStripTex(k).clone(); t.needsUpdate = true; return t; };   // (its own scroll and scale; the picture's shared)
 let glassT = null;
@@ -3625,7 +3628,7 @@ function skyTex(k) {                                 // each hour's sky: banded 
   if (Q.sun) { g.beginPath(); g.arc(Q.cx, Q.cy + 10, 34, 0, TAU); g.fillStyle = Q.sun; g.fill(); }
   if (Q.stars) for (let i = 0; i < Q.stars; i++) { g.globalAlpha = .2 + r2() * .5; g.fillStyle = "#f3f6ff"; g.fillRect(r2() * 1024, r2() * 220, 1.6, 1.6); }
   g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (skyCache[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (skyCache[k] = KIT.settleTex(t));
 }
 function nightSkyTex() {                             // the same banded sky, but deep blue, with stars and a big soft moon
   const c = document.createElement("canvas"); c.width = 1024; c.height = 512; const g = c.getContext("2d"), r2 = rngF(5);
@@ -3640,7 +3643,7 @@ function nightSkyTex() {                             // the same banded sky, but
   halo.addColorStop(0, "rgba(236, 240, 255, .55)"); halo.addColorStop(1, "rgba(236, 240, 255, 0)"); g.fillStyle = halo; g.fillRect(mx - 160, my - 160, 320, 320);
   g.beginPath(); g.arc(mx, my, 46, 0, TAU); g.fillStyle = "#f4f1dc"; g.fill();
   g.globalAlpha = .18; g.fillStyle = "#c9c6ad"; [[-14, -8, 10], [12, 10, 7], [6, -16, 5], [-8, 16, 6]].forEach(([dx, dy, r]) => { g.beginPath(); g.arc(mx + dx, my + dy, r, 0, TAU); g.fill(); }); g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return KIT.settleTex(t);
 }
 let look = SCREENS[0], world = 0;                    // world: 0 the berry woods, 1 crashing waves
 function setLook(k) {                                // light the clearing for its hour
@@ -3698,7 +3701,7 @@ function rowSkyTex(k) {                             // the woods up top (row A):
     for (let j = 0; j < 5; j++) { g.beginPath(); g.arc(cx + (j - 2) * w * .28, cy - Math.sin(j / 4 * Math.PI) * w * .22, w * (.2 + r2() * .1), 0, TAU); g.fill(); }
     g.fillRect(cx - w * .62, cy - 2, w * 1.24, w * .16); }
   g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (ROW_SKY[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (ROW_SKY[k] = KIT.settleTex(t));
 }
 let rowFx = null;                                    // the rows' moving bits: drips falling in the forest's undergrowth (row D), rings spreading where they land
 function buildRowBits(s) {
@@ -4649,8 +4652,8 @@ function bgRing(cx, top, rx, ry, ph, dy = 0, ox = 0) {   // one of BA4's loops (
 }
 function bwGeo(B) {                                  // a bridge walk's end in this room: its stairs' foot (Pa), their top (N), the far end (F): x px, y px, z units
   const fr = B.side === "front", nx = fr ? B.fx : B.bx, nz = fr ? -BW_NEAR : -BG_FAR_Z - BW_FAR, fx = fr ? B.bx : B.fx, fz = fr ? -BW_FAR : -BG_FAR_Z - BW_NEAR;
-  const du = (fx - nx) * S, dz = fz - nz, L = Math.hypot(du, dz), ux = du / L, uz = dz / L, y = GROUND - BW_DECK;
-  return { N: { x: nx, y, z: nz }, F: { x: fx, y, z: fz }, Pa: { x: nx - ux * BW_STAIR / S, y: GROUND, z: nz - uz * BW_STAIR }, ux, uz, L, zone: nx - ux * BW_STAIR / S };
+  const du = (fx - nx) * S, dz = fz - nz, L = Math.hypot(du, dz), ux = du / L, uz = dz / L, g = GROUND + (B.dy || 0), y = g - BW_DECK;   // (B.dy: its room's floor lower: BB6's)
+  return { N: { x: nx, y, z: nz }, F: { x: fx, y, z: fz }, Pa: { x: nx - ux * BW_STAIR / S, y: g, z: nz - uz * BW_STAIR }, ux, uz, L, zone: nx - ux * BW_STAIR / S };
 }
 function woodsBgSet(P, g, s, rng, R) {
   const k = P.k, st = STAGES[s], V3 = (a, b, c) => new THREE.Vector3(a, b, c);
@@ -5155,8 +5158,8 @@ function authorForest() {
   const BGC = ["BA1", "BA2", "BA3", "BA4", "BA5", "BA6", "BB2", "BB3", "BB4", "BB5", "BB6"], BG = {}; BGC.forEach((c, i) => { BG[c] = S0.length + i; });
   const bg = (c, o, roster, what) => { const src = S0[C[c.slice(1)]], i = BG[c]; if (i !== S0.length) console.warn("forest: the background out of order", c);
     S0.push({ h: src.h, col: 900 + BGC.indexOf(c), bgCell: c, bgRow: c[1], elev: src.elev, foe: src.foe, authored: true, plats: [], ...o }); R0[i] = roster || []; nm(S0[i], what); return S0[i]; };
-  const DECK = GROUND - 120, A1W = { fx: 1500, bx: 520 }, B6W = { fx: 1950, bx: 1500 }, V = (pts, r0, r1, o) => ({ pts, r0, r1, ...o });   // (DECK: the upper deck, "reach the top tier of the bridge with a regular jump")
-  const RINGS = BG_RINGS.map(r => V(bgRing(...r), .42, .36)), LAND = { top: GROUND, bot: GROUND + 290 };
+  const DECK = GROUND - 120, BD = 200, BBG = GROUND + BD, A1W = { fx: 1500, bx: 520 }, B6W = { fx: 1950, bx: 1500 }, V = (pts, r0, r1, o) => ({ pts, r0, r1, ...o });   // (DECK: the upper deck, "reach the top tier of the bridge with a regular jump")
+  const RINGS = BG_RINGS.map(r => V(bgRing(...r), .42, .36)), LAND = { top: GROUND, bot: GROUND + 290 }, ST = { step: true };   // (ST: a vine you walk on, up onto the next by walking)
   // BA1-BA3: "two-tiered bridge", "the player cannot jump off of this bridge": the lower deck the floor all along, the upper one a jump up; broken at BA2's end, a beam under
   bg("BA1", { open: true, noRoots: true, ground: [[0, 0]], noLeft: true, next: BG.BA2, plats: [[800, DECK, 1840, "deck"]], bwalk: { ...A1W, to: C.A1, side: "back" },
     set: [{ k: "redBridge", x0: 300, x1: 2900, end0: true, gapF: [380, 620] }, { k: "bwFoot" }] },
@@ -5175,43 +5178,47 @@ function authorForest() {
   // BA4: "the screen is zoomed out and the almost silhouetted player's team walks on free standing glos like vines": three loops, along their tops; drop through
   // (double tap down) or fall between them, down into BB4
   bg("BA4", { open: true, noRoots: true, zoom: 2, sil: true, ground: [[0, 0]], gaps: [[380, 2760]], below: BG.BB4, dropOnly: true, prev: BG.BA3, next: BG.BA5,   // (dropOnly: down into BB4 only, never up out of it: the user 2026-11-02, "you should not be able to jump into the vines from the bottom and then climb up onto the screen with the silhoutted zoomed out look")
-    plats: [[410, 470, 420, "vine"], [970, 455, 420, "vine"], [1530, 470, 1080, "vine"]],
+    plats: [[350, 470, 490, "vine", ST], [830, 462, 150, "vine", ST], [970, 455, 430, "vine", ST], [1390, 462, 150, "vine", ST], [1530, 470, 1080, "vine", ST]],
     set: [{ k: "bgLand", x0: -300, x1: 380, ...LAND, ragged: 1 }, { k: "glos", paths: [...RINGS, V([[1900, 485, 0], [2200, 487, .15], [2450, 484, -.1], [2700, 486, 0]], .42, .4),
+      V([[300, 482, .3], [420, 480, .1], [560, 478, 0]], .3, .26), V([[780, 480, -.1], [900, 472, .25], [1020, 466, 0]], .3, .26), V([[1340, 468, 0], [1460, 472, -.25], [1580, 482, .1]], .3, .26),
       V([[380, 480, -.5], [330, 560, -.9], [300, 700, -1.2], [330, 800, -1.4]], .3, .16, { hand: true })] }] }, [], "VINES");
   // BA5: "this screen will zoom in back to normal": the vine on up to its end, a star at its tip; off it onto the land, "a tree and the fire and chair rest stop"
   bg("BA5", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 1450]], below: BG.BB5, prev: BG.BA4, next: BG.BA6, rest: true, peace: true, restX: 1900,
-    plats: [[-40, 470, 600, "vine"], [600, 432, 460, "vine"], [1080, 394, 330, "vine"]], items: [["power", 1380, 394]],
-    set: [{ k: "glos", paths: [V([[-200, 485, 0], [250, 487, .15], [560, 484, -.1], [640, 447, 0], [880, 446, .15], [1060, 409, 0], [1250, 408, .1], [1420, 404, 0]], .44, .3, { hand: true })] },
+    plats: [[-40, 470, 610, "vine", ST], [560, 432, 510, "vine", ST], [1060, 394, 300, "vine", ST], [1350, 432, 110, "vine", ST]], items: [["power", 1300, 394]],
+    set: [{ k: "glos", paths: [V([[-200, 485, 0], [250, 487, .15], [560, 484, -.1], [640, 447, 0], [880, 446, .15], [1060, 409, 0], [1250, 408, .1], [1345, 412, 0], [1420, 445, 0], [1490, 486, 0]], .44, .3, { hand: true })] },
       { k: "bgLand", x0: 1450, x1: 2900, ...LAND, ragged: -1 }, { k: "bgTree", x: 2300, base: GROUND, top: 170, r: 1.05, z: -2.8, reach: 1, crown: { y: 130, r: 4.6 } }] }, [], "REST STOP");
   // BA6: the land on to its edge ("they jump off the edge all the way down to BB6"); you can come up onto it from BB6's ledges (its top a platform: up through it)
   bg("BA6", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 2760]], below: BG.BB6, prev: BG.BA5, noRight: true, plats: [[-60, GROUND, 960, "turf"]],
     set: [{ k: "bgLand", x0: -300, x1: 900, ...LAND, ragged: 1 }] }, [["acorn", "rust", { plat: 0, x: 250 }], ["leafy", "leaf", { plat: 0, x: 620 }]], "BLUFF");
+  // Row BB's floors BD px lower than the rest of the woods (none under them): the user, 2026-11-02, "the row b rooms should have higher ceilings. the ladder should
+  // be longer, the platforms to jump up to the rest spot should be more of a climb". The ways up into BA stay at the same height (BA lines up a row over BB), so the
+  // ladder's BD longer and the ledges up from the floor have a step or two more
   // BB2: "the tree ends and the player jumps on a vine they walk on to another tree with branches and platforms. they jump up to a tree top with a rare item"
-  bg("BB2", { open: true, noRoots: true, ground: [[0, 0]], gaps: [[-200, 2000]], noLeft: true, next: BG.BB3,
-    plats: [[620, 400, 380, "branch"], [180, 325, 330, "branch"], [620, 245, 320, "branch"], [330, 160, 480, "crown"], [1150, 435, 640, "vine"]], items: [["power", 570, 160]],
-    set: [{ k: "bgTree", x: 560, base: GROUND + 600, top: 220, r: 1.4, z: -1.8, reach: 600 }, { k: "treetops", x0: 1980, x1: 2900 },
-      { k: "glos", paths: [V([[980, 800, -.6], [1040, 600, -.3], [1130, 470, 0], [1300, 452, .1], [1470, 450, 0], [1640, 452, -.1], [1810, 470, 0], [1900, 600, .3], [1960, 800, .5]], .44, .4)] }] },
+  bg("BB2", { open: true, noRoots: true, drop: BD, ground: [[0, BD]], gaps: [[-200, 2000]], noLeft: true, next: BG.BB3,
+    plats: [[620, 400 + BD, 380, "branch"], [180, 325 + BD, 330, "branch"], [620, 245 + BD, 320, "branch"], [330, 160 + BD, 480, "crown"], [1150, 435 + BD, 650, "vine", ST], [1790, 455 + BD, 225, "vine", ST]], items: [["power", 570, 160 + BD]],
+    set: [{ k: "bgTree", x: 560, base: BBG + 600, top: 220 + BD, r: 1.4, z: -1.8, reach: 600 }, { k: "treetops", x0: 1980, x1: 2900, y: BBG },
+      { k: "glos", dy: BD, paths: [V([[980, 800, -.6], [1040, 600, -.3], [1130, 470, 0], [1300, 452, .1], [1470, 450, 0], [1640, 452, -.1], [1810, 470, 0], [1900, 600, .3], [1960, 800, .5]], .44, .4)] }] },
     [["acorn", "rust", { plat: 0, x: 860 }], ["leafy", "leaf", { plat: 1, x: 300 }], ["twiggy", "olive", { plat: 2, x: 820 }], ["pinecone", "rust", { plat: 4, x: 1470 }], ["leafy", "orange", 2250]], "TREETOPS");
   // BB3: the ladder down from BA3 "ends at the top of a tree. the player is walking on top of the tree. theres a smaller tree that extends high and has a branch"
-  bg("BB3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BB2, next: BG.BB4, up: BG.BA3, upX: 1965, plats: [[900, 290, 380, "branch"]],
-    set: [{ k: "treetops", x0: -300, x1: 2900 }, { k: "bgTree", x: 820, base: GROUND + 120, top: 190, r: .7, z: -1.5, reach: 500, crown: { y: 160, r: 2.8 } },
-      { k: "bgTree", x: 2230, base: GROUND + 200, top: -300, r: 5.4, z: -6.6, col: "#c98d7a", col2: "#a8705f", reach: 1 }] },
+  bg("BB3", { open: true, noRoots: true, drop: BD, ground: [[0, BD]], prev: BG.BB2, next: BG.BB4, up: BG.BA3, upX: 1965, upLen: 360 + BD, plats: [[900, 290 + BD, 380, "branch"]],
+    set: [{ k: "treetops", x0: -300, x1: 2900, y: BBG }, { k: "bgTree", x: 820, base: BBG + 120, top: 190 + BD, r: .7, z: -1.5, reach: 500, crown: { y: 160 + BD, r: 2.8 } },
+      { k: "bgTree", x: 2230, base: BBG + 200, top: -300, r: 5.4, z: -6.6, col: "#c98d7a", col2: "#a8705f", reach: 1 }] },
     [["leafy", "leaf", 300], ["acorn", "rust", 1150], ["twiggy", "olive", { plat: 0, x: 1180 }]], "TREETOPS");
   // BB4: the floor, the vines' loops hanging into it from BA4; "one loop in BB4 has a star and that's another vine the player can actually land on". Up high, just under where
   // you fall in from BA4, and yours to land on only from above (sky): "it should hafve the vines much higher and you should not be able to jump into the vines from the bottom" (2026-11-02)
-  bg("BB4", { ground: [[0, 0]], prev: BG.BB3, next: BG.BB5, plats: [[380, 110, 480, "vine", { sky: true }]], items: [["power", 620, 110]],
-    set: [{ k: "treetops", x0: -300, x1: 650 }, { k: "glos", dy: -ROW_H, paths: [...RINGS] },
-      { k: "glos", paths: [V([[350, 125, -.1], [480, 122, 0], [620, 126, .1], [760, 122, 0], [890, 125, -.1]], .38, .34), V([[1200, 335, -1.7], [1230, 385, -1.6], [1262, 430, -1.5]], .26, .14, { hand: true }),
-        V([[1880, 370, -1.7], [1930, 410, -1.8], [1915, 448, -1.6]], .26, .14, { hand: true })] }] },
+  bg("BB4", { drop: BD, ground: [[0, BD]], prev: BG.BB3, next: BG.BB5, plats: [[380, 110, 480, "vine", { sky: true }]], items: [["power", 620, 110]],
+    set: [{ k: "treetops", x0: -300, x1: 650, y: BBG }, { k: "glos", dy: -ROW_H, paths: [...RINGS] },
+      { k: "glos", paths: [V([[350, 125, -.1], [480, 122, 0], [620, 126, .1], [760, 122, 0], [890, 125, -.1]], .38, .34), V([[1200, 335 + BD, -1.7], [1230, 385 + BD, -1.6], [1262, 430 + BD, -1.5]], .26, .14, { hand: true }),
+        V([[1880, 370 + BD, -1.7], [1930, 410 + BD, -1.8], [1915, 448 + BD, -1.6]], .26, .14, { hand: true })] }] },
     [["acorn", "rust", 1310], ["leafy", "orange", 2070]], "FAR WOODS");
   // BB5-BB6: the land's face behind; up it on ledges (the user's two, "add another one that leads them to bb6 (it extends into bb5 and to bb6", "from bb6 have another
   // platform higher that they can use to get up to ba6", and steps up to them off the floor, "add an extra platform if they needed to make their way back up there");
   // "bb6 has a bridge similar to the one in A1 that brings them back to b6"
-  bg("BB5", { ground: [[0, 0]], prev: BG.BB4, next: BG.BB6, noStrip: true, plats: [[1620, 385, 230], [1900, 300, 230], [2250, 215, 560, "span"]],
-    set: [{ k: "bgLand", x0: 1455, x1: 2900, top: GROUND - ROW_H, bot: GROUND + 60, z0: -9, z1: -2.2 }] },
-    [["leafy", "leaf", 500], ["acorn", "rust", 1260], ["twiggy", "olive", { plat: 0, x: 1735 }]], "FAR WOODS");
-  bg("BB6", { ground: [[0, 0]], prev: BG.BB5, noRight: true, noStrip: true, plats: [[-310, 215, 560, "span"], [300, 140, 220], [490, 250, 180], [640, 360, 180]], bwalk: { ...B6W, to: C.B6, side: "back" }, items: [["guava", 1100]],
-    set: [{ k: "bgLand", x0: -300, x1: 900, top: GROUND - ROW_H, bot: GROUND + 60, z0: -9, z1: -2.2 }, { k: "bwFoot" }] },
+  bg("BB5", { drop: BD, ground: [[0, BD]], prev: BG.BB4, next: BG.BB6, noStrip: true, plats: [[1090, 580, 220], [1340, 480, 220], [1620, 385, 230], [1900, 300, 230], [2250, 215, 560, "span"]],
+    set: [{ k: "bgLand", x0: 1455, x1: 2900, top: GROUND - ROW_H, bot: BBG + 60, z0: -9, z1: -2.2 }] },
+    [["leafy", "leaf", 500], ["acorn", "rust", 1260], ["twiggy", "olive", { plat: 2, x: 1735 }]], "FAR WOODS");
+  bg("BB6", { drop: BD, ground: [[0, BD]], prev: BG.BB5, noRight: true, noStrip: true, plats: [[-310, 215, 560, "span"], [300, 140, 220], [490, 250, 180], [640, 360, 180], [850, 465, 180], [1040, 570, 190]], bwalk: { ...B6W, to: C.B6, side: "back", dy: BD }, items: [["guava", 1100]],
+    set: [{ k: "bgLand", x0: -300, x1: 900, top: GROUND - ROW_H, bot: BBG + 60, z0: -9, z1: -2.2 }, { k: "bwFoot" }] },
     [["leafy", "leaf", 350], ["stumpy", "olive", 850]], "FAR WOODS");
   // the woods' own ends of the two walkways, and the background seen small from the rooms in front of it ("All you can see some of the background in all the A rows and
   // b rows from b5 to b6")
@@ -10145,7 +10152,7 @@ function swimAfter(s, p, back, up, dt) {                // a buddy (or EJ) under
 function updateEJ(dt) {                              // the partner: at your side, hopping up and down after you, and at any baddy that comes near
   if (!ej || ej.phase === "fight") return;
   const s = ej.st, r = ej.r, p = player; ej.t += dt; if (s.zipR) return;   // (down the zipline behind you)
-  if (stronghold || cine) { r.root.visible = r.shadow.visible = false; ej.away = true; return; }   // (she waits outside the stronghold)
+  if (cine) { r.root.visible = r.shadow.visible = false; ej.away = true; return; }   // (and into a stronghold with you, as the rest of the team: the user, 2026-11-02: "when a player went down into a stronghold, his teammates didn't follow them")
   if (ej.away) { ej.away = false; ejPlace(p.x - p.face * 90, p.y, p.face); r.root.visible = r.shadow.visible = true; }
   if (ej.phase === "chided") { ejChided(dt); return; }
   if (campSit(s, "ej", dt, ej && ej.r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); return; }   // (at a rest stop: on the log by the fire)
@@ -10854,7 +10861,7 @@ function moveBody(b, dt, halfW) {
     if (gy !== null && (b.y >= gy || (wasGround && !b.plat && gy - b.y < 9)) && (prevY <= gy + (wasGround ? 8 : 1) || (g0 !== null && prevY <= g0 + 1))) surf = { y: gy, p: null };   // (on a slope: keep to it, up or down; and the ground that's come up under you catches you)
     else if (b === player && gy !== null && !b.climb && !b.auto && !b.sunk && b.y - gy > 24 && b.y - gy < 320 && prevY - gy > 24) surf = { y: gy, p: null };   // (the player, ever left inside the ground: back on top of it)
     for (const p of PLATFORMS)
-      if (!(b.dropT > 0 && p === b.dropPlat) && !(p.sky && b === player && !(b.footY <= p.y + 2)) && prevY <= p.y + .5 && b.y >= p.y && b.x > p.x - 6 && b.x < p.x + p.w + 6 && (!surf || p.y < surf.y)) surf = { y: p.y, p };   // dropping through: ignore that one · one only from above (sky): yours only if you were last stood as high, or fell in from the room above
+      if (!(b.dropT > 0 && p === b.dropPlat) && !(p.sky && b === player && !(b.footY <= p.y + 2)) && (prevY <= p.y + .5 || (p.step && wasGround && b.y - p.y <= 42 && b.x > p.x && b.x < p.x + p.w)) && b.y >= p.y && b.x > p.x - 6 && b.x < p.x + p.w + 6 && (!surf || p.y < surf.y)) surf = { y: p.y, p };   // dropping through: ignore that one · one only from above (sky): yours only if you were last stood as high, or fell in from the room above · a step (the woods' vines you walk: up onto the next one by walking, a little higher; the user, 2026-11-02 "you fall off where the vine starts and where they connect. make sure you don't fall off just by walking")
     if (surf) { if (!wasGround) b.landV = b.vy; b.y = surf.y; b.vy = 0; b.onGround = true; b.plat = surf.p; if (b === player) b.footY = surf.y; }
   }
   return prevY;
@@ -12561,10 +12568,18 @@ function partInput(dt) {                             // the buddy button: a pres
 const HEAL_PILE = [[0, 0, 0], [0, .02, .17], [0, 0, -.17], [.03, .13, .09], [.03, .13, -.09], [-.04, .1, .22], [-.04, .1, -.22], [.04, .25, 0], [0, .3, .11], [0, .3, -.11]];   // (an armful: three along the bottom, then up)
 let healer = { fight: false, quiet: 0, cd: 0, at: -9 };
 const healerP = () => partnerList().find(P => P.kind === "ally" && P.a && P.a.A.heal) || null;
-function healPile(r, L) {                            // the armful in his hands: the newest ten, as they are, on his chest's front
-  const key = L.join(","); if (r.__pileKey === key && r.__pile && r.__pile.parent) return; r.__pileKey = key;
+let basketM = null;
+function healBasket(g) {                             // his basket (the user, 2026-11-02: "for the buddy that carries food. give him a basket to hold for the food to go in so it's not just in his hands"):
+  const M = basketM || (basketM = { w: toon("#c99a5e", { side: THREE.DoubleSide }), d: toon("#94643a") }), B = new THREE.Group(); B.position.set(0, -.05, 0); B.scale.set(.85, 1, 1.3); g.add(B);   // wicker, open at the top, oval along his arms
+  const add = (geo, m, x, y, z, rx = 0) => { const o = mk(geo, null, { mat: m, ol: .018 }); o.position.set(x, y, z); o.rotation.x = rx; B.add(o); return o; };
+  add(new THREE.CylinderGeometry(.27, .2, .24, 20, 1, true), M.w, 0, 0, 0); add(new THREE.CircleGeometry(.2, 20), M.d, 0, -.115, 0, -Math.PI / 2);   // (its sides, its floor)
+  add(new THREE.TorusGeometry(.27, .024, 6, 24), M.d, 0, .12, 0, Math.PI / 2); [-.05, .04].forEach(y => add(new THREE.TorusGeometry(.24 + y * .3, .012, 4, 24), M.d, 0, y, 0, Math.PI / 2));   // (the rim, two bands of weave)
+  const h = add(new THREE.TorusGeometry(.25, .022, 6, 18, Math.PI), M.w, 0, .12, 0); h.rotation.y = Math.PI / 2;   // (its handle, over the top)
+}
+function healPile(r, L) {                            // the basket in his hands (L null: none), and in it the newest ten, as they are, on his chest's front
+  const key = L ? "b" + L.join(",") : ""; if (r.__pileKey === key && (!L || (r.__pile && r.__pile.parent))) return; r.__pileKey = key;
   if (r.__pile) { r.__pile.parent && r.__pile.parent.remove(r.__pile); r.__pile.traverse(m => { if (m.isMesh && m.geometry) m.geometry.dispose(); }); r.__pile = null; }
-  if (!L.length || !r.chest) return; const g = new THREE.Group(); g.position.set(.6, -.66, 0); r.chest.add(g); r.__pile = g;
+  if (!L || !r.chest) return; const g = new THREE.Group(); g.position.set(.6, -.66, 0); r.chest.add(g); r.__pile = g; healBasket(g);
   L.forEach((k, i) => { const m = lootRig(k); actors.remove(m); m.scale.setScalar(.55); m.position.set(...HEAL_PILE[i]); m.rotation.set(Math.sin(i * 7.1) * .4, Math.sin(i * 3.3) * 1.2, Math.sin(i * 5.7) * .35); g.add(m); });
 }
 function healPick(need) { const B = bag(), have = HEAL_KINDS.filter(k => B[k] > 0 || itemsInf); return have.find(k => HEAL_AMT[k] >= need) || have[have.length - 1] || null; }
@@ -12575,10 +12590,10 @@ function healerUse(H, why) {                         // one of what he's carryin
   if (H.a && H.a.A) SFX.buddy(H.a.A.id, "sp"); if (story) writeSave(); return true;
 }
 function healerTick(dt) {
-  const H = healerP(), p = player; if (!H || !p || mode !== "play" || transit || p.dead) { if (H && H.a && H.a.r && H.a.r.__pile) healPile(H.a.r, []); return; }
-  const q = H.q, r = H.a.r, L = carryNow(), n = L.length; healPile(r, q.worn ? [] : L);
-  q.cup = approach(q.cup || 0, n && !q.worn ? 1 : 0, dt * 4); q.cup2 = approach(q.cup2 || 0, n > 4 && !q.worn ? 1 : 0, dt * 4);   // (one arm under a handful; both, more than that)
-  healer.cd = Math.max(0, healer.cd - dt); if (q.worn || !r.root.visible || stronghold || hideout) return;
+  const H = healerP(), p = player; if (!H || !p || mode !== "play" || transit || p.dead) { if (H && H.a && H.a.r && H.a.r.__pile) healPile(H.a.r, null); return; }
+  const q = H.q, r = H.a.r, L = carryNow(); healPile(r, q.worn ? null : L);
+  q.cup = approach(q.cup || 0, q.worn ? 0 : 1, dt * 4); q.cup2 = approach(q.cup2 || 0, q.worn ? 0 : 1, dt * 4);   // (both arms round his basket, full or not)
+  healer.cd = Math.max(0, healer.cd - dt); if (q.worn || !r.root.visible || hideout) return;
   const near = foesAlive().some(e => !e.dead && Math.abs(e.x - p.x) < 1300 && Math.abs(e.y - p.y) < 500);
   if (near) { healer.fight = true; healer.quiet = 0;
     const A = partnerList().find(P => P !== H && P.q !== q && !(P.kind === "ally" && P.a.A.heal)), low = (p.hp > 0 && p.hp <= 1) || (A && (A.q.php ?? PARTNER_HP) === 1);   // (you, or the attack buddy, down to one)
@@ -13021,14 +13036,14 @@ function partTag(q, i, dt) {                        // shown a moment in each ne
 }
 const PLAYER_FIRST = 170;                          // (how much nearer than you a partner has to be, px, before a baddy goes for it instead)
 function foeTgt(b) {                               // who a baddy (or the boss) goes for (the user, 2026-10-26: "make enemies also target them. the prioritize attacking whoever is closer, camila or rose of their partners, thoguh the player is first priority for them"): you, unless a partner's a good deal nearer
-  const p = player; if (!p || mode !== "play" || stronghold || hideout || arena) return p;
+  const p = player; if (!p || mode !== "play" || hideout || arena) return p;
   const far = q => Math.abs(q.x - b.x) + Math.abs(q.y - b.y) * .6; let best = p, bd = p.dead ? 1e9 : far(p) - PLAYER_FIRST;
   for (const P of partnerList()) { const q = P.q; if (!q.rig || !q.rig.root.visible || q.sitAt || q.hideAt) continue; const d = far(q) - (q === b.ptgt ? 60 : 0); if (d < bd) { bd = d; best = q; } }   // (the one it's after already: a little stickier)
   b.ptgt = best === p ? null : best; return best;
 }
 const partnerBox = q => { const H = (q.rig && q.rig.heightPx) || 80; return { x1: q.x - 18, x2: q.x + 18, y1: q.y - H, y2: q.y }; };
 function partnerHurt(P, d) {
-  const q = P.q; if (!q || q.pinv > 0 || q.worn || mode !== "play" || transit || stronghold) return false;   // (worn out: no more hits)
+  const q = P.q; if (!q || q.pinv > 0 || q.worn || mode !== "play" || transit) return false;   // (worn out: no more hits)
   if (q.bubble) { q.pinv = .6; if (--q.bubble.hits <= 0) budPop(q); else { SFX.bubblePop(); sparks(q.x, q.y - ((q.rig && q.rig.heightPx) || 80) * .5, 6); } return false; }   // (its bubble takes it, smaller each time)
   if (q.block) { q.pinv = .45; q.vx = d * 150; SFX.block(); sparks(q.x - d * 14, q.y - ((q.rig && q.rig.heightPx) || 80) * .55, 5); return false; }   // (guard up with you: it rings off)
   q.php = (q.php ?? PARTNER_HP) - 1; q.pinv = 1.1; q.heartT = 2.2; q.vx = d * 260; q.vy = -360; q.onGround = false; q.plat = null; q.hurtT = .3;
@@ -13067,7 +13082,7 @@ function partnerTick(dt) {
   for (const q of HEART_HAS) if (!now.includes(q)) { if (q.heartSpr) q.heartSpr.visible = false; if (q.tagSpr) q.tagSpr.visible = false; q.heartT = 0; }   // (one that's gone: its hearts with it)
   { const rk = allyRoomKey(); if (rk !== partRoomK) { partRoomK = rk; L.forEach(P => { P.q.tagT = 2.4; }); }   // (its button's mark: a moment in each new room, and when it joins)
     L.forEach((P, i) => { if (!partSeen.has(P.q)) { partSeen.add(P.q); P.q.tagT = 2.8; } if (P.q.worn) P.q.tagT = 0; partTag(P.q, Math.min(i, 1), dt); }); }   // (worn out: no button's mark)
-  if (!L.length || transit || stronghold || cine) return;
+  if (!L.length || transit || cine) return;
   for (const P of L) { const q = P.q, box = partnerBox(q); if (q.pinv > 0 || q.worn) continue;
     for (const b of baddies) if (!b.dead && !b.gone && b.atk === "go" && !(b.hurtT > 0) && !b.sad && !b.calm && overlap(box, { x1: b.x - b.hw, x2: b.x + b.hw, y1: b.y - b.h, y2: b.y })) { partnerHurt(P, Math.sign(q.x - b.x) || b.dir || 1); break; }   // (rammed: a lunge, a roll, a leap)
     if (q.pinv > 0 || !bossIn || !enemy || enemy.dead || enemy.gone || duo) continue;
@@ -14216,7 +14231,7 @@ function crewStep(Q, dt, waiting) {                // each of the rest of a crew
   });
 }
 const shoreX = x => { const SW = !(rideS && rideS.play) && STAGES[stage] && STAGES[stage].swim; return SW && x > SW[0] - 60 && x < SW[1] + 80 ? SW[1] + 80 : x; };   // (the cove's water: a buddy waits at its edge, never in it or walking on it. The user, 2026-10-25)
-const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" : "") + (arena ? ":ar" : "");
+const allyRoomKey = () => world + ":" + stage + (stronghold ? ":sh" + stronghold.screen : "") + (arena ? ":ar" : "");   // (each of the stronghold's rooms its own: in with you, at your side, every time)
 const allyHide = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); };
 const allyShow = q => { if (q) [q, ...(q.crew || [])].forEach(m => { m.r.root.visible = m.r.shadow.visible = true; }); };
 function alliesOff() { allies.forEach(allyHide); allyHide(allyHere); allies = []; allyHere = null; allyBring = null; arriveDrop(); }   // (a new game, the title, the character screen, the level select)
@@ -14480,7 +14495,7 @@ function climbArrive(s) {                            // (into a room on a ladder
 }
 function updateAllyOne(ally, k, dt) {              // (k: its place in the line behind you)
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt; if (s.zipR) return;   // (down the zipline behind you)
-  if (stronghold || cine || hideout || opening) { allyHide(ally); ally.away = true; return; }   // (it waits outside)
+  if (cine || hideout || opening) { allyHide(ally); ally.away = true; return; }   // (it waits outside; down into a stronghold, in with you: the user, 2026-11-02: "when a player went down into a stronghold, his teammates didn't follow them")
   const behind = 90 + palsAll().length * 50 + (ejPal() ? 50 : 0) + k * 75;
   if (ally.away || ally.at !== allyRoomKey() || ally.pl !== p) { ally.away = false; allyPlace(p.x - p.face * behind, p.y, p.face, ally); allyShow(ally); s.lvlLock = false; climbArrive(s); }   // (a new room, or back on your feet: at your side)
   if (campSit(s, allyKey(k), dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); crewStep(ally, dt, false); return; }   // (at a rest stop: on its stump by the fire)
@@ -17154,7 +17169,7 @@ function skyWorldTex(k) {                                // Loof's sky for each 
   for (let i = 0; i < 7; i++) { const x = r2() * 2048, y = 300 + r2() * 420, w = 80 + r2() * 140; if (Math.hypot(x - dx, y - dy) < R + w * .5) continue; g.globalAlpha = .55 + r2() * .35; heapCloud(g, x, y, w, Q.cloud, Q.shade, r2); }
   g.globalAlpha = 1;
   for (let i = 0; i < 16; i++) heapCloud(g, i * 140 + r2() * 60, 990 - r2() * 40, 260 + r2() * 160, Q.cloud, Q.shade, r2);   // the cloud banks along the horizon
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (skySkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (skySkies[k] = KIT.settleTex(t));
 }
 const worldSky = (k, tall) => world === 13 ? deepSkyTex(k) : world === 12 ? kpSkyTex(k) : world === 11 ? casSkyTex(k) : world === 10 ? bazSkyTex(k) : world === 8 ? lakeSkyTex(k) : world === 7 ? cruxSkyTex(k) : world === 6 ? candySkyTex(k) : world === 5 ? keshSkyTex(k) : world === 4 ? duneSkyTex(k) : world === 3 ? skyWorldTex(k) : world ? waveSkyTex(k, tall) : skyTex(k);   // (each world's own sky)
 const fgCloudTexes = {};
@@ -17162,7 +17177,7 @@ function fgCloudTex(k) {                                 // a soft cloud to floa
   if (fgCloudTexes[k]) return fgCloudTexes[k];
   const Q = SKY_PAL[k], c = document.createElement("canvas"); c.width = 512; c.height = 256; const g = c.getContext("2d"), r2 = rngF(9 + k);
   g.filter = "blur(10px)"; heapCloud(g, 256, 190, 400, Q.cloud, Q.shade, r2);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (fgCloudTexes[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (fgCloudTexes[k] = KIT.settleTex(t));
 }
 let skyTileT = null;
 const skyTileTex = () => skyTileT || (skyTileT = (() => { const t = tex(128, 128, g => {   // the docks' paving: sandstone tiles, a little uneven
@@ -17589,7 +17604,7 @@ function duneSkyTex(k) {                              // the desert sky for each
   g.strokeStyle = Q.low; g.lineCap = "round";                                                     // thin high wisps
   for (let i = 0; i < 6; i++) { const y = 300 + r2() * 420, x = r2() * 2048, w = 200 + r2() * 360; g.globalAlpha = .18 + r2() * .2; g.lineWidth = 3 + r2() * 5; g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 14, x + w, y + 6); g.stroke(); }
   g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (duneSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (duneSkies[k] = KIT.settleTex(t));
 }
 function buildDunes(k = 0, seed = k) {
   const before = new Set(scene.children); let rng = rngF(37 + seed * 53);
@@ -17829,7 +17844,7 @@ function keshSkyTex(k) {                              // the garden's sky: stars
   if (k >= 4) { g.lineCap = "round"; for (let i = 0; i < 9; i++) {      // long thin dawn clouds, lit pink from below
     const y = 470 + r2() * 360, x = r2() * 2048, w = 260 + r2() * 520; g.globalAlpha = (k === 4 ? .22 : .5) + r2() * .2; g.strokeStyle = k === 6 ? "#ffd0b8" : "#f4a8c4"; g.lineWidth = 10 + r2() * 16;
     g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + w / 2, y - 12, x + w, y + 4); g.stroke(); g.globalAlpha *= .6; g.strokeStyle = "#fff0e8"; g.lineWidth *= .35; g.beginPath(); g.moveTo(x + 20, y - 4); g.quadraticCurveTo(x + w / 2, y - 16, x + w - 30, y); g.stroke(); } g.globalAlpha = 1; }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (keshSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (keshSkies[k] = KIT.settleTex(t));
 }
 // a blossom tree (the reference's big one): a pale forked trunk, then layers of scalloped canopy, white on top, blue beneath, a few pink buds
 function blossomTree(par, Q, rng, s = 1, mats) {
@@ -18160,7 +18175,7 @@ function candySkyTex(k, bare) {                       // what the round windows 
   g.globalAlpha = .55; g.strokeStyle = k >= 5 ? "#8a7ad8" : "#ffffff"; g.lineWidth = 9; g.lineCap = "round";
   for (let i = 0; i < (bare ? 0 : 4); i++) { const cx = r2() * 512, cy = 120 + r2() * 300, R = 20 + r2() * 30; g.beginPath(); for (let a = 0; a < TAU * 1.6; a += .2) { const rr = R * (1 - a / (TAU * 2)); g.lineTo(cx + Math.cos(a) * rr * 1.8, cy + Math.sin(a) * rr); } g.stroke(); }   // swirly clouds
   g.globalAlpha = 1; g.fillStyle = S.disc; g.beginPath(); g.arc(S.discX * .6, S.discY * .9 + 60, S.discR * .9, 0, TAU); g.fill();
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (candySkies[key] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (candySkies[key] = KIT.settleTex(t));
 }
 // a spiral band, from its middle out, widening as it goes; the outer end can run on into a pointed flick (Vinella's quiff)
 function swirlShape(R, turns, w0, w1, tip = 0) {
@@ -18612,7 +18627,7 @@ function cruxSkyTex(k) {                              // a grey sky, lighter low
     g.fillStyle = k >= 5 ? "#8a8a8a" : "#f6f6f6"; g.beginPath(); for (let j = 0; j < n; j++) g.arc(x + j * s * .9, y - Math.sin(j / (n - 1) * Math.PI) * s * .5, s * (.7 + .3 * Math.sin(j * 2.1)), 0, TAU); g.fill();
     g.lineWidth = 5; g.strokeStyle = "#1a1a1a"; for (let j = 0; j < n; j++) { g.beginPath(); g.arc(x + j * s * .9, y - Math.sin(j / (n - 1) * Math.PI) * s * .5, s * (.7 + .3 * Math.sin(j * 2.1)), Math.PI * .95, Math.PI * 2.05); g.stroke(); }
     g.fillRect(x - s * .7, y + s * .45, (n - 1) * s * .9 + s * 1.4, 0); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (cruxSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (cruxSkies[k] = KIT.settleTex(t));
 }
 const CX = { white: "#e8e8e8", light: "#c0c0c0", mid: "#8e8e8e", dark: "#565656", deep: "#2e2e2e", black: "#121212" };
 function cruxTower(par, rng, s, mats) {               // a Moebius tower: a flared bell base, a long body, ring balconies, windows, a dome or a spire on top
@@ -19066,7 +19081,7 @@ function lakeSkyTex(k) {                              // the mint sky of the pai
   g.restore(); g.globalAlpha = 1; g.strokeStyle = Q.line; g.lineWidth = 3; g.beginPath(); g.arc(px, py, pr, 0, TAU); g.stroke();
   g.fillStyle = Q.bird;                                                              // a few birds, little ochre flappers like the painting's
   for (let i = 0; i < 9; i++) { const x = 200 + r2() * 1600, y = 120 + r2() * 420, s = 8 + r2() * 10; g.beginPath(); g.moveTo(x - s, y - s * .5); g.quadraticCurveTo(x - s * .4, y - s * .2, x, y); g.quadraticCurveTo(x + s * .4, y - s * .2, x + s, y - s * .6); g.lineTo(x + s * .2, y + s * .2); g.lineTo(x - s * .2, y + s * .2); g.closePath(); g.fill(); }
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (lakeSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (lakeSkies[k] = KIT.settleTex(t));
 }
 const LK = { mud: "#e6c79e", mudD: "#c99a76", mudDeep: "#9c6e64", crack: "#a8805f", rockA: "#8a7090", rockB: "#a98290", rockC: "#6d5a80", rockD: "#c79a8c", rockE: "#594a6e",
   hut: "#d08a5a", hutD: "#b06a4e", hutL: "#e3a878", hutR: "#c76f5a", wood: "#8a6250", woodD: "#5e4238", glass: "#bde8c8", glassD: "#7fbf9a", mtn: "#8ea2c8", mtnD: "#7a8cb6",
@@ -19637,7 +19652,7 @@ function bazSkyTex(k) {                              // the painting's soft sky:
   g.fillStyle = Q.cloud; g.globalAlpha = k >= 5 ? .35 : .85;                         // round puffs, in rows, flat underneath
   for (let i = 0; i < 9; i++) { const cx = r2() * 2048, cy = 380 + r2() * 300, w = 140 + r2() * 220; for (let j = 0; j < 5; j++) { g.beginPath(); g.arc(cx + (j - 2) * w * .22, cy - Math.sin(j / 4 * Math.PI) * w * .16, w * .2, Math.PI, 0); g.fill(); } g.fillRect(cx - w * .62, cy - 2, w * 1.24, 8); }
   g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (bazSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (bazSkies[k] = KIT.settleTex(t));
 }
 const BZ = { street: "#a6c0ea", streetD: "#7d98cc", streetL: "#c8d9f4", cob: "#8aa6d8", lip: "#6a84bc", wallA: "#f2b49a", wallB: "#e8907a", wallC: "#f6d2b0", wallD: "#d9827e", wallE: "#c9a3d9",
   tower: "#9a9ad6", towerD: "#7b7cc0", towerL: "#bcb8e8", dome: "#7aa0d8", wood: "#a8724e", woodD: "#7a4e34", cloth: "#fff4e0", clothR: "#e8504a", clothT: "#3fb3a8", clothY: "#f2c230", clothP: "#b45ab8",
@@ -19957,7 +19972,7 @@ function casSkyTex(k) {                              // a violet night over the 
   for (let i = 0; i < Q.stars; i++) { g.globalAlpha = .3 + r2() * .7; g.fillStyle = "#fff6e0"; const s = r2() < .1 ? 2.6 : 1.4; g.fillRect(r2() * 2048, r2() * 600, s, s); } g.globalAlpha = 1;
   g.fillStyle = "#fff4cc"; g.beginPath(); g.arc(1500, 220, 70, 0, TAU); g.fill(); g.fillStyle = Q.top; g.beginPath(); g.arc(1530, 200, 64, 0, TAU); g.fill();   // the crescent moon
   const h = g.createLinearGradient(0, 700, 0, 1024); h.addColorStop(0, "rgba(255,190,120,0)"); h.addColorStop(1, `rgba(255,190,120,${.5 * Q.glow})`); g.fillStyle = h; g.fillRect(0, 700, 2048, 324);
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (casSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (casSkies[k] = KIT.settleTex(t));
 }
 const CS = { marbleA: "#f2e6f0", marbleB: "#2a1e3a", gold: "#f2c230", goldD: "#b8860b", stone: "#e8b48a", stoneD: "#c48a68", stoneL: "#f6cfa6", tower: "#7c86d8", towerD: "#5a62b8", towerL: "#a6aef0",
   felt: "#1f8a5a", feltD: "#16603e", wood: "#7a3e2a", woodD: "#4e2618", red: "#d8243a", black: "#1c1624", white: "#fbf7ee", velvet: "#8a1a4a", glass: "#bfe8ff",
@@ -20286,7 +20301,7 @@ function kpSkyTex(k) {                               // the sky up here: a clear
   g.fillStyle = Q.cloud; g.globalAlpha = k >= 5 ? .4 : .8;                           // long thin bands of cloud, low over the far plain
   for (let i = 0; i < 12; i++) { const cy = 660 + r2() * 300, cx = r2() * 2048, w = 300 + r2() * 600, h = 10 + r2() * 18; g.beginPath(); g.ellipse(cx, cy, w / 2, h, 0, 0, TAU); g.fill(); }
   g.globalAlpha = 1;
-  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (kpSkies[k] = t);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return (kpSkies[k] = KIT.settleTex(t));
 }
 const KPC = { stone: "#e8c46a", stoneD: "#c49a44", stoneL: "#f6dc94", tile: "#dcb458", tileD: "#b88a36", tileL: "#f0d07a", gold: "#ffd21f", leaf: "#3fa83a", leafD: "#2a7a2a", leafL: "#7ad04a",
   red: "#c8282a", redD: "#8a1a1a", cream: "#fff4d8", ink: "#3a2a1a", rock: "#b9b2c8", rockD: "#8e88a8", rockL: "#dcd6ea", peak: "#c8c2dc", peakD: "#9e98bc", snow: "#f6f6ff",
@@ -22901,7 +22916,7 @@ const TAPES = [{ id: "tape1", name: "GUAGUA GROOVE", song: 14, w: 0, fixed: true
 // (song: on every build but the PC page, the seven above play a tune of MY OWN instead, score.js 19-25: the user, 2026-10-28 "can you make your own versions of the
 // added casette songs for the other versions of the game?")
 const tapeRec = T => (T.pc && window.BERRY_PC && (PC_REC.tapes || {})[T.id]) || null;   // (a PC cassette's recording: none on the phone build)
-const tapesHere = () => TAPES;                       // (every cassette on every build: a PC one plays its recording there, my own tune everywhere else)
+const tapesHere = () => TAPES.filter(T => T.pc);     // (the user's own cassettes only, on every build: a PC one plays its recording there, my own take on it everywhere else. The user, 2026-11-02: "for the cassette player. only play cassettes tapes that we add, don't play the regular game music": the game's own tunes on tape, the five and the AFTER DARKs, no longer found, carried or played)
 const tapeGot = id => story ? (story.tapes || []).includes(id) : true;   // (free play: every song to try)
 const TAPE_PLAN = {};
 function tapePlan(w) {
@@ -23199,7 +23214,7 @@ let dropPlan = new Map();                            // spot (room:roster index)
 const DROP_CHANCE = .25;
 function dropPick() {
   dropPlan = new Map(); if (!story || !WORLDS[world] || world === 9) return;
-  const want = [], T = TAPES.find(t => t.w === world && !t.fixed && !t.lie); if (T && !tapeGot(T.id)) want.push({ kind: "tape", id: T.id });
+  const want = [], T = tapesHere().find(t => t.w === world && !t.fixed && !t.lie); if (T && !tapeGot(T.id)) want.push({ kind: "tape", id: T.id });
   for (const id in ACC) if (ACC[id].drop === world && !gearOwned(id)) want.push({ kind: "charm", id });
   if (!want.length) return;
   const spots = []; STAGES.forEach((q, k) => { if (q.cut || q.peace || q.arena || !q.cell) return; (BB_ROSTER[k] || []).forEach((e, i) => { if (BB_TYPES[e[0]]) spots.push(k + ":" + i); }); });
@@ -24207,9 +24222,9 @@ function bepStuck(f, dx, dt, tx, leaving) {          // no nearer for 3 s (a wal
   if ((P.t += dt) < 3) return false; P.t = 0; P.d = 1e9;
   puffs(f.x, f.y - f.h * .5, 3, f.hw, 100);
   if (leaving) { f.gone = true; f.r.root.visible = f.r.shadow.visible = false; return true; }   // (on their way out of the room: gone on ahead)
-  let x = clamp(tx, 40, WORLD - 40);
-  if (!solidAt(x)) for (let k = 1; k < 120; k++) { const c = [x - Math.sign(dx || 1) * k * 20, x + Math.sign(dx || 1) * k * 20].find(v => v > 40 && v < WORLD - 40 && solidAt(v)); if (c !== undefined) { x = c; break; } }   // (its spot over the water, or a hole: the nearest firm ground by it, this side first)
-  const g = groundAt(x); if (g === null) return false;
+  let x = clamp(tx, 40, WORLD - 40), g = bepFoot(x, f.y);
+  if (g === null) for (let k = 1; k < 120; k++) { const c = [x - Math.sign(dx || 1) * k * 20, x + Math.sign(dx || 1) * k * 20].find(v => v > 40 && v < WORLD - 40 && bepFoot(v, f.y) !== null); if (c !== undefined) { x = c; g = bepFoot(c, f.y); break; } }   // (its spot over the water, or a hole: the nearest footing by it, a pier or a rock too, this side first; not all the way back to the shore)
+  if (g === null) return false;
   Object.assign(f, { x, y: g, vx: 0, vy: 0, onGround: true, plat: null, gapHop: null, wallAt: undefined }); puffs(x, g - f.h * .5, 3, f.hw, 100); SFX.blop(); return true;
 }
 function bepHurt(f, dir) {                        // a baddy's blow lands on a bep: knocked back, and one of their five berries gone
@@ -24236,10 +24251,17 @@ function showBepLife(f, hit) {                    // the five berries pop up ove
 }
 const _bl = new THREE.Vector3();
 const _ba = new THREE.Vector3();
+let bepBack = null;
+function bepBackWay() {                           // they're waiting for you in a room you've left (the way to their hideout): this room's way back toward them, or null
+  const at = bepRun.at; if (mode !== "play" || paused || hideout || bepEv || !bepRun.escort || bepRun.fled || at === undefined || at === stage || !STAGES[at] || !player) return null;
+  const k = world + ":" + stage + ":" + at; if (!bepBack || bepBack.k !== k) bepBack = { k, rt: bepRoute(at) }; return bepBack.rt;
+}
 function syncBepArrow() {                         // while they're leading you: off the screen, a little arrow at its edge points the way to them
   const el = $("bepArrow"), live = mode === "play" && bepEv && !hideout && !paused ? friends.filter(f => !f.gone && !(f.popAt > 0)) : [];
-  if (!live.length) { el.classList.remove("show"); return; }
-  const x = live.reduce((a, f) => a + f.x, 0) / live.length, y = live.reduce((a, f) => a + f.y - f.h * .5, 0) / live.length;
+  let x, y; const bk = live.length ? null : bepBackWay();   // (left behind in another room: the way back to them, off this one's edge. The user, 2026-11-02 "also show an arrow pointing to the room they're in if you left them behind somehow")
+  if (bk) { const p = player, k = bk.kind; x = k === "right" ? WORLD + 600 : k === "left" ? -600 : bk.x; y = k === "up" || k === "climb" || k === "rise" ? p.y - 2400 : k === "down" || k === "drop" ? p.y + 2400 : p.y - 60; }
+  else if (!live.length) { el.classList.remove("show"); return; }
+  else { x = live.reduce((a, f) => a + f.x, 0) / live.length; y = live.reduce((a, f) => a + f.y - f.h * .5, 0) / live.length; }
   _ba.set(X(x), Y(y), 0).project(camera); const W = innerWidth, H = innerHeight, sx = (_ba.x + 1) / 2 * W, sy = (1 - _ba.y) / 2 * H, m = 30;
   if (sx > 0 && sx < W && sy > 0 && sy < H) { el.classList.remove("show"); return; }
   const cx = W / 2, cy = H / 2, dx = sx - cx, dy = sy - cy, k = Math.min((W / 2 - m) / Math.max(1, Math.abs(dx)), (H / 2 - m) / Math.max(1, Math.abs(dy)));
@@ -24416,8 +24438,8 @@ function startBeps() {                            // the room's clear: was the s
   bepEv = { B: STAGES[home].bep, mode: B ? "trail" : back ? "escortBack" : "escort", phase: "pop", t: 0, lead: null, wait: false };
   if (!B) { bepRun.escort = friends.map(f => "#" + f.r.mB.color.getHexString()); bepRun.back = back; bepRun.at = stage; bepRun.next = rt0 ? rt0.to : undefined; }   // from here on they lead you room by room (back the way you came, mostly)
 }
-function bepRoute() {                              // the way on from this room toward the hideout, by the shortest way through the rooms: { kind (right, left, up, down: a rope; drop: a hole; climb), x, side (which side of it you are), R (a rope), a, b (a hole's edges) }
-  const home = bepHome(); if (home < 0 || home === stage) return null;
+function bepRoute(goal) {                          // (goal: another room than their hideout: the way back to them, bepBackArrow) the way on from this room toward the hideout, by the shortest way through the rooms: { kind (right, left, up, down: a rope; drop: a hole; climb), x, side (which side of it you are), R (a rope), a, b (a hole's edges) }
+  const home = goal ?? bepHome(); if (home < 0 || home === stage) return null;
   const S = STAGES, prev = new Map([[stage, null]]), Q = [stage];
   const cam = rig && rig.id === "camila";            // (never through a hero's wall that's still standing, nor up or down Camila's rock unless you're her: the user, 2026-10-27 "the beps were trying to take camila through leaves that only rose could cut")
   const hops = s => { const q = S[s], L = [], add = (n, k) => { if (n !== undefined && n !== null && n >= 0 && n < S.length && !S[n].arena) L.push([n, k]); };
@@ -24437,13 +24459,32 @@ function bepRoute() {                              // the way on from this room 
   return { kind, x, R, a, b, to: n, side: Math.sign(x - player.x) || 1 };
 }
 const firmNear = (x, dir) => { if (solidAt(x)) return x; for (let k = 1; k < 120; k++) { const c = x + dir * k * 20; if (solidAt(c)) return c; } return x; };   // (firm ground: the nearest, going dir)
+function bepFoot(x, y0) {                           // where a bep could stand at x, nearest the height y0: the ground there (not the water), or a ledge
+  let best = null; const g = groundAt(x); if (g !== null && !overGap(x)) best = g;
+  for (const q of PLATFORMS) if (!q.sky && x > q.x + 4 && x < q.x + q.w - 4 && (best === null || Math.abs(q.y - y0) < Math.abs(best - y0))) best = q.y;
+  return best;
+}
+function bepLeap(f, dx, out) {                      // its footing runs out ahead (a pier's end, the shore, a rock too high to walk up): a bound onto the nearest thing to stand on that way.
+  // The user, 2026-11-02: "make sure the beps jump on their own like in cuss' waves they lead me to edges and wouldnt jump" (they only knew the woods' ground gaps)
+  if (!f.onGround || Math.abs(dx) < 24) return null; const d = Math.sign(dx), hw = f.hw || 20, ah = bepFoot(f.x + d * (hw + 10), f.y);
+  if (ah !== null && Math.abs(ah - f.y) < 16) return null;   // (still footing ahead)
+  for (let s = 40; s <= 460; s += 20) { const x = f.x + d * s; if (x < -60 || x > WORLD + 60) break; const y = bepFoot(x, f.y); if (y === null || y < f.y - 230 || y > f.y + 420) continue;
+    const x2 = x + d * 26, y2 = bepFoot(x2, y); return [y2 !== null && Math.abs(y2 - y) < 6 ? x2 : x, y, f.z]; }
+  return out ? [f.x + d * 400, f.y - 40, f.z] : null;   // (leading you out by that edge: a leap out of the room)
+}
+const bepGapLand = (f, g, dx) => { const x = dx > 0 ? g[1] + 30 : g[0] - 30; return x > 20 && x < WORLD - 20 && Math.abs(x - f.x) < 520 && groundAt(x) !== null && !overGap(x); };   // (a gap's far side in one bound: in the room, near enough, ground to land on; not a whole sea, its far shore past the room's end: that's pier to pier, bepGo)
+function bepGo(f, dx, outOK) {                      // (bepLeap's bound, taken: out of the room by its edge, if that's where it lands)
+  const lp = bepLeap(f, dx, outOK); if (!lp) return false; const o = outOK && (lp[0] >= WORLD || lp[0] <= 0);
+  f.gapHop = { from: [f.x, f.y, f.z], to: o ? [dx > 0 ? WORLD + 140 : -140, f.y - 40, f.z] : lp, t: 0, out: o }; SFX.chirp(); return true;
+}
 function bepGapAhead(f, dx, skip) {               // a gap to bound over: right in front of its feet, or under the end of the ledge it's stepping off
   if (!f.onGround || Math.abs(dx) <= 20 || skip) return null;
   const ahead = f.x + Math.sign(dx) * (f.hw + 8), g = GAPS.find(([a, c]) => ahead > a && ahead < c); if (g || !f.plat) return g || null;
   const edge = dx > 0 ? f.plat.x + f.plat.w : f.plat.x; if (Math.abs(edge - f.x) > f.hw + 14) return null;
   const lx = edge + Math.sign(dx) * 40; return GAPS.find(([a, c]) => lx > a - 10 && lx < c + 10) || null;
 }
-const bepSpot = (rt, T) => rt.kind === "right" ? firmNear(WORLD - 150 - T.lag * 600, -1) : rt.kind === "left" ? firmNear(150 + T.lag * 600, 1) : rt.R ? escortSpot(T, true, rt.R)   // where each one waits for you, back from the way on
+const bepFirm = (x, dir) => { const ok = v => v > 60 && v < WORLD - 60 && bepFoot(v, GROUND) !== null; if (ok(x)) return x; for (let k = 1; k < 120; k++) { const c = x + dir * k * 20; if (ok(c)) return c; } return x; };   // (firm footing: the ground, or a pier, a rock, a ledge)
+const bepSpot = (rt, T) => rt.kind === "right" ? bepFirm(WORLD - 150 - T.lag * 600, -1) : rt.kind === "left" ? bepFirm(150 + T.lag * 600, 1) : rt.R ? escortSpot(T, true, rt.R)   // where each one waits for you, back from the way on
   : clamp((rt.kind === "drop" ? (rt.side > 0 ? rt.a - 40 : rt.b + 40) : rt.x - rt.side * 60) - rt.side * T.lag * 400, 40, WORLD - 40);
 function spawnEscort(cameBack) {                  // still leading you: they come into each room a little ahead of you, toward its way on to the hideout (whichever way that is)
   const from = bepRun.cur; bepRun.cur = stage;        // (the room you've come from: every room change calls this)
@@ -24555,6 +24596,7 @@ function bepTask(f, dt) {                         // a bep in the event: along t
     if (lv && !edge && !R && E.t > T.lag * 6 && (rt.kind === "drop" ? f.x > rt.a - 60 && f.x < rt.b + 60 || Math.abs(dx) < 70 : Math.abs(dx) < 30)) {   // at the hole's lip, or the climb's foot: on it goes
       if (rt.kind === "climb" || rt.kind === "rise") { f.climbOut = { t: 0, from: [f.x, f.y, f.z] }; SFX.chirp(); return true; }
       f.dropIn = f.y; f.vy = -260; f.onGround = false; SFX.chirp(); return false; }
+    if (f.onGround && f.hitWall && E.phase !== "wait" && !(lv && rt.kind === "drop") && bepGo(f, dx, lv && edge)) return true;   // (something to bound onto ahead: that, not a bound on the spot)
     if (f.onGround && f.hitWall && E.phase !== "wait") { bepWall(f, Math.sign(dx) || f.dir); SFX.chirp(); }   // a step or a ledge in the way: one big bound (a cliff: up and over)
     if (E.phase !== "wait" && !(R && lv && Math.abs(dx) < 40) && bepStuck(f, dx, dt, tx, lv && edge)) return true;
     if (E.phase === "wait" || (R && E.phase === "leave" && Math.abs(dx) < 40)) { f.vx = approach(f.vx, 0, 600 * dt); f.dir = Math.sign(player.x - f.x) || f.dir; f.look = true; if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.7, 1.5); f.vy = -240; f.onGround = false; } }
@@ -24562,7 +24604,8 @@ function bepTask(f, dt) {                         // a bep in the event: along t
       const g = bepGapAhead(f, dx, lv && rt.kind === "drop");   // (not over the hole they're taking you down)
       const out = g && lv && edge && (dx > 0 ? g[1] >= WORLD : g[0] <= 0);   // (the drop runs off the edge they're leading you out by: a leap out of the room across it)
       if (out) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? WORLD + 140 : -140, f.y - 40, f.z], t: 0, out: true }; SFX.chirp(); }
-      else if (g) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? g[1] + 30 : g[0] - 30, groundAt(dx > 0 ? g[1] + 30 : g[0] - 30) ?? GROUND, f.z], t: 0 }; SFX.chirp(); } }
+      else if (g && bepGapLand(f, g, dx)) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? g[1] + 30 : g[0] - 30, groundAt(dx > 0 ? g[1] + 30 : g[0] - 30) ?? GROUND, f.z], t: 0 }; SFX.chirp(); }
+      else if (!(lv && rt.kind === "drop")) bepGo(f, dx, lv && edge); }
     f.z = approach(f.z, .3, dt);
     if (lv && edge && (bk ? f.x < -60 : f.x > WORLD + 60)) { f.gone = true; f.r.root.visible = f.r.shadow.visible = false; }
     return false;
@@ -24575,10 +24618,11 @@ function bepTask(f, dt) {                         // a bep in the event: along t
     if (E.wait || E.phase === "gate") { f.vx = approach(f.vx, 0, 600 * dt); f.dir = Math.sign(player.x - f.x) || f.dir; f.look = true;
       if (f.onGround && (f.hopT -= dt) <= 0) { f.hopT = rand(.6, 1.2); f.vy = -260; f.onGround = false; } }
     else { const dx = tx - f.x; f.vx = approach(f.vx, clamp(dx * 4, -140, 140), 900 * dt); if (Math.abs(dx) > 2) f.dir = Math.sign(dx); f.look = false;
-      if (f.onGround && f.hitWall) bepWall(f, Math.sign(dx) || f.dir);
+      if (f.onGround && f.hitWall && !bepGo(f, dx, false)) bepWall(f, Math.sign(dx) || f.dir);
       if (bepStuck(f, dx, dt, tx, false)) return true;
       const g = bepGapAhead(f, dx, false);
-      if (g) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? g[1] + 30 : g[0] - 30, groundAt(dx > 0 ? g[1] + 30 : g[0] - 30) ?? GROUND, f.z], t: 0 }; SFX.chirp(); } }
+      if (g && bepGapLand(f, g, dx)) { f.gapHop = { from: [f.x, f.y, f.z], to: [dx > 0 ? g[1] + 30 : g[0] - 30, groundAt(dx > 0 ? g[1] + 30 : g[0] - 30) ?? GROUND, f.z], t: 0 }; SFX.chirp(); }
+      else bepGo(f, dx, false); }
     f.z = approach(f.z, tz, 1.1 * dt);
   }
   return false;
@@ -25289,7 +25333,7 @@ function shScreen(i, back) {
   entrySide = back ? "right" : "left"; const done = shFill(), x = back ? WORLD - 40 : 60, d = back ? -1 : 1;
   Object.assign(player, { x, y: GROUND, vx: 120 * d, vy: 0, face: d, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, auto: null, safe: { x, y: GROUND, plat: null } });
   if (!done && !H.seen.has(i)) player.safeT = 1; H.seen.add(i); updateHearts(false);   // (a fresh room: a moment's grace, but no hearts back: the user, 2026-10-23. A berry in the mess hall instead)
-  palsPut({ x: x - d * 60, y: GROUND, vx: 120 * d, vy: 0, onGround: true, plat: null, pounce: null });
+  palsPut({ x: x - d * 60, y: GROUND, vx: 120 * d, vy: 0, onGround: true, plat: null, pounce: null }); if (ej) ej.away = true;   // (June too, beside you: the buddies come by allyRoomKey)
   const halfW = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camera.aspect;
   camX = back ? X(WORLD) - halfW + 1 : clamp(X(130), 10, 40); camBase = Y(GROUND);
   const b = $("banner"); b.innerHTML = `<div class="blk">THE STRONGHOLD</div><div class="bar">${done ? "ALREADY CLEARED" : "SHH… THEY HAVEN'T SEEN YOU YET"}</div>`;
