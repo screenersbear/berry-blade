@@ -10154,7 +10154,7 @@ function updateEJ(dt) {                              // the partner: at your sid
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
   if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
@@ -12637,7 +12637,7 @@ const POST_R = 270, POST_GO = 250, POST_SORTIE_V = 300, POST_SORTIE_MAX = 760, C
 let chgB = { on: false, t: 0, dir: 0, up: false, sortie: false };
 const partAble = () => partnerList().filter(P => P.q && !P.q.worn && !P.q.tcOn && !P.q.tcFly);
 function postOf(P) { return P.q.post || null; }
-function postSet(P, x, y, kind, plat) { const q = P.q; q.post = { x: clamp(x, 40, WORLD - 40), y, kind, plat: plat || null, t: 0, idle: 0 }; q.tagT = Math.max(q.tagT || 0, 1.6); q.tagTxt = chgName(); if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; } else q.pact = q.pcmd = q.pnext = null; }
+function postSet(P, x, y, kind, plat) { const q = P.q; q.post = { x: clamp(x, 40, WORLD - 40), y, kind, plat: plat || null, t: 0, idle: 0 }; q.homeW = q.wayE = null; q.tagT = Math.max(q.tagT || 0, 1.6); q.tagTxt = chgName(); if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; } else q.pact = q.pcmd = q.pnext = null; }
 function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); } }
 // split levels (the user, 2026-11-02: "if you and the buddies under you (say on a split level area) fight separately, when you want to move ahead and you call your buddies over,
 // let them stay on a platform below you but follow your movements. the only thing that would make them come up to you is if you make them jump up or jump down to get back to
@@ -12647,7 +12647,7 @@ function lvlLockSet(q) { const p = player; if (!q || !p || q.climb || q.zip) ret
   q.lvlLock = off && (q.onGround || !!q.plat); q.lvlSp = q.lvlLock ? supportSpan(q) : null; }
 function chgDrop(p) {                               // △ with ↓: off what they stand on, down a level, and after you
   const L = partAble(); if (!L.length) return; let n = 0;
-  L.forEach(P => { const q = P.q; if (q.climb || q.zip) return; postClear(P); q.lvlLock = false;
+  L.forEach(P => { const q = P.q; if (q.climb || q.zip) return; postClear(P); q.lvlLock = false; homeSet(q);
     if (q.onGround && q.plat) { Object.assign(q, { dropPlat: q.plat, dropT: .3, onGround: false, vy: 140, plat: null }); q.y += 2; n++; } });
   if (n) SFX.jump(); chgSignal(p, L, "DOWN!");
 }
@@ -12688,7 +12688,7 @@ function chgJump(p, t, ax) {                         // let go of ↑: they jump
 }
 function chgStart(p, how) {                         // the command: where to, and the signal (your hand up, a whistle, their mark; the rings where they're to be)
   const L = partAble(); if (!L.length) return;
-  if (how === "hold" && L.some(P => P.q.post)) { L.forEach(postClear); L.forEach(P => lvlLockSet(P.q)); chgSignal(p, L, "BACK TO ME"); return; }   // (again, on its own: back to you; one on another level than yours, along it under (or over) you, lvlLock)
+  if (how === "hold" && L.some(P => P.q.post)) { L.forEach(postClear); L.forEach(P => { lvlLockSet(P.q); homeSet(P.q); }); chgSignal(p, L, "BACK TO ME"); return; }   // (again, on its own: back to you; one on another level than yours, along it under (or over) you, lvlLock)
   const d = how === "go" || how === "sortie" ? (chgB.dir || p.face) : p.face;
   if (how === "hold") L.forEach(P => postSet(P, P.q.x, P.q.y, "hold", P.q.plat));
   else if (how === "up") { const pl = platAbove(p);   // the platform over you (nearest, up within a good jump): there, side by side
@@ -12712,9 +12712,32 @@ function platAbove(p) {                              // the platform over you: u
     const d = dy + Math.max(0, x1 - p.x, p.x - x2); if (d < bd) { bd = d; best = { x1, x2, y: q.y, q }; } } return best;
 }
 function postFoe(s, T) { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (walled(e.x, T.x)) continue; const d = Math.abs(e.x - T.x) + Math.abs(e.y - T.y) * .6; if (d < POST_R && d < bd) { bd = d; best = e; } } return best; }
+// called back (the user, 2026-11-02: "when you split a path with the characters like we added in berry forest with the bridge. and you tell your characters to follow you after
+// you commanded them to fight alone, they should fight things in their way on their way to you"): from its post back to you, a baddy on its level between it and you, it stops
+// and fights it (a string, then another, fire first at one in Glos's roots), then on its way again. On its way till it's by you, a new room, HOME.max seconds, or it's getting
+// no nearer (a gap, a wall: then the usual catch-up); and all the way it comes on foot, not popped back to your side from far off
+const HOME = { max: 14, reach: 280, back: 140, near: 170, stuck: 1.5, gap: [.25, .5] };   // (seconds at most · how near ahead of it one has to be to stop for it · or behind it, at its heels · this near you: back · no nearer this long: stuck · between its strings)
+function homeSet(q) { if (q) { q.homeW = { t0: time, rk: allyRoomKey(), gap: 0, best: 1e9, still: 0 }; q.wayE = null; } }
+function homeFoe(s, reach = 1e9) {                  // the nearest baddy in its way: on its level, between it and you, or at its heels (reach: no further ahead of it than this)
+  const p = player, d = Math.sign(p.x - s.x) || s.face; let best = null, bd = 1e9;
+  for (const e of partFoesAll()) { if (walled(e.x, s.x) || Math.abs(e.y - s.y) > 170) continue; const a = (e.x - s.x) * d;
+    if (a < -HOME.back || a > reach || (p.x - e.x) * d < -60) continue; if (Math.abs(a) < bd) { bd = Math.abs(a); best = e; } }
+  return best;
+}
+function homeStep(o, s, dt) {                       // (on its way back: true while it's stopped for one, its following waiting; a string at it goes as your button's would, o.pcmd)
+  const W = s.homeW, p = player; if (!W) return false; const d = p ? Math.abs(s.x - p.x) : 0;
+  if (d < W.best - 20) { W.best = d; W.still = 0; } else W.still += dt;   // (getting no nearer: stuck)
+  if (!p || p.dead || s.post || s.worn || W.rk !== allyRoomKey() || time - W.t0 > HOME.max || d < HOME.near || W.still > HOME.stuck) { s.homeW = s.wayE = null; return false; }
+  if (o.A && o.A.heal) return false;                  // (the healer: no blows, ever; it just comes)
+  const e = homeFoe(s, HOME.reach); if (!e) { W.gap = 0; return false; } W.still = 0;
+  s.vx = approach(s.vx, 0, 2000 * dt); s.face = Math.sign(e.x - s.x) || s.face; if ((W.gap -= dt) > 0) return true;
+  W.gap = rand(...HOME.gap); s.wayE = e; o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !s.onGround, fire: e.web > 0 && budFireO(o) };
+  return true;
+}
+const homeBlocked = s => !!s.homeW;                  // (on its way back: it comes on foot, fighting what's in its way, not popped to your side)
 function postStep(o, s, dt, pet) {                   // posted: what comes into its place, it fights; nothing there, it goes back to its place and waits (a sortie: back to you)
   const T = s.post; T.t += dt; postRing(s, true);
-  if (T.back) { postClear({ q: s }); return false; }
+  if (T.back) { postClear({ q: s }); homeSet(s); return false; }   // (on its way back: what's in its way, fought, homeStep)
   const busy = pet ? !!(o.pact || o.pcmd || o.pounce) : !!(o.pact || o.pcmd);
   if (busy) return true;
   const e = postFoe(s, T); if (e) { o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !s.onGround, keep: true, fire: !pet && e.web > 0 && budFireO(o) }; T.idle = 0; return true; }
@@ -12792,6 +12815,7 @@ function partFoesAll() {                            // everyone a partner's blow
 const onScreen = (x, y, m = .5) => { const hH = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z, hW = hH * camera.aspect, cy = LOOK_Y + camBase + camLift;   // (in the picture as it is: m units inside its edges)
   return Math.abs(X(x) - camX) < hW - m && Math.abs(Y(y) - cy) < hH - m * .5; };
 function partTarget(s, air) {                       // the one it goes for: nearest it, near you, ahead of you rather than behind; only what you can see
+  if (s.wayE) { const e = s.wayE; if (!e.dead && !e.gone && !walled(e.x, s.x) && partFoesAll().includes(e)) return e; s.wayE = null; }   // (on its way back: the one in its way)
   if (s.post) return postFoe(s, s.post);               // (posted: what's come into its place)
   const p = player; let best = null, bd = 1e9;
   for (const e of partFoesAll()) { if (walled(e.x, s.x) || Math.abs(e.x - p.x) > PART_REACH || Math.abs(e.x - s.x) > PART_REACH + 80 || Math.abs(e.y - s.y) > (air ? 320 : 200) || !onScreen(e.x, e.y - eH(e) * .5)) continue;
@@ -12875,6 +12899,7 @@ function partHuman(o, s, dt, X) {
     if (!o.pact) { s.sprint = false; defendStep(s, dt); return true; } }
   s.defOn = false;
   s.block = false; o.shoot = !!X.shoot; o.col = X.col;
+  if (!o.pact && !o.pcmd && !o.stay && s.homeW && homeStep(o, s, dt) && !o.pcmd) return true;   // (called back: one in its way, fought on the way)
   if (!o.pact && o.pcmd) { const c = o.pcmd; o.pcmd = null; if (!(o.A && o.A.heal)) partStart(o, s, c, X); }   // (the healer: no blows, ever)
   if (!o.pact && o.stay && stayStep(o, s, dt, X)) return true;   // (sent in: still at it)
   const A = o.pact; if (!A) return false;
@@ -14456,7 +14481,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
   { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
   if (s.onGround) s.mirrorJ = false;
