@@ -1357,17 +1357,27 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
   // (which one is picked at run time). `wr` turns the fist at the wrist and `fist` bends it there; punches still balloon `fist`
   const wr = group(g, 0, -.13, 0), fist = group(wr), mf = M(Q.fill), mOrb = M(Q.orb), mGold = M(Q.main), mDeep = M(tint(Q.orb, .42, .4, .4));
   fist.add(P(slab(roundRect(.1, .15, .035, -.08, -.16), .17, .025), mf));                                  // back of the hand and palm
-  fist.add(at(P(new THREE.SphereGeometry(1, 16, 12).scale(.06, .075, .1), mDeep), .005, -.175, 0));     // dark inside the curl: it shows between the fingers
+  const curl = group(fist);                                                                               // (the curled fingers on their own: hidden when the hand opens, open below)
+  curl.add(at(P(new THREE.SphereGeometry(1, 16, 12).scale(.06, .075, .1), mDeep), .005, -.175, 0));     // dark inside the curl: it shows between the fingers
   const FZ = [-.102, -.034, .034, .102], FR = [.054, .062, .062, .056];
   FZ.forEach((z, i) => {
     const R = FR[i], r = .027, cx = -.012, cy = -.188, f = P(new THREE.TorusGeometry(R, r, 10, 16, Math.PI).rotateZ(Math.PI), mf);
-    fist.add(at(f, cx, cy, z));                                                                            // a finger: over the knuckle, round the front, back up the palm
-    fist.add(at(P(new THREE.CapsuleGeometry(r, .05, 4, 10), mf), cx + R, cy + .03, z));                     // …tucking in toward the wrist
-    fist.add(at(P(new THREE.CylinderGeometry(R - r + .008, R - r + .008, .05, 14).rotateX(Math.PI / 2), mf), cx, cy, z));   // (the curl filled in)
-    fist.add(at(P(new THREE.SphereGeometry(1, 10, 8).scale(.012, .026, .022), mGold), cx + R + r * .82, cy + .038, z));   // gold plate on the palm side
+    curl.add(at(f, cx, cy, z));                                                                            // a finger: over the knuckle, round the front, back up the palm
+    curl.add(at(P(new THREE.CapsuleGeometry(r, .05, 4, 10), mf), cx + R, cy + .03, z));                     // …tucking in toward the wrist
+    curl.add(at(P(new THREE.CylinderGeometry(R - r + .008, R - r + .008, .05, 14).rotateX(Math.PI / 2), mf), cx, cy, z));   // (the curl filled in)
+    curl.add(at(P(new THREE.SphereGeometry(1, 10, 8).scale(.012, .026, .022), mGold), cx + R + r * .82, cy + .038, z));   // gold plate on the palm side
     const kn = P(new THREE.SphereGeometry(1, 12, 8).scale(.026, .026, .022), mGold), ka = Math.PI * 1.22;   // gold knuckle plate
-    fist.add(at(kn, cx + (R + r * .7) * Math.cos(ka), cy + (R + r * .7) * Math.sin(ka), z));
+    curl.add(at(kn, cx + (R + r * .7) * Math.cos(ka), cy + (R + r * .7) * Math.sin(ka), z));
   });
+  // the hand open, palm out (the user, 2026-11-04: "camila will stand defiantly with her gauntlet arm pointed forward, palm wide open and shooting a beam out of her hand"):
+  // the four fingers out straight and a little fanned, gold knuckle plates and fingertips, the thumb out to its side. Shown by the game's p.palm, the curl hidden meanwhile
+  const open = group(fist); open.visible = false; const FL = [.13, .15, .145, .12];
+  FZ.forEach((z, i) => { const L = FL[i], a = -(i - 1.5) * .15, f = group(open, -.03, -.165, z * 1.05); f.rotation.x = a;   // (fanned out from the middle)
+    f.add(at(P(new THREE.CapsuleGeometry(.025, L - .05, 4, 10), mf), 0, -L / 2, 0));                          // a finger, straight out from the knuckle
+    f.add(at(P(new THREE.SphereGeometry(1, 10, 8).scale(.014, .022, .02), mGold), .02, -L + .03, 0));          // its gold tip, on the palm side
+    f.add(at(P(new THREE.SphereGeometry(1, 12, 8).scale(.024, .024, .022), mGold), -.024, -.01, 0)); });     // its gold knuckle plate, on the back
+  const openT = [-1, 1].map(ts => { const t = group(open, .01, -.07, ts * .085); t.visible = false; t.rotation.x = -ts * .95;   // the thumb out to the side, open
+    t.add(at(P(new THREE.CapsuleGeometry(.03, .07, 4, 10), mf), 0, -.06, 0)); t.add(at(P(new THREE.SphereGeometry(1, 12, 8).scale(.014, .024, .03), mGold), .024, -.1, 0)); return t; });
   const thumbs = [-1, 1].map(ts => {                                                                       // the thumb: from the heel of the hand, across the first two fingers
     const t = group(fist); t.visible = false;
     t.add(at(P(new THREE.SphereGeometry(1, 12, 10).scale(.05, .06, .045), mf), .035, -.07, ts * .095));
@@ -1393,7 +1403,7 @@ function buildGauntlet(parent, M, P, Q) {       // same hand frame; the cuff run
     halo(new THREE.LatheGeometry(prof.map(v => new THREE.Vector2(v.x + .085, v.y)), 28), gc, .2), halo(new THREE.SphereGeometry(.2, 20, 14), gc, .5), halo(new THREE.SphereGeometry(.26, 20, 14), gc, .2)];
   glow[0].material.side = glow[1].material.side = THREE.DoubleSide; g.add(glow[0], glow[1]);
   glow[2].material.side = glow[3].material.side = THREE.BackSide; fist.add(at(glow[2], 0, -.13, 0), at(glow[3], 0, -.13, 0));   // (round the fist, not over it: the fingers stay clear)
-  return { kind: "gauntlet", group: outer, rings, wr, fist, thumbs, teeth, teethX, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc, P, M, ringG: g, ringN: n, ringX: extra, Q, lifeKey: "f".repeat(n) };
+  return { kind: "gauntlet", group: outer, rings, wr, fist, curl, open, openT, thumbs, teeth, teethX, spikeAim, hideHand: true, glow, glowMats: [mCuff, mOrb, mGold], glowCol: gc, P, M, ringG: g, ringN: n, ringX: extra, Q, lifeKey: "f".repeat(n) };
 }
 
 // ───────────────────────────── the living weapons, grown (the user, 2026-11-01) ─────────────────────────────
@@ -1518,7 +1528,7 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
     if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } } };   // her legs: it keeps out to her side of them   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = 0; G.pt = approach(G.pt || 0, p.pointKind ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
+  G.fist = 0; G.pt = approach(G.pt || 0, p.pointKind && !(STRIKES[p.pointKind] || {}).openHand ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fyK + .06 * hs - A[6].y) / hl;                // near the ground it bends at the wrist to lie along it (dragged), never into it
@@ -2535,6 +2545,22 @@ Object.assign(STRIKES, {
     armF: [1.5, 1.53, 1.5], elbF: [.08, .06, .08], spF: [.1, .1, .1], blade: [0, .02, 0], armB: [.35, .38, .35], elbB: [1.7, 1.7, 1.7], spB: [.45, .45, .45], fNx: [.4, .4, .4], fFx: [-.44, -.44, -.44], fNz: [.08, .08, .08], fFz: [.06, .06, .06] }) },
   point_giant: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [-.14, -.17, -.14], arch: [-.16, -.18, -.16], bodyY: [-.14, -.16, -.14], twist: [-.1, -.1, -.1], headRot: [-.12, -.1, -.12],   // the big hand out at them, a finger pointing, leant back against its weight
     armF: [1.3, 1.34, 1.3], elbF: [.1, .08, .1], spF: [.15, .15, .15], fNx: [.44, .44, .44], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+  // the heroines' shot (the user, 2026-11-04: "camila will stand defiantly with her gauntlet arm pointed forward, palm wide open and shooting a beam out of her hand"):
+  // chest out, leant back a touch, the gauntlet out straight and the hand bent back so the palm faces them (the game opens it: p.palm); the big hand the same, open
+  beam_fist: { dur: 1.2, openHand: true, keys: PT({ lean: [-.1, -.12, -.1], arch: [-.14, -.16, -.14], bodyY: [-.14, -.16, -.14], twist: [-.2, -.2, -.2], headRot: [-.14, -.12, -.14],
+    armF: [1.57, 1.6, 1.57], elbF: [.02, .02, .02], spF: [.1, .1, .1], wF: [-1.45, -1.45, -1.45], armB: [.3, .32, .3], elbB: [1.75, 1.75, 1.75], spB: [.5, .5, .5], fNx: [.46, .46, .46], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+  beam_giant: { dur: 1.2, wsize: 3, giant: "gauntlet", openHand: true, keys: PT({ lean: [-.16, -.18, -.16], arch: [-.16, -.18, -.16], bodyY: [-.16, -.18, -.16], twist: [-.12, -.12, -.12], headRot: [-.12, -.1, -.12],
+    armF: [1.4, 1.43, 1.4], elbF: [.06, .05, .06], spF: [.15, .15, .15], fNx: [.48, .48, .48], fFx: [-.54, -.54, -.54], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+  // tried again while it's still steaming (the user: "both girls have a failure animation when attempting to use their projectile after a fully charged attack"): the hand
+  // out, nothing but a puff, then pulled in and shaken (it's hot); Rose's blade out, a feeble wave of it, then held up and looked at, shaken
+  shot_fail_fist: { dur: 1.0, openHand: true, step: 0, sq: -.04, sfx: "huff", hits: [], keys: KZ([0, .12, .3, .42, .5, .58, .66, .74, .82, .9, 1.0], {
+    armF: [.6, 1.5, 1.5, .95, 1.1, .92, 1.1, .92, 1.05, .9, .5], elbF: [1.2, .05, .05, 1.85, 1.8, 1.85, 1.8, 1.85, 1.8, 1.7, 1.2], wF: [0, -1.4, -1.4, 0, .6, -.6, .6, -.6, .4, 0, 0],
+    lean: [.05, -.06, -.06, .16, .16, .16, .16, .16, .14, .1, .06], headRot: [0, -.1, -.05, .3, .32, .3, .32, .3, .3, .2, 0], twist: [0, -.2, -.2, .25, .25, .25, .25, .25, .2, .1, 0],
+    armB: [.3, .3, .3, .7, .7, .7, .7, .7, .6, .4, .3], elbB: [1.5, 1.6, 1.6, 1.2, 1.2, 1.2, 1.2, 1.2, 1.3, 1.4, 1.5], fNx: [.2, .4, .4, .25, .25, .25, .25, .25, .25, .22, .2], fFx: [-.2, -.44, -.44, -.25, -.25, -.25, -.25, -.25, -.25, -.22, -.2] }) },
+  shot_fail_sword: { dur: 1.0, step: 0, sq: -.04, sfx: "huff", hits: [], keys: KZ([0, .15, .3, .45, .55, .65, .75, .85, 1.0], {
+    armF: [.4, 1.35, 1.25, 1.95, 1.95, 1.95, 1.95, 1.9, .5], elbF: [1.0, .25, .3, 1.5, 1.5, 1.5, 1.5, 1.4, 1.0], blade: [.3, -.25, -.15, 1.45, 1.2, 1.45, 1.2, 1.35, .3],
+    lean: [.05, .2, .18, -.08, -.08, -.08, -.08, -.06, .05], headRot: [0, .05, .05, -.28, -.3, -.28, -.3, -.25, 0], twist: [0, .2, .2, -.15, -.15, -.15, -.15, -.1, 0],
+    armB: [.3, .5, .5, .3, .3, .3, .3, .3, .3], elbB: [1.4, 1.2, 1.2, 1.5, 1.5, 1.5, 1.5, 1.5, 1.4], fNx: [.2, .38, .38, .24, .24, .24, .24, .24, .2], fFx: [-.2, -.4, -.4, -.24, -.24, -.24, -.24, -.24, -.2] }) },
   gg4_tc1: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.38, .4, .38], arch: [.1, .12, .1], bodyY: [-.46, -.48, -.46], headRot: [-.2, -.18, -.2], armF: [.35, .38, .35], elbF: [.25, .25, .25], spF: [.25, .25, .25],   // charge 1: down in a crouch, the arm on the ground before her
     fNx: [.42, .42, .42], fFx: [-.46, -.46, -.46], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
   gg4_tc2: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.24, .26, .24], arch: [-.05, -.04, -.05], bodyY: [-.4, -.42, -.4], twist: [.42, .45, .42], headRot: [-.2, -.18, -.2], armF: [-.95, -1.0, -.95], elbF: [.55, .55, .55], spF: [.32, .32, .32],   // charges 2 and 3: the arm cocked back (they get up on it)
@@ -3783,7 +3809,8 @@ function syncHuman(p, r, dt = 0) {
     r.hands[i].visible = !(pr && pr.hideHand && s === propS);
     if (gArm) { t.mesh.visible = s !== propS; if (s === propS) giantArm(p, r, s, _S, _E, _W, D); }   // grown: its own arm in place of hers
     if (pr && s === propS) {                                          // the prop hand
-      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk + wb; pr.wr.rotation.y = -near * GAUNT.turn * fk; pr.thumbs[0].visible = s < 0; pr.thumbs[1].visible = s > 0;
+      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { const op = !!pr.open && s === propS && (p.palm || 0) > .5; pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk + wb; pr.wr.rotation.y = -near * GAUNT.turn * fk + (op ? Math.PI : 0); pr.thumbs[0].visible = !op && s < 0; pr.thumbs[1].visible = !op && s > 0;
+        if (pr.open) { pr.open.visible = op; pr.curl.visible = !op; pr.openT[0].visible = op && s > 0; pr.openT[1].visible = op && s < 0; }   // (the hand open, palm out: p.palm, the game's heroine shot, 2026-11-04)
         if (pr.spikeAim && pr.spikeSide !== s) { pr.spikeSide = s; pr.spikeAim.forEach(k => { k.sp.position.z = s * k.z; k.aim.quaternion.copy(k.q[s > 0 ? 1 : 0]); }); } }   // (the knuckle spikes: over to the thumb's side)
       if (pr.inner) { pr.inner.rotation.z = (o.wrist ?? -.6) + wristFix; pr.inner.rotation.x = o.roll || 0; if (pr.kind === "sword") giantSword(p, r, pr, s); }
       if (gArm) pr.group.visible = false;
