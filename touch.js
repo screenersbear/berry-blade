@@ -83,7 +83,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyX"], b: ["KeyC"], x: ["KeyV"], y: ["KeyZ"] };   // (the 3DS's way round, 2026-11-01: △ (its X, top) the buddy, □ (its Y, left) the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyV"], b: ["KeyX"], x: ["KeyZ"], y: ["KeyC"] };   // (the keyboard's own since 2026-11-03 late: V jump, X attack, Z □, C △)   // (the 3DS's way round, 2026-11-01: △ (its X, top) the buddy, □ (its Y, left) the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
@@ -119,7 +119,7 @@
     [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { const E = document.getElementById(id);   // (the shoulders: held as long as the thumb's on them)
       E.addEventListener("pointerdown", e => { e.preventDefault(); try { E.setPointerCapture(e.pointerId); } catch { } E.classList.add("on"); key(code, true); });
       ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => E.addEventListener(t, () => { E.classList.remove("on"); key(code, false); })); });
-    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyC"); });   // sitting: a tap anywhere gets you up (attack: C since 2026-11-01)
+    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyX"); });   // sitting: a tap anywhere gets you up (attack: C since 2026-11-01, X since 2026-11-03 late)
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => C.addEventListener(t, () => C.classList.remove("on")));
     ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner, #tLT, .tSh")) e.preventDefault(); }, { passive: false }));
   };
