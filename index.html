@@ -10488,6 +10488,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ej.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ej.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
+    else if (ej.hopT <= 0 && edgeLeap(s, p)) ej.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
@@ -13680,6 +13681,29 @@ function homeStep(o, s, dt) {                       // (on its way back: true wh
   W.gap = rand(...HOME.gap); s.wayE = e; o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !s.onGround, fire: e.web > 0 && budFireO(o) };
   return true;
 }
+// at a platform's edge on its way to you, nothing to come down on past it (a gap, the water): a jump to you, not the drop (the user, 2026-11-04: "when you call back
+// buddies that are in a platform you threw them too, if they would fall to an unlandable spot to get to you, they do not jump")
+function landBelow(x, y) {                            // where one dropping at x from y would come down (null: nowhere, a gap or the open water)
+  let best = null; for (const P of PLATFORMS) if (x >= P.x && x <= P.x + P.w && P.y >= y - 2 && (best === null || P.y < best)) best = P.y;
+  const g = groundAt(x); if (g !== null && g >= y - 2 && (best === null || g < best)) best = g; return best;
+}
+function hopTo(s, tx, ty, vmax = 900) {               // a jump that comes down at (tx, ty): a hop up first, higher (for longer in the air) if it's far
+  const G = GRAV, up = Math.max(70, s.y - ty + 70); let vy = -Math.sqrt(2 * G * up), t = (-vy + Math.sqrt(Math.max(0, vy * vy - 2 * G * (s.y - ty)))) / G;
+  const tn = Math.abs(tx - s.x) / vmax; if (tn > t) { t = tn; vy = Math.max(-1500, (ty - s.y - G * t * t / 2) / t); }
+  s.vy = vy; s.vx = clamp((tx - s.x) / Math.max(.2, t), -vmax, vmax); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.gapHop = true; SFX.jump();   // (gapHop: nothing but the jump till it's down, partHuman)
+}
+function edgeLeap(s, p) {                             // (updateAlly, updateEJ) true: it's jumped. You past the end of what it's on (a platform, a stretch of ground), and nothing past that end
+  if (!p || !p.onGround) return false;                //   to come down on: a jump at the first place past it to land, your way (followSpan keeps it back from the end, so it never got to the gap)
+  const d = Math.sign(p.x - s.x); if (!d || Math.abs(p.x - s.x) < 120 || p.y < s.y - 140) return false;
+  const sp = s.plat ? [s.plat.x, s.plat.x + s.plat.w] : supportSpan(s); if (!sp) return false;
+  const end = s.plat ? (d > 0 ? sp[1] : sp[0]) : (d > 0 ? sp[1] + 12 : sp[0] - 12);
+  if ((p.x - end) * d < 40 || (end - s.x) * d > 130) return false;   // (you're not past its end; or it's not at it yet)
+  if (landBelow(end + d * 26, s.y) !== null) return false;   // (something to come down on: the drop's fine)
+  let x = end + d * 30, land = null;
+  for (let k = 0; k < 160 && (p.x - x) * d > 0; k++, x += d * 10) { const y = landBelow(x, s.y - 160); if (y !== null) { land = [x + d * 36, y]; break; } }
+  if (!land) land = [p.x - d * 60, p.y];
+  hopTo(s, land[0], land[1], 1150); dust(s.x, s.y, 4, -d); return true;   // (fast and low: under what's hung over a gap, B7's bridge)
+}
 const homeBlocked = s => !!s.homeW;                  // (on its way back: it comes on foot, fighting what's in its way, not popped to your side)
 function postStep(o, s, dt, pet) {                   // posted: what comes into its place, it fights; nothing there, it goes back to its place and waits (a sortie: back to you)
   const T = s.post; T.t += dt; postRing(s, true);
@@ -13843,6 +13867,7 @@ function partStrike(o, s, i, X) {                   // the next strike of the st
 function partHuman(o, s, dt, X) {
   const p = player; if (s.fleap) return fleapStep(o, s, dt); if (s.dzap) return dzapStep(s, dt);
   if (s.bcStun > 0) return bcStunStep(s, dt); if (s.bc) return bcStep(o, s, dt);   // (the guard held to nothing: seeing stars; its part in a block combo)
+  if (s.gapHop) { if (s.onGround) s.gapHop = false; else { o.pcmd = o.pnext = null; if (o.pact) partEnd(o, s, true); return false; } }   // (over a gap on its way to you, edgeLeap: no blow at one on the way, or it comes down short)
   { const AR = archOfO(o); if (AR && AR.tick && AR.tick(o, s, dt, X)) return true; }   // (an archetype's own going on: a cast, a vanish, its charge special)   // (its charge move going: the flaming leap, the electric tackle)
   if (s.worn) { o.pact = o.pcmd = o.pnext = o.stay = null; s.block = false; s.defOn = false; return false; }   // (worn out: it only follows, slowly)
   if (s.tcOn || s.tcFly) return true;   // (Camila's team charge: where it puts them, teamChargeTick)
@@ -15463,6 +15488,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
     if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ally.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ally.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
     else if (s.plat && p.onGround && p.y - s.y > 40 && Math.abs(p.x - s.x) < 160) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
+    else if (ally.hopT <= 0 && edgeLeap(s, p)) ally.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
