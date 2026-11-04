@@ -8506,7 +8506,7 @@ function tutTick(dt) {                               // (every frame, paused or 
   else if (c === "B3" && !btSeen("buds") && btSeen("up") && partnerList().length && (partnerList().length > 1 || !arrive.some(m => m.w === 9))) tutShow("buds");   // (both with you now (or the one, none still to come): their buttons)
   if (c === "B4" && !btSeen("split") && said("tut3")) tutShow("split");
   if (c === "B5" && !btSeen("lead") && p.x > 640) tutShow("lead");
-  if (c === "B6" && !btSeen("tired") && !tutZoom && (p.x > 300 || tutT.t > 1.6)) tutB6();
+  if (c === "B6" && !btSeen("tired") && !tutZoom) tutB6();   // (at once, as you come in: the user, 2026-11-03 late "start that right away because if the player moves to a weird spot when the character is maybe over another, it doesn't look good". It waited till x > 300 or 1.6 s)
   if (c === "B7" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
   if (!btSeen("worn") && nrgOut(p)) { btMark("worn"); tutPop(`WORN OUT! LET YOUR FRIENDS FIGHT · HOLD ${tutTag("sq")} TO GET YOUR ENERGY BACK`, 5.5); }   // (the drawing's "when player gets tired ... show charge")
   if (tutLock() && !ejFight() && p.hitWall && (p.x < 70 || p.x > WORLD - 70) && (tutT.bump -= dt) <= 0) { tutT.bump = 1.6; popText(p.x, p.y - 140, "WIN THEM ALL BACK FIRST!"); SFX.thud(); }   // (pushing at a shut way out)
@@ -8517,8 +8517,9 @@ function tutEnter(c) {                               // into one of its rooms
   if (c === "B3") tutBuds();
   if (c === "B6" && !btSeen("tired")) { const U = upStore(), g = upGoal(9); if ((U[9] || 0) < g * TUT_UP.b6) { U[9] = Math.ceil(g * TUT_UP.b6); wpnByUprise(true); } }   // (75% by now, whatever's been won back: the weapon fully grown)
 }
-function tutB6() {                                   // B6, a few steps in (the buddies off you): the game stopped, the camera slowly in on you while she tells it; then the word
+function tutB6() {                                   // B6, as you come in (a few steps in, the buddies off you, till 2026-11-03 late): the game stopped, the camera slowly in on you while she tells it; then the word
   for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; tutZoom = { k: 0, out: false }; tutHold = { id: "zoom", t: 0, quiet: true }; startVO("tut4");
+  if (player) { Object.assign(player, { vx: 0, sprint: false }); player.chains = []; }   // (as you come in, now: stood still, her hair's springs started again at rest, not frozen streaming back from the walk across the rooms for the whole of it)
 }
 function tutBuds() {                                 // B3: a buddy sat waiting on the ledge at the left (up and with you as you reach it), another already fighting one of them below
   const place = (A, x, y, plat, b) => { const r = allyRig(A), st = makeState(x, r);
@@ -9887,6 +9888,7 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   const dx = o0.x - o1.x, dy = o0.y - o1.y, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
   const was = q => q ? { q, x: q.x + dx / S, y: q.y - dy / S } : null;
   const movers = [player, ...palsAll(), ...allies.map(a => a.st), ej && ej.st].filter(Boolean).map(was);
+  const pic = (dir === "up" || dir === "down") && slideGrab();   // (the room as you see it now: if the camera's got nowhere to go, it's faded off the new one, no pan)
   panKeep = {}; try { work(); } catch (e) { console.error("room change failed", e); }
   const old = panKeep.old; panKeep = null;
   if (!old) { transit = false; return; }
@@ -9902,6 +9904,7 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   warmFrame(); const pos1 = camera.position.clone(), quat1 = camera.quaternion.clone(), L1 = lookGrab();
   pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0 };
   { const up = upWant(stage); if (up >= 0 && up !== s0 && !peekCache) peekCache = buildGhost(up); }   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
+  if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = RISE_FADE; render(0); return; }   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
   panTick(0); render(0);                             // (drawn at once, where the camera was: the frame warmFrame drew is never seen)
 }
 function panTick(dt) {
@@ -9911,6 +9914,10 @@ function panTick(dt) {
   lookLerp(P.L0, P.L1, e);
   if (u >= 1) panEnd(true);
 }
+let riseFade = 0; const RISE_FADE = .35;            // (a room change with nowhere for the camera to go: the room you left fading off the new one over RISE_FADE s, the game going on under it)
+function slideGrab() { try { render(0); const C = renderer.domElement; if (!slideCv) { slideCv = document.createElement("canvas"); slideCv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none"; C.after(slideCv); }
+  slideCv.width = C.width; slideCv.height = C.height; slideCv.getContext("2d").drawImage(C, 0, 0); slideCv.style.transform = C.style.transform = ""; return true; } catch (e) { return false; } }   // (the picture as it is, kept on slideCv, not shown yet)
+function riseFadeTick(dt) { riseFade = Math.max(0, riseFade - dt); if (!slideCv) return; slideCv.style.opacity = riseFade / RISE_FADE; if (!riseFade) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } }
 let panFade = 0;                                     // (the last of the pan: its final picture laid over the new screen alone, fading, so what only the other screen drew doesn't vanish at once)
 function panEnd(fade) {
   const P = pan; if (!P) return;
@@ -9964,7 +9971,7 @@ function upSee(p) {                                  // up off a jump under an o
   const R = holeAbove(p.x); if (!R || tutLock()) return;   // (the beach tutorial: not up out of a room with berries still in it)
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
-  if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);
+  if (!peek && !STAGES[stage].peekOff && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);   // (peekOff: no look up from there)
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
   p.y = sy - ROW_H - 1; goRoomRise(R.to);            // (landed up there: into it, onto what you came down on)
@@ -19995,8 +20002,8 @@ const CARIB_SEA = { deep: "#0b7896", mid: "#13adc0", light: "#7fe6d4", foam: "#f
 const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#f4e4b4", plats: [], plats2: [] }));
 const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's drawings, IMG_1198/1199): row C the beach itself, row B up on the bluff over it. plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk), "tee" (a plank on one post)
   { h: 0, foe: 0, cell: "C1", elev: 0, tut: true, name: "HOME BEACH", home: true, noLeft: true, next: 1, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },   // (the house, as the opening had it)
-  { h: 0, foe: 0, cell: "C2", elev: 0, tut: true, name: "PALM SHORE", prev: 0, noRight: true, steps: [[2160, -400]], wayUp: 2, wayTip: "↑ ON UP: OFF THE TALL ONE AND ONTO THE BLUFF", camUp: 1,
-    plats: [[1560, 290, 250, "tee"], [1900, 170, 250, "tee"]] },   // (the first a held jump up (180: a plain jump's 150, held 220); off the second (a plain jump, 120 up; it runs right up to the bluff's face) up onto the bluff or B2's ledge. The bluff's face at 2160, its top 40 px under B2's floor so the jump up always reaches B2 first · camUp 1 and the second at 170 (was 75): you could see neither it from the first nor the bluff's top. The user, 2026-11-03: "the 2nd platform was invisible")
+  { h: 0, foe: 0, cell: "C2", elev: 0, tut: true, name: "PALM SHORE", prev: 0, noRight: true, peekOff: true, steps: [[2160, -400]], wayUp: 2, wayTip: "↑ ON UP: OFF THE TALL ONE AND ONTO THE BLUFF", camUp: 1,
+    plats: [[1560, 290, 250, "tee"], [1900, 170, 250, "tee"]] },   // (the first a held jump up (180: a plain jump's 150, held 220); off the second (a plain jump, 120 up; it runs right up to the bluff's face) up onto the bluff or B2's ledge. The bluff's face at 2160, its top 40 px under B2's floor so the jump up always reaches B2 first · camUp 1 and the second at 170 (was 75): you could see neither it from the first nor the bluff's top. The user, 2026-11-03: "the 2nd platform was invisible")   // (peekOff: the bluff's top is over the seam into B2, so the look up cut through where you stood and swapped its palms for B2's the moment you jumped: now B2 comes in as you land on it, faded in over a third of a second, swapPan's riseFade)
   { h: 0, foe: 0, cell: "B2", elev: ROW_H / ROW_RISE, tut: true, name: "THE BLUFF", gaps: [[-200, 2150]], below: 1, riseFrom: 1, riseIn: [[1250, 2560]], noLeft: true, prev: 1, next: 3 },   // (open over C2 but for the bluff's top at the right: "a platform on b2 that they can use to walk to b3")
   { h: 0, foe: 0, cell: "B3", elev: ROW_H / ROW_RISE, tut: true, name: "COCONUT COVE", prev: 2, next: 4, plats: [[240, 365, 320, "rock"], [1150, 250, 340, "plank"]] },   // (the buddy sat on the ledge at the left, the other fighting below)
   { h: 0, foe: 0, cell: "B4", elev: ROW_H / ROW_RISE, tut: true, name: "THE BOARDWALK", prev: 3, next: 5, plats: [[420, 290, 2080, "plank"]] },   // ("a long platform that stretches the length of the screen but starts a few steps in from the left side")
@@ -23523,11 +23530,11 @@ function gotTape(T, q) {
 // CONSOLE in it. The games themselves are still to be made: each cartridge plays a stand-in screen till then (consGameStep / consGameDraw)
 const CONS_PRICE = 500, CART_HUB = 150, CART_ROAD = 120;
 const CARTS = [{ id: "cart1", name: "TIC TAC TOWER", hub: true, page: "games/tictactower.html?v=20261102a", cpu: true,   // (the new rules, 2026-10-31: pieces pushed, lines score)
-    help: { touch: "HOLD A PANEL, LET GO TO PLACE · SWIPE ONE OF YOURS TO PUSH IT (HOLD IT: ARROWS) · SWIPE ALONG A TIER'S SIDE TO TURN IT · DRAG UNDER IT TO LOOK ROUND · TAP THE BUBBLE: PLAY THE COMPUTER", pad: "{lb} / {rb}: THE TIERS · {j}: PLACE · {j} ON ONE OF YOURS, THEN A WAY: PUSH IT · {sq}: PICK UP THE TIER, THEN ← →: TURN IT · {tk}: TURN THE VIEW · START: MENU", keys: "← → ↑ ↓ MOVE · Q / E: THE TIERS · X: PLACE · X ON ONE OF YOURS, THEN A WAY: PUSH IT · V: PICK UP THE TIER, THEN ← →: TURN IT · Z: TURN THE VIEW · ESC: MENU" } },
-  { id: "cart2", name: "BERRY STACK", road: true, tune: true, page: "games/berrystack.html?v=20261102g",   // (the user's, 2026-11-02: a toy claw machine; four berries on the plate, skewered, out to a cat or a dog)
-    help: { touch: "TAP TO DROP THE BERRY · STACK 4 ON THE PLATE", pad: "{j}: DROP THE BERRY · STACK 4 ON THE PLATE · START: MENU", keys: "X: DROP THE BERRY · STACK 4 ON THE PLATE · ESC: MENU" } },
-  { id: "cart3", name: "TIDY UP!", road: true, hold: true, pad: true, tune: true, page: "games/tidyup.html?v=20261103c",   // (the user's, 2026-11-03: a kid's room on a little round world, everything into its box before the clock runs out. hold: it's told which way's held · pad: the phone keeps its pad up · tune: its own song, mine)
-    help: { touch: "TAP OR THE PAD TO WALK · TAP A THING OR ✕: PICK IT UP · TAP ITS BOX OR ✕ BY IT: PUT IT IN", pad: "D-PAD: WALK · {j}: PICK UP · {j} BY ITS BOX: PUT IT IN · START: MENU", keys: "← → ↑ ↓ WALK · X: PICK UP · X BY ITS BOX: PUT IT IN · ESC: MENU" } },
+    help: { touch: "HOLD A PANEL, LET GO TO PLACE · SWIPE ONE OF YOURS TO PUSH IT (HOLD IT: ARROWS) · SWIPE ALONG A TIER'S SIDE TO TURN IT · DRAG UNDER IT TO LOOK ROUND · TAP THE BUBBLE: PLAY THE COMPUTER", pad: "{lb} / {rb}: THE TIERS · {j}: PLACE · {j} ON ONE OF YOURS, THEN A WAY: PUSH IT · {sq}: PICK UP THE TIER, THEN ← →: TURN IT · {tk}: TURN THE VIEW · START: MENU", keys: "← → ↑ ↓ MOVE · Q / E: THE TIERS · V: PLACE · V ON ONE OF YOURS, THEN A WAY: PUSH IT · Z: PICK UP THE TIER, THEN ← →: TURN IT · C: TURN THE VIEW · ESC: MENU" } },
+  { id: "cart2", name: "BERRY STACK", road: true, tune: true, page: "games/berrystack.html?v=20261103a",   // (the user's, 2026-11-02: a toy claw machine; four berries on the plate, skewered, out to a cat or a dog)
+    help: { touch: "TAP TO DROP THE BERRY · STACK 4 ON THE PLATE", pad: "{j}: DROP THE BERRY · STACK 4 ON THE PLATE · START: MENU", keys: "V: DROP THE BERRY · STACK 4 ON THE PLATE · ESC: MENU" } },
+  { id: "cart3", name: "TIDY UP!", road: true, hold: true, pad: true, tune: true, page: "games/tidyup.html?v=20261103d",   // (the user's, 2026-11-03: a kid's room on a little round world, everything into its box before the clock runs out. hold: it's told which way's held · pad: the phone keeps its pad up · tune: its own song, mine)
+    help: { touch: "TAP OR THE PAD TO WALK · TAP A THING OR ✕: PICK IT UP · TAP ITS BOX OR ✕ BY IT: PUT IT IN", pad: "D-PAD: WALK · {j}: PICK UP · {j} BY ITS BOX: PUT IT IN · START: MENU", keys: "← → ↑ ↓ WALK · V: PICK UP · V BY ITS BOX: PUT IT IN · ESC: MENU" } },
   { id: "cart4", name: "MINI-GAME 4", road: true }, { id: "cart5", name: "MINI-GAME 5", w: 4 }, { id: "cart6", name: "MINI-GAME 6", w: 7 }];   // (hub: every hub's stall · road: the stands by the road, the next one you haven't got · w: lying in a room of that world · page: a game that's a page of its own)
 // a game's song (TIC TAC TOWER's came in the user's own file, free to publish (the user, 2026-10-30): the phone build plays it too)
 const CART_BGM = { cart1: "games/tictactower-bgm.m4a" };   // (cart2: BERRY STACK's song, a borrowed recording, the user 2026-11-02: the PC page only, build_phone.py takes it out)
@@ -27590,6 +27597,7 @@ function frame(now) {                              // (the next frame is asked f
     pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
+    if (riseFade > 0) riseFadeTick(dt);              // (a room change without a pan: the one you left fading off, the game going on)
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
     else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || !!tutHold || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
