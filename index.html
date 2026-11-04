@@ -1067,7 +1067,7 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
 const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !roomBossDown(stage)) || !!S0.end || (!!S0.gift && !!story && !story.armed) || (world === 9 && !!S0.tut && !tutOver() && !!((WORLDS[9].roster || [])[stage] || []).length); };   // (the beach tutorial's: its berries first, 2026-11-03)   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
 const backOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(-1) : leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock && !tutLock();   // the way you came in is always open (not in the beach tutorial till it's clear); the other way needs the room cleared
 const rightOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(1) : !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].shutR && STAGES[stage].shutR() && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !tutLock() && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
-const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock;   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
+const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock && !(L.rope === "down" && tutLock());   // (the beach's B5: its rope down shut till the room's won back, as its ways out are, 2026-11-04)   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
   return S0.noLeft ? dn ?? S0.upX ?? 130 : 130; };
@@ -4893,9 +4893,16 @@ function buildSet(s) {
         const m = at(mk(new THREE.CylinderGeometry(.5, .55, .16, 22), null, { mat: mOff, ol: .02 }), X(x), gy + .13, 0); g.add(m); ms.push(m); y0.push(gy + .13); });
       roomPads = { s, ms, y0, on: P.xs.map(() => false), mOff, mOn }; continue; }
     if (P.k === "gate") {                           // a way on, shut (room.shutR) till its key's got (gateTick): a portcullis (bars), a door (BD4's), a panel in the wall (BD5's hidden one), a rock rising from the floor (lift: C11's)
-      const look = P.look || "bars", x = X(P.x), gy = Y(groundAt(P.x - 40) ?? GROUND), H = (P.h ?? 300) * S, W = (P.w ?? 120) * S, open = itemGot(P.key) ? 1 : 0;
+      const look = P.look || "bars", x = X(P.x), gy = Y(groundAt(P.x - 40) ?? GROUND), H = (P.h ?? 300) * S, W = (P.w ?? 120) * S, open = itemGot(P.key) || (P.tutOpen && tutOver()) ? 1 : 0;   // (tutOpen: the beach's C9 fence, open once its tutorial's behind you, 2026-11-04)
       const fr = toon(look === "bars" ? "#3d3a44" : "#5e3a1e"), lf = toon(look === "bars" ? "#77748a" : look === "panel" ? "#74492a" : look === "lift" ? "#6f675d" : "#a0522d"), leaf = new THREE.Group(); g.add(leaf);
-      if (look === "lift") { leaf.position.set(x, gy, -.1); leaf.add(at(mk(jag(new THREE.BoxGeometry(W, H, 1.6, 3, 3, 2), rng, .18), null, { mat: lf, ol: .03 }), 0, -H / 2, 0)); leaf.add(at(mk(new THREE.BoxGeometry(W + .1, .2, 1.7), null, { mat: toon("#8d8478"), ol: .02 }), 0, -.1, 0)); }
+      if (look === "fence") { const wd = toon("#8a6440"), wd2 = toon("#6b4f33"); leaf.position.set(x - W / 2, gy, 0);   // (C9's, 2026-11-04: "the fence on the right side of the screen opens"): driftwood pickets on two rails, hinged on its left post, swung back out of the way
+        [-1, 1].forEach(sd => g.add(at(mk(new THREE.CylinderGeometry(.22, .26, H + .6, 8), null, { mat: wd2, ol: .03 }), x + sd * (W / 2 + .22), gy + (H + .6) / 2, 0)));
+        for (let i = 0; i < 6; i++) { const px = .12 + i * (W - .24) / 5; leaf.add(at(mk(new THREE.BoxGeometry(.26, H - .1, .1), null, { mat: wd, ol: .02 }), px, (H - .1) / 2, 0)); leaf.add(at(mk(new THREE.ConeGeometry(.17, .3, 4).rotateY(Math.PI / 4), null, { mat: wd, ol: .02 }), px, H, 0)); }
+        [.2, .75].forEach(u => leaf.add(at(mk(new THREE.BoxGeometry(W, .2, .14), null, { mat: wd2, ol: .02 }), W / 2, H * u, .1)));
+        { const br = mk(new THREE.BoxGeometry(Math.hypot(W, H * .55), .16, .12), null, { mat: wd2, ol: .02 }); br.rotation.z = Math.atan2(H * .55, W); at(br, W / 2, H * .475, .12); leaf.add(br); }
+        for (let fx = P.x + (P.w ?? 120) / 2 + 40; fx < WORLD + 300; fx += 46) { const ph = H * R(.92, 1.04); g.add(at(mk(new THREE.BoxGeometry(.3, ph, .14), null, { mat: rng() < .5 ? wd : wd2, ol: .02 }), X(fx), gy + ph / 2, -.2)); }   // (and on to the room's end)
+        [.2, .75].forEach(u => g.add(at(mk(new THREE.BoxGeometry(X(WORLD + 300) - x - W / 2, .2, .12), null, { mat: wd2, ol: .02 }), (x + W / 2 + X(WORLD + 300)) / 2, gy + H * u, -.08))); }
+      else if (look === "lift") { leaf.position.set(x, gy, -.1); leaf.add(at(mk(jag(new THREE.BoxGeometry(W, H, 1.6, 3, 3, 2), rng, .18), null, { mat: lf, ol: .03 }), 0, -H / 2, 0)); leaf.add(at(mk(new THREE.BoxGeometry(W + .1, .2, 1.7), null, { mat: toon("#8d8478"), ol: .02 }), 0, -.1, 0)); }
       else { leaf.position.set(x, gy, 0);
         [-1, 1].forEach(sd => g.add(at(mk(new THREE.BoxGeometry(.4, H + .5, .7), null, { mat: fr, ol: .03 }), x + sd * (W / 2 + .2), gy + H / 2 + .25, 0)));
         g.add(at(mk(new THREE.BoxGeometry(W + .8, .5, .7), null, { mat: fr, ol: .03 }), x, gy + H + .5, 0));
@@ -8689,9 +8696,10 @@ function proAbort() {                                // (off to the title in the
 // (then the uprising bar, lit up); B4 the long boardwalk ("press R ... divide and conquer"); B5 the two platforms ("hold R and press a direction"); B6 a row of them, the
 // weapon's weight told while the camera goes slowly in on you; B7 Evil June, over your head into the middle. Every room shut till its berries are all won back ("don't let
 // the player leave any of the rooms in this opening world until they defeat all the berries in it"). Then off its end into the woods, as a new game had them before
-const TUT_UP = { goal: 36, start: 0, b6: .76, cap: .95 };   // (the beach's own uprising: from 0%, the weapon at its base size and Camila moving as she does at base (the user, 2026-11-03: "the opening shouldn't start at 25% because then they start with a big weapon"); its berries are worth 4 + 8 + 9 + 6 points through C2-B5, so out of 36 it grows in B3 (25%), B4 (50%) and at B5's end (75%); at least 76% walking into B6 all the same, "force the uprising bar to grow faster"; never full (cap): no showdown here. Was goal 52 from a quarter)
+const TUT_UP = { goal: 60, start: 0, c10: .76, cap: .95 };   // (the beach rebuilt, 2026-11-04: its berries 4, 8, 3, 1, 9, 6, 10, 6, 10 points, C2 to C9, so out of 60 it grows at the end of B4 (25%), in C6 (50%) and in C8 (75%); at least 76% walking into C10, the bridge room, for its team charge. Before that: the beach's own uprising: from 0%, the weapon at its base size and Camila moving as she does at base (the user, 2026-11-03: "the opening shouldn't start at 25% because then they start with a big weapon"); its berries are worth 4 + 8 + 9 + 6 points through C2-B5, so out of 36 it grows in B3 (25%), B4 (50%) and at B5's end (75%); at least 76% walking into B6 all the same, "force the uprising bar to grow faster"; never full (cap): no showdown here. Was goal 52 from a quarter)
 const TUT_GO = 1.1;                                  // (a word up this long before a button takes it away: not skipped by a button still held)
 const TUT_TXT = {
+  charge: () => `JUST ABOUT EVERY ABILITY HAS A CHARGE VARIANT, SO TRY HOLDING ALL YOUR BUTTONS AND SEE WHAT YOU FIND!`,   // (B3's, as you come in: the user, 2026-11-04 "the tutorial text here should notify the player here that just about every ability has a charge variant so try holding all your buttons and see what you find!")
   up: () => "WHEN YOU'VE BROUGHT ENOUGH BERRIES ON YOUR SIDE, YOU CAN LIBERATE EACH AREA",
   buds: () => { const L = partnerList(), D = partDefender(), A = teamAtk(L), nm = P => (P && P.a && P.a.A.name) || "YOUR BUDDY", heal = pHeal(D);   // (the user, 2026-11-03 late: the first buddy on △, its own attack; the blocker on the block button, its passive. Was △ the first, □ the second)
     return `YOUR BERRY BUDDIES ARE WITH YOU! PRESS ${tutTag("b1")} TO HAVE ${nm(A[0])} LEAD WITH THEIR OWN ABILITIES.${D && !A.includes(D) ? ` ${nm(D)} IS YOUR BLOCKER: PRESS ${tutTag("blk")} AND ${nm(D)} BLOCKS IN FRONT OF YOU${heal ? `, AND HEALS THE TEAM WHEN ONE OF YOU IS LOW` : ""}.` : ""}`; },
@@ -8699,7 +8707,7 @@ const TUT_TXT = {
   lead: () => `WHEN SPLIT, HOLD ${tutTag("ch")} AND PRESS A DIRECTION TO LEAD YOUR BUDDIES UP, DOWN, FORWARD OR BEHIND YOU.`,
   tired: () => `WHEN FIGHTING TOO LONG WITH THE FULLY GROWN WEAPON, ROSE + CAMILA WILL WEAR OUT. IN THESE MOMENTS, HAVE YOUR FRIENDS DEFEND YOU, AND PRESS AND HOLD ${tutTag("sq")} TO REGAIN YOUR COMPOSURE WHILE THEY ARE FIGHTING ON THEIR OWN.`,
   launch: () => `TRY THE CHARGE ATTACK: HOLD ${tutTag("atk")} UNTIL YOUR BUDDIES ARE UP ON YOUR WEAPON, THEN LET GO TO LAUNCH THEM AT YOUR OPPONENTS. IT CAN BE USED FOR MORE THAN JUST DAMAGE...` };   // (B7, after tut6: the user, 2026-11-03 late "show tutorial text that says to try the charge attack to launch your opponents. say also that this can be used to do more than just damage...")   // (□ held: a tap swaps who leads)
-const TUT_VO = { C2: "tut1", B3: "tut2", B4: "tut3", B7: "tut6", B8: "tut5" };   // (B6's, tut4, as it stops: tutB6 · B7 tut6 since 2026-11-03 late, June's B8 tut5 (it was B7's))
+const TUT_VO = { C2: "tut1", B4: "tut2", C5: "tut3", C10: "tut6", C11: "tut5" };   // (the beach rebuilt, 2026-11-04: B3's buddies and their words on to the new B4; the old B4's on down to C5; the bridge room C10, June's C11. Before: B3 tut2, B4 tut3, B7 tut6, B8 tut5. B6's, tut4, as it stops: tutB6 · B7 tut6 since 2026-11-03 late, June's B8 tut5 (it was B7's))
 const btS = () => story ? (story.bt || (story.bt = { seen: [] })) : (window.__bt || (window.__bt = { seen: [] }));   // (the tutorial's place: in the save)
 const btSeen = id => (btS().seen || []).includes(id);
 const btMark = id => { const S = btS(); if (!(S.seen || (S.seen = [])).includes(id)) S.seen.push(id); if (story) writeSave(); };
@@ -8770,6 +8778,7 @@ const roomOf = () => (mode === "play" && !hideout && !arena && !stronghold && ST
 const peekOf = () => { const S = roomOf(); return (S && S.peek) || null; };
 const peekZoom = () => { const P = peekOf(); return P && peekSt.k > .001 ? 1 + (P.zoom ?? .6) * peekSt.k : 0; };   // (zoomWant's)
 const peekLean = () => { const P = peekOf(); return P ? X(P.lean || 0) * peekSt.k : 0; };
+const camMid = () => { const S = roomOf(), M = S && S.camMid; return M && player && player.x >= M[0] && player.x <= M[1] ? X(M[2]) : null; };   // (room.camMid: [x0, x1, x]: you between x0 and x1, the camera held on x. C9's lookouts, 2026-11-04)
 const peekUp = () => { const P = peekOf(); return P ? (P.up || 0) * peekSt.k : 0; };
 function flingAim(p, s, k) {                          // (teamFling: let go in one of the room's launch spots, facing its way: an arc of its own up there, teamChargeTick's, as tbAim's)
   const S = roomOf(), L = S && S.fling; if (!L) return null;
@@ -8829,10 +8838,63 @@ function darkVeil(g, s) {                           // a dark cave (C9-C11): dar
 function wavesFx(dt) {                                // (roomFx's, every frame)
   const S = roomOf(); if (!S) return;
   if (S.bridge && itemGot(S.bridge.key) && !PLATFORMS.some(q => q.bridgeOf === S)) { const [x, y, w, kind] = S.bridge.plat; PLATFORMS.push({ x, y, w, kind, bridgeOf: S }); }
-  ladderTick(dt); padsTick(); gateTick(dt); if (S.ducks) ducksTick(S.ducks);
+  ladderTick(dt); padsTick(); twrTick(dt); gateTick(dt); if (S.ducks) ducksTick(S.ducks);
   if (roomDark && roomDark.s === stage && player) { const c = camera.position, zv = Math.min(5, c.z - 2), k = (c.z - zv) / c.z;   // (the dark: in front of the whole room, the floor's edge too, its hole on you: put where you are as the camera sees it, sized to match)
     roomDark.m.position.set(c.x + (X(player.x) - c.x) * k, c.y + (Y(player.y) + 1.3 - c.y) * k, zv); roomDark.m.scale.setScalar(.8 * k); }   // (.8: its pool ~1.5 units round you, near dark by 5, at the camera's narrow 32°)
   const R = roomGate, p = player; if (R && R.s === stage && R.open < 1 && R.wall && p && !p.dead && p.x > R.px - 70) { p.x = R.px - 70; if (p.vx > 0) p.vx = 0; }   // (shut: up against it)
+}
+// C9, the lookouts (the user, 2026-11-04): "at the top of each one is a button that the players can press. when they press it, they stay with their hand on it until they press x again. the idea is
+// that they need to separate and direct their partners to get up the ladder. holding R and holding up like they do to jump makes them jump and auto climb to the top. when they see the button they
+// automatically press and hold it. when the player presses their button, the fence on the right side of the screen opens". ✕ or ○ by a button presses it, either again lets go; both held at once and the fence opens, and stays open
+const TWR_K = { reach: 50, run: 380, key: "w9:c9fence" };   // (how near a button you press it, px; a buddy's run over to its ladder, px/s; the fence's key)
+const twrSt = { s: -1, who: [], openT: -1 };          // (who: each button's holder, "you" or a buddy's state)
+const twrOf = () => { const q = mode === "play" && !stronghold && !hideout && STAGES[stage]; return q && q.towers ? q : null; };
+function twrAt(q, i) { const t = q.towers[i], P = q.plats[t.plat]; return { x: t.btn, y: P[1], P, L: LADDERS.find(L => L.pole && L.x >= P[0] && L.x <= P[0] + P[2]) }; }
+function twrPress(p) {                                // (updatePlayer's: ✕ or ○ stood by a button up on its lookout: your hand on it)
+  const q = twrOf(); if (!q || p.dead || !p.onGround || !p.plat || !(jumpBuf > 0 || atkBuf > 0) || p.atkT >= 0 || p.combo) return false;
+  for (let i = 0; i < q.towers.length; i++) { const T = twrAt(q, i); if (Math.abs(p.plat.y - T.y) > 4 || Math.abs(p.x - T.x) > TWR_K.reach || twrSt.who[i]) continue;
+    jumpBuf = atkBuf = 0; const f = Math.sign(T.x - p.x) || p.face; p.press = { i, t: 0, f }; twrSt.who[i] = "you";
+    Object.assign(p, { vx: 0, face: f, block: false, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, tpose: 0 }); SFX.clack(); return true; }
+  return false;
+}
+function pressStep(p, dt) {                           // (her hand on it: stood still; ✕ or ○ again, she lets go)
+  const P = p.press, q = twrOf(), T = q && twrAt(q, P.i); P.t += dt;
+  const upGo = upPend >= 0 && time - upPend >= UPW; if (upGo) upPend = -1;   // (↑ on its own, as a jump: lets go too)
+  if (!T || p.hurtT > 0 || p.dead || ((jumpBuf > 0 || atkBuf > 0 || upGo) && P.t > .2)) { jumpBuf = atkBuf = 0; twrLet(p); return; }
+  p.x = approach(p.x, T.x - P.f * 30, 240 * dt); p.vx = 0; p.face = P.f; p.vy = Math.min(p.vy + GRAV * dt, 1100); moveBody(p, dt, 16); p.pointKind = "press";
+  p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5; spring(p, dt); updatePose(p, dt);
+}
+function twrLet(p) { if (!p.press) return; if (twrSt.who[p.press.i] === "you") twrSt.who[p.press.i] = null; p.press = null; p.pointKind = null; }
+function twrSend(p, L) {                              // (chgJump's, at the lookouts: R + ↑ sends the nearest buddy up a lookout that's free, not the one you're at, and it presses its button)
+  const q = twrOf(); if (!q || itemGot(TWR_K.key)) return false;
+  const busy = i => !!twrSt.who[i] || allies.some(a => a.st.twr && a.st.twr.i === i), mine = p.press ? p.press.i : q.towers.map((t, i) => i).sort((a, b) => Math.abs(twrAt(q, a).x - p.x) - Math.abs(twrAt(q, b).x - p.x))[0];
+  const i = q.towers.map((t, k) => k).find(k => k !== mine && !busy(k)); if (i === undefined) return false;
+  const T = twrAt(q, i), B = L.filter(P => P.kind === "ally" && P.q && !P.q.twr && !P.q.climb && !P.q.zipR).sort((a, b) => Math.abs(a.q.x - T.L.x) - Math.abs(b.q.x - T.L.x))[0]; if (!B || !T.L) return false;
+  B.q.twr = { i, ph: "run", t: 0 }; SFX.jump(); p.wave = Math.max(p.wave || 0, .3); popText(B.q.x, B.q.y - 120, "ON IT!", 900); return true;
+}
+function towerStep(s, dt, ally) {                    // (updateAllyOne's, first: sent up a lookout. Over to its ladder, a hop onto it and up it, along its deck to the button, its hand on it)
+  const W = s.twr; if (!W) return false; const q = twrOf(); if (!q || W.s !== undefined && W.s !== stage) { s.twr = null; s.climb = null; s.pointKind = null; return false; } W.s = stage;
+  const T = twrAt(q, W.i), L = T.L, f = Math.sign(T.x - L.x) || 1; W.t += dt; Object.assign(s, { atkKind: null, atkT: -1, block: false, defOn: false, pinv: Math.max(s.pinv || 0, .2) });
+  if (W.ph === "run") { const d = L.x - s.x; s.vy = Math.min(s.vy + GRAV * dt, 1100);
+    if (s.onGround) { s.face = Math.sign(d) || s.face; s.vx = Math.sign(d) * Math.min(TWR_K.run, Math.abs(d) / dt); s.sprint = Math.abs(d) > 200; }
+    moveBody(s, dt, 14); if (Math.abs(L.x - s.x) < 6 && s.onGround) { W.ph = "hop"; W.t = 0; W.y0 = s.y; W.x0 = s.x; dust(s.x, s.y, 3, 0); SFX.jump(); } return true; }
+  if (W.ph === "hop") { const u = Math.min(1, W.t / .32); s.x = lerp(W.x0, L.x, u); s.y = W.y0 - 80 * u - Math.sin(Math.PI * u) * 40; Object.assign(s, { vx: 0, vy: 0, onGround: false, plat: null, sq: .2 });
+    if (u >= 1) { W.ph = "climb"; s.climbPh = 0; } return true; }
+  if (W.ph === "climb") { const y0 = s.y; s.y = Math.max(L.top, s.y - CLIMB_V * dt); s.climbPh = (s.climbPh || 0) + Math.abs(s.y - y0) * .045; Object.assign(s, { x: L.x, vx: 0, vy: 0, onGround: false, plat: null, climb: L, face: f, sprint: false });
+    if (s.y <= L.top) { s.climb = null; s.onGround = true; s.y = T.y; s.plat = PLATFORMS.find(Q => Q.y === T.y && L.x >= Q.x && L.x <= Q.x + Q.w) || null; s.sq = -.15; s.sqv = 0; W.ph = "walk"; } return true; }
+  const tx = T.x - f * 30; s.y = T.y; s.vy = 0; s.onGround = true; s.face = f;
+  if (W.ph === "walk") { const d = tx - s.x; s.vx = Math.sign(d) * Math.min(220, Math.abs(d) / dt); s.x += s.vx * dt; if (Math.abs(d) < 3) { W.ph = "hold"; W.t = 0; s.vx = 0; SFX.clack(); } return true; }
+  s.x = tx; s.vx = 0; s.pointKind = "press"; twrSt.who[W.i] = s;   // (W.ph "hold": its hand on it till the fence is open)
+  return true;
+}
+function twrTick(dt) {                                // (wavesFx's, every frame: the buttons down while held, and both down at once, the fence open)
+  const q = twrOf(), p = player; if (!q || !p) { twrSt.s = -1; if (p && p.press) twrLet(p); return; }
+  if (twrSt.s !== stage) { twrSt.s = stage; twrSt.who = q.towers.map(() => null); twrSt.openT = -1; if (p.press) twrLet(p); }
+  twrSt.who = twrSt.who.map((w, i) => w === "you" ? (p.press && p.press.i === i ? w : null) : w && w.twr && w.twr.i === i && w.twr.ph === "hold" && allies.some(a => a.st === w) ? w : null);
+  const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i]; if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); b.cap.material.color.set(on ? "#5ccf5f" : "#e0402e"); } });
+  if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; }
+  if (twrSt.openT >= 0 && (twrSt.openT += dt) > 1.4) { twrSt.openT = -1; allies.forEach(a => { const s = a.st; if (s.twr) { s.twr = null; s.pointKind = null; s.wave = 1; a.waveT = 1.2; } }); }   // (a beat on, the buddies let go and cheer)
+  if (!btSeen("btn") && p.onGround && p.plat && q.towers.some((t, i) => Math.abs(p.plat.y - twrAt(q, i).y) < 4)) { btMark("btn"); tutPop(`PRESS ${tutTag("j")} OR ${tutTag("atk")} AT THE BUTTON TO HOLD IT DOWN · HOLD ${tutTag("ch")} AND <span class="key">↑</span> TO SEND A BUDDY UP THE OTHER LOOKOUT`, 6); }   // (up on a lookout the first time: how)
 }
 function ladderTick(dt) {
   const S = roomOf(), L = S && S.ladder, R = roomLadder; if (!L || !R || R.s !== stage || R.done) return;
@@ -8856,7 +8918,7 @@ function gateTick(dt) {
   if (R.open === 0) { SFX.gate(); shake = Math.max(shake, 3); }
   R.open = Math.min(1, R.open + dt / 1.4); gateLeaf(R);
 }
-const gateLeaf = R => { if (R.look === "panel") R.leaf.position.x = R.x0 + R.open * R.W * 1.1; else if (R.look === "lift") R.leaf.position.y = R.y0 + R.open * R.H; else R.leaf.position.y = R.y0 + R.open * (R.H + .3); };   // (a panel slides aside, a lift rises from under the floor (its rock hangs below its top, so up by its height), the rest go up)
+const gateLeaf = R => { if (R.look === "fence") R.leaf.rotation.y = R.open * R.open * (3 - 2 * R.open) * 1.65; else if (R.look === "panel") R.leaf.position.x = R.x0 + R.open * R.W * 1.1; else if (R.look === "lift") R.leaf.position.y = R.y0 + R.open * R.H; else R.leaf.position.y = R.y0 + R.open * (R.H + .3); };   // (a panel slides aside, a lift rises from under the floor (its rock hangs below its top, so up by its height), the rest go up)
 function ducksTick(D) {
   const L = foesAlive().filter(b => b.type === "duckling");
   L.forEach(b => { if (!b.tough) { b.tough = true; b.hp = Math.round(b.hp * 2.4); b.miniCue = true; } });   // (three of them, together a mini boss: each a good deal tougher than a baddy)
@@ -8936,37 +8998,40 @@ function tutTick(dt) {                               // (every frame, paused or 
   const q = STAGES[stage], c = q.cell, p = player, said = id => (story.vo || []).includes(id) && !(vo && vo.id === id) && !voQ.includes(id);
   if (tutT.s !== stage) { tutT.s = stage; tutT.t = 0; tutEnter(c); }
   tutT.t += dt;
-  if (tutHold) { if (tutHold.quiet && c === "B6" && said("tut4")) tutShow("tired"); return; }   // (B6: her words said, then the word on it)
+  if (tutHold) return;   // (B6's stop, its words and then the TIRED word on it, gone with the room, 2026-11-04)
   if (c === "C2" && !btSeen("jump")) { const T = PLATFORMS.filter(L => L.kind === "tee").sort((a, b) => a.x - b.x)[0]; if (T && p.x > T.x - 420) { btMark("jump"); tutPop(`HOLD THE JUMP BUTTON ${tutTag("j")}`, 5); } }
-  if (c === "B3" && !btSeen("up") && said("tut2")) tutShow("up");
-  else if (c === "B3" && !btSeen("buds") && btSeen("up") && partnerList().length && (partnerList().length > 1 || !arrive.some(m => m.w === 9))) tutShow("buds");   // (both with you now (or the one, none still to come): their buttons)
-  if (c === "B4" && !btSeen("split") && said("tut3")) tutShow("split");
-  if (c === "B5" && !btSeen("lead") && p.x > 640) tutShow("lead");
-  if (c === "B7" && !btSeen("launch") && said("tut6")) tutShow("launch");   // (B6's stop, tutB6: tut4 and the TIRED word, gone with the weapon's weight, 2026-11-04)   // (her words as you fight, then the word on the charge)
-  if (c === "B8" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
+  if (c === "B3" && !btSeen("charge") && tutT.t > .9) tutShow("charge");
+  if (c === "B4" && !btSeen("up") && said("tut2")) tutShow("up");
+  else if (c === "B4" && !btSeen("buds") && btSeen("up") && partnerList().length && (partnerList().length > 1 || !arrive.some(m => m.w === 9))) tutShow("buds");   // (both with you now (or the one, none still to come): their buttons)
+  if (c === "C5" && !btSeen("split") && said("tut3")) tutShow("split");
+  if (c === "C8" && !btSeen("lead") && p.x > 640) tutShow("lead");
+  if (c === "C10" && !btSeen("launch") && said("tut6")) tutShow("launch");   // (B6's stop, tutB6: tut4 and the TIRED word, gone with the weapon's weight, 2026-11-04)   // (her words as you fight, then the word on the charge)
+  if (c === "C11" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
+  if (q.lockX !== undefined && tutLock() && p.x > q.lockX) { p.x = q.lockX; if (p.vx > 0) p.vx = 0; p.hitWall = true; }   // (B5's cliff edge: held back from it till its baddy's won back, the room's way out shut like any other)
   if (!btSeen("worn") && nrgOut(p)) { btMark("worn"); tutPop(`WORN OUT! LET YOUR FRIENDS FIGHT · HOLD ${tutTag("sq")} TO GET YOUR ENERGY BACK`, 5.5); }   // (the drawing's "when player gets tired ... show charge")
-  if (tutLock() && !ejFight() && p.hitWall && (p.x < 70 || p.x > WORLD - 70) && (tutT.bump -= dt) <= 0) { tutT.bump = 1.6; popText(p.x, p.y - 140, "WIN THEM ALL BACK FIRST!"); SFX.thud(); }   // (pushing at a shut way out)
+  if (tutLock() && !ejFight() && p.hitWall && (p.x < 70 || p.x > WORLD - 70 || (q.lockX !== undefined && p.x >= q.lockX - 1)) && (tutT.bump -= dt) <= 0) { tutT.bump = 1.6; popText(p.x, p.y - 140, "WIN THEM ALL BACK FIRST!"); SFX.thud(); }   // (pushing at a shut way out)
   else tutT.bump = Math.max(0, tutT.bump - dt);
 }
 function tutEnter(c) {                               // into one of its rooms
   if (TUT_VO[c]) startVO(TUT_VO[c]);
-  if (c === "B3") tutBuds();
-  if (c === "B6" && !btSeen("tired")) { const U = upStore(), g = upGoal(9); if ((U[9] || 0) < g * TUT_UP.b6) { U[9] = Math.ceil(g * TUT_UP.b6); wpnByUprise(true); } }   // (75% by now, whatever's been won back: the weapon fully grown)
+  if (c === "B4") tutBuds();   // (B3's till 2026-11-04)
+  if (c === "C10") { const U = upStore(), g = upGoal(9); if ((U[9] || 0) < g * TUT_UP.c10) { U[9] = Math.ceil(g * TUT_UP.c10); wpnByUprise(true); } }   // (75% by the bridge room, whatever's been won back: the weapon fully grown for its team charge. B6's till 2026-11-04)
 }
 function tutB6() {                                   // B6, as you come in (a few steps in, the buddies off you, till 2026-11-03 late): the game stopped, the camera slowly in on you while she tells it; then the word
   for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; tutZoom = { k: 0, out: false }; tutHold = { id: "zoom", t: 0, quiet: true }; startVO("tut4");
   if (player) { Object.assign(player, { vx: 0, sprint: false }); player.chains = []; }   // (as you come in, now: stood still, her hair's springs started again at rest, not frozen streaming back from the walk across the rooms for the whole of it)
 }
-function tutBuds() {                                 // B3: a buddy sat waiting on the ledge at the left (up and with you as you reach it), another already fighting one of them below
-  const place = (A, x, y, plat, b) => { const r = allyRig(A), st = makeState(x, r);
+function tutBuds() {                                 // B4 (B3 till 2026-11-04): a buddy sat waiting in the white chair up on the high ground (up and with you as you reach it), another already fighting one of them out on the shelf
+  const place = (A, x, y, plat, b, chair) => { const r = allyRig(A), st = makeState(x, r);
     Object.assign(st, { y, vy: 0, onGround: true, face: b ? Math.sign(b.x - x) || 1 : -1, sit: b ? 0 : 1, wave: 0, hopT: 0, php: PARTNER_HP, pinv: 9 }); if (plat) st.plat = plat;
-    const M = { kind: "ally", A, w: 9, own: true, r, st, b, t: 0, atkT: rand(.3, .8), hit: false, crew: crewOf(A, x, y), phase: b ? "duel" : "sit" };
+    const M = { kind: "ally", A, w: 9, own: true, r, st, b, t: 0, atkT: rand(.3, .8), hit: false, crew: crewOf(A, x, y), phase: b ? "duel" : "sit", chair: !!chair };
     if (b) { b.duel = M; M.hp0 = b.hp; b.dir = Math.sign(x - b.x) || -1; }
     r.root.visible = r.shadow.visible = true; arrive.push(M); };
   const WP = worldPair(0), A1 = WP.A, A2 = WP.A2, free = () => TEAM_MAX - teamCount() - arrive.length;   // (the forest's two, Stilt and Rink: the user, 2026-11-03 "make the opening buddies in the beach area the same two as berry forest". Noro and Dorys till then)
-  if (A1 && !allyWith(A1) && !arrive.some(m => m.A === A1) && free() > 0) { const L = PLATFORMS.filter(q => q.x < 700).sort((a, b) => a.x - b.x)[0]; place(A1, L ? L.x + L.w / 2 : 400, L ? L.y : GROUND, L || null, null); }
-  if (A2 && !allyWith(A2) && !arrive.some(m => m.A === A2) && free() > 0) { const b = baddies.filter(meetFighter).filter(q => !q.plat && !q.duel).sort((a, c) => Math.abs(a.x - 900) - Math.abs(c.x - 900))[0];
-    if (b) { const x = clamp(b.x - 100, 120, WORLD - 120); place(A2, x, groundAt(x) ?? GROUND, null, b); } else place(A2, 900, groundAt(900) ?? GROUND, null, null); }
+  const cx = STAGES[stage].chair ?? 400, sh = PLATFORMS.find(q => q.kind === "shelf");   // (the chair up on the high ground, the shelf out from it)
+  if (A1 && !allyWith(A1) && !arrive.some(m => m.A === A1) && free() > 0) place(A1, cx, groundAt(cx) ?? GROUND, null, null, true);
+  if (A2 && !allyWith(A2) && !arrive.some(m => m.A === A2) && free() > 0) { const b = baddies.filter(meetFighter).filter(q => !q.duel && (sh ? (q.plat === sh || (q.x >= sh.x && q.x <= sh.x + sh.w && Math.abs(q.y - sh.y) < 40)) : !q.plat)).sort((a, c) => Math.abs(a.x - 900) - Math.abs(c.x - 900))[0]; // (the shelf baddy is matched by where it stands too: on the first frame in B4 its plat isnt set yet, 2026-11-04)
+    if (b) { const x = sh ? clamp(b.x - 110, sh.x + 30, sh.x + sh.w - 30) : clamp(b.x - 100, 120, WORLD - 120); place(A2, x, sh ? sh.y : groundAt(x) ?? GROUND, sh || null, b); } else place(A2, 900, groundAt(900) ?? GROUND, null, null); }
 }
 function tutShow(id) {                               // the game stopped, a word on the screen; a button (after a moment) to go on
   btMark(id); for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
@@ -10104,11 +10169,11 @@ function wayCue(bossBeat) {                          // the way-on arrow: only w
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
 function goNext() { bigLeave(); const S = STAGES[stage]; if (S.toWorld !== undefined && !S.exitLeft) return world === 9 && S.tut && story && (!tutOver() || pro) ? tutEnd() : goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row   // (a door on the left: its right edge is just the way on into the world: it used to take you out through the door, 2026-10-24)   // (pro: already on its way into the black: once, not again the next frame as the world's end too (the stats card, at over 100%, asked for a showdown: the user, 2026-11-03))
-const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to) ?? q.wayUp, dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
+const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to) ?? q.wayUp, dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined && !q.zip;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
   cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
-  cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
+  cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : q.zip ? "ZIPLINE →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
   return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
-const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP; if (tbHere() && !tbDown()) return "THE BRIDGE IS STILL UP: GET IT DOWN TO GO ON"; if (q.wayTip) return q.wayTip;   // (B7 cleared with its bridge still up: not "walk right" over a gap you can't cross (the user, 2026-11-03 late: "it said go to next screen but the bridge actually didnt go down"))   // (wayTip: a room's own, the beach tutorial's C2)
+const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP; if (tbHere() && !tbDown()) return "THE BRIDGE IS STILL UP: GET IT DOWN TO GO ON"; if (q.towers && !itemGot(TWR_K.key) && !tutOver()) return "THE FENCE IS SHUT: BOTH LOOKOUT BUTTONS DOWN AT ONCE"; if (q.wayTip) return q.wayTip;   // (B7 cleared with its bridge still up: not "walk right" over a gap you can't cross (the user, 2026-11-03 late: "it said go to next screen but the bridge actually didnt go down"))   // (wayTip: a room's own, the beach tutorial's C2)   // (the lookouts' fence still shut, C9's, 2026-11-04)
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
   if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
   return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
@@ -11614,6 +11679,7 @@ function updatePlayer(dt) {
     if (fromBot || fromTop || fromFall) { upPend = -1; Object.assign(p, { climb: L, climbDir: fromBot ? -1 : 1, climbPh: 0, vx: 0, vy: 0, onGround: false, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0 }); jumpBuf = 0; if (fromTop) p.y = L.top + 14; break; }
   }
   if (p.climb) { climbStep(p, dt); return; }
+  if (p.press || twrPress(p)) { pressStep(p, dt); return; }   // (C9: your hand on a lookout's button, 2026-11-04)
   if (p.cons) { consStep(p, dt); return; }   // (the BERRY CONSOLE in her hands: sat still, the game takes the buttons)
   if (!p.zip) zipPark();   // (its trolley waiting by the post: the user, 2026-10-25 "make the grips of the zipline or something be there because it looks like just string")
   if (!p.zip && control && STAGES[stage].zip && !p.onGround && !p.dead && !transit) zipGrab(p);   // (A1: the zipline, jumped up to)
@@ -11942,6 +12008,7 @@ function zipGrab(p) {                                // in the air, the line acr
   const Z = zipLine(stage), o = cellPx(stage); if (!Z || !o || p.vy < -900) return;
   const H = (p.rig.heightPx || 92) * ZIP_HANG, d = (o.x + p.x - Z.a[0]) / Z.ux; if (d < 10 || d > 520) return;
   const ly = Z.a[1] + Z.uy * d - o.y; if (p.y - H - 30 > ly || p.y - 60 < ly) return;
+  if (tutLock()) { if ((zipGrab.no = (zipGrab.no || 0)) < time) { zipGrab.no = time + 1.6; popText(p.x, p.y - 150, "WIN THEM ALL BACK FIRST!"); SFX.thud(); } return; }   // (the beach's C6: shut till the room's won back, its way on the line, 2026-11-04)
   p.zip = { a: Z.a, ux: Z.ux, uy: Z.uy, L: Z.L, d, v: Math.max(260, Math.abs(p.vx) * .6) }; zipHideAll(); zipAng = -Math.atan2(Z.uy, Z.ux);
   partnerList().slice(0, 2).forEach((P, i) => { const q = P.q, r = P.kind === "pet" ? q.rig : P.kind === "ally" ? P.a.r : ej && ej.r; if (!q || !r) return;   // your partners: up onto the two behind yours
     q.zipR = { k: i + 1, t: 0, x0: q.x, y0: q.y, r, pet: P.kind === "pet", a: P.a || null }; q.atkKind = null; q.atkT = -1; q.pounce = null; });
@@ -14097,7 +14164,7 @@ function chgHold(s, dt) {                            // (in the partner's own st
   return true;
 }
 function chgJump(p, t, ax) {                         // let go of ↑: they jump (from the ground; up already, a second time, once), and stay where they come down, to fight what comes
-  const L = partAble(); if (!L.length) return;
+  const L = partAble(); if (!L.length) return; if (twrSend(p, L)) return;   // (C9: one sent up the other lookout instead, 2026-11-04)
   const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1), h = lerp(CHG_JUMP.lo, CHG_JUMP.hi, u), v = Math.sqrt(2 * GRAV * h); let n = 0;
   L.forEach((P, k) => { const q = P.q; if (q.climb || q.zip) return;
     if (q.onGround) q.chgAir = 1; else if (q.chgAir > 0) q.chgAir--; else return;
@@ -15821,8 +15888,8 @@ function updateMeet(dt) { meetStep(meet, dt); arrive.slice().forEach(M => meetSt
 function meetStep(M, dt) {
   if (!M || !M.st || mode !== "play" || !player || transit) return; const s = M.st, p = player, b = M.b; M.t += dt;
   if (M.phase === "sit") {                           // (sat waiting: it watches you come; up, as you reach it)
-    s.sit = 1; s.sitGround = true; s.vx = 0; s.face = Math.sign(p.x - s.x) || s.face;
-    if (Math.abs(p.x - s.x) < 170 && Math.abs(p.y - s.y) < 140 && !p.dead) { s.sit = 0; s.sitGround = false; M.phase = "cheer"; M.t = 0; s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1;
+    s.sit = 1; s.sitGround = !M.chair; s.vx = 0; s.face = Math.sign(p.x - s.x) || s.face; if (M.chair) { s.chair = true; s.seatLift = seatLift(M.r); s.z = -1.1; }   // (B4's white chair: sat up in it, back off the way you walk, 2026-11-04)
+    if (Math.abs(p.x - s.x) < 170 && Math.abs(p.y - s.y) < 140 && !p.dead) { s.sit = 0; s.sitGround = false; if (M.chair) { s.chair = false; s.seatLift = 0; s.z = 0; } M.phase = "cheer"; M.t = 0; s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1;
       if (M.kind === "ally") { buddyLast[M.A.id] = -9; SFX.buddy(M.A.id, "hi", .9); } else petCall(M.sp, 1.3); } }
   else if (M.phase === "duel" || M.phase === "help") {
     if (!b || b.dead || b.gone) { M.phase = "cheer"; M.t = 0; s.atkKind = null; s.atkT = -1; if (b) b.duel = null; s.face = Math.sign(p.x - s.x) || s.face;   // (the berry beaten: a cheer)
@@ -16038,7 +16105,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   if (campSit(s, allyKey(k), dt, r)) { s.vy = Math.min(s.vy + GRAV * dt, 1100); moveBody(s, dt, 14); ejLook(s, dt); crewStep(ally, dt, false); return; }   // (at a rest stop: on its stump by the fire)
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
-  if (hugWith(s, dt) || climbWith(s, dt)) { ejLook(s, dt); crewStep(ally, dt, false); return; }   // (the group hug: in to you; up a climb after you)
+  if (towerStep(s, dt, ally) || hugWith(s, dt) || climbWith(s, dt)) { ejLook(s, dt); crewStep(ally, dt, false); return; }   // (towerStep: C9, sent up a lookout to its button, 2026-11-04)   // (the group hug: in to you; up a climb after you)
   const SET = setOf(r.spec), busy = partHuman(ally, s, dt, { set: SET, sp: KIT.BUDDY_SP[A.lead || A.id] || (SET.charge || [])[2], plain: (KIT.BUDDY_PLAIN || {})[A.lead || A.id], shoot: A.shoot, col: A.col, crew: ally.crew,
     voice: (sp, i) => { if (sp) SFX.buddy(A.id, "sp"); else if (i === 0 && Math.random() < .35) SFX.buddy(A.id, "atk"); } });   // (its voice: into a special always, a string now and then)
   const wet = world === 13 && deepWetAt(s.y); s.dive = wet;   // (under the deep's water: swimming, its swim pose and its bubble on, not sinking and put back by you over and over)
@@ -21018,26 +21085,33 @@ const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's draw
   { h: 0, foe: 0, cell: "C2", elev: 0, tut: true, name: "PALM SHORE", prev: 0, noRight: true, peekOff: true, steps: [[2160, -400]], wayUp: 2, wayTip: "↑ ON UP: OFF THE TALL ONE AND ONTO THE BLUFF", camUp: 1,
     plats: [[1560, 290, 250, "tee"], [1900, 170, 250, "tee"]] },   // (the first a held jump up (180: a plain jump's 150, held 220); off the second (a plain jump, 120 up; it runs right up to the bluff's face) up onto the bluff or B2's ledge. The bluff's face at 2160, its top 40 px under B2's floor so the jump up always reaches B2 first · camUp 1 and the second at 170 (was 75): you could see neither it from the first nor the bluff's top. The user, 2026-11-03: "the 2nd platform was invisible")   // (peekOff: the bluff's top is over the seam into B2, so the look up cut through where you stood and swapped its palms for B2's the moment you jumped: now B2 comes in as you land on it, faded in over a third of a second, swapPan's riseFade)
   { h: 0, foe: 0, cell: "B2", elev: ROW_H / ROW_RISE, tut: true, name: "THE BLUFF", gaps: [[-200, 2150]], below: 1, riseFrom: 1, riseIn: [[1250, 2560]], noLeft: true, prev: 1, next: 3 },   // (open over C2 but for the bluff's top at the right: "a platform on b2 that they can use to walk to b3")
-  { h: 0, foe: 0, cell: "B3", elev: ROW_H / ROW_RISE, tut: true, name: "COCONUT COVE", prev: 2, next: 4, plats: [[240, 365, 320, "rock"], [1150, 250, 340, "plank"]] },   // (the buddy sat on the ledge at the left, the other fighting below)
-  { h: 0, foe: 0, cell: "B4", elev: ROW_H / ROW_RISE, tut: true, name: "THE BOARDWALK", prev: 3, next: 5, plats: [[420, 290, 2080, "plank"]] },   // ("a long platform that stretches the length of the screen but starts a few steps in from the left side")
-  { h: 0, foe: 0, cell: "B5", elev: ROW_H / ROW_RISE, tut: true, name: "DRIFTWOOD POINT", prev: 4, next: 6, plats: [[1000, 345, 520, "plank"], [1110, 205, 300, "tee"]] },   // (two, one over the other; two in front of them, in the way out)
-  { h: 0, foe: 0, cell: "B6", elev: ROW_H / ROW_RISE, tut: true, name: "THE HIGH SANDS", prev: 5, next: 7, plats: [[520, 330, 280, "rock"], [1700, 320, 300, "drift"]] },
-  { h: 0, foe: 0, cell: "B7", elev: ROW_H / ROW_RISE, tut: true, name: "THE OLD WINCH", prev: 6, next: 8, gaps: [[TBR.g0, TBR.g1]], tbridge: true, plats: [] },   // (the user, 2026-11-03 late: "a straightforward screen with several baddies, but then towards the end, there's a gap in the floor that the player can't jump over and they can see a machine at the other side": the gap 700 px (a running jump and the double jump carry 513 at most), the winch and its button past it, the bridge hung up over it (tbBuild); fling the team over (teamFling), one hops down on the button (tbStep), and down the bridge comes (tbTick))
-  { h: 0, foe: 0, cell: "B8", elev: ROW_H / ROW_RISE, tut: true, tutBoss: true, name: "THE FOREST'S EDGE", prev: 7, edge: true, toWorld: 0, plats: [[300, 360, 340, "rock"], [1060, 290, 440, "plank"], [1880, 360, 340, "rock"]] },   // (Evil June: two low at the sides, one higher in the middle · 290, not 190: up there she was off the top of the screen · B7 till 2026-11-03 late)
+  { h: 0, foe: 0, cell: "B3", elev: ROW_H / ROW_RISE, tut: true, name: "COCONUT COVE", prev: 2, next: 6, ground: [[0, 0], [1650, 0], [2300, -270], [2560, -270]], plats: [[240, 365, 320, "rock"], [1150, 250, 340, "plank"]] },   // (no buddies here now, only the word on charging: the user, 2026-11-04 "remove the buddies from that section and their VO and tutorial as we'll move it to another screen". The dune up at its end, to walk on into B4 up on its high ground)
+  { h: 0, foe: 0, cell: "C5", elev: 0, tut: true, name: "THE BOARDWALK", prev: 10, next: 11, noLeft: true, up: 10, upX: 615, cliff: true, ground: [[0, -440], [600, -440], [600, 0]], plats: [[700, 290, 1800, "plank"]] },   // (the old B4, down in the cove under B5's cliff now: the user, 2026-11-04 "c5 is the bottom cove area still open sky though and beach and rocks, no grass. the new c5 is what was the old b4 with the splitting tutorial". The cliff's foot at the left, B5's rope ladder down its face, the boardwalk a few steps on from it)
+  { h: 0, foe: 0, cell: "C8", elev: 0, tut: true, name: "DRIFTWOOD POINT", prev: 12, next: 13, plats: [[1000, 345, 520, "plank"], [1110, 205, 300, "tee"]] },   // (the old B5, on the sand: "c8 will now be where the old b5 tutorial area was with the platforms to show how they can jump and move")
+  { h: 0, foe: 0, cell: "B4", elev: ROW_H / ROW_RISE, tut: true, name: "THE CHAIR ROCK", prev: 3, next: 10, ground: [[0, -270], [420, -270], [420, 0]], plats: [[420, 310, 640, "shelf"]], chair: 310, items: [["gear", 470]] },   // (the user, 2026-11-04: "a high ground you enter on from the left with the first buddy sitting there in a white chair. then you drop down to a platform extending out of the elevated land and you'll see the 2nd buddy fighting another baddy. then you drop down further ... you can also walk to the left under the middle platform ... and find a secret item all the way camera left": a berry gear at the rock's foot under the shelf. Index 6 was B6, THE HIGH SANDS, gone with its tired lesson)
+  { h: 0, foe: 0, cell: "C10", elev: 0, tut: true, name: "THE OLD WINCH", prev: 13, next: 8, gaps: [[TBR.g0, TBR.g1]], tbridge: true, plats: [] },   // (the user, 2026-11-03 late: "a straightforward screen with several baddies, but then towards the end, there's a gap in the floor that the player can't jump over and they can see a machine at the other side": the gap 700 px (a running jump and the double jump carry 513 at most), the winch and its button past it, the bridge hung up over it (tbBuild); fling the team over (teamFling), one hops down on the button (tbStep), and down the bridge comes (tbTick))   // (B7 till 2026-11-04, up on the bluff: down on the sand now, the sea in its gap. The user: "c9 will be the bridge room from before and whatever text is needed there that we had and voiceover if any", the bridge room after the lookouts, C10 so)
+  { h: 0, foe: 0, cell: "C11", elev: 0, tut: true, tutBoss: true, name: "THE FOREST'S EDGE", prev: 7, edge: true, toWorld: 0, plats: [[300, 360, 340, "rock"], [1060, 290, 440, "plank"], [1880, 360, 340, "rock"]] },   // (Evil June: two low at the sides, one higher in the middle · 290, not 190: up there she was off the top of the screen · B7 till 2026-11-03 late)   // (B8 till 2026-11-04: on the sand, C11. "they cross the bridge and c10 will be the boss room with evil june": the bridge room C10, so hers the one after it)
   { h: 0, foe: 0, bgCell: "C1", col: 999, elev: 0, hut: true, peace: true, name: "HOME", noLeft: true, noRight: true, endR: 1400, mine: { x: 170, to: 0, tx: 224 }, items: [["cons", 1150]] },   // (the kids' house, inside: ↑ at its door in C1, after the tutorial. The BERRY CONSOLE on the rug by the low table, if it isn't yours yet. The user, 2026-11-04)
+  { h: 0, foe: 0, cell: "B5", elev: ROW_H / ROW_RISE, tut: true, name: "THE CLIFF TOP", prev: 6, noRight: true, gaps: [[600, 3600]], below: 4, down: 4, downX: 600, downWall: -1, lockX: 585 },   // (the user, 2026-11-04: "another high platform on the left with a ladder you can go down on. you can go down the ladder or jump off to the right (one baddy up here first). this should look like we're going down some beach cliffs": the cliff top, the cove a row down; lockX: held back from its edge till the baddy's won back)
+  { h: 0, foe: 0, cell: "C6", elev: 0, tut: true, name: "THE WATER TOWER", prev: 4, noRight: true, camUp: 1.4, gaps: [[2280, 3600]], plats: [[1780, 170, 360, "tower"]], poles: [[1805, 170]], zip: { x: 1945, y: 40, to: 12, ex: 1280, ey: 300, base0: 170, base1: 470 }, wayTip: "↑ UP THE WATER TOWER, THEN JUMP UP ONTO THE ZIPLINE" },   // (the user, 2026-11-04: "4 baddies and then a high water tower looking structure you can use a ladder to climb up on. it will have a zip line that the team gets on and takes them to the next screen": out over the inlet at its end and into C7)
+  { h: 0, foe: 0, cell: "C7", elev: 0, tut: true, name: "THE LANDING", prev: 11, next: 5, noLeft: true, gaps: [[-900, 190]] },   // ("c6 zip line ends in the middle of the screen on c7. there will be 3 baddies on the left of the zip line end and 3 to the right of it. it's an encouragement for players to split up but dont show any text for this")
+  { h: 0, foe: 0, cell: "C9", elev: 0, tut: true, name: "THE LOOKOUTS", prev: 5, next: 7, zoom: 2.3, camMid: [430, 1860, 1145], camUp: 6, plats: [[640, 40, 210, "lookout"], [1440, 40, 210, "lookout"]], poles: [[665, 40], [1465, 40]], towers: [{ plat: 0, btn: 820 }, { plat: 1, btn: 1620 }], set: [{ k: "gate", x: 2330, key: "w9:c9fence", look: "fence", h: 300, w: 150, tutOpen: true }] },   // (the user, 2026-11-04: "more zoomed out than usual to fit these two towers. it will have two high lookout stations with little roofs and ladders that climb up them. baddies on the bottom. at the top of each one is a button ... when the player presses their button, the fence on the right side of the screen opens": both buttons held at once, twrTick. Out of a jump's reach, 430 up (a held jump and the double jump: Rose's 407); the camera out and up to have both in the picture)
 ];
 const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the sand (the beach's own uprising, TUT_UP)
   [],
   [["leafy", "leaf", 700], ["twiggy", "olive", 960], ["stumpy", "bark", 1200]],
   [],
-  [["leafy", "orange", 640], ["thornball", "moss", 900], ["acorn", "rust", 1180], ["twiggy", "yellow", { plat: 1, x: 1330 }], ["pinecone", "bark", 1900], ["leafy", "red", 2200]],
-  [["leafy", "yellow", { plat: 0, x: 900 }], ["acorn", "olive", { plat: 0, x: 1500 }], ["twiggy", "rust", { plat: 0, x: 2100 }], ["stumpy", "olive", 1100], ["thornball", "purple", 1650], ["pinecone", "rust", 2250]],
-  [["twiggy", "bark", { plat: 1, x: 1200 }], ["leafy", "orange", { plat: 1, x: 1330 }], ["stumpy", "bark", 1950], ["thornball", "olive", 2200]],
-  [["twiggy", "orange", { plat: 0, x: 660 }], ["leafy", "red", 820], ["bramble", "moss", 980], ["stumpy", "olive", 1140], ["mossback", "bark", 1320], ["thornball", "moss", 1500], ["logger", "rust", 1660],
-   ["acorn", "rust", { plat: 1, x: 1780 }], ["leafy", "yellow", { plat: 1, x: 1920 }], ["pinecone", "bark", 1860], ["bramble", "olive", 2040], ["toadstool", "red", 2220], ["mossback", "rust", 2400]],   // (B6: 13, the big ones two blows each, so the fully grown weapon wears you out here: the user, 2026-11-03 "add more baddies to the room where the wearing out mechanic is introduced so that it can happen there")
-  [["leafy", "olive", 480], ["twiggy", "rust", 640], ["acorn", "yellow", 800], ["stumpy", "bark", 960], ["thornball", "red", 1120], ["pinecone", "olive", 1280], ["bramble", "moss", 1440]],   // (B7: seven, all before the gap)
+  [["leafy", "orange", 640], ["thornball", "moss", 900], ["acorn", "rust", 1180], ["twiggy", "yellow", { plat: 1, x: 1330 }], ["pinecone", "bark", 1560], ["leafy", "red", 2430]],   // (B3: the last two off the dune's slope, 2026-11-04)
+  [["leafy", "yellow", { plat: 0, x: 1050 }], ["acorn", "olive", { plat: 0, x: 1600 }], ["twiggy", "rust", { plat: 0, x: 2150 }], ["stumpy", "olive", 1250], ["thornball", "purple", 1750], ["pinecone", "rust", 2300]],   // (C5: the old B4's, its boardwalk a little shorter, from 700)
+  [["twiggy", "bark", { plat: 1, x: 1200 }], ["leafy", "orange", { plat: 1, x: 1330 }], ["stumpy", "bark", 1950], ["thornball", "olive", 2200]],   // (C8: the old B5's)
+  [["leafy", "olive", { plat: 0, x: 860 }], ["stumpy", "bark", 1700]],   // (B4: the one the second buddy's fighting up on the shelf, and one down on the sand. B6's thirteen till 2026-11-04)
+  [["leafy", "olive", 480], ["twiggy", "rust", 640], ["acorn", "yellow", 800], ["stumpy", "bark", 960], ["thornball", "red", 1120], ["pinecone", "olive", 1280], ["bramble", "moss", 1440]],   // (C10, the bridge room (B7 till 2026-11-04): seven, all before the gap)
   [],
   [],   // (the house: no one)
+  [["twiggy", "orange", 360]],   // (B5: "one baddy up here first")
+  [["leafy", "red", 620], ["acorn", "yellow", 920], ["thornball", "olive", 1220], ["stumpy", "rust", 1520]],   // (C6: four, before the tower)
+  [["leafy", "orange", 430], ["twiggy", "moss", 680], ["pinecone", "bark", 930], ["acorn", "olive", 1630], ["thornball", "red", 1880], ["bramble", "moss", 2130]],   // (C7: three each side of where the zipline comes down)
+  [["leafy", "yellow", 380], ["stumpy", "olive", 1050], ["acorn", "rust", 1300], ["mossback", "bark", 1960], ["twiggy", "orange", 2180]],   // (C9: down on the sand, round the towers' feet)
 ];
 // Noro and Doir, as bosses: their own characters (charkit), posed like the player, each with two moves of their own. Beaten, they don't go
 // up in smoke: they pick themselves up and run off into the forest (they'll be back)
@@ -21146,12 +21220,16 @@ function buildBeach(k = 0, seed = k) {
     for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2, w = (b - a) * S, cx = X(m); if (w <= 0) continue;
       if (GP.some(([g0, g1]) => m > g0 && m < g1)) { if (hi) scene.add(at(mk(new THREE.BoxGeometry(w, 6, 14), null, { mat: mSand, ol: 0 }), cx, lowY - 3, -2)); continue; }   // (open: the beach a row down)
       const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? WY - 1 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
+      const ga = Y(groundAt(a + .01) ?? GROUND), gb = Y(groundAt(b - .01) ?? GROUND);
+      if (Math.abs(ga - gb) > .05) { const sl = mk(new THREE.BoxGeometry(Math.hypot(w, gb - ga), .5, d), null, { mat: mSand, ol: 0 }); sl.rotation.z = Math.atan2(gb - ga, w); at(sl, cx, (ga + gb) / 2 - .25, zc); scene.add(sl);   // a slope (B3's dune up to B4's high ground, 2026-11-04): its sand along it, the rock under it cut to the line
+        const sh = new THREE.Shape([new THREE.Vector2(X(a), bot), new THREE.Vector2(X(b), bot), new THREE.Vector2(X(b), gb - .45), new THREE.Vector2(X(a), ga - .45)]), rk = mk(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), null, { mat: hi || ST.cliff ? mBl : mCl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); continue; }
       scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
-      if (hi || raised) { scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it
+      if (hi || raised) { scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi && !ST.cliff ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it (ST.cliff: B5's bluff on down into the cove, C5's, 2026-11-04)
         for (let k = 1; k <= 3; k++) { const y = top - .5 - k * (top - .5 - bot) / 4; scene.add(at(mk(new THREE.BoxGeometry(w, .14, .06), null, { mat: mBlD, ol: 0 }), cx, y, zc + d / 2 + .03)); }   // (its layers)
         const n = Math.max(2, Math.round((top - bot) / 2.2));   // boulders along a face that's open to the side
         [[a, -1], [b, 1]].forEach(([ex, sd]) => { if (ex <= -900 || ex >= WORLD + 900) return; const open = GP.some(([g0, g1]) => ex + sd * 5 > g0 && ex + sd * 5 < g1) || (groundAt(ex + sd * 10) ?? 1e9) > groundAt(m) + 60; if (!open) return;
-          for (let k = 0; k < n; k++) { const r = R(.6, 1.2); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, 1.2, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .04 }), X(ex) + sd * R(-.2, .3), bot + (k + .5) * (top - bot) / n, R(zb + 1, 4))); } }); }
+          const clear = LADDERS.some(L => Math.abs(L.x - ex) < 80) || (ST.items || []).some(it => Math.abs(it[1] - ex) < 100);   // (a ladder or an item at its foot: the boulders kept back behind it, 2026-11-04)
+          for (let k = 0; k < n; k++) { const r = R(.6, 1.2); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, 1.2, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .04 }), X(ex) + sd * R(-.2, .3), bot + (k + .5) * (top - bot) / n, R(zb + 1, clear ? -1.8 : 4))); } }); }
       else scene.add(at(mk(new THREE.BoxGeometry(w, 5.5, 14), null, { mat: mSand, ol: 0 }), cx, -3.25, -2)); }
   }
   else scene.add(at(mk(new THREE.BoxGeometry(WX + 70, 6, 14), null, { mat: mSand, ol: 0 }), WX / 2, -3, -2));
@@ -21160,22 +21238,22 @@ function buildBeach(k = 0, seed = k) {
   const foam = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, .7).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mFoam), wl = -WY / drop;   // (where the water meets the slope: wl of the way down)
   scene.add(foam); keep.add(foam);
   // coconut palms all along the back of the beach, leaning out to sea; sea grape and rocks under them; rocks at the water's edge
-  const knock = [];
-  for (const sl of W.scatter(Math.round(15 * WS), 6, 6, 3201)) inSlot(sl, x => { if (x < lo + 2) return; const z = -R(3.2, 8.5); if (ST.home && x < 13 && z > -7) return;
+  const knock = [], inGap = x => !hi && (ST.gaps || []).some(([a, b]) => x > X(a) - 1.2 && x < X(b) + 1.2);   // (inGap: over the sea through a gap in the sand, row C's (C6, C7, C10 since 2026-11-04): nothing grows there)
+  for (const sl of W.scatter(Math.round(15 * WS), 6, 6, 3201)) inSlot(sl, x => { if (x < lo + 2) return; const z = -R(3.2, 8.5); if ((ST.home && x < 13 && z > -7) || inGap(x)) return;
     const g = tropPalm(scene, M, x, gAt(x), z, rng, { h: R(6.5, 11), lean: R(-.3, .3), coco: true }); g.rotation.x = -R(.04, .18); });
   if (ST.home) [[960, -2.4, 1], [1290, -2.9, 1], [1450, -2.3, 1], [1620, -2.8, 1], [1800, -2.4, 1], [1990, -2.7, 1], [2190, -2.4, 1]].forEach(([px, z, d], i) => {   // the seven that come down in the opening (each knocked over to the right, away from whoever hits it)
     const g = tropPalm(scene, M, X(px), gAt(X(px)), z, rng, { h: 8.4 + (i % 3) * .7, lean: d * .12, coco: true });
     g.traverse(o => { if (o.isMesh) keep.add(o); }); knock.push({ g, x: px, z, dir: d, t: -1 }); if (!beachOpening) g.rotation.z = -d * 1.48; });   // (dir: the way the crown falls)
-  else if (!ST.cove) for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1, g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
-  for (const sl of W.scatter(Math.round(26 * WS), 8, 8, 3202)) inSlot(sl, x => { if (x < lo) return; const z = -R(2.4, 8.6), r = R(.5, 1.2); if (ST.home && x < 12 && z > -7) return;
+  else if (!ST.cove) for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1; if (inGap(x)) continue; const g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
+  for (const sl of W.scatter(Math.round(26 * WS), 8, 8, 3202)) inSlot(sl, x => { if (x < lo) return; const z = -R(2.4, 8.6), r = R(.5, 1.2); if ((ST.home && x < 12 && z > -7) || inGap(x)) return;
     scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[((sl.j % 3) + 3) % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); });
-  for (const sl of W.scatter(Math.round(18 * WS), 8, 8, 3203)) inSlot(sl, x => { const r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) + (zb + 9) : -R(2.5, 8); if (z > zb && x < lo) return;
+  for (const sl of W.scatter(Math.round(18 * WS), 8, 8, 3203)) inSlot(sl, x => { const r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) + (zb + 9) : -R(2.5, 8); if (z > zb && (x < lo || inGap(x))) return;
     scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x, z < zb ? sb + (z - zb) * drop / run + r * .3 - .2 : gAt(x) + r * .3, z)); });
   { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sh = new THREE.InstancedMesh(new THREE.ConeGeometry(.09, .14, 6).rotateX(Math.PI / 2), toon("#ffe0d2"), Math.round(90 * WS));   // shells
-    for (let i = 0; i < sh.count; i++) { const x = R(lo, WX + 8); e.set(R(-.4, .4), R(0, TAU), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, gAt(x) + .04, R(-8.5, 4.5)), q, new THREE.Vector3(1, 1, 1)); sh.setMatrixAt(i, m4); } scene.add(sh);
+    for (let i = 0; i < sh.count; i++) { const x = R(lo, WX + 8); e.set(R(-.4, .4), R(0, TAU), 0); q.setFromEuler(e); const k = inGap(x) ? 0 : 1; m4.compose(new THREE.Vector3(x, gAt(x) + .04, R(-8.5, 4.5)), q, new THREE.Vector3(k, k, k)); sh.setMatrixAt(i, m4); } scene.add(sh);
     const st = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, r = i % 2 ? .07 : .2; (i ? st.lineTo : st.moveTo).call(st, Math.cos(a) * r, Math.sin(a) * r); }
     const sf = new THREE.InstancedMesh(new THREE.ShapeGeometry(st).rotateX(-Math.PI / 2), toon("#ff7a4a"), Math.round(12 * WS));   // starfish
-    for (let i = 0; i < sf.count; i++) { const x = R(lo, WX + 8); q.setFromEuler(e.set(0, R(0, TAU), 0)); m4.compose(new THREE.Vector3(x, gAt(x) + .03, R(-8, 4)), q, new THREE.Vector3(1, 1, 1)); sf.setMatrixAt(i, m4); } scene.add(sf); }
+    for (let i = 0; i < sf.count; i++) { const x = R(lo, WX + 8); q.setFromEuler(e.set(0, R(0, TAU), 0)); const k = inGap(x) ? 0 : 1; m4.compose(new THREE.Vector3(x, gAt(x) + .03, R(-8, 4)), q, new THREE.Vector3(k, k, k)); sf.setMatrixAt(i, m4); } scene.add(sf); }
   // the kids' house (the first room): a little wooden house up on posts, turquoise with a red tin roof, a porch, a hammock between two palms,
   // a table with a bowl of mangoes, and the log they sit on
   if (ST.home) { const H = group(scene, 6.4, 0, -5.2), mWall = toon("#42c2cc"), mRoof = toon("#d8463a"), mTrim = toon("#fdf6e6"), mWood = toon("#8a6440"), mDoor = toon("#e8a23a"), mWin = toon("#2f3b43");
@@ -21227,13 +21305,50 @@ function buildBeach(k = 0, seed = k) {
       for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 2.4), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, 0));
       const nP = Math.max(1, Math.ceil((w - .6) / 9));   // (a long boardwalk: posts along it, not only at its ends)
       for (let j = 0; j <= nP; j++) { const px = cx - w / 2 + .3 + (w - .6) * j / nP, g = gAt(px); [-.9, .9].forEach(z => scene.add(at(mk(new THREE.CylinderGeometry(.12, .12, top - g, 6), null, { mat: mDriftD, ol: .03 }), px, (top + g) / 2, z))); } }
+    else if (p.kind === "shelf") {                    // a shelf of rock jutting out of the high ground's face (B4's, 2026-11-04: "a platform extending out of the elevated land"): thick at the rock, open under it
+      const x0 = X(p.x); scene.add(at(mk(new THREE.DodecahedronGeometry(1, 0).scale(w * .52, .5, 1.3), null, { mat: mRock, ol: .05 }), cx, top - .45, 0));
+      scene.add(at(mk(new THREE.BoxGeometry(w - .1, .22, 2.5), null, { mat: mRockL, ol: .05 }), cx, top - .11, 0)); scene.add(at(mk(new THREE.BoxGeometry(w - .5, .06, 2.3), null, { mat: mSand, ol: 0 }), cx, top + .02, 0));   // (sand blown up onto it)
+      scene.add(at(mk(new THREE.DodecahedronGeometry(1, 0).scale(w * .2, .9, 1.25), null, { mat: mRock, ol: .04 }), x0 + w * .1, top - .8, -.1));   // (its root, into the rock)
+      for (let k = 0; k < 5; k++) scene.add(at(mk(new THREE.DodecahedronGeometry(R(.2, .38), 0), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x0 + w * R(.22, .9), top - .82 - R(0, .12), R(-.9, .9))); }   // (rough under it)
+    else if (p.kind === "tower") {                    // the water tower (C6's, 2026-11-04: "a high water tower looking structure you can use a ladder to climb up on"): a deck up on four legs braced at the back, its tank on it behind you, a cone of a roof on that
+      const mT = toon("#dfe8e6"), mTb = toon("#8fa3a8"), mRf = toon("#c8402c"), mLg = toon("#7a5a3a"), x0 = X(p.x), x1 = X(p.x + p.w), hh = top - gy;
+      [x0 + .5, x1 - .5].forEach(lx => [-2.6, .8].forEach(z => scene.add(at(mk(new THREE.BoxGeometry(.3, hh, .3), null, { mat: mLg, ol: .03 }), lx, gy + hh / 2, z))));   // (its legs)
+      for (let j = 0; j < 2; j++) { const ya = gy + j * hh / 2, yb = ya + hh / 2, dx = x1 - x0 - 1, an = Math.atan2(yb - ya, dx), ln = Math.hypot(dx, yb - ya);   // (crossed braces between the back legs, two storeys: none at the front, where you'd be behind them)
+        [1, -1].forEach(sd => { const br = mk(new THREE.BoxGeometry(ln, .14, .12), null, { mat: mDriftD, ol: .02 }); br.rotation.z = sd * an; at(br, (x0 + x1) / 2, (ya + yb) / 2, -2.4); scene.add(br); });
+        scene.add(at(mk(new THREE.BoxGeometry(x1 - x0 - .7, .16, .14), null, { mat: mLg, ol: .02 }), (x0 + x1) / 2, yb - .3, -2.6)); }
+      scene.add(at(mk(new THREE.BoxGeometry(w + .4, .24, 4.2), null, { mat: mDrift, ol: .05 }), cx, top - .12, -.9));   // the deck
+      for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 4.2), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, -.9));
+      [x0 - .1, x1 + .1].forEach(rx => scene.add(at(mk(new THREE.BoxGeometry(.1, .9, .1), null, { mat: mLg, ol: .02 }), rx, top + .45, -2.9))); scene.add(at(mk(new THREE.BoxGeometry(w + .3, .1, .1), null, { mat: mLg, ol: .02 }), cx, top + .9, -2.9));   // (a rail along its back)
+      const T = group(scene, x0 + 2.1, top, -2.05);   // the tank
+      T.add(at(mk(new THREE.CylinderGeometry(1.55, 1.55, 2.3, 20), null, { mat: mT, ol: .05 }), 0, 1.15, 0)); [.45, 1.15, 1.85].forEach(y => T.add(at(mk(new THREE.CylinderGeometry(1.58, 1.58, .12, 20), null, { mat: mTb, ol: 0 }), 0, y, 0)));
+      T.add(at(mk(new THREE.ConeGeometry(1.75, .9, 20), null, { mat: mRf, ol: .05 }), 0, 2.75, 0)); }
+    else if (p.kind === "lookout") {                  // a lookout station (C9's, 2026-11-04: "two high lookout stations with little roofs and ladders that climb up them"): up on four legs braced at the back, a rail round its back, a roof on four posts; its button (TWR, below)
+      const mLg = toon("#7a5a3a"), mRf = toon("#d8463a"), x0 = X(p.x), x1 = X(p.x + p.w), hh = top - gy, nS = 3;
+      [x0 + .35, x1 - .35].forEach(lx => [-1.6, 1].forEach(z => scene.add(at(mk(new THREE.BoxGeometry(.32, hh, .32), null, { mat: mLg, ol: .03 }), lx, gy + hh / 2, z))));
+      for (let j = 0; j < nS; j++) { const ya = gy + j * hh / nS, yb = ya + hh / nS, dx = x1 - x0 - .7, an = Math.atan2(yb - ya, dx), ln = Math.hypot(dx, yb - ya);
+        [1, -1].forEach(sd => { const br = mk(new THREE.BoxGeometry(ln, .14, .12), null, { mat: mDriftD, ol: .02 }); br.rotation.z = sd * an; at(br, (x0 + x1) / 2, (ya + yb) / 2, -1.4); scene.add(br); });
+        scene.add(at(mk(new THREE.BoxGeometry(x1 - x0 - .4, .16, .14), null, { mat: mLg, ol: .02 }), (x0 + x1) / 2, yb - .2, -1.6)); }
+      scene.add(at(mk(new THREE.BoxGeometry(w + .3, .26, 3.1), null, { mat: mDrift, ol: .05 }), cx, top - .13, -.3));   // the deck
+      for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 3.1), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, -.3));
+      scene.add(at(mk(new THREE.BoxGeometry(w + .3, .1, .1), null, { mat: mLg, ol: .02 }), cx, top + .85, -1.75)); scene.add(at(mk(new THREE.BoxGeometry(w + .3, .1, .1), null, { mat: mLg, ol: .02 }), cx, top + .45, -1.75));   // (the rail round its back)
+      const rh = 3.3; [x0 + .1, x1 - .1].forEach(rx => [-1.7, 1.15].forEach(z => scene.add(at(mk(new THREE.BoxGeometry(.14, rh, .14), null, { mat: mLg, ol: .02 }), rx, top + rh / 2, z))));   // (the roof's posts)
+      const rf = mk(new THREE.ConeGeometry((w / 2 + .7) * 1.42, 1.5, 4).rotateY(Math.PI / 4), null, { mat: mRf, ol: .05 }); rf.scale.z = 4.1 / (w + 1.4); at(rf, cx, top + rh + .7, -.28); scene.add(rf); }
     else if (p.kind === "tee") {                      // a T: a plank up on one stout post (the user's drawing, C2), braced under its middle
       scene.add(at(mk(new THREE.BoxGeometry(w, .26, 2.4), null, { mat: mDrift, ol: .05 }), cx, top - .13, 0));
       for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 2.4), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, 0));
       scene.add(at(mk(new THREE.CylinderGeometry(.26, .32, top - gy, 8), null, { mat: mDriftD, ol: .04 }), cx, (top + gy) / 2, 0));
       [-1, 1].forEach(sd => { const br = mk(new THREE.BoxGeometry(1.5, .14, .14), null, { mat: mDriftD, ol: .03 }); br.rotation.z = sd * .62; at(br, cx + sd * .55, top - .62, 0); scene.add(br); }); } }
   function mWood() { return mWood.m || (mWood.m = toon("#8a6440")); }
-  const TBV = ST.tbridge ? tbBuild(scene, keep, gAt) : null;   // (B7: the crane, the bridge, the winch)
+  const TBV = ST.tbridge ? tbBuild(scene, keep, gAt) : null;   // (C10 (B7 till 2026-11-04): the crane, the bridge, the winch)
+  const mIr = toon("#4a4e57"), TWR = (ST.towers || []).map(t => { const P = ST.plats[t.plat], B = group(scene, X(t.btn), Y(P[1]), -.85);   // each lookout's button (C9's): a big red one on a post at the deck's far end, green while it's held down (twrTick)
+    B.add(at(mk(new THREE.CylinderGeometry(.09, .12, 1.8, 8), null, { mat: mIr, ol: .02 }), 0, .9, 0)); B.add(at(mk(new THREE.CylinderGeometry(.3, .34, .14, 16), null, { mat: mIr, ol: .02 }), 0, 1.84, 0));
+    const cap = mk(new THREE.CylinderGeometry(.22, .25, .2, 16), null, { mat: toon("#e0402e"), ol: .02 }); at(cap, 0, 2, 0); B.add(cap); B.traverse(o => { if (o.isMesh) keep.add(o); }); return { cap, y0: 2, on: false }; });   // (chest high: at hip height it hid behind the weapon, 2026-11-04)
+  { const zi = ST.zip ? seed : STAGES.findIndex(q => q && q.zip && !q.cut && q.zip.to === seed), Z = zi >= 0 ? zipLine(zi) : null, o = cellPx(seed);   // the zipline (C6 down to C7, 2026-11-04): the line, a post at either end and its pulley, drawn in both rooms
+    if (Z && o) { const mL = toon("#2e2c34"), mP = toon("#6b4f33"), Zq = STAGES[zi].zip, oa = cellPx(zi), ob = cellPx(Zq.to), ax = X(Z.a[0] - o.x), ay = Y(Z.a[1] - o.y), bx = X(Z.b[0] - o.x), by = Y(Z.b[1] - o.y);
+      const ln = mk(new THREE.CylinderGeometry(.035, .035, Math.hypot(bx - ax, by - ay), 5), null, { mat: mL, ol: 0 }); ln.rotation.z = -Math.atan2(bx - ax, by - ay); at(ln, (ax + bx) / 2, (ay + by) / 2, 0); scene.add(ln);
+      const post = (x, y, yb) => { const h = y - yb + .4; scene.add(at(mk(new THREE.BoxGeometry(.26, h, .26), null, { mat: mP, ol: .03 }), x + .14, yb + h / 2, -.3)); scene.add(at(mk(new THREE.CylinderGeometry(.2, .2, .14, 12).rotateX(Math.PI / 2), null, { mat: mL, ol: .02 }), x + .1, y + .06, -.12)); };
+      post(ax, ay, Y(oa.y + Zq.base0 - o.y)); post(bx, by, Y(ob.y + Zq.base1 - o.y)); } }
+  if (ST.chair !== undefined) { const A = worldPair(0).A, r = A ? allyRig(A) : null, C = buildChair(), x = X(ST.chair); C.scale.setScalar(r ? seatH(r) * CHAIR_BIG : .9); C.position.set(x, gAt(x), -1.1); C.rotation.y = .35; scene.add(C); }   // the white chair the first buddy sits waiting in, up on the high ground (B4's, 2026-11-04: "the first buddy sitting there in a white chair")
   // spray glinting over the water
   const N = 50, mpos = new Float32Array(N * 3), seeds = [];
   for (let i = 0; i < N; i++) seeds.push([R(-10, WX + 10), R(.3, 4), R(-14, -8), rng() * TAU]);
@@ -21250,7 +21365,7 @@ function buildBeach(k = 0, seed = k) {
   }
   function relight(L) { const sc = L.sea || CARIB_SEA; seaM.uniforms.cDeep.value.set(sc.deep); seaM.uniforms.cMid.value.set(sc.mid); seaM.uniforms.cLight.value.set(sc.light); seaM.uniforms.cFoam.value.set(sc.foam); seaM.uniforms.cLine.value.set(sc.line);
     mSand.color.set(L.sand || Q.sand); mWet.color.copy(mSand.color).multiplyScalar(.86); }
-  return { k, shafts: [], motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)), tick, relight, knock };
+  return { k, shafts: [], motes, seeds, sky, objs: scene.children.filter(o => !before.has(o)), tick, relight, knock, twr: TWR };
 }
 const ROOM_SPECIAL = new Set(["statue", "boss", "bossX", "toWorld", "end", "bep", "gift", "castle", "peace", "outside", "peak", "shrine", "home", "duo", "edge", "next", "nextHi",
   "up", "down", "upX", "downX", "downWall", "noLeft", "noRight", "cell", "col", "name", "h", "plats", "gaps", "steps", "ground", "ceils", "ladders", "gifts",
@@ -24879,10 +24994,10 @@ function consDraw() {                                // (every frame while it's 
 }
 function drawPauseCons() { const im = $("ptCons").querySelector("img"); if (im) { const u = consPic(); if (im.getAttribute("src") !== u) im.src = u; } const n = cartsGot().length; $("pcNow").textContent = !consOwned() ? "" : n ? `${n} GAME${n > 1 ? "S" : ""} · PICK IT TO PLAY` : "NO GAMES YET"; }
 function spawnRoomItems() {
-  if (!WORLDS[world] || (world === 9 && !STAGES[stage].hut) || stronghold || hideout || arena) return;
+  const beach = world === 9 && !STAGES[stage].hut; if (!WORLDS[world] || (beach && !STAGES[stage].items) || stronghold || hideout || arena) return;   // (on the beach, only a room's own: B4's secret gear, 2026-11-04)
   (STAGES[stage].items || []).forEach(([k, x, y, tid, on], i) => { if (!upShows(on) || (k === "cons" && consOwned())) return; const id = k === "tape" ? "tape:" + tid : world + ":" + stage + ":fix" + i; if (itemGot(id) || (k === "tape" && ((story && tapeGot(tid)) || !tapesHere().some(T => T.id === tid)))) return;   // (the room's own, in their places: [kind, x, y on a platform] · a cassette: [.., its id])
     spawnLoot(k, x, y ?? groundAt(x) ?? GROUND, false, id); if (y !== undefined) { const q = loot[loot.length - 1]; q.y = q.gy = y; } });
-  itemPlan(world).forEach((q, i) => { if (q.s !== stage) return; const id = world + ":" + q.s + ":" + q.k + i; if (itemGot(id)) return;
+  if (!beach) itemPlan(world).forEach((q, i) => { if (q.s !== stage) return; const id = world + ":" + q.s + ":" + q.k + i; if (itemGot(id)) return;
     const x = crateSpot(q.x); if (x !== null) spawnLoot(q.k, x, groundAt(x) ?? GROUND, false, id); });
   tapesHere().forEach(T => { if (!T.lie || T.w !== world || (story && tapeGot(T.id)) || itemGot("tape:" + T.id)) return;   // (the PC page's own cassettes: lying in a room of their world; in free play too, the user 2026-10-28: B4's wasn't up there on a developer run)
     const P = tapePlan(world); if (!P || P.s !== stage) return; const x = crateSpot(P.x); if (x !== null) spawnLoot("tape", x, groundAt(x) ?? GROUND, false, "tape:" + T.id); });
@@ -28195,11 +28310,12 @@ function syncWorld(dt) {
     const CF = FEEL.camera, camOn = !FEEL.legacy && CF.enabled && !hideout && !(cine && cine.phase === "pan"), moving = Math.abs(player.vx) > 40;
     if (camOn) { camLook = lerp(camLook, moving ? Math.sign(player.vx) * CF.lookahead * 2 * halfW : 0, 1 - Math.exp(-dt * (moving ? 2.2 : CF.catchUp * .6))); }   // (COMBAT FEEL's CAMERA: ahead the way you're moving, back to you when you stop)
     let txc = X(player.x) + camLook + tbLean() + peekLean() + (camOn ? .8 * player.vx * S / Math.max(.5, CF.follow) : 0); /* (no framing a fight any more: the camera's on you alone, the user 2026-11-01: "the camera shouldn't follow enemies. right now i was not moving and an enemy bounced in an our of the screen and the camera jerked back and forth") */
-    const tx = hideout ? X(hideout.cx) : cine && cine.phase === "pan" ? clamp(X(cine.x), halfW - 1, X(WORLD) - halfW + 1) : camOn ? clamp(txc, halfW - 1, X(WORLD) - halfW + 1) : clamp(X(player.x) + player.face * 1.6 + tbLean() + peekLean(), halfW - 1, X(WORLD) - halfW + 1);   // (off: the game's own, 64 px ahead of the way you face)
+    const cm = camMid(); if (cm !== null) txc = cm;   // (C9's: held still between its two lookouts so both are seen, the user 2026-11-04 "more zoomed out than usual to fit these two towers")
+    const tx = hideout ? X(hideout.cx) : cine && cine.phase === "pan" ? clamp(X(cine.x), halfW - 1, X(WORLD) - halfW + 1) : camOn ? clamp(txc, halfW - 1, X(WORLD) - halfW + 1) : clamp(cm ?? X(player.x) + player.face * 1.6 + tbLean() + peekLean(), halfW - 1, X(WORLD) - halfW + 1);   // (off: the game's own, 64 px ahead of the way you face)
     camSit = lerp(camSit, hideout && player.sit ? 1 : 0, 1 - Math.exp(-dt * .8));
     camX = lerp(camX, tx, 1 - Math.exp(-dt * (camOn ? (moving ? CF.follow : CF.catchUp) : 4.5)));
     const gyC = hideout ? null : groundAt(player.x), onPl = player.onGround && player.plat, bridgeUp = onPl && player.plat.kind === "bridge" ? Math.max(0, Y(player.plat.y) - Y(gyC ?? GROUND) - 3.2) : 0;   // (bridgeUp: on a bridge the camera comes up so you're seen whole, the user 2026-10-25)
-    const hiP = Math.max(bridgeUp, gyC !== null && onPl && (STAGES[stage] || {}).authored ? Math.max(0, Y(player.plat.y) - Y(gyC) - 5.5) : 0);   // (standing up on a very high platform in the hand-made forest, e.g. Rose's post in C1: the camera comes up too)
+    const hiP = Math.max(bridgeUp, gyC !== null && onPl && ((STAGES[stage] || {}).authored || player.plat.kind === "tower" || (player.plat.kind === "lookout" && camMid() === null)) ? Math.max(0, Y(player.plat.y) - Y(gyC) - ((STAGES[stage] || {}).authored ? 5.5 : 3.4)) : 0);   // (standing up on a very high platform in the hand-made forest, e.g. Rose's post in C1: the camera comes up too)   // (and up on the beach's water tower and lookouts, 2026-11-04)
     // the camera moves within a screen only for where you stand (the user, 2026-10-25: "jjumping up normally shouldn't move the camera up or
     // throwing up an enemy either. only if you stand on a higher platform should the camera move within a screen"; and off a high platform
     // "it should just move back down"): up on a platform it comes up as far as it used to settle there; in the air it holds, or follows you down

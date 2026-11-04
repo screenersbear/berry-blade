@@ -2547,6 +2547,8 @@ Object.assign(STRIKES, {
     armF: [1.3, 1.34, 1.3], elbF: [.1, .08, .1], spF: [.15, .15, .15], fNx: [.44, .44, .44], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
   // her whistle to the team (the user, 2026-11-04: "have the characters do a whistle"): her free hand up to her mouth, her head up a touch, turned out to them
   whistle: { dur: 1.2, openHand: true, keys: PT({ lean: [.02, .03, .02], twist: [.14, .14, .14], headRot: [-.1, -.12, -.1], armB: [1.45, 1.48, 1.45], elbB: [2.5, 2.5, 2.5], spB: [.3, .3, .3] }) },
+  // a hand held down on a button (the beach's lookouts, the user 2026-11-04: "when they press it, they stay with their hand on it"): leant in over it, the free hand out and down flat on it, the head down to it
+  press: { dur: 1.2, openHand: true, keys: PT({ lean: [.16, .17, .16], bodyY: [-.06, -.07, -.06], twist: [.22, .23, .22], headRot: [.22, .24, .22], armB: [1.05, 1.07, 1.05], elbB: [.3, .3, .3], spB: [.12, .12, .12], armF: [.25, .26, .25], elbF: [.6, .6, .6] }) },
   // the heroines' shot (the user, 2026-11-04: "camila will stand defiantly with her gauntlet arm pointed forward, palm wide open and shooting a beam out of her hand"):
   // chest out, leant back a touch, the gauntlet out straight and the hand bent back so the palm faces them (the game opens it: p.palm); the big hand the same, open
   beam_fist: { dur: 1.2, openHand: true, keys: PT({ lean: [-.1, -.12, -.1], arch: [-.14, -.16, -.14], bodyY: [-.14, -.16, -.14], twist: [-.2, -.2, -.2], headRot: [-.14, -.12, -.14],
