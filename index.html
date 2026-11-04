@@ -5992,7 +5992,7 @@ function voice(kind, chance = 1) {                    // the player's own voice:
   const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = L[i]; src.playbackRate.value = rand(.98, 1.02); g.gain.value = VOICE_VOL[kind] || .1;
   src.connect(g); g.connect(sfxBus); src.start(ac.currentTime); vox.src = src;
 }
-const VOICE_VOL = { attack: .09, hurt: .11, jump: .06, heal: .08, ko: .12 };
+const VOICE_VOL = { attack: .09, hurt: .11, jump: .06, heal: .08, ko: .12, fire: .1, burn: .1, healcall: .09 };   // (fire, burn, healcall: the pack's spoken lines, her calls for her commands, make_call_voices.py)
 const SFX = {
   meow(k = 1) { if (!live()) return; const t = ac.currentTime, o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain(), p = sfxPitch() * k;   // a sliding "mi-aow": a buzzy voice through a moving vowel
     o.type = "sawtooth"; o.frequency.setValueAtTime(560 * p, t); o.frequency.linearRampToValueAtTime(820 * p, t + .14); o.frequency.linearRampToValueAtTime(500 * p, t + .5);
@@ -13074,8 +13074,8 @@ function cheerFx(p, dt) {                             // (her energy off her han
 // prioritized"): the next of them leads (tLead, teamAtk): its the △ special, its power on the rest's blows, its baddy the one △ has them both on, the first pick when they split
 const pName = P => P.kind === "ally" ? P.a.A.name : P.kind === "ej" ? (EJ_DEF || {}).name || "EVIL JUNE" : "";
 function leadSwap(p, L) {
-  if (L.length < 2) { heroNo(p, L.length ? "JUST THE ONE" : ""); return; }
-  const A = teamAtk(L), N = A[1], q = N.q, H = (q.rig && q.rig.heightPx) || 80, col = partCol(N); tLead = q;
+  const A = teamAtk(L); if (A.length < 2) { heroNo(p, L.length ? "JUST THE ONE" : ""); return; }   // (two along but one of them the healer: one attacker, no one to swap to. It was L.length, and threw every frame till you regrouped: found 2026-11-04)
+  const N = A[1], q = N.q, H = (q.rig && q.rig.heightPx) || 80, col = partCol(N); tLead = q;
   A[0].q.pcharge = 0; Object.assign(teamB[1], { t: 0, full: false, said: false });   // (a △ charge going: the new one's from nothing)
   popText(q.x, q.y - H - 34, (pName(N) || "THIS ONE") + " LEADS"); glowGhost(q, col); q.uniT = Math.max(q.uniT || 0, .6); q.uniCol = col; q.tagT = Math.max(q.tagT || 0, 1.2);
   if (tFocus) { const e = focusPick(L, teamAtk(L)); tFocus.e = e; if (e) focusOn(L, e); }   // (△ had them both on one: the new lead's now)
@@ -13096,12 +13096,13 @@ function cmdPoint(p, L) {
 function cmdPointTick(p, dt) { if (!(p.cmdPt > 0)) return; p.cmdPt -= dt; p.vx = approach(p.vx, 0, 3000 * dt); if (p.cmdPt <= 0 || !p.onGround || p.hurtT > 0) { p.cmdPt = 0; if (!p.point) p.pointKind = null; } }
 const CRY = { camila: { together: ["TOGETHER!", "AGAIN!", "HIT THEM HARD!"], power: ["POWER UP!"], now: ["NOW! LET IT RIP!"], split: ["SPLIT UP!", "TAKE ONE EACH!"], hug: ["GROUP HUG!"], regroup: ["TOGETHER, YOU TWO!"], five: ["UP TOP!"], spread: ["SPREAD OUT!"], lead: ["YOU LEAD!", "YOUR TURN UP FRONT!"], cheer: ["YOU CAN DO IT!", "GO GET THEM!"], rest: ["COVER ME!", "CATCHING MY BREATH!"], heavy: ["THIS ARM IS HEAVY..."], focus: ["THAT ONE! BOTH OF YOU!", "GANG UP ON IT!"] },
   rose: { together: ["ALL TOGETHER!", "AGAIN!", "GET THEM!"], power: ["CHARGE IT UP!"], now: ["NOW! GO, GO, GO!"], split: ["SPLIT UP!", "EVERYBODY PICK ONE!"], hug: ["HUG IT OUT!"], regroup: ["STICK TOGETHER!"], five: ["HIGH FIVE!"], spread: ["SPREAD OUT, EVERYBODY!"], lead: ["TAKE THE LEAD!", "YOU'RE UP FRONT!"], cheer: ["I BELIEVE IN YOU!", "SHOW THEM!"], rest: ["COVER ME A SEC!", "BREATHER!"], heavy: ["THIS SWORD WEIGHS A TON..."], focus: ["BOTH ON THAT ONE!", "TOGETHER ON IT!"] } };   // (cries.js: the same lines in their voices, cries1102.sh)
-const CRY_VOL = .5, CRY_VOICE = false; let cryB = { t: 0 }, cryN = {};   // (CRY_VOICE: the lines heard in their voices, cries.js; off since 2026-11-03, the user: "too literal and long")
+const CRY_VOL = .5, CRY_VOICE = false, CRY_SND = { split: "attack", together: "attack", focus: "attack", cheer: "attack", regroup: "jump", lead: "jump", five: "jump", rest: "heal", heavy: "hurt", hug: "healcall", now: "attack" };   // (no "hellstorm" for "now": the user, 2026-11-04, "dont use hell lines")   // (CRY_SND: each command's sound, her own CC0 takes, voices.js (the user, 2026-11-03 late night: "can we check the voice pack for camila's current voices and add some of those to her commands? they shouldnt be ai generated script, just sound effects we find. same for rose?"))
+ let cryB = { t: 0 }, cryN = {};   // (CRY_VOICE: the lines heard in their voices, cries.js; off since 2026-11-03, the user: "too literal and long")
 function cry(k, i) {                                  // her line for it (i: which; none, the next in turn), heard and in a bubble over her
   const p = player, who = rig && VOICE_OF[rig.id], T = who && CRY[who] && CRY[who][k]; if (!p || !T) return;
   if (i === undefined) i = (cryN[k] = ((cryN[k] ?? -1) + 1)) % T.length;
   const el = $("cryB"); if (el) { el.textContent = T[i]; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); cryB.t = 1.1; cryTick(0); }
-  if (!CRY_VOICE) return;   // (no voices for now: the bubble only)
+  if (!CRY_VOICE) { if (CRY_SND[k]) voice(CRY_SND[k]); return; }   // (not the made-up lines (cries.js, off): a take of her own from the voice pack, CRY_SND)
   if (vox.state === "idle") voiceInit(); const L = vox.bank[who + "_cry_" + k], b = L && L[i]; if (!b || !live() || !sfxOn) return;
   if (vox.src) try { vox.src.stop(); } catch (e) { }
   const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = CRY_VOL; src.connect(g); g.connect(sfxBus); src.start(ac.currentTime); vox.src = src;
@@ -13122,9 +13123,9 @@ function partInput(dt) {                             // the buddy button: a pres
     if (i === 0) { B.on = false; B.hold = false; return; }   // (the first button's the block now: its partner, the defender, answers to the guard, defendStep)
     if (i === 2) { lineBtn(B, ok && held.part(2), dt); return; }   // (□: the line's order, not a buddy's button (two along at most since 2026-11-03))
     const on = ok && held.part(i), P0 = L[i] || (L.length === 1 ? L[0] : null), P = P0 && !P0.q.worn && !(P0.kind === "ally" && P0.a && P0.a.A.heal) ? P0 : null, q = P && P.q;   // (the healer: not on your attack button)   // (one along: it's on this one too)   // (worn out: its button does nothing)   // (back again since 2026-11-03 late, the user, 2026-11-03 late: "I keep going back and forth on this but let's go back to where the second buddy was just the blocker with his passive ability and only one was the blocker")
-    if (on && !B.on) { B.t = 0; B.full = false; if (q && !bl) { partInT = time; postClear(P); q.tagT = Math.max(q.tagT || 0, 1); partPressT = time; partCommand(P, "tap", true); } }   // (while you block: nothing at all, 2026-11-03 late)   // (a press: its next blow)
+    if (on && !B.on) { B.t = 0; B.full = false; if (q && !bl) { partInT = time; postClear(P); q.tagT = Math.max(q.tagT || 0, 1); partPressT = time; partCommand(P, "tap", true); if (budOwn(P, "fire") && !archOfP(P) && time - (vox.fireT ?? -9) > 2.5) { vox.fireT = time; voice("fire"); } } }   // (Rink's fire: she calls it, "FIRE!", not every press)   // (while you block: nothing at all, 2026-11-03 late)   // (a press: its next blow)
     if (on && q && !bl && !q.fleap) { B.t += dt; const k = clamp((B.t - PART_HOLD) / BUD_CHARGE, 0, 1); q.pcharge = k; if (k >= 1 && !B.full) { B.full = true; SFX.jcharge(); } }   // (filling: the orb round it, as yours, syncBudAura)
-    if (B.on && !on && B.full && q && ok && !bl) { const AR = archOfP(P); if (!(AR && AR.charge && AR.charge(P))) budLeap(P); }   // (an archetype's charge special, else the world's leap)   // (let go full: its charge move)
+    if (B.on && !on && B.full && q && ok && !bl) { const AR = archOfP(P); if (!(AR && AR.charge && AR.charge(P))) { budLeap(P); if (budOwn(P, "fire")) voice("burn"); } }   // (his leap wrapped in fire: "BURN!")   // (an archetype's charge special, else the world's leap)   // (let go full: its charge move)
     // (block + a buddy button held was the blocker's charge, its electric tackle (defZap, left in): off, 2026-11-03 late. The user: "remove any button inputs paired with block for now"; the back-step stays)
     if (!on || bl) { B.full = false; B.t = 0; if (q) q.pcharge = 0; }
     B.on = on;
@@ -13146,7 +13147,7 @@ function lineSet(k, home) {                          // the line in this order n
   if (!n) { heroNo(p, "NO ONE ALONG"); return; }
   const T = n > 1 ? LINE2 : LINE1, was = lineK % T.length; lineK = ((k % T.length) + T.length) % T.length;
   const O = T[lineK], H = (p.rig && p.rig.heightPx) || 92, nm = x => x === "h" ? "YOU" : pName(L[x]) || "BUDDY";
-  popText(p.x, p.y - H - 34, home && was === 0 ? "YOU'RE IN FRONT" : O.map(nm).join(" · "), 1400); SFX.confirm();
+  popText(p.x, p.y - H - 34, home && was === 0 ? "YOU'RE IN FRONT" : O.map(nm).join(" · "), 1400); SFX.confirm(); voice("jump");   // (a hup of hers with it)
   L.slice(0, 2).forEach((P, i) => { if (P.q) { P.q.tagT = Math.max(P.q.tagT || 0, 1); if (O[0] === i) glowGhost(P.q, partCol(P)); } });   // (the one out front: a flash of its colour)
   partInT = time;
 }
