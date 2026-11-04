@@ -105,6 +105,23 @@
     background: var(--y); color: var(--s); border: 3px solid var(--s); box-shadow: 5px 5px 0 var(--s); font: 15px/1.3 "Bungee", sans-serif; text-transform: uppercase;
     text-align: center; padding: 8px 14px 6px; opacity: 0; transition: opacity .3s, transform .3s; }
   #voCap.show { opacity: 1; transform: translate(-50%, 0); }
+  #tutBox { position: fixed; inset: 0; z-index: 57; display: flex; align-items: center; justify-content: center; background: rgba(20, 28, 36, .42); opacity: 0; pointer-events: none; transition: opacity .25s; }   /* (the beach tutorial's word, the game stopped under it: 2026-11-03) */
+  #tutBox.show { opacity: 1; pointer-events: auto; }
+  #tutBox.top { align-items: flex-start; padding-top: 3vh; }   /* (B6's word: up top, you below it in close) */
+  #tutBox .tb { max-width: min(84vw, 660px); background: var(--y); color: var(--s); border: 3px solid var(--s); box-shadow: 6px 6px 0 var(--s); font: 19px/1.4 "Bungee", sans-serif; text-transform: uppercase; text-align: center; padding: 16px 20px 12px; transform: translateY(10px) scale(.96); transition: transform .25s; }
+  #tutBox.show .tb { transform: none; }
+  #tutBox .tgo { margin-top: 10px; font-size: 11px; opacity: 0; transition: opacity .3s; }
+  #tutBox.go .tgo { opacity: .7; }
+  #tutBox .key, #tutPop .key { display: inline-block; background: var(--s); color: var(--y); padding: 1px 7px 0; margin: 0 2px; border-radius: 4px; }
+  #tutPop { position: fixed; left: 50%; top: 17%; transform: translate(-50%, -8px); z-index: 56; pointer-events: none; width: max-content; max-width: min(84vw, 640px); background: var(--y); color: var(--s); border: 3px solid var(--s);
+    box-shadow: 5px 5px 0 var(--s); font: 16px/1.3 "Bungee", sans-serif; text-transform: uppercase; text-align: center; padding: 8px 14px 6px; opacity: 0; transition: opacity .3s, transform .3s; }   /* (its pop: the game going on under it) */
+  #tutPop.show { opacity: 1; transform: translate(-50%, 0); }
+  #tutArr { position: fixed; left: calc(14px + var(--upW, 22px) + 10px); top: 24px; z-index: 58; font: 30px/1 "Bungee", sans-serif; color: var(--y); -webkit-text-stroke: 2px var(--s); opacity: 0; pointer-events: none; }
+  body.tutUp #tutArr { opacity: 1; animation: tutPoke .6s ease-in-out infinite alternate; }
+  body.tutUp #upBar { z-index: 58; animation: tutGlow .9s ease-in-out infinite alternate; }   /* (B3: the uprising bar, lit up over the dark) */
+  @keyframes tutGlow { from { filter: drop-shadow(0 0 3px #ffd203); } to { filter: drop-shadow(0 0 14px #ffd203) drop-shadow(0 0 4px #fff); } }
+  @keyframes tutPoke { from { transform: translateX(0); } to { transform: translateX(10px); } }
+  @media (pointer: coarse), (max-height: 560px) { #tutBox .tb { font-size: 14px; max-width: min(62vw, 520px); } #tutPop { font-size: 12px; max-width: min(56vw, 520px); } }
   b.who { display: inline-block; margin-right: 6px; padding: 1px 6px 0; background: var(--s); color: var(--y); font-weight: normal; }   /* (who's telling it: Camila or Rose) */
   #vlList { width: min(84vw, 640px); max-height: 52vh; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; margin: 4px 0 10px; }
   #vlList .vl { display: flex; align-items: flex-start; gap: 8px; text-align: left; font: 13px/1.3 "Bungee", sans-serif; text-transform: uppercase; padding: 8px 10px 6px; }
@@ -849,6 +866,7 @@
   <div class="btns" id="raBtns"><button data-a="yes">PULL OVER</button><button data-a="no">DRIVE ON</button></div>
 </div></div>
 <div id="voCap" aria-live="polite"></div>
+<div id="tutBox"><div class="tb"><div class="tt"></div><div class="tgo"></div></div></div><div id="tutPop" aria-live="polite"></div><div id="tutArr">◀</div>
 <div id="pop">PARRY!</div><div id="cryB"></div>
 <div id="select" class="hidden"><div class="lockup big"><div class="blk" id="stitle">CHOOSE</div><div class="bar" id="ssub">YOUR CHARACTER</div></div>
   <div class="foot"><div id="blurb"></div><div id="roster"></div><div id="tools"><button id="bBack">‹ BACK</button> <button id="bEdit">EDIT CHARACTERS</button> <button id="bAch">ACHIEVEMENTS</button> <button id="bLvl">LEVEL SELECT</button></div><small id="shint"></small></div></div>
@@ -1045,9 +1063,9 @@ const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a
   if (stage === 0 && STITCH.has(world) && !stronghold && (worldStack.length || prevWorld(world) >= 0)) return "back";   // (a stitched world's first room: off its left, always back out of the world, however you came in: the waves' D1, 2026-10-25)
   if (entrySide === "top" || entrySide === "bottom") return null;
   return trail.length > 1 ? trail[trail.length - 2] : worldStack.length || prevWorld(world) >= 0 ? "back" : null; };
-const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !roomBossDown(stage)) || !!S0.end || (!!S0.gift && !!story && !story.armed); };   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
-const backOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(-1) : leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock;   // the way you came in is always open; the other way needs the room cleared
-const rightOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(1) : !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
+const mustClear = () => { const S0 = STAGES[stage]; return (S0.toWorld !== undefined && !S0.exitLeft && !roomBossDown(stage)) || !!S0.end || (!!S0.gift && !!story && !story.armed) || (world === 9 && !!S0.tut && !!((WORLDS[9].roster || [])[stage] || []).length); };   // (the beach tutorial's: its berries first, 2026-11-03)   // (the only ways on that need the room cleared: out of the world, past its boss; and the beach's bep room, in a story)
+const backOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(-1) : leftOf() !== null && (exitOpen || entrySide === "left" || leftOf() !== "out" || roomBossDown(stage)) && !(leftOf() === "out" && doorBarred(stage)) && !(STAGES[stage].noLeft && !stronghold) && !(bepEv && bepEv.mode !== "escortBack" && bepEv.mode !== "escort") && !hideout && !cine && !stronghold && !ejFight() && !patrolLock && !tutLock();   // the way you came in is always open (not in the beach tutorial till it's clear); the other way needs the room cleared
+const rightOpen = () => STAGES[stage] && STAGES[stage].big ? bigOpen(1) : !(STAGES[stage].noRight && !stronghold) && !(STAGES[stage].mini && !miniBeaten(STAGES[stage].mini) && !stronghold) && !(stronghold && stronghold.screen === SH_ROOMS.length - 1) && (exitOpen || entrySide === "right" || !mustClear()) && !ejFight() && !patrolLock && !tutLock() && !(STAGES[stage].toWorld === 12 && !STAGES[stage].exitLeft && !kpOpen()) && !(STAGES[stage].toWorld !== undefined && !STAGES[stage].exitLeft && doorBarred(stage));   // (a door barred till the next world's boss is beaten, 2026-10-30)   // (King P's road: shut till most of the island's bosses are beaten)   // (clearing the room isn't needed to go on: the user, 2026-10-20)
 const ropeOpen = L => !transit && !hideout && !stronghold && !cine && !ejFight() && !patrolLock;   // (a rope ladder's always open: it never leads out of the world)   // a rope ladder on to a new room needs this one cleared (the one you came by is always open)
 const entryX = () => { const S0 = STAGES[stage], dn = S0.downX !== undefined ? S0.downX + (S0.downWall || -1) * 40 : null;   // where you come back in after a knockout: the way you came
   if (entrySide === "right") return WORLD - 130; if (entrySide === "bottom" && S0.arriveX !== undefined) return S0.arriveX; if (entrySide === "bottom" && dn !== null) return dn; if (entrySide === "top" && S0.upX !== undefined) return S0.upX;
@@ -5447,7 +5465,7 @@ function authorCrux() {
 function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its platforms, its own trees or rocks, its set pieces (into `level`)
   setPlatforms(s); WP = wPlace(s);
   const c = STAGES[s].col ?? STAGES[s].h;
-  level = STAGES[s].home ? buildHome(h, s) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees
+  level = typeof STAGES[s].home === "string" ? buildHome(h, s) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees   // (home a string: the castle's rooms. The beach's house, home: true, was being built as one of them, a hall of wood: 2026-11-03)
   level.s = s; level.w = world; level.h = h;
   if (LADDERS.length) level.objs.push(...buildLadders());
   if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
@@ -6175,6 +6193,7 @@ addEventListener("keydown", e => {
   if (itemsUp) { e.preventDefault(); if (!e.repeat) { const it = ITEMS.find(q => q.key === e.code); if (it) useItem(it.k); else if (e.code === "Escape") closeItems(); } return; }   // the items, held open: their keys
   if (e.code === "Slash" && !e.repeat && mode === "play" && openItems()) { e.preventDefault(); return; }
   if (menuUp) { menuKey(e); return; }                  // the main menu, the save files, "who are you?", the gear's menu, the world map
+  if (tutHold) { e.preventDefault(); if (!e.repeat) tutGo(); return; }   // (the beach tutorial's word: any key, after a moment)
   if (comicUp) { if (!e.repeat) { e.preventDefault(); if (tale && ["Escape", "Enter"].includes(e.code)) taleSkip(); else comicNext(); } return; }     // the bep's comic page: any key (the story's: Esc / Enter skips it)
   if (rideS && rideS.play && rideS.road.ev.cine && !e.repeat && e.code === "Enter") { e.preventDefault(); rideSkip(); return; }   // (stopped for the view: Enter, back in La Guagua; the rest as ever)
   if (rideS && rideS.ph !== "lift" && !rideS.play) { e.preventDefault(); if (!e.repeat && ["Enter", "Escape", "Space"].includes(e.code)) rideSkip(); return; }   // (on La Guagua: only skipping)
@@ -6303,6 +6322,7 @@ function pollPad() {
       if (pr("j")) { const q = B[modalSel]; modalWas = false; if (q) q.click(); else onReset(); }   // (no buttons showing: on, as ever)
       padPrev = { ...pad }; return; }
     if (!modalOpen) modalWas = false; }
+  if (tutHold) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a) || (pad.st && !padPrev.st)) tutGo(); padPrev = { ...pad }; return; }
   if (comicUp) { if (tale && pad.st && !padPrev.st) taleSkip(); else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
   if (rideS && rideS.play && rideS.road.ev.cine && !menuUp && pad.st && !padPrev.st) { rideSkip(); padPrev = { ...pad }; return; }
   if (rideS && rideS.ph !== "lift" && !rideS.play && !menuUp) { if ((pad.st && !padPrev.st) || (pad.j && !padPrev.j)) rideSkip(); padPrev = { ...pad }; return; }
@@ -7664,7 +7684,7 @@ const spawnRoom = () => { const c = story && story.check, e = story && story.ent
 function writeSave() {
   if (pro || (rideS && rideS.road) || (STAGES[stage] && STAGES[stage].quick)) return;   // (not in the middle of the prologue: the file starts in the woods; nor on the road between worlds; nor in QUICK PLAY)
   if (!story || !story.char) return; const all = loadSaves();   // (not till you've said who you are)
-  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, phones: story.phones || null, tapes: story.tapes || [], cons: !!story.cons, carts: story.carts || [], bgears: story.bgears || null, bgpow: story.bgpow || null, marks: story.marks || null, phonesRep: !!story.phonesRep, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], duo: story.duo || [], at: Date.now() };
+  all[story.slot] = { v: 1, layout: LAYOUT, seen: Object.fromEntries(Object.entries(mapSeen).map(([w, s]) => [w, [...s]])), char: story.char, armed: !!story.armed, t: Math.round(story.t), w: world, s: spawnRoom(), uprise: story.uprise || {}, bt: story.bt || null, rests: story.rests || {}, tot: story.tot || {}, paths: story.paths || [], hubs: story.hubs || {}, hideouts: story.hideouts || {}, freed: story.freed || {}, beat: story.beat || null, beat0: story.beat0 || 0, lastDoor: story.lastDoor || {}, keys: story.keys || {}, glos: story.glos || 0, bag: story.bag || null, got: story.got || [], cats: story.cats || [], dogs: story.dogs || [], axos: story.axos || [], axo2s: story.axo2s || [], maps: story.maps || [], itemTip: !!story.itemTip, tut: story.tut || [], tale: !!story.tale, vo: story.vo || [], cards: story.cards || [], gear: story.gear || null, phones: story.phones || null, tapes: story.tapes || [], cons: !!story.cons, carts: story.carts || [], bgears: story.bgears || null, bgpow: story.bgpow || null, marks: story.marks || null, phonesRep: !!story.phonesRep, cat: tamed ? tamed.w : null, pet: tamed ? petSp(tamed) : null, cat2: tamed2 ? tamed2.w : null, pet2: tamed2 ? petSp(tamed2) : null, ally: allies[0] ? allies[0].A.w : null, allyId: allies[0] ? allies[0].A.id : null, allies: allies.map(a => a.A.id), where: WORLDS[world].name, visited: [...story.visited], duo: story.duo || [], at: Date.now() };
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(all)); } catch { }
 }
 const hm = t => { t = Math.floor(t || 0); return Math.floor(t / 3600) + "H " + String(Math.floor(t / 60) % 60).padStart(2, "0") + "M"; };   // time played, in hours and minutes (the user, 2026-10-20)
@@ -8050,7 +8070,7 @@ function storyLoad(slot, q) { if (q.layout === 14) { const dw = o => { const r =
   if (q.layout !== LAYOUT && q.w !== 9) q = { ...q, s: 0, rests: {}, hubs: {}, lastDoor: {}, seen: {}, hideouts: {} };   // (an older save: its world from the start, its map and checkpoints anew)
   { const S0 = WORLDS[q.w] && WORLDS[q.w].stages; if (S0 && q.s != null && (!S0[q.s] || S0[q.s].cut)) q = { ...q, s: 0 }; }   // (saved in a room that's gone since, the forest's A8 or C8 (2026-10-25): its world from the start)
   mapSeen = Object.fromEntries(Object.entries(q.seen || {}).map(([w, a]) => [w, new Set(a)])); tamed = q.cat != null && petDef(q.pet || "cat", q.cat) ? { w: q.cat, sp: q.pet || "cat", r: wildRig(q.cat, q.pet || "cat") } : null;
-  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } tamed2 = null; alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), duo: q.duo || [], uprise: q.uprise || {}, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null, phones: q.phones || null, tapes: q.tapes || [], cons: !!q.cons, carts: q.carts || [], bgears: q.bgears || null, bgpow: q.bgpow || null, marks: q.marks || null, phonesRep: !!q.phonesRep }; storyRun(q.w, fixRests(q.w, q.s), false); }   // (tamed2 dropped: one pet now, 2026-11-03, a second stays home)
+  tamed2 = q.cat2 != null && petDef(q.pet2 || "cat", q.cat2) ? { w: q.cat2, sp: q.pet2 || "cat", r: wildRig(q.cat2, q.pet2 || "cat") } : null; if (!tamed && tamed2) { tamed = tamed2; tamed2 = null; } tamed2 = null; alliesOff(); allyBring = q.allies && q.allies.length ? q.allies : q.ally != null ? [q.allyId || q.ally] : null; story = { slot, char: q.char, armed: !!q.armed || q.w !== 9, t: q.t || 0, visited: new Set(q.visited || [q.w]), duo: q.duo || [], uprise: q.uprise || {}, bt: q.bt || null, tot: q.tot || {}, paths: q.paths || MAP_LINKS.filter(([a, b]) => (q.visited || []).includes(a) && (q.visited || []).includes(b)).map(([a, b]) => linkKey(a, b)), rests: q.rests || {}, hubs: q.hubs || {}, hideouts: q.hideouts || {}, freed: q.freed || {}, beat: q.beat || undefined, lastDoor: q.lastDoor || {}, keys: q.keys || {}, glos: q.glos || 0, beat0: q.beat ? q.beat0 || 0 : Math.max(0, (q.visited || []).filter(w => w !== 9).length - 1), bag: q.bag || undefined, got: q.got || [], cats: q.cats || (q.cat != null && (q.pet || "cat") === "cat" ? [q.cat] : []), dogs: q.dogs || [], axos: q.axos || [], axo2s: q.axo2s || [], maps: q.maps || [], itemTip: !!q.itemTip, tut: q.tut || [], tale: !!q.tale, vo: q.vo || [], cards: q.cards || [], gear: q.gear || null, phones: q.phones || null, tapes: q.tapes || [], cons: !!q.cons, carts: q.carts || [], bgears: q.bgears || null, bgpow: q.bgpow || null, marks: q.marks || null, phonesRep: !!q.phonesRep }; storyRun(q.w, fixRests(q.w, q.s), false); }   // (tamed2 dropped: one pet now, 2026-11-03, a second stays home)
 function fixRests(w0, s0) {                        // rest stops saved before the worlds grew (2026-10-21) name rooms that aren't rest stops now: each moves onto one
   let s1 = s0; const colOf = q => +String(q.cell || "").slice(1) || 0;   // that is, in order along the world, and a start at one moves with it
   for (const w in story.rests || {}) { const S0 = WORLDS[w] && WORLDS[w].stages, L = story.rests[w] || []; if (!S0) continue;
@@ -8073,7 +8093,7 @@ function storyRun(w, s, fresh) {                     // into a story run (a new 
     mode = "play"; setScreen(s); beginPlay(); beachOpening = false;
     roster.forEach(r => { if (r !== rig) r.root.visible = r.shadow.visible = false; });
     if (fresh && w === 9 && s === 0) startOpening();   // (a new game: Camila and Rose on the beach, and Glos coming down)
-    else if (w === 9 && story.char) kidPartner();       // (the other one, alongside you on the beach)
+    else if (w === 9 && story.char && !story.armed) kidPartner();       // (the other one, alongside you on the beach; not in the tutorial: armed, a team of buddies)
     story.visited.add(w); if (w !== 9 && !teamCount() && allyBring === null) teamFresh = true; writeSave();   // (no one along, a new game or an old save: the world's two)
     if (hideNext) { hideNext = false; if (STAGES[stage].bep) enterHideout(); }   // (from the map: straight on in)
   }, WORLDS[w].name);
@@ -8394,7 +8414,7 @@ function openingPicked(id) {                         // you're June (or Chase): 
 function endOpening() { const o = opening; if (!o) return; finishOpening(); o.kids.forEach(k => { actors.remove(k.fruit); if (k.r !== rig) k.r.root.visible = k.r.shadow.visible = false; }); opening = null; $("skipHint").classList.remove("show"); }
 let pro = null, proCam = null;                       // a new game's prologue (the user, 2026-10-26: "when you hit new game, play beach sounds. screen is black the whole time. camile starts the voice over ... then it starts to fade into the beach scene ... then it fades to black again. then it fades into a scene of camila and rose on la guagua being driven by one of the berry buddies across a high way next to a sandy beach road, sun setting in the background. the opening narration plays with the comic strips appearing over the sky above la guagua"; "at the end of her voice over, fade to black as the car speeds up out of frame and then the berry woods title appears and the first map beings"): ph black · in · beach · out · bus · pick · go · title
 const GUAGUA_B = { body: "#e8a5b0", roof: "#e8a5b0", belt: "#93c393", beltDk: "#6b9898", arch: "#6b9898", bed: "#e8a5b0", rail: "#93c393" };   // (La Guagua's colours: the user's pick, 2026-10-26, "B: pink top")
-const proFrozen = () => !!pro && (!!pro.road || (pro.ph === "title" && !pro.dropped));   // (on the road, and under the black before the woods: the game waits, the prologue moves itself)
+const proFrozen = () => !!pro && (!!pro.road || (pro.ph === "title" && !pro.dropped) || pro.ph === "tutOut");   // (on the road, and under the black before the woods: the game waits, the prologue moves itself)
 function startPrologue() {
   pro = { ph: "black", t: 0, a: 1 }; const B = $("proBlack"); B.style.opacity = 1; B.classList.add("show"); $("proTitle").classList.remove("on");
   $("skipHint").classList.add("pro"); voLoad(); taleLoad(); guaguaLoad();
@@ -8409,8 +8429,9 @@ function proTick(dt) {                               // (every frame, paused or 
   else if (P.ph === "out") { fade(1, 1.3); if (P.a >= 1 && P.t > 1.6) { proBus(); P.ph = "bus"; P.t = 0; } }
   else if (P.ph === "bus") { fade(0, 2.4); if (!P.told && P.t > 2.2) { P.told = true; startTale(proPickNow, { sky: true }); } }   // the story so far, its panels over the sky above them
   else if (P.ph === "go") { const R = P.road; if (P.t > .35) { R.v = Math.min(R.v + 15 * dt, 42); R.busX += R.v * dt; } if (P.t > 1.2) fade(1, .9); if (P.a >= 1 && P.t > 2.3) { P.ph = "title"; P.t = 0; } }   // off it goes, out of the picture (no BERRY WOODS on the black after it: 2026-10-30)
-  else if (P.ph === "title") { if (!P.built && P.t > .9) { P.built = true; proWoods(); }   // the Berry Woods on the black, the forest built under it
-    if (P.built && !transit && P.t > 1.6) { if (!P.dropped) { P.dropped = true; $("proTitle").classList.remove("on"); startIntro(); } fade(0, 1.5); if (P.a <= 0) proDone(); } }   // (the two of them drop in as it lifts)
+  else if (P.ph === "tutOut") { fade(1, 1.1); if (P.a >= 1 && P.t > 1.3) { P.ph = "title"; P.t = 0; } }   // (off the end of the beach, its tutorial done: to black, then the woods)
+  else if (P.ph === "title") { if (!P.built && P.t > .9) { P.built = true; P.woods ? proWoods() : proBeach(); }   // the beach tutorial on the black (since 2026-11-03), or after it the Berry Woods, built under it
+    if (P.built && !transit && P.t > 1.6) { if (!P.dropped) { P.dropped = true; $("proTitle").classList.remove("on"); P.woods ? startIntro() : tutStart(); } fade(0, 1.5); if (P.a <= 0) proDone(); } }   // (the two of them drop into the woods as it lifts)
   if (P.road) roadTick(P.road, dt);
 }
 function proSkip() {                                 // (Enter / Esc / Start, or SKIP, before the road: on to La Guagua)
@@ -8426,14 +8447,136 @@ function proBus() {                                  // behind the black: the be
 }
 function proPickNow() { const P = pro; if (!P) return; P.ph = "pick"; P.t = 0; paused = true; if (P.road) P.road.zoomIn = true; beachPick(); }   // the story told: in close, and who are you?
 function proPicked(id) { const P = pro; if (!P) return; story.char = id; sel = roster.findIndex(r => r.id === id); P.ph = "go"; P.t = 0; SFX.whoosh(); }
-function proWoods() {                                // under the black: the road let go, the forest's first room
-  const R = pro.road; pro.road = null; disposeRoad(R); proCam = null; paused = false;
-  story.visited = new Set([0]); story.tale = true; story.armed = true; story.vo = [...new Set([...(story.vo || []), "glos"])];
+function proWoods() {                                // under the black: the forest's first room (after the beach tutorial since 2026-11-03; the road let go, before)
+  const R = pro.road; pro.road = null; if (R) disposeRoad(R); proCam = null; paused = false;
+  story.visited = new Set([...(story.visited || []), 0]); story.tale = true; story.armed = true; story.vo = [...new Set([...(story.vo || []), "glos"])];
   storyRun(0, 0, true);
 }
 function proDone() { pro = null; $("proBlack").classList.remove("show"); $("skipHint").classList.remove("pro"); writeSave(); }
 function proAbort() {                                // (off to the title in the middle of it)
   if (!pro) return; const R = pro.road; pro = null; if (R) disposeRoad(R); proCam = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("skipHint").classList.remove("pro");
+}
+// ── the beach tutorial (the user, 2026-11-03: "after the opening cutscene to start the game, we will have this tutorial area. it will start at the beach house that
+// was in the opening cutscene and each room will expand on the beach and add to it"; the drawings IMG_1198 and IMG_1199). C1 the house; C2 three of them and two
+// T-platforms ("hold the jump button" pops up as you near the first), up off the second onto B2's ledge and on to B3, a buddy sat waiting and another already fighting
+// (then the uprising bar, lit up); B4 the long boardwalk ("press R ... divide and conquer"); B5 the two platforms ("hold R and press a direction"); B6 a row of them, the
+// weapon's weight told while the camera goes slowly in on you; B7 Evil June, over your head into the middle. Every room shut till its berries are all won back ("don't let
+// the player leave any of the rooms in this opening world until they defeat all the berries in it"). Then off its end into the woods, as a new game had them before
+const TUT_UP = { goal: 52, start: .25, b6: .76, cap: .95 };   // (the beach's own uprising: from a quarter, so the weapon grows twice on the way, 50% in B4 and 75% by B5's end; at least 76% walking into B6, "force the uprising bar to grow faster"; never full: no showdown here)
+const TUT_GO = 1.1;                                  // (a word up this long before a button takes it away: not skipped by a button still held)
+const TUT_TXT = {
+  up: () => "WHEN YOU'VE BROUGHT ENOUGH BERRIES ON YOUR SIDE, YOU CAN LIBERATE EACH AREA",
+  split: () => `PRESS ${tutTag("ch")} TO HAVE YOUR BERRY BUDDIES DIVIDE AND CONQUER.`,
+  lead: () => `WHEN SPLIT, HOLD ${tutTag("ch")} AND PRESS A DIRECTION TO LEAD YOUR BUDDIES UP, DOWN, FORWARD OR BEHIND YOU.`,
+  tired: () => `WHEN FIGHTING TOO LONG WITH THE FULLY GROWN WEAPON, ROSE + CAMILA WILL WEAR OUT. IN THESE MOMENTS, HAVE YOUR FRIENDS DEFEND YOU, AND PRESS AND HOLD ${tutTag("sq")} TO REGAIN YOUR COMPOSURE WHILE THEY ARE FIGHTING ON THEIR OWN.` };   // (□ held: a tap swaps who leads)
+const TUT_VO = { C2: "tut1", B3: "tut2", B4: "tut3", B7: "tut5" };   // (B6's, tut4, as it stops: tutB6)
+const btS = () => story ? (story.bt || (story.bt = { seen: [] })) : (window.__bt || (window.__bt = { seen: [] }));   // (the tutorial's place: in the save)
+const btSeen = id => (btS().seen || []).includes(id);
+const btMark = id => { const S = btS(); if (!(S.seen || (S.seen = [])).includes(id)) S.seen.push(id); if (story) writeSave(); };
+const tutRoom = () => world === 9 && mode === "play" && !!STAGES[stage] && !!STAGES[stage].tut && !stronghold && !hideout;
+const tutExitHold = () => tutRoom() && !!STAGES[stage].tutBoss && (!btS().june || !!(ej && ej.tut));   // (B7: open only once Evil June's beaten and gone)
+const tutLock = () => tutRoom() && (!exitOpen || tutExitHold());   // (every way out shut: berries left in here)
+const tutKey = k => { const T = window.BERRY_TOUCH; return k === "ch" ? chgName() : k === "sq" ? (T ? "□" : padUse ? padName("tkl") : "V") : k === "j" ? (T ? "A" : padUse ? padName("j") : "X") : k; };
+const tutTag = k => `<span class="key">${tutKey(k)}</span>`;
+let tutHold = null, tutZoom = null;                  // (tutHold: a word up, the game stopped under it; quiet, the game stopped for a voice-over · tutZoom: B6's look in at you)
+const tutT = { s: -1, t: 0, bump: 0 };
+function proBeach() {                                // under the black: the road let go, and the beach again, by the house: the tutorial
+  const R = pro.road; pro.road = null; if (R) disposeRoad(R); proCam = null; paused = false;
+  story.visited = new Set([9]); story.tale = true; story.armed = true; story.vo = [...new Set([...(story.vo || []), "glos"])]; story.bt = { seen: [] };
+  const U = story.uprise || (story.uprise = {}); U[9] = Math.max(U[9] || 0, Math.round(upGoal(9) * TUT_UP.start));   // (a quarter of the way: "we have been fighting for some time now")
+  tutHold = null; tutZoom = null; tutT.s = -1; storyRun(9, 0, false);
+}
+function tutStart() { Object.assign(player, { x: 600, y: groundAt(600) ?? GROUND, vx: 0, vy: 0, face: 1, onGround: true, plat: null }); tutT.s = -1; }   // (by the house, as the black lifts)
+function tutEnd() {                                  // off the end of the beach, its tutorial done: into the black, and on into the woods as a new game had them
+  if (pro || transit) return; btS().done = true; if (story) writeSave();
+  pro = { ph: "tutOut", t: 0, a: 0, woods: true }; const B = $("proBlack"); B.style.opacity = 0; B.classList.add("show"); for (const k in keys) keys[k] = false;
+}
+function tutTick(dt) {                               // (every frame, paused or not, as the prologue's)
+  if (!story || world !== 9 || mode !== "play" || !player || pro || !STAGES[stage]) { if (tutHold) tutShut(); tutZoom = null; return; }
+  if (tutHold) { tutHold.t += dt; if (!tutHold.quiet) $("tutBox").classList.toggle("go", tutHold.t > TUT_GO); }
+  if (tutZoom) { const z = tutZoom; z.k = z.out ? Math.max(0, z.k - dt / .9) : Math.min(1, z.k + dt / 10); if (z.out && z.k <= 0) tutZoom = null; z.up = clamp((z.up || 0) + (tutHold && tutHold.id === "tired" ? dt : -dt) / .6, 0, 1); }   // (in over ten seconds; back out in under one)
+  if (paused || transit || pan || panFade > 0 || comicUp || modalOpen || menuUp || statsUp || player.dead || !STAGES[stage].tut) return;
+  const q = STAGES[stage], c = q.cell, p = player, said = id => (story.vo || []).includes(id) && !(vo && vo.id === id) && !voQ.includes(id);
+  if (tutT.s !== stage) { tutT.s = stage; tutT.t = 0; tutEnter(c); }
+  tutT.t += dt;
+  if (tutHold) { if (tutHold.quiet && c === "B6" && said("tut4")) tutShow("tired"); return; }   // (B6: her words said, then the word on it)
+  if (c === "C2" && !btSeen("jump")) { const T = PLATFORMS.filter(L => L.kind === "tee").sort((a, b) => a.x - b.x)[0]; if (T && p.x > T.x - 420) { btMark("jump"); tutPop(`HOLD THE JUMP BUTTON ${tutTag("j")}`, 5); } }
+  if (c === "B3" && !btSeen("up") && said("tut2")) tutShow("up");
+  if (c === "B4" && !btSeen("split") && said("tut3")) tutShow("split");
+  if (c === "B5" && !btSeen("lead") && p.x > 640) tutShow("lead");
+  if (c === "B6" && !btSeen("tired") && !tutZoom && (p.x > 300 || tutT.t > 1.6)) tutB6();
+  if (c === "B7" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
+  if (!btSeen("worn") && nrgOut(p)) { btMark("worn"); tutPop(`WORN OUT! LET YOUR FRIENDS FIGHT · HOLD ${tutTag("sq")} TO GET YOUR ENERGY BACK`, 5.5); }   // (the drawing's "when player gets tired ... show charge")
+  if (tutLock() && !ejFight() && p.hitWall && (p.x < 70 || p.x > WORLD - 70) && (tutT.bump -= dt) <= 0) { tutT.bump = 1.6; popText(p.x, p.y - 140, "WIN THEM ALL BACK FIRST!"); SFX.thud(); }   // (pushing at a shut way out)
+  else tutT.bump = Math.max(0, tutT.bump - dt);
+}
+function tutEnter(c) {                               // into one of its rooms
+  if (TUT_VO[c]) startVO(TUT_VO[c]);
+  if (c === "B3") tutBuds();
+  if (c === "B6" && !btSeen("tired")) { const U = upStore(), g = upGoal(9); if ((U[9] || 0) < g * TUT_UP.b6) { U[9] = Math.ceil(g * TUT_UP.b6); wpnByUprise(true); } }   // (75% by now, whatever's been won back: the weapon fully grown)
+}
+function tutB6() {                                   // B6, a few steps in (the buddies off you): the game stopped, the camera slowly in on you while she tells it; then the word
+  for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; tutZoom = { k: 0, out: false }; tutHold = { id: "zoom", t: 0, quiet: true }; startVO("tut4");
+}
+function tutBuds() {                                 // B3: a buddy sat waiting on the ledge at the left (up and with you as you reach it), another already fighting one of them below
+  const place = (A, x, y, plat, b) => { const r = allyRig(A), st = makeState(x, r);
+    Object.assign(st, { y, vy: 0, onGround: true, face: b ? Math.sign(b.x - x) || 1 : -1, sit: b ? 0 : 1, wave: 0, hopT: 0, php: PARTNER_HP, pinv: 9 }); if (plat) st.plat = plat;
+    const M = { kind: "ally", A, w: 9, own: true, r, st, b, t: 0, atkT: rand(.3, .8), hit: false, crew: crewOf(A, x, y), phase: b ? "duel" : "sit" };
+    if (b) { b.duel = M; M.hp0 = b.hp; b.dir = Math.sign(x - b.x) || -1; }
+    r.root.visible = r.shadow.visible = true; arrive.push(M); };
+  const A1 = ALLIES.find(a => a.id === "noro"), A2 = ALLIES.find(a => a.id === "doir"), free = () => TEAM_MAX - teamCount() - arrive.length;
+  if (A1 && !allyWith(A1) && !arrive.some(m => m.A === A1) && free() > 0) { const L = PLATFORMS.filter(q => q.x < 700).sort((a, b) => a.x - b.x)[0]; place(A1, L ? L.x + L.w / 2 : 400, L ? L.y : GROUND, L || null, null); }
+  if (A2 && !allyWith(A2) && !arrive.some(m => m.A === A2) && free() > 0) { const b = baddies.filter(meetFighter).filter(q => !q.plat && !q.duel).sort((a, c) => Math.abs(a.x - 900) - Math.abs(c.x - 900))[0];
+    if (b) { const x = clamp(b.x - 100, 120, WORLD - 120); place(A2, x, groundAt(x) ?? GROUND, null, b); } else place(A2, 900, groundAt(900) ?? GROUND, null, null); }
+}
+function tutShow(id) {                               // the game stopped, a word on the screen; a button (after a moment) to go on
+  btMark(id); for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
+  tutHold = { id, t: 0 }; const B = $("tutBox"); B.querySelector(".tt").innerHTML = TUT_TXT[id]();
+  B.querySelector(".tgo").textContent = window.BERRY_TOUCH ? "TAP TO GO ON" : "PRESS ANY BUTTON TO GO ON";
+  B.classList.remove("go"); B.classList.add("show"); B.classList.toggle("top", id === "tired"); document.body.classList.toggle("tutUp", id === "up"); SFX.page && SFX.page();
+  if (id === "up") { const r = $("upBar").getBoundingClientRect(), w = $("weapon").getBoundingClientRect(), A = $("tutArr").style; A.left = r.right + 6 + "px"; A.top = Math.max(r.top + r.height * .45, w.bottom + 4) + "px"; }   // (the arrow beside the bar, under the weapon picture next to it, not over it)
+}
+function tutGo() { if (!tutHold || tutHold.quiet || tutHold.t < TUT_GO) return; SFX.tick(); tutShut(); }
+function tutShut() {
+  const id = tutHold && tutHold.id; tutHold = null; $("tutBox").classList.remove("show", "go"); document.body.classList.remove("tutUp");
+  for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (tutZoom && (id === "tired" || id === "zoom")) tutZoom.out = true;
+}
+$("tutBox").addEventListener("pointerdown", e => { e.preventDefault(); tutGo(); });
+function tutPop(html, sec = 4.5) { const P = $("tutPop"); P.innerHTML = html; P.classList.remove("show"); void P.offsetWidth; P.classList.add("show"); clearTimeout(tutPop.tm); tutPop.tm = setTimeout(() => P.classList.remove("show"), sec * 1000); SFX.tick(); }   // (a word that doesn't stop the game)
+const TUTV = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+function tutCam() {                                  // B6: from where it was, slowly in close on you (and back out after)
+  const k0 = tutZoom.k, k = k0 * k0 * (3 - 2 * k0); if (k <= 0) return;
+  const d = camera.getWorldDirection(TUTV[0]), a = TUTV[1].copy(camera.position).addScaledVector(d, -camera.position.z / (d.z || -1));   // (what it was looking at, on the play's plane)
+  const u0 = tutZoom.up || 0, u = u0 * u0 * (3 - 2 * u0) * .85, hx = X(player.x), hy = Y(player.y - 70), f = player.face || 1;   // (u: the word up, the view up a little so you're under it)
+  camera.position.lerp(TUTV[2].set(hx + f * .9, hy + 1 + u, 8), k); a.lerp(TUTV[3].set(hx + f * .35, hy + u, 0), k); camera.lookAt(a);
+}
+function tutJuneIn() {                               // B7, walking on in: Evil June drops in toward the far end of the screen (a bit gentler than her own: a heart a hit)
+  ejDef(); const D = EJ_DEF = EJ_DEFS.tut || (EJ_DEFS.tut = { ...EJ_DEFS[ejWho], dmg: 1 });
+  hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };
+  const v = new THREE.Vector3(1, 0, .5).unproject(camera).sub(camera.position), xr = (camera.position.x - v.x * camera.position.z / (v.z || -1)) / S;   // (the screen's right edge, on the play's plane)
+  enemy = makeFoeState(D, clamp(xr - 150, player.x + 320, WORLD - 230)); Object.assign(enemy, { dir: -1, atkCd: 2.2, y: -80, vy: 260, onGround: false, tutIn: { step: "drop", t: 0 } });
+  showFoe(D); setFoeHud(); $("exitCue").classList.add("hidden"); SFX.ejSting();
+  const b = $("banner"); b.innerHTML = `<div class="blk">${D.name}</div><div class="bar">SHE'S FOUND YOU · EVERY WAY OUT IS SHUT</div>`; b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
+}
+function tutJuneStep(e, dt) {                        // her way in: down at the far end, a look at you, then up over your head onto the middle's high platform ("she jumps over the player to the middle")
+  const I = e.tutIn, p = player; I.t += dt; e.inv = Math.max(e.inv, .2); e.atk = null; e.vx = 0;
+  if (I.step === "drop") { e.vy = Math.min(e.vy + GRAV * dt, 1100); e.y += e.vy * dt; const gy = groundAt(e.x) ?? GROUND;
+    if (e.y >= gy) { e.y = gy; e.vy = 0; e.onGround = true; e.sq = -.35; e.sqv = 0; dust(e.x, e.y, 8); SFX.land(); I.step = "eye"; I.t = 0; } }
+  else if (I.step === "eye") { e.dir = Math.sign(p.x - e.x) || -1;
+    if (I.t > .8) { const L = PLATFORMS.filter(q => q.x < WORLD / 2 && q.x + q.w > WORLD / 2).sort((a, b) => a.y - b.y)[0], y1 = L ? L.y : groundAt(WORLD / 2) ?? GROUND, x1 = L ? L.x + L.w / 2 : WORLD / 2;
+      const apex = Math.min(e.y, y1) - 50, g = 2600, vy0 = -Math.sqrt(2 * g * (e.y - apex)), T = -vy0 / g + Math.sqrt(2 * (y1 - apex) / g);
+      Object.assign(I, { step: "leap", t: 0, vx: (x1 - e.x) / T, g, y1, L: L || null }); e.vy = vy0; e.onGround = false; e.plat = null; e.sq = .3; e.sqv = 0; SFX.whoosh(); SFX.bigjump && SFX.bigjump(.8); } }
+  else if (I.step === "leap") { e.x += I.vx * dt; e.vy += I.g * dt; e.y += e.vy * dt; e.dir = Math.sign(I.vx) || e.dir;
+    if (e.vy > 0 && e.y >= I.y1) { e.y = I.y1; e.vy = 0; e.onGround = true; e.plat = I.L; e.sq = -.4; e.sqv = 0; dust(e.x, e.y, 10); SFX.thud(); shake = Math.max(shake, 5);
+      e.dir = Math.sign(p.x - e.x) || -1; e.tutIn = null; e.atkCd = 1.1; e.inv = 0; } }
+  const yT = e.dir > 0 ? -.5 : -Math.PI + .5; e.yaw = lerp(e.yaw ?? yT, yT, 1 - Math.exp(-dt * 9));
+}
+function tutJuneDown() {                             // beaten: up she gets and off she runs, on into the forest (as Noro and Dorys did, once, from this beach)
+  const D = EJ_DEF, e = enemy, r = D.rig, st = makeState(e.x, r);
+  Object.assign(st, { y: e.y, vy: 0, onGround: e.onGround, plat: e.plat, face: 1, sq: -.3, sqv: 0, wave: 0 }); FLASHSET(r.mats, 0); r.root.visible = r.shadow.visible = true;
+  e.ks = null; ej = { phase: "chided", step: "flee", st, r, t: 0, dir: 1, tut: true };
+  foe = FOES[STAGES[stage].foe] || FOES[0]; enemy = makeFoeState(foe, WORLD - 360); bossIn = false; bossCue = 0; setFoeHud();
+  btS().june = true; if (story) writeSave(); SFX.whoosh(); popText(st.x, st.y - 150, "HMPH!"); if (wst) wst.boss = D.name;
 }
 let guaguaPics = null;                               // La Guagua (the user, 2026-10-25: "a bus the characters ride between worlds ... a mix of these two, the yellow van vibe, but with a bit of a pickup truck thing in the back for a character to sit on"; the mockup 10-26, colours B): a cab-over van, its windows see-through (the driver at the wheel), an open bed behind with a roll bar
 function guaguaLoad() {                              // the logo (the user's): the G as a little bus, and the whole word (story/guagua.js: data URLs, so the PC page can use them)
@@ -9133,7 +9276,7 @@ const TUTOR = {
     { cap: () => `TAP ${keyTag("atk")} AGAIN AND AGAIN: A COMBO! HOLD ${keyTag("lr")} AS YOU DO AND IT CHANGES`, pose: "combo" },
     { cap: () => `${keyTag("up")} AND ${keyTag("atk")}: UP IT GOES! JUMP AFTER IT AND KEEP HITTING`, pose: "launch" },
     { cap: () => `${keyTag("down")} AND ${keyTag("atk")}: A SLIDE, RIGHT INTO THEM`, pose: "slide" } ] },
-  weapon: { at: [[9, 2, true], [0, "C2", true]], vo: "weapon", panels: [   // (read out by Camila, no words on the page: the user, 2026-10-23)
+  weapon: { at: [[0, "C2", true]], vo: "weapon", panels: [   // (not the beach's third room now: its tutorial's, 2026-11-03)   // (read out by Camila, no words on the page: the user, 2026-10-23)
     { cap: () => `YOUR WEAPON IS YOUR HEALTH: EVERY HIT YOU TAKE COSTS A PIECE OF IT`, pose: "health" },
     { cap: () => `BEAT BADDIES AND ITS SPIKES COME OUT: MORE POWER IN EVERY BLOW`, pose: "power" },
     { cap: () => `HOLD ${keyTag("atk")} TO CHARGE IT UP, THEN LET GO FOR A BIG COMBO`, pose: "charge" } ] },
@@ -9349,7 +9492,12 @@ const VO = { pro1: ["We were too young to remember a time without them."],   // 
   sad: ["Oh, there were some sad berry baddies too.", "Not all of us have the option to resist, and we have to protect our families, too.",
     "But there was something we did to help these sad ones: we cheered them up."],   // (Rose's two lines Camila's own since 2026-10-26, her answers made one telling)
   toll: ["As we fought back, of course, the land took a toll.", "Our forests and buildings burned; there was destruction, as the villains and their berry baddies would not give up easily.",
-    "But we kept our real purpose in mind."] };   // (the user, 2026-10-24: the first room you come into with smoke in it)
+    "But we kept our real purpose in mind."],   // (the user, 2026-10-24: the first room you come into with smoke in it)
+  tut1: ["We have been fighting for some time now... and developed tricks of our own."],   // (the beach tutorial, the user's words, 2026-11-03: C2)
+  tut2: ["Some berries were already on our side. But we used our berry weapons to capture the enemies, and plan our uprising."],   // (B3, the buddies)
+  tut3: ["We could split up when necessary, and progress more easily."],   // (B4)
+  tut4: ["The berry weapons were living weapons. They held the spirit of our ancestors, which is why they could also capture our hardheaded friends now. However, it would grow with the energy of each location, and took a toll on us. This is where our friends really had to shine."],   // (B6, slowly in close on you)
+  tut5: ["There were still many things we didn't know about our weapons, or what lay before us... but we were determined to find out."] };   // (B7, as you walk on in and Evil June comes)
 const VO_WHO = {};                                   // who says each line (none but Camila now: the user, 2026-10-26 "we just want to have camila narrate for now"; Rose had lines in woods, buddy, sad and rival)
 const voWho = (k, i) => (VO_WHO[k] || [])[i] || "camila", whoName = w => w === "rose" ? "ROSE" : "CAMILA";
 function capWho(el, who, text) { el.textContent = text; }   // (a caption: just the words, never who's saying them: the user, 2026-10-24 "dont say who is talking")
@@ -9361,7 +9509,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261026b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261103t"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -9505,7 +9653,7 @@ function openExit() {                                // the boss is down (or the
   const bossBeat = !!STAGES[stage].boss && bossIn;   // (the boss itself, just now)
   wayCue(bossBeat); if (!bossBeat && !mustClear()) return;   // (an ordinary room: nothing to say, every way on was open all along: the user, 2026-10-20)
   const b = $("banner");
-  b.innerHTML = `<div class="blk">${STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${wayOnText()}</div>`;
+  b.innerHTML = `<div class="blk">${STAGES[stage].tutBoss && world === 9 ? (EJ_DEF || {}).name + " DEFEATED" : STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${wayOnText()}</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 function wayCue(bossBeat) {                          // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
@@ -9513,19 +9661,19 @@ function wayCue(bossBeat) {                          // the way-on arrow: only w
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
-function goNext() { bigLeave(); const S = STAGES[stage]; if (S.toWorld !== undefined && !S.exitLeft) return goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row   // (a door on the left: its right edge is just the way on into the world: it used to take you out through the door, 2026-10-24)
-const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to), dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
+function goNext() { bigLeave(); const S = STAGES[stage]; if (S.toWorld !== undefined && !S.exitLeft) return world === 9 && S.tut && story && !btS().done ? tutEnd() : goWorld(S.toWorld); goRoom(S.nextHi !== undefined && player.y < GROUND - 180 ? S.nextHi : nextOf(stage), false); }   // off the end of the jutting ledge: up a row   // (a door on the left: its right edge is just the way on into the world: it used to take you out through the door, 2026-10-24)
+const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ?? (q.climbUp && q.climbUp.to) ?? q.wayUp, dn = q.down ?? q.below, dead = q.noRight && q.toWorld === undefined && upTo === undefined && dn === undefined;   // the way on: an arrow (no names of rooms: the user, 2026-10-20), a world's name only on the way out of it
   cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
   cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
   return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
-const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP;
+const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP; if (q.wayTip) return q.wayTip;   // (wayTip: a room's own, the beach tutorial's C2)
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
   if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
   return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
 // the stats card: fade to black, how the world went, and on into the next one only when you press something
 let wst = null, statsUp = null;
 // the uprising (see the patch notes): points won back per world, kept with the story save (or, outside the story, on their own)
-const UP_PTS = { S: 1, M: 2, B: 3, G: 5 }, UP_RUNS = 5, UPRISE_KEY = "berry.uprise.v1", upGoals = {};
+const UP_PTS = { S: 1, M: 2, B: 3, G: 5 }, UP_RUNS = 5, UPRISE_KEY = "berry.uprise.v1", upGoals = { 9: TUT_UP.goal };   // (the beach's set by hand: TUT_UP)
 function upRunPts(w) {                            // what one run through world w is worth, averaged over its ways through (to each of its boss rooms)
   if (WORLDS[w] && WORLDS[w].upPts0 !== undefined) return WORLDS[w].upPts0;   // (counted before the grid filled in: see deepenWorlds)
   const W = WORLDS[w], S0 = W.stages, R0 = W.roster || [], ends = [];
@@ -9543,10 +9691,10 @@ function upAllPts(w) {                              // being shorter, the uprisi
   return R0.reduce((a, row) => a + (row || []).reduce((b, q) => b + (UP_PTS[(BB_TYPES[q[0]] || {}).size] || 0) * (q[3] === "mini" ? 3 : 1), 0), 0);
 }
 const upGoal = w => upGoals[w] ?? (upGoals[w] = Math.max(1, Math.round(upAllPts(w) * UP_WORLD)));
-const upOn = w => w !== 9 && !!WORLDS[w] && !!WORLDS[w].roster;          // (not the beach: it has no uprising of its own)
+const upOn = w => !!WORLDS[w] && !!WORLDS[w].roster;          // (the beach too since 2026-11-03: its tutorial's, TUT_UP. It had none)
 const upFree = {};                                   // (free play's: from 0% each level the level select starts, kept no longer: the user, 2026-10-28 "in dev mode, default levels played to 0 uprising level")
 const upStore = () => story ? (story.uprise || (story.uprise = {})) : upFree;
-const upPct = w => Math.min(100, (upStore()[w] || 0) / upGoal(w) * 100);
+const upPct = w => Math.min(w === 9 ? TUT_UP.cap * 100 : 100, (upStore()[w] || 0) / upGoal(w) * 100);   // (the beach's never full: no showdown there)
 function upAdd(b) {                               // one more won back
   if (!upOn(world) || (STAGES[stage] && STAGES[stage].quick)) return;   // (QUICK PLAY's: not the world's)
   const pts = (UP_PTS[b.T.size] || 1) * (b.mini ? 3 : 1), U = upStore(); U[world] = (U[world] || 0) + pts; if (wst) wst.up = (wst.up || 0) + pts;
@@ -9810,7 +9958,7 @@ const UP_SEE = 200;                                  // (this high, under the op
 const UP_FIGHT = { x: 420, y: 200 };                 // (the way up shut only with one close by, at the height you jumped from: a fight. Was any awake within 900 px, the floor's far below a stack's top too, so back down in a room whose baddies were up again, the way up just stopped. The user, 2026-11-02 "after falling down, the ability to jump up again disappeared")
 function upSee(p) {                                  // up off a jump under an opening into the room above: it's there to see, and you're only in it once you come down onto something of it (its floor by the hole, a ledge); else back down into this one
   const y0 = p.upY ?? p.y; p.upY = p.y; if (p.onGround) p.upFoot = p.y;
-  const R = holeAbove(p.x); if (!R) return;
+  const R = holeAbove(p.x); if (!R || tutLock()) return;   // (the beach tutorial: not up out of a room with berries still in it)
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
   if (!peek && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);
@@ -10146,7 +10294,7 @@ function ejDef(who = ejWho) {                        // the rival's own rig, apa
 }
 function maybeEJ(force, revisit) {
   const S0 = STAGES[stage];
-  if (ej || S0.boss || S0.home || S0.peace || S0.deep || stronghold || hideout || intro || cine || mode !== "play" || freedNow()) return false;   // (not under the sea: she doesn't swim)
+  if (ej || S0.boss || S0.home || S0.peace || S0.deep || world === 9 || stronghold || hideout || intro || cine || mode !== "play" || freedNow()) return false;   // (not under the sea: she doesn't swim)
   if (!force) { ejDry++; ejSaveDry(); if (ejDry < EJ_GAP || Math.random() >= (revisit ? EJ_BACK : EJ_P) + Math.max(0, ejDry - EJ_PITY) * .01) return false; }
   const side = entrySide === "right" ? -1 : 1; let bx = null;                    // she drops in ahead of you, onto solid ground
   for (const d of [560, 460, 660, 360, 760, 260]) for (const sd of [side, -side]) { const x = player.x + sd * d; if (bx === null && x > 160 && x < WORLD - 160 && groundAt(x) !== null) bx = x; }
@@ -10238,7 +10386,7 @@ function ejChided(dt) {                              // startled (a jump and a "
   ejLook(s, dt);
 }
 function ejGone() {                                  // she's off: till you meet her again
-  const s = ej.st; s.blush = false; s.shy = 0; s.startle = 0; ejEnd();
+  const s = ej.st, tu = ej.tut; s.blush = false; s.shy = 0; s.startle = 0; ejEnd(); if (tu) return;   // (the tutorial's: its own word, openExit's)
   const b = $("banner"); b.innerHTML = `<div class="blk">${foe.name}</div><div class="bar">${(EJ_DEF || {}).name || "EVIL JUNE"}'S RUN OFF · TILL NEXT TIME</div>`;
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
@@ -12715,8 +12863,9 @@ function teamShoot(o, s, T, dt) {                     // (spread out: a shot at 
 // after a time, they start walking slower and can't jump high ... you only get tired from combat so using them better allows you to keep your energy"): from the 75% size on,
 // every blow you throw takes some of your energy (p.nrg, 1 full; the bigger the more, a charged part more again). Under half, you slow and your jumps drop (p.weary); none
 // left, no blows at all but the team charge that throws them ("when drained, you can still do the charge attack that launches them"). It comes back with the team out on
-// their own, □ held ("send your buddies to fight so you can press and hold square to recharge"); with no team along, slowly, a while after your last blow
-const NRG = { from: 2, cost: [0, 0, .04, .055], combo: 1.4, tired: .5, slow: .42, jump: .28, rest: .36, hold: .3, solo: .07, soloWait: 2.5 };
+// their own, □ held ("send your buddies to fight so you can press and hold square to recharge"); with no team along, slowly, a while after your last blow.
+// from: 3, the fully grown one, 75% of the uprising (2 till the user's correction, 2026-11-03: "75% uprising and its respective weapon size is when this triggers")
+const NRG = { from: 3, cost: [0, 0, .04, .055], combo: 1.4, tired: .5, slow: .42, jump: .28, rest: .36, hold: .3, solo: .07, soloWait: 2.5 };
 const nrgHeavy = p => p === player && !!wpnKind(p) && (p.power || 0) >= NRG.from;
 const nrgOut = p => nrgHeavy(p) && (p.nrg ?? 1) <= 0;
 function nrgUse(p, S) {                               // (a blow of yours begun: its weight off your energy)
@@ -15405,6 +15554,7 @@ function updateEnemy(dt) {
   if (e.atk !== "act") e.tuck = false;               // (the turtle comes back out of its shell)
   e.inv = Math.max(0, e.inv - dt); e.flash = Math.max(0, e.flash - dt); e.hurtT = Math.max(0, e.hurtT - dt);
   if (e.iceT > 0 && !e.dead && !e.leaf && !e.under) { iceStep(e, dt, D.hw + 2); return; }   // (a boss frozen too, not as long: the black mage's ice)
+  if (e.tutIn && !e.dead) { tutJuneStep(e, dt); spring(e, dt); return; }   // (the beach tutorial's Evil June, on her way in)
   if (e.zapT > 0 && !e.dead && !e.leaf && !e.under) { e.zapT -= dt; e.vx = approach(e.vx, 0, 4000 * dt); e.atk = null; e.vy = Math.min((e.vy || 0) + 2000 * dt, 1000); moveBody(e, dt, D.hw + 2);   // (the blocker's lightning: a boss stiff with it too, not as long)
     if ((e.zapFxT = (e.zapFxT || 0) - dt) <= 0) { e.zapFxT = .06; zapFx(e); } spring(e, dt); return; }
   if (e.rollB && !e.dead) { bossRollTick(e, dt); spring(e, dt); return; }
@@ -15420,7 +15570,7 @@ function updateEnemy(dt) {
   else if (e.dead) {
     e.deathT += dt; e.vx = approach(e.vx, 0, 900 * dt);
     if (Math.random() < dt * 22) puffs(e.x + rand(-D.hw, D.hw), e.y - Math.random() * D.h, 1, 10, 120);
-    if (e.deathT > .9 && D.ej) { ejJoin(); return; }   // Evil June doesn't go up in smoke: she joins you
+    if (e.deathT > .9 && D.ej) { if (tutRoom() && STAGES[stage].tutBoss) tutJuneDown(); else ejJoin(); return; }   // Evil June doesn't go up in smoke: she joins you (the beach tutorial's: off she runs)
     if (D.flee) return;                                // (nor do Noro and Doir: they get up and run, updateDuo)
     if (e.deathT > .9) {
       e.gone = true; e.deathT = 0; hideFoe(D); SFX.explode(true);
@@ -19829,17 +19979,26 @@ let WAVE_FOES = null;
 const BEACH_HOUR = [0, 0, 0, 0, 0, 0, 0, 0];
 const CARIB_SEA = { deep: "#0b7896", mid: "#13adc0", light: "#7fe6d4", foam: "#ffffff", line: "#0a5570" };
 const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#f4e4b4", plats: [], plats2: [] }));
-const BEACH_STAGES = [   // plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk)
-  { h: 0, foe: 0, cell: "B1", elev: 0, name: "HOME BEACH", home: true, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },
-  { h: 0, foe: 0, cell: "B2", elev: 0, name: "PALM SHORE", gift: true, plats: [[460, 360, 200, "rock"], [860, 300, 230, "plank"], [1300, 385, 170, "drift"], [1700, 320, 200, "rock"], [2120, 365, 190, "boat"]] },
-  { h: 0, foe: 0, cell: "B3", elev: 0, name: "COCONUT COVE", plats: [[500, 380, 180, "boat"], [880, 310, 210, "rock"], [1280, 360, 220, "plank"], [1700, 300, 190, "rock"], [2100, 385, 170, "drift"]] },
-  { h: 0, foe: 0, cell: "B4", elev: 0, name: "THE FOREST'S EDGE", boss: true, duo: true, edge: true, bossX: 1700, toWorld: 0, plats: [[420, 370, 190, "drift"], [820, 300, 210, "rock"], [1240, 380, 180, "boat"]] },
+const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's drawings, IMG_1198/1199): row C the beach itself, row B up on the bluff over it. plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk), "tee" (a plank on one post)
+  { h: 0, foe: 0, cell: "C1", elev: 0, tut: true, name: "HOME BEACH", home: true, noLeft: true, next: 1, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },   // (the house, as the opening had it)
+  { h: 0, foe: 0, cell: "C2", elev: 0, tut: true, name: "PALM SHORE", prev: 0, noRight: true, steps: [[2160, -400]], wayUp: 2, wayTip: "↑ ON UP: OFF THE TALL ONE AND ONTO THE BLUFF",
+    plats: [[1380, 240, 220, "tee"], [1720, 75, 220, "tee"]] },   // (the first a held jump up; off the second, up onto B2's ledge. The bluff's face at 2160, its top 40 px under B2's floor so the jump up always reaches B2 first)
+  { h: 0, foe: 0, cell: "B2", elev: ROW_H / ROW_RISE, tut: true, name: "THE BLUFF", gaps: [[-200, 2150]], below: 1, riseFrom: 1, riseIn: [[1250, 2560]], noLeft: true, prev: 1, next: 3 },   // (open over C2 but for the bluff's top at the right: "a platform on b2 that they can use to walk to b3")
+  { h: 0, foe: 0, cell: "B3", elev: ROW_H / ROW_RISE, tut: true, name: "COCONUT COVE", prev: 2, next: 4, plats: [[240, 365, 320, "rock"], [1150, 250, 340, "plank"]] },   // (the buddy sat on the ledge at the left, the other fighting below)
+  { h: 0, foe: 0, cell: "B4", elev: ROW_H / ROW_RISE, tut: true, name: "THE BOARDWALK", prev: 3, next: 5, plats: [[420, 290, 2080, "plank"]] },   // ("a long platform that stretches the length of the screen but starts a few steps in from the left side")
+  { h: 0, foe: 0, cell: "B5", elev: ROW_H / ROW_RISE, tut: true, name: "DRIFTWOOD POINT", prev: 4, next: 6, plats: [[1000, 345, 520, "plank"], [1110, 205, 300, "tee"]] },   // (two, one over the other; two in front of them, in the way out)
+  { h: 0, foe: 0, cell: "B6", elev: ROW_H / ROW_RISE, tut: true, name: "THE HIGH SANDS", prev: 5, next: 7, plats: [[520, 330, 280, "rock"], [1700, 320, 300, "drift"]] },
+  { h: 0, foe: 0, cell: "B7", elev: ROW_H / ROW_RISE, tut: true, tutBoss: true, name: "THE FOREST'S EDGE", prev: 6, edge: true, toWorld: 0, plats: [[300, 360, 340, "rock"], [1060, 290, 440, "plank"], [1880, 360, 340, "rock"]] },   // (Evil June: two low at the sides, one higher in the middle · 290, not 190: up there she was off the top of the screen)
 ];
-const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the sand
-  [["leafy", "leaf", 900], ["acorn", "bark", { plat: 1 }], ["twiggy", "olive", 1450], ["pinecone", "rust", 2100]],
-  [["leafy", "orange", 640], ["thornball", "moss", 1100], ["acorn", "rust", { plat: 1 }], ["stumpy", "bark", 1550], ["twiggy", "bark", 2000]],
-  [["pinecone", "bark", 700], ["leafy", "yellow", { plat: 1 }], ["thornball", "olive", 1150], ["twiggy", "rust", 1550], ["acorn", "olive", { plat: 3 }]],
-  [["stumpy", "olive", 650], ["leafy", "red", { plat: 1 }], ["thornball", "purple", 1050], ["pinecone", "rust", 1500]],
+const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the sand (the beach's own uprising, TUT_UP)
+  [],
+  [["leafy", "leaf", 700], ["twiggy", "olive", 960], ["stumpy", "bark", 1200]],
+  [],
+  [["leafy", "orange", 640], ["thornball", "moss", 900], ["acorn", "rust", 1180], ["twiggy", "yellow", { plat: 1, x: 1330 }], ["pinecone", "bark", 1900], ["leafy", "red", 2200]],
+  [["leafy", "yellow", { plat: 0, x: 900 }], ["acorn", "olive", { plat: 0, x: 1500 }], ["twiggy", "rust", { plat: 0, x: 2100 }], ["stumpy", "olive", 1100], ["thornball", "purple", 1650], ["pinecone", "rust", 2250]],
+  [["twiggy", "bark", { plat: 1, x: 1200 }], ["leafy", "orange", { plat: 1, x: 1330 }], ["stumpy", "bark", 1950], ["thornball", "olive", 2200]],
+  [["leafy", "red", 950], ["stumpy", "olive", 1150], ["thornball", "moss", 1350], ["pinecone", "bark", 1550], ["acorn", "rust", 1750], ["twiggy", "orange", 1950]],
+  [],
 ];
 // Noro and Doir, as bosses: their own characters (charkit), posed like the player, each with two moves of their own. Beaten, they don't go
 // up in smoke: they pick themselves up and run off into the forest (they'll be back)
@@ -19873,19 +20032,35 @@ function buildBeach(k = 0, seed = k) {
   const before = new Set(scene.children); let rng = rngF(401 + seed * 37);
   const R = (a, b) => a + rng() * (b - a), keep = new Set(), ST = STAGES[seed] || {}, M = tropMats(), Q = BEACH_SCREENS[k], W = WP || wPlace(-1), inSlot = slotRun(() => rng, v => { rng = v; });   // (W: the world's slots: the palms, bushes and rocks along the beach, the same where two screens meet)
   const mSand = toon(Q.sand), mWet = toon("#dcc58e"), mFoam = new THREE.MeshBasicMaterial({ color: "#ffffff" }), mRock = toon("#646770"), mRockL = toon("#8d929b"), mDrift = toon("#cbb79c"), mDriftD = toon("#a08c74");
-  const WY = Y(WATER), gAt = x => Y(groundAt(x / S) ?? GROUND), bush = ["#4f8a3a", "#3f7a33", "#6a9a3a"].map(c => toon(c));
+  const hi = !!ST.tut && (ST.elev || 0) > 0, lowY = Y(GROUND + ROW_H), sb = hi ? lowY : 0, zb = hi ? -12 : -9;   // (hi: a room up on the bluff, row B: the beach itself a row down, lowY; sb the sand's level by the sea, zb where the slope down to it starts)
+  const WY = Y(WATER), gAt = x => Y(groundAt(x / S) ?? (hi ? GROUND + ROW_H : GROUND)), bush = ["#4f8a3a", "#3f7a33", "#6a9a3a"].map(c => toon(c));
   const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() });
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(230, 92, 230, 92).rotateX(-Math.PI / 2), seaM); at(sea, WX / 2, WY, -36); scene.add(sea); keep.add(sea);
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k), fog: false })); at(sky, WX / 2, 12, -80); scene.add(sky); keep.add(sky);
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k), fog: false })); at(sky, WX / 2, 12, -80); if (hi) { sky.scale.y = 1.4; sky.position.y = 6; } scene.add(sky); keep.add(sky);
   // the sand, and its slope down into the sea; the foam running up and back
   const lo = ST.cove ? X(ST.ground[2][0]) + 1.5 : -8;   // (the hidden cove: its pool at the left, the sand only from the slope on, nothing growing in the water)
   if (ST.cove) { const xs = X(ST.ground[1][0]), xe = X(ST.ground[2][0]), bed = Y(GROUND + ST.ground[1][1]), a = Math.atan2(-bed, xe - xs), L = Math.hypot(xe - xs, bed) + .3;
     scene.add(at(mk(new THREE.BoxGeometry(WX + 35 - xe, 6, 14), null, { mat: mSand, ol: 0 }), (xe + WX + 35) / 2, -3, -2));
     scene.add(at(mk(new THREE.BoxGeometry(xs + 40, 6, 14), null, { mat: mWet, ol: 0 }), (xs - 40) / 2, bed - 3, -2));   // the pool's sandy bed
     const w = mk(new THREE.BoxGeometry(L, 6, 14), null, { mat: mWet, ol: 0 }); w.rotation.z = a; at(w, (xs + xe) / 2 + 3 * Math.sin(a), bed / 2 - 3 * Math.cos(a), -2); scene.add(w); }
+  else if (ST.tut) {                                 // the tutorial's: the ground as it is, a piece at a time (its gaps open, C2's bluff, the bluff under every room up on it)
+    const mBl = toon("#c9965e"), mBlD = toon("#9c6b42"), mCl = toon("#8a8279"), cuts = new Set([-900, WORLD + 900]);
+    PROFILE.forEach(q => cuts.add(q[0])); GAPS.forEach(([a, b]) => { cuts.add(a); cuts.add(b); });
+    const xs = [...cuts].filter(x => x >= -900 && x <= WORLD + 900).sort((a, b) => a - b);
+    for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2, w = (b - a) * S, cx = X(m); if (w <= 0) continue;
+      if (GAPS.some(([g0, g1]) => m > g0 && m < g1)) { if (hi) scene.add(at(mk(new THREE.BoxGeometry(w, 6, 14), null, { mat: mSand, ol: 0 }), cx, lowY - 3, -2)); continue; }   // (open: the beach a row down)
+      const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? WY - 1 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
+      scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
+      if (hi || raised) { scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it
+        for (let k = 1; k <= 3; k++) { const y = top - .5 - k * (top - .5 - bot) / 4; scene.add(at(mk(new THREE.BoxGeometry(w, .14, .06), null, { mat: mBlD, ol: 0 }), cx, y, zc + d / 2 + .03)); }   // (its layers)
+        const n = Math.max(2, Math.round((top - bot) / 2.2));   // boulders along a face that's open to the side
+        [[a, -1], [b, 1]].forEach(([ex, sd]) => { if (ex <= -900 || ex >= WORLD + 900) return; const open = GAPS.some(([g0, g1]) => ex + sd * 5 > g0 && ex + sd * 5 < g1) || (groundAt(ex + sd * 10) ?? 1e9) > groundAt(m) + 60; if (!open) return;
+          for (let k = 0; k < n; k++) { const r = R(.6, 1.2); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, 1.2, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .04 }), X(ex) + sd * R(-.2, .3), bot + (k + .5) * (top - bot) / n, R(zb + 1, 4))); } }); }
+      else scene.add(at(mk(new THREE.BoxGeometry(w, 5.5, 14), null, { mat: mSand, ol: 0 }), cx, -3.25, -2)); }
+  }
   else scene.add(at(mk(new THREE.BoxGeometry(WX + 70, 6, 14), null, { mat: mSand, ol: 0 }), WX / 2, -3, -2));
-  const drop = -WY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);
-  at(slope, WX / 2, -drop / 2, -9 - run / 2); scene.add(slope);
+  const drop = sb - WY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);
+  at(slope, WX / 2, sb - drop / 2, zb - run / 2); scene.add(slope);
   const foam = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, .7).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mFoam), wl = -WY / drop;   // (where the water meets the slope: wl of the way down)
   scene.add(foam); keep.add(foam);
   // coconut palms all along the back of the beach, leaning out to sea; sea grape and rocks under them; rocks at the water's edge
@@ -19898,8 +20073,8 @@ function buildBeach(k = 0, seed = k) {
   else if (!ST.cove) for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1, g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
   for (const sl of W.scatter(Math.round(26 * WS), 8, 8, 3202)) inSlot(sl, x => { if (x < lo) return; const z = -R(2.4, 8.6), r = R(.5, 1.2); if (ST.home && x < 12 && z > -7) return;
     scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[((sl.j % 3) + 3) % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); });
-  for (const sl of W.scatter(Math.round(18 * WS), 8, 8, 3203)) inSlot(sl, x => { const r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) : -R(2.5, 8); if (z > -9 && x < lo) return;
-    scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x, z < -9 ? (z + 9) * drop / run + r * .3 - .2 : gAt(x) + r * .3, z)); });
+  for (const sl of W.scatter(Math.round(18 * WS), 8, 8, 3203)) inSlot(sl, x => { const r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) + (zb + 9) : -R(2.5, 8); if (z > zb && x < lo) return;
+    scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x, z < zb ? sb + (z - zb) * drop / run + r * .3 - .2 : gAt(x) + r * .3, z)); });
   { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sh = new THREE.InstancedMesh(new THREE.ConeGeometry(.09, .14, 6).rotateX(Math.PI / 2), toon("#ffe0d2"), Math.round(90 * WS));   // shells
     for (let i = 0; i < sh.count; i++) { const x = R(lo, WX + 8); e.set(R(-.4, .4), R(0, TAU), 0); q.setFromEuler(e); m4.compose(new THREE.Vector3(x, gAt(x) + .04, R(-8.5, 4.5)), q, new THREE.Vector3(1, 1, 1)); sh.setMatrixAt(i, m4); } scene.add(sh);
     const st = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, r = i % 2 ? .07 : .2; (i ? st.lineTo : st.moveTo).call(st, Math.cos(a) * r, Math.sin(a) * r); }
@@ -19923,9 +20098,14 @@ function buildBeach(k = 0, seed = k) {
     tb.add(at(mk(new THREE.SphereGeometry(.3, 12, 6, 0, TAU, Math.PI / 2, Math.PI / 2), null, { mat: toon("#d9b48a"), ol: .02 }), 0, .78, 0));
     [["#ff8a1e", -.12, .05], ["#ffb52e", .1, -.05], ["#e8442e", .02, .12]].forEach(([c, x, z]) => tb.add(at(mk(new THREE.SphereGeometry(.12, 10, 8).scale(1, 1.25, .9), null, { mat: toon(c), ol: 0 }), x, .9, z)));
     tb.add(at(mk(new THREE.CylinderGeometry(.14, .16, .34, 8), null, { mat: toon("#e8b23a"), ol: .02 }), .42, .95, -.1)); tb.add(at(mk(new THREE.ConeGeometry(.12, .3, 6), null, { mat: toon("#3f8a3c"), ol: 0 }), .42, 1.25, -.1));   // a pineapple
-    const lg = mk(new THREE.CylinderGeometry(.26, .28, 4.2, 10).rotateZ(Math.PI / 2), null, { mat: mDrift, ol: .04 }); at(lg, X(515), .26, -1.25); scene.add(lg); }   // the log they sit on
+    const lg = mk(new THREE.CylinderGeometry(.26, .28, 4.2, 10).rotateZ(Math.PI / 2), null, { mat: mDrift, ol: .04 }); at(lg, X(515), .26, -1.25); scene.add(lg);   // the log they sit on
+    const C = group(scene, X(880), 0, -2.6), mF = toon("#e8402e"), mFw = toon("#fdf6e6"); C.rotation.y = 2.5;   // the beach chair (the user's drawing, 2026-11-03): a deck chair, red and white, turned to the sea
+    [[-.42, .55], [.42, .55], [-.42, -.5], [.42, -.5]].forEach(([x, z]) => C.add(at(mk(new THREE.CylinderGeometry(.04, .04, z > 0 ? .5 : 1.2, 5), null, { mat: mWood, ol: .02 }), x, z > 0 ? .25 : .6, z)));
+    const seat = new THREE.Group(); seat.position.set(0, .82, .02); seat.rotation.x = -.62; C.add(seat);
+    [-1, 0, 1].forEach(i => seat.add(at(mk(new THREE.BoxGeometry(.28, .04, 1.45), null, { mat: i ? mF : mFw, ol: .02 }), i * .28, 0, 0)));
+    [-1, 1].forEach(sd => seat.add(at(mk(new THREE.BoxGeometry(.05, .07, 1.5), null, { mat: mWood, ol: .02 }), sd * .44, -.02, 0))); }
   if (ST.edge || ST.gift) { const x0 = ST.edge ? WX * .55 : WX + 3;   // the rainforest: where the beach ends (the far end, and a glimpse past the third room's end)
-    for (let i = 0; i < (ST.edge ? 34 : 26); i++) { const x = R(x0, WX + 28), z = -R(3, 22), roll = rng();
+    for (let i = 0; i < (ST.edge ? 34 : 26); i++) { const x = R(x0, WX + 28), z = -R(3, hi ? 11 : 22), roll = rng();
       if (roll < .3) tropTabonuco(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(9, 12) }); else if (roll < .55) tropTreeFern(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(5, 7) });
       else if (roll < .75) tropPalm(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(7, 10), lean: R(-.2, .2) }); else tropYagrumo(scene, M, x, gAt(Math.min(x, WX)), z, rng, { h: R(8, 11) }); }
     for (let i = 0; i < (ST.edge ? 30 : 8); i++) { const x = R(x0, WX + 10), z = -R(2, 8); if (rng() < .5) tropMalanga(scene, M, x, gAt(Math.min(x, WX)), z, rng, R(1, 1.4)); else tropHeliconia(scene, M, x, gAt(Math.min(x, WX)), z, rng, R(1, 1.3)); }
@@ -19949,7 +20129,13 @@ function buildBeach(k = 0, seed = k) {
       B.add(at(mk(new THREE.BoxGeometry(w * .8, .1, 1.5), null, { mat: mWood(), ol: 0 }), 0, top - .2, 0)); }
     else if (p.kind === "plank") { scene.add(at(mk(new THREE.BoxGeometry(w, .22, 2.4), null, { mat: mDrift, ol: .05 }), cx, top - .11, 0));
       for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 2.4), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, 0));
-      [-1, 1].forEach(sd => [-.9, .9].forEach(z => scene.add(at(mk(new THREE.CylinderGeometry(.12, .12, top - gy, 6), null, { mat: mDriftD, ol: .03 }), cx + sd * (w / 2 - .3), (top + gy) / 2, z)))); } }
+      const nP = Math.max(1, Math.ceil((w - .6) / 9));   // (a long boardwalk: posts along it, not only at its ends)
+      for (let j = 0; j <= nP; j++) { const px = cx - w / 2 + .3 + (w - .6) * j / nP, g = gAt(px); [-.9, .9].forEach(z => scene.add(at(mk(new THREE.CylinderGeometry(.12, .12, top - g, 6), null, { mat: mDriftD, ol: .03 }), px, (top + g) / 2, z))); } }
+    else if (p.kind === "tee") {                      // a T: a plank up on one stout post (the user's drawing, C2), braced under its middle
+      scene.add(at(mk(new THREE.BoxGeometry(w, .26, 2.4), null, { mat: mDrift, ol: .05 }), cx, top - .13, 0));
+      for (let xx = -w / 2 + .3; xx < w / 2; xx += .55) scene.add(at(mk(new THREE.BoxGeometry(.04, .02, 2.4), null, { mat: mDriftD, ol: 0 }), cx + xx, top + .005, 0));
+      scene.add(at(mk(new THREE.CylinderGeometry(.26, .32, top - gy, 8), null, { mat: mDriftD, ol: .04 }), cx, (top + gy) / 2, 0));
+      [-1, 1].forEach(sd => { const br = mk(new THREE.BoxGeometry(1.5, .14, .14), null, { mat: mDriftD, ol: .03 }); br.rotation.z = sd * .62; at(br, cx + sd * .55, top - .62, 0); scene.add(br); }); } }
   function mWood() { return mWood.m || (mWood.m = toon("#8a6440")); }
   // spray glinting over the water
   const N = 50, mpos = new Float32Array(N * 3), seeds = [];
@@ -19960,7 +20146,7 @@ function buildBeach(k = 0, seed = k) {
   function tick(t, dt) {
     seaM.uniforms.uT.value = t;
     const u = .5 + .5 * Math.sin(t * .9), f = wl - .05 + u * .1;   // the foam running up the slope and back
-    foam.position.set(WX / 2, -drop * f + .03, -9 - run * f); foam.material.opacity = 1;
+    foam.position.set(WX / 2, sb - drop * f + .03, zb - run * f); foam.material.opacity = 1;
     knock.forEach(kk => { if (kk.t < 0 || kk.down) return; kk.t += dt; const u = kk.t - .14;   // hit: a shudder, then over it goes, faster and faster, away from the blow
       if (u < 0) kk.g.rotation.z = Math.sin(kk.t * 75) * .045 * (1 - kk.t / .14); else { const e = Math.min(1, u / .85); kk.g.rotation.z = -kk.dir * 1.48 * Math.pow(e, 2.2);
       if (e >= 1) { kk.down = true; SFX.thud(); shake = Math.max(shake, 7); for (let i = 0; i < 7; i++) dust(kk.x + kk.dir * i * 60, GROUND, 4, kk.dir); } } });
@@ -26930,6 +27116,7 @@ function syncWorld(dt) {
   }
   const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
+  else if (tutZoom && player) tutCam();   // (the beach tutorial's B6: slowly in close on you)
   if (cannonS) cannonCam();
   if (bwalkS) bwalkCam();
   if (pan) { camera.position.copy(pan.pos); camera.quaternion.copy(pan.quat); }   // (between stitched screens: the camera on its way across)
@@ -27252,7 +27439,7 @@ function update(dt) {
   if (STAGES[stage].gift && story && !story.armed && !gift && exitOpen && !transit && player.x > WORLD - 330) startGift();   // (the beach's third room: the bep's there as you head for the way out)
   updatePal(dt); teamChargeTick(dt); partnerTick(dt); rollTeamTick(dt); updateWild(dt); updateStrays(dt); updateBaddies(dt); blockWall(); quickTick(dt); updateFriends(dt); updateArena(dt); markSeen(); patrolLockTick(); updateBepEvent(dt); updateGifts(dt); updateCrates(dt); updateCrumbles(dt); updateRockfall(dt); updateSecret(dt); updateLoot(dt); updatePatrol(dt); if (duo) updateDuo(dt); else if (bossIn) { updateEnemy(dt); foeOffGaps(); } combat(); updateHazards(dt);
   if (trap) updateTrap(dt); if (stronghold) updateStronghold(dt);
-  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
+  if (!bossIn && !exitOpen && !player.dead && !(arena && arena.phase !== "fight") && !tutExitHold() && baddies.every(b => b.gone || b.flee || b.sad || b.T.move === "breach") && (bossCue += dt) > (bossHere(stage) ? .9 : .25)) stronghold ? shClear() : bossHere(stage) ? bossArrive() : openExit();   // a patch ends when it's clear (the beach's third room: the bep)
   if (!enemy.dead && !enemy.gone && !player.dead) trialTime += dt;
   if (!duo && enemy.gone && enemy.deathT > 1.1 && !modalOpen && !exitOpen && !transit) {
     beaten++; if (STAGES[stage].mini && !arena) { markGot("boss:" + STAGES[stage].mini); if (level.door) level.door.want = 1; SFX.gate && SFX.gate(); toast("THE GREAT DOOR SWINGS OPEN", 2600); if (story) writeSave(); }   // (Lossst: beaten for good, Glos's door open)
@@ -27385,12 +27572,12 @@ function frame(now) {                              // (the next frame is asked f
     adaptQuality(dt);
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || !!tutHold || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
