@@ -8517,13 +8517,19 @@ const tutT = { s: -1, t: 0, bump: 0 };
 // high over the gap on four chains from a crane's boom; the team charge let go at the edge flings the buddies over it (tbAim); down on the far side one hops onto the button
 // (tbStep); the winch lets the bridge down onto the gap, and the gap is ground (story.bt.bridge: it stays down)
 const TBR = { g0: 1640, g1: 2340, btn: 2440, mach: 2510, hang: 380, low: 2.4 };   // (the gap's two edges, px (700 across: a full sprint and the double jump timed right land 513 px on, and off the edge after it you're at the far face, under its top, at 560); the button and the winch past it; how high the bridge's underside hangs over the floor (a wound-up jump and the double jump reach 355, and a ceiling under it bumps your head); how long it takes to come down, s)
-const tbSt = { y: TBR.hang, t: -1, k: 0, near: 0 };   // (y: how high it hangs now · t: coming down, s since the button (-1: not) · k: the camera out and over the gap, 0-1 · near: how long you've stood at the edge)
+const tbSt = { y: TBR.hang, t: -1, k: 0, near: 0, s: -1 };   // (y: how high it hangs now · t: coming down, s since the button (-1: not) · k: the camera out and over the gap, 0-1 · near: how long you've stood at the edge)
 const tbHere = () => tutRoom() && !!STAGES[stage].tbridge;
 const tbDown = () => !!btS().bridge;
 const tbZoom = () => world === 9 && STAGES[stage] && STAGES[stage].tbridge ? 1 + .6 * tbSt.k : 0;   // (zoomWant's: out, so the far side's in the picture)
 const tbLean = () => { if (world !== 9 || !STAGES[stage] || !STAGES[stage].tbridge || !player) return 0; const u = clamp((player.x - TBR.g0 + 520) / 420, 0, 1); return X(350) * tbSt.k * u * u * (3 - 2 * u); };   // (the camera ahead of you, over the gap, as you come up to it)
 const tbUp = () => world === 9 && STAGES[stage] && STAGES[stage].tbridge && !tbDown() ? 1.7 * tbSt.k : 0;   // (and up, so the bridge hung over it is in the picture, not cut off at its top)
 function tbEnter() { tbSt.y = tbDown() ? 0 : TBR.hang; tbSt.t = -1; tbSt.near = 0; }
+function tbFrame(dt) {                               // (every frame, story or not: the bridge's own tick ran inside tutTick, which wants a story, so a room come into some other way (the level select) never let it down or zoomed out. The user, 2026-11-03 late: "it seemed like they hit the button ... but the bridge actually didnt go down")
+  if (!tbHere() || !player) { tbSt.s = -1; tbSt.k = 0; return; }
+  if (tbSt.s !== stage) { tbSt.s = stage; tbEnter(); }
+  if (paused || transit || pan || panFade > 0 || comicUp || modalOpen || menuUp || statsUp || tutHold || player.dead || pro) return;
+  tbTick(dt);
+}
 function tbTick(dt) {                                // (B7, every frame of play: the bridge on its way down; the camera out over the gap as you near it; a word if you stand stuck at the edge)
   const p = player, near = !tbDown() && p.x > TBR.g0 - 640;
   tbSt.k = approach(tbSt.k, near || tbSt.t >= 0 ? 1 : 0, dt / 1.2);
@@ -8541,8 +8547,9 @@ function tbPress(s) {                                // (a buddy down on the but
 function tbLanded() {                                // (down across the gap: ground over it)
   tbSt.t = -1; tbSt.y = 0; btS().bridge = true; if (story) writeSave();
   for (let i = GAPS.length - 1; i >= 0; i--) if (GAPS[i][0] === TBR.g0 && GAPS[i][1] === TBR.g1) GAPS.splice(i, 1);
+  for (let i = CEILS.length - 1; i >= 0; i--) if (CEILS[i][3] === "tb") CEILS.splice(i, 1);
   SFX.thud(); SFX.slam(); shake = Math.max(shake, 9); for (let x = TBR.g0 + 30; x < TBR.g1; x += 70) dust(x, GROUND, 3, x < (TBR.g0 + TBR.g1) / 2 ? -1 : 1);
-  popText((TBR.g0 + TBR.g1) / 2, GROUND - 130, "THE BRIDGE IS DOWN!"); SFX.reveal();
+  popText((TBR.g0 + TBR.g1) / 2, GROUND - 130, "THE BRIDGE IS DOWN!"); SFX.reveal(); if (exitOpen) wayCue(false);   // (the room already cleared: its NEXT arrow now)
   partnerList().forEach(P => { if (P.q && P.q.post && P.q.post.kind === "btn") postClear(P); });   // (and back over it to you)
 }
 function tbAim(p, s, k) {                            // (the team charge let go near the gap, facing it, the bridge still up and no berry ahead: flung over it onto the far side, one a step past the other)
@@ -8626,7 +8633,6 @@ function tutTick(dt) {                               // (every frame, paused or 
   if (c === "B5" && !btSeen("lead") && p.x > 640) tutShow("lead");
   if (c === "B6" && !btSeen("tired") && !tutZoom) tutB6();   // (at once, as you come in: the user, 2026-11-03 late "start that right away because if the player moves to a weird spot when the character is maybe over another, it doesn't look good". It waited till x > 300 or 1.6 s)
   if (c === "B7" && !btSeen("launch") && said("tut6")) tutShow("launch");   // (her words as you fight, then the word on the charge)
-  if (c === "B7") tbTick(dt);
   if (c === "B8" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
   if (!btSeen("worn") && nrgOut(p)) { btMark("worn"); tutPop(`WORN OUT! LET YOUR FRIENDS FIGHT · HOLD ${tutTag("sq")} TO GET YOUR ENERGY BACK`, 5.5); }   // (the drawing's "when player gets tired ... show charge")
   if (tutLock() && !ejFight() && p.hitWall && (p.x < 70 || p.x > WORLD - 70) && (tutT.bump -= dt) <= 0) { tutT.bump = 1.6; popText(p.x, p.y - 140, "WIN THEM ALL BACK FIRST!"); SFX.thud(); }   // (pushing at a shut way out)
@@ -8635,7 +8641,6 @@ function tutTick(dt) {                               // (every frame, paused or 
 function tutEnter(c) {                               // into one of its rooms
   if (TUT_VO[c]) startVO(TUT_VO[c]);
   if (c === "B3") tutBuds();
-  if (c === "B7") tbEnter();
   if (c === "B6" && !btSeen("tired")) { const U = upStore(), g = upGoal(9); if ((U[9] || 0) < g * TUT_UP.b6) { U[9] = Math.ceil(g * TUT_UP.b6); wpnByUprise(true); } }   // (75% by now, whatever's been won back: the weapon fully grown)
 }
 function tutB6() {                                   // B6, as you come in (a few steps in, the buddies off you, till 2026-11-03 late): the game stopped, the camera slowly in on you while she tells it; then the word
@@ -9783,7 +9788,7 @@ function openExit() {                                // the boss is down (or the
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 function wayCue(bossBeat) {                          // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
-  const on = exitOpen && !stronghold && !patrolLock && (bossBeat || mustClear()) && !doorBarred(stage); if (on) $("exitName").textContent = exitLabel(stage);
+  const on = exitOpen && !stronghold && !patrolLock && (bossBeat || mustClear()) && !doorBarred(stage) && !(tbHere() && !tbDown());   // (no NEXT arrow over B7's gap till its bridge is down) if (on) $("exitName").textContent = exitLabel(stage);
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
@@ -9792,7 +9797,7 @@ const exitLabel = s => { const q = STAGES[s], cue = $("exitCue"), upTo = q.up ??
   cue.classList.toggle("left", !!(q.exitLeft || dead));   // (a plain true / false: toggle(x, undefined) flips it every call)
   cue.querySelector(".blk").textContent = q.exitLeft ? "← NEXT" : dead ? "← BACK" : q.toWorld !== undefined || !q.noRight ? "NEXT →" : upTo !== undefined && dn !== undefined ? "↑ ↓" : upTo !== undefined ? "↑ UP" : "↓ DOWN";
   return q.toWorld !== undefined ? WORLDS[q.toWorld].name : ""; };
-const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP; if (q.wayTip) return q.wayTip;   // (wayTip: a room's own, the beach tutorial's C2)
+const wayOnText = () => { const q = STAGES[stage]; if (doorBarred(stage)) return BAR_TIP; if (tbHere() && !tbDown()) return "THE BRIDGE IS STILL UP: GET IT DOWN TO GO ON"; if (q.wayTip) return q.wayTip;   // (B7 cleared with its bridge still up: not "walk right" over a gap you can't cross (the user, 2026-11-03 late: "it said go to next screen but the bridge actually didnt go down"))   // (wayTip: a room's own, the beach tutorial's C2)
   if (q.exitLeft) return "← WALK LEFT, ON INTO " + (q.toWorld !== undefined ? WORLDS[q.toWorld].name : "THE NEXT CLEARING");
   if (q.noRight) return q.climbUp ? "↑ ON UP: JUMP UP THE LEDGES AND OFF THE TOP" : q.up !== undefined && q.down !== undefined ? "↑ ↓ CLIMB A ROPE LADDER, UP OR DOWN" : q.up !== undefined ? "↑ ON UP THE ROPE LADDER" : q.down !== undefined ? "↓ ON DOWN THE ROPE LADDER (OR JUST DROP)" : q.below !== undefined ? "↓ DROP DOWN TO GO ON" : "← A DEAD END: BACK THE WAY YOU CAME";
   return entrySide === "right" ? "← WALK LEFT TO THE NEXT CLEARING" : q.nextHi !== undefined ? "↑ UP TOP, OR ON ALONG THE BOTTOM →" : "WALK RIGHT TO THE NEXT CLEARING →"; };   // (a split: up top, or on along the bottom)
@@ -27737,7 +27742,7 @@ function frame(now) {                              // (the next frame is asked f
     adaptQuality(dt);
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (riseFade > 0) riseFadeTick(dt);              // (a room change without a pan: the one you left fading off, the game going on)
