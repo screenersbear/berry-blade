@@ -409,6 +409,7 @@
   #pause .btns { justify-content: center; }
   #pAsk { margin: 0 0 12px; background: var(--s); color: var(--y); font: 600 13px/1.55 "Jost", sans-serif; letter-spacing: .16em; padding: 9px 18px; text-align: center; }
   #pAsk.hidden { display: none; }
+#pAsk .rlog { margin: 8px auto 2px; max-width: 760px; max-height: 42vh; overflow: auto; text-align: left; white-space: pre-wrap; font: 500 11px/1.5 ui-monospace, Menlo, Consolas, monospace; letter-spacing: 0; color: #fff; }   /* (DEBUG → ROOM LOG) */
   #fpsBox { position: fixed; left: 50%; top: 4px; transform: translateX(-50%); z-index: 60; background: rgba(29, 31, 36, .82); color: var(--y); font: 600 11px/1.45 "Jost", sans-serif; letter-spacing: .06em; padding: 3px 10px; pointer-events: none; white-space: nowrap; } #fpsBox.hidden { display: none; }   /* (pause > DEBUG > FPS COUNTER) */
   #pause.dbg #pTeam { display: none; }
   #pause.dbg .pwrap > :not(#pBody), #pause.dbg #pWidgets { opacity: .18; pointer-events: none; }   /* (DEBUG: a popup over the pause screen, which dims behind it) */
@@ -5488,7 +5489,29 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
 const BIG_CELLS = [["B2", 0, 0], ["B3", 1, 0], ["A2", 0, 1], ["A3", 1, 1]];   // (a screen, how many across, how many rows up)
 const BIG_CUT = GROUND - ROW_H + SEAM_T;              // (px: above this line the top row: where a pan up or down cuts the two rows' pictures)
 let bigOn = (() => { try { return localStorage.getItem("bbBigRoom") === "1"; } catch (e) { return false; } })();
-let itemsInf = (() => { try { return localStorage.getItem("bbItemsInf") === "1"; } catch (e) { return false; } })();   // (DEBUG → UNLIMITED ITEMS: the bag never runs out. The user, 2026-11-01: "give unlimited items in debug mode")
+let itemsInf = (() => { try { return localStorage.getItem("bbItemsInf") === "1"; } catch (e) { return false; } })();
+// DEBUG → ROOM LOG (the user, 2026-11-03 late: "I jumped pretty far in BA6 in berry woods and it actually dorpped me in a8. that shouldn't happen"; not seen here in 300+ test jumps, then "Yes, add the log"):
+// the last ROOM_LOG_N room changes, newest first: where you were the frame before (room, x, y, falling speed), where you came in, and what moved you (the functions that did it). Kept in this browser
+const ROOM_LOG_N = 30; let roomLog = (() => { try { const v = JSON.parse(localStorage.getItem("bbRoomLog") || "[]"); return Array.isArray(v) ? v : []; } catch (e) { return []; } })(), rlLast = null;
+const rlName = s => { const q = STAGES[s]; return q ? (q.bgCell || q.cell || (q.big ? "BIG ROOM" : q.name) || "#" + s) : "#" + s; };
+function rlCause() {                                 // (the room change's own callers, from the stack: goRoomDrop, goRoomRise, goNext, storyRun ...)
+  const skip = /^(rlCause|rlNote|rlTick|enterStage|swapPan|work|frame|update|Error|eval|requestAnimationFrame|setTimeout)$/, out = [];
+  for (const l of (new Error().stack || "").split("\n")) { const m = /at (?:new |async )?([\w$.]+) \(/.exec(l) || /^\s*([\w$.]+)@/.exec(l), n = m ? m[1].split(".").pop() : ""; if (n && !skip.test(n) && !out.includes(n)) out.push(n); if (out.length >= 3) break; }
+  return out.join(" ← ") || "?";
+}
+function rlNote(to, why) {                           // (a room change: logged, and kept)
+  const L = rlLast, p = player, e = { t: Date.now(), w: world, from: L ? L.n : "?", fw: L ? L.w : world, fx: L ? Math.round(L.x) : 0, fy: L ? Math.round(L.y) : 0, fvx: L ? Math.round(L.vx) : 0, fvy: L ? Math.round(L.vy) : 0,
+    to: rlName(to), x: p ? Math.round(p.x) : 0, y: p ? Math.round(p.y) : 0, why: why || rlCause() };
+  roomLog.unshift(e); roomLog.length = Math.min(roomLog.length, ROOM_LOG_N); try { localStorage.setItem("bbRoomLog", JSON.stringify(roomLog)); } catch (er) { }
+  if (L) Object.assign(L, { s: to, w: world, n: e.to });
+}
+function rlTick() {                                  // (every frame of play: where you are, for the next change's "from"; and a room changed with no enterStage (a reset, a load) logged all the same)
+  const p = player; if (!p) return; const L = rlLast || (rlLast = { s: stage, w: world, n: rlName(stage), x: 0, y: 0, vx: 0, vy: 0 });
+  if (L.s !== stage || L.w !== world) rlNote(stage, "(no enterStage: a reset, a load, a run start)");
+  L.x = p.x; L.y = p.y; L.vx = p.vx; L.vy = p.vy;
+}
+function rlText() { return roomLog.length ? roomLog.map(e => { const d = new Date(e.t), hm = [d.getHours(), d.getMinutes(), d.getSeconds()].map(v => String(v).padStart(2, "0")).join(":");
+  return `${hm} W${e.fw}${e.fw !== e.w ? "→W" + e.w : ""} ${e.from} x${e.fx} y${e.fy} v${e.fvx},${e.fvy} → ${e.to} x${e.x} y${e.y} · ${e.why}`; }).join("\n") : "(NOTHING YET)"; }   // (DEBUG → UNLIMITED ITEMS: the bag never runs out. The user, 2026-11-01: "give unlimited items in debug mode")
 let bigShift = null;                                 // (into the big room in a pan: how far its middle is from the screen the pan was built for)
 const bigSubsNow = () => BIG_CELLS.map(([c, ax, up]) => ({ s: STAGES.findIndex(q => q && q.cell === c && !q.arena && !q.cut && !q.big), c, ox: ax * CELL_W, oy: -up * ROW_H }));
 const bigSubOf = s => world === 0 && bigOn && mode === "play" && !stronghold && !hideout && !arena && !rideS && bigSubsNow().some(u => u.s === s);
@@ -6944,7 +6967,7 @@ function setOpp(i) {
 let runStart = 0, beaten = 0, cleared = 0, modalKind = null;   // beaten: bosses · cleared: stages, this run
 // pause menu (Esc / Enter during a fight)
 let PAUSE_OPTS = ["resume", "ach", "lvl", "home", "quit"];
-const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dgo: "GO TO A ROOM", dteam: "PARTNERS", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dfeel: "COMBAT FEEL", dexp: "DOWNLOAD DEBUG SETTINGS", dimp: "LOAD DEBUG SETTINGS", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
+const PAUSE_LABEL = { songs: "HEADPHONES", resume: "RETURN TO GAME", map: "WORLD MAP", ach: "ACHIEVEMENTS", lvl: "LEVEL SELECT", home: "HOME SCREEN", quit: "QUIT GAME", debug: "DEBUG", dlog: "ROOM LOG", dgo: "GO TO A ROOM", dteam: "PARTNERS", dreset: "RESET THIS ROOM", dtale: "PLAY THE STORY", dfeel: "COMBAT FEEL", dexp: "DOWNLOAD DEBUG SETTINGS", dimp: "LOAD DEBUG SETTINGS", dback: "BACK", vlog: "GAME LOG", wear: "ACCESSORIES" };
 // (the user, 2026-10-28: "the pause menu should first have a option that says "return to game" which is where they cursor starts. but the player can scroll up to get to
 // those other options. hitting okay on the casette player will bring up the music menu, hitting the character viewers should have an accessories heading but also open to
 // the accesories menu ... and hitting the map should make it full screen"): the widgets (w_map, w_wear, w_tape: those you've got) at the top, then the options, RETURN TO GAME last
@@ -7089,11 +7112,18 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dlog", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; $("pause").classList.add("dpick"); PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE<br><b class='dbgRoom'></b>"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
+  if (what === "dlog" || what === "dlogc" || what === "dlogcp") {   // (DEBUG → ROOM LOG: the last room changes; copy them to send, or clear them)
+    if (what === "dlogc") { roomLog = []; try { localStorage.removeItem("bbRoomLog"); } catch (e) { } }
+    if (what === "dlogcp") { try { navigator.clipboard.writeText(rlText()).then(() => toast("ROOM LOG COPIED", 1600), () => toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200)); } catch (e) { toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200); } }
+    SFX.confirm(); PAUSE_OPTS = ["dlogcp", "dlogc", "dback"]; $("pbtns").innerHTML = `<button data-p="dlogcp">COPY IT</button><button data-p="dlogc">CLEAR IT</button><button data-p="dback">BACK</button>`;
+    const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    $("pAsk").innerHTML = `DEBUG: THE LAST ROOM CHANGES, NEWEST FIRST<br>WHERE YOU WERE THE FRAME BEFORE → WHERE YOU CAME IN · WHAT MOVED YOU<div class="rlog">${esc(rlText())}</div>`; $("pAsk").classList.remove("hidden");
+    setPauseSel(what === "dlog" ? 2 : PAUSE_OPTS.indexOf(what)); return; }
   if (what === "dteam") { SFX.confirm(); dbgTeam = dbgTeam || { b: 0, c: 0, d: 0, x: 0 }; dbgTeamShow(0); return; }
   if (what === "dwpn") { SFX.confirm(); PAUSE_OPTS = ["dw0", "dw1", "dw2", "dw3", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dback" ? "BACK" : "SIZE " + (+q[2] + 1) + " · " + POWER_PCT[+q[2]] + "%" + ((player.power || 0) === +q[2] ? "  ◂ NOW" : "")}</button>`).join("");   // (DEBUG: the weapon at any size, to see it: 2026-11-01)
     $("pAsk").innerHTML = "DEBUG: THE WEAPON'S SIZE<br>PICK ONE: BIGGER, IT GROWS AS IT DOES IN PLAY"; $("pAsk").classList.remove("hidden"); setPauseSel(Math.min(3, player.power || 0)); return; }
@@ -10509,7 +10539,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   if (wpnWorld !== world) { wpnWorld = world; wpnByUprise(false); }   // (into another world: the weapon as big as its uprising)
   if (bigSubOf(ns)) ns = bigEnter(ns);              // (one of the big room's screens: the big room)
   hideFoe(foe); clearHz(); endCameo(); clearTrap();
-  stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns);
+  stage = ns; oppSel = STAGES[stage].foe; foe = FOES[oppSel]; if (wst) wst.rooms.add(ns); try { rlNote(ns); } catch (e) { }   // (DEBUG → ROOM LOG)
   enemy = makeFoeState(foe, STAGES[stage].bossLeft && player ? Math.max(160, Math.min(STAGES[stage].bossX ?? 420, player.x - 420)) : WORLD - 360); enemy.atkCd = 3;   // (bossLeft: the waves' A1, the boss always on your left, the side its way out is: the user, 2026-10-25)
   const done = fillRoom(), iso = !!STAGES[stage].quick; if (!iso) maybeSkirmish(done);   // the berry baddies first; on a boss stage the boss drops in once they're popped   // (iso: QUICK PLAY, nothing else in it)
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
@@ -27428,6 +27458,7 @@ function update(dt) {
   time += dt; KIT.time = time;
   if (mode === "select") { updateSelect(dt); return; }
   if (mode === "opp") { updateOpp(dt); return; }
+  try { rlTick(); } catch (e) { }                  // (DEBUG → ROOM LOG: where you are this frame)
   if (mode === "world") { updateWorldSel(dt); return; }
   if (rideS && rideS.play) { roadUpdate(dt); return; }   // (stopped by the road on La Guagua: its own little stage)
   wstTick(dt);
