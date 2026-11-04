@@ -1229,8 +1229,9 @@ let pixelRatio = Math.min(devicePixelRatio || 1, 2);   // (phone build: sharper)
 renderer.setPixelRatio(pixelRatio);
 renderer.setSize(innerWidth, innerHeight);
 document.body.prepend(renderer.domElement);
-renderer.domElement.addEventListener("webglcontextlost", e => { e.preventDefault(); console.warn("the 3D picture was lost: asking for it back"); }, false);
-renderer.domElement.addEventListener("webglcontextrestored", () => { console.warn("the 3D picture is back: this room built again"); try { if (KIT.lostBack) KIT.lostBack(); texCachesDrop(); texRepaint(); level.s = -2; if (mode === "play" && STAGES[stage]) setScreen(stage); } catch (e) { console.error(e); } }, false);
+renderer.domElement.addEventListener("webglcontextlost", e => { e.preventDefault(); console.warn("the 3D picture was lost: asking for it back"); GFX.lost++; gfxNote("THE 3D PICTURE WAS LOST (the GPU reset)"); }, false);   // (each a line in DEBUG → ROOM LOG, since 2026-11-04)
+renderer.domElement.addEventListener("webglcontextrestored", () => { console.warn("the 3D picture is back: this room built again"); GFX.back++; gfxNote("THE 3D PICTURE CAME BACK: this room built again"); gfxRebuild(); }, false);
+function gfxRebuild() { try { if (KIT.lostBack) KIT.lostBack(); texCachesDrop(); texRepaint(); level.s = -2; if (mode === "play" && STAGES[stage]) setScreen(stage); } catch (e) { console.error(e); } }   // (every picture painted again and the room built again: the 3D picture back, or DEBUG → ROOM LOG → REPAINT THE ROOM)
 renderer.domElement.tabIndex = 0;
 const scene = new THREE.Scene();
 const FOG = new THREE.Color("#9cbca3");
@@ -5629,7 +5630,7 @@ function rlCause() {                                 // (the room change's own c
 }
 function rlNote(to, why) {                           // (a room change: logged, and kept)
   const L = rlLast, p = player, e = { t: Date.now(), w: world, from: L ? L.n : "?", fw: L ? L.w : world, fx: L ? Math.round(L.x) : 0, fy: L ? Math.round(L.y) : 0, fvx: L ? Math.round(L.vx) : 0, fvy: L ? Math.round(L.vy) : 0,
-    to: rlName(to), x: p ? Math.round(p.x) : 0, y: p ? Math.round(p.y) : 0, why: why || rlCause() };
+    to: rlName(to), x: p ? Math.round(p.x) : 0, y: p ? Math.round(p.y) : 0, why: why || rlCause(), g: gfxNums() };
   roomLog.unshift(e); roomLog.length = Math.min(roomLog.length, ROOM_LOG_N); try { localStorage.setItem("bbRoomLog", JSON.stringify(roomLog)); } catch (er) { }
   if (L) Object.assign(L, { s: to, w: world, n: e.to });
 }
@@ -5638,8 +5639,72 @@ function rlTick() {                                  // (every frame of play: wh
   if (L.s !== stage || L.w !== world) rlNote(stage, "(no enterStage: a reset, a load, a run start)");
   L.x = p.x; L.y = p.y; L.vx = p.vx; L.vy = p.vy;
 }
-function rlText() { return roomLog.length ? roomLog.map(e => { const d = new Date(e.t), hm = [d.getHours(), d.getMinutes(), d.getSeconds()].map(v => String(v).padStart(2, "0")).join(":");
-  return `${hm} W${e.fw}${e.fw !== e.w ? "→W" + e.w : ""} ${e.from} x${e.fx} y${e.fy} v${e.fvx},${e.fvy} → ${e.to} x${e.x} y${e.y} · ${e.why}`; }).join("\n") : "(NOTHING YET)"; }   // (DEBUG → UNLIMITED ITEMS: the bag never runs out. The user, 2026-11-01: "give unlimited items in debug mode")
+const rlClock = t => { const d = new Date(t); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(v => String(v).padStart(2, "0")).join(":"); };
+function rlText() { return roomLog.length ? roomLog.map(e => { const hm = rlClock(e.t), g = e.g ? " · " + e.g : "";
+  if (e.k) return `${hm} !! ${e.why} · W${e.w} ${e.to} x${e.x} y${e.y}${g}`;   // (not a room change: the 3D picture lost or back, the page put away, a warning or an error)
+  return `${hm} W${e.fw}${e.fw !== e.w ? "→W" + e.w : ""} ${e.from} x${e.fx} y${e.fy} v${e.fvx},${e.fvy} → ${e.to} x${e.x} y${e.y} · ${e.why}${g}`; }).join("\n") : "(NOTHING YET)"; }   // (DEBUG → UNLIMITED ITEMS: the bag never runs out. The user, 2026-11-01: "give unlimited items in debug mode")
+// DEBUG → ROOM LOG, the 3D picture's side (the user, 2026-11-04, of the woods' platforms gone black: "I thought the debug code would show you?" and "it seems like
+// it's some loading problem and at some point things just don't load properly"; the log had only the room changes in it). Now each change notes the picture's
+// counts (t: pictures on the GPU, g: shapes, p: shader programs, L: times the 3D picture was lost); the 3D picture lost or back, the page put away a long while
+// (a Mac asleep) and the game's warnings and errors are lines of their own; and the log opens with how the picture is right now (rlHealth), copied with it
+const GFX = { lost: 0, back: 0, errs: new Set(), hid: 0, mute: false }; let rlNow = "";
+function gfxNums() { try { const I = renderer.info; return `t${I.memory.textures} g${I.memory.geometries} p${I.programs ? I.programs.length : "?"}${GFX.lost ? " L" + GFX.lost : ""}`; } catch (e) { return "?"; } }
+function gfxNote(why) {                              // (a line in the log that isn't a room change, kept with the rest)
+  try { const p = player; roomLog.unshift({ t: Date.now(), w: world, k: 1, to: rlName(stage), x: p ? Math.round(p.x) : 0, y: p ? Math.round(p.y) : 0, why, g: gfxNums() });
+    roomLog.length = Math.min(roomLog.length, ROOM_LOG_N); localStorage.setItem("bbRoomLog", JSON.stringify(roomLog)); } catch (e) { }
+}
+["error", "warn"].forEach(k => { const f = console[k]; console[k] = function (...a) { f.apply(console, a); if (!rlLast || GFX.mute) return; try {   // (the game's own and three.js's once you're playing (not the map's checks at the start): each once, a dozen a visit at most)
+  const s = a.map(v => v instanceof Error ? v.message : v && typeof v === "object" ? "" : String(v)).join(" ").replace(/\s+/g, " ").trim().slice(0, 150);
+  if (s && !/^(the 3D picture|UniformsUtils: Textures of render targets)/.test(s) && !GFX.errs.has(s) && GFX.errs.size < 12) { GFX.errs.add(s); gfxNote((k === "error" ? "ERROR: " : "WARNING: ") + s); } } catch (e) { } }; });
+document.addEventListener("visibilitychange", () => { if (document.hidden) { GFX.hid = Date.now(); return; } const m = GFX.hid ? Math.round((Date.now() - GFX.hid) / 60000) : 0; GFX.hid = 0;
+  if (m >= 2) gfxNote(`THE PAGE WAS PUT AWAY ${m >= 60 ? Math.floor(m / 60) + "h " : ""}${m % 60}m (the Mac asleep, or another tab or app in front)`); });
+const gfxHex = a => "#" + [a[0], a[1], a[2]].map(v => v.toString(16).padStart(2, "0")).join("");
+function gfxSeen(root, fn) { root.traverse(o => { if (!o.isMesh && !o.isSprite && !o.isPoints) return; let v = o.visible, q = o.parent; while (v && q) { v = q.visible; q = q.parent; } if (v) fn(o); }); }   // (what's drawn: it and all it's in shown)
+function gfxTest() {                                 // (two squares drawn off screen and read back: a toon one lit by one light, as the platforms are drawn (black: the shading's step picture gone), and a plain one)
+  const rt = new THREE.WebGLRenderTarget(4, 4), sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 10), g = new THREE.PlaneGeometry(2, 2), px = new Uint8Array(4), out = [];
+  const prev = renderer.getRenderTarget(), cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(), d = new THREE.DirectionalLight("#ffffff", 2);
+  const mats = [["toon", toon("#e0a060")], ["plain", new THREE.MeshBasicMaterial({ color: "#e0a060" })]], q = new THREE.Mesh(g, mats[0][1]); d.position.set(0, 0, 5); cam.position.z = 5; sc.add(d, q);
+  GFX.mute = true; try { if (SHADE) SHADE.pass(false);   // (mute: three.js's own warning on a new material's first drawing isn't the game's)
+    for (const [nm, m] of mats) { q.material = m; renderer.setRenderTarget(rt); renderer.setClearColor(0, 1); renderer.clear(); renderer.render(sc, cam); renderer.readRenderTargetPixels(rt, 2, 2, 1, 1, px); out.push(nm + " " + gfxHex(px)); }
+  } catch (e) { out.push("couldn't: " + e.message); } GFX.mute = false;
+  renderer.setRenderTarget(prev); renderer.setClearColor(cc, ca); rt.dispose(); g.dispose(); mats.forEach(([, m]) => m.dispose());
+  return out.join(" · ") + " (made #e0a060)";
+}
+function gfxScreen() {                               // (the room as last drawn, before the grade: nine spots, the top row first)
+  try { const px = new Uint8Array(4), W = frameRT.width, H = frameRT.height, o = [];
+    for (const fy of [.75, .5, .25]) for (const fx of [1 / 6, .5, 5 / 6]) { renderer.readRenderTargetPixels(frameRT, Math.floor(W * fx), Math.floor(H * fy), 1, 1, px); o.push(gfxHex(px)); }
+    return o.join(" "); } catch (e) { return "couldn't: " + e.message; }
+}
+function gfxPics() {                                 // (every picture on something drawn: let go, empty, or blank: a sample of its pixels all clear)
+  const seen = new Set(), bad = [];
+  const blank = im => { try { let D = null, w = im.width, h = im.height; if (im instanceof HTMLCanvasElement) { const c = im.getContext("2d"); if (!c) return false; D = c.getImageData(0, 0, w, h).data; } else if (typeof ImageData === "function" && im instanceof ImageData) D = im.data; else return false;
+    for (let i = 0; i < 48; i++) { const x = Math.floor((i % 8 + .5) / 8 * w), y = Math.floor((Math.floor(i / 8) + .5) / 6 * h), k = (y * w + x) * 4; if (D[k + 3]) return false; } return true; } catch (e) { return false; } };
+  [scene, actors].forEach(R => gfxSeen(R, o => (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (!m) return; for (const key in m) { const t = m[key]; if (!t || !t.isTexture || seen.has(t)) continue; seen.add(t);
+    const im = t.image, why = t.__gone ? "let go" : !im ? (t.isDataTexture || t.isRenderTargetTexture || t.isFramebufferTexture ? "" : "no picture") : im.width === 0 ? "empty" : t.isDataTexture ? "" : blank(im) ? "blank" : "";
+    if (why) bad.push(`${o.name || (o.parent && o.parent.name) || o.type}.${key} ${why}`); } })));
+  return `${seen.size} · ` + (bad.length ? bad.slice(0, 6).join(", ") + (bad.length > 6 ? ` +${bad.length - 6} more` : "") : "none let go or blank");
+}
+function gfxDark() {                                 // (the scenery's own colours, black or near it: outlines aside)
+  const seen = new Set(), dark = [];
+  gfxSeen(scene, o => (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (!m || seen.has(m) || !m.color || m.side === THREE.BackSide) return; seen.add(m); const c = m.color;
+    if (c.r * .2126 + c.g * .7152 + c.b * .0722 < .02 && !(m.transparent && m.opacity < .6)) dark.push(`${m.type.replace("Mesh", "").replace("Material", "")} #${c.getHexString()}`); }));   // (the see-through shadows under everyone aside)
+  const U = [...new Set(dark)]; return `${dark.length} of ${seen.size}` + (U.length ? ": " + U.slice(0, 5).join(", ") : "");
+}
+const gfxBrowser = () => { const u = navigator.userAgent, f = (re, n) => { const m = re.exec(u); return m ? n + " " + m[1] : ""; };
+  return (f(/Edg\/(\d+)/, "Edge") || f(/Chrome\/(\d+)/, "Chrome") || f(/Firefox\/(\d+)/, "Firefox") || f(/Version\/([\d.]+).*Safari/, "Safari") || "?") + (/iPhone|iPad/.test(u) ? " (phone)" : /Mac/.test(u) ? " (Mac)" : ""); };
+function rlHealth() {                                // (how the 3D picture is right now: on top of the log, and copied with it)
+  const L = [], n = v => Math.round(v * 100) / 100, p = player, up = Math.round(performance.now() / 60000); let gl = null, gpu = "?";
+  try { gl = renderer.getContext(); const x = gl.getExtension("WEBGL_debug_renderer_info"); gpu = String(x ? gl.getParameter(x.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)).slice(0, 80); } catch (e) { }
+  L.push(`NOW ${rlClock(Date.now())} · W${world} ${rlName(stage)}${p ? ` x${Math.round(p.x)} y${Math.round(p.y)}` : ""} · ${mode} · the page open ${up >= 60 ? Math.floor(up / 60) + "h " : ""}${up % 60}m`);
+  L.push(`${gfxBrowser()} · ${gpu} · ${innerWidth}x${innerHeight} ×${n(renderer.getPixelRatio())}${performance.memory ? " · memory " + Math.round(performance.memory.usedJSHeapSize / 1048576) + " MB" : ""}`);
+  L.push(`3D PICTURE ${gl && gl.isContextLost() ? "LOST RIGHT NOW" : "on"} · lost ${GFX.lost}× back ${GFX.back}× this visit · ${gfxNums()} · frame errors ${frameErrs}`);
+  L.push(`LIGHT sun ${n(sun.intensity)} hemi ${n(hemi.intensity)} · the characters' sun ${n(sun2.intensity)} hemi ${n(hemi2.intensity)} · dim ${n(gradeMat.uniforms.dim.value)} ruin ${n(gradeMat.uniforms.ruin.value)} · the look ${SHADE ? "applied" : "the game's own"}`);
+  L.push(`TEST SQUARES ${gfxTest()}`);
+  L.push(`ON SCREEN ${gfxScreen()}`);
+  L.push(`PICTURES IN VIEW ${gfxPics()}`);
+  L.push(`DARK COLOURS IN VIEW ${gfxDark()}`);
+  return L.join("\n");
+}
 let bigShift = null;                                 // (into the big room in a pan: how far its middle is from the screen the pan was built for)
 const bigSubsNow = () => BIG_CELLS.map(([c, ax, up]) => ({ s: STAGES.findIndex(q => q && q.cell === c && !q.arena && !q.cut && !q.big), c, ox: ax * CELL_W, oy: -up * ROW_H }));
 const bigSubOf = s => world === 0 && bigOn && mode === "play" && !stronghold && !hideout && !arena && !rideS && bigSubsNow().some(u => u.s === s);
@@ -7246,13 +7311,15 @@ function pauseChoose(what) {
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; $("pause").classList.add("dpick"); PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE<br><b class='dbgRoom'></b>"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
+  if (what === "dlogfix") { closePause(); SFX.confirm(); gfxNote("REPAINTED BY HAND (DEBUG → ROOM LOG)"); gfxRebuild(); toast("THE ROOM PAINTED AGAIN", 1600); return; }   // (what a GPU reset's return does: if that brings the black back to its colours, it was the pictures)
   if (what === "dlog" || what === "dlogc" || what === "dlogcp") {   // (DEBUG → ROOM LOG: the last room changes; copy them to send, or clear them)
+    if (what === "dlog" || !rlNow) rlNow = rlHealth();   // (the 3D picture as it was when the log was opened: right after something went wrong)
     if (what === "dlogc") { roomLog = []; try { localStorage.removeItem("bbRoomLog"); } catch (e) { } }
-    if (what === "dlogcp") { try { navigator.clipboard.writeText(rlText()).then(() => toast("ROOM LOG COPIED", 1600), () => toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200)); } catch (e) { toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200); } }
-    SFX.confirm(); PAUSE_OPTS = ["dlogcp", "dlogc", "dback"]; $("pbtns").innerHTML = `<button data-p="dlogcp">COPY IT</button><button data-p="dlogc">CLEAR IT</button><button data-p="dback">BACK</button>`;
+    if (what === "dlogcp") { try { navigator.clipboard.writeText(rlNow + "\n\n" + rlText()).then(() => toast("ROOM LOG COPIED", 1600), () => toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200)); } catch (e) { toast("COULDN'T COPY: TAKE A SCREENSHOT", 2200); } }
+    SFX.confirm(); PAUSE_OPTS = ["dlogcp", "dlogfix", "dlogc", "dback"]; $("pbtns").innerHTML = `<button data-p="dlogcp">COPY IT</button><button data-p="dlogfix">REPAINT THE ROOM</button><button data-p="dlogc">CLEAR IT</button><button data-p="dback">BACK</button>`;
     const esc = t => t.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-    $("pAsk").innerHTML = `DEBUG: THE LAST ROOM CHANGES, NEWEST FIRST<br>WHERE YOU WERE THE FRAME BEFORE → WHERE YOU CAME IN · WHAT MOVED YOU<div class="rlog">${esc(rlText())}</div>`; $("pAsk").classList.remove("hidden");
-    setPauseSel(what === "dlog" ? 2 : PAUSE_OPTS.indexOf(what)); return; }
+    $("pAsk").innerHTML = `DEBUG: THE LAST ROOM CHANGES, NEWEST FIRST<br>WHERE YOU WERE THE FRAME BEFORE → WHERE YOU CAME IN · WHAT MOVED YOU<div class="rlog">${esc(rlNow)}\n\n${esc(rlText())}</div>`; $("pAsk").classList.remove("hidden");
+    setPauseSel(what === "dlog" ? PAUSE_OPTS.length - 1 : PAUSE_OPTS.indexOf(what)); return; }
   if (what === "dteam") { SFX.confirm(); dbgTeam = dbgTeam || { b: 0, c: 0, d: 0, x: 0 }; dbgTeamShow(0); return; }
   if (what === "dwpn") { SFX.confirm(); PAUSE_OPTS = ["dw0", "dw1", "dw2", "dw3", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dback" ? "BACK" : "SIZE " + (+q[2] + 1) + " · " + POWER_PCT[+q[2]] + "%" + ((player.power || 0) === +q[2] ? "  ◂ NOW" : "")}</button>`).join("");   // (DEBUG: the weapon at any size, to see it: 2026-11-01)
     $("pAsk").innerHTML = "DEBUG: THE WEAPON'S SIZE<br>PICK ONE: BIGGER, IT GROWS AS IT DOES IN PLAY"; $("pAsk").classList.remove("hidden"); setPauseSel(Math.min(3, player.power || 0)); return; }
