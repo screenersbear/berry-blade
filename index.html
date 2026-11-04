@@ -12033,6 +12033,7 @@ function makeBubble(p, hits = 1) {                  // (hits: the bubblegum's ta
   if (p.bubble) return;
   const m = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), SHIELD_M); m.renderOrder = 5; actors.add(m);
   p.bubble = { m, t: 0, hits, k: hits }; if (hits === 1) p.tpose = 1; SFX.bubble(); sparks(p.x, p.y - (p.rig.heightPx || 92) * .5, hits > 1 ? 14 : 6);
+  if (p === player) [pal, pal2].forEach(q => { if (q && q.rig && q.rig.root.visible && !q.zipR && !q.sit) { budBubble(q, 1); q.bubTie = true; } });   // (the pets in theirs with yours, the first: the user, 2026-11-04 "if you bubble while having a dog or cat on the team, they should laso get a bubble with the first bubble that pops up")
 }
 function teamBubbles(p) { partnerList().forEach(P => { const q = P.q; if (q && !q.worn && !q.post && !q.bubble && Math.abs(q.x - p.x) < 220 && Math.abs(q.y - p.y) < 80) budBubble(q, 1); }); }   // (the guard held to your bubble: one round each lined up with you)
 function budBubble(q, hits) {                       // a buddy's bubble (the bubblegum's: the whole team in one each)
@@ -12041,9 +12042,10 @@ function budBubble(q, hits) {                       // a buddy's bubble (the bub
 }
 function budPop(q, fx = true) { const B = q && q.bubble; if (!B) return; q.bubble = null; actors.remove(B.m); B.m.geometry.dispose(); if (fx) { SFX.bubblePop(); sparks(q.x, q.y - ((q.rig && q.rig.heightPx) || 80) * .5, 10); } }
 function syncBudBubbles(dt) {                        // (round each, with it as it goes; gone with it)
-  const L = mode === "play" ? partnerList().map(P => P.q) : [];
+  const L = mode === "play" ? partnerList().map(P => P.q).concat([pal, pal2].filter(Boolean)) : [];   // (and the pets': theirs come with yours)
   for (const q of budBubbled) if (!L.includes(q) || !q.bubble || !q.rig || !q.rig.root.visible || q.worn) { if (q.bubble) budPop(q, false); budBubbled.delete(q); }
-  for (const q of L) { const B = q.bubble; if (!B) continue; budBubbled.add(q); B.t += dt; const H = ((q.rig && q.rig.heightPx) || 80) * S, u = Math.min(1, B.t / .4), pop = u < 1 ? 1 + Math.sin(u * Math.PI) * .25 - (1 - u) * (1 - u) * .9 : 1;
+  for (const q of [pal, pal2]) if (q && q.bubble && q.bubTie && !(player && player.bubble)) { budPop(q); q.bubTie = false; }   // (a pet's goes when yours does: a hit, popped from inside, a swap)
+  for (const q of L) { const B = q.bubble; if (!B) continue; budBubbled.add(q); B.t += dt; const H = ((q.rig && q.rig.heightPx) || (petRig(q.rig) ? 64 : 80)) * S, u = Math.min(1, B.t / .4), pop = u < 1 ? 1 + Math.sin(u * Math.PI) * .25 - (1 - u) * (1 - u) * .9 : 1;
     B.k += (B.hits - B.k) * (1 - Math.exp(-dt * 9)); const r = H * .66 * pop * (1 + (B.k - 1) * GUM_GROW), w = Math.sin(time * 5.5 + 1) * .035;
     B.m.position.set(X(q.x), Y(q.y) + r * .78, q.z || 0); B.m.scale.set(r * (1 + w), r * (1 - w), r); }
 }
@@ -12571,8 +12573,21 @@ function petChore(q, dt) {                           // the pet on its own: now 
     if (solidAt(x) && Math.abs((groundAt(x) ?? -1e9) - q.y) < 20) q.dig = { ph: "go", x, t: 0 }; }
   return false;
 }
+function palFloat(q, i, dt) {                      // in its bubble (the user, 2026-11-04: "they'll float until the bubble is popped. they dont walk with the bubble"): up off its feet, sat in it, drifting after you
+  const p = player; if (!p) return false;            // through the air, bobbing; popped, down it drops and on it goes
+  const k = partSlot(q), tx = shoreX(p.x - p.face * (75 + k * 55)), ty = p.y - 70 - k * 14 + Math.sin(time * 2.4 + i * 1.7) * 9;
+  q.vx = approach(q.vx, clamp((tx - q.x) * 1.6, -240, 240), 500 * dt); q.vy = approach(q.vy, clamp((ty - q.y) * 2.2, -200, 200), 600 * dt);
+  q.x = clamp(q.x + q.vx * dt, 30, WORLD - 30); q.y += q.vy * dt; if (Math.abs(p.x - q.x) > 720) { q.x = tx; q.y = ty; q.vx = q.vy = 0; }   // (left far behind: there with you, as when it walks)
+  Object.assign(q, { onGround: false, plat: null, pounce: null, atkKind: null, atkT: -1, hopT: 0, stepHop: 0, mirrorJ: false, dive: false, dropT: 0 });
+  q.face = Math.abs(tx - q.x) > 30 ? Math.sign(tx - q.x) : p.face; q.z = approach(q.z || 0, PART_Z[k], .9 * dt);
+  q.prof = approach(q.prof || 0, 0, dt * 5); q.bodyYaw = lerp(.85, .3, q.prof); q.yaw = lerp(q.yaw, q.face > 0 ? -q.bodyYaw : -Math.PI + q.bodyYaw, 1 - Math.exp(-dt * 12));
+  q.blink -= dt; if (q.blink < -.12) q.blink = 2 + Math.random() * 2.5;
+  const sv = q.sit, og = q.onGround; q.sit = 1; q.onGround = true; spring(q, dt); updatePose(q, dt); q.sit = sv; q.onGround = og;   // (its sitting pose, legs still: for the drawing only)
+  return true;
+}
 function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the second)
   if (q.zipR) return;                                // (down the zipline behind you: zipRide moves it)
+  if (q.bubble && palFloat(q, i, dt)) return;        // (in its bubble: floating, not walking)
   const p = player, far = Math.abs(p.x - q.x), mk = i ? "palAt2" : "palAt", k = partSlot(q), F = PET_FOLLOW[petOf(q)] || [370, 500], slow = pal && pal2 && q === pal2 && petOf(pal) === petOf(pal2) ? .93 : 1;   // (k: its place in the line; two of a kind: the second a touch slower, so they string out)
   if (!q.pounce && q.atkKind) { q.atkKind = null; q.atkT = -1; }   // (its special's pose, done with)
   if (climbWith(q, dt)) { q.yaw = lerp(q.yaw, q.face > 0 ? -.85 : -Math.PI + .85, 1 - Math.exp(-dt * 12)); q.blink -= dt; if (q.blink < -.12) q.blink = 2 + Math.random() * 2.5; updatePose(q, dt); return; }   // (up a climb after you)
