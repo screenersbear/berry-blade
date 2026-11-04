@@ -2545,6 +2545,8 @@ Object.assign(STRIKES, {
     armF: [1.5, 1.53, 1.5], elbF: [.08, .06, .08], spF: [.1, .1, .1], blade: [0, .02, 0], armB: [.35, .38, .35], elbB: [1.7, 1.7, 1.7], spB: [.45, .45, .45], fNx: [.4, .4, .4], fFx: [-.44, -.44, -.44], fNz: [.08, .08, .08], fFz: [.06, .06, .06] }) },
   point_giant: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [-.14, -.17, -.14], arch: [-.16, -.18, -.16], bodyY: [-.14, -.16, -.14], twist: [-.1, -.1, -.1], headRot: [-.12, -.1, -.12],   // the big hand out at them, a finger pointing, leant back against its weight
     armF: [1.3, 1.34, 1.3], elbF: [.1, .08, .1], spF: [.15, .15, .15], fNx: [.44, .44, .44], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+  // her whistle to the team (the user, 2026-11-04: "have the characters do a whistle"): her free hand up to her mouth, her head up a touch, turned out to them
+  whistle: { dur: 1.2, openHand: true, keys: PT({ lean: [.02, .03, .02], twist: [.14, .14, .14], headRot: [-.1, -.12, -.1], armB: [1.45, 1.48, 1.45], elbB: [2.5, 2.5, 2.5], spB: [.3, .3, .3] }) },
   // the heroines' shot (the user, 2026-11-04: "camila will stand defiantly with her gauntlet arm pointed forward, palm wide open and shooting a beam out of her hand"):
   // chest out, leant back a touch, the gauntlet out straight and the hand bent back so the palm faces them (the game opens it: p.palm); the big hand the same, open
   beam_fist: { dur: 1.2, openHand: true, keys: PT({ lean: [-.1, -.12, -.1], arch: [-.14, -.16, -.14], bodyY: [-.14, -.16, -.14], twist: [-.2, -.2, -.2], headRot: [-.14, -.12, -.14],
