@@ -10984,7 +10984,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
-  if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
+  if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
 }
@@ -12549,8 +12549,8 @@ function bcStep(o, s, dt) {                           // (partHuman: a buddy's p
     case "guard": defendStep(s, dt); return true;
     case "base": s.block = true; s.defOn = true; if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); if (B.t >= B.T && !bcAnyOut()) { bcFree(s); return false; } return true;   // (held as long as one of them's still out, 2026-11-04)
     case "chg": { const M = p.bcm; if (!M) { bcFree(s); return false; } s.pcharge = M.lv / BC.max;   // (the orb round it filling, syncBudAura)
-      if (B.role === "D") { s.block = true; s.defOn = true; to(p.x + dir * DEF_GAP); s.tkDig = B.m === "tri" ? 0 : .5; }
-      else { s.block = false; s.defOn = false; s.tkDig = 1; to(p.x - dir * (46 + 26 * partSlot(s))); }   // (○ since 2026-11-04 as the rest: each at its place, the shield held)
+      if (B.role === "D") { s.block = true; s.defOn = true; to(p.x + dir * defGap(s)); s.tkDig = B.m === "tri" ? 0 : .5; }
+      else { s.block = false; s.defOn = false; s.tkDig = 1; to(p.x - dir * defBack(s)); }   // (○ since 2026-11-04 as the rest: each at its place, the shield held)
       return true; }
     case "push": { const u = B.t / B.T; s.block = B.role === "D"; s.defOn = s.block; s.vx = u < 1 ? dir * B.v * Math.cos(Math.PI * u) : 0;
       if (B.role === "D" && u < .55) bcSweep(s, s.x, s.y, dir, 70, 10, "jab", B.got, false, .6);
@@ -13015,8 +13015,8 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
     if (SD ? !P2.latch && ((q.onGround && P2.t >= SD.dur) || P2.t > 1.4) : (q.onGround && P2.t > .12) || (q.dive && P2.t > .7)) { q.pounce = null; q.atkKind = null; q.atkT = -1; }
   } else if (busy) {                             // (blocking with you, or about to pounce)
   } else if (q.onGround) {                       // follow: at its place a step behind you, at your speed, up when you jump; hop up after you, drop down after you
-    const sp = followSpan(q), want = shoreX(partWant(k, sp, PART_GAP[k] + 6)), dx = want - q.x, dir = Math.sign(dx) || q.face;   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
-    q.vx = approach(q.vx, Math.abs(dx) < 12 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), q.worn ? -120 : -700, q.worn ? 120 : 700), 3400 * dt); partJump(q, k, dx); q.z = approach(q.z || 0, PART_Z[k], .9 * dt);
+    const sp = followSpan(q), want = shoreX(sepWant(q, partWant(k, sp, PART_GAP[k] + 6))), dx = want - q.x, dir = Math.sign(dx) || q.face; q.folT = time;   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
+    q.vx = approach(q.vx, Math.abs(dx) < 6 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), q.worn ? -120 : -700, q.worn ? 120 : 700), 3400 * dt); partJump(q, k, dx); q.z = approach(q.z || 0, PART_Z[k], .9 * dt);
     if (Math.abs(dx) > 18 && !q.plat && !footAhead(q.x, dir * 40) && q.hopT <= 0) {   // a pit (or the water) ahead: over it, never into it (the user 2026-10-22)
       const land = gapEnd(q.x, dir), gy = groundAt(p.x);
       if (land !== null) { const T = .62; q.vy = -GRAV * T / 2; q.vx = (land - q.x) / T; q.onGround = false; q.hopT = .5; q.sq = .2; q.sqv = 0; }
@@ -13039,6 +13039,7 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
   q.dive = deepWetAt(q.y);
   if (q.dive) { if (q.pounce) { q.vx *= Math.exp(-dt * 1.5); q.vy *= Math.exp(-dt * 1.5); } } else q.vy = Math.min(q.vy + GRAV * dt, 1100);   // (no falling in the water)
   if (!q.onGround && q.stepHop && !q.pounce) q.vx = q.stepHop;
+  if (!q.dive) sepStep(q, dt);                     // (never stood in you, nor in a buddy busy there)
   { const P0 = q.onGround && !q.pounce && (q.atkKind || q.atkT >= 0) ? q.plat : null, BK = q.dive ? null : bridgeKeep(q, dt); moveBody(q, dt, 14); if (P0) q.x = clamp(q.x, P0.x + 8, P0.x + P0.w - 8); if (BK) q.x = clamp(q.x, BK.x + 8, BK.x + BK.w - 8); }   // (on the bridge: not off the end of it on a blow)
   if (q.dive) { q.y += q.vy * dt; q.onGround = false; }
   if (q.onGround) { q.stepHop = 0; q.mirrorJ = false; }
@@ -13285,8 +13286,67 @@ let pJumpCue = null, partRoomK = "", partSeen = new Set();   // (pJumpCue: your 
 const partBlocking = () => !teamM && !!player && !player.dead && mode === "play" && (!!player.block || (player.blockHold || 0) > 0 || (player.gbT > 0 && held.block));   // (yours broken: theirs stays up, 2026-11-01)
 const partSlot = q => { const L = partnerList(), i = L.findIndex(P => P.q === q); if (i >= 0) return Math.min(i, 2); const j = [pal, pal2].indexOf(q); return j < 0 ? 0 : Math.min(Math.min(L.length, 3) + j, 4); };   // (a buddy: its own place, each of the three. Was Math.min(i, 1): the second and third shared one, walking inside each other. The user, 2026-11-03: "the buddies should all be staggered and not walking and clipping over each other")   // (a pet: the next place free after the buddies, never on one of theirs. The user, 2026-11-02 "the cat joined our team and he was overlapping with the berry buddies")
 const partCount = () => Math.min(partnerList().length, 3) + (pal ? 1 : 0) + (pal2 ? 1 : 0);
-const partWant = (k, sp, gap) => { const p = player, w = p.x - p.face * gap; if (!sp) return w;   // (its place, on what you're stood on: at an end of it, still a step apart from the others, the furthest back nearest the end, and behind you)
-  const e = 14 + Math.max(0, partCount() - 1 - k) * 40, lo = Math.min(sp[0] + e, Math.max(sp[0] + 14, p.x - 30)), hi = Math.max(sp[1] - e, Math.min(sp[1] - 14, p.x + 30)); return clamp(w, lo, hi); };
+// never in one another, nor in you (the user, 2026-11-04, of the anime mockup's pictures: "in those screenshots it shows a big problem that keeps happening. make sure buddies
+// never stand over your character or over each other"): each body measured (bodyHalf: half its width on screen, its weapon in), the places in the line that far apart at least
+// (lineSpots; the gaps were 64 px, less than a body), where there's no room behind you (a room's end, a ledge's, a bridge's) the rest in front of you once you stand still,
+// not piled at the end; and one stood in you, or in a buddy busy at something, walks out of it (sepWant, sepStep). Passing through on its way somewhere is still fine
+const SEP_GAP = 14;                                 // (px between two bodies at their places: more than the 6 px either may stop short of its place by, both ways (that was 12: two stopped short into each other))
+function bodyHalf(s) {                                // half its width on screen, px: measured once, stood still with its arms down; till then a guess from its height
+  const r = s && s.rig; if (!r || !r.root) return 30; if (r.halfPx) return r.halfPx;
+  const H = r.heightPx || 90, est = clamp(H * .4, 22, 52), k = r.D && r.D.px ? H / r.D.px : Math.abs(r.root.scale.x) || 1;
+  if (!s.onGround || s.atkKind || s.atkT >= 0 || Math.abs(s.vx || 0) > 40 || !r.root.visible || Math.abs(Math.abs(r.root.scale.x) / k - 1) > .04) return est;   // (not mid-blow, nor while it grows in or shrinks away: at C5 it was caught half grown, and took half its room)
+  const b = new THREE.Box3(), q = new THREE.Box3(), skip = new Set(); if (r.shadow && r.shadow.isObject3D) r.shadow.traverse(c => skip.add(c));   // (not its shadow on the ground)
+  r.root.updateMatrixWorld(true);
+  r.root.traverse(o => { if (!o.isMesh || !o.visible || o.userData.mkHull || skip.has(o) || !o.geometry) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); q.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (isFinite(q.min.x)) b.union(q); });
+  const h = isFinite(b.min.x) ? (b.max.x - b.min.x) / 2 / S : 0; return h > H * .25 ? (r.halfPx = clamp(h, 18, 64)) : est;   // (a body much narrower than a quarter its height: a bad look at it, not kept)
+}
+function lineSpots(sp) {                              // where each in the line stands now, by its slot: its place behind you (or □'s in front), a body's width from the next at least
+  const p = player, f = p.face || 1, L = partnerList(), n = Math.min(L.length, 3), M = [], at = new Map(), free = s => !!s && !s.post && !s.lvlLock && !s.dead;
+  for (let i = 0; i < n; i++) { const s = L[i].q; if (!free(s)) continue; const g0 = lineGap(i); M.push({ k: i, s, g: g0 + Math.sign(g0) * ((s.rig && s.rig.heightPx) || 90) * .12 }); }
+  palsAll().forEach(q => { if (!free(q)) return; const k = partSlot(q); M.push({ k, s: q, g: PART_GAP[k] + 6 }); });
+  const lo = Math.max(30, sp ? sp[0] + 14 : 30), hi = Math.min(WORLD - 30, sp ? sp[1] - 14 : WORLD - 30), room = d => Math.max(0, d * f > 0 ? p.x - lo : hi - p.x), still = p.onGround && Math.abs(p.vx) < 40;   // (room: px free behind you, d 1, or in front, d -1; never past the room's end, where a ground that runs on into the next room still stops them)
+  const chain = (list, d, front) => { let rel = 0, hh = bodyHalf(p), out = false; const left = [];
+    for (const m of list) { const h = bodyHalf(m.s), r = Math.max(Math.abs(m.g), rel + hh + h + SEP_GAP);
+      if (out || r > room(d) - (!front && m.s.lineFront ? 30 : 0)) { out = true; left.push(m); continue; }   // (in front a while: back behind once there's room and a bit)
+      at.set(m.k, p.x - d * f * r); rel = r; hh = h; if (!front) m.s.lineFront = false; }
+    return left; };
+  const behind = M.filter(m => m.g > 0).sort((a, b) => a.g - b.g), ahead = M.filter(m => m.g < 0).sort((a, b) => b.g - a.g);
+  let spill = chain(behind, 1, false);
+  if (!still) spill = spill.filter(m => { if (m.s.lineFront) return true; at.set(m.k, clamp(p.x - f * m.g, lo, hi)); return false; });   // (you on the move: at the end a moment, as before, not across you and back)
+  spill.forEach(m => { m.s.lineFront = true; });
+  chain([...ahead, ...spill], -1, true).forEach(m => at.set(m.k, clamp(p.x - f * m.g, lo, hi)));   // (no room either side: as near its place as there is)
+  return at;
+}
+const partWant = (k, sp, gap) => { const w = lineSpots(sp).get(k); if (w !== undefined) return w; const v = player.x - player.face * gap; return sp ? clamp(v, sp[0] + 14, sp[1] - 14) : v; };   // (its place; one on a level of its own, or sent somewhere: behind you on what it stands on, as before)
+const sepFol = s => time - (s.folT ?? -9) < .1;       // (following you this moment: the line keeps those apart)
+function sepBodies() { const p = player, B = []; if (p && !p.dead) B.push(p); allies.forEach(a => { if (!a.away && a.st && a.r && a.r.root && a.r.root.visible) B.push(a.st); }); if (ejPal() && ej.st) B.push(ej.st); palsAll().forEach(q => B.push(q)); return B; }
+function sepWant(s, w) {                              // its place, but never in you, nor in a buddy stood busy there (fighting, guarding, sent there): to its own side of them
+  const hs = bodyHalf(s), p = player;
+  for (let it = 0; it < 2; it++) for (const o of sepBodies()) { if (o === s || o.dead || (o !== p && sepFol(o)) || Math.abs(o.y - s.y) > 30) continue;
+    const need = hs + bodyHalf(o) + SEP_GAP * .5; if (Math.abs(w - o.x) < need) w = o.x + (Math.sign(s.x - o.x) || -(p.face || 1)) * need; }
+  return w;
+}
+function sepStep(s, dt) {                             // stood in you, or in a buddy busy there: out of it, walking (its speed, so its legs go), to its own side; an edge that way, the other
+  const p = player; if (mode !== "play" || teamM || !s.onGround || s.dead || s.post || s.bc || s.tcOn || s.tcFly || s.pounce || s.fleap || s.dzap || s.gapHop || s.defSlide > 0 || s.zipR || s.climb) return;
+  const hs = bodyHalf(s); let push = 0;
+  for (const o of sepBodies()) { if (o === s || o.dead || !o.onGround || Math.abs(o.y - s.y) > 30) continue;
+    const me = o === p; if (!me && sepFol(o)) continue;   // (the other following you: the line keeps two following apart, and one busy here, it steps aside itself, sepWant)
+    const dx = s.x - o.x, ad = Math.abs(dx), need = hs + bodyHalf(o) + SEP_GAP * .4; if (ad >= need) continue;
+    if (Math.abs(s.vx) > 150 && Math.sign(s.vx) === -Math.sign(dx || 1)) continue;   // (on its way through, at a run: through)
+    const d = ad > .5 ? Math.sign(dx) : me ? -(p.face || 1) : partSlot(s) > partSlot(o) ? -(p.face || 1) : (p.face || 1);
+    push += d * (need - ad) * (me ? 1 : .5); }
+  if (Math.abs(push) < .5) return;
+  let d = Math.sign(push); const ok = dd => { const x = s.x + dd * 26; return x > 24 && x < WORLD - 24 && (s.plat ? x > s.plat.x + 6 && x < s.plat.x + s.plat.w - 6 : groundAt(x) !== null); };
+  if (!ok(d)) { if (!ok(-d)) return; d = -d; push = d * 60; }   // (against an end: out the other side)
+  const v = d * clamp(Math.abs(push) * 7, 90, 320); s.vx = d > 0 ? Math.max(s.vx, v) : Math.min(s.vx, v);
+  if (!s.atkKind && !(s.atkT >= 0) && !s.block) s.face = d;
+}
+function defBack(s) {                                 // guarding, behind you: a body's width apart at least (it was 46 px from you and 26 more each: in one another)
+  const p = player, D = partDefender(), Q = partnerList().map(P => P.q).concat(palsAll()).filter(q => q && q !== (D && D.q) && !q.post).sort((a, b) => partSlot(a) - partSlot(b));
+  let r = 0, hh = bodyHalf(p); for (const q of Q) { const h = bodyHalf(q); r = Math.max(46 + 26 * partSlot(q), r + hh + h + 4); if (q === s) return r; hh = h; }
+  return 46 + 26 * partSlot(s);
+}
+const defGap = s => Math.max(DEF_GAP, bodyHalf(player) + bodyHalf(s) + 4);   // (the guard in front: clear of you)
 const partCol = P => P.kind === "ally" ? P.a.A.col || "#ffffff" : P.kind === "pet" ? (petSp(P.t) === "dog" ? "#9fe8ff" : "#ff9ad0") : "#b06cff";
 const partBtnName = i => window.BERRY_TOUCH ? ["L", "△", "□"][i] || "△" : padUse ? padName(["blk", "p2", "tkl"][i] || "p2") : ["S", "C", "Z"][i] || "C";   // (the block's, the first attacker's, the second's: 2026-11-02; C △ and Z □ on the keys since 2026-11-03 late)
 const chgName = () => window.BERRY_TOUCH ? "R" : padUse ? padName("ch") : "D";   // (CHARGE!'s button: its mark over their heads)
@@ -14203,11 +14263,11 @@ function defendStep(s, dt) {                         // the guard's up: the defe
   const p = player, D = partDefender(), me = D && D.q === s, fd = defFace(); s.block = true; s.face = fd;
   if (me && s.post) { s.vx = approach(s.vx, 0, 3000 * dt); return; }   // (posted by COMMAND: it guards where it is, and the guard's yours, with its bubble, 2026-11-02)
   if (!me && s.post) { s.vx = approach(s.vx, 0, 3000 * dt); return; }   // (posted elsewhere: it guards where it is)
-  if (!me) { const tx = p.x - fd * (46 + 26 * partSlot(s)); s.vx = approach(s.vx, clamp((tx - s.x) * 10, -DEF_RUN * .75, DEF_RUN * .75), (s.onGround ? 7000 : 4000) * dt); s.sprint = Math.abs(s.vx) > 400; return; }   // (behind you)
-  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = p.x + fd * DEF_GAP;   // in front: a quick low hop to it, timed to come down there
+  if (!me) { const tx = p.x - fd * defBack(s); s.vx = approach(s.vx, clamp((tx - s.x) * 10, -DEF_RUN * .75, DEF_RUN * .75), (s.onGround ? 7000 : 4000) * dt); s.sprint = Math.abs(s.vx) > 400; return; }   // (behind you)
+  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = p.x + fd * defGap(s);   // in front: a quick low hop to it, timed to come down there
     if (s.onGround && Math.abs(tx - s.x) > DEF_NEAR) { s.vy = -GRAV * DEF_HOP / 2; s.onGround = false; s.plat = null; s.defHopT = DEF_HOP; s.vx = clamp((tx - s.x) / DEF_HOP, -DEF_HOP_V, DEF_HOP_V); } else s.defHopT = 0; }   // (near: no hop, it just runs there)
   if (s.defSlide > 0) { s.defSlide -= dt; s.vx = s.defDir * DEF_SLIDE_V; s.face = s.defDir; defParry(s, D); if (s.defSlide <= 0) s.defCd = .35; }   // sliding out at them
-  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * DEF_GAP;
+  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * defGap(s);
     if (!s.onGround && s.defHopT > 0) { s.defHopT -= dt; s.vx = clamp((tx - s.x) / Math.max(1 / 60, dt, s.defHopT), -DEF_HOP_V, DEF_HOP_V); }   // (in the hop: aimed to come down on its place, wherever that's got to)
     else s.vx = approach(s.vx, clamp((tx - s.x) * (s.onGround ? 14 : 8), -DEF_RUN, DEF_RUN), (s.onGround ? 12000 : 5000) * dt);
     s.sprint = Math.abs(s.vx) > 400; }
@@ -14686,12 +14746,13 @@ function bridgeKeep(s, dt) {                        // (before its move: its ste
 }   // (what you're stood on, edge to edge: once a frame)
 function partFollow(s, k, dt) {                     // its place: a step behind you (the second, two), a little further back from the camera; at your speed; up when you jump
   const p = player, g0 = lineGap(k), gap = g0 + Math.sign(g0) * ((s.rig && s.rig.heightPx) || 90) * .12;   // (where □ has it in the line: behind you, or out in front)
+  s.folT = time;                                     // (following: sepStep leaves the line's spacing to the line)
   { const rk = allyRoomKey(); if (s.inRk !== rk) { s.inRk = rk; s.inWait = .1 + k * .28; } }   // (into a room: off one after another, the first in line first, not all as one. The user, 2026-11-04: "when you start a new room, the team is too bunched up and they all stop moving together. let them start moving in a staggered way so they hit the normal separation/rhythm")
   if (s.inWait > 0 && s.onGround && !s.lvlLock) { s.inWait -= dt; s.vx = approach(s.vx, 0, 3400 * dt); s.face = p.face; s.sprint = false; return 0; }
   if (s.lvlLock && s.onGround && p.onGround && Math.abs(s.y - p.y) < 40) s.lvlLock = false;   // (level with you again: with you)
   if (s.lvlLock && s.onGround) s.lvlSp = supportSpan(s) || s.lvlSp; const sp = s.lvlLock ? s.lvlSp : followSpan(s);   // (on its own level: what it stands on, end to end)
-  const want = shoreX(partWant(k, sp, gap)), dx = want - s.x;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
-  const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 12 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
+  const want = shoreX(sepWant(s, partWant(k, sp, gap))), dx = want - s.x;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
+  const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 6 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
   s.z = approach(s.z || 0, PART_Z[k], .9 * dt);
   if (s.onGround || s.mirrorJ) s.vx = approach(s.vx, s.wave > 0 ? 0 : v, (s.onGround ? 3400 : 1500) * dt); s.sprint = Math.abs(s.vx) > 430;   // (in the air on a hop of its own, over a gap: its own way on)
   s.face = Math.abs(s.vx) > 60 ? Math.sign(s.vx) : p.face;
@@ -16241,7 +16302,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
-  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
+  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
   if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
