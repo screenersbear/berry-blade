@@ -708,7 +708,7 @@
 </style>
 <script src="charkit.js?v=20261103n"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="shading.js?v=20261105a"></script>
+<script src="shading.js?v=20261105b"></script>
 <script src="score.js?v=20261104a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
@@ -1057,7 +1057,7 @@ function koShow() {                                 // knocked out in the story:
   if (story) writeSave();
 }
 let crumbleGone = new Set(), dropNext = false, heroNext = false;   // (dropNext: a new stay in a world, its drops to pick once the room's set up: dropPick)                         // (the breakable platforms broken this stay: spawnCrumbles)
-function newStay() { crumbleGone = new Set(); dropNext = true; heroNext = true; heroSaid = new Set(); koStay = 0; bossDown = false; bossNotAt = -1; cronyDown = new Set(); mainAgain = new Set(); roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); meetStay(); }
+function newStay() { crumbleGone = new Set(); dropNext = true; heroNext = true; heroSaid = new Set(); koStay = 0; bossDown = false; bossNotAt = -1; cronyDown = new Set(); mainAgain = new Set(); roomsDone = new Set(); roomsSeen = new Set(); stayCols = new Set(); roomHour = new Map(); sleepPlan = new Map(); pressPlan = new Map(); giftsTaken = new Set(); cratesBroken = new Set(); healTaken = new Set(); catStay(); allyStay(); meetStay(); }
 const leftOf = () => { const S0 = STAGES[stage];  // what's off the left edge: a way out of the world, the room to the left, back the way you came, or the world before
   if (S0.exitLeft && S0.toWorld !== undefined) return "out";
   if (S0.prev !== undefined) return S0.prev;
@@ -5339,7 +5339,7 @@ function authorForest() {
     ceils: [[-600, 3200, 100]] }, [["leafy", "leaf", 560], ["thornball", "purple", 2100], ["acorn", "rust", 1700]]);   // (two more: one on the left, one more on the right. The user, 2026-10-29)   // (the ceiling: the woods' own, drawn for its ceils; a second one on top of it flickered, 2026-10-24)
   // C5: the other side of the grass (the same grass: cut once, cut for good, from either side); stairs up to the hole from B5 (jump up it: on
   // to B6 that way); 3 baddies; the wall at the far end (C6 is beyond it)
-  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopY: 70, ceils: holeCeil(FOREST_HOLE_B5, -40), plats: [[2140, 120, 220, "slab"]],   // (the slab: a ledge at the top of the steps under the hole, up onto it and on up into B5. The user, 2026-10-26: "add an actual paltform at the top of the "steps" that lead to the opening in the ceiling")   // (up the steps; over the top one, the gap in the land overhead: B5's hole, straight up. Was a slab at the very top under it, and a strip of ceiling that looked like a ledge: the user, 2026-10-26)
+  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopY: 70, ceils: holeCeil(FOREST_HOLE_B5, -80), upLift: GROUND - ROW_H + SEAM_T + 80, plats: [[2140, 120, 220, "slab"]],   // (the slab: a ledge at the top of the steps under the hole, up onto it and on up into B5. The user, 2026-10-26: "add an actual paltform at the top of the "steps" that lead to the opening in the ceiling")   // (up the steps; over the top one, the gap in the land overhead: B5's hole, straight up. Was a slab at the very top under it, and a strip of ceiling that looked like a ledge: the user, 2026-10-26)   // (its roof 200 px over the slab, was 160, and its own: B5's floor really sits 90 px over the slab, so a look up into B5 laid B5's slab and hole down right over yours. upLift: how much higher than the stitch B5 sits over this roof (its floor's underside on it), so the way up is the hole as a shaft (upShaft: a held jump, or a double jump, up into it and off to one side) and the drop down pans in with the two lined up. The user, 2026-11-05: "the transition from c5 to b5 is still insane ... it's partly because the ceiling is so low too")
     secret: { who: "rose", x: -20, side: -1, door: true, tall: true, key: "grass:C4C5" }, set: [{ k: "earth", side: 1, col: EARTH }] },
     [["leafy", "leaf", 700], ["acorn", "rust", 1150], ["twiggy", "olive", 1650]]); nm(c5, "STAIRS");
   // C6: in front of the giant tree; a ledge with a baddie, a mango up on a small platform, two baddies; the hole the tree's ledges climb up
@@ -10499,11 +10499,12 @@ function swapSlide(dir, work) {                    // dir: the way the camera go
 // stops, the camera pans from where it was to where it'll be, over both screens drawn in place (each cut off at the edge they share), then on.
 let pan = null, panKeep = null;
 const rowStep = (a, b) => { const A = cellOff(a), B = cellOff(b); return STITCH.has(world) && A && B && Math.abs(A.x - B.x) < .01 ? Math.round((A.y - B.y) / (ROW_H * S)) : 0; };   // (b one row under a: 1; over it: -1)
+let panLift = 0;                                     // (the next swapPan's lift, set just before it: goRoomRise, goRoomDrop)
 function swapPan(dir, ns, work) {                   // as swapSlide, for a stitched world's neighbouring screens (else it is swapSlide)
-  const o0 = cellOff(stage), o1 = cellOff(ns);
+  const o0 = cellOff(stage), o1 = cellOff(ns), lift = panLift; panLift = 0;   // (lift: the room you leave set that much higher (3D units) than the stitch puts it, from the new one: woods C5's own roof under B5, upLift)
   if (!STITCH.has(world) || !o0 || !o1 || Math.abs(o0.x - o1.x) > WX + .01 || Math.abs(o0.y - o1.y) > ROW_H * S + .01 || hideout || stronghold || arena || mode !== "play" || !player) return swapSlide(dir, work);
   transit = true; if (pan) panEnd(); const s0 = stage;
-  const dx = o0.x - o1.x, dy = o0.y - o1.y, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
+  const dx = o0.x - o1.x, dy = o0.y - o1.y + lift, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
   const was = q => q ? { q, x: q.x + dx / S, y: q.y - dy / S, rx: q.x, ry: q.y } : null;   // (rx, ry: where it was in the old room's own terms, to tell who the room change put somewhere)
   const movers = [player, ...palsAll(), ...allies.map(a => a.st), ej && ej.st].filter(Boolean).map(was);
   const pic = (dir === "up" || dir === "down") && slideGrab();   // (the room as you see it now: if the camera's got nowhere to go, it's faded off the new one, no pan)
@@ -10523,7 +10524,7 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   const pos1 = camera.position.clone(), quat1 = camera.quaternion.clone(), L1 = lookGrab();
   pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0 };
   { const up = upWant(stage); if (up >= 0 && up !== s0 && !peekCache) peekCache = buildGhost(up); }   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
-  if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = RISE_FADE; render(0); return; }   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
+  if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = riseFadeT = RISE_FADE; render(0); return; }   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
   panTick(0); render(0);                             // (drawn at once, where the camera was: the frame warmFrame drew is never seen)
 }
 function panTick(dt) {
@@ -10533,10 +10534,10 @@ function panTick(dt) {
   lookLerp(P.L0, P.L1, e);
   if (u >= 1) panEnd(true);
 }
-let riseFade = 0; const RISE_FADE = .35;            // (a room change with nowhere for the camera to go: the room you left fading off the new one over RISE_FADE s, the game going on under it)
+let riseFade = 0, riseFadeT = .35; const RISE_FADE = .35;   // (riseFadeT: this one's length)            // (a room change with nowhere for the camera to go: the room you left fading off the new one over RISE_FADE s, the game going on under it)
 function slideGrab() { try { render(0); const C = renderer.domElement; if (!slideCv) { slideCv = document.createElement("canvas"); slideCv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none"; C.after(slideCv); }
   slideCv.width = C.width; slideCv.height = C.height; slideCv.getContext("2d").drawImage(C, 0, 0); slideCv.style.transform = C.style.transform = ""; return true; } catch (e) { return false; } }   // (the picture as it is, kept on slideCv, not shown yet)
-function riseFadeTick(dt) { riseFade = Math.max(0, riseFade - dt); if (!slideCv) return; slideCv.style.opacity = riseFade / RISE_FADE; if (!riseFade) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } }
+function riseFadeTick(dt) { riseFade = Math.max(0, riseFade - dt); if (!slideCv) return; slideCv.style.opacity = riseFade / riseFadeT; if (!riseFade) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } }
 let panFade = 0;                                     // (the last of the pan: its final picture laid over the new screen alone, fading, so what only the other screen drew doesn't vanish at once)
 function panEnd(fade) {
   const P = pan; if (!P) return;
@@ -10579,7 +10580,7 @@ function peekWant(s) {                             // the room above s, if it's 
   return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
 }
 function upWant(s) {                               // the room above s, if one opens into it (a hole, or no floor): built ahead, for a look up into it off a jump
-  if (!STITCH.has(world) || s < 0 || !STAGES[s] || STAGES[s].deep) return -1;
+  if (!STITCH.has(world) || s < 0 || !STAGES[s] || STAGES[s].deep || STAGES[s].upLift) return -1;   // (upLift: a roof of its own under the room above, no look up into it: upShaft)
   const i = STAGES.findIndex(q => q && !q.cut && !q.dropOnly && q.below === s && (q.gaps || []).some(([a, b]) => b > 0 && a < WORLD));
   return i >= 0 && cellOff(i) && cellOff(s) ? i : -1;
 }
@@ -10590,10 +10591,17 @@ function upSee(p) {                                  // up off a jump under an o
   const R = holeAbove(p.x); if (!R || tutLock()) return;   // (the beach tutorial: not up out of a room with berries still in it)
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
+  if (STAGES[stage].upLift) { upShaft(p, R); return; }   // (a roof of its own under the room above: up its hole as up a shaft)
   if (!peek && !STAGES[stage].peekOff && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);   // (peekOff: no look up from there)
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
   p.y = sy - ROW_H - 1; goRoomRise(R.to);            // (landed up there: into it, onto what you came down on)
+}
+function upShaft(p, R) {                             // up through the hole in a room's own roof (upLift): nothing of the room above to see from here; once you're up in the hole, feet past the roof's underside, and going off to one side over its lip, you're in the room above, just over its floor by the hole (a fade, the camera where it was)
+  const U = njCeil(R.a - 1) ?? njCeil(R.b + 1); if (U === null || p.y > U - 6) return;   // (the user, 2026-11-05: "in berry woods, the transition from c5 to b5 is still insane. if you jump up it reveals b5 hole's texture over c5's screen. it's partly because the ceiling is so low too": B5's floor sat 70 px under C5's roof, so the look up laid its slab and hole down over C5's own, right over the slab)
+  const s = p.x >= R.b - 16 ? 1 : p.x <= R.a + 16 ? -1 : 0; if (!s || (p.x > R.a && p.x < R.b && p.vx * s <= 0)) return;   // (your side at the hole's side and going that way, or past it: over the lip. Straight up and down: back down into this room, nothing changed)
+  const ex = s > 0 ? R.b : R.a, g = upFloorY(upLandOf(R.to), ex + s); if (g === null) return;
+  goRoomRise(R.to, g + p.y - U, s > 0 ? Math.max(p.x, ex) : Math.min(p.x, ex));   // (the roof's underside here is the floor's top up there: as high over it as you're up in the hole, and over its floor, not its hole, under the fade)
 }
 function upReach(p, R) {                             // will this jump get up there? The top of it, as it's going (p.vy, the jump cut if you've let go), up past the floor beside the hole up there, or a ledge over it
   // (the user, 2026-11-03: "in berry woods c5 to b5 is a weird transition. if you jump at the opening in c5, it immediately shows b5 even if you didnt jump high enough and then you land and b5 part disappears": C5's top step is 200 px under B5's floor, a jump 157, UP_SEE 30 px over it)
@@ -10758,13 +10766,14 @@ const safeNear = x => { for (let d = 0; d < WORLD; d += 20) for (const v of [x -
 function riseTop(ns, x) {                          // where you have to get up to, here, to go on up into room ns: the top of what's over you there to land on (in this room's y), else over the top edge
   let t = -12; for (const q of STAGES[ns].plats || []) if (x > q[0] && x < q[0] + q[2]) t = Math.max(t, q[1] - ROW_H); return t;   // (the user, 2026-10-25: "you can easily get pushed up to the platform on c3 ... a little less sensitivity of how high")
 }
-function goRoomRise(ns) {                          // the hand-made waves: jumped up through the open floor of the room above, on up into it, just as you were going
+function goRoomRise(ns, ry, rx) {                  // the hand-made waves: jumped up through the open floor of the room above, on up into it, just as you were going
   cine = null; const fx = player.x, fy = player.y, vx = player.vx, vy = player.vy, face = player.face, fj = player.fullJump, aj = player.airJumps;
+  panLift = ry === undefined ? 0 : (fy + ROW_H - ry) * S;   // (ry: where you come up in it, not a row's height on from here: upShaft)
   swapPan("up", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns; if (back) trail.pop(); else trail.push(ns);
     entrySide = "bottom"; entryHi = false; clockEnter(ns); setScreen(ns);
-    const x = clamp(fx, 40, WORLD - 40), y = fy + ROW_H;
+    const x = clamp(rx ?? fx, 40, WORLD - 40), y = ry ?? fy + ROW_H;
     Object.assign(player, { x, y, vx, vy, face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, fullJump: fj, airJumps: aj, sunkT: 0, sunk: false, hurtT: 0, safeT: 1, safe: safeNear(x) });
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), y, face);
@@ -10772,9 +10781,11 @@ function goRoomRise(ns) {                          // the hand-made waves: jumpe
     camX = clamp(X(x), halfW - 1, X(WORLD) - halfW + 1); if (camArriveOn()) camArrive(x, y, Y(y) + camUpOf(ns), ns); else camBase = Y(y) + camUpOf(ns); exitOpen = false; $("exitCue").classList.add("hidden");
     enterStage(ns, back); spawnEscort(back); clearArrival(player.x);
   });
+  if (ry !== undefined && riseFade > 0) { riseFade = riseFadeT = .2; camStand = camBase; }   // (up a shaft: the camera held where it was till you're down on the floor, the fade quick, so the room you left isn't seen sliding off this one)
 }
 function goRoomDrop(ns) { bigLeave();                         // down a drop: into the room below, falling in from the top of the screen (the user, 2026-10-20: "they fall down to the next screen")
   cine = null; const fx = player.x, fy = player.y, vy = clamp(player.vy, 380, 900), face = player.face, rs = rowStep(stage, ns);
+  const dl = rs === 1 && STAGES[ns] && STAGES[ns].upLift && STAGES[stage] && STAGES[stage].below === ns ? STAGES[ns].upLift : 0; panLift = dl * S;   // (down into a room with its own roof under this one (woods B5 into C5): this floor's underside on that roof, in the pan and where you come in)
   swapPan("down", ns, () => {
     const esc = bepRun.escort; clearFriends(); bepRun.escort = esc; clearGifts();
     const back = trail.length > 1 && trail[trail.length - 2] === ns;
@@ -10788,7 +10799,7 @@ function goRoomDrop(ns) { bigLeave();                         // down a drop: in
     const gy = groundAt(x) ?? GROUND, dp = !!STAGES[ns].deep;
     if (dp) x = clamp(fx, 60, WORLD - 60);                                          // (the deep: straight on down through the water, where you were)
     const ceilY = CEILS.reduce((m, [c0, c1, cy]) => x > c0 && x < c1 ? Math.max(m, cy) : m, -1e9);   // (never in a ceiling: just under it, where there's one over you)
-    Object.assign(player, { footY: -1e9, x, y: dp ? DEEP_TOP + 40 : Math.max(rs === 1 ? Math.min(fy - ROW_H, gy - 60) : gy - 430, ceilY + 2), vx: 0, vy: dp ? Math.min(vy, 240) : vy,   /* (stitched: on down from where you were, a row's height up the room below) */ face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, sunkT: 0, sunk: false, hurtT: 0,
+    Object.assign(player, { footY: -1e9, x, y: dp ? DEEP_TOP + 40 : Math.max(rs === 1 ? Math.min(fy - ROW_H - dl, gy - 60) : gy - 430, ceilY + 2), vx: 0, vy: dp ? Math.min(vy, 240) : vy,   /* (stitched: on down from where you were, a row's height up the room below) */ face, onGround: false, plat: null, climb: null, carry: 0, atkT: -1, combo: null, ...chargeKeep(), tackle: null, sunkT: 0, sunk: false, hurtT: 0,
       safeT: 1, safe: world === 1 && STAGES[ns].authored ? safeNear(x) : { x, y: gy, plat: null } });   // (in a new room: a moment's protection, not shown: no blink, the user 2026-10-22)
     palsPut({ x: clamp(x - 50 * face, 40, WORLD - 40), y: gy - 400, vx: 0, vy, onGround: false, plat: null, pounce: null });
     ejPlace(clamp(x - 100 * face, 60, WORLD - 60), gy, face);
@@ -12414,12 +12425,12 @@ const oOfP = P => P ? (P.kind === "ally" ? P.a : P.kind === "ej" ? ej : null) : 
 const GUARD = { hits: 5, wait: 2, mend: .9 };      // (blows it takes · seconds with nothing on it before it mends · a fifth back this often)
 function guardMeter(p, dt) {                          // (updatePlayer, the guard just worked out) the line's length: a fifth off it for each blow it's taken
   if (!held.block) p.gmLock = false;                 // (stunned: let go before it'll go up again)
-  if ((p.gHits || 0) > 0 && time - (p.gHitAt ?? -9) > GUARD.wait) { p.gMend = (p.gMend || 0) + dt; if (p.gMend >= GUARD.mend) { p.gMend = 0; p.gHits--; } } else p.gMend = 0;
+  if ((p.gHits || 0) > 0 && time - (p.gHitAt ?? -9) > GUARD.wait) { p.gMend = (p.gMend || 0) + dt; if (p.gMend >= GUARD.mend) { p.gMend = 0; p.gHits = Math.max(0, p.gHits - 1); } } else p.gMend = 0;
   p.gm = approach(p.gm ?? 1, 1 - (p.gHits || 0) / GUARD.hits, dt * 5);   // (the big ones still break it at once, guardBreaker; the old time on it is gone, 2026-11-04)
 }
-function guardTake(p, d) {                            // a blow on the guard: one of its five. True: that was the fifth, and it's broken
-  p.gHits = (p.gHits || 0) + 1; p.gHitAt = time; p.gMend = 0;
-  if (p.gHits < GUARD.hits) { if (p.gHits === GUARD.hits - 1) popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "GUARD CRACKING!", 700); return false; }
+function guardTake(p, d, w = 1) {                            // a blow on the guard: one of its five. True: that was the fifth, and it's broken
+  const g0 = p.gHits || 0; p.gHits = g0 + w; p.gHitAt = time; p.gMend = 0;   // (w: a popper's seed .3, a boxer's jab .4, 2026-11-05)
+  if (p.gHits < GUARD.hits) { if (g0 < GUARD.hits - 1 && p.gHits >= GUARD.hits - 1) popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "GUARD CRACKING!", 700); return false; }
   p.gHits = 0; guardBreak(p, d); return true;
 }
 function bcStun(p) {                                  // held to nothing: you and whoever's guarding with you, a second seeing stars
@@ -12497,8 +12508,8 @@ function bcSweep(s, x, y, dir, fw, bk, kind, got, hero, push) {   // a combo's b
   return n;
 }
 function bcSlam(s, x, y, dir, hero, pow = 1) {        // down from up high: whoever's round where it comes down, knocked off their feet
-  let n = 0; for (const e of partFoesAll()) { const dx = e.x - x; if (Math.abs(dx) > 120 + eHW(e) * .5 || e.y - eH(e) > y + 30 || e.y < y - 200 || walled(e.x, x)) continue;
-    const d = Math.sign(dx) || dir; if (hero ? partHitFoe0(s, e, d, "smash", true) : partHitFoe(s, e, d, "smash")) { n++; offBalance(e, d, .9 + .3 * pow); } }
+  let n = 0; bcTopOn = x; try { for (const e of partFoesAll()) { const dx = e.x - x; if (Math.abs(dx) > 120 + eHW(e) * .5 || e.y - eH(e) > y + 30 || e.y < y - 200 || walled(e.x, x)) continue;
+    const d = Math.sign(dx) || dir; if (hero ? partHitFoe0(s, e, d, "smash", true) : partHitFoe(s, e, d, "smash")) { n++; offBalance(e, d, .9 + .3 * pow); } } } finally { bcTopOn = null; }   // (bcTopOn: it's from above, for a pineapple hat or a barrage)
   dust(x, y, 10, 0); sparks(x, y - 10, 8); SFX.thud(); shake = Math.max(shake, 5 + pow * 2); hitstop = Math.max(hitstop, n ? .07 : .03); rumble(120, .8);
   return n;
 }
@@ -12669,7 +12680,7 @@ function bcOutStep(s, B, dt, dir, to, ph) {          // (bcStep) a buddy's: wait
   s.block = false; s.defOn = false;
   if (B.ph === "go") { to(B.x1); s.sprint = true; bcPose(s, "punch", .2); if (Math.abs(s.x - B.x1) < 16 || B.t > .32) { ph("hit"); (B.strong ? SFX.kick : SFX.punch)(); } return true; }
   if (B.ph === "hit") { const T = B.strong ? BC_OUT.Ts : BC_OUT.T, kind = B.strong ? "haymaker" : "punch"; s.vx = approach(s.vx, 0, 6000 * dt); s.sprint = false; bcPose(s, kind, Math.min(.9, .25 + .65 * B.t / T));
-    if (!B.hit && B.t >= T * .35) { B.hit = true; s.bcK = B.big ? 2.4 : B.strong ? 1.7 : 1; const n = bcSweep(s, s.x, s.y, dir, B.strong ? 96 : 74, 16, kind, B.got, false, B.big ? 1.4 : B.strong ? 1 : .45); s.bcK = 0;
+    if (!B.hit && B.t >= T * .35) { B.hit = true; s.bcK = B.big ? 2.4 : B.strong ? 1.7 : 1; let n = 0; bcOutOn = true; try { n = bcSweep(s, s.x, s.y, dir, B.strong ? 96 : 74, 16, kind, B.got, false, B.big ? 1.4 : B.strong ? 1 : .45); } finally { bcOutOn = false; } s.bcK = 0;   // (bcOutOn: a block strike, for a barrage)
       if (B.big) { shake = Math.max(shake, 7); hitstop = Math.max(hitstop, n ? .08 : .03); dust(s.x, s.y, 6, dir); rumble(120, .8); } }
     if (B.t >= T) ph("back"); return true; }
   to(B.hx); s.atkKind = null; s.atkT = -1; if (Math.abs(s.x - B.hx) < 18 || B.t > .5) { bcFree(s); return false; } return true;   // (back: to its place behind the shield)
@@ -12857,7 +12868,7 @@ function frontGap(p, far) {                       // the nearest one to hit in f
   return best === null ? null : Math.max(0, best);
 }
 function bounceOff(p, d) {                 // whoever was pressing in on the shield bounces off it (the smaller, the further) and holds off for a moment, so you can turn
-  const list = baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined).map(b => [b, b.hw, b.h, b.wt]);
+  const list = baddies.filter(b => !b.dead && !b.gone && !b.under && !b.sad && !b.flee && b.happyT === undefined && !(b.atk === "go" && BB_PRESS.has(b.T.atk))).map(b => [b, b.hw, b.h, b.wt]);   // (a popper's barrage, a boxer's flurry: they keep on at you, 2026-11-05)
   if (duo) duoTargets().forEach(d => list.push([d.e, d.D.hw, d.D.h, 0])); else if (bossIn && !enemy.dead && !enemy.gone) list.push([enemy, enemy.def.hw, enemy.def.h, 0]);
   for (const [e, hw, h, wt] of list) {
     const side = Math.sign(e.x - p.x) || -d;
@@ -25795,9 +25806,9 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
     const spot = k + ":" + i; if (sadDone.has(spot)) return null;                  // a sad berry you cheered up has gone for the rest of the run
     const sleepy = revisit && sleepersFor(k).includes(i);
     if (sleepy) { const b = makeSpawn(type, col, at); b.spot = spot; b.idx = i; if (b.r.segs) { disposeBaddy(b); return null; } b.sleep = true; b.zT = rand(0, 1); b.dir = Math.random() < .5 ? -1 : 1; return b; }   // ... and after dark, some asleep
-    const b = makeSpawn(type, col, at); b.spot = spot; if (tag === "mini") makeMini(b); tierUp(b);
+    const b = makeSpawn((tag !== "mini" && pressSwap(k, i)) || type, col, at); b.spot = spot; if (tag === "mini") makeMini(b); tierUp(b);
     if (sadSpots.has(spot) && !(revisit && sadFate[sadHome.get(spot)] === "killed")) { const h = sadHome.get(spot); b.sad = true; sadFace(b); sadFate[h] = null; sadSpots = new Set([...sadSpots].filter(sp => sp === spot || sadHome.get(sp) !== h)); }   // (met it: that hideout's other candidates are dropped)   (one you popped comes back an ordinary baddy)
-    return b;
+    hatMaybe(b); return b;
   }).filter(Boolean);
   bossIn = !baddies.length && bossHere(k) && !STAGES[k].duo && !STAGES[k].mini; bossCue = 0;   // (Lossst: not waiting about, he drops in a moment after you, GUARDIAN OF GLOS'S DOOR: 2026-10-28)   // (Noro and Doir's room has no baddies (a boss room's the boss alone): they drop in together a moment after you come in, not the one boss waiting. 2026-10-23: Noro alone, invisible on the 3DS)
 }
@@ -26026,6 +26037,121 @@ const BB_ATK = {                                 // wind-up (s), the move itself
   bomb:  { wind: .35, go: .3, rest: 1.4, start: b => bbBomb(b) },
 };
 Object.assign(BB_ATK, KESH_ATK, CRUX_ATK);                 // (the ninja berries': throwing stars, the smoke blink)
+// ── baddies that make you use what you can do (the user, 2026-11-05: "we want enemies that force the player to use the different abilities they have"):
+// pineapple hats (a blow from above pops it, and the berry), the popper's bursts of seeds and the boxer's spring fists (block them; only a blow from above or a
+// block strike stops them once they've started)
+const HAT_P = .35, BOX_REACH = 150, BOX_N = 5, BB_PRESS = new Set(["barrage", "fists"]);   // (HAT_P: how many of the medium ones wear one · the boxer's reach (px) and punches)
+let PINE_HAT_TEX = null, hatTip = false, pressTip = false, bcTopOn = null, bcOutOn = false, pressPlan = new Map();   // (bcTopOn: where the team's slam from up high is landing, while it lands · bcOutOn: a block step-out's blow landing · pressPlan: this run, room → its roster spots that are a popper or a boxer)
+PG.pine = mk(new THREE.DodecahedronGeometry(.11, 0), null, { mat: toon("#f2b640"), ol: .03 });   // (a bit of a popped pineapple)
+PG.pineLeaf = mk(new THREE.ConeGeometry(.07, .32, 4).scale(1, 1, .35), null, { mat: toon("#3f9d3c"), ol: .03 });   // (and one of its leaves)
+Object.assign(BB_TYPES, {
+  popper: { b: bbPopper, size: "M", speed: 70, move: "walk", atk: "barrage", range: 330, keep: 230, jumpy: .15 },   // (stays a way off: its seeds only carry about 350 px)
+  boxer:  { b: bbBoxer,  size: "M", speed: 85, move: "walk", atk: "fists",   range: 190, keep: 110, jumpy: .2 },   // (keep: it stops at punching distance, not in you)
+});
+Object.assign(BB_ATK, {
+  barrage: { wind: .7, go: 1.85, rest: 1.25, start: b => { b.barr = { n: 0, k: 0, t: 0, hp0: player ? player.hp : 0 }; SFX.charge(); pressSay(); } },   // three bursts of four (bbBarrage)
+  fists:   { wind: .45, go: 1.32, rest: 1.0, start: b => { b.jab = { n: 0, t: 0 }; pressSay(); } },                      // five punches, one fist then the other (bbJabs)
+});
+BB_MELEE.add("fists"); BB_COMBO.add("fists");   // (a brawler: keen, and now and then straight into another flurry)
+function pressSay() { if (pressTip) return; pressTip = true; toast("BLOCK IT! A BLOCK STRIKE OR A BLOW FROM ABOVE STOPS IT", 4200); }
+function bbPopper(r) {                            // the popper: a round berry with a pea-shooter snout, cross brows
+  const { P, body, mB, mD, mL } = r;
+  body.add(P(new THREE.LatheGeometry([[0, 0], [.24, .01], [.37, .08], [.43, .24], [.43, .44], [.38, .62], [.27, .77], [.13, .86], [0, .88]].map(([x, y]) => new THREE.Vector2(x, y)), 28), mB));
+  const sn = group(body, .36, .4, 0); r.snout = sn;   // (out the front: a short tube, a dark ring and the hole at its end)
+  sn.add(at(P(new THREE.CylinderGeometry(.1, .13, .26, 16).rotateZ(-Math.PI / 2), mL), .1, 0, 0));
+  sn.add(at(P(new THREE.TorusGeometry(.1, .035, 8, 18).rotateY(Math.PI / 2), mD), .23, 0, 0));
+  sn.add(at(new THREE.Mesh(new THREE.CircleGeometry(.075, 16).rotateY(Math.PI / 2), r.mE), .236, 0, 0));
+  r.arms = [-1, 1].map(s => { const A = group(body, 0, .42, s * .4); A.add(at(P(new THREE.CapsuleGeometry(.06, .12, 4, 10), mB), 0, -.1, 0)); A.rotation.x = -s * .5; return A; });
+  r.crown(body, -.02, .86, 0, .13); r.eye(body, .34, .63, -.14, .07); r.eye(body, .34, .63, .14, .07); r.mouth(body, .41, .25, 0, .035);
+  r.brow(body, .36, .74, -.14, .1, .35); r.brow(body, .36, .74, .14, .1, -.35);
+  [-1, 1].forEach(s => r.foot(body, .04, s * .19, .1));
+  r.anim = (b, t, s, dt) => { b.popK = Math.max(0, (b.popK || 0) - (dt || .016) * 8); const k = b.popK, w = s.wind ? .12 + Math.sin(t * 34) * .04 : 0; sn.scale.set(1 - k * .3, 1 + k * .35 + w, 1 + k * .35 + w);
+    const yw = r.yaw.rotation.y, lx = b.dir * Math.cos(yw), lz = b.dir * Math.sin(yw); sn.position.set(.36 * lx, .44, .36 * lz); sn.rotation.y = Math.atan2(-lz, lx); };   // (it swells winding up; each seed out, a kick. The snout aims along the screen at you, not at the camera, 2026-11-05)
+}
+function bbBoxer(r) {                             // the boxer: a sturdy berry, gloves up, each on a spring arm that shoots out
+  const { P, body, mB, mD } = r, hsl = {}; mB.color.getHSL(hsl);
+  body.add(P(new THREE.LatheGeometry([[0, 0], [.25, .01], [.36, .08], [.41, .24], [.42, .44], [.37, .64], [.27, .8], [.13, .9], [0, .92]].map(([x, y]) => new THREE.Vector2(x, y)), 28), mB));
+  const red = hsl.h < .07 || hsl.h > .9, gl = r.M(red ? "#3d6fd6" : "#d93b3b"), cuff = r.M("#f3efe6");   // (red gloves; blue on a red berry)
+  const coil = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(Array.from({ length: 49 }, (_, i) => new THREE.Vector3(i / 48, Math.cos(i / 48 * TAU * 6) * .045, Math.sin(i / 48 * TAU * 6) * .045))), 96, .018, 5);   // (a spring a unit long, along +x)
+  r.fists = [-1, 1].map(s => { const sh = group(body, .12, .5, s * .27), spring = group(sh, 0, 0, 0), F = group(sh, .3, 0, 0);
+    spring.add(P(coil, mD)); F.add(P(ball(.15, 16, 12).scale(1.1, .95, .95), gl)); F.add(at(P(new THREE.CylinderGeometry(.1, .11, .08, 14).rotateZ(Math.PI / 2), cuff), -.15, 0, 0));
+    F.add(at(P(ball(.06, 10, 8), gl), .03, .09, -s * .08)); return { sh, spring, F, x0: .3 }; });
+  r.crown(body, -.02, .9, 0, .13); r.eye(body, .33, .66, -.13, .068); r.eye(body, .33, .66, .13, .068); r.mouth(body, .41, .42, 0, .045);
+  r.brow(body, .35, .77, -.13, .1, .4); r.brow(body, .35, .77, .13, .1, -.4);
+  [-1, 1].forEach(s => r.foot(body, .05, s * .19, .1));
+  r.anim = (b, t, s) => { const reach = BOX_REACH * (b.T.mh || 1) / (b.h || 128);   // (its reach in px, in this unit space)
+    const yw = r.yaw.rotation.y, lx = b.dir * Math.cos(yw), lz = b.dir * Math.sin(yw);   // (straight along the screen at you, though it stands turned three-quarters to the camera)
+    r.fists.forEach((Q, i) => { const P = b.punch; let e = 0; if (P && P.side === i) { const u = P.t; e = u < .07 ? u / .07 : u < .12 ? 1 : Math.max(0, 1 - (u - .12) / .09); }
+      const F = Q.F.position; F.set(Q.x0 + e * reach * lx + (s.wind ? -.07 : 0), Math.sin(t * 7 + i * Math.PI) * .03 * (s.walking ? 1.5 : 1) + (s.wind ? .04 : 0), e * reach * lz);   // (bobbing, gloves up; pulled back to wind up)
+      const L = Math.hypot(F.x, F.z); Q.spring.rotation.y = Math.atan2(-F.z, F.x); Q.spring.scale.x = Math.max(.02, L - .15); Q.F.rotation.y = Q.spring.rotation.y; }); };   // (the spring from the shoulder to the glove)
+}
+function bbBarrage(b, dt) {                       // (updateBaddy) the popper's: three bursts of four seeds, straight at you, gone again about 350 px off. Blockable: each a third of a blow on your guard
+  const B = b.barr; if (b.dead || b.atk !== "go" || !player || player.dead) { b.barr = null; return; }
+  if (!B.spent && player.hp < B.hp0) { B.spent = true; hz.forEach(h => { if (h.owner === b && h.m) h.harmless = true; }); }   // (a heart off you: that's all one barrage takes, the rest of it harmless)
+  if ((B.t -= dt) > 0) return;
+  const tg = b.tgt || player, x0 = b.x + b.dir * (b.hw + 16), y0 = b.y - b.h * .42, ty = (tg.y - ((tg.rig && tg.rig.heightPx) || 80) * .5) - y0, life = .74;
+  addHz({ m: new THREE.Mesh(BB_SEED, B.n % 2 ? b.r.mD : b.r.mB), x: x0, y: y0, vx: b.dir * 470, vy: clamp(ty, -70, 70) / life + rand(-45, 45), r: 11, life, gw: .3, owner: b, harmless: !!B.spent,
+    sync: h => { h.m.rotation.z = h.t * 16; h.m.scale.setScalar(Math.max(.001, Math.min(1, (h.life - h.t) / .12))); } });   // (shrinking away at the end of its run)
+  SFX.blop(); b.popK = 1; b.sq = .08; b.sqv = 0; B.n++;
+  if (B.n % 4) B.t = .09; else { B.k++; B.t = .42; b.dir = Math.sign(tg.x - b.x) || b.dir; if (B.k >= 3) b.barr = null; }   // (between bursts: round to where you are now)
+}
+function bbJabs(b, dt) {                          // (updateBaddy) the boxer's: five quick punches, stepping in on you as it throws them. Blockable: each two fifths of a blow on your guard
+  const J = b.jab; if (b.dead || b.atk !== "go") { b.jab = null; b.punch = null; return; }
+  const P = b.punch; if (P) { P.t += dt; if (!P.hit && P.t >= .06) { P.hit = true; addHz({ x: b.x + b.dir * (b.hw + BOX_REACH * .55), y: b.y - b.h * .52, r: BOX_REACH * .5, life: .08, vx: b.dir * .01, gw: .4, owner: b }); } if (P.t > .24) b.punch = null; }
+  if (b.onGround) { const nx = b.x + b.dir * 60 * dt, tg = b.tgt || player, ok = Math.abs(tg.x - b.x) > 100 && !(b.plat && (nx < b.plat.x + 20 || nx > b.plat.x + b.plat.w - 20)) && !(GAPS.length && overGap(nx + b.dir * b.hw)) && nx > 40 && nx < WORLD - 40; b.vx = ok ? b.dir * 60 : 0; }   // (not off its ledge, into a gap)
+  if ((J.t -= dt) > 0 || J.n >= BOX_N) return;
+  if (!J.n) b.dir = Math.sign((b.tgt || player).x - b.x) || b.dir;
+  b.punch = { side: J.n % 2, t: 0 }; J.n++; J.t = .21; SFX.whoosh(); b.sq = .06; b.sqv = 0;
+}
+function pressBreak(b) {                          // a blow that stops a barrage or a flurry: from above (your ↓ + attack in the air, the team's slam), or a block strike (○ held in block: yours or a buddy's)
+  if (bcTopOn !== null || bcOutOn) return true;
+  const p = player; if (partBlow || !p) return false;
+  return !!(p.bcGo && p.bcGo.k === "out") || (DOWN_AIR.has(p.atkKind) && p.atkT >= 0 && p.y <= b.y - b.h * .3);
+}
+function pressStop(b) {                           // stopped: it reels, and it's a while before it's at you again
+  b.barr = null; b.jab = null; b.punch = null; b.popK = 0; b.hurtT = Math.max(b.hurtT, .85); b.atkCd = Math.max(b.atkCd, 1.8);
+  SFX.clash(); sparks(b.x, b.y - b.h * .6, 8); popText(b.x, b.y - b.h - 30, "STOPPED!");
+}
+function pressSwap(k, i) {                        // (spawnBaddies) this run, which of room k's baddies are a popper (in a medium spitter's place) or a boxer (a medium brawler's): one of each at most, often none
+  if (!pressPlan.has(k)) { const P = {}, R = BB_ROSTER[k] || [];
+    const pick = (ok, ty, pr) => { const c = R.map((e, j) => [e, j]).filter(([e, j]) => e && P[j] === undefined && e[3] !== "mini" && !(e[2] && typeof e[2] === "object" && e[2].gap !== undefined) && BB_TYPES[e[0]] && ok(BB_TYPES[e[0]]));
+      if (c.length && Math.random() < pr) P[c[Math.floor(Math.random() * c.length)][1]] = ty; };
+    if (tutOver()) { pick(T => T.size === "M" && (T.atk === "spit" || T.atk === "lob") && T.move !== "float" && !T.swim && (T.keep || 0) < 9999, "popper", .6); pick(T => T.size === "M" && ["swipe", "lunge", "bite", "slam"].includes(T.atk) && T.move === "walk", "boxer", .6); }   // (none in the tutorial)
+    pressPlan.set(k, P); }
+  return pressPlan.get(k)[i];
+}
+const hatOk = b => b.T.size === "M" && !b.mini && !b.armor && !b.under && !b.sad && !b.npc && !b.sleep && !["float", "breach"].includes(b.T.move) && !b.T.swim && (b.T.keep || 0) < 9999 && tutOver();
+function hatMaybe(b) { if (hatOk(b) && Math.random() < HAT_P) hatUp(b); }
+function hatUp(b) {                               // a pineapple sat on its head, its leaves up (fitted to the body, as the iron is)
+  const r = b.r; r.root.updateMatrixWorld(true); const inv = r.body.matrixWorld.clone().invert(); _ab.makeEmpty();
+  r.body.traverse(o => { if (o.isMesh && o.geometry) { o.geometry.computeBoundingBox(); _ab.union(o.geometry.boundingBox.clone().applyMatrix4(_am.multiplyMatrices(inv, o.matrixWorld))); } });
+  if (_ab.isEmpty()) return;
+  const sz = _ab.getSize(new THREE.Vector3()), c = _ab.getCenter(new THREE.Vector3()), wd = Math.max(sz.x, sz.z), pr = Math.min(wd * .2, sz.y * .15), g = new THREE.Group(); r.body.add(g);   // (about half its height, leaves and all)
+  if (!PINE_HAT_TEX) { PINE_HAT_TEX = tex(128, 128, (x, w, h) => {   // (its skin: gold, cut into diamonds, a light eye in each)
+      x.fillStyle = "#f0b53a"; x.fillRect(0, 0, w, h); x.strokeStyle = "#9a5a1c"; x.lineWidth = 5;
+      for (let i = -128; i <= 256; i += 32) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i + 128, 128); x.stroke(); x.beginPath(); x.moveTo(i, 128); x.lineTo(i + 128, 0); x.stroke(); }
+      x.fillStyle = "#ffe08a"; for (let y = 0; y <= 128; y += 16) for (let q = (y / 16) % 2 ? 0 : 16; q <= 128; q += 32) { x.beginPath(); x.arc(q, y, 4, 0, TAU); x.fill(); } });
+    PINE_HAT_TEX.wrapS = PINE_HAT_TEX.wrapT = THREE.RepeatWrapping; PINE_HAT_TEX.repeat.set(2, 1.5); }
+  const skin = r.M("#ffffff"); skin.map = PINE_HAT_TEX; skin.needsUpdate = true;
+  const fruit = new THREE.Mesh(new THREE.SphereGeometry(pr, 22, 16), skin); fruit.scale.y = 1.22; fruit.position.set(c.x - pr * .1, _ab.max.y + pr * .62, c.z); fruit.rotation.z = -.12; g.add(fruit);
+  const lf = [r.M("#3f9d3c"), r.M("#2b7a33")], top = fruit.position.y + pr * 1.1;
+  for (let i = 0; i < 9; i++) { const a = i / 9 * TAU, L = pr * (i % 2 ? .95 : 1.35), lean = i % 2 ? .75 : .45;
+    g.add(pointAlong(at(new THREE.Mesh(new THREE.ConeGeometry(pr * .2, L, 5).scale(1, 1, .4), lf[i % 2]), fruit.position.x + Math.cos(a) * pr * (.12 + lean * .3), top + L * .4, fruit.position.z + Math.sin(a) * pr * (.12 + lean * .3)), new THREE.Vector3(Math.cos(a) * lean, 1, Math.sin(a) * lean))); }
+  r.hat = g; b.hat = true;
+}
+function hatTop(b) {                              // a blow on its pineapple from above? Yours: ↓ + attack in the air, up over it. The team's: their slam from up high, coming down on it
+  if (!b.hat || b.hatGone) return false;
+  if (bcTopOn !== null) return Math.abs(b.x - bcTopOn) < b.hw + 70;
+  const p = player; return !partBlow && !!p && !p.dead && DOWN_AIR.has(p.atkKind) && p.atkT >= 0 && p.y <= b.y - b.h * .45;   // (on its head as it lands: on its top counts as on the ground)
+}
+function hatPop(b) {                              // popped: bits of it everywhere, its leaves flying (and the berry's beaten: hitBaddy)
+  b.hatGone = true; if (b.r.hat) b.r.hat.visible = false;
+  const x = b.x, y = b.y - b.h - 14;
+  for (let i = 0; i < 10; i++) spawn("pine", X(x) + rand(-.25, .25), Y(y) + rand(-.1, .3), (b.z || 0) + .3, V(rand(-5, 5), rand(4, 10), rand(-2, 2)), .75, rand(.6, 1), { g: 24, spin: 9 });
+  for (let i = 0; i < 7; i++) spawn("pineLeaf", X(x) + rand(-.2, .2), Y(y) + rand(0, .3), (b.z || 0) + .3, V(rand(-4, 4), rand(6, 11), rand(-2, 2)), .9, rand(.7, 1.1), { g: 16, spin: 7, drag: .6 });
+  sparks(x, y, 8); SFX.bubblePop(); SFX.crack(); shake = Math.max(shake, 5); hitstop = Math.max(hitstop, .08); popText(x, y - 30, "POP!");
+}
+function hatTipCheck(b) { if (player && !b.hatGone && Math.abs(b.x - player.x) < 560) { hatTip = true; toast("A PINEAPPLE HAT! JUMP OVER IT, THEN DOWN + ATTACK TO POP IT", 4200); } }
 function shoreDx(b, dx) {                       // a leap that would come down in the open water lands at the water's edge instead (or on a stack, if there's one there)
   const lx = b.x + dx, g = GAPS.find(([a, c]) => lx > a && lx < c);
   if (!g || PLATFORMS.some(q => lx > q.x && lx < q.x + q.w && q.y < b.y)) return dx;
@@ -27603,7 +27729,7 @@ function bbTarget(b) {                            // who a baddy's after: you; b
 function updateBaddy(b, dt) {
   const T = b.T, p = b.tgt = bbTarget(b), A = BB_ATK[T.atk], AW = A ? windOf(b, A) : 0;   // (AW: its wind-up, COMBAT FEEL's TELEGRAPHS)
   if (b.miniCue && !transit && !b.dead) { b.miniCue = false; SFX.trumpet(); }
-  if (b.volley) gunVolley(b, dt);   // (no words over it: the user, 2026-10-25 "remove the mini boss text popup")
+  if (b.volley) gunVolley(b, dt); if (b.barr) bbBarrage(b, dt); if (b.jab) bbJabs(b, dt); if (b.hat && !hatTip) hatTipCheck(b);   // (no words over it: the user, 2026-10-25 "remove the mini boss text popup")
   b.inv = Math.max(0, b.inv - dt); b.flash = Math.max(0, b.flash - dt); b.hurtT = Math.max(0, b.hurtT - dt);
   if (b.backAt !== undefined && time >= b.backAt) stepBack(b, false);   // (a string of your blows taken: a step back out of reach)
   bbEvade(b, p);
@@ -27888,9 +28014,11 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
     b.armor--; b.flash = .1; b.inv = .15; b.hurtT = .15; b.vx = dir * 140 / b.wt; SFX.block(); sparks(b.x - dir * b.hw * .5, b.y - b.h * .6, 8); hitFeel(b, dir, kind, false);
     if (!b.armor) armorOff(b); return true;
   }
+  const popH = hatTop(b); if (popH) { hatPop(b); b.hp = Math.min(b.hp, .01); }   // (its pineapple hit from above: popped, and that's it beaten. 2026-11-05)
   b.hp -= heroDmg(kind); if (b.sad) b.sadHits = (b.sadHits || 0) + 1; b.hitT = time;   // (hitT: when it last took a blow: no harm to touch for a moment after, see combat)
-  const arm = bbArmored(b, kind); if (arm) { b.armorAt = time; SFX.armor(); }   // (a big one in its heavy attack: hurt, but it doesn't flinch, the swing comes on)
-  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; if (!arm) { b.hurtT = (kind === "jab" || kind === "cut" ? .5 : .32) * feelStun(kind, b.hp <= 0); b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1); }
+  const press = BB_PRESS.has(b.T.atk) && b.atk === "go" && !b.dead, brk = press && pressBreak(b);   // (a barrage or a flurry going: hurt by any blow, stopped only by one from above or a block strike)
+  const arm = !popH && (bbArmored(b, kind) || (press && !brk)); if (arm) { b.armorAt = time; SFX.armor(); }   // (a big one in its heavy attack: hurt, but it doesn't flinch, the swing comes on)
+  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; if (!arm) { b.hurtT = (kind === "jab" || kind === "cut" ? .5 : .32) * feelStun(kind, b.hp <= 0); b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1); } if (brk && !b.dead) pressStop(b);
   hitPitch = feelPitch(); if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain(), swordOn()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
   SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1); hitPitch = 1;   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
@@ -28264,7 +28392,8 @@ const CLASH_LEAD = .1, CLASH_PAD = 26;                 // your swing counts a te
 const BB_BODY = new Set(["lunge", "leap", "flop", "sting", "roll"]), BOSS_BODY = new Set(["tidedash", "shellspin", "swoop", "bellyflop", "nrFly", "drTornado"]), BODY_HURT_BOSS = new Set([...BOSS_BODY, "nrRush"]);   // attacks that are the body itself flying at you
 function tryClash(p, T, hb, pb) {
   const e = T.e, boss = e === enemy || !!(duo && duo.some(d => d.e === e));
-  if (p.combo || e.recoil > 0 || !(boss ? e.atk === "act" && !e.hide : e.atk === "go" && e.T && e.hurtT <= 0)) return false;   // (a charged combo powers through)
+  if (p.combo || e.recoil > 0 || !(boss ? e.atk === "act" && !e.hide : e.atk === "go" && e.T && e.hurtT <= 0)) return false;
+  if (!boss && e.T && BB_PRESS.has(e.T.atk) && pressBreak(e)) return false;   // (a block strike or a blow from above on a barrage or a flurry: no clash, it gets through, 2026-11-05)   // (a charged combo powers through)
   const near = { x1: pb.x1 - CLASH_PAD, x2: pb.x2 + CLASH_PAD, y1: pb.y1 - 10, y2: pb.y2 + 4 }, bx = h => ({ x1: h.x - h.r, x2: h.x + h.r, y1: h.y - h.r, y2: h.y + h.r });
   const blows = hz.filter(h => h.owner === e && !h.harmless && !h.reflected && h.t < h.life && (!h.m && !h.g && Math.abs(h.vx) < 1 && Math.abs(h.vy) < 1   // its claws, its bite, its blade: a hit box right in front of it
     || boss && e.def.kit && h.t < .14 && Math.abs(h.x - e.x) < e.def.hw + 110));   // (a sword-fighter's slash, just leaving the blade)
@@ -28276,6 +28405,7 @@ function tryClash(p, T, hb, pb) {
   p.inv = Math.max(p.inv, .35); p.sq = -.22; p.sqv = 5;
   if (boss && bigAtk(e)) { e.sq = -.1; e.sqv = 0; }   // (its big attack: blows meeting don't stop it)
   else if (boss) { e.vx = d * 380; e.atk = null; e.atkCd = Math.max(e.atkCd, 1.1); e.backoff = .5; e.brainT = 0; e.sq = -.15; e.sqv = 0; e.recoil = .45; }   // a boss: rocked back, its attack broken off
+  else if (e.T && BB_PRESS.has(e.T.atk) && e.atk === "go") { e.sq = -.1; e.sqv = 0; }   // (a popper's barrage, a boxer's flurry: blows meeting don't stop it, 2026-11-05)
   else { e.vx = d * 400 / Math.pow(e.wt || 1, 1.2); e.vy = -260; e.onGround = false; e.plat = null; e.atk = null; e.atkCd = Math.max(e.atkCd, 1); e.sq = .2; e.sqv = 0; e.recoil = .5; }   // a baddy: knocked back (the smaller, the further)
   const cx = (p.x + d * 24 + e.x - d * hw) / 2, cy = p.y - H * .55;
   slashFlair(cx, cy, false); sparks(cx, cy, 14); hitstop = Math.max(hitstop, .11); shake = Math.max(shake, 6); SFX.clash(); popText(cx, cy - 50, "CLASH!");
@@ -28433,7 +28563,7 @@ function hurtPlayer(d, src) {
     if (src && src.m && !src.reflected && time - (p.blockAt ?? -9) < PARRY_WIN && Math.abs(src.vx) + Math.abs(src.vy) > 60) { parry(p, src, d); { const e = src.owner || partFoesAll().filter(f => (f.x - p.x) * p.face > 0).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0]; if (e) blkArch("parry", e, parrySide(p, e)); } return false; }   // just in time: sent back
     if (!src && hurtBy && !hurtBy.dead && time - (p.blockAt ?? -9) < PARRY_WIN) { parryMelee(p, hurtBy, d); return false; }   // a blow, just in time: parried, them off balance (2026-11-02)
     if (guardBreaker(hurtBy || (src && src.owner))) { guardBreak(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // a big one's: the guard breaks
-    if (!guardTake(p, d)) blockHit(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // guarded (the fifth blow on it breaks it: guardTake)
+    if (!guardTake(p, d, (src && src.gw) || 1)) blockHit(p, d); if (src) src.life = Math.min(src.life, src.t); return false; }   // guarded (the fifth blow on it breaks it: guardTake)
   if (src && src.daze) { src.life = Math.min(src.life, src.t); dazePlayer(p); return true; }   // Crux's city: the dizzy swirl only scrambles you
   freezeReset(); p.hp = Math.max(0, p.hp - hurtK(src)); updateHearts(true); p.combo = null; p.chargeT = 0; p.chargeLv = 0; p.tkCharge = null;    // each hit costs a level of ATK power
   const PH = FEEL.playerHit, ph = !FEEL.legacy && PH.enabled;   // (COMBAT FEEL's PLAYER HIT, 2026-10-31: the freeze, shake, sparks and weight your blows get, on you; off: the game's own)

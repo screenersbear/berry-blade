@@ -7,12 +7,14 @@ window.BerryShading = (() => {
   // the game's look, shipped (the user, 2026-10-31, "okay first let's do this lighting for the game" + their exported CUSTOM): the characters flatter (lighting
   // .31), a soft 3-step ramp, a light rim, a touch of top light, richer colour; the scenery a little calmer, its shadows toward blue-grey. SHIPPED_ID: a choice
   // made in a browser before this look shipped (an APPLY, NO SHADING) doesn't hide it; one made after it does
-  const SHIPPED_ID = "20261031c", SHIPPED = {   // (c, 2026-10-31: the user's second CUSTOM, lighting influence .04 (was .31). Every browser takes it, as a new id)
+  const SHIPPED_ID = "20261105a", SHIPPED = {   // (a, 2026-11-05: the painted texture added, below. c, 2026-10-31: the user's second CUSTOM, lighting influence .04 (was .31). Every browser takes it, as a new id)
     character: { lightingInfluence: .04, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
       rimLight: { enabled: true, color: "#FFFFFF", width: 0, intensity: 0 },   // (as the user's file has it: on, at width 0 and intensity 0, so nothing: the shader skips a rim that has no width)
       edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .017, intensity: .5 },
-      fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.31 },
-    environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: .9, contrast: .87, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 } }
+      fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.4,   // (1.31 until 2026-11-05: a bit more colour, below)
+      texture: { enabled: true, strength: .3, late: true } },   // (the 90s anime look's painted coat, without its filters and lines, a little lighter on them (.3; late shows it more): the user, 2026-11-05 "is it possibly to give similar texture to the main aesthetic of the game now, but not the tv-ish filters and lines of the anime style?")
+    environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: 1.05, contrast: .93, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 },
+      texture: { enabled: true, strength: .55 } }   // (saturation .9 and contrast .87 until 2026-11-05: the user, asked if the game look should get a bit more of the 90s anime look's saturation: "Yes, try it". Its full amount (1.5 / 1.18 / 1.0 here) made the woods neon)
   };
   const DEF = {
     character: {
@@ -24,6 +26,7 @@ window.BerryShading = (() => {
       fakeAO: { enabled: true, strength: .4 },
       topLight: { enabled: true, strength: .15 },
       specular: { enabled: false, intensity: 0 },
+      texture: { enabled: false, strength: .45, late: false },   // (here so a look can carry it through normalize; off unless the look turns it on)
       saturation: 1.0
     },
     environment: {
@@ -31,6 +34,7 @@ window.BerryShading = (() => {
       toonRamp: { enabled: false, steps: 2, softness: .3 },
       saturation: .9,
       contrast: .9,
+      texture: { enabled: false, strength: .55 },
       shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 }
     }
   };
@@ -48,9 +52,9 @@ window.BerryShading = (() => {
   const PRESET_UI = [["current", "ORIGINAL"], ...(SHIPPED ? [["shipped", "IN THE GAME"]] : []), ["softToon", "SOFT TOON"], ["kh", "KINGDOM HEARTS-ISH"], ["flat", "FLAT GRAPHIC"], ["custom", "CUSTOM"]];   // (current: the game unshaded, as it was before any look)
   const unifs = () => ({ mkOn: { value: 1 }, mkInfl: { value: 1 }, mkRampOn: { value: 0 }, mkSteps: { value: 3 }, mkSoft: { value: .15 }, mkTintOn: { value: 0 }, mkTint: { value: null }, mkTintStr: { value: .5 },
     mkRimOn: { value: 0 }, mkRimC: { value: null }, mkRimW: { value: .3 }, mkRimI: { value: .6 }, mkAOOn: { value: 0 }, mkAOStr: { value: .4 }, mkTopOn: { value: 0 }, mkTopStr: { value: .15 },
-    mkSpecOn: { value: 0 }, mkSpecI: { value: 0 }, mkSat: { value: 1 }, mkCon: { value: 1 }, mkGround: { value: 0 }, mkTexOn: { value: 0 }, mkTexStr: { value: 0 }, mkTexObj: { value: 0 }, mkSpecSz: { value: .94 } });
+    mkSpecOn: { value: 0 }, mkSpecI: { value: 0 }, mkSat: { value: 1 }, mkCon: { value: 1 }, mkGround: { value: 0 }, mkTexOn: { value: 0 }, mkTexStr: { value: 0 }, mkTexObj: { value: 0 }, mkSpecSz: { value: .94 }, mkTexLate: { value: 0 } });
   const VERT = `varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO;\n`, VERT_MAIN = `\n vMkW = (modelMatrix * vec4(transformed, 1.0)).xyz; vMkN = normalize(mat3(modelMatrix) * objectNormal); vMkO = transformed * vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz));\n`;   // (vMkO: where on the part itself, at its size in the world: a texture on a character that goes along with it, not one it walks through)
-  const FRAG = `uniform float mkOn, mkInfl, mkRampOn, mkSteps, mkSoft, mkTintOn, mkTintStr, mkRimOn, mkRimW, mkRimI, mkAOOn, mkAOStr, mkTopOn, mkTopStr, mkSpecOn, mkSpecI, mkSat, mkCon, mkGround, mkTexOn, mkTexStr, mkTexObj, mkSpecSz;
+  const FRAG = `uniform float mkOn, mkInfl, mkRampOn, mkSteps, mkSoft, mkTintOn, mkTintStr, mkRimOn, mkRimW, mkRimI, mkAOOn, mkAOStr, mkTopOn, mkTopStr, mkSpecOn, mkSpecI, mkSat, mkCon, mkGround, mkTexOn, mkTexStr, mkTexObj, mkSpecSz, mkTexLate;
 uniform vec3 mkTint, mkRimC; varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO;
 float mkHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float mkNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -71,15 +75,17 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     vec3 mkLit = mkRampOn > .5 ? mkAlb * (mkSun * mix(.5, 1.0, mkR) + mkHemi) * RECIPROCAL_PI + totalEmissiveRadiance : mkBase;   // (stepped: the sun in bands over the sky's fill; its shadow band keeps half the sun, as the game's own ramp keeps .71)
     if (mkTintOn > .5) { float l = max(dot(mkTint, vec3(.299, .587, .114)), .05); vec3 tc = mkTint / l * .82; mkLit = mix(mkLit, mkLit * tc, (1.0 - mkR) * mkTintStr); }   // (the shadow side shifted toward the tint, not greyed)
     vec3 mkFlat = mkAlb * 1.05 + totalEmissiveRadiance;
-    vec3 c = mix(mkFlat, mkLit, mkInfl);
+    vec3 c = mix(mkFlat, mkLit, mkInfl); float mkTm = 1.0; vec3 mkTs = vec3(0.0);
     if (mkTexOn > .5) { vec3 q = mkTexObj > .5 ? vMkO : vMkW, d = vec3(dot(q.xy, vec2(.8, .6)), dot(q.xy, vec2(-.6, .8)), q.z);   // (a painted surface, not a plastic one: blotches of a thicker and thinner coat, brush strokes on a slant, a fine grain; a little more in the shade. Only with a look that asks for it, DEBUG > SHADER's 90S ANIME)
       float m = mkNoise(q * 1.3) * .6 + mkNoise(q * 3.1 + 7.0) * .4, b = mkNoise(vec3(d.x * 2.4, d.y * 11.0, d.z * 11.0) + 3.0), g = mkNoise(q * 24.0 + 11.0);
-      float t = (m - .5) * .9 + (b - .5) * .55 + (g - .5) * .4; c *= 1.0 + t * mkTexStr * mix(1.0, 1.35, 1.0 - mkR); c += (m - .5) * mkTexStr * vec3(.05, .015, -.04); }
+      float t = (m - .5) * .9 + (b - .5) * .55 + (g - .5) * .4; mkTm = 1.0 + t * mkTexStr * mix(1.0, 1.35, 1.0 - mkR); mkTs = (m - .5) * mkTexStr * vec3(.05, .015, -.04);
+      if (mkTexLate < .5) { c = c * mkTm + mkTs; mkTm = 1.0; mkTs = vec3(0.0); } }
     if (mkAOOn > .5) { float ao = clamp(-mkNW.y, 0.0, 1.0) * .65 + (1.0 - smoothstep(0.0, .7, vMkW.y - mkGround)) * .45; c *= 1.0 - mkAOStr * clamp(ao, 0.0, 1.0); }   // (creases face down; low down near the ground)
     if (mkTopOn > .5) c += mkAlb * mkTopStr * max(mkNW.y, 0.0);
     if (mkRimOn > .5 && mkRimW > .001 && mkRimI > .001) { float f = 1.0 - max(dot(mkN, mkV), 0.0); c += mkRimC * smoothstep(1.0 - mkRimW, 1.0, f) * mkRimI; }   // (no width: no rim; smoothstep(1, 1, f) is undefined)
     if (mkSpecOn > .5) { vec3 h = normalize(mkL + mkV); c += mkSun * smoothstep(mkSpecSz, mkSpecSz + (1.0 - mkSpecSz) * .42, dot(mkN, h)) * mkSpecI * .35; }   // (mkSpecSz: how near the light's mirror angle it shows, .94 as it always was; nearer 1, a smaller spot)
     float lu = dot(c, vec3(.299, .587, .114)); c = mix(vec3(lu), c, mkSat); c = (c - .22) * mkCon + .22;
+    if (mkTexLate > .5) c = min(max(c, 0.0), vec3(1.0)) * pow(max(mkTm, 0.0), 2.2) + mkTs;   // (late: on the colour as it shows, after the saturation; the game's characters are saturated past full (red .84 at 1.31), which flattened the coat on Camila's reds. 2.2: an even step to the eye, not in light)
     outgoingLight = mkOn > .5 ? max(c, 0.0) : mkBase; }
 `;
   function patchShader(sh, U) {
@@ -94,13 +100,13 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     a.mkRimOn.value = C.rimLight.enabled ? 1 : 0; a.mkRimC.value.set(C.rimLight.color); a.mkRimW.value = C.rimLight.width; a.mkRimI.value = C.rimLight.intensity;
     a.mkAOOn.value = C.fakeAO.enabled ? 1 : 0; a.mkAOStr.value = C.fakeAO.strength; a.mkTopOn.value = C.topLight.enabled ? 1 : 0; a.mkTopStr.value = C.topLight.strength;
     a.mkSpecOn.value = C.specular.enabled ? 1 : 0; a.mkSpecI.value = C.specular.intensity; a.mkSpecSz.value = C.specular.size || .94; a.mkSat.value = C.saturation; a.mkCon.value = 1;
-    a.mkTexOn.value = C.texture && C.texture.enabled ? 1 : 0; a.mkTexStr.value = C.texture ? C.texture.strength || 0 : 0; a.mkTexObj.value = 1;   // (texture: only a look that has it, the 90s anime one; on a character, it moves with it)
+    a.mkTexOn.value = C.texture && C.texture.enabled ? 1 : 0; a.mkTexStr.value = C.texture ? C.texture.strength || 0 : 0; a.mkTexObj.value = 1; a.mkTexLate.value = C.texture && C.texture.late ? 1 : 0;   // (texture: only a look that has it, the game's own and the 90s anime one; on a character, it moves with it)
   }
   function setEnv(b, E) {                                // and its environment settings (no rim, AO, top light or specular on the scenery)
     b.mkOn.value = 1; b.mkInfl.value = E.lightingInfluence; b.mkRampOn.value = E.toonRamp.enabled ? 1 : 0; b.mkSteps.value = E.toonRamp.steps; b.mkSoft.value = E.toonRamp.softness;
     b.mkTintOn.value = E.shadowTint.enabled ? 1 : 0; b.mkTint.value.set(E.shadowTint.color); b.mkTintStr.value = E.shadowTint.strength; b.mkSat.value = E.saturation; b.mkCon.value = E.contrast;
     b.mkRimOn.value = 0; b.mkAOOn.value = 0; b.mkTopOn.value = 0; b.mkSpecOn.value = 0;
-    b.mkTexOn.value = E.texture && E.texture.enabled ? 1 : 0; b.mkTexStr.value = E.texture ? E.texture.strength || 0 : 0; b.mkTexObj.value = 0;
+    b.mkTexOn.value = E.texture && E.texture.enabled ? 1 : 0; b.mkTexStr.value = E.texture ? E.texture.strength || 0 : 0; b.mkTexObj.value = 0; b.mkTexLate.value = 0;
   }
   function newUnifs(THREE) { const U = unifs(); U.mkTint.value = new THREE.Color(); U.mkRimC.value = new THREE.Color(); return U; }
   function hullMat(THREE) {                              // the light edge (inverted hull): the mesh pushed out along its normals, its back faces in the highlight colour.
