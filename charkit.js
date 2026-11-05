@@ -1507,7 +1507,8 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
   const S = _gSh.copy(S0), dz = Math.max(0, .2 * r.spec.body.girth * D.chest * 1.45 * .92 - Math.abs(S0.z)); S.z += s * dz;   // (out at her shoulder's side, where her chest ends: grown out of it there, not through her top. The user, 2026-11-01: "camila's arm is still goign through through her chest")
   G.on = true; G.s = s; G.grp.visible = true;
-  _gu.subVectors(E, S).multiplyScalar(1 + (c.len - 1) * GIANT_UPPER); _gv.subVectors(W, E).multiplyScalar(c.len);   // (her own upper arm grows less than the gauntleted forearm)
+  G.lk = approach(G.lk ?? 0, p.zip || p.climb || p.crawl ? 1 : 0, 6 / 60); const len = lerp(c.len, 1, G.lk);   // (on a zip line, a ladder or crawling: no longer than her own arm, its hand where hers is, on the handle, the rung, the floor. The user, 2026-11-05 "in c7 on the beach, when camila rides the zip line, make sure she actually grabs the zip line handle" · "the crawling animation, maybe because of the big sword or arm in c8 looks very unnatural")
+  _gu.subVectors(E, S).multiplyScalar(1 + (len - 1) * GIANT_UPPER); _gv.subVectors(W, E).multiplyScalar(len);   // (her own upper arm grows less than the gauntleted forearm)
   A[0].copy(S).addScaledVector(_gu, -.06);                                    // (its root a little into the shoulder)
   for (let i = 1; i <= 3; i++) A[i].copy(S).addScaledVector(_gu, i / 3);
   for (let i = 4; i <= 6; i++) A[i].copy(A[3]).addScaledVector(_gv, (i - 3) / 3);
@@ -1528,7 +1529,7 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
     if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } } };   // her legs: it keeps out to her side of them   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
   keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = 0; G.pt = approach(G.pt || 0, p.pointKind && !(STRIKES[p.pointKind] || {}).openHand ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
+  G.fist = p.zip || p.climb ? G.lk : 0; G.pt = approach(G.pt || 0, p.pointKind && !(STRIKES[p.pointKind] || {}).openHand ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fyK + .06 * hs - A[6].y) / hl;                // near the ground it bends at the wrist to lie along it (dragged), never into it
@@ -1628,7 +1629,8 @@ function giantPose(p, o) {                           // not in a move: too heavy
   p.gripFree = false; p.gPoseK = 0; const F = p.fidget, FS = F && STRIKES[F.kind], OA = FS && FS.ownArms, own0 = OA ? clamp(Math.min((F.t - OA[0]) / .3, (OA[1] - F.t) / .3), 0, 1) : 0, fh = !!(FS && FS.freeHand && F.t > FS.freeHand[0] && F.t < FS.freeHand[1]);   // (own0: a big idle's own arms, Camila's handstand on the grown fist, the user 2026-11-02 "even with big hands")
                    // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
-  if (p.climb || p.zip || (p.sit && !p.chair) || p.crawl || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose || p.restK > .5) return;
+  if (p.climb || p.zip || p.crawl || (p.sit && p.chair)) { p.gripFree = true; return; }   // (both hands her own: on the rungs, the zip line's handle, the floor; sat in a chair, her sword put by it (index.html's chairProp). Her other hand pulled over to the grown arm till 2026-11-05)
+  if (p.sit || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose || p.restK > .5) return;   // (sat in a chair too since 2026-11-05: it stood her up in the grown stance over the chair. The user: "rose doesnt sit down on the rest chairs")
   if (p.cheerK > .25) { p.gPoseK = clamp((p.cheerK - .25) / .4, 0, 1); p.gripFree = true; return; }   // (the cheer: the grown arm up with her own, both hands up)
   const w = clamp(g, 0, 1) * (1 - own0), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
@@ -3756,7 +3758,7 @@ function syncHuman(p, r, dt = 0) {
   const tU = (o.twistU || 0) * fs, tH = (o.twistH || 0) * fs;
   r.hips.position.copy(_P[1]); r.hips.rotation.z = -ang[0] * .6; r.hips.rotation.y = tH;
   r.chest.position.copy(_SB); r.chest.rotation.set(0, tU, -ang[1]);   // (all three: giantRoll tips it about x, and that has to start from nothing each frame, or it adds up and turns her chest round and round)
-  const hb = r.prop && r.prop.kind === "gauntlet" ? clamp(giantOf(p), 0, 1) : 0, a2 = ang[2] < 0 ? ang[2] * (1 - .6 * hb) : ang[2], hu = hb * Math.min(.14, Math.max(0, .27 * (Math.sin(.22) - Math.sin(ang[1]))));   // her arm grown: her head held up out of her tall collar (its front rises as she stands up out of her boxer's lean, .22, or leans back under the weight: up by as much), and over it, not sunk back behind it (the user, 2026-11-02: "look at how camila's head sinks into her body")
+  const hb = r.prop && r.prop.kind === "gauntlet" ? clamp(giantOf(p), 0, 1) : 0, a2 = ang[2] < 0 ? ang[2] * (1 - .6 * hb) : ang[2], hu0 = hb * Math.min(.14, Math.max(0, .27 * (Math.sin(.22) - Math.sin(ang[1])))), hu = r.huS = r.huS === undefined || !(dt > 0) ? hu0 : r.huS + (hu0 - r.huS) * (1 - Math.exp(-dt * 2.5));   // (eased, so it follows how far she leans, never each step's bob: the user, 2026-11-05 "camila's head bounces in an unntatural way when she has a big arm and is walking")   // her arm grown: her head held up out of her tall collar (its front rises as she stands up out of her boxer's lean, .22, or leans back under the weight: up by as much), and over it, not sunk back behind it (the user, 2026-11-02: "look at how camila's head sinks into her body")
   r.head.position.set(p.neck.x + Math.sin(a2) * D.headOff * Bd.head, p.neck.y + Math.cos(a2) * D.headOff * Bd.head + hu, 0);
   r.head.rotation.set(0, -p.face * (.85 - (p.bodyYaw ?? .85)) + tU * .5 + (o.headY || 0) * fs, -(ang[2] * .7 + o.headRot));   // (the head goes half way with the shoulders)
   r.mFace.map = p.blink < 0 ? r.faceB : (p.shy > 0 || p.blush) && r.faceS ? r.faceS : r.faceO;   // (shy, or still blushing: the blushing face, if one's been made)
@@ -3772,7 +3774,7 @@ function syncHuman(p, r, dt = 0) {
   if (!gArm) giantOff(r); else if (r.giant) { const k = (r.giant.idleW ?? 0) * giantAt(GIANT_CLUB, giantOf(p)).roll; if (k > 1e-3) giantRoll(r, propS * k); }   // (her shoulders over toward its weight)
   const grip = pr && pr.kind === "sword" ? clamp(o.grip || 0, 0, 1) : 0; let wristFix = 0;
   (propS > 0 ? [1, -1] : [-1, 1]).forEach(s => {                     // the sword hand goes first, so the other hand can find its hilt
-    const lk = gArm && s !== propS && r.giant ? 1 + .2 * clamp(giantOf(p), 0, 1) : 1;   // (holding the grown arm: her other arm a fifth longer)
+    const lk = gArm && s !== propS && r.giant ? 1 + .2 * clamp(giantOf(p), 0, 1) * (1 - (r.giant.lk || 0)) : 1;   // (holding the grown arm: her other arm a fifth longer; on the zip line's handle, a rung or the floor her own length again, both hands level: 2026-11-05, "make sure she actually grabs the zip line handle")
     const i = s > 0 ? 1 : 0, isNear = s === near, st = 0, gr = 1 + (isNear ? o.gF || 0 : o.gB || 0), wb = isNear ? o.wF || 0 : o.wB || 0;   // (wb: the fist bent at the wrist, 2026-10-24: "i could rotate other parts but not camila's fist")
     let a = isNear ? o.armF : o.armB, e = isNear ? o.elbF : o.elbB, sp = isNear ? o.spF || 0 : o.spB || 0, rl = isNear ? o.rlF || 0 : o.rlB || 0;   // (rl: the forearm turned round the upper arm)
     _S.set(_SB.x, _SB.y - .02, s * shoulder * gw);
