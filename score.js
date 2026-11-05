@@ -459,6 +459,18 @@ window.BerryScore = (() => {
   const CH_T12 = ["Ebm7","Ebm7","Ebm7","Ebm7","Gbmaj7","Gbmaj7","Gbmaj7","Gbmaj7","Ebm7","Ebm7","Ebm7","Ebm7","Bbm7","Bbm7","Bbm7","Bbm7","Gbmaj7","Gbmaj7","Db","Db","Ebm7","Ebm7","Bb7","Bb7","Ebm7","Ebm7","Eb7","Eb7","Gbmaj7","Gbmaj7","Bb7","Bb7"];
   const VOICE_T12 = { Ebm7: [51, 54, 58, 61], Gbmaj7: [53, 54, 58, 61], Bbm7: [53, 56, 58, 61], Db: [53, 56, 61, 65], Bb7: [50, 53, 56, 58], Eb7: [51, 55, 58, 61] };
   const ROOT_T12 = { Ebm7: 39, Gbmaj7: 42, Bbm7: 46, Db: 37, Bb7: 46, Eb7: 39 };
+  // LA GUAGUA'S RIDE (26): ORIGINAL, written for this game (2026-11-04, the user: "when riding la guagua, change the music. make a new guagua theme"). The road's own, played the whole ride: F major, 128 bpm, 16 bars (A · B). A reedy accordion-ish lead over a scraper-and-drum road beat; the A skips up and down the F chord with a push at each bar's end, the B climbs from B-flat to a high C and turns home on G minor and C
+  const MEL_T13 = [[0,2,72],[2,1,74],[3,1,72],[4,2,69],[6,2,72],[8,3,77],[11,1,76],[12,2,74],[14,2,72],[16,2,74],[18,2,77],[20,4,74],[24,2,76],[26,2,79],[28,4,76],
+    [32,2,77],[34,1,79],[35,1,77],[36,2,72],[38,2,77],[40,3,81],[43,1,79],[44,2,77],[46,2,76],[48,2,74],[50,2,70],[52,2,74],[54,2,79],[56,6,76],[62,2,72],
+    [64,2,72],[66,1,74],[67,1,72],[68,2,69],[70,2,72],[72,3,77],[75,1,76],[76,2,77],[78,2,79],[80,2,82],[82,2,81],[84,4,77],[88,2,79],[90,2,76],[92,4,72],
+    [96,2,74],[98,2,77],[100,2,81],[102,2,77],[104,2,79],[106,2,74],[108,2,70],[110,2,74],[112,3,76],[115,1,74],[116,2,72],[118,2,76],[120,6,77],[126,2,72],
+    [128,2,74],[130,2,77],[132,2,82],[134,2,81],[136,4,82],[140,2,81],[142,2,79],[144,2,79],[146,2,76],[148,2,72],[150,2,76],[152,4,79],[156,2,81],[158,2,79],
+    [160,3,76],[163,1,77],[164,2,76],[166,2,72],[168,2,69],[170,2,72],[172,4,76],[176,2,77],[178,2,81],[180,2,84],[182,2,81],[184,4,77],[188,2,76],[190,2,74],
+    [192,2,74],[194,2,79],[196,2,82],[198,2,79],[200,3,74],[203,1,72],[204,4,70],[208,2,72],[210,2,76],[212,2,79],[214,2,84],[216,4,82],[220,2,81],[222,2,79],
+    [224,4,81],[228,2,77],[230,2,72],[232,2,74],[234,2,77],[236,4,81],[240,2,79],[242,2,77],[244,2,74],[246,2,70],[248,4,72],[252,2,76],[254,2,79]];
+  const CH_T13 = ["F","F","Bb","C","F","F","Gm","C","F","F","Bb","C","Dm","Gm","C","F","Bb","Bb","C","C","Am","Am","Dm","Dm","Gm","Gm","C","C","F","Dm","Gm","C"];
+  const VOICE_T13 = { F: [53, 57, 60, 65], Bb: [53, 58, 62, 65], C: [52, 55, 60, 64], Gm: [50, 55, 58, 62], Dm: [50, 53, 57, 62], Am: [52, 57, 60, 64] };
+  const ROOT_T13 = { F: 41, Bb: 46, C: 36, Gm: 43, Dm: 38, Am: 45 };
   const SONGS = [
     { MEL, CH, VOICE, ROOT, DARK, STYLES, bars: 16, bpm: 100, drone: 43, darkLead: { 11: -1, 4: -1, 1: -1 }, clipVar: null },
     { MEL: MEL2, CH: CH2, VOICE: VOICE2, ROOT: ROOT2, DARK: { G: "Gm", Em: "Edim", E: "E7b5" }, STYLES: STYLES2, bars: 16, bpm: 84, drone: 45, darkLead: { 11: -1, 6: -1 }, clipVar: null },
@@ -486,6 +498,7 @@ window.BerryScore = (() => {
     { MEL: MEL_T10, CH: CH_T10, VOICE: VOICE_T10, ROOT: ROOT_T10, DARK: {}, STYLES: [{ lead: "soft", pad: .022, softPad: true, bass: "long", drums: "rim", arp: .012, verb: .56, gain: .78 }], bars: 16, bpm: 90, drone: 47, darkLead: {}, clipVar: null },   // 23: AETHER (a cassette: my own tune, the other builds' stand-in for the PC page's recording)
     { MEL: MEL_T11, CH: CH_T11, VOICE: VOICE_T11, ROOT: ROOT_T11, DARK: {}, STYLES: [{ lead: "keys", pad: .014, bass: "groove", drums: "light", arp: .02, harp: true, verb: .24, gain: .86 }], bars: 16, bpm: 130, drone: 43, darkLead: {}, clipVar: null },   // 24: TIGER AND FLOWER (a cassette: my own tune, the other builds' stand-in for the PC page's recording)
     { MEL: MEL_T12, CH: CH_T12, VOICE: VOICE_T12, ROOT: ROOT_T12, DARK: {}, STYLES: [{ lead: "keys", pad: .014, bass: "walk", drums: "brush", arp: 0, verb: .22, gain: .84 }], bars: 16, bpm: 100, drone: 39, darkLead: {}, clipVar: null },   // 25: KILLAH BLUES (a cassette: my own tune, the other builds' stand-in for the PC page's recording)
+    { MEL: MEL_T13, CH: CH_T13, VOICE: VOICE_T13, ROOT: ROOT_T13, DARK: {}, STYLES: [{ lead: "reed", pad: .012, bass: "groove", drums: "road", arp: .016, verb: .13, gain: .9 }], bars: 16, bpm: 128, drone: 41, darkLead: {}, clipVar: null },   // 26: LA GUAGUA'S RIDE (the road's own, not a cassette: syncMusic plays it while La Guagua drives)
   ];
   const HUB = 9;                                 // HUB (9): a world's hub, its own take on the tune (2026-10-22; out here, not by EASE: the PC score swaps the woods' part above out)
   SONGS.forEach(S => { if (S.STYLES.length >= 9 && !S.STYLES[HUB]) S.STYLES[HUB] = { ...S.STYLES[3], hub: true, lead: "pluck", harp: true, arp: .022, verb: .22, gain: (S.STYLES[3].gain || .9) * .95, dark: false, drone: false, key: 0, orig: undefined, bpm: undefined }; });   // the hub's: the world's own drums and bass at golden hour, a mallet lead and the harp (the user, 2026-10-22: "another variation of the level's music for each hub")
@@ -499,6 +512,7 @@ window.BerryScore = (() => {
     tresBrush: { kick: [[0, .6], [6, .4], [12, .5]], brush: [[8, .8]], shaker: [0, 2, 4, 6, 8, 10, 12, 14].map(s => [s, s % 4 ? .65 : .4]) },
     machine: { kick: [[0, 1], [8, .9], [11, .5]], snare: [[4, 1], [12, 1]], hat: [...Array(16).keys()].map(s => [s, s % 2 ? .45 : .75]), clank: [[7, .55], [15, .4]] },   // Volt Keep: the factory floor
     heart: { kick: [[0, .5], [3, .34]] },                                                                      // Evil June: a heartbeat, lub-dub once a bar
+    road: { kick: [[0, .9], [6, .5], [8, .8], [14, .45]], rim: [[4, .55], [11, .3], [12, .6]], shaker: [...Array(16).keys()].map(x => [x, x % 4 === 0 ? 1 : x % 2 ? .55 : .75]), hat: [0, 4, 8, 12].map(x => [x, .3]) },   // La Guagua's ride: a scraper on every sixteenth, the drum on the ones and a slap on the twos
     march: { kick: [[0, .9], [8, .75]], snare: [[4, .75], [12, .75], [14, .35], [15, .45]], hat: [0, 4, 8, 12].map(s => [s, .4]) },
   };
   const hz = m => 440 * Math.pow(2, (m - 69) / 12);
@@ -572,9 +586,9 @@ window.BerryScore = (() => {
         [[1, 1, 1.6], [3, .22, .5], [4.17, .12, .22]].forEach(([r, a, dec]) => { const o = osc("sine", f * r, t, t + dec * 4 + .3), g = ac.createGain(); if (wob) wob.connect(o.detune);
           g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(a * .9, t + .003); g.gain.setTargetAtTime(0, t + .003, dec); o.connect(g); g.connect(d); }); return;
       }
-      const flt = lp(kind === "bright" ? 2600 : kind === "soft" ? 2200 : 1500), g = adsr(t, kind === "warm" ? .03 : .008, .8, .14, .72, end, .09), tu = st.tune || 0;
-      const parts = kind === "bright" ? [["square", 0, .5], ["sawtooth", 7, .32]] : kind === "soft" ? [["triangle", 0, .85], ["sine", 1200, .15]] : [["triangle", -8, .5], ["triangle", 8, .5], ["sawtooth", 0, .12]];
-      const vib = osc("sine", 5.4, t, end + .2), vg = ac.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(dur > .45 ? 9 : 0, t + Math.min(.45, dur)); vib.connect(vg);
+      const flt = lp(kind === "bright" ? 2600 : kind === "soft" ? 2200 : kind === "reed" ? 2300 : 1500), g = adsr(t, kind === "warm" ? .03 : .008, .8, .14, .72, end, .09), tu = st.tune || 0;
+      const parts = kind === "reed" ? [["sawtooth", -12, .36], ["sawtooth", 12, .36], ["square", 1200, .06]] : kind === "bright" ? [["square", 0, .5], ["sawtooth", 7, .32]] : kind === "soft" ? [["triangle", 0, .85], ["sine", 1200, .15]] : [["triangle", -8, .5], ["triangle", 8, .5], ["sawtooth", 0, .12]];
+      const vib = osc("sine", 5.4, t, end + .2), vg = ac.createGain(); vg.gain.setValueAtTime(0, t); vg.gain.linearRampToValueAtTime(dur > .45 && kind !== "reed" ? 9 : 0, t + Math.min(.45, dur)); vib.connect(vg);   // (the reed: no vibrato, its two detuned reeds beat against each other like an accordion's)
       parts.forEach(([type, det, a]) => { const o = osc(type, f, t, end + .2, det + tu), og = ac.createGain(); og.gain.value = a; vg.connect(o.detune); o.connect(og); og.connect(flt); });
       flt.connect(g); g.connect(d);
     }
@@ -679,7 +693,7 @@ window.BerryScore = (() => {
     setGloom(v) { gloom = !!v; },
     quickFade(sec) { xfNext = sec; xfUntil = (ac0 ? ac0.currentTime : 0) + 2; },   // (the next change, if it comes in the next 2 s, crossfades over sec instead of 3 s)                // (the uprising at 75%: darker everywhere, a touch slower)
     setHour(k, tempo = 1) { const SG = SONGS[song]; want = Math.max(0, Math.min(SG.STYLES.length - 1, k)); wantBpm = (SG.STYLES[want].bpm || SG.bpm * tempo) * (gloom && !SG.STYLES[want].serene ? .92 : 1); if (SG.STYLES[want].orig && ac0) decodeClip(ac0, SG); },
-    EASE, SERENE, EJ: 5, HUB,
+    EASE, SERENE, EJ: 5, HUB, RIDE: 26,   // (RIDE: La Guagua's own tune, while she drives)
     tick,
     get state() { const c = players[players.length - 1] || {}, clip = SONGS[song].clip; return { playing, song: c.song ?? song, hour: c.k ?? want, want, bpm: c.bpm ?? wantBpm, slot: c.slot ?? 0, bands: players.length, clip: clip.buf ? "ready" : clip.busy ? "decoding" : "none" }; },
     // test helper: render the score offline (seconds of audio at one hour) → AudioBuffer

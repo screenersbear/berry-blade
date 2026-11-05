@@ -1021,7 +1021,7 @@ function hairChains(st) {                         // the flowing locks for each 
 // the iris and pupil on it with a glint, and the lash line a thick dark ridge standing out from the face, with three lashes flicking out at
 // the outer corner. Each eye's a pivot facing out of the face, so a blink squashes it shut (the 3DS does the same with them)
 const CARVED = ["june", "chase", "camila", "rose"];     // the heroes you play (the rivals and bosses keep their painted eyes)
-const carvedOn = S => S.face.eyes3d ?? CARVED.includes(S.id);
+const carvedOn = S => S.face.eyes3d ?? CARVED.includes(String(S.id).replace(/-bare$/, ""));   // (-bare: the opening's girls, unarmed on the beach, are still them: their carved eyes, not painted ones. The user, 2026-11-04: "rose and camila's eyes are not the right color in the beach scene")
 function headPointer(mesh, faceY) {                   // a flat-face pixel → the point on the head mesh (its local space) and the normal there
   const g = mesh.geometry, P = g.attributes.position, UV = g.attributes.uv, N = g.attributes.normal, I = g.index, nT = I ? I.count / 3 : P.count / 3, at = k => I ? I.getX(k) : k;
   const tris = []; for (let t = 0; t < nT; t++) { const a = at(t * 3), b = at(t * 3 + 1), c = at(t * 3 + 2);
@@ -3243,6 +3243,7 @@ function updatePoseHuman(p, dt) {
   }
   if ((p.block || p.tpose > 0) && a < 0 && p.hurtT <= 0) {    // guard up (and held long enough, opening out from it to the T)
     const B = { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }, sw = leadFar(p); for (const k in B) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0 && (p.onGround || !LEG_CH.has(kk))) T[kk] = B[k]; }   // (in the air the guard is the arms and body only: the legs keep the jump; a ground stance's feet up there contorted Chase's legs)
+    if (p.blkR && p.block && p.onGround && !(p.tpose > .3)) { T.bodyY = (T.bodyY ?? 0) - .36; T.fNx = (T.fNx ?? 0) + .2; T.fFx = (T.fFx ?? 0) - .2; T.lean = (T.lean ?? 0) + .12; T.headRot = (T.headRot ?? 0) - .1; }   // (the blocker in front of you: down low, feet wide, dug in, so it reads as the shield. The user, 2026-11-04: "make stilt and any other blocker's stance more squatted")
   }
   if (p.pivotT > 0 && a < 0 && p.onGround && p.hurtT <= 0) { T.lean -= .16; T.bodyY -= .03; T.armF += .35; T.armB += .25; T.headRot -= .06; }   // a turn on the spot: weight back as she swings round (COMBAT FEEL's pivot, 2026-10-31)
   if (p.fidgetWas && !p.fidget) p.flowEase = .6; p.fidgetWas = !!p.fidget; p.flowEase = a >= 0 || p.tackle || p.dodge ? 0 : Math.max(0, (p.flowEase || 0) - dt);   // (a handstand cut short by a press: back over onto her feet, not snapped)
@@ -3409,7 +3410,7 @@ function updatePoseCat(p, dt) {
     Object.assign(T, { bodyY: b * .008 * m.bounce, arch: .25 + b * .035, armF: .22 + b * .03, armB: .05 - b * .02, headRot: Math.sin(t * 1.3) * .04, hatTilt: Math.sin(t * 1.3 + 1) * .04 });
     if (m.stance) for (const k in m.stance) T[k] = m.stance[k] + (k === "arch" ? b * .035 : k === "bodyY" ? b * .008 * m.bounce : k === "armF" ? b * .03 : 0);   // his own standing pose, still breathing
   }
-  if ((p.block || p.tpose > 0) && p.atkT < 0 && p.hurtT <= 0) { const B = { ...CAT_BLOCK, ...(m.guard || {}) }; for (const k in B) if (p.onGround || !LEG_CH.has(k)) T[k] = B[k]; }   // (in the air: arms and body only)
+  if ((p.block || p.tpose > 0) && p.atkT < 0 && p.hurtT <= 0) { const B = { ...CAT_BLOCK, ...(m.guard || {}) }; for (const k in B) if (p.onGround || !LEG_CH.has(k)) T[k] = B[k]; if (p.blkR && p.block && p.onGround) { T.bodyY = (T.bodyY ?? 0) - .16; T.fNx = (T.fNx ?? 0) + .08; T.fFx = (T.fFx ?? 0) - .08; } }   // (a blocker's: low, 2026-11-04)   // (in the air: arms and body only)
   if (p.atkT < 0 && p.hurtT <= 0 && !p.climb) extraPoses(p, T, true);
   if (p.hurtT <= 0 && p.atkT < 0) T.lean += m.lean;
   if (p.rig.spec.parts.axo && !p.sit) { T.tailBase = Math.max(T.tailBase, 1.6); T.tailCurl *= .4; }   // (an axolotl's tail trails low behind it, never up over its back)
