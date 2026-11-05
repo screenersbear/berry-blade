@@ -1287,7 +1287,7 @@ const gradeMat = new THREE.ShaderMaterial({
     }`,
   depthTest: false, depthWrite: false,
 });
-gradeScene.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat));
+const gradeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat); gradeScene.add(gradeQuad);   // (its material DEBUG > SHADER's 90s anime pass while that's on)
 // the menus' pictures of the characters through the game's own filter (the user, 2026-11-02: "the character preview in the menu shows the character like without the
 // filter on the actual game?"): the same grade pass, its colours and its paper, keeping the picture's see-through background (premul: for a canvas; else straight, to read back)
 const PV_FS = gradeMat.fragmentShader.replace("uniform sampler2D tex, bgTex;", "uniform sampler2D tex, bgTex; uniform float premul;")
@@ -1361,13 +1361,15 @@ grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.generateMipmaps = fa
 // toon() or the kit's toonT gets its step at load; render() sets the one shared uniform set for each pass, the level's to the look's environment settings and
 // the actors' (the girls, partners, baddies, pets) to its character settings. None applied: nothing here touches a thing
 let shadeRaw = false;                                // (the SHADING MOCKUP building its own: the game's look as it is, unpatched)
+let animeOn = 0;                                     // (pause > DEBUG > SHADER: 1 the 90s anime look, 2 PC-98, 0 the game's own; ANIME below)
 const SHADE = (() => { const B = window.BerryShading, A = B && B.active(); if (!A) return null; const U = B.newUnifs(THREE), H = B.hullMat(THREE);
-  return { A, U, H, edge: B.setHull(H, A.cfg.character), patch: sh => B.patchShader(sh, U), pass(ch) { if (ch) B.setChar(U, A.cfg.character); else B.setEnv(U, A.cfg.environment); } }; })();
+  const o = { A, U, H, cel: null, edge: B.setHull(H, A.cfg.character), patch: sh => B.patchShader(sh, U), pass(ch) { const C = o.cel || A.cfg; if (ch) B.setChar(U, C.character); else B.setEnv(U, C.environment); } }; return o; })();   // (cel: DEBUG > SHADER's 90s anime cels in place of the look, the look itself untouched)
 function shadeMat(m) { if (SHADE && !shadeRaw) { m.onBeforeCompile = sh => SHADE.patch(sh); m.customProgramCacheKey = () => "shade"; } return m; }
 function shadeHulls(root) {                          // (the look's edge highlight: its light hull on each of a character's toon parts, once)
   if (!SHADE || !SHADE.edge || shadeRaw || !root) return;
   root.traverse(o => { if (!o.isMesh || o.userData.mkHull || o.userData.mkHullMesh || !o.material || !o.material.isMeshToonMaterial || !o.geometry || !o.geometry.attributes.normal) return;
-    const h = new THREE.Mesh(o.geometry, SHADE.H.mat); h.userData.mkHull = true; h.frustumCulled = false; h.castShadow = false; o.add(h); o.userData.mkHullMesh = h; });
+    if (animeOn && o.material.side !== THREE.FrontSide) return;   // (the 90s anime ink shell: not on the open two-sided parts, the hair and the skirt, where a shell pushed out from the inside lands on the face; the depth line inks those)
+    const h = new THREE.Mesh(o.geometry, SHADE.H.mat); h.userData.mkHull = true; h.frustumCulled = false; h.castShadow = false; o.add(h); o.userData.mkHullMesh = h; if (animeOn) ANIME.hulls.push(h); });   // (its own, taken off again on GAME)
 }
 const toon = (color, extra) => shadeMat(new THREE.MeshToonMaterial({ color, gradientMap: grad, ...extra }));
 
@@ -1395,6 +1397,100 @@ function outlineMat(th) {
   }));
   return outlineMats.get(th);
 }
+// pause > DEBUG > SHADER (the user, 2026-11-04: "I'd like to build it and add it in the debug menu so I can swap between shaders", of the 90s anime mockup; then "can you
+// do a mockup where the black line around the characters is not so thick first?"): GAME, the game's own look; 90S ANIME, two-tone cels tinted purple with a hard gloss, ink
+// round the characters from the depth, the scenery's lines darker, and a film's colour fringing, glow on the brights, grain, inky blacks and lavender whites; PC-98, the same
+// then chunky pixels, an ordered dither and scanlines. ANIME LINES: THIN (the default, the second mockup) or THICK (the first). Kept in this browser (bb_shader). On GAME none of it runs
+const ANIME = (() => {
+  const CEL = {   // (the characters lit for real, in two hard steps; the scenery the same, its shade toward purple)
+    character: { lightingInfluence: 1, toonRamp: { enabled: true, steps: 2, softness: .02 }, shadowTint: { enabled: true, color: "#6A58B0", strength: .5 },
+      rimLight: { enabled: false, color: "#FFFFFF", width: 0, intensity: 0 }, edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .02, intensity: 1 },
+      fakeAO: { enabled: false, strength: 0 }, topLight: { enabled: false, strength: 0 }, specular: { enabled: true, intensity: 2.4 }, saturation: 1.32 },
+    environment: { lightingInfluence: 1, toonRamp: { enabled: true, steps: 2, softness: .04 }, saturation: 1.02, contrast: 1.1, shadowTint: { enabled: true, color: "#4A3C8C", strength: .62 } }
+  };
+  const POST = `
+uniform float a90mode, a90line, a90ghost; uniform sampler2D a90dep; uniform vec2 a90nf;
+float a90lin(vec2 u) { float z = texture2D(a90dep, u).r * 2.0 - 1.0, n = a90nf.x, f = a90nf.y; return 2.0 * n * f / (f + n - z * (f - n)); }
+float a90ink(vec2 uv, vec2 P) {   // the characters' ink line: their depth (drawn after the level's was cleared) against anything farther, all round
+  float d0 = a90lin(uv), e = 0.0;
+  for (int i = 0; i < 8; i++) { float a = float(i) * .785398; float d = a90lin(uv + vec2(cos(a), sin(a)) * P * a90line); e = max(e, (d - d0) / d0); }
+  return smoothstep(.035, .08, e);
+}
+float a90b2(vec2 a) { a = floor(a); return fract(dot(a, vec2(.5, a.y * .75))); }
+float a90b4(vec2 a) { return a90b2(.5 * a) * .25 + a90b2(a); }
+void main() {
+  vec2 P = tpx * pstep, uv = vUv;
+  if (a90mode > .5) { vec2 blk = P * 2.0; uv = (floor(vUv / blk) + .5) * blk; }   // (PC-98: two by two pixels)
+  vec3 c = gradeAt(uv);
+  float act = 1.0 - step(.99999, texture2D(a90dep, uv).r);   // (a character here: drawn crisp, as a cel over the painted background)
+  float sr = mix(1.7, .7, act);
+  vec3 soft = (gradeAt(uv + vec2(P.x * sr, 0.0)) + gradeAt(uv - vec2(P.x * sr, 0.0)) + gradeAt(uv + vec2(0.0, P.y * sr)) + gradeAt(uv - vec2(0.0, P.y * sr))) * .25;
+  c = mix(c, soft, mix(.75, .3, act));
+  { float l0 = dot(c, vec3(.299, .587, .114)); c = max(mix(vec3(l0), c, mix(.9, 1.14, act)), 0.0); }   // (the background a little paler, the cels richer)
+  float rr = gradeAt(uv + vec2(P.x * 1.6, 0.0)).r, bb = gradeAt(uv - vec2(P.x * 1.3, P.y * .3)).b;   // (the film's colour fringing: red a touch right, blue a touch left)
+  c = vec3(mix(c.r, rr, .85), c.g, mix(c.b, bb, .85));
+  vec3 h = vec3(0.0);
+  for (int i = 0; i < 8; i++) { float a = float(i) * .785398; h += max(gradeAt(uv + vec2(cos(a), sin(a)) * P * 5.0) - .8, 0.0); }
+  c += h * .125 * vec3(1.0, .62, .55) * 1.1;   // (a warm glow round the brightest things)
+  float ik = max(a90ink(uv, P), a90ink(uv + vec2(P.x * 1.6, 0.0), P) * a90ghost);   // (the line; THICK: its red ghost a little to the right, as the colour fringing)
+  c = mix(c, vec3(.05, .035, .08), ik * mix(.86, .94, a90ghost));
+  float l = dot(c, vec3(.299, .587, .114)); c = max(mix(vec3(l), c, 1.16), 0.0);
+  c = c * c * (3.0 - 2.0 * c) * .35 + c * .65;
+  c = mix(vec3(.045, .025, .10), vec3(1.0, .955, 1.0), c);   // (inky purple blacks, lavender whites; no dark edges: the user, 2026-10-26)
+  float g = hash(floor(gl_FragCoord.xy / pstep) + floor(gtime) * vec2(17.0, 31.0)) - .5;
+  c += g * (a90mode > .5 ? .035 : .095);
+  if (a90mode > .5) { float d = a90b4(floor(gl_FragCoord.xy / (2.0 * pstep))); c = floor(c * 5.0 + d) / 5.0;   // (PC-98: six levels a colour, a 4 x 4 ordered dither)
+    if (mod(floor(gl_FragCoord.y / pstep), 3.0) < 1.0) c *= .8; }   // (and its scanlines)
+  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+}`;
+  const LINES = { thin: [1, 0, .011], thick: [2, .6, .021] };   // (the depth line's reach, in screen px; its red ghost; the ink shell round the characters' one-sided parts, in units)
+  const NAMES = ["GAME", "90S ANIME", "PC-98"], hulls = [];
+  const st = (() => { try { const o = JSON.parse(localStorage.getItem("bb_shader") || "{}"); return { mode: [0, 1, 2].includes(o.mode) ? o.mode : 0, thick: !!o.thick }; } catch (e) { return { mode: 0, thick: false }; } })();
+  const save = () => { try { localStorage.setItem("bb_shader", JSON.stringify(st)); } catch (e) { } };
+  let mat = null, keep = null, n = 0;
+  function build() {   // (the grade pass as it is, its main made a function the film pass reads at any spot; the uniforms the very same ones, so the hour's colour and the rest reach it)
+    let fs = gradeMat.fragmentShader; if (!fs.includes("void main() {") || !fs.includes("gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);")) { console.warn("SHADER: the grade pass changed, 90s anime off"); return null; }
+    fs = fs.replace("void main() {", "vec3 gradeAt(vec2 vUv) {").replace("gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);", "return clamp(c, 0.0, 1.0);") + "\n" + POST;
+    return new THREE.ShaderMaterial({ uniforms: Object.assign({}, gradeMat.uniforms, { a90mode: { value: 0 }, a90line: { value: 1 }, a90ghost: { value: 0 }, a90dep: { value: null }, a90nf: { value: new THREE.Vector2(.1, 300) } }),
+      vertexShader: gradeMat.vertexShader, fragmentShader: fs, depthTest: false, depthWrite: false });
+  }
+  function lines() { const L = st.thick ? LINES.thick : LINES.thin; if (mat) { mat.uniforms.a90line.value = L[0]; mat.uniforms.a90ghost.value = L[1]; mat.uniforms.a90mode.value = st.mode === 2 ? 1 : 0; } if (SHADE && keep) SHADE.H.th.value = L[2]; }
+  function inkAll() {   // (every character on hand gets its ink shell; the scenery's lines thicker and inkier. Again every half second: who came in since)
+    if (SHADE) shadeHulls(actors);
+    for (const m of outlineMats.values()) if (!m.userData.a90) { m.userData.a90 = [m.uniforms.th.value, m.uniforms.col.value.getHex()]; m.uniforms.th.value *= 1.9; m.uniforms.col.value.set("#0d0a14"); }
+  }
+  function on() {
+    if (!mat) mat = build(); if (!mat) { st.mode = 0; return false; }
+    if (!keep) { keep = SHADE ? { edge: SHADE.edge, col: SHADE.H.mat.color.getHex(), th: SHADE.H.th.value } : {};
+      if (!frameRT.depthTexture) { frameRT.depthTexture = new THREE.DepthTexture(frameRT.width, frameRT.height); frameRT.depthTexture.type = THREE.UnsignedIntType; frameRT.dispose(); keep.dep = true; }   // (the depth the ink line reads; only while it's on)
+      if (SHADE) { SHADE.cel = CEL; SHADE.edge = true; SHADE.H.mat.color.set("#0d0a14"); }
+      gradeQuad.material = mat; }
+    animeOn = st.mode; lines(); inkAll(); return true;
+  }
+  function off() {
+    if (!keep) return; animeOn = 0;
+    if (SHADE) { SHADE.cel = null; SHADE.edge = keep.edge; SHADE.H.mat.color.setHex(keep.col); SHADE.H.th.value = keep.th; }
+    hulls.forEach(h => { const p = h.parent; if (p) { p.remove(h); if (p.userData.mkHullMesh === h) p.userData.mkHullMesh = null; } }); hulls.length = 0;
+    for (const m of outlineMats.values()) if (m.userData.a90) { m.uniforms.th.value = m.userData.a90[0]; m.uniforms.col.value.setHex(m.userData.a90[1]); delete m.userData.a90; }
+    gradeQuad.material = gradeMat;
+    if (keep.dep && frameRT.depthTexture) { frameRT.depthTexture.dispose(); frameRT.depthTexture = null; frameRT.dispose(); }
+    keep = null;
+  }
+  return {
+    hulls,
+    frame() {   // (each frame, before the scene's drawn: the choice kept from last time taken up on the first, the camera's range for the depth, the newcomers inked)
+      if (st.mode && !keep) on();
+      if (!animeOn || !mat) return;
+      mat.uniforms.a90nf.value.set(camera.near, camera.far); mat.uniforms.a90dep.value = frameRT.depthTexture;
+      if (++n % 30 === 0) inkAll();
+    },
+    cycle() { st.mode = (st.mode + 1) % 3; save(); if (st.mode) on(); else off(); return st.mode; },
+    lineSwap() { st.thick = !st.thick; save(); lines(); return st.thick; },
+    label: () => "SHADER: " + NAMES[st.mode],
+    lineLabel: () => "ANIME LINES: " + (st.thick ? "THICK" : "THIN"),
+    get mode() { return st.mode; }
+  };
+})();
 // faceted mesh (flat normals) + inverted-hull outline built from smoothed normals
 function mk(geo, color, { ol = .035, mat, smooth = false } = {}) {
   if (!OUTLINES) ol = 0;
@@ -1632,7 +1728,7 @@ function saveFile(name, text) { try { const a = document.createElement("a"); a.h
 function pickFile(cb) { const i = document.createElement("input"); i.type = "file"; i.accept = ".json,application/json"; i.style.display = "none"; i.addEventListener("change", async () => { const f = i.files && i.files[0]; i.remove(); if (f) cb(await f.text()); }); document.body.appendChild(i); i.click(); }
 function copyText(text, said) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(said, 1600), () => { prompt("Copy these settings:", text); }); }
 // all of them in one file: the combat feel, a look applied from the SHADING MOCKUP (and the mockup's own), pause > DEBUG > TEXTURE. From pause > DEBUG or the DEVELOPER menu
-const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look", "bb_fps", "bbBigRoom", "bbItemsInf"];   // (the big room test and unlimited items too, 2026-11-01)
+const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_look", "bb_fps", "bbBigRoom", "bbItemsInf", "bb_shader"];   // (the big room test and unlimited items too, 2026-11-01; the SHADER, 2026-11-04)
 function debugExport() { const o = { berryDebug: 1, at: new Date().toISOString(), keys: {} }; for (const k of DEBUG_KEYS) { try { const v = localStorage.getItem(k); if (v != null) o.keys[k] = JSON.parse(v); } catch (e) { } } return JSON.stringify(o, null, 2); }
 function debugImport(text) { const o = JSON.parse(text); if (!o || !o.berryDebug || !o.keys) throw new Error("not a debug settings file"); for (const k of DEBUG_KEYS) if (k in o.keys) localStorage.setItem(k, JSON.stringify(o.keys[k])); }
 function debugFileIn() { pickFile(t => { try { debugImport(t); toast("DEBUG SETTINGS LOADED · STARTING AGAIN WITH THEM", 2000); setTimeout(() => location.reload(), 1400); } catch (e) { toast("THAT ISN'T A DEBUG SETTINGS FILE", 2200); } }); }   // (a look and a texture take hold as the game starts)
@@ -7315,8 +7411,8 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dlog", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dlook", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
-    $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dlog", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dlook", "dshade", "dline", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dlook" ? lookLabel() : q === "dshade" ? ANIME.label() : q === "dline" ? ANIME.lineLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+    $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW<br>TEXTURE: TRY ONE ON THE CHARACTERS · SHADER: THE GAME, 90S ANIME OR PC-98 (KEPT IN THIS BROWSER)"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; $("pause").classList.add("dpick"); PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE<br><b class='dbgRoom'></b>"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
   if (what === "dtale") { closePause(); SFX.confirm(); startTale(null); return; }
@@ -7343,6 +7439,8 @@ function pauseChoose(what) {
     toast(itemsInf ? "UNLIMITED ITEMS: USE ANY OF THEM AS OFTEN AS YOU LIKE (KEPT IN THIS BROWSER)" : "ITEMS: AS MANY AS YOU'RE CARRYING AGAIN", 3000); return; }   // (2026-11-01)
   if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
   if (what === "dimp") { SFX.confirm(); debugFileIn(); return; }   // (COMBAT FEEL's panel, over the pause)
+  if (what === "dshade") { SFX.tick(); ANIME.cycle(); const b = $("pbtns").querySelector('[data-p="dshade"]'); if (b) b.textContent = ANIME.label(); return; }   // (2026-11-04: GAME, 90S ANIME, PC-98, round again)
+  if (what === "dline") { SFX.tick(); ANIME.lineSwap(); const b = $("pbtns").querySelector('[data-p="dline"]'); if (b) b.textContent = ANIME.lineLabel(); return; }   // (the anime looks' lines round the characters: THIN or THICK)
   if (what === "dlook") { texOpen(); return; }   // (the look, to try: kept in this browser. Its own window now, the game in view)
   if (what === "ngup") { const U = story.ngUp || (story.ngUp = {}); U[world] = (ngIdx() + 1) % UP_PREVIEW.length; ngApply(); ngDirty = true; writeSave(); SFX.tick();   // (NEW GAME+: the next of this world's uprisings; the room built to it as you go back in)
     const b = $("pbtns").querySelector('[data-p="ngup"]'); if (b) b.textContent = ngLabel(); return; }
@@ -28834,6 +28932,7 @@ function render(dt) {
   if (!pan) gradeMat.uniforms.dim.value = !bepSel && !hideout && !rideS && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : 0;   // (the forest's underground rooms)
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
+  ANIME.frame();                                     // (DEBUG > SHADER: the 90s anime look, if picked)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   { const K = KIT.skin; if (K) { K.skin.value = TEXTURES[LOOK.tex][1]; K.skinRes.value.set(frameRT.width, frameRT.height); K.skinStep.value = renderer.getPixelRatio(); } }   // (the characters' own texture, DEBUG · K: an older charkit still cached has none)
