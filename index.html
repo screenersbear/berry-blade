@@ -28692,10 +28692,13 @@ function bwalkGo(B, W) {
   team.forEach((m, j) => { const s = m.st, x0 = clamp(s.x, W.Pa.x - 420, W.Pa.x + 420); bwalkPath(m, [{ x: x0, y: groundAt(x0) ?? s.y, z: 0 }, { x: W.Pa.x, y: gy, z: 0 }, { ...W.Pa, y: gy }, W.N, far], j * .3); m.hid = false; });
   bwalkS = { ph: "out", t: 0, B, team, cam: { p: camera.position.clone(), q: camera.quaternion.clone() } }; cine = null; SFX.confirm();
 }
+const bwalkFree = s => Object.assign(s, { crouch: false, crawl: false, skid: false, brake: null, block: false, pivotT: 0, upHop: null, upCoil: null, dodge: null, fidget: null, pointKind: null, tcPose: null, tpose: 0, hurtT: 0, atkT: -1, combo: null, prof: 1, bodyYaw: .3 });   // (every walker, every step of the show: the moves that switch the walk cycle off (↓'s crouch going back, a run's brake-skid, a guard, a blow) can't stick, as nothing else runs to end them; and turned as when walking)
 function bwalkTick(dt) {                             // the walk, a step at a time
   const Q = bwalkS; Q.t += dt; const t = Q.t;
   for (const m of Q.team) { const s = m.st, W = bwalkPos(m, t), dx = (W.b.x - W.a.x) * S, dz = W.b.z - W.a.z, walking = W.go && !W.end;
-    Object.assign(s, { x: W.p.x, y: W.p.y, z: W.p.z, vy: 0, onGround: true, plat: null }); s.vx = walking ? 180 * (Math.abs(dx) > .05 ? Math.sign(dx) : s.face || 1) : 0;
+    Object.assign(s, { x: W.p.x, y: W.p.y, z: W.p.z, vy: 0, onGround: true, plat: null }); bwalkFree(s);   // (nothing left over from before the walk: the user, 2026-11-04 "their models just slid over and didnt actually walk")
+    const hz = Math.hypot(dx, dz), seg = Math.hypot(hz, (W.b.y - W.a.y) * S), sv = BW_GO / S * (seg > 1e-6 ? hz / seg : 1) * Math.cos(s.bodyYaw);   // (the stride paced to the ground they really cover, stairs included: the feet planted, not skating)
+    s.vx = walking ? sv * (Math.abs(dx) > .05 ? Math.sign(dx) : s.face || 1) : 0;
     const yt = walking && Math.hypot(dx, dz) > .01 ? Math.atan2(-dz, dx) : (s.face > 0 ? -.55 : -Math.PI + .55); if (walking && Math.abs(dx) > .05) s.face = Math.sign(dx);
     let d = yt - (s.yaw ?? -.55); d = Math.atan2(Math.sin(d), Math.cos(d)); s.yaw = (s.yaw ?? -.55) + d * (1 - Math.exp(-dt * 9));
     m.hid = Q.ph === "out" ? W.end : !W.go;
