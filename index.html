@@ -10978,7 +10978,7 @@ function updateEJ(dt) {                              // the partner: at your sid
   const wet = world === 13 && deepWetAt(s.y); s.dive = wet;   // (under the deep's water: swimming, its swim pose and its bubble on, not sinking and put back by you over and over)
   if (wet && !busy && !s.post) swimAfter(s, p, 80, 0, dt); else if (!busy) partFollow(s, partSlot(s), dt);
   if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
-    if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ej.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ej.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
+    if (p.onGround && s.y - p.y > 40 && (Math.abs(p.x - s.x) < 220 || Math.abs((s.upX ?? 1e9) - s.x) < 160) && ej.hopT <= 0 && !s.stayDown) { hopUp(s, s.upX ?? p.x); ej.hopT = .5; }   // up after you, onto its place by you (none there: it waits below, ledgeWait)
     else if (downAfter(s, p)) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (ej.hopT <= 0 && edgeLeap(s, p)) ej.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
@@ -13016,7 +13016,8 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
     if (SD ? !P2.latch && ((q.onGround && P2.t >= SD.dur) || P2.t > 1.4) : (q.onGround && P2.t > .12) || (q.dive && P2.t > .7)) { q.pounce = null; q.atkKind = null; q.atkT = -1; }
   } else if (busy) {                             // (blocking with you, or about to pounce)
   } else if (q.onGround) {                       // follow: at its place a step behind you, at your speed, up when you jump; hop up after you, drop down after you
-    const sp = followSpan(q), want = shoreX(sepWant(q, crossWait(q, partWant(k, sp, PART_GAP[k] + 6)))), dx = want - q.x, dir = Math.sign(dx) || q.face; q.folT = time; q.wantX = want;   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
+    const sp = followSpan(q); ledgeWait(q); ledgeSqueeze(q, k, sp);   // (a ledge with no place for it: down off it, to wait at its foot; the rest of this frame as it was, harmless)
+    const want = q.upX ?? shoreX(sepWant(q, crossWait(q, partWant(k, sp, PART_GAP[k] + 6)))), dx = want - q.x, dir = Math.sign(dx) || q.face; q.folT = time; q.wantX = want;   // (upX: its place up on your ledge, ledgeWait)   // (you in the cove's water: it waits on the edge, as the buddies do; on what you're stood on, not off the end of it)
     q.vx = approach(q.vx, Math.abs(dx) < 3 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), q.worn ? -120 : -700, q.worn ? 120 : 700), 3400 * dt); partJump(q, k, dx); q.zLine = partZ(k, sp); q.z = approach(q.z || 0, q.zLine - (q.zBackA || 0), 1.4 * dt);
     if (Math.abs(dx) > 18 && !q.plat && !footAhead(q.x, dir * 40) && q.hopT <= 0) {   // a pit (or the water) ahead: over it, never into it (the user 2026-10-22)
       const land = gapEnd(q.x, dir), gy = groundAt(p.x);
@@ -13028,7 +13029,7 @@ function updatePalOne(q, i, dt) {                 // (i: 0 the first pet, 1 the 
     }
     q.face = Math.abs(q.vx) > 60 ? Math.sign(q.vx) : p.face;
     q.hopT -= dt;
-    if (p.onGround && q.y - p.y > 40 && far < 200 && q.hopT <= 0) { const hh = q.y - p.y + 50; q.vy = -Math.sqrt(2 * GRAV * hh); q.vx = q.stepHop = clamp((p.x - q.x) / .5, -520, 520); q.onGround = false; q.plat = null; q.hopT = .5; q.sq = .2; q.sqv = 0; }
+    if (p.onGround && q.y - p.y > 40 && (far < 200 || Math.abs((q.upX ?? 1e9) - q.x) < 160) && q.hopT <= 0 && !q.stayDown) { q.stepHop = hopUp(q, q.upX ?? p.x); q.hopT = .5; }   // (onto its place by you; none: it waits below, ledgeWait)
     else if (q.plat && p.onGround && p.y - q.y > 40 && Math.abs(dx) < 140) { q.dropPlat = q.plat; q.dropT = .3; q.onGround = false; q.vy = 140; q.y += 2; }
     else if (q.hitWall === dir && Math.abs(dx) > 18 && q.hopT <= 0 && q.x > 60 && q.x < WORLD - 60 && hopStep(q, dir)) q.hopT = .5;   // a step up between you: up it after you
   } else if (q.mirrorJ) {                         // up with you: on after you through the air
@@ -13339,22 +13340,34 @@ function lineFace() {                                 // which way the line runs
   if (f === lineF) { lineFx = p.x; lineFt = time; } else if (Math.abs(p.x - lineFx) > 110 || time - lineFt > 1.2) { lineF = f; lineFx = p.x; lineFt = time; }
   return lineF;
 }
-function lineSpots(sp) {                              // where each in the line stands now, by its slot, and how far back from the camera: { x, z } (Maps). Each a step farther back than the one before it, and only as far along as their shapes need
-  const p = player, f = lineFace(), sf = p.face || 1, key = time + "|" + (sp ? sp[0] + "," + sp[1] : "") + "|" + f + sf; if (lineMemo && lineMemo.key === key) return lineMemo;   // (once a frame. f: the way the line runs; sf: the way they face, stood there, as you do)
-  const L = partnerList(), n = Math.min(L.length, 3), M = [], at = new Map(), zAt = new Map(), free = s => !!s && !s.post && !s.lvlLock && !s.dead;
+function lineMembers() {                              // (lineSpots, upSpot) the line's bodies: { k, s, g }, g its place from you (behind +, ahead -, as □ has the line)
+  const L = partnerList(), n = Math.min(L.length, 3), M = [], free = s => !!s && !s.post && !s.lvlLock && !s.dead;
   for (let i = 0; i < n; i++) { const s = L[i].q; if (!free(s)) continue; const g0 = lineGap(i); M.push({ k: i, s, g: g0 + Math.sign(g0) * ((s.rig && s.rig.heightPx) || 90) * .12 }); }
   palsAll().forEach(q => { if (!free(q)) return; const k = partSlot(q); M.push({ k, s: q, g: PART_GAP[k] + 6 }); });
-  const lo = Math.max(30, sp ? sp[0] + 14 : 30), hi = Math.min(WORLD - 30, sp ? sp[1] - 14 : WORLD - 30), room = d => Math.max(0, d * f > 0 ? p.x - lo : hi - p.x), zCap = p.plat ? LINE_ZP : LINE_ZG;   // (room: px free behind you, d 1, or in front, d -1; never past the room's end, where a ground that runs on into the next room still stops them)
-  const chain = (list, d, front) => { let rel = 0, prev = p, pz = p.z || 0, out = false; const left = [], step = Math.min(LINE_DZ, zCap / Math.max(1, list.length));
+  return M;
+}
+function linePack(M, lo, hi, zCap, mark) {            // (lineSpots, upSpot) their places: behind you as far as there's room, the rest in front, each a step farther back from the camera; out: no room either side. mark: lineSpots's own (it keeps lineFront)
+  const p = player, f = lineFace(), sf = p.face || 1, at = new Map(), zAt = new Map(), room = d => Math.max(0, d * f > 0 ? p.x - lo : hi - p.x);   // (room: px free behind you, d 1, or in front, d -1; never past the room's end, where a ground that runs on into the next room still stops them)
+  const chain = (list, d, front) => { let rel = 0, prev = p, pz = p.z || 0, out = false, nf = 0; const left = [];
+    for (let i = 0, a = 0, pv = p; i < list.length; i++) { a += LINE_K * (bodyHalf(pv) + bodyHalf(list[i].s)) + LINE_M; if (a > room(d)) break; nf++; pv = list[i].s; }   // (how many could fit at all: the depth shared among those. On a short ledge, by all of them, each step was so small that not even the first fit)
+    const step = Math.min(LINE_DZ, zCap / Math.max(1, nf));
     for (const m of list) { if (out) { left.push(m); continue; }
       const z = pz - step, r = rel + Math.max(pairGap(prev, m.s, pz - z, d, f, sf), LINE_K * (bodyHalf(prev) + bodyHalf(m.s))) + LINE_M;
       if (r > room(d) - (!front && m.s.lineFront ? 40 : 0)) { out = true; left.push(m); continue; }   // (in front a while: back behind once there's room and a bit)
-      at.set(m.k, p.x - d * f * r); zAt.set(m.k, z); rel = r; prev = m.s; pz = z; if (!front) m.s.lineFront = false; }
+      at.set(m.k, p.x - d * f * r); zAt.set(m.k, z); rel = r; prev = m.s; pz = z; if (!front && mark) m.s.lineFront = false; }
     return left; };
   const behind = M.filter(m => m.g > 0).sort((a, b) => a.g - b.g), ahead = M.filter(m => m.g < 0).sort((a, b) => b.g - a.g);
-  const spill = chain(behind, 1, false); spill.forEach(m => { m.s.lineFront = true; });   // (no room behind you, a room's end or a ledge's: in front of you, walking or not, by behind you (sepStep). It was piled at the end while you walked, all in one another: the user, 2026-11-04, "had a glitch where the buddy was over a dog and they both kept twitching")
-  chain([...ahead, ...spill], -1, true).forEach(m => { at.set(m.k, clamp(p.x - f * m.g, lo, hi)); zAt.set(m.k, -zCap); });   // (no room either side: as near its place as there is, as far back as they go)
-  return (lineMemo = { key, x: at, z: zAt });
+  const spill = chain(behind, 1, false); if (mark) spill.forEach(m => { m.s.lineFront = true; });   // (no room behind you, a room's end or a ledge's: in front of you, walking or not, by behind you (sepStep). It was piled at the end while you walked, all in one another: the user, 2026-11-04, "had a glitch where the buddy was over a dog and they both kept twitching")
+  const out = new Set(chain([...ahead, ...spill], -1, true).map(m => { at.set(m.k, clamp(p.x - f * m.g, lo, hi)); zAt.set(m.k, -zCap); return m.k; }));   // (no room either side: as near its place as there is, as far back as they go. out: those; off a ledge, they wait below it, ledgeSqueeze)
+  return { at, zAt, out };
+}
+function lineSpots(sp) {                              // where each in the line stands now, by its slot, and how far back from the camera: { x, z } (Maps). Each a step farther back than the one before it, and only as far along as their shapes need
+  const p = player, f = lineFace(), sf = p.face || 1, key = time + "|" + (sp ? sp[0] + "," + sp[1] : "") + "|" + f + sf; if (lineMemo && lineMemo.key === key) return lineMemo;   // (once a frame. f: the way the line runs; sf: the way they face, stood there, as you do)
+  const A = lineMembers(), M = A.filter(m => !m.s.stayDown), DN = A.filter(m => m.s.stayDown);   // (DN: waiting below a ledge with no place for them up there, ledgeWait)
+  const lo = Math.max(30, sp ? sp[0] + 14 : 30), hi = Math.min(WORLD - 30, sp ? sp[1] - 14 : WORLD - 30), { at, zAt, out } = linePack(M, lo, hi, p.plat ? LINE_ZP : LINE_ZG, true);
+  if (DN.length) { const ls = DN[0].s.downSp || [p.x, p.x]; let r = Math.max(0, (p.x - (f > 0 ? ls[0] : ls[1])) * f), prev = null, i = 0;   // (the ones waiting below: at the ledge's foot, the end behind you, one after another back from it)
+    for (const m of DN.sort((a, b) => a.g - b.g)) { r += prev ? LINE_K * (bodyHalf(prev) + bodyHalf(m.s)) + LINE_M : bodyHalf(m.s) + 16; at.set(m.k, clamp(p.x - f * r, lo, hi)); zAt.set(m.k, -Math.min(LINE_ZG, ++i * LINE_DZ)); prev = m.s; } }
+  return (lineMemo = { key, x: at, z: zAt, out });
 }
 const partWant = (k, sp, gap) => { const w = lineSpots(sp).x.get(k); if (w !== undefined) return w; const v = player.x - lineFace() * gap; return sp ? clamp(v, sp[0] + 14, sp[1] - 14) : v; };   // (its place; one on a level of its own, or sent somewhere: behind you on what it stands on, as before)
 function crossWait(s, w) {                            // its place the far side of you: it waits for you to come through it (each steps back as you pass, sepStep), or, you stood still, takes its turn, the one nearest you first. Not all through you at once, all as far back as they go, in one another
@@ -13365,6 +13378,31 @@ function crossWait(s, w) {                            // its place the far side 
   return w;
 }
 const partZ = (k, sp) => { const z = lineSpots(sp).z.get(k); return z !== undefined ? z : PART_Z[k]; };   // (how far back from the camera its place is)
+// a ledge too short for the whole team (the user, 2026-11-05: "I had this situation where one metal buddy and the dog couldnt land on the platform and they kept jumping up and down.
+// make it where if they cant fit, they just dont jump and stay on the bottom"): one with no place up there by you waits at the ledge's foot; it was hopped up at you every half second, landed a third past you, off the end, and up again
+function upSpot(s, slack = 0) {                    // you up on a ledge, s below it: its place up there in the line (as lineSpots packs it, so the two agree), or null: no room for it there
+  const p = player, sp = heroSpan(); if (!sp) return null;
+  const M = lineMembers().filter(m => m.s === s || !m.s.stayDown), me = M.find(m => m.s === s); if (!me) return null;   // (the line up there with it in it, in the line's order: the ones nearer you in it come first)
+  const R = linePack(M, Math.max(30, sp[0] + 14) + slack, Math.min(WORLD - 30, sp[1] - 14) - slack, p.plat ? LINE_ZP : LINE_ZG, false);
+  return R.out.has(me.k) ? null : R.at.get(me.k) ?? null;
+}
+function ledgeWait(s) {                               // (following, every frame) stayDown: you up on a ledge with no place for it, so it waits below; not hopping up, nor up when you jump
+  const p = player; s.upX = null; if (!p || p.dead || p.climb || s.lvlLock || s.post) { s.downPlat = null; return (s.stayDown = 0); }
+  if (!p.onGround || !s.onGround) return s.stayDown || 0;   // (you or it in the air: as it was)
+  if (s.downPlat && s.downPlat !== p.plat) s.downPlat = null;   // (you off the ledge it was squeezed off)
+  if (s.y - p.y <= 40) return (s.stayDown = 0);   // (up there with you)
+  const sp = heroSpan(); if (!sp) return (s.stayDown = 0); s.downSp = sp;
+  const x = s.downPlat ? null : upSpot(s, s.stayDown ? 12 : 0); s.upX = x;   // (its place up there: it goes under it, then up, partFollow; it stood back in the line below, too far off to come up)
+  return (s.stayDown = x === null ? 1 : 0);   // (squeezed off it: down till you leave it; waiting: up only once there's room and a bit)
+}
+function hopUp(s, tx) {                               // up after you, onto your ledge: a hop that comes down on its place there (it was aimed at you, and as long in the air as it took, so it came down a third past you)
+  const p = player, hh = s.y - p.y + 50, T = Math.sqrt(2 * hh / GRAV) + Math.sqrt(100 / GRAV);   // (up to 50 over it, down that 50 onto it)
+  s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((tx - s.x) / T, -520, 520); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.ledgeUpT = time; return s.vx;
+}
+function ledgeSqueeze(s, k, sp) {                     // (following, on your ledge) no place for it up there at all: down off it to wait at its foot, not stood in the others at the end
+  const p = player; if (!s.onGround || !s.plat || !p.onGround || p.plat !== s.plat || !lineSpots(sp).out.has(k) || landBelow(s.x, s.y + 4) === null) return false;
+  s.downPlat = p.plat; s.stayDown = 1; s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; return true;
+}
 const sepFol = s => time - (s.folT ?? -9) < .1;       // (following you this moment: the line keeps those apart)
 function sepBodies() { const p = player, B = []; if (p && !p.dead) B.push(p); allies.forEach(a => { if (!a.away && a.st && a.r && a.r.root && a.r.root.visible) B.push(a.st); }); if (ejPal() && ej.st) B.push(ej.st); palsAll().forEach(q => B.push(q)); return B; }
 function sepWant(s, w) {                              // its place, but never in you: to its own side of you, as far as the line allows. A buddy stood busy somewhere it goes by behind now (sepStep); it was moved to that one's side, and every place there moved to the one spot, all piled in one another
@@ -13383,8 +13421,8 @@ function sepStep(s, dt) {                             // about to stand in one n
   const p = player, off = mode !== "play" || teamM || s.dead || s.post || s.sit || s.bc || s.tcOn || s.tcFly || s.pounce || s.fleap || s.dzap || s.gapHop || s.defSlide > 0 || s.zipR || s.climb;
   let want = 0, push = 0;
   if (!off) { const base = (s.z || 0) + (s.zBackA || 0), cap = -(s.plat ? LINE_ZP : LINE_ZPASS), A = shapeOf(s, s.face || 1), me = { x: s.x, y: s.y, z: base, f: s.face || 1 };   // (base: where it'd be without stepping back)
-    const fol = sepFol(s), hs0 = bodyHalf(s);
-    for (const o of sepBodies()) { if (o === s || o.dead || Math.abs(o.y - s.y) > 40 || Math.abs(o.x - s.x) > bodyHalf(o) + bodyHalf(s) + (fol ? 50 : 6) || !sepNearer(o, s)) continue;
+    const fol = sepFol(s), hs0 = bodyHalf(s), guard = !!s.defOn && s.block && s.defTx !== undefined && Math.abs(s.x - s.defTx) < 24;   // (the guard at its place: before you, nearer the camera, not back behind you)
+    for (const o of sepBodies()) { if (o === s || o.dead || (guard && o === p) || Math.abs(o.y - s.y) > 40 || Math.abs(o.x - s.x) > bodyHalf(o) + bodyHalf(s) + (fol ? 50 : 6) || !sepNearer(o, s)) continue;
       const B = shapeOf(o, o.face || 1), it = { x: o.x, y: o.y, z: o.z || 0, f: o.face || 1 };
       const inAt = z => { me.z = z; return A && B ? shapeIn(B, it, A, me, .01) : Math.abs(o.x - s.x) < (bodyHalf(o) + bodyHalf(s)) * .8 && Math.abs(it.z - z) < 1.3; };   // (not measured yet: by their widths)
       if (fol && s.wantX !== undefined && (s.wantX - o.x) * (s.x - o.x) < 0 && Math.abs(s.wantX - s.x) > 12) { want = Math.max(want, Math.max(0, base - cap) + .08); if (o !== p && Math.abs(o.x - s.x) < bodyHalf(o) + bodyHalf(s) + 20) sepFwd(o, -.15 - (o.z || 0)); continue; }   // (its place the far side of this one: back as far as it goes before it gets there, and by behind it)
@@ -14319,18 +14357,21 @@ function partAuto(dt) {
     q.autoT = rand(...G); o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: !q.onGround, weak: true }; });
 }
 const DEF_GAP = 70, DEF_SLIDE = .3, DEF_SLIDE_V = 980, DEF_HOP = .22, DEF_HOP_V = 2000, DEF_RUN = 1300, DEF_NEAR = 160;   // (the hop in: its time in the air, its speed at most; the run in after)
-const partDefender = () => { const P = partnerList()[0]; return P && P.q && !P.q.tcFly && !P.q.worn ? P : null; };
+const partDefender = () => { const L = partnerList(), ok = P => !!(P && P.q && !P.q.tcFly && !P.q.worn); return L.find(P => ok(P) && blkRank(P.a)) || L.find(ok) || null; };   // (the blocker; worn out, the next blocker along, or any buddy able: with the first worn out, nobody guarded. The user, 2026-11-05: "it should always be the blocker character up front even when they're not up front in the lineup")
 const defPosted = () => { const P = partnerList()[0]; return !!(P && P.q && P.q.post); };   // (COMMAND's put your blocker somewhere: the guard's your own, with its bubble)
 const defFace = () => { const p = player, e = foesAlive().filter(e => !walled(e.x, p.x) && Math.abs(e.x - p.x) < 800 && Math.abs(e.y - p.y) < 260).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0]; return e ? Math.sign(e.x - p.x) || p.face : p.face; };
 function defendStep(s, dt) {                         // the guard's up: the defender jumps in front of you all and holds there, guard up; the rest of the team behind you, guard up
   const p = player, D = partDefender(), me = D && D.q === s, fd = defFace(); s.block = true; s.face = fd;
   if (me && s.post) { s.vx = approach(s.vx, 0, 3000 * dt); return; }   // (posted by COMMAND: it guards where it is, and the guard's yours, with its bubble, 2026-11-02)
   if (!me && s.post) { s.vx = approach(s.vx, 0, 3000 * dt); return; }   // (posted elsewhere: it guards where it is)
-  if (!me) { const tx = p.x - fd * defBack(s); s.vx = approach(s.vx, clamp((tx - s.x) * 10, -DEF_RUN * .75, DEF_RUN * .75), (s.onGround ? 7000 : 4000) * dt); s.sprint = Math.abs(s.vx) > 400; return; }   // (behind you)
-  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = p.x + fd * defGap(s);   // in front: a quick low hop to it, timed to come down there
+  const lsp = heroSpan() || (heroSpanLast && heroSpanLast.st === stage ? heroSpanLast.sp : null), onLv = Math.abs(s.y - p.y) < 40, keep = x => lsp && onLv ? clamp(x, lsp[0], lsp[1]) : x;   // (its place kept on what you stand on: up on a ledge, its place past the end was down off it, and it dropped there. The user, 2026-11-05)
+  if (!me) { const tx = keep(p.x - fd * defBack(s)); s.vx = approach(s.vx, clamp((tx - s.x) * 10, -DEF_RUN * .75, DEF_RUN * .75), (s.onGround ? 7000 : 4000) * dt); s.sprint = Math.abs(s.vx) > 400; return; }   // (behind you)
+  const below = s.onGround && p.onGround && s.y - p.y > 40 && !(s.defSlide > 0), gx = p.x + fd * defGap(s), tx0 = lsp ? clamp(gx, lsp[0], lsp[1]) : gx; s.defTx = tx0;   // (in front: on the ledge, at its very end if that's all there is, before you)
+  if (below && !(s.defUpT > time)) { if (!s.defOn) s.defAt = time; hopUp(s, tx0); s.defUpT = time + .6; s.defHopT = 0; s.defOn = true; }   // (down below you: up onto it, to its place in front of you)
+  if (!s.defOn) { s.defOn = true; s.defAt = time; const tx = tx0;   // in front: a quick low hop to it, timed to come down there
     if (s.onGround && Math.abs(tx - s.x) > DEF_NEAR) { s.vy = -GRAV * DEF_HOP / 2; s.onGround = false; s.plat = null; s.defHopT = DEF_HOP; s.vx = clamp((tx - s.x) / DEF_HOP, -DEF_HOP_V, DEF_HOP_V); } else s.defHopT = 0; }   // (near: no hop, it just runs there)
   if (s.defSlide > 0) { s.defSlide -= dt; s.vx = s.defDir * DEF_SLIDE_V; s.face = s.defDir; defParry(s, D); if (s.defSlide <= 0) s.defCd = .35; }   // sliding out at them
-  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = p.x + fd * defGap(s);
+  else { s.defCd = Math.max(0, (s.defCd || 0) - dt); const tx = tx0;
     if (!s.onGround && s.defHopT > 0) { s.defHopT -= dt; s.vx = clamp((tx - s.x) / Math.max(1 / 60, dt, s.defHopT), -DEF_HOP_V, DEF_HOP_V); }   // (in the hop: aimed to come down on its place, wherever that's got to)
     else s.vx = approach(s.vx, clamp((tx - s.x) * (s.onGround ? 14 : 8), -DEF_RUN, DEF_RUN), (s.onGround ? 12000 : 5000) * dt);
     s.sprint = Math.abs(s.vx) > 400; }
@@ -14814,7 +14855,8 @@ function partFollow(s, k, dt) {                     // its place: a step behind 
   if (s.inWait > 0 && s.onGround && !s.lvlLock) { s.inWait -= dt; s.vx = approach(s.vx, 0, 3400 * dt); s.face = p.face; s.sprint = false; return 0; }
   if (s.lvlLock && s.onGround && p.onGround && Math.abs(s.y - p.y) < 40) s.lvlLock = false;   // (level with you again: with you)
   if (s.lvlLock && s.onGround) s.lvlSp = supportSpan(s) || s.lvlSp; const sp = s.lvlLock ? s.lvlSp : followSpan(s);   // (on its own level: what it stands on, end to end)
-  const want = shoreX(sepWant(s, crossWait(s, partWant(k, sp, gap)))), dx = want - s.x; s.wantX = want;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
+  ledgeWait(s); if (ledgeSqueeze(s, k, sp)) return 0;   // (a ledge with no place for it: below, at its foot)
+  const want = s.upX ?? shoreX(sepWant(s, crossWait(s, partWant(k, sp, gap)))), dx = want - s.x; s.wantX = want;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
   const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 3 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
   s.zLine = partZ(k, sp); s.z = approach(s.z || 0, s.zLine - (s.zBackA || 0), 1.4 * dt);   // (its depth in the line, and any step back to get by one, sepStep)
   if (s.onGround || s.mirrorJ) s.vx = approach(s.vx, s.wave > 0 ? 0 : v, (s.onGround ? 3400 : 1500) * dt); s.sprint = Math.abs(s.vx) > 430;   // (in the air on a hop of its own, over a gap: its own way on)
@@ -14825,7 +14867,7 @@ function partJump(s, k, dx) {                       // you jumped: so does it, a
   const c = pJumpCue; if (s.onGround) s.airJ = 1; if (!c) return;
   if (s.jSeen !== c.t) { s.jSeen = c.t; if (time - c.t > .5) return; s.jAt = c.t + .06 + k * .08; s.jVy = c.vy; s.jDbl = c.dbl; }   // (a jump of yours from before it was here: not that one)
   if (!s.jAt || time < s.jAt) return; s.jAt = 0;
-  if (Math.abs(dx) > 320 || !(s.onGround || (s.jDbl && s.airJ > 0)) || s.atkKind || s.block) return;
+  if (Math.abs(dx) > 320 || !(s.onGround || (s.jDbl && s.airJ > 0)) || s.atkKind || s.block || s.stayDown) return;   // (stayDown: waiting below a full ledge)
   const h = s.jVy * s.jVy / (2 * GRAV * WEIGHT * feelMove().weight); s.vy = -Math.sqrt(2 * GRAV * h); if (!s.onGround) s.airJ = 0;
   s.onGround = false; s.plat = null; s.sq = .25; s.sqv = 0; s.mirrorJ = true;
 }
@@ -16358,7 +16400,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   const wet = world === 13 && deepWetAt(s.y); s.dive = wet;   // (under the deep's water: swimming, its swim pose and its bubble on, not sinking and put back by you over and over)
   if (wet && !busy && !s.post) swimAfter(s, p, behind, k * 30, dt); else if (!busy) partFollow(s, partSlot(s), dt);
   if (!wet && s.onGround && !s.atkKind && !s.block && !s.post && !s.lvlLock) {   // (posted, CHARGE!: it stays up there (or down there), not after you)
-    if (p.onGround && s.y - p.y > 40 && Math.abs(p.x - s.x) < 220 && ally.hopT <= 0) { const hh = s.y - p.y + 50; s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((p.x - s.x) / .5, -520, 520); s.onGround = false; s.plat = null; ally.hopT = .5; s.sq = .2; s.sqv = 0; }   // up after you
+    if (p.onGround && s.y - p.y > 40 && (Math.abs(p.x - s.x) < 220 || Math.abs((s.upX ?? 1e9) - s.x) < 160) && ally.hopT <= 0 && !s.stayDown) { hopUp(s, s.upX ?? p.x); ally.hopT = .5; }   // up after you, onto its place by you (none there: it waits below, ledgeWait)
     else if (downAfter(s, p)) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (ally.hopT <= 0 && edgeLeap(s, p)) ally.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
