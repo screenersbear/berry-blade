@@ -5804,10 +5804,11 @@ function setScreen(s) {                              // build stage s (its platf
   const scr = WORLDS[frNow && world === 6 ? 0 : world].screens; if (WORLDS[world] && SCREENS[0] !== scr[0]) { SCREENS.splice(0, SCREENS.length, ...scr); level.s = -2; }   // (the candy works set free: the woods' sky and light, outdoors)
   if (level.s !== s || level.w !== world || level.h !== h || (level.ruin || 0) !== tierNow || !!level.freed !== frNow) {
     if (panKeep) panKeep.old = level; else disposeLevel(level);   // (a pan between stitched screens: the room you're leaving kept, drawn beside the new one till the camera's across)
-    if (STAGES[s].big) buildBig(s, h, tierNow, frNow); else screenBuild(s, h, tierNow, frNow);
+    const gh = ghostBuild ? null : nbTake(s, h, tierNow, frNow);   // (built already, a neighbour's ghost: that, not built again)
+    if (gh) nbAdopt(gh, s); else if (STAGES[s].big) buildBig(s, h, tierNow, frNow); else screenBuild(s, h, tierNow, frNow);
     dropTextures();
   }
-  if (!ghostBuild) { if (hourEase) hourEaseEnd(false); if (peekCache && peekCache.from !== s) dropPeekCache(); }
+  if (!ghostBuild) { if (hourEase) hourEaseEnd(false); if (peekCache && peekCache.from !== s) dropPeekCache(); if (nb && nb.s !== s) { if (panKeep && !panKeep.nb) { panKeep.nb = nb; nb = null; } else nbDrop(); } }   // (nb: the old room's neighbours; a pan's kept, drawn with the room it's leaving)
   if (mode === "play" && panKeep && !ghostBuild && hourTurn === s && hourWas) hourHold(h); else setLook(h);   // (a stitched world's pan: in under the hour you left, the new one coming on once you're there)
 }
 // the hour turning as you pan into the next screen (the user, 2026-10-25: "let's do that slide into the new hour when you already arrived
@@ -10406,14 +10407,14 @@ let panLift = 0;                                     // (the next swapPan's lift
 function swapPan(dir, ns, work) {                   // as swapSlide, for a stitched world's neighbouring screens (else it is swapSlide)
   const o0 = cellOff(stage), o1 = cellOff(ns), lift = panLift; panLift = 0;   // (lift: the room you leave set that much higher (3D units) than the stitch puts it, from the new one: woods C5's own roof under B5, upLift)
   if (!STITCH.has(world) || !o0 || !o1 || Math.abs(o0.x - o1.x) > WX + .01 || Math.abs(o0.y - o1.y) > ROW_H * S + .01 || hideout || stronghold || arena || mode !== "play" || !player) return swapSlide(dir, work);
-  transit = true; if (pan) panEnd(); const s0 = stage;
+  transit = true; if (pan) panEnd(); const s0 = stage; nbSkip = s0;   // (nbSkip: the room you're leaving, not built again as a ghost of the new one: kept at the pan's end)
   const dx = o0.x - o1.x, dy = o0.y - o1.y + lift, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
   const was = q => q ? { q, x: q.x + dx / S, y: q.y - dy / S, rx: q.x, ry: q.y } : null;   // (rx, ry: where it was in the old room's own terms, to tell who the room change put somewhere)
   const movers = [player, ...palsAll(), ...allies.map(a => a.st), ej && ej.st].filter(Boolean).map(was);
   const pic = (dir === "up" || dir === "down") && slideGrab();   // (the room as you see it now: if the camera's got nowhere to go, it's faded off the new one, no pan)
   panKeep = {}; try { work(); } catch (e) { console.error("room change failed", e); }
-  const old = panKeep.old; panKeep = null;
-  if (!old) { transit = false; return; }
+  const old = panKeep.old, onb = panKeep.nb || null; panKeep = null;
+  if (!old) { if (onb) nbDrop(onb); nbSkip = -1; transit = false; return; }
   const G = new THREE.Group(), N = new THREE.Group(); G.position.set(dx, dy, 0); scene.add(G, N);
   if (old.subs && old.bigFrom) { G.position.x -= old.bigFrom.x; G.position.y -= old.bigFrom.y; }   // (out of the big room: its middle, from the screen you left it by)
   { const bs = bigShift; bigShift = null; if (bs) { G.position.x += bs.x; G.position.y += bs.y; pos0.x += bs.x; pos0.y += bs.y; movers.forEach(m => { if (m) { m.x += bs.px; m.y += bs.py; } }); } }   // (into it)
@@ -10426,8 +10427,9 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   { const zw = zoomWant(); if (Math.abs(zw - camZoom) > .01) { camZoom = zw; const hw = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * CAM_Z * camZoom * camera.aspect, lo = hw - 1, hi = X(WORLD) - hw + 1; if (lo <= hi) camX = clamp(camX, lo, hi); } }   // (the new room's own zoom, reached in the pan: the beach's C9, zoomed out, panned into C10 still out and showed past its end, C9's fence there gone the moment the pan stopped, then the zoom easing in. The user, 2026-11-05: "between c9 and c 10 the walls closest to the edge of the screne flickered badly")
   warmFrame(); if (dir === "up" && pic) { camLift = 0; warmFrame(); camBase -= camera.position.y - pos0.y; camX -= camera.position.x - pos0.x; warmFrame(); }   // (up into the room above: the camera kept just where it was, across and up, and from there it eases on over as you go (camBase, toward where you stand), you moving all the while: no pan to wait through. camLift: the lift the jump's top had in the room below, not this one's. The user, 2026-11-04: "moving from c2 to b2 still makes the camera shake up top. the player should jump up to b2 and land where ever they move it too")
   const pos1 = camera.position.clone(), quat1 = camera.quaternion.clone(), L1 = lookGrab();
-  pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0 };
-  { const up = upWant(stage); if (up >= 0 && up !== s0 && !peekCache) peekCache = buildGhost(up); }   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
+  if (onb) [onb.up, onb.dn].forEach(g => { if (g) { g.G.position.add(G.position); g.G.updateMatrixWorld(true); } });   // (the room you're leaving's neighbours: in their places by it)
+  pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0, onb, oclip: onb ? nbClip(onb).map(pl => pl.clone().translate(G.position)) : [] };
+  { const up = upWant(stage); if (up >= 0 && up !== s0 && !peekCache && (nbOf(stage) || {}).up !== up) peekCache = buildGhost(up); }   // (not if it's a neighbour: built as that, a frame or two on)   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
   if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = riseFadeT = RISE_FADE; render(0); return; }   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
   panTick(0); render(0);                             // (drawn at once, where the camera was: the frame warmFrame drew is never seen)
 }
@@ -10452,12 +10454,15 @@ function panEnd(fade) {
   lookLerp(P.L0, P.L1, 1);
   if (level.sky) scene.add(level.sky);
   [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N);
-  if (upWant(stage) === P.s0 && !peekCache && !P.old.subs) { P.G.visible = false; peekCache = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (down from the room above into one you can look back up into: the room you left kept for it, in its place already)
+  if (P.onb) nbDrop(P.onb); nbSkip = -1;   // (the room you left's neighbours away; it's no longer one not to build)
+  const W = nbOf(stage); if (W && (W.up === P.s0 || W.dn === P.s0) && !P.old.subs) { P.G.visible = false; if (nbKeep) { scene.remove(nbKeep.G); disposeLevel(nbKeep.level); } nbKeep = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (a neighbour of the one you're in: kept, its ghost)
+  else if (upWant(stage) === P.s0 && !peekCache && !P.old.subs) { P.G.visible = false; peekCache = { s: P.s0, level: P.old, G: P.G, from: stage }; }   // (down from the room above into one you can look back up into: the room you left kept for it, in its place already)
   else { scene.remove(P.G); P.G.position.set(0, 0, 0); disposeLevel(P.old); } dropTextures();
   if (!panFade) transit = false;
 }
 function panFadeTick(dt) { panFade = Math.max(0, panFade - dt); if (slideCv) slideCv.style.opacity = panFade / .2; if (!panFade) { if (slideCv) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } transit = false; } }
 function panScene(P = pan) {                        // the screens, while panning (or peeking): the sky, then each screen cut at the edge it shares with the other
+  if (panViewOn(P)) return viewScene(panCells(P), false, P.skyS);   // (the world as one piece: each with its neighbours)
   const bg = scene.background, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(); scene.background = null;
   renderer.setClearColor(FOG, 1); renderer.clear(); renderer.render(P.skyS, camera);
   P.N.visible = false; panSide(P.G, P.cutOld, P.old); P.N.visible = true; P.G.visible = false; panSide(P.N, P.cutNew, P === pan ? level : null);
@@ -10469,6 +10474,7 @@ function panSide(grp, cut, L) {                      // (one side of a pan: a bi
   L.subs.forEach(v => { v.G.visible = true; });
 }
 function panFg(P = pan) {                           // and their foregrounds, each as cut
+  if (panViewOn(P)) return viewScene(panCells(P), true);
   const bg = scene.background; scene.background = null; camera.layers.set(1);
   P.N.visible = false; panSide(P.G, P.cutOld, P.old); P.N.visible = true; P.G.visible = false; panSide(P.N, P.cutNew, P === pan ? level : null);
   P.G.visible = true; renderer.clippingPlanes = []; camera.layers.set(0); scene.background = bg;
@@ -10542,17 +10548,17 @@ function landAbove(hu, px) {                       // is there somewhere up ther
 function buildGhost(s) {                           // the room above built, this one's play left as it is (its platforms, pits, ladders; its own bits)
   const keep = { level, rowFx, restCamp, ruinFx, bloomFx, hour, P: PLATFORMS.slice(), G: GAPS.slice(), PR: PROFILE.slice(), C: CEILS.slice(), L: LADDERS.slice(), FL: FLOOR_LOW, SK: SINK, WA: WATER , W: WORLD };
   panKeep = {}; ghostBuild = true; let ghost = null;
-  try { setScreen(s); ghost = level; } catch (e) { console.error("peek build failed", e); } finally { panKeep = null; ghostBuild = false; }
+  let fx = null; try { setScreen(s); ghost = level; fx = { rowFx, restCamp, ruinFx, bloomFx }; } catch (e) { console.error("peek build failed", e); } finally { panKeep = null; ghostBuild = false; }   // (fx: its own moving bits, for when it's the room you're in: nbAdopt)
   ({ level, rowFx, restCamp, ruinFx, bloomFx, hour } = keep);
   PLATFORMS.splice(0, PLATFORMS.length, ...keep.P); GAPS.splice(0, GAPS.length, ...keep.G); PROFILE.splice(0, PROFILE.length, ...keep.PR); CEILS.splice(0, CEILS.length, ...keep.C); LADDERS.splice(0, LADDERS.length, ...keep.L);
   FLOOR_LOW = keep.FL; SINK = keep.SK; WATER = keep.WA; WORLD = keep.W; if (!hourEase) setLook(hour);
   if (!ghost || ghost === level) return null;
   const o0 = cellOff(stage), o1 = cellOff(s), G = new THREE.Group(); G.position.set(o1.x - o0.x, o1.y - o0.y, 0); G.visible = false; scene.add(G); ghost.objs.forEach(o => G.add(o));
   if (ghost.sky) ghost.sky.visible = false; skyBitsOff(G);
-  return { s, level: ghost, G, from: stage };
+  return { s, level: ghost, G, from: stage, fx };
 }
 function startPeek(to, force) {                     // (force: a look up out of a jump, upSee, PEEK or not)
-  if ((!PEEK && !force) || peek || pan || transit || !STITCH.has(world)) return;
+  if ((!PEEK && !force) || peek || pan || transit || !STITCH.has(world) || (nb && nb.s === stage && nb.up && nb.up.s === to)) return;   // (nb: the room above drawn always already)
   if (!peekCache || peekCache.s !== to || peekCache.from !== stage) { dropPeekCache(); peekCache = buildGhost(to); }
   if (!peekCache) return;
   const G = peekCache.G, N = new THREE.Group(), dy = G.position.y, cut = dy - SEAM_T * S; scene.add(N); level.objs.forEach(o => N.add(o)); G.visible = true;
@@ -10566,9 +10572,94 @@ function endPeek() {
   const P = peek; if (!P) return; peek = null;
   if (level.sky) scene.add(level.sky); [...P.N.children].forEach(o => scene.add(o)); scene.remove(P.N); P.G.visible = false;
 }
+// THE WORLD AS ONE PIECE (the user, 2026-11-06: "we keep having problems with screens not matching. I want to have each world built in its entirety, so when you jump up to a next screen, the floor and the ceiling are the same geometry and the screen just shifts up"; "as long as the actual geometry is the same, loading in pieces is totally fine. I just dont want it to keep stitching oddly still"): a stitched room's neighbours straight over and under it kept built in their places
+// (ghosts, as buildGhost makes them) and drawn every frame, every room cut to its own rows at the seams it shares. So the band between a room's floor and the seam
+// under it is drawn by that room alone, seen from above or below: the room below's ceiling IS the room above's floor. The same in a pan: the room you leave and the one
+// you go to each drawn with its neighbours, every one cut to its own. Only the sky and the far backdrop (all behind NB_FAR) are the room you're in's own, whole
+let nb = null, nbKeep = null, nbSkip = -1;                        // nb: { s, w, W, up, dn, tried } (up, dn: ghosts { s, level, G, cut }); nbKeep: the room a pan left, kept to be a ghost of the one it went to
+const NB_FAR = -45;                                  // (z: a room's far backdrop all behind this: never a neighbour's, never cut)
+function nbOf(s) {                                   // the rooms linked straight over and under s (-1: none); null: not a room drawn with its neighbours
+  if (!STITCH.has(world) || s < 0 || !STAGES[s] || STAGES[s].big || STAGES[s].upLift || hideout || stronghold || arena) return null;   // (upLift: a roof of its own under the room above, not on the grid: the woods' C5)
+  const ok = t => t >= 0 && STAGES[t] && !STAGES[t].big && !STAGES[t].cut && !STAGES[t].upLift && cellOff(t);
+  const up = STAGES.findIndex(q => q && q.below === s), dn = STAGES[s].below ?? -1;
+  return { up: ok(up) && rowStep(s, up) === -1 ? up : -1, dn: ok(dn) && rowStep(s, dn) === 1 ? dn : -1 };
+}
+const NB_TOP = () => Y(GROUND - ROW_H + SEAM_T), NB_BOT = () => Y(GROUND + SEAM_T), nbPlane = (y, c) => new THREE.Plane(new THREE.Vector3(0, y, 0), c);   // (a room's seams, in its own terms: with the one over it, with the one under it)
+function nbClip(N) { const o = []; if (N.up) o.push(nbPlane(-1, NB_TOP())); if (N.dn) o.push(nbPlane(1, -NB_BOT())); return o; }   // (the room itself: under the seam over it, over the one under it; only where that neighbour's drawn)
+function nbClass(L) { const B = new THREE.Box3(); L.objs.forEach(o => { if (o.userData.nbFar !== undefined) return; o.updateMatrixWorld(true); B.setFromObject(o); o.userData.nbFar = !B.isEmpty() && B.max.z < NB_FAR; }); }   // (each of a room's things: all far back, or not)
+function nbGhost(t) {                                // a neighbour's ghost: the room a pan left, the look-up's, or built now; its sky and far backdrop away; cut to its side of the seam
+  let g = null;
+  if (nbKeep && nbKeep.s === t) { g = nbKeep; nbKeep = null; } else if (peekCache && peekCache.s === t && peekCache.from === stage) { g = peekCache; peekCache = null; } else g = buildGhost(t);
+  if (!g) return null; const o0 = cellOff(stage), o1 = cellOff(t); g.G.position.set(o1.x - o0.x, o1.y - o0.y, 0); g.G.visible = false; g.from = stage;
+  nbClass(g.level); g.farHid = g.farHid || []; g.level.objs.forEach(o => { if (o.userData.nbFar && o.visible) { o.visible = false; g.farHid.push(o); } }); if (g.level.sky) g.level.sky.visible = false;
+  g.cut = rowStep(stage, t) < 0 ? [nbPlane(1, -NB_TOP())] : [nbPlane(-1, NB_BOT())];
+  const up = rowStep(stage, t) < 0, sy = up ? NB_TOP() : NB_BOT(), B = new THREE.Box3(); g.G.updateMatrixWorld(true);   // (what of it's all on the far side of the seam: never seen, not drawn)
+  g.G.matrixWorldAutoUpdate = false;   // (placed once, not every frame: nbAnim places what of it moves)
+  g.tickOk = !!g.level.tick && !/\b(player|PLATFORMS|SFX|camera|level|stage)\b/.test(String(g.level.tick));   // (its own moving bits ticked as well, if all they move is themselves: kelp, fish, lamps; not a chandelier that drops on you, nor one that thuds)
+  g.G.traverse(o => { if (!o.isMesh || o.isInstancedMesh || o.isSkinnedMesh || !o.visible || !o.geometry) return; if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); B.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld); if (up ? B.max.y < sy - .02 : B.min.y > sy + .02) { o.visible = false; g.farHid.push(o); } });
+  return g;
+}
+function nbTick() {                                  // (render) the room you're in: its neighbours built, one a frame from the first (both in one frame was one long frame; in a pan, the one you're leaving's drawn as itself till it's over)
+  if (mode !== "play" || !player || ghostBuild || !STITCH.has(world)) return;
+  if (!nb || nb.s !== stage || nb.w !== world) { nbDrop(); nb = { s: stage, w: world, W: nbOf(stage), up: null, dn: null, tried: new Set(), at: last }; nbClass(level); }   // (at: none built the frame the room was, that one's long enough; one there already, taken)
+  const W = nb.W, skip = nbSkip; if (!W) return;
+  const had = t => (nbKeep && nbKeep.s === t) || (peekCache && peekCache.s === t && peekCache.from === stage);   // (built already: the room you've just left, the look-up's)
+  for (const k of ["up", "dn"]) { const t = W[k]; if (t < 0 || nb[k] || t === skip || nb.tried.has(t)) continue;
+    if (had(t)) { nb.tried.add(t); nb[k] = nbGhost(t); } else if (nb.at !== last) { nb.at = last; nb.tried.add(t); nb[k] = nbGhost(t); } }   // (built: one a frame, last the frame's own time; a room change draws its frame more than once)
+  if (nbKeep && nbSkip < 0) { scene.remove(nbKeep.G); disposeLevel(nbKeep.level); nbKeep = null; }   // (a room a pan left that's no neighbour of this one after all)
+}
+function nbTake(s, h, tier, fr) {                   // the ghost of room s, if it's one of the room you're in's and built as s would be now (its hour, its ruin, set free or not)
+  const N = nb; if (!N || N.w !== world) return null;
+  for (const k of ["up", "dn"]) { const g = N[k]; if (g && g.s === s && g.fx && g.level.h === h && (g.level.ruin || 0) === tier && !!g.level.freed === fr) { N[k] = null; return g; } }
+  return null;
+}
+function nbAdopt(g, s) {                             // a ghost made the room you're in: its things out into the scene where they are, its far backdrop and sky back on, its play set up (screenBuild's, but nothing built)
+  setPlatforms(s); WP = wPlace(s); level = g.level; scene.remove(g.G); g.G.position.set(0, 0, 0); g.G.matrixWorldAutoUpdate = true; [...g.G.children].forEach(o => scene.add(o));
+  (g.farHid || []).forEach(o => { o.visible = true; }); (g.G.userData.skyHid || []).forEach(o => { o.visible = true; }); if (level.sky) level.sky.visible = true;
+  if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));
+  ({ rowFx, restCamp, ruinFx, bloomFx } = g.fx);
+}
+function nbAnim(dt) {                                // (render, after the room you're in's) the rooms over and under moving as they do when you're in them: kelp and plants swaying, fish, lamps, birds; none still till you're in it
+  if (!nbOn()) return; const keep = rowFx;
+  try {
+    for (const g of [nb.up, nb.dn]) { if (!g) continue; let on = false;
+      if (g.tickOk) { g.level.tick(time, dt); on = true; }
+      if (g.fx && g.fx.rowFx && g.fx.rowFx.birds) { rowFx = g.fx.rowFx; syncRowMore(dt, time); on = true; }
+      if (on) g.G.updateMatrixWorld(true); }
+  } finally { rowFx = keep; }
+}
+function nbDrop(N = nb) { if (N === nb) nb = null; if (!N) return; [N.up, N.dn].forEach(g => { if (g) { scene.remove(g.G); disposeLevel(g.level); } }); }
+const nbOn = () => !!(nb && nb.s === stage && nb.w === world && (nb.up || nb.dn) && mode === "play" && !level.subs);
+const nbBox = up => new THREE.Box3(new THREE.Vector3(-1, up ? NB_TOP() : NB_BOT() - ROW_H * S - 1, NB_FAR), new THREE.Vector3(WX + 1, up ? NB_TOP() + ROW_H * S + 1 : NB_BOT(), 30));   // (a neighbour's part of the world, in this room's terms: not in sight, not drawn)
+const nbCells = fg => [...(!fg || (level.fg && level.fg.length) ? [{ objs: level.objs, clip: nbClip(nb) }] : []), ...[nb.up, nb.dn].filter(g => g && (!fg || (g.level.fg && g.level.fg.length))).map(g => ({ G: g.G, clip: g.cut, box: g === nb.up ? nb.boxU || (nb.boxU = nbBox(true)) : nb.boxD || (nb.boxD = nbBox(false)) }))];   // (fg: only the rooms with a foreground)
+const nbFgAny = () => !!((level.fg && level.fg.length) || [nb.up, nb.dn].some(g => g && g.level.fg && g.level.fg.length));
+function panCells(P) {                               // a pan's rooms: the one you're leaving and its neighbours (moved with it), the one you're going to and its; each cut to its own
+  const ax = P.cutOld.normal.x !== 0, d = P.G.position, o = [{ G: P.G, clip: [P.cutOld, ...P.oclip] }];
+  if (P.onb) [P.onb.up, P.onb.dn].forEach(g => { if (g && g.s !== stage) o.push({ G: g.G, clip: [...g.cut.map(pl => pl.clone().translate(d)), ...(ax ? [P.cutOld] : [])] }); });
+  o.push({ G: P.N, clip: [P.cutNew, ...(nb && nb.s === stage ? nbClip(nb) : [])] });
+  if (nb && nb.s === stage) [nb.up, nb.dn].forEach(g => { if (g) o.push({ G: g.G, clip: [...g.cut, ...(ax ? [P.cutNew] : [])] }); });
+  return o;
+}
+const panViewOn = P => !!(P && P === pan && (P.onb || (nb && nb.s === stage && (nb.up || nb.dn))) && !P.old.subs && !level.subs);
+const _vc = new THREE.Color(), _vf = new THREE.Frustum(), _vm = new THREE.Matrix4();
+function viewScene(cells, fg, pre) {                 // (render) the rooms drawn as one: first all that's no room's (the sky, the far backdrop: whole), then each room cut to its own
+  const bg = scene.background, cc = renderer.getClearColor(_vc).clone(), ca = renderer.getClearAlpha(), was = new Map(), off = o => { if (!was.has(o)) was.set(o, o.visible); o.visible = false; };
+  scene.background = null; if (fg) camera.layers.set(1); else { renderer.setClearColor(FOG, 1); renderer.clear(); if (pre) renderer.render(pre, camera); }
+  try {
+    for (const c of cells) if (c.G) off(c.G); else for (const o of c.objs) if (!o.userData.nbFar) off(o);
+    renderer.clippingPlanes = []; renderer.render(scene, camera); scene.matrixWorldAutoUpdate = false;   // (every thing placed now: not again for each room's pass)
+    for (const o of scene.children) if (o.visible && !o.isLight) off(o);   // (drawn once: not again in a room's pass)
+    _vf.setFromProjectionMatrix(_vm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    for (const c of cells) {
+      if (c.box && !_vf.intersectsBox(c.box)) continue;   // (out of sight)
+      const on = c.G ? [c.G] : c.objs.filter(o => was.get(o) === true);
+      on.forEach(o => { o.visible = true; }); renderer.clippingPlanes = c.clip; renderer.render(scene, camera); on.forEach(o => { o.visible = false; });
+    }
+  } finally { scene.matrixWorldAutoUpdate = true; was.forEach((v, o) => { o.visible = v; }); renderer.clippingPlanes = []; if (fg) camera.layers.set(0); else renderer.setClearColor(cc, ca); scene.background = bg; }
+}
 function dropPeekCache() { if (peek) endPeek(); const C = peekCache; peekCache = null; if (!C) return; scene.remove(C.G); disposeLevel(C.level); }
 let ghostBuild = false;
-const skyBitsOff = G => G.traverse(o => { if (o.isMesh && o.position.z < -70 && o.material && o.material.fog === false && !o.material.depthWrite) o.visible = false; });   // (a screen not the one you're in: its moon and sun in the sky away, the camera's screen's are the ones up there: Kesh's garden)
+const skyBitsOff = G => G.traverse(o => { if (o.isMesh && o.visible && o.position.z < -70 && o.material && o.material.fog === false && !o.material.depthWrite) { o.visible = false; (G.userData.skyHid = G.userData.skyHid || []).push(o); } });   // (skyHid: back on if it's the room you're in after all: nbAdopt)   // (a screen not the one you're in: its moon and sun in the sky away, the camera's screen's are the ones up there: Kesh's garden)
 function lookGrab() {                               // the light as it is (to ease from one screen's into the next's while panning)
   const U = gradeMat.uniforms;
   return { fog: FOG.clone(), near: scene.fog.near, far: scene.fog.far, sun: [sun.color.clone(), sun.intensity], sun2: [sun2.color.clone(), sun2.intensity],
@@ -29495,7 +29586,7 @@ function hatchHero() {                             // the user, 2026-10-25: "the
   camera.layers.set(3); renderer.render(actors, camera); camera.layers.set(0); return hm;
 }
 function render(dt) {
-  syncMini(); hourEaseTick(dt); peekTick(); gearCheck(); wearTick(dt); tryOnTick(dt);
+  syncMini(); hourEaseTick(dt); peekTick(); nbTick(); gearCheck(); wearTick(dt); tryOnTick(dt);
   if (mode === "select") lineup.forEach(st => { st.rig.sync(st, st.rig, dt); if (menuUp || titleUp) st.rig.root.visible = st.rig.shadow.visible = false; });   // (nobody out behind the title or the menus)
   else if (mode === "world") lineup[sel].rig.sync(lineup[sel], lineup[sel].rig, dt);
   else if (mode === "opp") FOES[oppSel].sync(oppView, FOES[oppSel].rig, dt);
@@ -29515,7 +29606,7 @@ function render(dt) {
   if (bwalkS) bwalkSync();
   if (mode === "play") { syncHeld(); syncFoeDizzy(dt); syncFoeShields(dt); syncBcStars(); }
   if (NJ_HIDE.size) ninjaVis();   // (the ninja's puffs: whoever's gone in one, out of sight)
-  syncCards(); syncHazards(); syncBubble(dt); syncBudBubbles(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncZaps(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAuras(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time);
+  syncCards(); syncHazards(); syncBubble(dt); syncBudBubbles(dt); syncAirBubbles(); syncSwingTrail(); syncFlairs(); syncZaps(); syncParticles(dt); syncGhosts(dt); syncWorld(dt); syncAuras(dt); syncGuard(dt); syncDizzy(dt); syncCaps(dt); syncBepLife(); syncBepArrow(); syncRest(); syncRuin(); syncBloom(); syncRow(dt); syncRowMore(dt, time); nbAnim(dt);
   const bepSel = mode === "select" && !warmAll && !!gradeMat.uniforms.bgTex.value;   // picking a character: no scenery, the blue bep crowd instead
   if (bepSel !== !!level._hid) { if (bepSel) { level._hid = level.objs.filter(o => o.visible); level._hid.forEach(o => { o.visible = false; }); } else { level._hid.forEach(o => { o.visible = true; }); level._hid = null; } }
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout && !rideS ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
@@ -29526,7 +29617,7 @@ function render(dt) {
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   if (SHADE) SHADE.pass(false);                     // (an applied look: the level's settings, then the characters')
-  if (pan) panScene(); else if (peek) panScene(peek); else if (level.subs) bigScene(); else renderer.render(scene, camera);
+  if (pan) panScene(); else if (peek) panScene(peek); else if (level.subs) bigScene(); else if (nbOn() && !bepSel) viewScene(nbCells(), false); else renderer.render(scene, camera);   // (viewScene: the rooms over and under this one too, the world as one piece)
   actors.fog = actorFog();
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
@@ -29534,7 +29625,7 @@ function render(dt) {
   renderer.render(actors, camera);
   if (SHADE) SHADE.pass(false);
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
-  if (pan) panFg(); else if (peek) panFg(peek); else if (level.subs && !bepSel) { fgSeeThru(dt); bigFg(); } else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
+  if (pan) panFg(); else if (peek) panFg(peek); else if (level.subs && !bepSel) { fgSeeThru(dt); bigFg(); } else if (nbOn() && !bepSel && nbFgAny()) { fgSeeThru(dt); viewScene(nbCells(true), true); } else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   renderer.setRenderTarget(null);
   { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);
