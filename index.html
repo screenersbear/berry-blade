@@ -704,7 +704,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261105i"></script>
+<script src="charkit.js?v=20261105o"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261105b"></script>
 <script src="score.js?v=20261104a"></script>
@@ -2692,7 +2692,8 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   if (!(bgY < -.5)) for (const sl of W.scatter(Math.round(14 * WS), 10, 10, 2111)) inSlot(sl, x => { const z = -R(5, 12);   // lianas hanging out of the canopy
     if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) return; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); });
   for (const sl of W.steps(14, 24, 30, 30, 2112)) inSlot(sl, x => tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22)));   // the mogotes far off
-  if (bgY > -.5) farForest(scene, bgY, W);   // (the forest filled in behind: placed in the world's drawing too)
+  if (bgY > -.5 || (st.bgRow && st.drop)) farForest(scene, bgY, W);
+  if (st.bgRow && st.drop && st.open) { scene.add(at(mk(new THREE.BoxGeometry(WX + 160, .35, 7.4), null, { mat: mGrass, ol: 0 }), WX / 2, bgY - .175, -6)); scene.add(at(mk(new THREE.BoxGeometry(WX + 160, 1.7, 7.2), null, { mat: mDirt, ol: 0 }), WX / 2, bgY - 1.2, -6.1)); scene.add(at(mk(new THREE.BoxGeometry(WX + 160, 9, 7.2), null, { mat: toon("#122018"), ol: 0 }), WX / 2, bgY - 6.5, -6.1)); }   // (open, BB2 and BB3: the bank behind, from the path back to the forest floor, whole over BB2's pit, as the woods' own pits have it)   // (the forest filled in behind: placed in the world's drawing too. The background's row BB too, down at its floor: the user, 2026-11-05 "fill in the background with floor etc like we did to the front part of the map's backgrounds")
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
     petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
   for (const sl of W.scatter(Math.round(70 * WS), 12, 12, 2113)) inSlot(sl, x => {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
@@ -4719,16 +4720,17 @@ function woodsBgSet(P, g, s, rng, R) {
     bgMerge(g, G, .02); return true;
   }
   if (k === "bgLand") {                              // a stretch of land (BA3's past the bridge, BA4's last of it, BA5-BA6's high ground; behind BB5-BB6 the same land's face, floor to its top): earth, turf, strata, rocks; roots under a ragged end
-    const C = ["#7a5236", "#5e3f29", "#6c9c44", "#5a8a3a", "#4a3426"], G = new Map(C.map(c => [c, []])), put = (c, q) => G.get(c).push(q);
-    const xa = X(P.x0), xb = X(P.x1), yt = Y(P.top), yb = Y(P.bot), z0 = P.z0 ?? -8, z1 = P.z1 ?? 2.6, rg = P.ragged || 0;
-    put(C[0], bgBox(xa, xb, yb, yt - .12, z0, z1)); put(C[2], bgBox(xa - .05, xb + .05, yt - .32, yt, z0 - .05, z1 + .08));
-    for (let y = yt - .9; y > yb + .3; y -= R(.7, 1.4)) put(C[1], bgBox(xa, xb, y - R(.05, .12), y, z1, z1 + .04));   // (strata on its face)
-    for (let i = 0, n = Math.round((xb - xa) * (yt - yb) * .06); i < n; i++) put(rng() < .5 ? C[1] : C[0], bgBlob(R(xa, xb), R(yb, yt - .6), z1 + R(-.15, .1), R(.25, .55), R(.2, .45), R(.2, .4)));
-    for (let i = 0, n = Math.round((xb - xa) * 1.1); i < n; i++) put(rng() < .5 ? C[2] : C[3], new THREE.ConeGeometry(R(.05, .09), R(.25, .5), 4).translate(R(xa, xb), yt + .15, R(z0 + .3, z1 - .1)));   // (grass)
+    const C = ["#7a5236", "#5e3f29", "#6c9c44", "#5a8a3a", "#4a3426"], G = new Map(C.map(c => [c, []])), GF = new Map(C.map(c => [c, []])), ZS = .45, put = (c, q, z = -9) => (P.fg && z > ZS ? GF : G).get(c).push(q);   // (fg: its front, from ZS out, drawn in front of everyone: BA3's, so the team going down its ladder are covered by the floor, not seen sinking through it. The user, 2026-11-05)
+    const xa = X(P.x0), xb = X(P.x1), yt = Y(P.top), yb = Y(P.bot), z0 = P.z0 ?? -8, z1 = P.z1 ?? 2.6, rg = P.ragged || 0, zm = P.fg ? ZS : z1;
+    put(C[0], bgBox(xa, xb, yb, yt - .12, z0, zm)); put(C[2], bgBox(xa - .05, xb + .05, yt - .32, yt, z0 - .05, P.fg ? zm : z1 + .08));
+    if (P.fg) { put(C[0], bgBox(xa, xb, yb, yt - .12, zm, z1), 1); put(C[2], bgBox(xa - .05, xb + .05, yt - .32, yt, zm, z1 + .08), 1); }
+    for (let y = yt - .9; y > yb + .3; y -= R(.7, 1.4)) put(C[1], bgBox(xa, xb, y - R(.05, .12), y, z1, z1 + .04), z1);   // (strata on its face)
+    for (let i = 0, n = Math.round((xb - xa) * (yt - yb) * .06); i < n; i++) put(rng() < .5 ? C[1] : C[0], bgBlob(R(xa, xb), R(yb, yt - .6), z1 + R(-.15, .1), R(.25, .55), R(.2, .45), R(.2, .4)), z1);
+    for (let i = 0, n = Math.round((xb - xa) * 1.1); i < n; i++) { const c = rng() < .5 ? C[2] : C[3], r = R(.05, .09), h = R(.25, .5), x = R(xa, xb), z = R(z0 + .3, z1 - .1); put(c, new THREE.ConeGeometry(r, h, 4).translate(x, yt + .15, z), z); }   // (grass)
     if (rg) { const ex = rg > 0 ? xb : xa;
-      for (let i = 0; i < 9; i++) put(rng() < .5 ? C[1] : C[0], bgBlob(ex + rg * R(-.3, .2), R(yb + .4, yt - .4), R(z0 + .5, z1), R(.4, .8), R(.4, .7), R(.4, .8)));   // (a ragged end)
-      for (let i = 0; i < 16; i++) { const hl = R(.6, 2.8), x = ex - rg * R(0, 3), z = R(z0 + .5, z1 - .2); put(C[4], bgRod(V3(x, yb + .05, z), V3(x + R(-.3, .3), yb - hl, z), .05, .015, 4)); } }   // (roots under it)
-    bgMerge(g, G, .03); return true;
+      for (let i = 0; i < 9; i++) { const c = rng() < .5 ? C[1] : C[0], x = ex + rg * R(-.3, .2), y = R(yb + .4, yt - .4), z = R(z0 + .5, z1); put(c, bgBlob(x, y, z, R(.4, .8), R(.4, .7), R(.4, .8)), z); }   // (a ragged end)
+      for (let i = 0; i < 16; i++) { const hl = R(.6, 2.8), x = ex - rg * R(0, 3), z = R(z0 + .5, z1 - .2); put(C[4], bgRod(V3(x, yb + .05, z), V3(x + R(-.3, .3), yb - hl, z), .05, .015, 4), z); } }   // (roots under it)
+    bgMerge(g, G, .03); if (P.fg) { const F = new THREE.Group(); g.add(F); bgMerge(F, GF, .03); F.traverse(o => o.layers.set(1)); } return true;
   }
   if (k === "treetops") {                            // the tops of trees, the floor (BB3: "the player is walking on top of the tree"), the crowns' bulk under it
     const LV = ["#3f7a3a", "#4f8a49", "#5f9a52", "#356b33"], G = new Map(LV.map(c => [c, []])), y = Y(P.y ?? GROUND), xa = X(P.x0), xb = X(P.x1);
@@ -4747,6 +4749,8 @@ function woodsBgSet(P, g, s, rng, R) {
       const sd = q.x + q.w / 2 > P.x ? 1 : -1, xn = sd > 0 ? a : b, xe = sd > 0 ? b : a, rr = .3;
       put(bk, bgRod(V3(x, top - rr - .25, z), V3(xn, top - rr, -.25), rr * 1.6, rr * 1.1, 8)); put(bk, bgRod(V3(xn, top - rr, -.25), V3(xe, top - rr * .7, -.15), rr * 1.1, rr * .55, 8));   // (out from the trunk, then along under where you stand)
       for (let i = 0; i < 3; i++) put(LV[i], bgBlob(xe + sd * R(.1, .5), top + R(-.2, .5), R(-.8, .4), R(.6, .9), R(.45, .7), R(.6, .9), 1)); });
+    if (P.roots) { const yf = Y(P.floor ?? GROUND); for (let i = 0; i < P.roots; i++) { const t = Math.PI * (.55 + .9 * i / Math.max(1, P.roots - 1)) + R(-.12, .12), L = R(1.4, 3), cx = Math.cos(t), cz = Math.sin(t), h = R(.7, 1.6), ez = z + (r + L) * cz; if (ez > 1.4) continue;   // (its roots: out round its foot on this side, down into the floor. P.floor: the floor it stands on, px)
+      put(bk, bgRod(V3(x + cx * r * .8, yf + h, z + cz * r * .8), V3(x + cx * (r + L), yf - .15, ez), r * .32, .1, 8)); } }
     if (P.crown) { const cy = Y(P.crown.y), cr = P.crown.r; for (let i = 0; i < Math.round(cr * 4); i++) put(LV[i % 3], bgBlob(x + R(-cr, cr) * .9, cy + R(-.5, .7) * cr * .55, z + R(-cr * .6, cr * .25), R(1, 1.7) * cr * .45, R(.8, 1.2) * cr * .35, R(1, 1.6) * cr * .4, 1)); }
     bgMerge(g, G, .03); return true;
   }
@@ -4767,7 +4771,7 @@ function woodsBgSet(P, g, s, rng, R) {
     const gy = Y(groundAt(W.Pa.x) ?? GROUND), ns = 4, pax = X(W.Pa.x);   // the stairs, up from the floor
     for (let i = 0; i < ns; i++) { const u = (i + .5) / ns, h = Math.max(.05, (top - gy) * (i + 1) / ns), stp = new THREE.BoxGeometry(BW_STAIR / ns + .06, h, 1.7); stp.rotateY(th); stp.translate(pax + (nx - pax) * u, gy + h / 2, W.Pa.z + (W.N.z - W.Pa.z) * u); put(i % 2 ? BG_PLANK : BG_PLANK2, stp); }
     [-1, 1].forEach(sd => { const ox = ax * .85 * sd, oz = az * .85 * sd; put(BG_RED, bgRod(V3(pax + ox, gy + 1, W.Pa.z + oz), V3(nx + ox, top + 1, W.N.z + oz), .05, .05, 5)); put(BG_RED, bgBox(pax + ox - .11, pax + ox + .11, gy, gy + 1.2, W.Pa.z + oz - .11, W.Pa.z + oz + .11)); });
-    bgMerge(g, G, .02); return true;
+    bgMerge(g, G, .02); if (P.fg) { g.userData.bwFg = true; g.traverse(o => o.layers.set(bwalkS ? 0 : 1)); } return true;   // (fg: out toward you, so in front of everyone once they're off it, not under their feet; on it, as it is: bwFg. The user, 2026-11-05 "in BA1, when you get off the bridge and walk to the right, have the bridge be in the foreground")
   }
   if (k === "woodsFar") {                            // the background, small in the distance (the user: "make sure a small version of the background is visible where applicable in the main map's background, in the distance")
     const m = /^([A-D])(\d+)$/.exec(st.cell || ""); if (!m) return true;
@@ -5090,8 +5094,15 @@ function buildSet(s) {
       F.add(at(mk(new THREE.BoxGeometry(xa + 16, H, 9), null, { mat: mR, ol: .04 }), (xa - 16) / 2, gy + H / 2 - 1, 1.8));              // the face in front, left of the doorway
       F.add(at(mk(new THREE.BoxGeometry(xb - xa + .6, H - door, 9), null, { mat: mR, ol: .04 }), (xa + xb) / 2, gy + door + (H - door) / 2, 1.8));   // over the doorway
       g.add(at(mk(new THREE.BoxGeometry(xb + 16, H, 1.6), null, { mat: mR, ol: 0 }), (xb - 16) / 2, gy + H / 2 - 1, -2.3));       // the passage's back: rock, all the way in
-      for (let i = 0; i < 46; i++) g.add(at(mk(new THREE.DodecahedronGeometry(R(.5, 1.2), 0), null, { mat: rng() < .5 ? mR2 : mR3, ol: .03 }), R(-14, xb), gy + R(-.4, door + .4), R(-1.8, -1.2)));   // (its rough wall inside, lumps of the rock)
-      for (let i = 0; i < 12; i++) g.add(at(mk(new THREE.IcosahedronGeometry(R(.3, .6), 0).scale(1.4, .45, 1), null, { mat: mMoss, ol: .02 }), R(xa - 2, xb), gy + R(.3, door - .5), R(-1.6, -1.1)));
+      const cw = (xb - xa) * .76, cx = (xa + xb) / 2 - .2, ch = door - .35, inMouth = (x, y) => Math.abs(x - cx) < cw / 2 + .15 && y - gy < ch - .2;   // (the cave's mouth in the passage's back wall, where Camila's rocks stood: the user, 2026-11-05 "the wall behind it should look like a cave opening not just a solid brown polygon")
+      for (let i = 0; i < 46; i++) { const r = R(.5, 1.2), m = rng() < .5 ? mR2 : mR3, x = R(-14, xb), y = gy + R(-.4, door + .4), z = R(-1.8, -1.2); if (!inMouth(x, y)) g.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: m, ol: .03 }), x, y, z)); }   // (its rough wall inside, lumps of the rock: none over the mouth)
+      for (let i = 0; i < 12; i++) { const r = R(.3, .6), x = R(xa - 2, xb), y = gy + R(.3, door - .5), z = R(-1.6, -1.1); if (!inMouth(x, y)) g.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .45, 1), null, { mat: mMoss, ol: .02 }), x, y, z)); }
+      [["#3b342d", 1, -1.37], ["#26211d", .8, -1.35], ["#15120f", .58, -1.33]].forEach(([c, k, z]) => { const w = cw * k, h = ch * (.55 + .45 * k), hs = h - w / 2 * .8, A = new THREE.Shape(); A.moveTo(-w / 2, 0); A.lineTo(-w / 2, hs);   // (the mouth: three arches, each darker and smaller, into the dark)
+        for (let a = 1; a <= 16; a++) { const t = Math.PI - a / 16 * Math.PI; A.lineTo(Math.cos(t) * w / 2, hs + Math.sin(t) * (h - hs)); } A.lineTo(w / 2, 0); A.lineTo(-w / 2, 0);
+        g.add(at(new THREE.Mesh(new THREE.ShapeGeometry(A), new THREE.MeshBasicMaterial({ color: c })), cx, gy - .05, z)); });
+      for (let i = 0; i <= 12; i++) { const t = Math.PI - i / 12 * Math.PI, hs = ch - cw / 2 * .8, r = .5 + (i * 7 % 5) * .07, rx = Math.cos(t) * (cw / 2 + .15), ry = i === 0 || i === 12 ? .4 + (i % 2) * .3 : hs + Math.sin(t) * (ch - hs + .1);   // (its rim: rough stones round the arch)
+        const m = mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: i % 2 ? mR2 : mR3, ol: .03 }); m.rotation.set(i * .7, i * 1.3, i * .4); g.add(at(m, cx + rx, gy + ry, -1.3)); }
+      [-1, 1].forEach(sd => [1.3, 2.3].forEach((y, j) => { const m = mk(new THREE.DodecahedronGeometry(.5 + j * .1, 0), null, { mat: j ? mR3 : mR2, ol: .03 }); m.rotation.set(y, sd, j); g.add(at(m, cx + sd * (cw / 2 + .2), gy + y, -1.3)); }));   // (and down its sides)
       g.add(at(new THREE.Mesh(new THREE.BoxGeometry(xa + 16, door + 1, .3), new THREE.MeshBasicMaterial({ color: "#2a2622" })), (xa - 16) / 2 - 2, gy + door / 2, -1.05));   // (deeper in, the dark of the way through to the cove)
       for (let i = 0; i < 70; i++) { const y = gy + R(-.5, H - 2), r = R(.55, 1.4), z = R(-14, 5.8); (z > .5 ? F : g).add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: rng() < .5 ? mR2 : mR3, ol: .03 }), xb + R(-.3, .5), y, z)); }   // its craggy face (the ones in front of the path: over everyone too)
       for (let i = 0; i < 40; i++) { const r = R(.4, 1); F.add(at(mk(new THREE.DodecahedronGeometry(r, 0), null, { mat: rng() < .5 ? mR2 : mR3, ol: .03 }), R(-14, xa + .2), gy + R(-.4, H - 2), R(5.6, 6.4))); }
@@ -5162,7 +5173,7 @@ function authorForest() {
   S0.forEach(q => { if (q.hub) { delete q.hub; if (!q.rest) delete q.peace; } });   // (the hub's D5 now)
   // the hidden cove (behind Camila's rocks in A1): one room on the shore, water to the left to swim in, a mango, and Burr, who lives there
   const COVE = S0.length; S0.push({ h: S0[C.A1].h, col: 999, name: "THE HIDDEN COVE", elev: 0, foe: 0, authored: true, cove: true, ground: [[0, 110], [640, 110], [790, 0]], swim: [-200, 720, GROUND + 6],
-    plats: [], next: C.A1, noLeft: true, peace: true, items: [["fruit", 1650]], set: [{ k: "pool", x0: -300, x1: 760, y: GROUND + 6 }, { k: "coveRocks", x: 2560 }] });
+    plats: [], next: C.A1, noLeft: true, peace: true, items: [["fruit", 1650], ["gear", 1000]], set: [{ k: "pool", x0: -300, x1: 760, y: GROUND + 6 }, { k: "coveRocks", x: 2560 }] });   // (a berry gear on its shore, by the water: the user, 2026-11-05 "in the hidden beach room, have a berry gear")
   R0[COVE] = []; W.buddySpots = [COVE, C.D4, C.B6]; W.buddyPos = { [C.B6]: 330 };   // (the berry buddies' spots: the cove, and D4. The user, 2026-10-26; B6 too, at its far left a few steps in, 2026-10-27 "add a buddy in b6 at the very left of the screen a few spaces away from when the player enters")
 
   // ── row A
@@ -5299,7 +5310,7 @@ function authorForest() {
   const RINGS = BG_RINGS.map(r => V(bgRing(...r), .42, .36)), LAND = { top: GROUND, bot: GROUND + 290 }, ST = { step: true };   // (ST: a vine you walk on, up onto the next by walking)
   // BA1-BA3: "two-tiered bridge", "the player cannot jump off of this bridge": the lower deck the floor all along, the upper one a jump up; broken at BA2's end, a beam under
   bg("BA1", { open: true, noRoots: true, ground: [[0, 0]], noLeft: true, next: BG.BA2, plats: [[800, DECK, 1840, "deck"]], bwalk: { ...A1W, to: C.A1, side: "back" },
-    set: [{ k: "redBridge", x0: 300, x1: 2900, end0: true, gapF: [380, 620] }, { k: "bwFoot" }] },
+    set: [{ k: "redBridge", x0: 300, x1: 2900, end0: true, gapF: [380, 620] }, { k: "bwFoot", fg: true }] },
     [["acorn", "rust", { plat: 0, x: 1330 }], ["leafy", "orange", { plat: 0, x: 2120 }], ["twiggy", "olive", 1770]], "RED BRIDGE");
   bg("BA2", { open: true, noRoots: true, ground: [[0, 0], [2260, 0], [2260, 44], [2440, 44], [2440, 0]], prev: BG.BA1, next: BG.BA3, plats: [[-40, DECK, 2640, "deck"]], items: [["gum", 1110, DECK]],
     set: [{ k: "redBridge", x0: -300, x1: 2900, brk: [2260, 2440] }] },
@@ -5308,7 +5319,7 @@ function authorForest() {
   // the ladder down through the land to BB3's treetops
   bg("BA3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BA2, next: BG.BA4, down: BG.BB3, downX: 1950, plats: [[-40, DECK, 1700, "deck"]],
     secret: { who: "fire", x: 2240, tall: true, door: true, key: "bgVines" },
-    set: [{ k: "redBridge", x0: -300, x1: 1800, end1: true }, { k: "bgLand", x0: 1780, x1: 2900, ...LAND },
+    set: [{ k: "redBridge", x0: -300, x1: 1800, end1: true }, { k: "bgLand", x0: 1780, x1: 2900, ...LAND, fg: true },
       { k: "glos", paths: [V([[2150, 470, -3], [2120, 330, -3.4], [2200, 150, -3], [2380, 60, -2.5], [2600, 110, -3]], .5, .26, { hand: true }), V([[2650, 470, -4.2], [2580, 300, -4.6], [2460, 120, -4], [2290, 30, -3.6]], .55, .3, { hand: true }),
         V([[2200, 472, 2.4], [2300, 400, 2.8], [2420, 350, 2.4], [2600, 410, 2.6]], .26, .18, { hand: true }), V([[2560, 470, -1], [2500, 260, -1.4], [2390, 140, -1], [2330, 180, -.6]], .34, .22, { swirl: .7 })] }] },
     [["leafy", "leaf", 395], ["acorn", "rust", 890], ["twiggy", "olive", 1380]], "RED BRIDGE");
@@ -5357,7 +5368,8 @@ function authorForest() {
     set: [{ k: "bgLand", x0: 1455, x1: 2900, top: GROUND - ROW_H, bot: BBG + 60, z0: -9, z1: -2.2 }] },
     [["leafy", "leaf", 500], ["acorn", "rust", 1260], ["twiggy", "olive", { plat: 2, x: 1735 }]], "FAR WOODS");
   bg("BB6", { drop: BD, ground: [[0, BD]], prev: BG.BB5, noRight: true, noStrip: true, plats: [[-310, 215, 560, "span"], [300, 140, 220], [490, 250, 180], [640, 360, 180], [850, 465, 180], [1040, 570, 190]], bwalk: { ...B6W, to: C.B6, side: "back", dy: BD }, items: [["guava", 1100]],
-    set: [{ k: "bgLand", x0: -300, x1: 900, top: GROUND - ROW_H, bot: BBG + 60, z0: -9, z1: -2.2 }, { k: "bwFoot" }] },
+    set: [{ k: "bgLand", x0: -300, x1: 900, top: GROUND - ROW_H, bot: BBG + 60, z0: -9, z1: -2.2 }, { k: "bwFoot", fg: true },
+      { k: "bgTree", x: 2600, base: BBG + 60, top: -60, r: 2.4, z: -2.2, reach: 1, roots: 9, floor: BBG, crown: { y: 80, r: 6.5 } }] },   // (the way on shut by a great tree, the room's end at its trunk: the user, 2026-11-05 "at the end of bb6, add a big tree lbocking the game")
     [["leafy", "leaf", 350], ["stumpy", "olive", 850]], "FAR WOODS");
   // the woods' own ends of the two walkways, and the background seen small from the rooms in front of it ("All you can see some of the background in all the A rows and
   // b rows from b5 to b6")
@@ -7561,7 +7573,7 @@ function drawLvl() {                                 // first the worlds (one to
   L.innerHTML = top + `<h4>${W.name}</h4>` + g + sec;
   $("lvlWho").textContent = $("lvlWho").textContent.replace(/ · [^·]*$/, "") + " · " + W.name;
 }
-const RIDE_STOPS = [["", "ANY STOP", "AT RANDOM, AS IN THE GAME"], ["none", "NO STOP", "JUST THE DRIVE"], ["ambush", "AMBUSH", "BADDY CARS BOX YOU IN"], ["stand", "FOOD STAND", "A SELLER BY THE ROAD"], ["soccer", "SOCCER", "KID BERRIES · FIRST GOAL WINS"], ["view", "THE VIEW", "PULL OVER FOR A WHILE"]];
+const RIDE_STOPS = [["", "ANY STOP", "AT RANDOM, AS IN THE GAME"], ["none", "NO STOP", "JUST THE DRIVE"], ["ambush", "AMBUSH", "BADDY CARS BOX YOU IN"], ["stand", "FOOD STAND", "A SELLER BY THE ROAD"], ["view", "THE VIEW", "PULL OVER FOR A WHILE"]];
 let lvlRoad = [0, 1];                                // (the road for a test ride: from, to)
 const rideRoads = () => { const L = new Map(); WORLDS.forEach((W, w) => W.stages.forEach(q => { const v = q.toWorld; if (v !== undefined && RIDE_KIT[w] && RIDE_KIT[v]) L.set(Math.min(w, v) + "-" + Math.max(w, v), [Math.min(w, v), Math.max(w, v)]); })); return [...L.values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]); };   // (every way between two worlds by road)
 function drawLvlRide() {                             // La Guagua: the stop, then who's going; the road it's on picked below (picked again: the other way)
@@ -8699,7 +8711,7 @@ const TUT_TXT = {
   lead: () => `WHEN SPLIT, HOLD ${tutTag("ch")} AND PRESS A DIRECTION TO LEAD YOUR BUDDIES UP, DOWN, FORWARD OR BEHIND YOU.`,
   tired: () => `WHEN FIGHTING TOO LONG WITH THE FULLY GROWN WEAPON, ROSE + CAMILA WILL WEAR OUT. IN THESE MOMENTS, HAVE YOUR FRIENDS DEFEND YOU, AND PRESS AND HOLD ${tutTag("sq")} TO REGAIN YOUR COMPOSURE WHILE THEY ARE FIGHTING ON THEIR OWN.`,
   launch: () => `TRY THE CHARGE ATTACK: HOLD ${tutTag("atk")} UNTIL YOUR BUDDIES ARE UP ON YOUR WEAPON, THEN LET GO TO LAUNCH THEM AT YOUR OPPONENTS. IT CAN BE USED FOR MORE THAN JUST DAMAGE...` };   // (B7, after tut6: the user, 2026-11-03 late "show tutorial text that says to try the charge attack to launch your opponents. say also that this can be used to do more than just damage...")   // (□ held: a tap swaps who leads)
-const TUT_VO = { C2: "tut1", B4: "tut2", C5: "tut3", C10: "tut6", C11: "tut5" };   // (the beach rebuilt, 2026-11-04: B3's buddies and their words on to the new B4; the old B4's on down to C5; the bridge room C10, June's C11. Before: B3 tut2, B4 tut3, B7 tut6, B8 tut5. B6's, tut4, as it stops: tutB6 · B7 tut6 since 2026-11-03 late, June's B8 tut5 (it was B7's))
+const TUT_VO = { C2: "tut1", B4: "tut2", C5: "tut3", C11: "tut5" };   // (C10's tut6 gone: the user, 2026-11-05 "in c10 remove the voiceover")   // (the beach rebuilt, 2026-11-04: B3's buddies and their words on to the new B4; the old B4's on down to C5; the bridge room C10, June's C11. Before: B3 tut2, B4 tut3, B7 tut6, B8 tut5. B6's, tut4, as it stops: tutB6 · B7 tut6 since 2026-11-03 late, June's B8 tut5 (it was B7's))
 const btS = () => story ? (story.bt || (story.bt = { seen: [] })) : (window.__bt || (window.__bt = { seen: [] }));   // (the tutorial's place: in the save)
 const btSeen = id => (btS().seen || []).includes(id);
 const btMark = id => { const S = btS(); if (!(S.seen || (S.seen = [])).includes(id)) S.seen.push(id); if (story) writeSave(); };
@@ -8719,6 +8731,7 @@ const TBR = { g0: 1640, g1: 2340, btn: 2440, mach: 2510, hang: 380, low: 2.4 }; 
 const tbSt = { y: TBR.hang, t: -1, k: 0, near: 0, s: -1 };   // (y: how high it hangs now · t: coming down, s since the button (-1: not) · k: the camera out and over the gap, 0-1 · near: how long you've stood at the edge)
 const tbHere = () => tutRoom() && !!STAGES[stage].tbridge;
 const tbDown = () => !!btS().bridge || tutOver();
+const tbAcross = s => tbHere() && !tbDown() && s.x > TBR.g1 - 40;   // (over the gap from you, the bridge still up: it stays there, never popped back to your side)
 const tbZoom = () => world === 9 && STAGES[stage] && STAGES[stage].tbridge ? 1 + .6 * tbSt.k : 0;   // (zoomWant's: out, so the far side's in the picture)
 const tbLean = () => { if (world !== 9 || !STAGES[stage] || !STAGES[stage].tbridge || !player) return 0; const u = clamp((player.x - TBR.g0 + 520) / 420, 0, 1); return X(350) * tbSt.k * u * u * (3 - 2 * u); };   // (the camera ahead of you, over the gap, as you come up to it)
 const tbUp = () => world === 9 && STAGES[stage] && STAGES[stage].tbridge && !tbDown() ? 1.7 * tbSt.k : 0;   // (and up, so the bridge hung over it is in the picture, not cut off at its top)
@@ -8749,7 +8762,7 @@ function tbLanded() {                                // (down across the gap: gr
   for (let i = CEILS.length - 1; i >= 0; i--) if (CEILS[i][3] === "tb") CEILS.splice(i, 1);
   SFX.thud(); SFX.slam(); shake = Math.max(shake, 9); for (let x = TBR.g0 + 30; x < TBR.g1; x += 70) dust(x, GROUND, 3, x < (TBR.g0 + TBR.g1) / 2 ? -1 : 1);
   popText((TBR.g0 + TBR.g1) / 2, GROUND - 130, "THE BRIDGE IS DOWN!"); SFX.reveal(); if (exitOpen) wayCue(false);   // (the room already cleared: its NEXT arrow now)
-  partnerList().forEach(P => { if (P.q && P.q.post && P.q.post.kind === "btn") postClear(P); });   // (and back over it to you)
+  partnerList().forEach(P => { if (P.q && P.q.post && P.q.post.kind === "btn") { postClear(P); homeSet(P.q); } });   // (and back over it to you, on foot: homeSet, or the far-off check popped them to your side the moment it was down)
 }
 function tbAim(p, s, k) {                            // (the team charge let go near the gap, facing it, the bridge still up and no berry ahead: flung over it onto the far side, one a step past the other)
   if (!tbHere() || tbDown() || tbSt.t >= 0 || p.face < 0 || p.x > TBR.g0 + 30 || s.x > TBR.g1 - 60 || p.x < TBR.g0 - 560) return null;   // (you on this side (her arm can reach out over the edge))
@@ -8928,7 +8941,7 @@ function gunVolley(b, dt) {                         // B4's cannon berry: its th
   if (!gunTip) { gunTip = true; toast(`CANNONBALLS! FACE THEM AND HOLD ${window.BERRY_TOUCH ? "L" : "S"} TO BLOCK`, 3800); }
 }
 function tbStep(o, s, dt) {                          // (over there: to the button and up, down on it with both feet; then it waits and watches the bridge come down)
-  const T = s.post; T.t += dt; if (!tbHere() || tbDown()) { postClear({ q: s }); return false; }
+  const T = s.post; T.t += dt; if (!tbHere() || tbDown()) { postClear({ q: s }); homeSet(s); return false; }   // (the bridge down: back to you on foot over it, not popped to your side (the user, 2026-11-05: "in c10 ... when buddies hit the switch, they need to stay over there until the bridge goes down, right now they teleported back to the player"))
   o.pcmd = o.pact = o.pnext = null; s.block = false; s.defOn = false;
   if (!s.onGround) return true;
   const dx = TBR.btn - s.x;
@@ -8998,7 +9011,7 @@ function tutTick(dt) {                               // (every frame, paused or 
   if (c === "B4" && !btSeen("buds") && said("tut2") && partnerList().length && (partnerList().length > 1 || !arrive.some(m => m.w === 9))) btMark("buds");   // (no pop on their buttons any more, the buddies still join you here: the user, 2026-11-05 "also remove the tutorials that give you your buddies in b4")   // (both with you now (or the one, none still to come): their buttons. The uprising bar's word no longer comes first here: it's in the woods now, after its card (showCard's close). The user, 2026-11-04: "in b4, remove the uprising details. move that to when you first land in berry woods")
   if (c === "C5" && !btSeen("split") && said("tut3")) tutShow("split");
   if (c === "C8" && !btSeen("lead") && p.x > 640) tutShow("lead");
-  if (c === "C10" && !btSeen("launch") && said("tut6")) tutShow("launch");   // (B6's stop, tutB6: tut4 and the TIRED word, gone with the weapon's weight, 2026-11-04)   // (her words as you fight, then the word on the charge)
+  if (c === "C10" && !btSeen("launch") && tutT.t > 1.2) tutShow("launch");   // (a moment after you come in: its voiceover's gone)   // (B6's stop, tutB6: tut4 and the TIRED word, gone with the weapon's weight, 2026-11-04)   // (her words as you fight, then the word on the charge)
   if (c === "C11" && !btS().june && !ej && !bossIn && p.x > 1350) tutJuneIn();
   if (q.lockX !== undefined && tutLock() && p.x > q.lockX) { p.x = q.lockX; if (p.vx > 0) p.vx = 0; p.hitWall = true; }   // (B5's cliff edge: held back from it till its baddy's won back, the room's way out shut like any other)
   if (!btSeen("worn") && nrgOut(p)) { btMark("worn"); tutPop(`WORN OUT! LET YOUR FRIENDS FIGHT · HOLD ${tutTag("sq")} TO GET YOUR ENERGY BACK`, 5.5); }   // (the drawing's "when player gets tired ... show charge")
@@ -9048,7 +9061,7 @@ function tutCam() {                                  // B6: from where it was, s
   camera.position.lerp(TUTV[2].set(hx + f * .9, hy + 1 + u, 8), k); a.lerp(TUTV[3].set(hx + f * .35, hy + u, 0), k); camera.lookAt(a);
 }
 function tutJuneIn() {                               // B7, walking on in: Evil June drops in toward the far end of the screen (a bit gentler than her own: a heart a hit)
-  ejDef(); const D = EJ_DEF = EJ_DEFS.tut || (EJ_DEFS.tut = { ...EJ_DEFS[ejWho], dmg: 1 });
+  ejDef(); const D = EJ_DEF = EJ_DEFS.tut || (EJ_DEFS.tut = { ...EJ_DEFS[ejWho], dmg: 1, hp: 50 });   // (50, not her 20: the user, 2026-11-05 "give evil june more health because she dies too quickly when the player's life is up")
   hideFoe(foe); foe = D; bossIn = true; ej = { phase: "fight", t: 0, bump: 0 };
   const v = new THREE.Vector3(1, 0, .5).unproject(camera).sub(camera.position), xr = (camera.position.x - v.x * camera.position.z / (v.z || -1)) / S;   // (the screen's right edge, on the play's plane)
   enemy = makeFoeState(D, clamp(xr - 150, player.x + 320, WORLD - 230)); Object.assign(enemy, { dir: -1, atkCd: 2.2, y: -80, vy: 260, onGround: false, tutIn: { step: "drop", t: 0 } });
@@ -9158,7 +9171,7 @@ function buildGuagua(look = {}) {
   { const sp = group(B, bx0 + .7, by + .12, -.6); sp.add(P(new THREE.CylinderGeometry(.5, .5, .24, 22), tire)); sp.add(P(new THREE.CylinderGeometry(.26, .26, .26, 16), hub)); }   // the spare, lying flat
   B.add(at(P(bx(.7, .5, .55), hub), bx0 + .7, by + .25, .75)); B.add(at(P(bx(.74, .12, .6), M("body")), bx0 + .7, by + .55, .75));   // a cool box
   B.add(at(P(new THREE.CylinderGeometry(.07, .09, .6, 8).rotateZ(Math.PI / 2), dark), bx0 - .1, .55, half - .45));   // the exhaust
-  root.userData = { B, wheels, by, bx1, rbX, rb: rbG, rbTop: by + .7 + rbH, cx1, mats: Object.values(mat) };
+  root.userData = { B, wheels, by, bx0, bx1, rbX, rb: rbG, rbTop: by + .7 + rbH, cx1, mats: Object.values(mat) };
   return root;
 }
 const ROAD_V = 9, BUS_K = 1.2, BLADE_TUCK = 1.85;  // (BLADE_TUCK: a sword's angle in La Guagua's seats by the windows: stood up beside her, under the roof and inside the door)                        // (the coast going by, units a second; La Guagua's size)
@@ -9190,8 +9203,8 @@ function buildRoad() {                               // the coast road at sunset
   const U = bus.userData, ride = (id, r, lx, ly, lz, face, yaw, extra) => { const st = makeState(0, r); Object.assign(st, { face, yaw, onGround: true, vx: 0, vy: 0 }, extra || {}); r.root.visible = r.shadow.visible = true; return { id, r, st, lx, ly, lz, yaw }; };
   const rc = roster.find(q => q.id === "camila"), rr = roster.find(q => q.id === "rose"); R.kids = [];
   U.rb.position.x = U.bx1 - 1.7;   // (the prologue's: the roll bar further back, so the two of them aren't on top of each other. The user, 2026-11-03: "have camila and rose better posed in the opening movie instead of just overlapping with each other")
-  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - 2.15, U.by + .08, .05, 1, -.5), hold: true });   // (Rose behind it, her hand up on its top bar: she was in front of it, right behind Camila)
-  if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });
+  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
+  if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - 2.15, U.by + .08, .05, 1, -.5), hold: "F" });   // (facing on, her near hand's her right: hold "F", that arm up)
   const A = ALLIES.find(a => a.id === "elpico"); if (A) { const r = allyRig(A); R.driver = { ...ride("elpico", r, U.cx1 - .92, 1.53, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (El Pico at the wheel: not green, so he stands out against the pink, the user 2026-10-26; now and then he turns to look out)   // (his head in the window, behind the wheel)
   return R;
 }
@@ -9206,7 +9219,7 @@ function roadTick(R, dt) {                           // (every frame: the coast 
   const place = c => { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.onGround = true;
     s.yaw = c.look ? c.yaw - .75 * Math.pow(Math.max(0, Math.sin(R.t * .62)), 1.6) : c.yaw;   // (the driver: a look out of the window, and back to the road)
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
-    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }
+    if (c.hold) { const o = s.out, F = c.hold === "F"; o[F ? "armF" : "armB"] = 2.55; o[F ? "elbF" : "elbB"] = .35; o.lean = (o.lean || 0) + .05; }
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .1 * Math.sin(R.t * 2.1);   // (his head bobbing along)   // (her other hand up on the roll bar: the blade's in the first)
     c.r.sync(s, c.r, dt); };
   R.kids.forEach(place); if (R.driver) place(R.driver);
@@ -9388,7 +9401,7 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
   if (!R.out) for (const c of R.riders) { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.vy = 0; s.onGround = true;
     s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .75 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
     s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
-    if (c.hold) { const o = s.out; o.armB = 2.55; o.elbB = .35; o.lean = (o.lean || 0) + .05; }   // (a hand up on the roll bar)
+    if (c.hold) { const o = s.out, F = c.hold === "F"; o[F ? "armF" : "armB"] = 2.55; o[F ? "elbF" : "elbB"] = .35; o.lean = (o.lean || 0) + .05; }   // (a hand up on the roll bar)
     if (c.slot === "back" || c.slot === "rear") { const o = s.out; o.armF = .2; o.elbF = .45; o.armB = .2; o.elbB = .45;   // (turned to the window: hands down in the lap, not out through the door)
       if (c.r.prop && c.r.prop.kind === "sword") o.wrist = BLADE_TUCK - (o.armF + o.elbF); }   // (a sword: stood up beside her, inside. It went out through the door: the user, 2026-10-26 "tuck it unless it naturally goes over not through")
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .08 * Math.sin(R.t * 2.1 + c.lz);
@@ -9426,7 +9439,7 @@ function rideAbort() { const P = rideS; if (!P) return; proCam = null; if (P.roa
 // world. c. they stop at a food stand with a berry selling items. d. they get asked to stop by kid berries and they play a game of soccer with them. camila and one berry kid versus rose
 // and another berry kid. set up simple goals on either side of the screen, right on the side of the road, and the player plays against the CPU and they try to push the ball just by moving
 // into it into the other goal. one goal and they go back to driving. e. the player is asked to stop for the scenery and the characters step out and appreciate it, like a bep hideout moment")
-const RIDE_EVS = [["none", 28], ["ambush", 20], ["stand", 18], ["soccer", 18], ["view", 16]];   // (how often each comes up)
+const RIDE_EVS = [["none", 34], ["ambush", 24], ["stand", 22], ["view", 20]];   // (how often each comes up)   // (the soccer gone, its share spread over the rest: the user, 2026-11-05: "remove the soccer mini game while driving". Its code still below, never rolled)
 let rideForce = null;                                // (the level select's pick of stop, for the next ride)
 const rideRollEv = () => { const f = rideForce || window.__rideEv; rideForce = null; if (f) return f; let r = Math.random() * 100; for (const [k, w] of RIDE_EVS) if ((r -= w) < 0) return k; return "none"; };
 const ROAD_STAGE = { cell: "", h: 0 };               // (stopped by the road: a room with nothing in it but the road)
@@ -9835,7 +9848,7 @@ const CARDS = {
 let cardQ = [];
 const CARD_KEY = "berry.cards.v1";                   // (the cards this device has shown: once ever, the user 2026-10-26 "stop showing the uprising screen after the first instance ... the tips describing it". The save
 const cardsSeen = () => { try { return JSON.parse(localStorage.getItem(CARD_KEY) || "[]") || []; } catch { return []; } };   //  never kept story.cards, so it came back every time a save was loaded: kept now too)
-function cardWant(id) { if (story && !(story.cards || []).includes(id) && !cardsSeen().includes(id) && !cardQ.includes(id)) cardQ.push(id); }
+function cardWant(id) { if (story && !(story.cards || []).includes(id) && (id === "uprise" || !cardsSeen().includes(id)) && !cardQ.includes(id)) cardQ.push(id); }   // (THE UPRISING: once a story, saves keep story.cards now, not once a device, so a new game has it after the woods voice-over, the user, 2026-11-05: "for the voice over, remove the 'we wished good luck..went separate ways.' also, after that voiceover, bring up a pop up that explains the uprising system.")
 function maybeCard() {
   if (!story) { cardQ = []; return; }
   const said = id => (story.vo || []).includes(id) && !(vo && vo.id === id);   // (a save from before the cards: what it's already been told, explained once)
@@ -9976,8 +9989,7 @@ function endTale() {
 const VO = { pro1: ["We were too young to remember a time without them."],   // (the prologue, 2026-10-26: on the black)
   pro2: ["One of my first conscious memories was sitting with Rose, and that grimy Glos crashing down upon our beach and forcefully taking over the Berry Forest. And she wasn't the first."],   // (the beach fading in, Glos crashing down)
   woods: ["And so, Rose and I decided to fight for our people.",
-  "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes.",
-  "We wished each other good luck, and went our separate ways."],   // (Camila alone since 2026-10-26, the user: "we just want to have camila narrate for now": her "Good luck, Rose" and Rose's "Good luck TO YOU!" told instead)
+  "We could capture in our berry weapons as many of these berry baddies as we could win over, and launch a full-on attack against the villains who had taken over our homes."],   // (its last line, their good lucks and separate ways, gone: the user, 2026-11-05: "for the voice over, remove the 'we wished good luck..went separate ways.' also, after that voiceover, bring up a pop up that explains the uprising system.") (Camila alone since 2026-10-26, the user: "we just want to have camila narrate for now": her "Good luck, Rose" and Rose's "Good luck TO YOU!" told instead)
   glos: ["That was the day Glos came down onto our beach, with her berry baddies right behind her."],   // (the opening, as she floats down: the user 2026-10-25 "need a voiceover right after glos appears"; my words)
   rival: ["Not everyone who was on the baddies' side felt good about it. Some tried to walk away and came with us, but it was always short lived...", "It was unfortunate."],   // (the first time the rival turns up, Noro or Doir: the user's words, 2026-10-25; Rose's opener Camila's own since 10-26)
   duo: ["This is who the bep was talking about. The island has had more than its fair share of \u201cvisitors\u201d lately."],   // (Noro and Doir turn up)
@@ -10484,7 +10496,7 @@ function upSee(p) {                                  // up off a jump under an o
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
   if (STAGES[stage].upLift) { upShaft(p, R); return; }   // (a roof of its own under the room above: up its hole as up a shaft)
-  if (!peek && !STAGES[stage].peekOff && p.y < UP_SEE && p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) startPeek(R.to, true);   // (peekOff: no look up from there)
+  if (!peek && !STAGES[stage].peekOff && p.y < UP_SEE && ((p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) || (world === 0 && upFloorY(upLandOf(R.to), p.x) !== null && upReach(p, { a: p.x, b: p.x })))) startPeek(R.to, true);   // (peekOff: no look up from there)   // (or up over its floor away from the hole, nothing overhead in the way: BB5's team launch, up off the span over BA5's land. Unseen till you came down on it, then there all at once, the user, 2026-11-05 "in BB5 I did the team high jump and it shot me up to BA5 which was cool but noticed the screens don't match")
   if (p.vy <= 0 || p.y > UP_SEE) return;
   const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
   p.y = sy - ROW_H - 1; goRoomRise(R.to);            // (landed up there: into it, onto what you came down on)
@@ -10859,7 +10871,7 @@ function ejPlace(x, y, face) { if (!ej || ej.phase !== "partner") return; x = on
 const ejExitDir = x => { const S0 = STAGES[stage], L = !S0.noLeft, R = !S0.noRight; return L && R ? (x < WORLD - x ? -1 : 1) : L ? -1 : R ? 1 : x < WORLD / 2 ? -1 : 1; };   // the nearest way out
 function ejLook(s, dt) {                             // turning and blinking, as the partner cameo does
   spring(s, dt); s.prof = approach(s.prof || 0, s.atkKind ? 1 : s.onGround ? s.gaitAmt || 0 : 0, dt * 5); s.bodyYaw = lerp(.85, .3, s.prof);
-  const yT = s.wave > 0 ? -Math.PI / 2 : s.face > 0 ? -s.bodyYaw : -Math.PI + s.bodyYaw; s.yaw = lerp(s.yaw, yT, 1 - Math.exp(-dt * 12));
+  const C = s.climb, yT = C ? (C.wallClimb === "side" ? (C.wall > 0 ? 0 : -Math.PI) : s.yaw < -Math.PI / 2 ? -1.5 * Math.PI : Math.PI / 2) : s.wave > 0 ? -Math.PI / 2 : s.face > 0 ? -s.bodyYaw : -Math.PI + s.bodyYaw; s.yaw = lerp(s.yaw, yT, 1 - Math.exp(-dt * 12));   // (on a ladder: its back to us, facing it, as she does: the user, 2026-11-05 "make sure the buddies are actually doing a climbing animation")
   s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; updatePose(s, dt);
 }
 function swimAfter(s, p, back, up, dt) {                // a buddy (or EJ) under the deep's water: after you up and down too, as the pets do (the user, 2026-11-02: "in the underwater world, your buddies should also have the bubble helmet but also they keep drowning and do not swim with the player")
@@ -10886,7 +10898,7 @@ function updateEJ(dt) {                              // the partner: at your sid
     else if (ej.hopT <= 0 && edgeLeap(s, p)) ej.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s) && !tbAcross(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
   if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
@@ -11742,7 +11754,7 @@ function updatePlayer(dt) {
   else { p.runT = 0; p.runDir = ax; }                                                   // …stop, turn, block or hit a wall and it starts over
   const ru = clamp(((p.runT || 0) - .35) / 1.5, 0, 1); p.runK = 1 + .5 * ru * ru * (3 - 2 * ru); p.sprint = p.runK > 1.3;   // up to half again as fast (the old sprint), gradually
   // charge: hold attack and it builds in three stages (CHARGE_STEP apart); let go for that many hits of the charged combo
-  if (p.block || p.bcm || p.bcGo) { }      // a charge waits while you block (or a block combo's going)
+  if (p.block || p.bcm || p.bcGo) { if (p.chargeT > 0) { p.chargeT = 0; p.chargeLv = 0; if (p === player) { aura.show = 0; aura.burst = 0; } } }      // a block (or a block combo) drops a charge: its glow off at once, and letting go fires nothing (it waited till 2026-11-05, the user: "if a player was charging their solo attack but then block, dont show the charge symbol, cancel it")
   else if (held.atk && (control || p.landLockT > 0) && !p.combo && !(p.blockHold > 0) && !p.bubbleLock && !p.tackle && !p.tackleLock && !(nrgOut(p) && !teamChargeOK(p))) {   // (not while the guard's opening out to the bubble; a landing's recovery holds it, never lets it go: the user, 2026-11-02 "jumping for some reason makes the characters stop charging")
     p.chargeT = (p.chargeT || 0) + dt;
     const k = p.chargeT / CHARGE_STEP, lv = k >= 3 ? 3 : k >= 2 ? 2 : k >= 1 ? 1 : 0;
@@ -11928,7 +11940,7 @@ function updatePlayer(dt) {
   p.spinY = 0;
   // 3/4 yaw toward the camera; turning swings through the front
   // running / diving: body swings toward profile (so the stretch reads), head keeps looking at the camera
-  const diving = attacking || !!p.upHop;     // punches, kicks and card moves read best side-on (and the crouch and jump up after a launch: turned to us, a tucked jump read as floating up, 2026-10-28)
+  const diving = attacking || !!p.upHop || !!p.tcPose;     // punches, kicks and card moves read best side-on (and the crouch and jump up after a launch: turned to us, a tucked jump read as floating up, 2026-10-28)   // (and the team charge: side-on, her arm out ahead with the team up on it to see, not turned to us. The user, 2026-11-05 "looks like the final animation for camila  launching teams changed? she faces the screen now? she should be facing forward so the player can see both buddies climbing on her arm")
   p.prof = approach(p.prof || 0, Math.max(p.onGround ? p.gaitAmt : 0, diving || p.dive || p.swim ? 1 : 0), dt * (diving ? 10 : 4));
   p.bodyYaw = lerp(.85, (p.dive || p.swim) && !attacking ? .08 : .3, p.prof);   // (swimming: right side-on, so the body's tilt along the stroke reads across the screen)
   const yT0 = p.face > 0 ? -p.bodyYaw : -Math.PI + p.bodyYaw, yT1 = p.tpose > 0 ? lerp(yT0, -Math.PI / 2, Math.min(1, p.tpose * 2.5)) : yT0;   // opening out to the T: turn to face us
@@ -11942,8 +11954,8 @@ function updatePlayer(dt) {
     if (!still) { p.stillT = 0; p.fidget = null; }
     else { p.stillT = (p.stillT || 0) + dt;
       if (p.fidget) { p.fidget.t += dt; const S = KIT.STRIKES[p.fidget.kind]; if (!S || p.fidget.t >= S.dur) { p.fidget = null; p.fidgetWait = FG.every * rand(.65, 1.35); } }
-      else if (p.stillT >= FG.after && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const id = String(p.rig.spec.id || p.rig.name || "").toLowerCase(), F = KIT.FIDGETS, L = F[id] || F.all, big = KIT.IDLES && KIT.IDLES[id], opts = L.filter(k => k !== p.fidgetLast);
-        const k = big && p.stillT >= (FG.idle ?? 12) && p.fidgetLast !== big ? big : opts[Math.floor(Math.random() * opts.length)] || L[0];   // (stood still a good while: her big idle every other time, the user 2026-11-02, KIT.IDLES)
+      else if (p.stillT >= FG.after && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const id = String(p.rig.spec.id || p.rig.name || "").toLowerCase(), F = KIT.FIDGETS, L = F[id] || F.all, big = KIT.idleOf ? KIT.idleOf(p, id) : KIT.IDLES && KIT.IDLES[id], opts = L.filter(k => k !== p.fidgetLast);
+        const k = big && p.stillT >= (FG.idle ?? 12) && !String(p.fidgetLast).startsWith(String(big).replace(/1$/, "")) ? big : opts[Math.floor(Math.random() * opts.length)] || L[0];   // (stood still a good while: her big idle every other time, the user 2026-11-02, KIT.IDLES)
         p.fidget = { kind: k, t: 0 }; p.fidgetLast = k; } } }   // (never the same one twice running)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
   // lean into acceleration, rock back when braking (springy)
@@ -12342,8 +12354,8 @@ function syncBcStars() {                              // (render) the stars roun
   const L = mode === "play" ? partnerList().map(P => P.q) : [];
   bcStars.forEach((sp, q) => { if (!L.includes(q) || !(q.bcStun > 0)) { sp.forEach(s => actors.remove(s)); bcStars.delete(q); } });
   for (const q of L) { if (!(q.bcStun > 0) || !q.rig) continue; let sp = bcStars.get(q);
-    if (!sp) { sp = [0, 1, 2].map(() => { const s = new THREE.Sprite(STAR_MAT || (STAR_MAT = glyphMat("★", "#ffd75a"))); s.scale.setScalar(.36); actors.add(s); return s; }); bcStars.set(q, sp); }
-    const H = q.rig.heightPx || 80; sp.forEach((s, k) => { const a = time * 6 + k * TAU / 3; s.position.set(X(q.x) + Math.cos(a) * .55, Y(q.y - H - 12), (q.z || 0) + Math.sin(a) * .4 + .3); }); }
+    if (!sp) { sp = [0, 1, 2].map(() => { const s = star3d(); s.scale.setScalar(.36); actors.add(s); return s; }); bcStars.set(q, sp); }
+    const H = q.rig.heightPx || 80; sp.forEach((s, k) => { const a = time * 6 + k * TAU / 3; s.position.set(X(q.x) + Math.cos(a) * .55, Y(q.y - H - 12), (q.z || 0) + Math.sin(a) * .4 + .3); s.rotation.y = a * .7; }); }   // (turning as they go round: 3D now)
 }
 const bcBusy = p => !!(p.bcm || p.bcGo || partnerList().some(P => P.q && P.q.bc));
 const bcLaunchOnly = p => !p.bcm && !p.bcGo && partnerList().every(P => !P.q || !P.q.bc || !!P.q.bc.launch || P.q.bc.k === "base");   // (only a launched one up: the launch's second step can go)
@@ -12424,15 +12436,27 @@ function bcFire(p, M) {                               // the button let go: the 
     SFX.release(lv); SFX.dash(); aura.flare = .35; aura.lv = lv; hitstop = Math.max(hitstop, .04); shake = Math.max(shake, 2 + lv); dust(p.x, p.y, 6, -dir);
     popText(p.x, p.y - H - 18, lv >= BC.max ? "FULL RUSH!" : "RUSH!", 800);
     if (D) bcSet(D, { k: "rush", dir, off: 46, role: "D" }); if (A) bcSet(A, { k: "rush", dir, off: -42, role: "A" }); return; }
-  if (k === "tri") {                                // the toss, a grenade of a buddy (bcToss)
+  if (k === "tri") {                                // the toss, a grenade of a buddy (bcToss); held, the dive off the blocker's back (bcDive)
+    if (lv) { bcDive(p, M); return; }
     if (!A) { heroNo(p, D ? "NO ONE BEHIND YOU TO THROW" : ""); return; }
-    bcToss(p, A, Dq, dir, lv); return; }
+    bcToss(p, A, Dq, dir, 0); return; }
   if (k === "x") { bcLaunch(p, M); return; }         // the launch (bcLaunch)
 }
 // L+△, the toss (the user, 2026-11-05: "for hold L and pressing x, first, let's change this to L + triangle. then make the toss go a little further, almost like tossing your buddy as a grenade ... when tossing the character in general, make sure they can go high enough to go over a big berry. tossing can also be used to get a buddy to do something across a platform or start a fight before you get there"): your attacker thrown over the shield and over whatever's in front, at the one
 // past it (the one behind a riot shield, not its front), high enough to clear a big one; onto what that one stands on, a platform too. Nobody there: on ahead, onto whatever's
 // there to land on. Held: further each level. Landed by one, it fights it, and the ones round it, then comes back to you (focusSend)
 const TOSS = { reach: 620, lv: 140, far: 360, farLv: 100, h: 320, clear: 90, T: .72 };   // (how far it looks for one, + each level · with nobody, how far on · its arc at least · over the tallest in the way by · its time)
+// L+△ held, the dive (it was ✕ held till 2026-11-05's batch, and came back here: the user, 2026-11-05 "L+triangle does the toss like a grenade but it's the charge that was missing. we already had it before, when it was L+X, that the charge would
+// launch both heros and the blocker would finish with an air attack slam"): off the blocker's back and down on the nearest you're facing. 1 your attacker, 2 it then you, 3 both then your blocker's own slam
+function bcDive(p, M) {
+  const { lv, dir, D, A } = M, Dq = D && D.q; SFX.release(lv); aura.flare = .3; aura.lv = lv;
+  const J = []; if (A) J.push(A); if (lv >= 2 || !A) J.push("h"); if (lv >= 3 && D) J.push(D);   // (the user, 2026-11-04: "first is one attacker, second charge it's both, third it's both and then the blocker also jumps")
+  const tg = bcJumpFoe(p, dir);   // (all of them at the one baddy nearest you that you're facing, wherever it stands)
+  J.forEach((P, i) => { const delay = i * .28, via = P === D ? null : Dq, pow = 1 + .3 * (lv - 1);
+    if (P === "h") p.bcGo = { k: "jump", t: 0, ph: "wait", delay, dir, via, mv: true, pow, x0: p.x, y0: p.y, ys: p.y, tg };
+    else bcSet(P, { k: "leap", dir, ph: "wait", delay, via, hi: 300, fw: 70, Tu: .34, hold: .08, Td: .2, pow, aim: 200 + 50 * i, tg, slot: i }); });
+  if (D && !J.includes(D)) bcSet(D, { k: "base", dir, T: (J.length - 1) * .28 + .6 });   // (it stays put, the guard up, while they go up off its back)
+}
 function tossFoe(x, y, dir, reach) {
   const L = partFoesAll().filter(e => { const d = (e.x - x) * dir; return d > 40 && d < reach && Math.abs(e.y - y) < 320 && !e.dead && !e.gone && !walled(e.x, x); }).sort((a, c) => (a.x - x) * dir - (c.x - x) * dir);
   return L.find(e => e.shieldOn !== "riot") || L[0] || null;
@@ -12509,7 +12533,7 @@ function bcStep(o, s, dt) {                           // (partHuman: a buddy's p
     case "guard": defendStep(s, dt); return true;
     case "base": s.block = true; s.defOn = true; if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); if (B.t >= B.T && !bcAnyOut()) { bcFree(s); return false; } return true;   // (held as long as one of them's still out, 2026-11-04)
     case "chg": { const M = p.bcm; if (!M) { bcFree(s); return false; } s.pcharge = M.lv / BC.max;   // (the orb round it filling, syncBudAura)
-      if (B.role === "D") { s.block = true; s.defOn = true; to(p.x + dir * defGap(s)); s.tkDig = B.m === "tri" ? 0 : .5; }
+      if (B.role === "D") { s.block = true; s.defOn = true; to(p.x + dir * defGap(s)); s.tkDig = .5; }   // (crouched for them to go up off its back: the launch, the dive)
       else { s.block = false; s.defOn = false; s.tkDig = 1; to(p.x - dir * defBack(s)); }   // (○ since 2026-11-04 as the rest: each at its place, the shield held)
       return true; }
     case "push": { const u = B.t / B.T; s.block = B.role === "D"; s.defOn = s.block; s.vx = u < 1 ? dir * B.v * Math.cos(Math.PI * u) : 0;
@@ -12599,7 +12623,7 @@ function bcJump(p, G) {                               // ✕ held, yours: off th
   if (G.ph === "hop") { const u = Math.min(1, G.t / .22), vH = (v.rig && v.rig.heightPx) || 80;   // (up onto its back)
     p.x = lerp(G.x0, v.x - dir * 4, u); p.y = lerp(G.y0, v.y - vH * .82, u) - 50 * 4 * u * (1 - u); p.vx = 0; p.vy = 0; p.onGround = false; p.plat = null;
     if (u >= 1) { v.sq = -.3; v.sqv = 0; ph("spring"); } return; }
-  if (G.ph === "spring") { const g = GRAV * WEIGHT * feelMove().weight, ty = bcTgOk(G.tg) ? bcLand(G.tg).y : null; p.vy = -Math.sqrt(2 * g * Math.max(330, ty !== null ? p.y - ty + 170 : 0)); p.vx = dir * 240; p.onGround = false; p.plat = null; p.coyote = 0; p.fullJump = true; p.sq = .3; p.sqv = 0; SFX.jump(); dust(p.x, p.y, 6); ph("up"); return; }   // (its one up on a platform: high enough to come down onto it)
+  if (G.ph === "spring") { const g = GRAV * WEIGHT * feelMove().weight, ty = bcTgOk(G.tg) ? bcLand(G.tg).y : null; p.vy = -Math.sqrt(2 * g * Math.max(330, ty !== null ? p.y - ty + 170 : 0)); p.vx = dir * 240; p.onGround = false; p.plat = null; p.coyote = 0; p.fullJump = true; p.sq = .3; p.sqv = 0; p.block = false; p.blockHold = 0; p.gmLock = true; SFX.jump(); dust(p.x, p.y, 6); ph("up"); return; }   // (gmLock: the guard down from here, down there fighting, till you let go of L: the user, 2026-11-05 "when pressing triangle with the L held, first launch the attacker buddy then the blocker should launch the hero and then shield is dropped and you fight")   // (its one up on a platform: high enough to come down onto it)
   if (G.ph === "up") { p.vx = dir * 240; if (p.vy > -60 || G.t > 1.2) { const e = bcTgOk(G.tg) ? G.tg : bcJumpFoe(p, dir), L = e ? bcLand(e) : null; G.tx = clamp(bcLandX(L, e ? e.x - dir * eHW(e) * .2 : p.x + dir * 150), p.x - 640, p.x + 640); if (L) p.thruY = L.y;   // (through any platform over the one it's after, onto what that one stands on, 2026-11-04)
       const dk = p.rig.kind === "cat" ? KIT.CAT_DOWN : (setOf(p.rig.spec) || {}).down; if (dk) startMove(p, dk); p.vy = 1400; SFX.whoosh(); ph("dive"); } return; }
   if (G.ph === "dive") { p.vx = clamp((G.tx - p.x) * 6, -800, 800); p.vy = Math.max(p.vy, 1200); if (p.onGround && G.t > .02) { p.vx = 0; bcSlam(p, p.x, p.y, dir, true, G.pow); bcGoEnd(p); } else if (G.t > 1.6) bcGoEnd(p); }
@@ -12686,9 +12710,9 @@ function bcCir(p, M) {                               // ○ let go: a tap, the n
 // attempting to use their projectile after a fully charged attack"). △ on its own (no way held), on your feet, the team along and with you (not off on their own after
 // CHARGE!, where △ is theirs): the shot; △ with a way is still your buddy's. Held: a level each SHOT.step, your charge's flash and ding. A shot's blow is yours (heroDmg),
 // + shotPlus for its level. The third: SHOT.hot seconds of steam off her hand (her sword) and no shots till it's gone; tried meanwhile, shot_fail_fist / shot_fail_sword
-const SHOT = { step: .6, hot: 45, fail: 1.0, col: { gauntlet: "#86e8ff", sword: "#ffb0de" },
-  beam: [{ L: 520, th: 26, T: .3, n: 1, plus: 0, kind: "punch", push: 0 }, { L: 650, th: 40, T: .38, n: 1, plus: 1, kind: "haymaker", push: .5 },
-         { L: 800, th: 60, T: .5, n: 2, plus: 2, kind: "smash", push: .8 }, { L: 1600, th: 150, T: 1.6, n: 8, plus: 1, kind: "smash", push: 1, big: true }],
+const SHOT = { step: .6, hot: 45, fail: 1.0, col: { gauntlet: "#86e8ff", sword: "#ffb0de" }, rim: { gauntlet: "#2a7fd4" },   // (rim: the beam's deep blue edge)
+  beam: [{ L: 520, th: 16, T: .3, n: 1, plus: 0, kind: "punch", push: 0 }, { L: 650, th: 24, T: .38, n: 1, plus: 1, kind: "haymaker", push: .5 },
+         { L: 800, th: 36, T: .5, n: 2, plus: 2, kind: "smash", push: .8 }, { L: 1600, th: 72, T: 1.6, n: 8, plus: 1, kind: "smash", push: 1, big: true }],   // (th: 26, 40, 60, 150 till the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
   wave: [{ r: 48, v: 950, T: .55, n: 1, plus: 0, kind: "slash", push: 0 }, { r: 60, v: 1000, T: .6, n: 1, plus: 1, kind: "slash", push: .4 },
          { r: 76, v: 1050, T: .66, n: 1, plus: 2, kind: "cleave", push: .7 }, { r: 190, v: 760, T: 1.35, n: 7, plus: 1, kind: "cleave", push: 1.2, big: true }] };
 let shotPlus = 0, shots = [], steamL = [], SHOT_TEX = null, CRESC_G = null; const shotHot = {}, _shV = new THREE.Vector3();   // (shotHot: each heroine's own, till when she steams, game time)
@@ -12704,6 +12728,10 @@ function shotIn(B, on) {                              // (partInput, △'s butto
 }
 const shotTex = () => SHOT_TEX || (SHOT_TEX = tex(128, 64, (g, w, h) => { const G = g.createLinearGradient(0, 0, 0, h); [[0, 0], [.28, .5], [.5, 1], [.72, .5], [1, 0]].forEach(([u, a]) => G.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = G; g.fillRect(0, 0, w, h);
   g.globalCompositeOperation = "destination-in"; const E = g.createLinearGradient(0, 0, w, 0); [[0, 0], [.07, 1], [.97, 1], [1, .3]].forEach(([u, a]) => E.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = E; g.fillRect(0, 0, w, h); }));   // (a beam's: soft along its edges, and in from nothing at the palm, no hard edge there)
+let BEAM_TEX = null, DISC_TEX = null;   // (crisp, not hazy: the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
+const beamTex = () => BEAM_TEX || (BEAM_TEX = tex(128, 256, (g, w, h) => { const G = g.createLinearGradient(0, 0, 0, h); [[0, 0], [.025, 1], [.975, 1], [1, 0]].forEach(([u, a]) => G.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = G; g.fillRect(0, 0, w, h);
+  g.globalCompositeOperation = "destination-in"; const E = g.createLinearGradient(0, 0, w, 0); [[0, 0], [.03, 1], [1, 1]].forEach(([u, a]) => E.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = E; g.fillRect(0, 0, w, h); }));   // (a beam's band: solid, its edges only a touch soft)
+const discTex = () => DISC_TEX || (DISC_TEX = tex(256, 256, g => { const r = g.createRadialGradient(128, 128, 0, 128, 128, 126); r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.96, "rgba(255,255,255,1)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 256, 256); }));   // (its ball and its end: a solid disc)
 function crescG() {                                   // a crescent, bulging out along +x (the slash's: its tips back toward her)
   if (CRESC_G) return CRESC_G; const sh = new THREE.Shape(), a = 1.15, c = .45, R = Math.hypot(Math.cos(a) + c, Math.sin(a)), b = Math.atan2(Math.sin(a), Math.cos(a) + c);
   sh.absarc(0, 0, 1, -a, a, false); sh.absarc(-c, 0, R, b, -b, true); return (CRESC_G = new THREE.ShapeGeometry(sh, 28));
@@ -12764,20 +12792,34 @@ function shotFire(p, Q) {                             // △ let go: off it goes
   Q.seq = lv < 3 ? [{ kind: g(0), lv }, { kind: g(1), lv }] : [{ kind: g(0), lv: 1 }, { kind: g(1), lv: 1 }, { kind: g(2), lv: 1 }, { kind: (SET && SET.up && KIT.STRIKES[SET.up] ? SET.up : "rise"), lv: 3, hop: true }];   // (the third: three in place, then the hop, its slash the huge one)
   if (lv >= 3) shotHot[p.rig.id] = time + SHOT.hot + 1.2;
 }
+Object.assign(SFX, {                                 // the heroines' shots, each her own sound, and a bigger one for the full charge (the user, 2026-11-05: "add a soundeffect for both of the girls' projectile moves as well as for the fully charged version")
+  beamShot(lv) {                                     // CAMILA's beam: a bright energy pew dropping away, a fizz along it (bigger each level)
+    const k = 1 + lv * .25; tone(1500, 380, .2 + lv * .06, { type: "square", vol: .07 * k, lp: 3200 }); tone(760, 190, .26 + lv * .08, { type: "sawtooth", vol: .06 * k, lp: 1800, delay: .01 });
+    tone(2300, 1200, .12, { type: "sine", vol: .06 }); noise(.3 + lv * .1, { vol: .14 * k, f0: 5200, f1: 1400, type: "bandpass", q: 3 }); },
+  beamBig() {                                        // her full charge: a whine up into a roaring blast, a deep rumble under it
+    tone(300, 1300, .25, { type: "sawtooth", vol: .07, lp: 2400 }); tone(120, 44, 1.7, { type: "sine", vol: .25, a: .04, delay: .05 }); tone(240, 100, 1.4, { type: "sawtooth", vol: .08, lp: 700, a: .05, delay: .05 });
+    noise(1.7, { vol: .24, f0: 2600, f1: 700, type: "bandpass", q: 1.1, a: .06, delay: .04 }); noise(1.2, { vol: .12, f0: 6500, f1: 3000, type: "highpass", a: .03, delay: .05 }); },
+  waveShot(lv) {                                     // ROSE's slash wave: a ringing shing off the blade, a whoosh after it
+    tone(2900, 2700, .32, { type: "sine", vol: .07 }); tone(4100, 3900, .26, { type: "sine", vol: .045, delay: .005 }); tone(1950, 1800, .2, { type: "triangle", vol: .05 });
+    noise(.32 + lv * .05, { vol: .2 + lv * .03, f0: 700, f1: 3800, type: "bandpass", q: 1.8, delay: .02 }); },
+  waveBig() {                                        // her full charge: a big ringing shing, a boom, the long roar of the wave going
+    tone(2600, 2400, .7, { type: "sine", vol: .1 }); tone(3900, 3600, .55, { type: "sine", vol: .06 }); tone(1300, 1200, .5, { type: "triangle", vol: .07 });
+    tone(110, 40, 1.0, { type: "sine", vol: .3, a: .02, delay: .03 }); noise(1.1, { vol: .3, f0: 500, f1: 2600, type: "bandpass", q: 1.2, a: .05, delay: .03 }); } });
 function shotEnd(p) { const Q = p.shot; if (Q) shotOrbOff(Q); p.shot = null; p.pointKind = null; p.palm = 0; }
 function shotBeam(p, lv) {                            // Camila's: straight out of her palm, as far as its level, a wall, or the room's end lets it; the third her huge one
   const sp = SHOT.beam[lv], col = SHOT.col.gauntlet, b = { k: "beam", sp, lv, dir: p.face, t: 0, hits: new Map() };
-  b.glow = shotMesh(CAP_G, col, shotTex()); b.core = shotMesh(CAP_G, "#ffffff", shotTex()); b.ball = shotMesh(CAP_G, col, haloTex()); b.ballC = shotMesh(CAP_G, "#ffffff", haloTex()); b.tip = shotMesh(CAP_G, col, haloTex());
-  shots.push(b); SFX.zap(); if (sp.big) { SFX.explode(); SFX.whoosh(); } else SFX.whoosh();
+  const rc = SHOT.rim.gauntlet; b.rim = shotMesh(CAP_G, rc, beamTex()); b.glow = shotMesh(CAP_G, col, beamTex()); b.core = shotMesh(CAP_G, "#ffffff", beamTex());   // (a drawn beam, three bands, not a glow: the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
+  b.ballR = shotMesh(CAP_G, rc, discTex()); b.ball = shotMesh(CAP_G, col, discTex()); b.ballC = shotMesh(CAP_G, "#ffffff", discTex()); b.tipR = shotMesh(CAP_G, rc, discTex()); b.tip = shotMesh(CAP_G, col, discTex()); b.tipC = shotMesh(CAP_G, "#ffffff", discTex());
+  shots.push(b); if (sp.big) SFX.beamBig(); else SFX.beamShot(lv);   // (her own sounds: the user, 2026-11-05: "add a soundeffect for both of the girls' projectile moves as well as for the fully charged version")
 }
 function shotWave(p, lv) {                            // Rose's: a crescent of light off the blade, on ahead through everything in its way
   const sp = SHOT.wave[lv], col = SHOT.col.sword, H = p.rig.heightPx || 92, dir = p.face;
   const w = { k: "wave", sp, lv, dir, t: 0, hits: new Map(), x: p.x + dir * (30 + sp.r * .4), y: sp.big ? Math.min(p.y - 70, (groundAt(p.x) ?? p.y) - sp.r * .62) : p.y - H * .55, x0: p.x };
   w.glow = shotMesh(crescG(), col, null); w.core = shotMesh(crescG(), "#ffffff", null); w.tr = [0, 1].map(() => shotMesh(crescG(), col, null));
-  shots.push(w); SFX.slash(); SFX.whoosh(); if (sp.big) { SFX.explode(); shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .05); rumble(300, 1); }
+  shots.push(w); if (sp.big) SFX.waveBig(); else SFX.waveShot(lv); if (sp.big) { shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .05); rumble(300, 1); }
 }
-function shotEndOne(b) { [b.glow, b.core, b.ball, b.ballC, b.tip, ...(b.tr || [])].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } }); }
-function shotsClear() { shots.forEach(shotEndOne); shots = []; steamL.forEach(q => { actors.remove(q.m); q.m.material.dispose(); }); steamL = []; if (player && player.shot) shotEnd(player); }
+function shotEndOne(b) { [b.rim, b.glow, b.core, b.ballR, b.ball, b.ballC, b.tipR, b.tip, b.tipC, ...(b.tr || [])].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } }); }
+function shotsClear() { shots.forEach(shotEndOne); shots = []; steamL.forEach(q => actors.remove(q.m)); steamL = []; if (player && player.shot) shotEnd(player); }
 function shotFoes(b, x1, x2, y1, y2, dir) {          // whoever's in its box, once each (the big ones: again each of its n beats)
   const sp = b.sp, beat = sp.n > 1 ? Math.floor(b.t / (sp.T / sp.n)) : 0;
   for (const e of partFoesAll()) { if ((b.hits.get(e) ?? -1) >= beat) continue; const hw = eHW(e) * .5, top = e.y - eH(e);
@@ -12793,11 +12835,16 @@ function shotsUpdate(dt) {                            // (every frame, by the sp
       const full = shotReach(b.ox, b.dir, sp.L), L = full * Math.min(1, b.t / (sp.big ? .16 : .08)), th = sp.th * (1 + .1 * Math.sin(b.t * 70)) * (u < .1 ? .6 + 4 * u : 1) * fade;
       if (u < 1) shotFoes(b, Math.min(b.ox, b.ox + b.dir * L), Math.max(b.ox, b.ox + b.dir * L), b.oy - th * .5 - 20, b.oy + Math.max(th * .5 + 20, 62), b.dir);   // (62 under it at least: from her eyes it still takes the small ones, 2026-11-05)
       const cx = X(b.ox + b.dir * L / 2), cy = Y(b.oy), z = o.z + .06;
-      b.glow.position.set(cx, cy, z); b.glow.scale.set(L * S, th * 2.3 * S, 1); b.glow.material.opacity = .9 * fade;
-      b.core.position.set(cx, cy, z + .01); b.core.scale.set(L * S, th * .75 * S, 1); b.core.material.opacity = fade;
-      const br = (sp.th * (sp.big ? 1.1 : 1.6) + 6 * Math.sin(b.t * 50)) * S; b.ball.position.set(X(b.ox), cy, z + .02); b.ball.scale.set(br * 2.6, br * 2.6, 1); b.ball.material.opacity = .9 * fade;
-      b.ballC.position.set(X(b.ox), cy, z + .03); b.ballC.scale.set(br * 1.2, br * 1.2, 1); b.ballC.material.opacity = fade;
-      b.tip.position.set(X(b.ox + b.dir * L), cy, z + .02); b.tip.scale.set(th * 2.4 * S, th * 2.4 * S, 1); b.tip.material.opacity = .8 * fade;
+      b.rim.position.set(cx, cy, z - .006); b.rim.scale.set(L * S, th * 1.75 * S, 1); b.rim.material.opacity = fade;   // (narrower and solid: its glow was 2.3 times as wide and see-through)
+      b.glow.position.set(cx, cy, z); b.glow.scale.set(L * S, th * 1.4 * S, 1); b.glow.material.opacity = fade;
+      b.core.position.set(cx, cy, z + .01); b.core.scale.set(L * S, th * .6 * S, 1); b.core.material.opacity = fade;
+      const br = (sp.th * (sp.big ? .92 : 1.35) + 3 * Math.sin(b.t * 50)) * S, bx = X(b.ox), tx = X(b.ox + b.dir * L), bz = sp.big ? z - .8 : z;   // (the full charge's ball behind her, so she stays in sight punching it out)
+      b.ballR.position.set(bx, cy, bz + .016); b.ballR.scale.set(br * 2.1, br * 2.1, 1); b.ballR.material.opacity = fade;
+      b.ball.position.set(bx, cy, bz + .02); b.ball.scale.set(br * 1.75, br * 1.75, 1); b.ball.material.opacity = fade;
+      b.ballC.position.set(bx, cy, bz + .03); b.ballC.scale.set(br * .95, br * .95, 1); b.ballC.material.opacity = fade;
+      b.tipR.position.set(tx, cy, z - .004); b.tipR.scale.set(th * 1.75 * S, th * 1.75 * S, 1); b.tipR.material.opacity = fade;   // (its end rounded off, the three bands)
+      b.tip.position.set(tx, cy, z + .002); b.tip.scale.set(th * 1.4 * S, th * 1.4 * S, 1); b.tip.material.opacity = fade;
+      b.tipC.position.set(tx, cy, z + .012); b.tipC.scale.set(th * .6 * S, th * .6 * S, 1); b.tipC.material.opacity = fade;
       if (sp.big && Math.random() < dt * 40) spawn("spark", X(b.ox + b.dir * rand(0, L)), cy + rand(-1, 1) * th * .5 * S, z + .1, V(b.dir * rand(4, 9), rand(-2, 2), rand(-1, 1)), .3, rand(.08, .14), { g: 0, spin: 8 });
       if (sp.big) shake = Math.max(shake, 3);
     } else {
@@ -12814,12 +12861,18 @@ function shotsUpdate(dt) {                            // (every frame, by the sp
   if (p && p.rig) { const id = p.rig.id, left = (shotHot[id] || 0) - time;
     if (left > 0 && mode === "play" && !transit) { const rate = left > 10 ? 12 : 3 + 9 * left / 10; if (Math.random() < dt * rate) { const o = shotHandPx(p, rand(.25, 1)); shotSteam(o.x + rand(-6, 6), o.y - 6, o.z, left > 10 ? 1 : .6 + .4 * left / 10); } }
     if (shotHot[id] && left <= 0) { delete shotHot[id]; if (shotWpn(p)) { const o = shotHandPx(p); sparks(o.x, o.y, 6); SFX.tick(); popText(p.x, p.y - (p.rig.heightPx || 92) - 30, shotWpn(p) === "gauntlet" ? "BEAM READY" : "SLASH READY", 900); } } }
-  steamL = steamL.filter(q => { q.t += dt; const u = q.t / q.life; if (u >= 1) { actors.remove(q.m); q.m.material.dispose(); return false; }
-    q.m.position.x += q.vx * dt; q.m.position.y += q.vy * dt; q.vx *= 1 - dt * 1.5; const sc = q.s * (.5 + 1.2 * u); q.m.scale.set(sc, sc, 1); q.m.material.opacity = q.a * (u < .15 ? u / .15 : 1 - (u - .15) / .85); return true; });
+  steamL = steamL.filter(q => { q.t += dt; const u = q.t / q.life; if (u >= 1) { actors.remove(q.m); return false; }
+    q.m.position.x += q.vx * dt; q.m.position.y += q.vy * dt; q.vx *= 1 - dt * 1.5; q.m.rotation.y += q.spin * dt; q.m.rotation.z += q.spin * .4 * dt;
+    const sc = q.s * .3 * (.55 + .8 * u) * (u < .18 ? u / .18 : 1) * (u > .6 ? Math.max(0, 1 - (u - .6) / .4) : 1); q.m.scale.setScalar(Math.max(sc, .001)); return true; });   // (swelling as it rises, then shrinking away: solid all the way, no fade)
+}
+let STEAM_PUFF = null;
+function steamCloud() {                              // a wisp of steam as a little cloud: four toon balls, inked, like the dust puffs (a soft sprite till the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
+  if (!STEAM_PUFF) { const m = toon("#eef2f7"), g = new THREE.Group(); [[1, 0, 0, 0], [.72, -.78, -.2, .12], [.62, .74, -.26, -.1], [.55, .1, .55, .2]].forEach(([r, x, y, z]) => { const b = mk(new THREE.IcosahedronGeometry(r, 1), null, { mat: m, ol: .06 }); b.position.set(x, y, z); g.add(b); }); STEAM_PUFF = g; }
+  const c = STEAM_PUFF.clone(); c.rotation.set(rand(-.3, .3), rand(0, TAU), rand(-.3, .3)); return c;
 }
 function shotSteam(px, py, z, k = 1) {               // a wisp of steam: up and out, swelling, gone in a second
-  const m = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex(), color: "#f2f5fa", transparent: true, opacity: 0, depthWrite: false, fog: false })); m.renderOrder = 6;
-  m.position.set(X(px), Y(py), z + .12); actors.add(m); steamL.push({ m, t: 0, life: rand(.8, 1.3) * k, s: rand(.35, .55) * k, a: rand(.45, .7), vx: rand(-.4, .4), vy: rand(.9, 1.6) * k });
+  const m = steamCloud(); m.scale.setScalar(.001); m.position.set(X(px), Y(py), z + .12); actors.add(m);
+  steamL.push({ m, t: 0, life: rand(.8, 1.3) * k, s: rand(.35, .55) * k, vx: rand(-.4, .4), vy: rand(.9, 1.6) * k, spin: rand(-1.5, 1.5) });
 }
 function shotFail(p) {                                // tried while it's still steaming: the hand out, a puff and nothing; pulled in and shaken. Rose: a feeble wave of the blade, looked at
   const k = shotWpn(p), left = Math.max(1, Math.ceil((shotHot[p.rig.id] || 0) - time)), H = p.rig.heightPx || 92;
@@ -13364,7 +13417,7 @@ function lineSpots(sp) {                              // where each in the line 
 const partWant = (k, sp, gap) => { const w = lineSpots(sp).x.get(k); if (w !== undefined) return w; const v = player.x - lineFace() * gap; return sp ? clamp(v, sp[0] + 14, sp[1] - 14) : v; };   // (its place; one on a level of its own, or sent somewhere: behind you on what it stands on, as before)
 function crossWait(s, w) {                            // its place the far side of you: it waits for you to come through it (each steps back as you pass, sepStep), or, you stood still, takes its turn, the one nearest you first. Not all through you at once, all as far back as they go, in one another
   const p = player; if (!p || p.dead || Math.abs(s.y - p.y) > 40 || (w - p.x) * (s.x - p.x) >= 0) return w;   // (on its own side: as it is)
-  const side = Math.sign(s.x - p.x) || 1, d = Math.abs(s.x - p.x); if (d < bodyHalf(p) + bodyHalf(s) + 10) return w;   // (at you already: on through)
+  const side = Math.sign(s.x - p.x) || 1, d = Math.abs(s.x - p.x); if (d < bodyHalf(p) + bodyHalf(s) + 10 || d > 320) return w;   // (at you already: on through)   // (a long way off, coming back to you (C10's button, over the bridge): on it comes behind the other, the turns are for round you. Stood waiting the whole way, it was taken for stuck and popped to your side, 2026-11-05)
   if (p.vx * side > 60) return s.x;   // (you coming its way: it waits there for you)
   for (const o of [...partnerList().map(P => P.q), ...palsAll()]) if (o && o !== s && sepFol(o) && o.wantX !== undefined && (o.wantX - p.x) * (o.x - p.x) < 0 && Math.sign(o.x - p.x) === side && Math.abs(o.x - p.x) < d) return s.x;   // (one nearer you to cross first)
   return w;
@@ -13503,11 +13556,11 @@ let foeDizzy = [];   // [{ e, sp: [stars], t }]
 function offBalance(e, dir, T = 1.4, dizzy = false) {   // knocked off balance (a parry, the user 2026-11-02: "there's a delay as they get knock back so you can get a couple free hits in"): back a step, reeling, no attacking
   if (!e || e.dead || e.gone) return; e.atk = null; e.windup = 0; e.atkCd = Math.max(e.atkCd || 0, T + .5); e.hurtT = Math.max(e.hurtT || 0, T); e.offBal = Math.max(e.offBal || 0, T); e.flash = .12;
   e.vx = dir * 430 / (e.wt || 1.2); if (e !== enemy) { e.vy = -240; e.onGround = false; }
-  if (dizzy) { let d = foeDizzy.find(q => q.e === e); if (!d) { d = { e, sp: [0, 1, 2].map(() => { const s = new THREE.Sprite(STAR_MAT || (STAR_MAT = glyphMat("★", "#ffd75a"))); s.scale.setScalar(.42); actors.add(s); return s; }) }; foeDizzy.push(d); } d.t = T; }
+  if (dizzy) { let d = foeDizzy.find(q => q.e === e); if (!d) { d = { e, sp: [0, 1, 2].map(() => { const s = star3d(); s.scale.setScalar(.42); actors.add(s); return s; }) }; foeDizzy.push(d); } d.t = T; }
 }
 function syncFoeDizzy(dt) {                         // (render) the stars round a dizzy one's head
   foeDizzy = foeDizzy.filter(d => { d.t -= dt; const e = d.e, on = d.t > 0 && !e.dead && !e.gone && (e === enemy || baddies.includes(e)); if (!on) { d.sp.forEach(s => actors.remove(s)); return false; }
-    d.sp.forEach((s, k) => { const a = time * 5 + k * TAU / 3; s.position.set(X(e.x) + Math.cos(a) * .7, Y(e.y - eH(e) - 16), (e.z || 0) + Math.sin(a) * .5 + .3); }); return true; });
+    d.sp.forEach((s, k) => { const a = time * 5 + k * TAU / 3; s.position.set(X(e.x) + Math.cos(a) * .7, Y(e.y - eH(e) - 16), (e.z || 0) + Math.sin(a) * .5 + .3); s.rotation.y = a * .7; }); return true; });
 }
 function parryMelee(p, e, d) {                      // a blow parried (blocked just as it came: the user, 2026-11-02 "make parrying knock opponent's off balance so players are more incentivized to try it")
   const dir = parrySide(p, e); offBalance(e, dir, 1.5); sparks(p.x + dir * 30, p.y - (p.rig.heightPx || 92) * .55, 12); SFX.parry(); popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "PARRY!");
@@ -14224,7 +14277,7 @@ function cryTick(dt) {                                // (the bubble over her he
   el.style.left = clamp((_popV.x + 1) / 2 * innerWidth, 90, innerWidth - 90) + "px"; el.style.top = clamp((1 - _popV.y) / 2 * innerHeight, 70, innerHeight - 40) + "px";
 }
 function partInput(dt) {                             // the buddy button: a press, its next blow; held, its charge, let go full: its charge move. Blocking: nothing (2026-11-03 late)
-  chargeInput(dt); { const rk = allyRoomKey(); if (rk !== partInput.rk) { partInput.rk = rk; postsClear(); } }   // (COMMAND; into another room: back with you)
+  chargeInput(dt); elemTick(dt); { const rk = allyRoomKey(); if (rk !== partInput.rk) { partInput.rk = rk; postsClear(); } }   // (COMMAND; into another room: back with you)   // (elemTick: one sent at its own power's spot, elemSend)
   const p = player, ok = mode === "play" && !!p && !p.dead && !paused && !menuUp && !modalOpen && !p.climb && !p.cons && !p.zip && !cine && !transit && !(intro && intro.lock);
   { const tm = teamOn(); if (tm !== teamM) { teamM = tm; teamSync(tm); } }   // (on their own, CHARGE!: X, Y and L theirs, teamInput)
   if (teamM) { teamInput(dt, ok); partFireFx(dt); partAuto(dt); healerTick(dt); teamFx(dt); return; }
@@ -14326,7 +14379,9 @@ function blkShield(r, col) {
 function shieldHold(r, s, i = 0) {                  // (i: the hand, 0 the left, 1 the right)
   const g = r.__shield; if (!g) return; const { c } = handChest(r, i), sh = !!(s && s.block), z = i ? .08 : -.08;
   if (!_shQ.side) { _shQ.side = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); _shQ.front = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2)); }
-  g.quaternion.slerp(sh ? _shQ.front : _shQ.side, .3); if (sh) g.position.set(c.x + .12, c.y + .02, c.z); else g.position.set(c.x, c.y - .02, c.z + z);
+  if (sh) { if (!_shQ.cw) Object.assign(_shQ, { cw: new THREE.Quaternion(), w: new THREE.Quaternion(), t: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0), n: new THREE.Vector3() }); r.chest.updateWorldMatrix(true, false); r.chest.getWorldQuaternion(_shQ.cw);
+    _shQ.w.setFromUnitVectors(_shQ.up, _shQ.n.set((s.face || 1) * .87, 0, .5).normalize()); g.quaternion.slerp(_shQ.t.copy(_shQ.cw).invert().multiply(_shQ.w), .3); }   // (its face out to the side it's guarding, the way it faces, a little to us so it still reads: the user, 2026-11-05 "when the blocker blocks, have the shield facing the enemy". It was turned in the chest's own terms, and came out facing us)
+  else g.quaternion.slerp(_shQ.side, .3); if (sh) g.position.set(c.x + .12, c.y + .02, c.z); else g.position.set(c.x, c.y - .02, c.z + z);
 }
 const shieldHolds = () => allies.forEach(a => { if (!a.A || !blkRank(a) || !a.r || !a.r.chest || !a.r.hands || a.r.hands.length < 2) return; if (!a.r.__shield) a.r.__shield = blkShield(a.r, a.A.col || "#a9dcea"); shieldHold(a.r, a.st, a.A.heal ? 1 : 0); });   // (the healer's in his right: his basket's in his left)
 const healHolds = () => { allies.forEach(a => { if (a.A.heal && a.r.__pile && a.r.__pile.visible) healHold(a.r, a.st); }); shieldHolds(); };   // (after this frame's pose, so it never lags his hands)
@@ -14443,6 +14498,31 @@ function chgDrop(p) {                               // △ with ↓: off what th
   if (n) SFX.jump(); chgSignal(p, L, "DOWN!");
 }
 function postsClear() { partnerList().forEach(postClear); }
+// sent at a spot only its power gets through (the user, 2026-11-05: "when reaching somewhere that an elemental power, like the vines being able to be cut by rink's fire, allow the player to just send the buddies towards it with the R and direction and have the character automatically burn it or whatever."): R with ← or → toward one, and the buddy whose own power it is (Rink: fire) goes to it, faces it,
+// strikes with it, and it burns; then back to you. Nothing like that that way (or no one along with that power): R and a way do what they always did
+const ELEM = { r: 1100, dy: 220, max: 7, hit: .22, back: 1.1 };   // (this far off at most · this far up or down · seconds to get there before it gives up · into its blow, the burn · then home)
+function elemSpots() {                               // (what fire gets through in this room: Glos's vines, only fire; Rose's tangle; her crates)
+  const L = [], B = secret;
+  if (B && (B.who === "fire" || B.who === "rose") && B.hp > 0 && !B.burn) L.push({ el: "fire", x: B.x + 60, y: B.gy ?? GROUND, w: 70, B });
+  for (const c of crates) if (!c.gone && c.who === "rose" && !c.burn) L.push({ el: "fire", x: c.x, y: c.y, w: 40, c });
+  return L;
+}
+const elemLive = S => S.B ? S.B === secret && S.B.hp > 0 && !S.B.burn : !S.c.gone && !S.c.burn;
+function elemSend(p, d) {                            // (chargeInput's: true, it's gone)
+  const S = elemSpots().filter(q => Math.sign(q.x - p.x) === d && Math.abs(q.x - p.x) < ELEM.r && Math.abs(q.y - p.y) < ELEM.dy).sort((a, b) => Math.abs(a.x - p.x) - Math.abs(b.x - p.x))[0]; if (!S) return false;
+  const P = partAble().find(P => P.kind === "ally" && P.a && P.q.ownEl === S.el && !P.q.climb && !P.q.zip); if (!P) return false;
+  const q = P.q, sd = Math.sign(S.x - q.x) || d, x = clamp(S.x - sd * (S.w + 26), 40, WORLD - 40);
+  postSet(P, x, groundAt(x) ?? q.y, "go", null); q.post.elem = S; q.post.el = { t: 0, t2: 0, ph: "go", sd }; q.lvlLock = false;
+  chgSignal(p, [P], ""); popText(q.x, q.y - ((q.rig && q.rig.heightPx) || 90) - 30, S.el === "fire" ? "BURN IT!" : "GO!"); return true;
+}
+function elemTick(dt) {                              // (partInput's, every frame: the one sent at it, there, its blow and the burn; then home)
+  for (const P of partnerList()) { const q = P.q, T = q && q.post, E = T && T.el, o = P.a; if (!E || !o || T.back) continue; const S = T.elem; E.t += dt;
+    if (E.ph === "go") { if (!elemLive(S) || E.t > ELEM.max) { T.back = true; continue; }   // (burnt already, or it can't get there: home)
+      if (Math.abs(q.x - T.x) < 34 && q.onGround && !q.atkKind && !o.pact) { E.ph = "burn"; E.t2 = 0; q.face = E.sd; q.vx = 0; o.pcmd = { type: "tap", up: false, down: false, fwd: false, air: false, perPress: false, fire: true }; } continue; }
+    E.t2 += dt; q.face = E.sd; const H = (q.rig && q.rig.heightPx) || 90;
+    if (E.t2 >= ELEM.hit && !E.lit) { E.lit = true; flamesPx(q.x + E.sd * H * .4, q.y - H * .5, 10, 24, 1.3); if (elemLive(S)) fireBurn(S.x, S.y - 40, 200); }   // (its blow lands: up it goes)
+    if (E.t2 >= ELEM.back) T.back = true; }
+}
 function chargeInput(dt) {                          // △: a press (with a way, or none), or held with a way; with ↑, the team's jumps
   const p = player, ok = mode === "play" && !!p && !p.dead && !paused && !menuUp && !modalOpen && !cine && !transit && !(intro && intro.lock), on = ok && held.charge, ax = (held.right ? 1 : 0) - (held.left ? 1 : 0);
   const up = on && held.upRaw;
@@ -14452,7 +14532,7 @@ function chargeInput(dt) {                          // △: a press (with a way,
     if (up) { if (chgB.upT < 0) chgB.upT = 0; chgB.upT += dt; chgCoil(chgB.upT); }                     // ↑ held: they crouch, winding it up
     else if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.upT = -1; chgB.jumped = true; }         // let go: off they go, as high as it was wound. Again each time
     if (held.down && !up && !chgB.dropped) { chgB.dropped = true; chgB.jumped = true; chgDrop(p); }   // ↓: down off what they're on, to you (split levels, 2026-11-02)
-    if (!chgB.sortie && !chgB.jumped && chgB.upT < 0 && chgB.t >= CHG_HOLD && chgB.dir) chgStart(p, "sortie"); if (chgB.sortie) chgSortie(p, dt);
+    if (!chgB.sortie && !chgB.jumped && chgB.upT < 0 && chgB.t >= CHG_HOLD && chgB.dir) { if (elemSend(p, chgB.dir)) chgB.jumped = true; else chgStart(p, "sortie"); } if (chgB.sortie) chgSortie(p, dt);   // (toward a spot only one of them gets through: that one to it, elemSend)
     const still = !chgB.dir && !chgB.jumped && !chgB.sortie && chgB.upT < 0 && !held.down && p.onGround && !p.climb && p.atkT < 0 && !p.combo && !p.block && !p.bubble;   // (held still: the hug)
     chgB.hs = still ? (chgB.hs || 0) + dt : 0;          // (how long it's been held still: the hug's own count)
     if (chgB.out && !chgB.hugged && chgB.t >= CHG_HOLD) { if (!still) { if (chgB.hug > 0) { chgB.hug = 0; hugEnd(); } }   // (out on their own, held still: back to you, and the hug; with you, held: nothing more than the tap)
@@ -14460,7 +14540,7 @@ function chargeInput(dt) {                          // △: a press (with a way,
       else if (chgB.called && hugCan()) { chgB.hug = clamp((chgB.hs - CHG_HOLD) / (HUG.hold - CHG_HOLD), 0, 1); hugWind(p, chgB.hug); if (chgB.hug >= 1) { chgB.hugged = true; hugGo(p); } } } }
   if (!on && chgB.on) { chgB.on = false; if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.jumped = true; }   // (both let go at once: the jump goes)
     if (chgB.hug > 0 && !chgB.hugged) hugEnd();   // (let go before the hug: no hug, but back to you all the same)
-    if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped && !chgB.hugged) { if (chgB.called) { if (!chgB.back) teamBack(p, partAble()); } else if (chgB.dir) chgStart(p, "go"); else if (chgB.out) teamBack(p, partAble()); else teamSplitCmd(p); } }   // (a tap: out on their own, back to you; with you, split up. The user, 2026-11-03: "pressing the command button once again is what brings them back")
+    if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped && !chgB.hugged) { if (chgB.called) { if (!chgB.back) teamBack(p, partAble()); } else if (chgB.dir) { if (!elemSend(p, chgB.dir)) chgStart(p, "go"); } else if (chgB.out) teamBack(p, partAble()); else teamSplitCmd(p); } }   // (a tap: out on their own, back to you; with you, split up. The user, 2026-11-03: "pressing the command button once again is what brings them back")
 }
 const CHG_JUMP = { lo: 170, hi: 420, wind: .1, full: .7, side: 280 };   // (a tap: a hop this high; held to full: this high; how long that takes; with a way held, this fast that way)
 function chgCoil(t) {                               // ↑ held with CHARGE!: the team crouched, wound up (the longer, the lower), their mark over them; full: a tick
@@ -14627,6 +14707,12 @@ function hopTo(s, tx, ty, vmax = 900) {               // a jump that comes down 
   const G = GRAV, up = Math.max(70, s.y - ty + 70); let vy = -Math.sqrt(2 * G * up), t = (-vy + Math.sqrt(Math.max(0, vy * vy - 2 * G * (s.y - ty)))) / G;
   const tn = Math.abs(tx - s.x) / vmax; if (tn > t) { t = tn; vy = Math.max(-1500, (ty - s.y - G * t * t / 2) / t); }
   s.vy = vy; s.vx = clamp((tx - s.x) / Math.max(.2, t), -vmax, vmax); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.gapHop = true; SFX.jump();   // (gapHop: nothing but the jump till it's down, partHuman)
+}
+function pitKeep(s, P1, x0, y0) {                 // (updateAllyOne, after its move) off the end of a platform with nothing past it but the drop (walked off, or knocked off it by a baddy): back at that end, on it
+  if (s.onGround || s.vy < 0 || s.gapHop || s.dropT > 0 || s.climb || s.climbW || s.tcFly || s.fleap || s.post || s.zipR || s.bc || s.pounce || s.dzap || s.exitOK) return;   // (on its way somewhere on purpose: a jump, a drop, a launch)
+  if (landBelow(s.x, s.y) !== null) return;   // (something under it to come down on: the drop's fine)
+  const q = P1 || (s.hurtT > 0 ? PLATFORMS.filter(q => x0 >= q.x - 6 && x0 <= q.x + q.w + 6 && q.y >= y0 - 2).sort((a, b) => a.y - b.y)[0] : null); if (!q) return;   // (walked off it; or knocked through the air over it)
+  s.x = clamp(s.x, q.x - 2, q.x + q.w + 2); s.vx = 0; if (s.y >= q.y) { s.y = q.y; s.vy = 0; s.onGround = true; s.plat = q; }   // (the user, 2026-11-05 "in BB2, the buddies walked off to the left of the screen and just kept doing it, then appearing back then doing it": a leafy's charge along the branch slid them off its end into the drop, put back by you, and off again)
 }
 function edgeLeap(s, p) {                             // (updateAlly, updateEJ) true: it's jumped. You past the end of what it's on (a platform, a stretch of ground), and nothing past that end
   if (!p || !p.onGround) return false;                //   to come down on: a jump at the first place past it to land, your way (followSpan keeps it back from the end, so it never got to the gap)
@@ -16393,31 +16479,57 @@ function updateAlly(dt) {                          // with you: just behind you 
 // up after her (the user, 2026-11-02: "buddies should climb with camila"): she's on a ladder, a rope, a rock face, a wall; the team at its foot goes up it after her,
 // one under the other, the same climb, and over the top after her as she steps off it (into another room: they're with you there as ever). And down one after you
 // ("your partnes should get on the ladder after you", 2026-11-02): at its top as you go down it, they get on and come down over you, one over the other
-const CLIMB_V = 260;
-function climbWith(s, dt) {
-  const p = player, L = p && !p.dead && mode === "play" ? p.climb : null;
-  if (!s.climbW) {
-    if (!L || s.post || s.worn || s.tcOn || s.tcFly || s.fleap || s.dzap || s.pounce || s.zipR || !s.onGround || Math.abs(s.x - L.x) > 260) return false;
-    const dir = p.climbDir || 0;
-    if (L.rope !== "down" && dir <= 0 && s.y > p.y + 30 && s.y >= L.top && Math.abs(s.y - L.bot) < 60) s.climbW = { L, st: stage, up: false };   // (near its foot, below her: up after her)
-    else if (!L.wallClimb && dir >= 0 && s.y < p.y - 30 && Math.abs(s.y - L.top) < 30) s.climbW = { L, st: stage, up: false, dn: true };   // (at its top, over her as she goes down: down after her)
-    else return false;
-  }
-  const C = s.climbW;
-  if (L !== C.L || stage !== C.st) { s.climbW = null; s.climb = null;
-    if (stage === C.st && !L && p.y < s.y - 20) { s.y = Math.max(Math.min(s.y, C.L.top + 30), p.y + 10); s.vy = -Math.sqrt(2 * GRAV * Math.max(80, s.y - p.y + 70)); s.vx = clamp((p.x - s.x) * 2.2, -320, 320); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; }   // (over the top after her)
-    return false; }
-  const n = partSlot(s), tx = L.x + (L.wallClimb ? 0 : (n % 2 ? 16 : -16)), ty = clamp(C.dn ? p.y - 72 - n * 62 : p.y + 72 + n * 62, L.top + 10, L.bot), y0 = s.y;
-  if (!C.up) { const d = tx - s.x; s.vx = Math.sign(d) * Math.min(330, Math.abs(d) / dt); s.x += s.vx * dt; s.face = Math.sign(d) || s.face; s.vy = 0; s.onGround = true; s.sprint = false;   // (across to its foot first)
-    if (Math.abs(tx - s.x) < 4) { C.up = true; s.vx = 0; } return true; }
-  s.x = approach(s.x, tx, 300 * dt); s.y = approach(s.y, ty, CLIMB_V * dt); s.climbPh = (s.climbPh || 0) + Math.abs(s.y - y0) * .045;
-  Object.assign(s, { vx: 0, vy: 0, onGround: false, plat: null, climb: L, atkKind: null, atkT: -1, block: false, defOn: false, face: L.wall || p.face, sprint: false });
-  return true;
+const CLIMB_V = 260, CLIMB_GAP = 14;
+const climbH = q => (q.rig && q.rig.heightPx) || 100;   // (a body's height, px: the next one on under its feet)
+function climbLine(L) {                              // the team on (or waiting at) the climb L, in order: the ones on it, furthest along first, then the ones waiting (your partners first, then the pets)
+  const on = q => q.climbW.on ? 0 : 1;
+  return [...partnerList().map(P => P.q), ...palsAll()].filter((q, i, A) => q && A.indexOf(q) === i && q.climbW && q.climbW.L === L && q.climbW.st === stage)
+    .sort((x, y) => on(x) - on(y) || (on(x) ? partSlot(x) - partSlot(y) : (x.climbW.dn ? y.y - x.y : x.y - y.y)));
 }
-function climbArrive(s) {                            // (into a room on a ladder, you still on it: they come in on it with you, over you going down, under you going up; no room on it, by you as ever)
+function climbOff(s, L, top) {                       // off the end of it: onto its top, or down at its foot
+  s.climbW = null; s.climb = null; s.vx = 0; s.vy = 0; s.onGround = true; s.sq = -.15; s.sqv = 0;
+  if (top) { s.y = L.top; s.x = L.ledge ? L.x : L.face + (L.wall || 0) * 24; s.face = L.wall || s.face; s.plat = PLATFORMS.find(q => s.x >= q.x - 4 && s.x <= q.x + q.w + 4 && Math.abs(q.y - L.top) < 6) || null; }
+  else { s.y = L.bot; s.plat = PLATFORMS.find(q => L.x >= q.x && L.x <= q.x + q.w && Math.abs(q.y - L.bot) < 6) || null; }
+}
+function climbWith(s, dt) {
+  const p = player, PL = p && !p.dead && mode === "play" ? p.climb : null;
+  if (!s.climbW) {                                   // her on a climb: in the line for it (at its foot, below her, going up; at its top, over her, going down)
+    const L = PL; if (!L || s.post || s.worn || s.tcOn || s.tcFly || s.fleap || s.dzap || s.pounce || s.zipR || s.bc || !s.onGround || Math.abs(s.x - L.x) > 440) return false;
+    const dir = p.climbDir || 0, walk = y => { for (let k = 1; k <= 4; k++) { const f = landBelow(s.x + (L.x - s.x) * k / 4, y - 4); if (f === null || Math.abs(f - y) > 14) return false; } return true; };   // (only along a floor to it: no walking out over a gap)
+    if (L.rope !== "down" && dir <= 0 && s.y > p.y + 30 && Math.abs(s.y - L.bot) < 40 && walk(L.bot)) s.climbW = { L, st: stage, on: false, dn: false };
+    else if (!L.wallClimb && dir >= 0 && s.y < p.y - 30 && Math.abs(s.y - L.top) < 30 && walk(L.top)) s.climbW = { L, st: stage, on: false, dn: true };
+    else return false;
+    s.y = s.climbW.dn ? L.top : L.bot;
+  }
+  const C = s.climbW, L = C.L;
+  if (stage !== C.st || s.hurtT > 0 || s.dead) { s.climbW = null; s.climb = null; return false; }
+  const her = PL === L, line = climbLine(L), i = line.indexOf(s), ahead = i > 0 ? line[i - 1] : her ? p : null;
+  const room = !!(L.rope || (L.wallClimb && !L.ledge));   // (its far end another room: only she goes through it)
+  let goUp = !C.dn; if (!her && !ahead) goUp = Math.abs(p.y - L.top) < Math.abs(p.y - L.bot) && !room;   // (she's off it: on to her end of it, or back the way it came)
+  const lo = L.top + (room ? 60 : 0), hi = L.bot;
+  let ty = ahead ? (goUp ? ahead.y + climbH(s) + CLIMB_GAP : ahead.y - climbH(ahead) - CLIMB_GAP) : goUp ? lo : hi;   // (staggered: its head under the feet of the one over it, or its feet over the head of the one under it)
+  if (!C.on) {                                       // waiting its turn: by the foot (or the top), then on once there's room
+    const fits = C.dn ? ty >= L.top + 20 : ty <= L.bot - 20;
+    if (!her && !ahead && p.onGround && Math.abs(p.y - (C.dn ? L.top : L.bot)) < 40) { s.climbW = null; return false; }   // (she came back off it this end: never mind)
+    const side = L.wall ? (C.dn ? L.wall : -L.wall) : Math.sign(s.x - L.x) || -(p.face || 1), w = line.slice(0, Math.max(0, i)).filter(q => !q.climbW.on).length;
+    let wx = L.x + side * (36 + w * 40); const fy = C.dn ? L.top : L.bot; for (let k = 0; k < 4; k++) { const f = landBelow(wx, fy - 4); if (f !== null && Math.abs(f - fy) < 12) break; wx = L.x + (wx - L.x) * .6; }
+    const tx = fits ? L.x : wx, d = tx - s.x;
+    s.vx = Math.abs(d) > 3 ? Math.sign(d) * Math.min(330, Math.abs(d) / dt) : 0; s.x += s.vx * dt; s.vy = 0; s.y = fy; s.onGround = true; s.sprint = false; s.climb = null;
+    s.face = Math.abs(d) > 3 ? Math.sign(d) : Math.sign(L.x - s.x) || s.face;
+    if (fits && Math.abs(L.x - s.x) < 4) { C.on = true; s.x = L.x; s.vx = 0; s.climbPh = 0; } return true;
+  }
+  ty = clamp(ty, lo, hi); const y0 = s.y;           // on it: right on it (not by it), after the one ahead
+  s.x = approach(s.x, L.x, 300 * dt); s.y = approach(s.y, ty, CLIMB_V * dt); s.climbPh = (s.climbPh || 0) + Math.abs(s.y - y0) * .06;
+  Object.assign(s, { vx: 0, vy: 0, onGround: false, plat: null, climb: L, atkKind: null, atkT: -1, block: false, defOn: false, sprint: false }); if (L.wall) s.face = L.wall;
+  if (!her && !ahead && Math.abs(s.y - ty) < 2) { if (goUp && !room && ty <= L.top) climbOff(s, L, true); else if (!goUp && ty >= L.bot) climbOff(s, L, false); }   // (at its end, her off it: off it too)
+  return true;
+}   // (the user, 2026-11-05: "when climbing up and down ladders, make sure the buddies are actually doing a climbing animation, that they're staggered and they're actually on the ladder and not next to it. when climbing up or down, make them wait their turn to climb down/up")
+function climbArrive(s) {                            // (into a room on a ladder, you still on it: they come in on it with you, in their line, over you going down, under you going up; no room on it, by you as ever)
   const p = player, L = p && p.climb; s.climbW = null; s.climb = null; if (!L || L.wallClimb) return;
-  const n = partSlot(s), dn = (p.climbDir || 0) > 0, y = dn ? p.y - 72 - n * 62 : p.y + 72 + n * 62; if (y < L.top + 10 || y > L.bot) return;
-  Object.assign(s, { x: L.x + (n % 2 ? 16 : -16), y, vx: 0, vy: 0, onGround: false, plat: null, climb: L }); s.climbW = { L, st: stage, up: true, dn };
+  const dn = (p.climbDir || 0) > 0, A = [...partnerList().map(P => P.q), ...palsAll()].filter((q, i, B) => q && B.indexOf(q) === i).sort((x, y) => partSlot(x) - partSlot(y));
+  let y = p.y, prev = p; for (const q of A) { y = dn ? y - climbH(prev) - CLIMB_GAP : y + climbH(q) + CLIMB_GAP; prev = q; if (q === s) break; }
+  y = clamp(y, L.top + 10, L.bot);
+  Object.assign(s, { x: L.x, y, vx: 0, vy: 0, onGround: false, plat: null, climb: L, climbPh: 0 }); s.climbW = { L, st: stage, on: true, dn };
 }
 function updateAllyOne(ally, k, dt) {              // (k: its place in the line behind you)
   const s = ally.st, r = ally.r, p = player, A = ally.A; ally.t += dt; if (s.zipR) return;   // (down the zipline behind you)
@@ -16440,10 +16552,10 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
     else if (ally.hopT <= 0 && edgeLeap(s, p)) ally.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
     else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
   }
-  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
+  if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s) && !tbAcross(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
   { const Z = !wet && crawlZone(s); if (Z) { s.crawl = Z; s.block = false; s.vx = clamp(s.vx, -CRAWL_V, CRAWL_V); s.crawlPh = (s.crawlPh || 0) + Math.abs(s.vx) * dt * CRAWL_PH; } else if (s.crawl) { s.crawl = null; s.sq = .14; s.sqv = 0; } }   // (through a low hole on hands and knees as you go, not walking upright through its roof: the user, 2026-11-05 "in berry forest the crawling animation ... looks very unnatural same for the buddies")
   s.dropT = Math.max(0, (s.dropT || 0) - dt); abStep(s, dt);   // (the blocker stepping in to take a shot, autoBlock)
-  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
+  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); const BK = bridgeKeep(s, dt); const PK = s.onGround ? s.plat : null, x0 = s.x, y0 = s.y; moveBody(s, dt, 14); if (!wet) pitKeep(s, PK, x0, y0); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
   if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
@@ -21442,7 +21554,7 @@ const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's draw
   { h: 0, foe: 0, cell: "B5", elev: ROW_H / ROW_RISE, tut: true, name: "THE CLIFF TOP", prev: 6, noRight: true, gaps: [[600, 3600]], below: 4, down: 4, downX: 600, downWall: -1, lockX: 585 },   // (the user, 2026-11-04: "another high platform on the left with a ladder you can go down on. you can go down the ladder or jump off to the right (one baddy up here first). this should look like we're going down some beach cliffs": the cliff top, the cove a row down; lockX: held back from its edge till the baddy's won back)
   { h: 0, foe: 0, cell: "C6", elev: 0, tut: true, name: "THE WATER TOWER", prev: 4, noRight: true, camUp: 1.4, gaps: [[2280, 3600]], dive: [2280, 2600], diveTo: 13, diveAfterTut: true, plats: [[1780, 170, 360, "tower"]], poles: [[1805, 170]], zip: { x: 1945, y: 40, to: 12, ex: 1280, ey: 300, base0: 170, base1: 470 }, wayTip: "↑ UP THE WATER TOWER, THEN JUMP UP ONTO THE ZIPLINE" },   // (the user, 2026-11-04: "4 baddies and then a high water tower looking structure you can use a ladder to climb up on. it will have a zip line that the team gets on and takes them to the next screen": out over the inlet at its end and into C7)   // (dive: the sea under the zipline, down into the deep, but only after the tutorial (in it, a fall in there is just a splash). The user, 2026-11-04: "add a connection to another level that we haven't had connected to it before", the deep picked off the map as the nearest. Cuss' Waves by C11 for a moment before that)
   { h: 0, foe: 0, cell: "C7", elev: 0, tut: true, name: "THE LANDING", prev: 11, next: 5, noLeft: true, gaps: [[-900, 190]] },   // ("c6 zip line ends in the middle of the screen on c7. there will be 3 baddies on the left of the zip line end and 3 to the right of it. it's an encouragement for players to split up but dont show any text for this")
-  { h: 0, foe: 0, cell: "C9", elev: 0, tut: true, name: "THE LOOKOUTS", prev: 5, next: 7, zoom: 2.3, camMid: [430, 1860, 1145], camUp: 6, plats: [[640, 40, 210, "lookout"], [1440, 40, 210, "lookout"]], poles: [[665, 40], [1465, 40]], towers: [{ plat: 0, btn: 820 }, { plat: 1, btn: 1620 }], set: [{ k: "gate", x: 2330, key: "w9:c9fence", look: "fence", h: 300, w: 150, tutOpen: true }] },   // (the user, 2026-11-04: "more zoomed out than usual to fit these two towers. it will have two high lookout stations with little roofs and ladders that climb up them. baddies on the bottom. at the top of each one is a button ... when the player presses their button, the fence on the right side of the screen opens": both buttons held at once, twrTick. Out of a jump's reach, 430 up (a held jump and the double jump: Rose's 407); the camera out and up to have both in the picture)
+  { h: 0, foe: 0, cell: "C9", elev: 0, tut: true, name: "THE LOOKOUTS", prev: 5, next: 7, zoom: 2.3, camMid: [430, 1860, 1145], camUp: 6, plats: [[640, 40, 210, "lookout"], [1440, 40, 210, "lookout"]], poles: [[665, 40], [1465, 40]], towers: [{ plat: 0, btn: 820 }, { plat: 1, btn: 1620 }], set: [{ k: "gate", x: 2330, key: "w9:c9fence", look: "fence", h: 300, w: 150, tutOpen: true }], bigTrio: "mossback", authored: true },   // (the user, 2026-11-04: "more zoomed out than usual to fit these two towers. it will have two high lookout stations with little roofs and ladders that climb up them. baddies on the bottom. at the top of each one is a button ... when the player presses their button, the fence on the right side of the screen opens": both buttons held at once, twrTick. Out of a jump's reach, 430 up (a held jump and the double jump: Rose's 407); the camera out and up to have both in the picture)
   { h: 0, foe: 0, cell: "C-1", elev: 0, woods: true, woodsPath: true, name: "THE BACK WOODS", exitLeft: true, toWorld: 0, next: 15 },   // (the way back from the woods: off the left of their first room and in here on the left, the user 2026-11-04: "when they go back towards the beach area, they will be just two thick forest like screens with baddies, that start you on the left side of the screen")
   { h: 0, foe: 0, cell: "C0", elev: 0, woods: true, woodsPath: true, name: "THE THICKET", prev: 14, next: 0 },   // (and on: "then you end up appearing, on the third screen, on the beach area, on the left of the house". Built as the woods are: buildLevel)
 ];
@@ -21460,7 +21572,7 @@ const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the s
   [["twiggy", "orange", 360]],   // (B5: "one baddy up here first")
   [["leafy", "red", 620], ["acorn", "yellow", 920], ["thornball", "olive", 1220], ["stumpy", "rust", 1520]],   // (C6: four, before the tower)
   [["leafy", "orange", 430], ["twiggy", "moss", 680], ["pinecone", "bark", 930], ["acorn", "olive", 1630], ["thornball", "red", 1880], ["bramble", "moss", 2130]],   // (C7: three each side of where the zipline comes down)
-  [["leafy", "yellow", 380], ["stumpy", "olive", 1050], ["acorn", "rust", 1300], ["mossback", "bark", 1960], ["twiggy", "orange", 2180]],   // (C9: down on the sand, round the towers' feet)
+  [["leafy", "yellow", 380], ["acorn", "rust", 760], ["stumpy", "olive", 1050], ["mossback", "bark", 1280]],   // (C9: down on the sand, round the towers' feet; the mossback's two shooters behind it, bigTrio. The twiggy at 2180 gone: past where the camera holds, you couldn't see it. The user, 2026-11-05: "in C9, there's a berry you cant see off screen. let's replace it and have the big berry there also have the two small partners shooting projectiles")
   [["stumpy", "bark", 640], ["leafy", "moss", 1000], ["thornball", "rust", 1400], ["twiggy", "olive", 1800]],   // (the back woods: four)
   [["acorn", "olive", 600], ["pinecone", "bark", 1000], ["leafy", "red", 1400], ["bramble", "moss", 1850]],   // (the thicket: four)
 ];
@@ -21613,8 +21725,10 @@ function buildBeach(k = 0, seed = k) {
   const hi = !!ST.tut && (ST.elev || 0) > 0, lowY = Y(GROUND + ROW_H), sb = hi ? lowY : 0, zb = hi ? -12 : -9;   // (hi: a room up on the bluff, row B: the beach itself a row down, lowY; sb the sand's level by the sea, zb where the slope down to it starts)
   const tbG = x => !!ST.tbridge && (ST.gaps || []).some(([a, b]) => x > a && x < b), WY = Y(WATER), gAt = x => Y((tbG(x / S) ? null : groundAt(x / S)) ?? (hi ? GROUND + ROW_H : GROUND)), bush = ["#4f8a3a", "#3f7a33", "#6a9a3a"].map(c => toon(c));
   const seaM = shaderMat(SEA_VS, SEA_FS, { uT: { value: 0 }, ...seaCols() });
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(230, 92, 230, 92).rotateX(-Math.PI / 2), seaM); at(sea, WX / 2, WY, -36); scene.add(sea); keep.add(sea);
-  const sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k), fog: false })); at(sky, WX / 2, 12, -80); if (hi) { sky.scale.y = 1.4; sky.position.y = 6; } scene.add(sky); keep.add(sky);
+  const seaY = hi ? WY + lowY : WY;   // (the sea's level: up on the bluff, a row down with the beach, as the room under it has it. It was at the bluff's own level, the sand's slope running up into it, so the top of C2 and the bottom of B2 didn't match: the user, 2026-11-05)
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(230, 92, 230, 92).rotateX(-Math.PI / 2), seaM); at(sea, WX / 2, seaY, -36); scene.add(sea); keep.add(sea);
+  if (hi) { const far = new THREE.Mesh(new THREE.PlaneGeometry(700, 182, 70, 18).rotateX(-Math.PI / 2), seaM); at(far, WX / 2, seaY, -173); scene.add(far); keep.add(far); }   // (from up there, the sea on out into the haze: from that high, its near piece's far edge came up well short of the horizon)
+  const sky = new THREE.Mesh(new THREE.PlaneGeometry(150, 36), new THREE.MeshBasicMaterial({ map: waveSkyTex(k), fog: false })); at(sky, WX / 2, 12, -80); if (hi) { sky.scale.set(2.9, 4.06, 1); sky.position.set(WX / 2, seaY + 54, -265); } scene.add(sky); keep.add(sky);   // (up on the bluff, back behind the far sea, as big to the eye as ever)
   // the sand, and its slope down into the sea; the foam running up and back
   const lo = ST.cove ? X(ST.ground[2][0]) + 1.5 : -8;   // (the hidden cove: its pool at the left, the sand only from the slope on, nothing growing in the water)
   if (ST.cove) { const xs = X(ST.ground[1][0]), xe = X(ST.ground[2][0]), bed = Y(GROUND + ST.ground[1][1]), a = Math.atan2(-bed, xe - xs), L = Math.hypot(xe - xs, bed) + .3;
@@ -21627,9 +21741,9 @@ function buildBeach(k = 0, seed = k) {
     const xs = [...cuts].filter(x => x >= -900 && x <= WORLD + 900).sort((a, b) => a - b);
     for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2, w = (b - a) * S, cx = X(m); if (w <= 0) continue;
       if (GP.some(([g0, g1]) => m > g0 && m < g1)) { if (hi) scene.add(at(mk(new THREE.BoxGeometry(w, 6, 14), null, { mat: mSand, ol: 0 }), cx, lowY - 3, -2)); continue; }   // (open: the beach a row down)
-      const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? WY - 1 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
+      const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? lowY - 6 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
       const ga = Y(groundAt(a + .01) ?? GROUND), gb = Y(groundAt(b - .01) ?? GROUND);
-      if (Math.abs(ga - gb) > .05) { const sl = mk(new THREE.BoxGeometry(Math.hypot(w, gb - ga), .5, d), null, { mat: mSand, ol: 0 }); sl.rotation.z = Math.atan2(gb - ga, w); at(sl, cx, (ga + gb) / 2 - .25, zc); scene.add(sl);   // a slope (B3's dune up to B4's high ground, 2026-11-04): its sand along it, the rock under it cut to the line
+      if (Math.abs(ga - gb) > .05) { const sl = mk(new THREE.BoxGeometry(Math.hypot(w, gb - ga), .5, d + .06), null, { mat: mSand, ol: 0 }); sl.rotation.z = Math.atan2(gb - ga, w); at(sl, cx, (ga + gb) / 2 - .25, zc); scene.add(sl);   // a slope (B3's dune up to B4's high ground, 2026-11-04): its sand along it, the rock under it cut to the line   // (d + .06: its face a hair in front of the flat sand's and the rock's, where they overlap at its foot. In the one plane they fought for it, the bottom of B3's hill flickering: the user, 2026-11-05)
         const sh = new THREE.Shape([new THREE.Vector2(X(a), bot), new THREE.Vector2(X(b), bot), new THREE.Vector2(X(b), gb - .45), new THREE.Vector2(X(a), ga - .45)]), rk = mk(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), null, { mat: hi || ST.cliff ? mBl : mCl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); continue; }
       scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
       if (hi || raised) { scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi && !ST.cliff ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it (ST.cliff: B5's bluff on down into the cove, C5's, 2026-11-04)
@@ -21641,9 +21755,9 @@ function buildBeach(k = 0, seed = k) {
       else scene.add(at(mk(new THREE.BoxGeometry(w, 5.5, 14), null, { mat: mSand, ol: 0 }), cx, -3.25, -2)); }
   }
   else scene.add(at(mk(new THREE.BoxGeometry(WX + 70, 6, 14), null, { mat: mSand, ol: 0 }), WX / 2, -3, -2));
-  const drop = sb - WY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);
+  const drop = sb - seaY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);
   at(slope, WX / 2, sb - drop / 2, zb - run / 2); scene.add(slope);
-  const foam = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, .7).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mFoam), wl = -WY / drop;   // (where the water meets the slope: wl of the way down)
+  const foam = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, .7).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mFoam), wl = (sb - seaY) / drop;   // (where the water meets the slope: wl of the way down)
   scene.add(foam); keep.add(foam);
   // coconut palms all along the back of the beach, leaning out to sea; sea grape and rocks under them; rocks at the water's edge
   const knock = [], inGap = x => !hi && (ST.gaps || []).some(([a, b]) => x > X(a) - 1.2 && x < X(b) + 1.2);   // (inGap: over the sea through a gap in the sand, row C's (C6, C7, C10 since 2026-11-04): nothing grows there)
@@ -24934,7 +25048,7 @@ function spawnLoot(kind, x, y, pop, id) {            // pop: it bursts out (of a
 function clearLoot() { loot.forEach(q => { actors.remove(q.g); }); loot = []; }
 // what a berry baddy's carrying (the user, 2026-11-02: the thief "randomly steal[s] from berries they hit, they'll steal food and other items ... randomize when enemies have
 // items to either drop or to steal"): now and then one carries something, bobbing over its head; beaten, it drops it; a thief's blow can take it first
-const HELD = { chance: .3, shown: false, kinds: [["guava", .34], ["chinola", .2], ["coin", .24], ["gum", .1], ["fruit", .12]] };   // (shown: off, what one carries a surprise till it drops or is stolen. The user, 2026-11-02 "don't show what item a berry has")
+const HELD = { chance: .15, shown: false, kinds: [["guava", .34], ["chinola", .2], ["coin", .24], ["gum", .1], ["fruit", .12]] };   // (chance: was .3, about one berry in two had a fruit to give between this and dropLoot, the user, 2026-11-05: "items are dropping too quickly or the bag is getting full too quickly or both?") (shown: off, what one carries a surprise till it drops or is stolen. The user, 2026-11-02 "don't show what item a berry has")
 let heldOn = [];   // [{ b, g }]: the ones showing
 function holdItems() { baddies.forEach(b => { if (b.item || b.sad || b.npc || b.type === "friend" || b.dead || b.gone || Math.random() >= HELD.chance) return; let r = Math.random(), k = HELD.kinds[0][0]; for (const [kk, w] of HELD.kinds) { if ((r -= w) < 0) { k = kk; break; } } b.item = { k }; }); }
 function heldMesh(b) { const h = heldOn.find(q => q.b === b); if (h) { actors.remove(h.g); heldOn = heldOn.filter(q => q !== h); } }
@@ -24951,7 +25065,7 @@ function syncHeld() {                               // (render) each one carried
 }
 function dropLoot(x, y, n, boss) {                   // a beaten berry's coins (or, now and then, an item instead)
   if (!boss && Math.random() < 1 / 300) { spawnLoot("gum", x, y, true); return; }
-  if (!boss) { const r = Math.random(); if (r < 1 / 30) spawnLoot("fruit", x, y, true); else if (r < 1 / 30 + 1 / 5) spawnLoot(Math.random() < .35 ? "chinola" : "guava", x, y, true); }   // (fruit far more often now, and along with the coins: the user, 2026-11-02 "have enemies drop more fruits")
+  if (!boss) { const r = Math.random(); if (r < 1 / 60) spawnLoot("fruit", x, y, true); else if (r < 1 / 60 + 1 / 12) spawnLoot(Math.random() < .35 ? "chinola" : "guava", x, y, true); }   // (1/60 and 1/12, were 1/30 and 1/5: with a carried one, about one berry in five gives a fruit now, the user, 2026-11-05: "items are dropping too quickly or the bag is getting full too quickly or both?") (fruit far more often now, and along with the coins: the user, 2026-11-02 "have enemies drop more fruits")
   for (let i = 0; i < n; i++) spawnLoot("coin", x + (i - (n - 1) / 2) * 18, y - i * 6, true);
 }
 function updateLoot(dt) {
@@ -25896,8 +26010,21 @@ function sleepersFor(k) {
 }
 let ZZ_MAT = null, BANG_MAT = null;
 const glyphMat = (ch, fill) => new THREE.SpriteMaterial({ depthWrite: false, map: tex(64, 64, g => { g.font = "900 50px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round"; g.lineWidth = 9; g.strokeStyle = "#241c38"; g.strokeText(ch, 32, 35); g.fillStyle = fill; g.fillText(ch, 32, 35); }) });
-function glyph(mat, x, y, z, v, life, size) { const m = new THREE.Sprite(mat); m.position.set(x, y, z); actors.add(m); parts.push({ m, v, life, t: 0, size, g: 0, spin: 0, drag: 0, kind: "zz" }); }
-const zzz = b => glyph(ZZ_MAT || (ZZ_MAT = glyphMat("z", "#eef0ff")), X(b.x) - b.dir * .12, Y(b.y - b.h * .85), b.z + .3, V(rand(.12, .3), .55, 0), 2.1, rand(.42, .56));
+function glyph(mat, x, y, z, v, life, size) { const m = mat.isMaterial ? new THREE.Sprite(mat) : mat;   // (mat: a sprite's material, or a thing of its own: zz3d)
+  m.position.set(x, y, z); actors.add(m); parts.push({ m, v, life, t: 0, size, g: 0, spin: 0, drag: 0, kind: "zz" }); }
+let ZZ_3D = null, STAR_3D = null;
+function zz3d() {                                    // a sleeper's Z: cut out and inked like everything else, not a letter (the user, 2026-11-05: "make the sleeping Zzs and the stars 3d objects that match the model styles and dont look like just text.")
+  if (!ZZ_3D) { const sh = new THREE.Shape(), w = .34, h = .36, t = .1;
+    sh.moveTo(-w, h); sh.lineTo(w, h); sh.lineTo(w, h - t); sh.lineTo(-w + t * 1.7, -h + t); sh.lineTo(w, -h + t); sh.lineTo(w, -h); sh.lineTo(-w, -h); sh.lineTo(-w, -h + t); sh.lineTo(w - t * 1.7, h - t); sh.lineTo(-w, h - t); sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: .16, bevelEnabled: true, bevelThickness: .04, bevelSize: .03, bevelSegments: 2 }); geo.center(); ZZ_3D = mk(geo, null, { mat: toon("#e6eaff"), ol: .05 }); }
+  const m = ZZ_3D.clone(); m.rotation.set(.22, -.62, rand(-.28, .12)); return m;   // (turned a little, so its thickness shows)
+}
+function star3d() {                                  // a dizzy one's star: a fat little five-pointed one, the same toon yellow and ink (the user, 2026-11-05: "make the sleeping Zzs and the stars 3d objects that match the model styles and dont look like just text.")
+  if (!STAR_3D) { const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? .21 : .5; i ? sh.lineTo(Math.cos(a) * r, Math.sin(a) * r) : sh.moveTo(Math.cos(a) * r, Math.sin(a) * r); } sh.closePath();
+    const geo = new THREE.ExtrudeGeometry(sh, { depth: .14, bevelEnabled: true, bevelThickness: .06, bevelSize: .04, bevelSegments: 2 }); geo.center(); STAR_3D = mk(geo, null, { mat: toon("#ffd75a"), ol: .045 }); }
+  return STAR_3D.clone();
+}
+const zzz = b => glyph(zz3d(), X(b.x) - b.dir * .12, Y(b.y - b.h * .85), b.z + .3, V(rand(.12, .3), .55, 0), 2.1, rand(.42, .56));
 function startle(b) {                             // stomped in its sleep: up it shoots, wide awake, and away from you out of the room
   b.sleep = false; b.flee = { dir: Math.sign(b.x - player.x) || 1, t: 0, gy: b.y };
   b.vy = -760; b.vx = 0; b.onGround = false; b.plat = null; b.sq = -.45; b.sqv = 0; b.inv = 99; b.atk = null;
@@ -25999,6 +26126,12 @@ function trioTypes() {                               // the world's own walkers 
   const L = z => [...T[z]]; const PL = TRIO_PLAIN(); return { S: L("S").length ? L("S") : PL.S, M: L("M").length ? L("M") : PL.M, B: L("B").length ? L("B") : L("G").length ? L("G") : PL.B };
 }
 function trioShooter(b) { b.Tnear = b.T; b.Tfar = { ...b.T, atk: "spit", range: 430, keep: 230, shots: 1, vReach: 170 }; b.T = b.Tfar; b.shooter = true; }   // (its shot from afar, its own blow up close: berryTrioTick)
+function trioBehind(b, n) {                         // a big one made a trio: n small shooters behind it (on into the room from where you come in), its own team attacks
+  const TT = trioTypes(), dir = entrySide === "right" ? -1 : 1, tr = { L: [b], kind: "BSS", ph: "idle", t: 0, cd: rand(TRIO.cd[0], TRIO.cd[1]) }; b.trio = tr;
+  for (let i = 0; i < n; i++) { let x = clamp(b.x + dir * (eHW(b) * .5 + 70 + i * TRIO.gap), 80, WORLD - 80); for (let j = 0; j < 8 && groundAt(x) === null; j++) x = clamp(x - dir * 40, 80, WORLD - 80); if (groundAt(x) === null) continue;
+    const s = makeBaddy(TT.S[i % TT.S.length], b.col || "red", x, groundAt(x)); s.trio = tr; s.dir = -dir; s.home = x; trioShooter(s); tr.L.push(s); baddies.push(s); }
+  trios.push(tr); return tr;
+}
 function trioMake(kind, x0, dir, col) {             // three of them, side by side from x0 on (dir: on into the room), the big one at the front of a riot trio
   const TT = trioTypes(), tr = { L: [], kind, ph: "idle", t: 0, cd: rand(TRIO.cd[0], TRIO.cd[1]) }, sizes = kind === "riot" ? ["B", "S", "S"] : kind.split("");
   sizes.forEach((z, i) => { const pool = TT[z]; if (!pool || !pool.length) return; let x = clamp(x0 + dir * i * TRIO.gap * (kind === "riot" && i ? 1.25 : 1), 80, WORLD - 80);
@@ -26024,6 +26157,7 @@ function berryTrioTick(dt) {                         // (after the baddies' own)
     return true; });
 }
 function roomExtras(k) {                             // (spawnBaddies) a trio in a room with only one or two in it (every other one); a flyer in one with no more than three
+  { const S = STAGES[k], b = S && S.bigTrio && baddies.find(q => q.type === S.bigTrio && !q.trio); if (b) trioBehind(b, 2); }   // (a room's big one with two small shooters of its own: the beach's C9)
   if (world === 9 || hideout || !baddies.length || STAGES[k].tut || STAGES[k].duo || STAGES[k].mini || bossHere(k)) return;
   const fwd = entrySide === "right" ? -1 : 1, col = ((BB_ROSTER[k] || [])[0] || [])[1] || "red", far = x => fwd > 0 ? x : WORLD - x;
   if (baddies.length <= 2 && k % 2 === 0) trioMake(TRIO_KINDS[(k / 2 + world) % TRIO_KINDS.length], far(WORLD * .62), fwd, col);
@@ -28310,15 +28444,20 @@ function growWeapon(p, to) {                     // it grows (or straight to the
 function growTick(p, dt) {                       // (every frame: the size the kit draws, and how far up off the ground she is, for its weapon to rest on the ground)
   p.airPx = p.onGround ? 0 : Math.max(0, (groundAt(p.x) ?? p.y + 400) - p.y);
   const want = p.power || 0, G = p.grow; if (!wpnKind(p)) { p.wsizeV = 0; p.grow = null; return; }
-  if (!G) { p.wsizeV = approach(p.wsizeV ?? want, want, dt * 2.5); return; }
+  if (!G) { p.wsizeV = approach(p.wsizeV ?? want, want, dt * 2.5); if (growRing) growRing.visible = false; return; }
   G.t += dt; const t = G.t, d = G.to - G.from; p.vx = approach(p.vx, 0, 3000 * dt);
-  if (t < GROW_POP) { const u = t / GROW_POP; p.wsizeV = G.from - .12 * Math.sin(u * Math.PI / 2) + Math.sin(t * 70) * .03 * u; }   // gathering: in a little, trembling
-  else { if (!G.popped) { G.popped = true; growPop(p); } const v = t - GROW_POP; p.wsizeV = G.to + Math.max(.25, d * .3) * Math.exp(-v * 7) * Math.cos(v * 22); }   // the burst out past it, and back
-  if (t >= GROW_T) { p.grow = null; p.wsizeV = want; }
+  if (t < GROW_POP) { const u = t / GROW_POP; p.wsizeV = G.from - .12 * Math.sin(u * Math.PI / 2) + Math.sin(t * 70) * .03 * u;   // gathering: in a little, trembling
+    if (Math.floor(t / .045) !== Math.floor((t - dt) / .045)) { const H = p.rig.heightPx || 92; sparks(p.x - p.face * 18 + rand(-46, 46), p.y - H * rand(.1, .7), 1); } }   // (crackling as it gathers, its light coming up in her, finishSync)
+  else { if (!G.popped) { G.popped = true; growPop(p); } const v = t - GROW_POP; p.wsizeV = G.to + Math.max(.25, d * .3) * Math.exp(-v * 7) * Math.cos(v * 22);   // the burst out past it, and back
+    if (growRing) { const u = Math.min(1, v / .42), H = p.rig.heightPx || 92; growRing.visible = u < 1; growRing.position.set(X(p.x - p.face * 18), Y(p.y - H * .4), (p.z || 0) + .3); growRing.scale.setScalar(.5 + 4.2 * (1 - (1 - u) * (1 - u))); growRing.material.opacity = .95 * (1 - u) * (1 - u); } }   // (its ring of light out round her)
+  if (t >= GROW_T) { p.grow = null; p.wsizeV = want; if (growRing) growRing.visible = false; }
 }
+let growRing = null;   // (the burst's ring of light: one, made the first time, growPop)
 function growPop(p) {                            // the burst: a flare of light out of it, sparks and dust, a thump; she's jolted by it
   const H = p.rig.heightPx || 92, x = p.x - p.face * 18, y = p.y - H * .35;
-  aura.burst = .4; aura.lv = 3; slashFlair(x, y, false); hitstop = Math.max(hitstop, .07); shake = Math.max(shake, 8);
+  aura.burst = .4; aura.lv = 3; slashFlair(x, y, false); hitstop = Math.max(hitstop, .17); shake = Math.max(shake, 8);   // (a beat's freeze on the burst, .07 till 2026-11-05: the user, 2026-11-05 "we need a more noticeable pause and transformation effect between the weapon growing. not like a huge slowdown so it's more noticeable")
+  if (!growRing) { growRing = new THREE.Mesh(new THREE.RingGeometry(.78, 1, 48), new THREE.MeshBasicMaterial({ color: "#fff1c2", transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide })); growRing.renderOrder = 6; actors.add(growRing); }
+  growRing.visible = true; growRing.position.set(X(x), Y(p.y - H * .4), (p.z || 0) + .3); growRing.scale.setScalar(.5); growRing.material.opacity = .95;
   sparks(x, y, 22); sparks(x, p.y - 10, 10); dust(p.x - 30, p.y, 8, -1); dust(p.x + 30, p.y, 8, 1);
   SFX.release(3); SFX.slam(); p.startle = .3; p.sq = .18; p.sqv = 0;
 }
@@ -28744,7 +28883,8 @@ const _P = Array.from({ length: 6 }, () => new THREE.Vector3()), _S = new THREE.
   _W = new THREE.Vector3(), _H = new THREE.Vector3(), _K = new THREE.Vector3(), _Hk = new THREE.Vector3(), _F = new THREE.Vector3(), _tw = new THREE.Vector3();
 function finishSync(p, r) {
   const hurt = (p.dead ? p.deadT < .15 : p.hurtT > .3 || p.hitFlash > .1) ? .9 : 0;
-  if (p === player && mode === "play" && aura.show > .01 && !hurt) {           // charging: the whole body lights up in the stage color
+  if (p === player && p.grow && !hurt) { const t = p.grow.t, k = t < GROW_POP ? (t / GROW_POP) ** 2 * .5 : .95 * Math.max(0, 1 - (t - GROW_POP) / .45); FLASHC(r.mats, k, k * .93, k * .72); }   // (the weapon growing: her light coming up as it gathers, white on the burst, and fading: the user, 2026-11-05 "we need a more noticeable pause and transformation effect between the weapon growing. not like a huge slowdown so it's more noticeable")
+  else if (p === player && mode === "play" && aura.show > .01 && !hurt) {           // charging: the whole body lights up in the stage color
     const c = CHARGE_COL[aura.lv], k = aura.show * [.08, .16, .24, .34][aura.lv] * (.7 + .3 * Math.sin(time * (12 + aura.lv * 6))); FLASHC(r.mats, c.r * k, c.g * k, c.b * k);
   } else FLASHSET(r.mats, hurt || (p.softInv && p.inv > 0 && p.hurtT <= 0 && !p.dead && accFlash && Math.floor(p.inv * 22) % 2 ? .26 : 0));   // (safe after a hit: a soft pale flicker, COMBAT FEEL's PLAYER HIT)
   const gy = p.bus ? Y(p.y) : Y(groundBelow(p)), hgt = Y(p.y) - gy, ss = clamp(1 - hgt / 7, .3, 1);   // (on La Guagua: under them, on the seat or the bed)
@@ -29177,10 +29317,10 @@ function cannonFarTick(Q, dt) {
       m.tip = 1.42 * (1 - e); s.y = GROUND - Math.sin(Math.PI * u) * 34; s.z = lerp(-.3, 0, e); s.yaw = lerp(Math.PI / 2, -.75, e); s.splat = Math.max(0, 1 - u * 2); s.onGround = u > .9;
       if (u >= 1) { m.ph = "ok"; s.splat = 0; s.onGround = true; s.y = GROUND; s.vy = 0; } } }
   Q.stars.forEach(sp => { const m = sp.userData.m, a = Q.t * 6 + sp.userData.k * TAU / 3, on = m.ph === "lie" || m.ph === "up"; sp.visible = on;   // (stars round their heads)
-    if (on) sp.position.set(X(m.st.x) + Math.cos(a) * .55, Y(m.st.y) + .5 + (m.ph === "up" ? m.H * S * (1 - m.tip / 1.42) : 0), m.st.z + m.H * S * Math.sin(m.tip) * .85 + Math.sin(a) * .4); });
+    if (on) sp.position.set(X(m.st.x) + Math.cos(a) * .55, Y(m.st.y) + .5 + (m.ph === "up" ? m.H * S * (1 - m.tip / 1.42) : 0), m.st.z + m.H * S * Math.sin(m.tip) * .85 + Math.sin(a) * .4); if (on) sp.rotation.y = a * .7; });
   if (!Q.done && Q.team.every(m => m.ph === "ok")) { Q.done = t + .75; Q.camK1 = 0; }
 }
-function cannonStars(Q, m) { for (let k = 0; k < 3; k++) { const sp = new THREE.Sprite(STAR_MAT || (STAR_MAT = glyphMat("★", "#ffd75a"))); sp.scale.setScalar(.42); sp.userData = { m, k }; actors.add(sp); Q.stars.push(sp); } }
+function cannonStars(Q, m) { for (let k = 0; k < 3; k++) { const sp = star3d(); sp.scale.setScalar(.42); sp.userData = { m, k }; actors.add(sp); Q.stars.push(sp); } }
 let STAR_MAT = null;
 function cannonDrop(C) {                             // back on the deck: out of the sky, one after another, thump
   const Q = cannonS, team = Q.team, x0 = STAGES[C.to].cannon ? STAGES[C.to].cannon.x - 420 : 1500, xs = [0, -170, 160, -330, 300, -480, 450];
@@ -29238,7 +29378,7 @@ function bwalkPos(m, t) {                            // where one of them is, t 
 function bwalkGo(B, W) {
   const team = cannonTeam(), far = bwLerp(W.N, W.F, B.side === "front" ? .32 : .36), gy = groundAt(W.Pa.x) ?? GROUND;
   team.forEach((m, j) => { const s = m.st, x0 = clamp(s.x, W.Pa.x - 420, W.Pa.x + 420); bwalkPath(m, [{ x: x0, y: groundAt(x0) ?? s.y, z: 0 }, { x: W.Pa.x, y: gy, z: 0 }, { ...W.Pa, y: gy }, W.N, far], j * .3); m.hid = false; });
-  bwalkS = { ph: "out", t: 0, B, team, cam: { p: camera.position.clone(), q: camera.quaternion.clone() } }; cine = null; SFX.confirm();
+  bwalkS = { ph: "out", t: 0, B, team, cam: { p: camera.position.clone(), q: camera.quaternion.clone() } }; cine = null; SFX.confirm(); bwFg(false);
 }
 const bwalkFree = s => Object.assign(s, { crouch: false, crawl: false, skid: false, brake: null, block: false, pivotT: 0, upHop: null, upCoil: null, dodge: null, fidget: null, pointKind: null, tcPose: null, tpose: 0, hurtT: 0, atkT: -1, combo: null, prof: 1, bodyYaw: .3 });   // (every walker, every step of the show: the moves that switch the walk cycle off (↓'s crouch going back, a run's brake-skid, a guard, a blow) can't stick, as nothing else runs to end them; and turned as when walking)
 function bwalkTick(dt) {                             // the walk, a step at a time
@@ -29262,8 +29402,9 @@ function bwalkLand(Q) {                              // (under the fade) at the 
     bwalkPath(m, [far, W.N, { ...W.Pa, y: gy }, { x: W.Pa.x, y: gy, z: 0 }, { x: ex, y: ey, z: 0 }], j * .3); m.hid = true; Object.assign(m.st, { x: far.x, y: far.y, z: far.z }); });
   Object.assign(Q, { ph: "in", t: 0, fading: false, cam: null });
 }
+const bwFg = on => (level.fg || []).forEach(F => { if (F.userData.bwFg) F.traverse(o => o.layers.set(on ? 1 : 0)); });   // (BA1's and BB6's walkway: in front of everyone, but not while they walk along it)
 function bwalkEnd() {                                // over: everyone themselves again, where they stand
-  const Q = bwalkS; if (!Q) return;
+  const Q = bwalkS; if (!Q) return; bwFg(true);
   Q.team.forEach(m => { const s = m.st; Object.assign(s, { z: 0, vx: 0, vy: 0, onGround: true, plat: null }); if (m.r && m.r.root) m.r.root.visible = true; if (m.a) { m.a.at = allyRoomKey(); m.a.pl = player; m.a.tgt = null; } });
   Object.assign(player, { safe: { x: player.x, y: player.y, plat: null }, inv: Math.max(player.inv || 0, .6) });
   bwalkS = null; bwPrev = true;                      // (the key still held from the way in: not another go)
