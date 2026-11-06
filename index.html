@@ -524,6 +524,10 @@
   .mnu.show { display: flex; }
   #map.show { background: rgba(47, 59, 67, .55); }
   .mnu .btns { justify-content: center; }
+  #keysPop { z-index: 66; background: rgba(47, 59, 67, .55); cursor: pointer; } #keysPop .panel { max-width: 780px; }   /* the controls, the first time on a keyboard (keysPopShow) */
+  #keysPop .kpGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 26px; margin: 0 0 20px; color: var(--s); font-size: 13px; letter-spacing: .05em; line-height: 1.35; }
+  #keysPop .kpGrid div { display: flex; align-items: center; gap: 12px; } #keysPop .kpGrid b { flex: none; min-width: 58px; text-align: center; background: var(--s); color: var(--y); padding: 4px 8px 2px; border-radius: 4px; font-weight: normal; }
+  #keysPop .kpGrid i { font-style: normal; opacity: .55; margin-left: 4px; } #keysPop .kpGrid .wide { grid-column: 1 / -1; }
   #menu .btns, #dev .btns { flex-direction: column; align-items: stretch; min-width: 300px; }
   .panel button.off:where(:not(#ed *)) { opacity: .35; pointer-events: none; }
   #gear { position: fixed; top: 16px; right: 16px; z-index: 44; width: 54px; height: 54px; display: none; align-items: center; justify-content: center; padding: 0;
@@ -850,6 +854,18 @@
   <div class="lockup"><div class="blk">ONE TOO MANY</div><div class="bar">TWO PARTNERS AT A TIME · WHO GOES HOME?</div></div>
   <div class="btns" id="teamBtns"></div>
   <small data-pad="← → to choose &middot; {j} to send them home">← → to choose &middot; Enter to send them home</small>
+</div></div>
+<div id="keysPop" class="mnu"><div class="panel">
+  <div class="lockup"><div class="blk">CONTROLS</div><div class="bar">ON THE KEYBOARD</div></div>
+  <div class="kpGrid">
+    <div><b>← →</b>MOVE · HOLD TO SPEED UP</div><div><b>↓↓</b>DROP DOWN</div>
+    <div><b>↑ Z<i>✕</i></b>JUMP · AGAIN IN THE AIR: DOUBLE JUMP</div><div><b>C<i>○</i></b>ATTACK · HOLD TO CHARGE</div>
+    <div><b>D<i>△</i></b>YOUR SHOT · HOLD: BIGGER</div><div><b>S<i>□</i></b>THE LINE: WHO GOES FIRST</div>
+    <div><b>F<i>L</i></b>BLOCK, YOUR BLOCKER IN FRONT</div><div><b>V<i>R</i></b>SPLIT UP THE TEAM · AGAIN: BACK TO YOU</div>
+    <div class="wide"><b>F + C Z D S</b>HOLD BLOCK AND PRESS ONE: A TEAM MOVE (TAP IT, OR HOLD IT TO CHARGE)</div>
+    <div><b>/</b>ITEMS</div><div><b>ESC</b>PAUSE</div>
+  </div>
+  <small>Z or Enter to play</small>
 </div></div>
 <div id="skipAsk" class="mnu"><div class="panel">
   <div class="lockup"><div class="blk">SKIP THE RIDE?</div><div class="bar" id="skSub"></div></div>
@@ -8130,7 +8146,7 @@ function fitMenus() {
     const f = Math.min(1, aw / w, room / hh); el.style.zoom = f < .985 ? f.toFixed(3) : ""; if (all) el.style.maxHeight = f < .985 ? "none" : ""; });
 }
 setInterval(fitMenus, 250); addEventListener("resize", fitMenus); addEventListener("orientationchange", () => setTimeout(fitMenus, 300)); if (window.visualViewport) visualViewport.addEventListener("resize", fitMenus);
-function closeMenus() { vlogHush(); ["menu", "dev", "settings", "slots", "hero", "map", "vlog"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); menuUp = null; }
+function closeMenus() { vlogHush(); ["menu", "dev", "settings", "slots", "hero", "map", "vlog", "keysPop"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); if (menuUp === "keys") paused = false; menuUp = null; }   // (the first-time controls popup paused the game itself: closed this way it comes back, not yet seen)
 function showMainMenu() {                            // over the bep crowd: NEW GAME, LOAD GAME, and the gear
   closeMenus(); story = null; mapSeen = {};
   if (mode !== "select") showSelect();
@@ -8223,9 +8239,20 @@ function markMenu() {
   if (menuUp === "rideskip") [...$("skBtns").children].forEach((b, i) => b.classList.toggle("on", i === skipSel));
   if (menuUp === "hero") { [...$("heroList").children].forEach((b, i) => b.classList.toggle("on", !heroAsk && i === heroSel)); $("heroAsk").querySelectorAll("button").forEach((b, i) => b.classList.toggle("on", i === heroAskSel)); }
 }
+// the controls, once, the first time you're playing on a computer's keyboard (the user, 2026-11-05: "the first time someone starts playing, show a popup that shows controls if they're playing on a computer with a keyboard"): up as soon as you've your
+// character to yourself (nothing talking, no film, no ride), the game held till Z, Enter (or any pick or back) or a click. Kept in this browser (bb_keysSeen)
+const KEYS_SEEN = "bb_keysSeen"; let keysDone = false, keysPopT = 0;
+function keysPopCheck(dt) {
+  if (keysDone) return; if (menuUp || paused || mode !== "play" || !player || player.dead || cine || opening || transit || titleUp || vo || tale || pro || rideS || window.__pause || !kbUse()) { keysPopT = 0; return; }
+  if ((keysPopT += dt) < .8) return; let seen = false; try { seen = !!localStorage.getItem(KEYS_SEEN); } catch (e) { } if (seen) { keysDone = true; return; }
+  menuUp = "keys"; paused = true; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; $("keysPop").classList.add("show"); SFX.confirm();
+}
+function keysPopClose() { keysDone = true; try { localStorage.setItem(KEYS_SEEN, "1"); } catch (e) { } $("keysPop").classList.remove("show"); if (menuUp === "keys") menuUp = null; paused = false; for (const k in keys) keys[k] = false; SFX.tick(); }
+$("keysPop").addEventListener("click", () => { if (menuUp === "keys") keysPopClose(); });
 function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ or ↓)
   if (transit) return;                               // (on the way into the game: the menus are still up under the fade)
   if (achOpen) { if (ok || back) closeAch(); return; }   // (the achievements over a menu: a controller's pick or back closes them, not the menu under them)
+  if (menuUp === "keys") { if (ok || back) keysPopClose(); return; }   // (the first-time controls: either one closes them)
   if (menuUp === "mappath") { if ((ok || back) && mapAnim && performance.now() - mapAnim.t0 > 2300) mapPathDone(); return; }   // (the way being drawn: a press once it's there goes on)
   const M = menuUp, step = (v, n) => (v + d + n) % n;
   if (M === "rideask") { if (d) { rideAskSel = 1 - rideAskSel; SFX.tick(); markMenu(); } if (ok) rideAnswer(rideAskSel === 0); if (back) rideAnswer(false); return; }
@@ -29414,6 +29441,7 @@ function frame(now) {                              // (the next frame is asked f
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
     pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    keysPopCheck(dt);   // (the first time on a keyboard: the controls)
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
     if (riseFade > 0) riseFadeTick(dt);              // (a room change without a pan: the one you left fading off, the game going on)
