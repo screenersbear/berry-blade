@@ -12540,7 +12540,7 @@ function bcStep(o, s, dt) {                           // (partHuman: a buddy's p
   }
   bcFree(s); return false;
 }
-const bcSoloOn = (o, s) => s.bcSolo > time && !!(o && (o.stay || o.pact || o.pcmd));
+const bcSoloOn = (o, s) => (s.bcSolo > time && !!(o && (o.stay || o.pact || o.pcmd))) || !!(s.post && s.post.sent && !s.post.back);   // (sent off at one: it fights on there while you keep the guard up, then back to its place by you)
 function bcLeap(s, B, dt, dir, kin, ph) {             // up high (off the blocker's back, if it's there to go off) and down hard on them
   s.block = false; s.defOn = false; s.pinv = Math.max(s.pinv || 0, .12);
   if (B.ph === "wait") { if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); s.tkDig = 1; if (B.t >= B.delay) { s.tkDig = 0; ph(B.launch && !B.self ? "onto" : B.via && B.via.rig && !B.via.worn ? "hop" : "up"); if (B.ph === "up") { SFX.jump(); dust(s.x, s.y, 5, 0); if (B.launch) launchPlan(s, B); } } return true; }
@@ -14020,7 +14020,7 @@ const TEAM = { aroundR: 190, aroundCd: [.5, .9], shotCd: [.75, 1.15], spreadGap:
 let teamM = false, tLead = null; const teamB = [0, 1, 2].map(() => ({ on: false, t: 0, full: false, said: false }));
 const pO = P => P.kind === "ally" ? P.a : P.kind === "ej" ? ej : P.q;   // (whose step drives it: a buddy's, Noro's, a pet's own)
 const pHeal = P => !!(P && P.kind === "ally" && P.a && P.a.A.heal);
-const teamOn = () => partAble().some(P => P.q.post);
+const teamOn = () => partAble().some(P => P.q.post && !P.q.post.sent);   // (one sent off by a move of yours (focusSend: the toss, the launch) isn't the team split up: it was, and your L stopped being your block till it got back (the user, 2026-11-05: "it's not working the way it used to when it was originally L+x"))
 const teamAtk = L0 => { const L = L0.filter((P, i) => !pHeal(P) && !(i === 0 && L0.length > 1 && blkRank(P.a))), i = L.findIndex(P => P.q === tLead); return i > 0 ? [...L.slice(i), ...L.slice(0, i)] : L; };   // (the attackers: not the healer, not the blocker in front (again since 2026-11-03 late); the one who leads first: □ tapped swaps it, leadSwap)
 function nearFoe(s, R, x0 = s.x) { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (walled(e.x, s.x) || Math.abs(e.y - s.y) > 220) continue; const d = Math.abs(e.x - x0); if (d < R && d < bd) { bd = d; best = e; } } return best; }
 function teamInput(dt, ok) {                          // (in partInput, while they're on their own: △ and □ theirs; the block's just yours, since 2026-11-03)
@@ -14371,7 +14371,7 @@ function partAuto(dt) {
 // sent off by a move of yours (the launcher, an L move): at the one it's given, then any other right by it, then back to you once there's nothing left there
 // (the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting, as opposed
 // to when the player presses R and splits up the team"). A sortie post with its own one (postStep follows it about, the next near its place after it, then home)
-function focusSend(P, e) { const q = P && P.q; if (!q || !e) return; postSet(P, e.x, e.y, "sortie", null); q.post.foe = e; q.post.focus = true; q.lvlLock = false; q.homeW = q.wayE = null; }
+function focusSend(P, e) { const q = P && P.q; if (!q || !e) return; postSet(P, e.x, e.y, "sortie", null); q.post.foe = e; q.post.focus = true; q.post.sent = true; q.lvlLock = false; q.homeW = q.wayE = null; }   // (sent: off at it on its own and back, not the team split up: teamOn leaves it out, your guard stays yours, bcSoloOn)
 // your launcher (the user, 2026-11-05: "when you launch a berry up for the air attacks, your team will go forward and attack enemies that were behind that berry rather than
 // jumping with you. if there are no other berries, then they will jump and attack with you"): the ones past it (on from you, about your level, no wall between), one each
 // as far as they go, the nearest first; none there, each goes up at the one you sent up
@@ -14811,7 +14811,7 @@ function partHuman(o, s, dt, X) {
   if (s.tcOn || s.tcFly) return true;   // (Camila's team charge: where it puts them, teamChargeTick)
   if (s.post && s.post.kind === "btn") return tbStep(o, s, dt);   // (the beach's B7: flung over the gap, at the winch's button)
   if (chgHold(s, dt)) return true;                   // (winding up for CHARGE! + ↑)
-  if (s.post && !partBlocking()) { const r = postStep(o, s, dt, false); if (!o.pcmd && !o.pact) return r; }   // (CHARGE!: at its place)
+  if (s.post && (!partBlocking() || s.post.sent)) { const r = postStep(o, s, dt, false); if (!o.pcmd && !o.pact) return r; }   // (CHARGE!: at its place)   // (sent off at one, focusSend: on at it with your guard up too)
   if (partBlocking() && !bcSoloOn(o, s)) { if (o.pact && (s.onGround || !s.atkKind)) partEnd(o, s, true); o.pcmd = o.pnext = null; o.stay = null;
     if (!o.pact) { s.sprint = false; defendStep(s, dt); return true; } }
   s.defOn = false;
@@ -14908,10 +14908,11 @@ function partPet(q, k, dt) {                        // a pet on your command: it
   if (q.tcOn || q.tcFly) return true;
   if (q.post && q.post.kind === "btn") return tbStep(q, q, dt);
   if (chgHold(q, dt)) return true;
-  if (q.post && !partBlocking()) { const r = postStep(q, q, dt, true); if (!q.pcmd && !q.pact) return r; }
-  if (partBlocking() && !q.pounce) { q.pact = q.pcmd = q.pnext = null; defendStep(q, dt); return true; }
+  const sent = !!(q.post && q.post.sent && !q.post.back);   // (sent off at one, focusSend: on at it with your guard up too, as a buddy does)
+  if (q.post && (!partBlocking() || sent)) { const r = postStep(q, q, dt, true); if (!q.pcmd && !q.pact) return r; }
+  if (partBlocking() && !q.pounce && !sent) { q.pact = q.pcmd = q.pnext = null; defendStep(q, dt); return true; }
   q.defOn = false;
-  if (partBlocking() && partnerList().some(P => P.q === q)) { q.pact = q.pcmd = q.pnext = null; if (!q.pounce) { q.block = true; if (q.onGround) q.vx = approach(q.vx, 0, 2600 * dt); const f = partTarget(q, false); q.face = f ? Math.sign(f.x - q.x) || q.face : p.face; return true; } return false; }
+  if (partBlocking() && !sent && partnerList().some(P => P.q === q)) { q.pact = q.pcmd = q.pnext = null; if (!q.pounce) { q.block = true; if (q.onGround) q.vx = approach(q.vx, 0, 2600 * dt); const f = partTarget(q, false); q.face = f ? Math.sign(f.x - q.x) || q.face : p.face; return true; } return false; }
   q.block = false;
   if (!q.pact && q.pcmd && !q.pounce) { const c = q.pcmd; q.pcmd = null; q.pWeak = !!c.weak; q.pFire = !!c.fire; const sp = c.type === "special" ? KIT.PET_SP[petOf(q)] : null, tgt = partTarget(q, true);
     q.pact = { t: 0, tgt, legs: c.type === "special" ? [{ sp, kind: sp ? "smash" : "launch", T: .45 }] : c.up ? [{ kind: "launch", T: .38 }, { kind: "smash", T: .3 }] : c.down && !q.onGround ? [{ kind: "smash", T: .22 }] : [{ kind: "smash", T: c.air || !q.onGround ? .3 : .38 }, { kind: "smash", T: .34 }] };
