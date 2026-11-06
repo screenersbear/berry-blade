@@ -1565,6 +1565,9 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
   for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo >= fy) break;
     pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
+  if (p.leanK > .001) { const z0 = pr.inner.rotation.z; for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo <= fy + .01) break;   // (Rose leaning on it, swordLean: down onto the ground too, its point planted, not hung off it)
+    pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
+    pr.inner.rotation.z += clamp((fy - lo) / d, -.5, .5); } pr.inner.rotation.z = z0 + clamp(pr.inner.rotation.z - z0, -.8, .8) * sstep(0, 1, p.leanK); }
   pr.group.position.z += s * .045 * Math.min(g, 3);
 }
 // its weight dragging her back as she runs, Camila's arm and Rose's blade alike (the user, 2026-11-01: "camila leans back when running, like the weight of the arm is pulling her back (which I love)
@@ -1593,7 +1596,35 @@ const GIANT_STANCE = {
   sword: { lean: .1, arch: .04, bodyY: -.1, headRot: -.06, fNx: .21, fFx: -.24, fNz: .22, fFz: .2, fNy: 0, fFy: 0, fP: 0, armF: .3, elbF: 1.55, spF: .2, armB: .12, elbB: .35, blade: 2.6 } };   // (blade: its angle, back over her shoulder)
 api.GIANT_STANCE = GIANT_STANCE;
 const ownPoseOf = (p, air) => { const M = p.rig.spec.move || {}; return air ? (p.vy < -160 ? M.rise : p.vy < 160 ? M.top : M.fall) : p.hurtT > 0 ? M.hurt : null; };   // (the pose she's in that the character may have set)
-function giantPose(p, o) {                           // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
+// Rose leaning on her grown sword (the user, 2026-11-06: "for rose's idle animations, when her sword is bigger, stage 2-4, have her prop it up and lean on it, holding the hilt
+// only. have some variety depending on the size"): stood still a moment, the sword planted, her hand up on the hilt, her weight on it; in place of her fidgets and her big idle while
+// it's grown (the game asks KIT.leanIdle). Keys as a gstance's (F: the sword arm; blade: its angle, giantSword tilts it till its point rests on the ground), by size 2, 3, 4; two sets,
+// as she's turned to us whichever way she faces: her sword hand the far one (sw; Rose facing left), planted out in front of her and leant into; the near one, planted behind her and
+// leant back on (the same lean behind her facing left had the slab hidden at her back, out of sight). Each blade angle well off straight down: there its point could come to the
+// ground either side, and it flipped from one to the other as she swayed
+const SWORD_LEAN_IDLE = { rose: [[
+  { armF: 1.0, elbF: 1.4, spF: .6, blade: -1.0, armB: .08, elbB: .35, spB: .12, lean: .25, arch: -.04, bodyY: -.05, fNx: .32, fFx: .12, fNz: -.2, fFz: .14, headRot: .1, headY: -.3, lid: 0 },   // (2: upright by her front foot like a staff, her hand on it at her shoulder)
+  { armF: 2.3, elbF: .5, spF: .5, blade: -1.1, armB: .08, elbB: .35, spB: .12, lean: .25, arch: -.1, bodyY: -.06, fNx: .34, fFx: .1, fNz: -.2, fFz: .14, headRot: .14, headY: -.25, lid: 0 },   // (3: slanting out ahead, her arm up over her head on it)
+  { armF: 2.0, elbF: .9, spF: .7, blade: -.95, armB: .08, elbB: .35, spB: .12, lean: .3, arch: 0, bodyY: -.07, fNx: .3, fFx: -.02, fNz: -.18, fFz: .14, headRot: .22, headY: -.2, lid: .35 } ], [   // (4: the slab propped out ahead at a slant, eyes half shut)
+  { armF: 2.6, elbF: .9, spF: 1.3, blade: -1.45, armB: .08, elbB: .35, spB: .12, lean: -.5, arch: -.04, bodyY: -.12, fNx: .32, fFx: .12, fNz: -.2, fFz: .14, headRot: .1, headY: -.3, lid: 0 },   // (2: a tall staff slanting back, her hand on it at her shoulder, leant back into it; any higher and its point hung off the ground)
+  { armF: 2.45, elbF: .35, spF: .5, blade: -1.78, armB: .08, elbB: .35, spB: .12, lean: -.42, arch: -.1, bodyY: -.06, fNx: .34, fFx: .1, fNz: -.2, fFz: .14, headRot: .14, headY: -.25, lid: 0 },   // (3: up over her head at arm's length, further back into it)
+  { armF: 2.6, elbF: .9, spF: .9, blade: -2.0, armB: .08, elbB: .35, spB: .12, lean: -.4, arch: -.16, bodyY: -.07, fNx: .3, fFx: -.02, fNz: -.18, fFz: .14, headRot: .22, headY: -.2, lid: .35 } ]] };   // (4: the slab propped behind her, slanting; the hilt up by her head, out of her face; her back to it, eyes half shut)
+const LEAN_IDLE = { after: 1, in: 1.4, out: 7 };   // (stood still this long, s; then into it at in/s, out of it at out/s)
+const leanIdleOf = p => { const L = SWORD_LEAN_IDLE[p.rig.spec.id]; return L && p.rig.prop && p.rig.prop.kind === "sword" && giantOf(p) > .5 ? L : null; };
+api.leanIdle = p => !!leanIdleOf(p);
+function swordLean(p, o, dt, sw, A, E) {
+  const L = leanIdleOf(p); if (!L) { p.leanK = 0; return; }
+  if (p.leanAt !== undefined && Math.abs(api.time - p.leanAt) > .1) p.leanK = 0; p.leanAt = api.time;   // (not here a moment (a block, a climb, a seat: giantPose went no further): from nothing again, never back in where it was)
+  const want = (p.stillT || 0) >= LEAN_IDLE.after && p.onGround !== false && p.atkT < 0 && !(p.hurtT > 0) && !p.fidget && !p.grow;
+  p.leanK = approach(p.leanK || 0, want ? 1 : 0, dt * (want ? LEAN_IDLE.in : LEAN_IDLE.out)); if (p.leanK < .001) return;
+  const S = L[sw ? 0 : 1], k = sstep(0, 1, p.leanK), u = clamp(giantOf(p) - 1, 0, 2), i = Math.min(Math.floor(u), 1), f = u - i, P0 = S[i], P1 = S[i + 1], t = api.time;
+  const br = Math.sin(t * 2.1), sway = Math.sin(t * .55), c = t % 7, tap = c > 4.6 && c < 5.8 ? Math.max(0, Math.sin((c - 4.6) * TAU * 2.5)) : 0;   // (breathing; her weight rocking on it; now and then a tap of the crossed foot)
+  const life = { bodyY: .012 * br, arch: .015 * br, lean: .035 * sway, headRot: .03 * sway, headY: .22 * Math.sin(t * .31), fNy: .05 * tap };   // (and a slow look round)
+  for (const key in P0) { if (key === "blade") continue; const kk = sw ? SWAP[key] || key : key, v = lerp(P0[key], P1[key], f) + (life[key] || 0); o[kk] = lerp(o[kk] ?? 0, v, k); }
+  if (life.fNy) { const kk = sw ? "fFy" : "fNy"; o[kk] = lerp(o[kk] ?? 0, life.fNy, k); }
+  const wt = lerp(P0.blade, P1.blade, f) - (o[A] + o[E]), w0 = o.wrist ?? -.6; o.wrist = lerp(w0, wt + TAU * Math.round((w0 - wt) / TAU), k);   // (the short way round from her shoulder: lowered behind her and planted)
+}
+function giantPose(p, o, dt = 1 / 60) {                // not in a move: too heavy to carry as it was, hanging from her shoulder and dragged behind her along the ground (its weight, her lean into it)
   p.gripFree = false; p.gPoseK = 0; const F = p.fidget, FS = F && STRIKES[F.kind], OA = FS && FS.ownArms, own0 = OA ? clamp(Math.min((F.t - OA[0]) / .3, (OA[1] - F.t) / .3), 0, 1) : 0, fh = !!(FS && FS.freeHand && F.t > FS.freeHand[0] && F.t < FS.freeHand[1]);   // (own0: a big idle's own arms, Camila's handstand on the grown fist, the user 2026-11-02 "even with big hands")
                    // (gPoseK: how much the grown arm follows her posed arm instead of resting on the ground, giantArm)
   const g = giantOf(p), pr = p.rig.prop; if (g <= .005 || !pr || (pr.kind !== "gauntlet" && pr.kind !== "sword")) return;
@@ -1623,12 +1654,13 @@ function giantPose(p, o) {                           // not in a move: too heavy
   giantDrag(p, o, g, run, air);                     // (its weight dragging her back as she runs: Camila's arm, Rose's blade, 2026-11-01)
   // standing, grown (the user, 2026-11-01: "revisit rose and camila's stances with their new weapons? they look incredibly awkward"): not the fighting stance it was (Camila's
   // boxer's crouch, Rose's lean with her free hand out in front) but planted under the weight: upright, feet apart, knees soft, head up
-  const jk = p.onGround ? Math.min(1, (p.jcharge || 0) * 1.6) : 0, st = w * (1 - (p.gaitAmt || 0)) * (air || p.hurtT > 0 ? 0 : 1) * (1 - jk); if (st < .01) return;   // (hit: her hurt pose, not planted; winding up a big jump: down into her crouch, the user 2026-11-01 "camila doesnt crouch when she's got a big arm and is chargning her jump")
+  const jk = p.onGround ? Math.min(1, (p.jcharge || 0) * 1.6) : 0, st = w * (1 - (p.gaitAmt || 0)) * (air || p.hurtT > 0 ? 0 : 1) * (1 - jk); if (st < .01) { swordLean(p, o, dt, sw, A, E); return; }   // (hit: her hurt pose, not planted; winding up a big jump: down into her crouch, the user 2026-11-01 "camila doesnt crouch when she's got a big arm and is chargning her jump")
   const G0 = GIANT_STANCE[pr.kind], G = M.gstance || {}, S = {};
   for (const k in G0) if (!/^(armF|elbF|spF|blade)$/.test(k)) S[k] = G0[k];   // (the planted stance; the weapon arm's hold is above, by its move)
   for (const k in G) if (k !== "blade") S[k] = G[k];                   // (the character's own grown standing pose over it, every part it set: the weapon arm too)
   for (const k in S) { if (fh && /^(armB|elbB|spB|rlB)$/.test(k)) continue; const kk = sw ? SWAP[k] || k : k; o[kk] = lerp(o[kk] ?? 0, S[k], st); }   // (fh: her other arm her own, dancing)
   if (pr.kind === "sword" && (G.blade !== undefined || G.armF !== undefined || G.elbF !== undefined)) o.wrist = lerp(o.wrist ?? -.6, (G.blade ?? G0.blade) - (o[A] + o[E]), st);   // (the blade at its angle: hers if she has one, else back over her shoulder)
+  swordLean(p, o, dt, sw, A, E);                     // (stood still a moment: Rose leant on it)
   // (her other arm posed in it: still holding the grown arm, where and as she posed it, holdSolve. It let go before, 2026-11-01, and her posed hand ended up by her chin facing the other way)
 }
 
@@ -3289,7 +3321,7 @@ function updatePoseHuman(p, dt) {
   o.lS = kick;
   o.fFx = lerp(o.fFx, sf[0], g); o.fFy = lerp(o.fFy, sf[1], g); o.pF = lerp(o.fP, sf[2], g); o.sF = 0;
   runLayer(p, o, ph / TAU, g);
-  giantPose(p, o);                                           // (a grown weapon: hanging, dragged; a move eases out of it and back)
+  giantPose(p, o, dt);                                       // (a grown weapon: hanging, dragged; a move eases out of it and back)
   if (p.wearyK > .01 && a < 0 && p.hurtT <= 0 && !p.climb) { const k = p.wearyK * (1 - (p.restK || 0)) * (1 - (p.cheerK || 0)), b = Math.sin(t * 8);   // worn out by a grown weapon (the game's nrgTick, 2026-11-03): stooped, head down, panting (after giantPose, or its stance hides it)
     o.lean += .24 * k; o.headRot += .24 * k; o.bodyY += (-.05 + .016 * b) * k; o.arch += (.08 + .05 * b) * k; }
   if (p.worn && a < 0) { const k = .85, sw = Math.sin(t * 2.2); o.lean += .36 * k; o.arch += .12 * k; o.headRot += (.34 + .04 * sw) * k; o.bodyY -= .05 * k;   // worn out (a partner out of hearts, 2026-11-01): bent over, head hung, arms dangling, a sway
