@@ -1631,6 +1631,7 @@ function giantPose(p, o, dt = 1 / 60) {                // not in a move: too hea
   if (p.climb || p.zip || p.crawl || (p.sit && p.chair)) { p.gripFree = true; return; }   // (both hands her own: on the rungs, the zip line's handle, the floor; sat in a chair, her sword put by it (index.html's chairProp). Her other hand pulled over to the grown arm till 2026-11-05)
   if (p.sit || p.dive || p.swim || p.consSit || p.block || p.tpose > 0 || p.pointKind || p.tcPose || p.restK > .5) return;   // (sat in a chair too since 2026-11-05: it stood her up in the grown stance over the chair. The user: "rose doesnt sit down on the rest chairs")
   if (p.cheerK > .25) { p.gPoseK = clamp((p.cheerK - .25) / .4, 0, 1); p.gripFree = true; return; }   // (the cheer: the grown arm up with her own, both hands up)
+  if (p.bstK > .2 || p.heaveK > .2) { p.gPoseK = clamp(Math.max(p.bstK || 0, p.heaveK || 0) * 1.5 - .3, 0, 1); p.gripFree = true; return; }   // (a boost for a jump, the game's L+✕, 2026-11-06: down with her hands cupped and the heave, the grown one in them, as the cheer)
   const w = clamp(g, 0, 1) * (1 - own0), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), air = !p.onGround, sw = leadFar(p), A = sw ? "armB" : "armF", E = sw ? "elbB" : "elbF", Sp = sw ? "spB" : "spF";
   const M = p.rig.spec.move || {}, own = ownPoseOf(p, air), mine = k => !!own && own[k] !== undefined, ow = { [A]: mine("armF"), [E]: mine("elbF"), [Sp]: mine("spF") };   // (its arm as the character posed it, in a jump or hit: kept)
   const hold = (k, v) => { if (!ow[k]) o[k] = lerp(o[k] ?? 0, v, w); }, armPosed = P => !!P && ["armF", "elbF", "spF", "rlF"].some(c => P[c] !== undefined);
@@ -2101,6 +2102,10 @@ function WHEEL_KEYS(a0, a1, dur, lead = .1) {
 }
 const TKDIG_H = { lean: .62, arch: -.05, bodyY: -.3, headRot: -.38, armF: .95, elbF: .35, armB: -.35, elbB: 1.1, spF: .05, spB: -.1, fNx: .36, fFx: -.42, hF: .5 };   // charging the tackle (redone 2026-10-17, the user found it unnatural): a lineman's set, leaning in with a flat back, hips low, head up and eyes forward, the lead hand reaching down and forward, the other cocked at the hip, feet wide and staggered, back heel up
 const TKDIG_C = { lean: .95, arch: .5, bodyY: -.32, headRot: -.25, armF: 1.15, elbF: .9, armB: 1.05, elbB: 1.0, fNx: .3, fFx: -.34, tailBase: 1.8, tailCurl: .15, hatTilt: -.25 };   // (the cat: crouched to pounce, front paws planted ahead, eyes forward, tail up)
+const BOOST_H = { lean: .4, arch: -.06, bodyY: -.3, headRot: -.28, armF: .92, elbF: .5, armB: .92, elbB: .5, spF: -.4, spB: -.4, fNx: .3, fFx: -.3, fNy: 0, fFy: 0 };   // a boost for a jump (L+✕, the user, 2026-11-06: "a crouching position with hands up front to simulate pushing up a character for a jump"): down low, feet wide, both hands cupped together out in front for a foot
+const HEAVE_H = { lean: -.12, arch: -.16, bodyY: .03, headRot: -.42, armF: 2.85, elbF: .22, armB: 2.85, elbB: .22, spF: .1, spB: .1, fNx: .14, fFx: -.14, fNy: 0, fFy: 0 };   // (and the heave: up out of it onto her toes, both arms flung up after the one going up, eyes on it)
+const BOOST_C = { lean: .55, arch: .3, bodyY: -.3, headRot: -.2, armF: 1.3, elbF: 1.2, armB: 1.3, elbB: 1.2, fNx: .26, fFx: -.26, tailBase: 1.5, tailCurl: .1 };   // (the cat's: crouched, front paws up together)
+const HEAVE_C = { lean: -.3, arch: -.1, bodyY: .05, headRot: -.32, armF: 2.6, elbF: .3, armB: 2.6, elbB: .3, tailBase: 1.9, tailCurl: .2 };
 const TACKLE_H = { lean: .7, arch: .2, bodyY: -.16, headRot: .28, armF: 1.3, elbF: 1.95, armB: 1.2, elbB: 2.0, spF: -.32, spB: -.32 };   // shoulder down, forearms braced across in front, head tucked: a running back going through
 const TACKLE_C = { lean: 1.0, arch: .3, bodyY: -.14, headRot: .26, armF: 1.45, elbF: 1.7, armB: 1.35, elbB: 1.7, tailBase: 1.55, tailCurl: -.08, hatTilt: -.4 };
 const tkKind = (p, k) => p.rig.spec.move.tackle === "wheel" && STRIKES[k + "_wheel"] ? k + "_wheel" : k;   // (Rose's: the cartwheel)
@@ -2149,6 +2154,8 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
     if (P.armF !== undefined) P.armF += sh; if (P.armB !== undefined) P.armB -= sh;
     for (const key in P) if (p.onGround || !LEG_CH.has(key)) T[key] = lerp(T[key] ?? 0, P[key], w); }
   if (p.jcharge > 0 && p.onGround) { const k = Math.min(1, p.jcharge * 1.6); T.bodyY -= .2 * k; T.lean += .22 * k; T.armF = lerp(T.armF, -.7, k); T.armB = lerp(T.armB, -.8, k); T.fNx = lerp(T.fNx, .22, k); T.fFx = lerp(T.fFx, -.2, k); }   // crouching down to spring
+  if (p.bstK > .001 || p.heaveK > .001) { const kb = sstep(0, 1, Math.min(1, p.bstK || 0)), kh = sstep(0, 1, Math.min(1, p.heaveK || 0)), B = cat ? BOOST_C : BOOST_H, U = cat ? HEAVE_C : HEAVE_H;   // a boost for a jump, the hands cupped (bstK), then the heave up out of it (heaveK): the game's L+✕
+    for (const key in B) T[key] = lerp(T[key] ?? 0, B[key], kb); for (const key in U) T[key] = lerp(T[key] ?? 0, U[key], kh); }
 }
 const CAT_BLOCK = { lean: .45, arch: .35, bodyY: -.05, armF: 1.7, elbF: 1.4, armB: 1.5, elbB: 1.5, fNx: .16, fFx: -.14, fNy: 0, fFy: 0, tailBase: 1.6, tailCurl: .1, hatTilt: -.15 };
 const MOVESETS = {
@@ -3144,7 +3151,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
-  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb) || !!p.upHop;   // (the crouch and jump up after a launch too: quick, or the crouch never shows)   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
+  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb) || !!p.upHop || p.heaveK > 0;   // (the crouch and jump up after a launch too: quick, or the crouch never shows)   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
   for (const key in T) {
     if (p.pose[key] === undefined) p.pose[key] = T[key];
     if (SPRUNG.has(key)) {
@@ -3230,7 +3237,7 @@ function updatePoseHuman(p, dt) {
   else if (a >= 0 && STRIKES[p.atkKind] && STRIKES[p.atkKind].keys) { const S = STRIKES[p.atkKind], K = keysOf(p, S), sw = !S.screen && leadFar(p), airLegs = p.airLegs = strikeLegs(p, T, ST, S, a);
     for (const k in K) { const kk = sw ? SWAP[k] || k : k; if (k !== "blade" && kk in POSE_H0 && !(airLegs && LEG_CH.has(kk) && kk !== "bodyY")) T[kk] = kv(p, K, k, a) * (sw && TWISTS.has(k) ? -1 : 1); } }
   else if (p.bounceT >= 0) Object.assign(T, { lean: .45, arch: .3, armF: 1.3, elbF: 1.5, armB: 1.1, elbB: 1.5, fNx: .15, fNy: .5, fFx: .02, fFy: .45, fP: -.3 });
-  else if (!p.onGround) {
+  else if (!p.onGround && !p.perch) {   // (perch: stood on someone's cupped hands, the game's L+✕ boost, 2026-11-06: standing legs, not the jump's tucked ones)
     // (the legs a stride apart, 2026-10-23: they hung close together front to back, one boot stacked over the other: "twisted and distorted ... in the air")
     // (the user, 2026-10-31: "when the girls are in the air, their legs should feel that way": the knee higher going up, both tucked at the top, then a stride apart
     // and loose coming down, swaying, trailing the way she drifts; only a fast drop reaches down for the ground)
@@ -3406,7 +3413,7 @@ function updatePoseCat(p, dt) {
   } else if (p.bounceT >= 0)    // flip: curl up into a ball like a cat
     Object.assign(T, { lean: .7, arch: .6, armF: 1.3, elbF: 1.5, armB: 1.0, elbB: 1.4, fNx: .14, fNy: .34, fFx: .04, fFy: .3, fP: -.4, tailBase: 2.3, tailCurl: .22, hatLift: .2 });
   else if ((p.dive || p.swim) && !p.onGround) Object.assign(T, catSwimPose(p, t));   // swimming (the deep): paddling, the tail waving it along
-  else if (!p.onGround) {
+  else if (!p.onGround && !p.perch) {
     if (p.vy < -160) Object.assign(T, { lean: .05, arch: -.3, armF: 2.5, elbF: .2, armB: -.7, fNx: -.02, fNy: .1, fFx: -.2, fFy: .04, fP: -.5, tailBase: 1.9, tailCurl: .03, hatTilt: -.12 }), layPose(T, m.rise, p);
     else if (p.vy < 160) Object.assign(T, { lean: .25, arch: .3, armF: 1.5, elbF: .7, armB: 1.0, elbB: .6, fNx: .14, fNy: .28, fFx: .02, fFy: .22, fP: -.2, tailBase: 1.3, tailCurl: -.12, hatLift: .06 }), layPose(T, m.top, p);
     else Object.assign(T, { lean: .12, arch: 0, armF: 1.0, elbF: .25, armB: .8, elbB: .3, fNx: .08, fNy: .0, fFx: -.06, fFy: .03, fP: .1, tailBase: .9, tailCurl: -.16, hatLift: .08, hatTilt: .1 }), layPose(T, m.fall, p);
@@ -4035,7 +4042,7 @@ function shyFace(r) {                           // a copy of the face with full 
   r.faceS = settleTex(wrapFront(r.faceArt(S2, false, !!r.eyes3d), null, S.face.faceY)); r.texs.push(r.faceS); return true;
 }
 
-return Object.assign(api, { CUP, settleTex, bmpOK: () => BMP_OK, lostBack: () => { LOSS_EP++; },
+return Object.assign(api, { CUP, BOOST_H, HEAVE_H, settleTex, bmpOK: () => BMP_OK, lostBack: () => { LOSS_EP++; },
   FEEL: FEEL_KIT, build, update, dispose, normalize, presets, shyFace, merge0, LOOKS, LOOK_BASE, withLook, makeState, updatePose, ATK, CAT_MOVES, CAT_GROUND, CAT_AIR, CAT_CHARGE, CAT_UP, CAT_DOWN, TK_CHARGE, cardRing, buildCards, paintCards, syncCards,
   POSE0, POSE_H0, RANGE, ENUM, BANGS, HAIR_STYLES, HANDS, MASKS, LAYERS, LAYER_DEF, HUMAN_DEFAULT, TOCSIN,
   DBG_RIG, FIDGETS, IDLES, idleOf, lifeLayout, lifeMax, propLife, TOOTH_HALF, BUILDS, FACE_STYLES, HAIR_MODES, FRINGES, PROPS, PROP_SIDES, PAD_SIDES, PAD_SHAPES, MOVE_SETS, RUN_STYLES, GAUNT, MOVESETS, STRIKES, WALL_HIT, BUDDY_SP, BUDDY_PLAIN, PET_SP, BLOCK_DEF, CAT_BLOCK, POSE_CH, ANIM_CH, keyv, keyvS, poseHandles, dragSolve, turnSolve, RING_OF, TWISTS, chanFor, leadFar, runLayer,
