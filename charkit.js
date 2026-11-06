@@ -2076,6 +2076,11 @@ function tackleOver(p, o, cat) { const k = p.tackleK || 0; if (k <= 0) return; c
 // none, not unwound back through it; the user, 2026-10-28: "when you finish doing a carthweel, she also kind of flips herself back into place" · "when you start charging it, she does a flip")
 const TURNS = new Set(["spin", "flip", "wheel"]);
 const CUP = { arm: .1, elb: 1.5, sp: -.25 };   // (the armful's hold: api.CUP to tune)
+function cupArms(p, o, k, two) {                 // the armful's arms: the near one round it (both, once it's more than a handful); cupL: the left one alone, wherever that is now (near facing left, far facing right), at his side still while he blocks (his right hand has the shield)
+  const L = !!p.cupL, C = CUP, ln = p.face < 0, kF = L ? (ln ? k : 0) : k, kB = L ? (ln ? 0 : k) : two;
+  if (kF > 0) { o.armF = lerp(o.armF ?? 0, C.arm, kF); o.elbF = lerp(o.elbF ?? 0, C.elb, kF); o.spF = lerp(o.spF ?? 0, C.sp, kF); }
+  if (kB > 0) { o.armB = lerp(o.armB ?? 0, C.arm, kB); o.elbB = lerp(o.elbB ?? 0, C.elb, kB); o.spB = lerp(o.spB ?? 0, C.sp, kB); }
+}
 function extraPoses(p, T, cat) {                  // laid over whatever pose came before
   const t = api.time;
   if (p.block || p.tpose > 0) {                   // the guard, hands drawn in close, opening out to the T as it's held
@@ -2104,9 +2109,7 @@ function extraPoses(p, T, cat) {                  // laid over whatever pose cam
   if (p.ball > 0) { const k = Math.min(1, p.ball), B = cat ? BALL_C : BALL_H; for (const key in B) T[key] = lerp(T[key] ?? 0, B[key], k); }   // out of the cannon: a ball
   if (p.splat > 0) { const k = Math.min(1, p.splat), w = Math.sin(t * 26) * .06 * (p.splatW || 0), B = cat ? SPLAT_C : SPLAT_H;   // splat on the cliff, spread out flat, quivering (splatW) as it sticks
     for (const key in B) T[key] = lerp(T[key] ?? 0, B[key] + (key === "spF" || key === "spB" || key === "fNz" || key === "fFz" ? w : 0), k); }
-  if (p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // an armful carried (the healer, 2026-11-02: the bag's fruit and gum): the near arm under it; both, once it's more than a handful
-    T.armF = lerp(T.armF ?? 0, CUP.arm, k); T.elbF = lerp(T.elbF ?? 0, CUP.elb, k); T.spF = lerp(T.spF ?? 0, CUP.sp, k);
-    if (two > 0) { T.armB = lerp(T.armB ?? 0, CUP.arm, two); T.elbB = lerp(T.elbB ?? 0, CUP.elb, two); T.spB = lerp(T.spB ?? 0, CUP.sp, two); } }
+  if (p.cup > 0) cupArms(p, T, Math.min(1, p.cup), Math.min(1, p.cup2 || 0));   // an armful carried (the healer, 2026-11-02: the bag's fruit and gum): the near arm under it; both, once it's more than a handful (cupArms)
   if (p.popB > 0) {                               // in the bubble, block held to pop it from inside: its keys (STRIKES / CAT_MOVES pop_sword, pop_reach), trembling with the effort as it gives
     const kind = p.popSword && !cat ? "pop_sword" : "pop_reach", M = (cat ? CAT_MOVES : STRIKES)[kind], k = Math.min(1, p.popB), u = k * M.dur, w = Math.min(1, k * 5), sh = Math.sin(t * 31) * .025 * k;
     const P = poseKeys(p, kind, u) || {}, own = p.rig.spec.move.anims && p.rig.spec.move.anims[kind], bl = (own && own.blade) || M.keys.blade; if (bl) P.blade = keyvS(bl, u);   // (poseKeys leaves the blade out)
@@ -2521,9 +2524,9 @@ Object.assign(STRIKES, {
   // the heroines' shot (the user, 2026-11-04: "camila will stand defiantly with her gauntlet arm pointed forward, palm wide open and shooting a beam out of her hand"):
   // chest out, leant back a touch, the gauntlet out straight and the hand bent back so the palm faces them (the game opens it: p.palm); the big hand the same, open
   beam_fist: { dur: 1.2, openHand: true, keys: PT({ lean: [-.1, -.12, -.1], arch: [-.14, -.16, -.14], bodyY: [-.14, -.16, -.14], twist: [-.2, -.2, -.2], headRot: [-.14, -.12, -.14],
-    armF: [1.57, 1.6, 1.57], elbF: [.02, .02, .02], spF: [.1, .1, .1], wF: [-1.45, -1.45, -1.45], armB: [.3, .32, .3], elbB: [1.75, 1.75, 1.75], spB: [.5, .5, .5], fNx: [.46, .46, .46], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+    armF: [1.97, 2.0, 1.97], elbF: [.02, .02, .02], spF: [.1, .1, .1], wF: [-1.45, -1.45, -1.45], armB: [.3, .32, .3], elbB: [1.75, 1.75, 1.75], spB: [.5, .5, .5], fNx: [.46, .46, .46], fFx: [-.5, -.5, -.5], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },   // (the hand up at her eyes, 1.97: it was 1.57, out at her chin. The user, 2026-11-05 "have camila's hand be higher, more at her eye level, when she shoots her projectile". Past about 2.0 the arm won't go: it drops)
   beam_giant: { dur: 1.2, wsize: 3, giant: "gauntlet", openHand: true, keys: PT({ lean: [-.16, -.18, -.16], arch: [-.16, -.18, -.16], bodyY: [-.16, -.18, -.16], twist: [-.12, -.12, -.12], headRot: [-.12, -.1, -.12],
-    armF: [1.4, 1.43, 1.4], elbF: [.06, .05, .06], spF: [.15, .15, .15], fNx: [.48, .48, .48], fFx: [-.54, -.54, -.54], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },
+    armF: [1.75, 1.78, 1.75], elbF: [.06, .05, .06], spF: [.15, .15, .15], fNx: [.48, .48, .48], fFx: [-.54, -.54, -.54], fNz: [.1, .1, .1], fFz: [.08, .08, .08] }) },   // (the big hand up too, 1.75: was 1.4. 2026-11-05)
   // tried again while it's still steaming (the user: "both girls have a failure animation when attempting to use their projectile after a fully charged attack"): the hand
   // out, nothing but a puff, then pulled in and shaken (it's hot); Rose's blade out, a feeble wave of it, then held up and looked at, shaken
   shot_fail_fist: { dur: 1.0, openHand: true, step: 0, sq: -.04, sfx: "huff", hits: [], keys: KZ([0, .12, .3, .42, .5, .58, .66, .74, .82, .9, 1.0], {
@@ -3177,7 +3180,8 @@ function updatePoseHuman(p, dt) {
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));
-  else if ((p.pointKind || p.tcPose) && a < 0 && p.hurtT <= 0 && STRIKES[p.pointKind || p.tcPose]) { const k = p.pointKind || p.tcPose; Object.assign(T, poseKeys(p, k, api.time % STRIKES[k].dur) || {}); }   // (pointing a partner at them; the team charge)   // crawling through a low hole (2026-10-28)
+  else if ((p.pointKind || p.tcPose) && a < 0 && p.hurtT <= 0 && STRIKES[p.pointKind || p.tcPose]) { const k = p.pointKind || p.tcPose; Object.assign(T, poseKeys(p, k, api.time % STRIKES[k].dur) || {});
+    if (p.kick > 0) { const u = p.kick; T.lean = (T.lean || 0) - .22 * u; T.arch = (T.arch || 0) - .12 * u; T.elbF = (T.elbF || 0) + .6 * u; T.headRot = (T.headRot || 0) - .14 * u; } }   // (the shot's kick: thrown back off it, the elbow giving, eased out by the game's p.kick. The user, 2026-11-05 "have a little recoil to her when she shoots them and bigger recoil when she shoots the bigger one")   // (pointing a partner at them; the team charge)   // crawling through a low hole (2026-10-28)
   else if (p.upCoil && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "upcoil", Math.min(p.upCoil.t, STRIKES.upcoil.dur)) || {});   // the air up attack's coil, before the strike (2026-10-31)
   else if (p.upHop && a < 0 && p.hurtT <= 0 && (!p.upHop.up || p.upHop.t < STRIKES.uphop.dur)) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the push off (2026-10-28; then the jump's own rising pose)
   else if ((p.dive || p.swim) && a < 0 && !p.onGround && p.hurtT <= 0) Object.assign(T, swimPose(p, t));   // swimming (the deep; the cove's water too, at the top of it: the user, 2026-10-25 "can camila have her swim animations here and not just glide"): the game tilts the whole body along the stroke (p.rot)
@@ -3265,9 +3269,7 @@ function updatePoseHuman(p, dt) {
     sn[0] = N.fx * dir / ds; sn[1] = Math.max(0, hip - N.dy) / ds; sn[2] = N.pt;
     sf[0] = F2.fx * dir / ds; sf[1] = Math.max(0, hip - F2.dy) / ds; sf[2] = F2.pt;
   }
-  if (p.cup > 0 && a < 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // (an armful held through the stride too: those arms don't swing, 2026-11-02)
-    o.armF = lerp(o.armF, CUP.arm, k); o.elbF = lerp(o.elbF, CUP.elb, k); o.spF = lerp(o.spF || 0, CUP.sp, k);
-    if (two > 0) { o.armB = lerp(o.armB, CUP.arm, two); o.elbB = lerp(o.elbB, CUP.elb, two); o.spB = lerp(o.spB || 0, CUP.sp, two); } }
+  if (p.cup > 0 && a < 0) cupArms(p, o, Math.min(1, p.cup), Math.min(1, p.cup2 || 0));   // (an armful held through the stride too: those arms don't swing, 2026-11-02)
   o.fNx = lerp(o.fNx, sn[0], g); o.fNy = lerp(o.fNy, sn[1], g); o.pN = lerp(o.fP, sn[2], g); o.sN = 0;
   const env = (t, a0, a1, b0, b1) => t < a0 || t > b1 ? 0 : t < a1 ? easeOut((t - a0) / (a1 - a0)) : t < b0 ? 1 : 1 - (t - b0) / (b1 - b0);
   const jab = a >= 0 && p.atkKind === "punch" ? env(a, .04, .08, .18, .27) : 0;
@@ -3300,9 +3302,7 @@ function updatePoseHuman(p, dt) {
     if (PK && PK.keys.blade) { const sw = leadFar(p); o.wrist = keyvS(PK.keys.blade, api.time % PK.dur) - (sw ? o.armB + o.elbB : o.armF + o.elbF); }   // (pointing: the blade's own angle)
     else if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
   }
-  if (SK && p.cup > 0) { const k = Math.min(1, p.cup), two = Math.min(1, p.cup2 || 0);   // (kicking with an armful, the healer's basket: the arms stay round it and the legs do the work, 2026-11-03)
-    o.armF = lerp(o.armF, CUP.arm, k); o.elbF = lerp(o.elbF, CUP.elb, k); o.spF = lerp(o.spF || 0, CUP.sp, k);
-    if (two > 0) { o.armB = lerp(o.armB, CUP.arm, two); o.elbB = lerp(o.elbB, CUP.elb, two); o.spB = lerp(o.spB || 0, CUP.sp, two); } }
+  if (SK && p.cup > 0) cupArms(p, o, Math.min(1, p.cup), Math.min(1, p.cup2 || 0));   // (kicking with an armful, the healer's basket: the arms stay round it and the legs do the work, 2026-11-03)
   // starting to run: a gather before the first stride (the user, 2026-10-22: "bring their torso up and forward and almost step up before
   // crouching down into the full run, almost like winding it up"): up onto the toes leaning in, arms drawn back, then down into the run
   if (moving && !p.wasMoving && p.gaitAmt < .35 && a < 0) p.gatherT = 0;
