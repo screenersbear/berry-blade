@@ -83,7 +83,7 @@
   const down = {};
   const key = (code, on) => { if (!!down[code] === on) return; down[code] = on; dispatchEvent(new KeyboardEvent(on ? "keydown" : "keyup", { code, bubbles: true, cancelable: true })); };
   const tap = code => { key(code, true); setTimeout(() => key(code, false), 60); };
-  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyV"], b: ["KeyX"], x: ["KeyZ"], y: ["KeyC"] };   // (the keyboard's own since 2026-11-03 late: V jump, X attack, Z □, C △)   // (the 3DS's way round, 2026-11-01: △ (its X, top) the buddy, □ (its Y, left) the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
+  const KEY = { u: "ArrowUp", d: "ArrowDown", l: "ArrowLeft", r: "ArrowRight" }, BTN = { a: ["KeyZ"], b: ["KeyC"], x: ["KeyS"], y: ["KeyD"] };   // (the keyboard's since 2026-11-05: Z ✕, C ○, S □, D △, F L, V R)   // (the keyboard's own since 2026-11-03 late: V jump, X attack, Z □, C △)   // (the 3DS's way round, 2026-11-01: △ (its X, top) the buddy, □ (its Y, left) the tackle; L the block, R CHARGE!)   // (since 2026-11-01: □ the tackle, △ CHARGE!; L the block buddy, R the attack buddy)   // (the keyboard's keys: Z jump, X attack, C and V the partners since 2026-10-31; the shoulders: Shift block, Space the tackle)
 
   // ── which way the d-pad is pushed: 8 ways, up only when it's pushed clearly up (jumping has its own button), so running doesn't jump by accident
   const padPtr = new Map(), btnPtr = new Map();
@@ -101,7 +101,7 @@
     const pd = [...padPtr.values()].join(""), bd = [...btnPtr.values()].join("");
     "udlr".split("").forEach(d => { key(KEY[d], pd.includes(d)); document.querySelector(`#tPad .arm[data-d="${d}"]`).classList.toggle("on", pd.includes(d)); });
     const held = new Set([...bd].flatMap(b => BTN[b] || []));
-    ["KeyX", "KeyC", "KeyV", "KeyZ"].forEach(k => key(k, held.has(k)));
+    ["KeyC", "KeyD", "KeyZ", "KeyS"].forEach(k => key(k, held.has(k)));
     "axby".split("").forEach(b => document.querySelector(`#tBtns [data-b="${b}"]`).classList.toggle("on", bd.includes(b)));
   };
   const hook = (el, map, read) => {
@@ -116,10 +116,10 @@
     C.addEventListener("pointerdown", e => { e.preventDefault(); C.classList.add("on"); tap("Escape"); });
     LT.addEventListener("pointerdown", e => { e.preventDefault(); try { LT.setPointerCapture(e.pointerId); } catch { } LT.classList.add("on"); key("Slash", true); });   // (held: the items)
     ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => LT.addEventListener(t, () => { LT.classList.remove("on"); key("Slash", false); }));
-    [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { const E = document.getElementById(id);   // (the shoulders: held as long as the thumb's on them)
+    [["tL", "KeyF"], ["tR", "KeyV"]].forEach(([id, code]) => { const E = document.getElementById(id);   // (the shoulders: held as long as the thumb's on them)
       E.addEventListener("pointerdown", e => { e.preventDefault(); try { E.setPointerCapture(e.pointerId); } catch { } E.classList.add("on"); key(code, true); });
       ["pointerup", "pointercancel", "lostpointercapture"].forEach(t => E.addEventListener(t, () => { E.classList.remove("on"); key(code, false); })); });
-    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyX"); });   // sitting: a tap anywhere gets you up (attack: C since 2026-11-01, X since 2026-11-03 late)
+    document.getElementById("tSit").addEventListener("pointerdown", e => { e.preventDefault(); tap("KeyC"); });   // sitting: a tap anywhere gets you up (attack: C since 2026-11-01, X since 2026-11-03 late)
     ["pointerup", "pointercancel", "pointerleave"].forEach(t => C.addEventListener(t, () => C.classList.remove("on")));
     ["contextmenu", "touchstart"].forEach(t => T.addEventListener(t, e => { if (e.target.closest("#tPad, #tBtns, #tCorner, #tLT, .tSh")) e.preventDefault(); }, { passive: false }));
   };
@@ -189,7 +189,7 @@
     if (s === was) return; was = s;
     T.classList.toggle("off", s !== "play" && s !== "sit" && s !== "cons" && s !== "conspad" && s !== "menu" && s !== "back"); T.classList.toggle("sit", s === "sit"); T.classList.toggle("cons", s === "cons"); T.classList.toggle("cpad", s === "conspad");
     if (s !== "play" && s !== "conspad") { padPtr.clear(); btnPtr.clear(); sync(); }
-    if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); [["tL", "KeyS"], ["tR", "KeyD"]].forEach(([id, code]) => { key(code, false); document.getElementById(id).classList.remove("on"); }); }
+    if (s !== "play") { key("Slash", false); document.getElementById("tLT").classList.remove("on"); [["tL", "KeyF"], ["tR", "KeyV"]].forEach(([id, code]) => { key(code, false); document.getElementById(id).classList.remove("on"); }); }
     const C = document.getElementById("tCorner"); C.classList.toggle("hide", s !== "play" && s !== "back" && s !== "sit" && s !== "cons" && s !== "conspad" && s !== "menu"); C.textContent = s === "play" || s === "sit" || s === "cons" || s === "conspad" ? "❚❚" : "‹";
   }, 120);
 
