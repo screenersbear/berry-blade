@@ -29760,6 +29760,117 @@ function adaptQuality(dt) {
   else if (false && frameRT.samples > 0) { frameRT.samples = 0; frameRT.dispose(); }      // and slower still: none
 }
 let fadeT = 0; const fadeEl = document.getElementById("fade");
+// ─────────────────────────── Crux's play box ───────────────────────────
+// The user, 2026-11-07: "let's redo the aesthetics of crux's world to be like a play box. the whole screen whenever you play should have a black and white framing like
+// this showing flowers and curtains and flowers on the bottom, all in the foreground above the action" (their picture: a paper theatre, flowers along its top, swags and
+// a string of bulbs, a drape each side tied back, flowers along the front). So while you play in Crux's city a paper theatre's front stands over the play, in black ink
+// on white paper: each cut-out casts a soft shadow on the one behind it, the last on the city. It's drawn once for the screen's size into four strips round the edge
+// (the middle's left clear), over the 3D picture and the room-change slide, under the hearts, the map and the menus.
+const PBOX = { on: false, w: 0, h: 0, el: null };
+function pboxArt(W, H, d) {                           // the whole front at W x H (CSS pixels, d device pixels each): a canvas
+  const cv = document.createElement("canvas"), tmp = document.createElement("canvas"); cv.width = tmp.width = Math.round(W * d); cv.height = tmp.height = Math.round(H * d);
+  const g = cv.getContext("2d"), x = tmp.getContext("2d"), u = Math.min(H / 100, W / 150), K = "#151515", P = "#fbfbf6", TAU = Math.PI * 2;   // (u: a hundredth of the screen's height, less on a tall narrow one)
+  let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296, rr = (a, b) => a + rnd() * (b - a);   // (the same flowers every time)
+  const sty = (f, s, lw) => { x.fillStyle = f; x.strokeStyle = s; x.lineWidth = lw * u; };
+  const layer = fn => { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, tmp.width, tmp.height); x.setTransform(d, 0, 0, d, 0, 0); x.lineJoin = x.lineCap = "round"; fn();
+    g.save(); g.shadowColor = "rgba(0, 0, 0, .5)"; g.shadowBlur = 2 * u * d; g.shadowOffsetX = .3 * u * d; g.shadowOffsetY = u * d; g.drawImage(tmp, 0, 0); g.restore(); };   // (one cut-out: its shadow falls on what's behind it)
+  const both = fn => { x.save(); fn(); x.restore(); x.save(); x.translate(W, 0); x.scale(-1, 1); fn(); x.restore(); };   // (the left side, then the same mirrored on the right)
+  const at = (cx, cy, a, fn) => { x.save(); x.translate(cx, cy); x.rotate(a); fn(); x.restore(); };
+  const circ = (cx, cy, r) => { x.beginPath(); x.arc(cx, cy, r, 0, TAU); };
+  const starP = (ro, ri, n) => { x.beginPath(); for (let i = 0; i < n * 2; i++) { const r = i % 2 ? ri : ro, t = i / (n * 2) * TAU - Math.PI / 2; x.lineTo(Math.cos(t) * r, Math.sin(t) * r); } x.closePath(); };
+  const halo = (lw = .32) => { sty(K, K, lw * 4.4); x.stroke(); x.strokeStyle = P; x.lineWidth = lw * 2.4 * u; x.stroke(); x.fill(); };   // (a black cut-out: a white edge round it, then ink round that)
+  const F = {
+    daisy(r) { sty(P, K, .3); for (let i = 0; i < 11; i++) { x.save(); x.rotate(i / 11 * TAU); x.beginPath(); x.ellipse(r * .55, 0, r * .46, r * .16, 0, 0, TAU); x.fill(); x.stroke(); x.restore(); }
+      x.fillStyle = K; circ(0, 0, r * .3); x.fill(); x.fillStyle = P; circ(-r * .09, -r * .09, r * .08); x.fill(); },
+    blossom(r) { const pts = [0, 1, 2, 3, 4].map(i => [Math.cos(i / 5 * TAU) * r * .5, Math.sin(i / 5 * TAU) * r * .5]);
+      sty(P, K, .64); pts.forEach(([a, b]) => { circ(a, b, r * .44); x.stroke(); }); pts.forEach(([a, b]) => { circ(a, b, r * .44); x.fill(); });   // (stroked twice as thick, then filled: one outline round all five)
+      x.lineWidth = .2 * u; pts.forEach(([a, b]) => { x.beginPath(); x.moveTo(a * 1.25, b * 1.25); x.lineTo(a * 1.65, b * 1.65); x.stroke(); });
+      x.fillStyle = K; starP(r * .3, r * .13, 5); x.fill(); x.fillStyle = P; circ(0, 0, r * .07); x.fill(); },
+    lily(r) { for (let i = 0; i < 6; i++) { x.save(); x.rotate(i / 6 * TAU); x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(r * .42, -r * .5, r, 0); x.quadraticCurveTo(r * .42, r * .5, 0, 0); sty(P, K, .26); x.fill(); x.stroke();
+        x.lineWidth = .18 * u; x.beginPath(); x.moveTo(r * .25, 0); x.lineTo(r * .75, 0); x.stroke(); x.restore(); }
+      x.fillStyle = K; circ(0, 0, r * .17); x.fill(); },
+    tulip(r) { x.beginPath(); x.moveTo(-r * .5, -r * .15); x.quadraticCurveTo(-r * .55, r * .6, 0, r * .62); x.quadraticCurveTo(r * .55, r * .6, r * .5, -r * .15);
+      [[.4, -.7], [.17, -.32], [0, -.8], [-.17, -.32], [-.4, -.7]].forEach(([a, b]) => x.lineTo(r * a, r * b)); x.closePath(); halo();
+      x.strokeStyle = P; x.lineWidth = .22 * u; x.beginPath(); x.moveTo(-r * .17, -r * .3); x.quadraticCurveTo(-r * .2, r * .25, -r * .02, r * .55); x.moveTo(r * .17, -r * .3); x.quadraticCurveTo(r * .2, r * .25, r * .02, r * .55); x.stroke(); },
+    bud(r) { sty(P, K, .3); x.beginPath(); x.moveTo(0, -r * .9); x.quadraticCurveTo(r * .6, -r * .1, 0, r * .4); x.quadraticCurveTo(-r * .6, -r * .1, 0, -r * .9); x.fill(); x.stroke();
+      x.fillStyle = K; x.beginPath(); x.moveTo(-r * .38, r * .05); x.quadraticCurveTo(-r * .1, r * .5, 0, r * .45); x.quadraticCurveTo(r * .1, r * .5, r * .38, r * .05); x.quadraticCurveTo(0, r * .3, -r * .38, r * .05); x.fill(); },
+    bell(r) { sty(P, K, .3); x.beginPath(); x.moveTo(0, -r * .55); x.quadraticCurveTo(r * .5, -r * .5, r * .42, r * .05); x.quadraticCurveTo(r * .45, r * .3, r * .62, r * .42);
+      [[.3, .3], [0, .46], [-.3, .3], [-.62, .42]].forEach(([a, b]) => x.lineTo(r * a, r * b)); x.quadraticCurveTo(-r * .45, r * .3, -r * .42, r * .05); x.quadraticCurveTo(-r * .5, -r * .5, 0, -r * .55); x.fill(); x.stroke();
+      x.fillStyle = K; circ(0, r * .5, r * .1); x.fill(); x.beginPath(); x.ellipse(0, -r * .52, r * .2, r * .1, 0, 0, TAU); x.fill(); }
+  };
+  const flower = (k, cx, cy, r, a = 0) => at(cx, cy, a, () => F[k](r));
+  const leaf = (cx, cy, L, a, inv) => at(cx, cy, a, () => { x.beginPath(); x.moveTo(0, 0); x.quadraticCurveTo(L * .45, -L * .34, L, 0); x.quadraticCurveTo(L * .45, L * .34, 0, 0);
+    if (inv) { halo(.28); x.strokeStyle = P; } else { sty(P, K, .3); x.fill(); x.stroke(); } x.lineWidth = .18 * u; x.beginPath(); x.moveTo(L * .1, 0); x.quadraticCurveTo(L * .5, -L * .05, L * .85, 0); x.stroke(); });
+  const stem = (x0, y0, x1, y1, bend, inv) => { x.beginPath(); x.moveTo(x0, y0); x.quadraticCurveTo((x0 + x1) / 2 + bend, (y0 + y1) / 2, x1, y1); if (inv) { x.strokeStyle = P; x.lineWidth = u; x.stroke(); } x.strokeStyle = K; x.lineWidth = .45 * u; x.stroke(); };
+  const grass = (y0, h0, h1, step) => { const tips = []; x.beginPath(); x.moveTo(-2 * u, H + u); x.lineTo(-2 * u, y0); let gx = -2 * u;
+    while (gx < W + 2 * u) { const w = rr(.6, 1.3) * step, h = rr(h0, h1), t = gx + w * .5 + rr(-.6, .6) * step; x.quadraticCurveTo(gx + w * .4, y0 - h * .35, t, y0 - h); x.quadraticCurveTo(gx + w * .6, y0 - h * .35, gx + w, y0); tips.push([t, y0 - h, gx + w * .5]); gx += w; }
+    x.lineTo(W + 2 * u, H + u); x.closePath(); x.fillStyle = K; x.fill();
+    x.strokeStyle = P; x.lineWidth = .16 * u; tips.forEach(([a, b, c], i) => { if (i % 3) return; x.beginPath(); x.moveTo(c, y0 + .8 * u); x.quadraticCurveTo(c + (a - c) * .4, y0 - (y0 - b) * .3, a - (a - c) * .15, b + (y0 - b) * .3); x.stroke(); }); };
+  // the drapes: gathered to a tie a little over halfway down, flaring again under it
+  const cw = 13 * u, tx = 4.6 * u, ty = H * .56, bw = 7 * u, top = 2 * u, edge = [];
+  const seg = (p0, p1, p2, p3) => { for (let i = 0; i <= 24; i++) { const t = i / 24, m = 1 - t; edge.push([m * m * m * p0[0] + 3 * m * m * t * p1[0] + 3 * m * t * t * p2[0] + t * t * t * p3[0], m * m * m * p0[1] + 3 * m * m * t * p1[1] + 3 * m * t * t * p2[1] + t * t * t * p3[1]]); } };
+  seg([cw, top], [cw + 1.2 * u, ty * .35], [tx + 3.5 * u, ty * .82], [tx, ty]); seg([tx, ty], [tx + 2 * u, ty + (H - ty) * .35], [bw - .5 * u, H - (H - ty) * .3], [bw, H + u]);
+  layer(() => both(() => { x.beginPath(); x.moveTo(-u, top); edge.forEach(([a, b]) => x.lineTo(a, b)); x.lineTo(-u, H + u); x.closePath(); sty(P, K, .5); x.fill(); x.stroke();
+    x.lineWidth = .32 * u; [.2, .42, .62, .8].forEach((s, i) => { x.beginPath(); edge.forEach(([a, b], j) => { const w = Math.sin(b / u * .21 + i * 1.7) * .35 * u; j ? x.lineTo(a * s + w, b) : x.moveTo(a * s + w, b); }); x.stroke(); });   // (the folds, gathering to the tie)
+    x.lineWidth = 1.1 * u; x.beginPath(); edge.forEach(([a, b], j) => j ? x.lineTo(a, b) : x.moveTo(a, b)); x.stroke(); }));   // (the hem: a thicker line)
+  // the swags across the top, a ball fringe on each, a rosette where two meet
+  const n = Math.max(3, Math.round(W / (30 * u))), sw = W / n, qp = (t, a, b, c) => (1 - t) * (1 - t) * a + 2 * (1 - t) * t * b + t * t * c;
+  layer(() => { for (let i = 0; i < n; i++) { const x0 = i * sw, x1 = x0 + sw, xm = x0 + sw / 2;
+      x.beginPath(); x.moveTo(x0 - u, 0); x.lineTo(x1 + u, 0); x.lineTo(x1, 5 * u); x.quadraticCurveTo(xm, 15 * u, x0, 5 * u); x.closePath(); sty(P, K, .5); x.fill(); x.stroke();
+      x.lineWidth = .32 * u; for (let k = 1; k <= 3; k++) { x.beginPath(); x.moveTo(x0 + sw * .05 * k, 5 * u - .55 * u * k); x.quadraticCurveTo(xm, 15 * u - 2.8 * u * k, x1 - sw * .05 * k, 5 * u - .55 * u * k); x.stroke(); }
+      x.fillStyle = K; for (let k = 1; k < 14; k++) { const t = k / 14; circ(qp(t, x1, xm, x0), qp(t, 5 * u, 15 * u, 5 * u) + .85 * u, .55 * u); x.fill(); } }
+    for (let i = 0; i <= n; i++) flower("blossom", i * sw, 5 * u, 2.5 * u, i * .7); });
+  // a string of bulbs from swag to swag; the tie-backs and their tassels; a star hung on each drape
+  layer(() => { for (let i = 0; i < n; i++) { const x0 = i * sw, x1 = x0 + sw, xm = x0 + sw / 2, y0 = 6 * u, c = 12.4 * u;
+      x.strokeStyle = K; x.lineWidth = .3 * u; x.beginPath(); x.moveTo(x0, y0); x.quadraticCurveTo(xm, c, x1, y0); x.stroke();
+      [.22, .5, .78].forEach(t => { const bx = qp(t, x0, xm, x1), by = qp(t, y0, c, y0);
+        x.fillStyle = K; x.fillRect(bx - .6 * u, by, 1.2 * u, 1.3 * u); sty(P, K, .35); x.beginPath(); x.ellipse(bx, by + 2.6 * u, 1.15 * u, 1.4 * u, 0, 0, TAU); x.fill(); x.stroke();
+        x.lineWidth = .18 * u; x.beginPath(); x.moveTo(bx - .4 * u, by + 2.4 * u); x.lineTo(bx - .13 * u, by + 2.9 * u); x.lineTo(bx + .13 * u, by + 2.4 * u); x.lineTo(bx + .4 * u, by + 2.9 * u); x.stroke(); }); }
+    both(() => { x.fillStyle = K; x.beginPath(); x.moveTo(-u, ty - 1.4 * u); x.quadraticCurveTo(tx * .5, ty - .3 * u, tx + 1.2 * u, ty - .8 * u); x.lineTo(tx + 1.2 * u, ty + .9 * u); x.quadraticCurveTo(tx * .5, ty + 1.7 * u, -u, ty + 1.2 * u); x.closePath(); x.fill();
+      x.fillStyle = P; for (let k = 0; k < 4; k++) { circ(tx * (k + .5) / 4.2, ty + .15 * u, .2 * u); x.fill(); }
+      const qx = tx + 1.2 * u; x.strokeStyle = K; x.lineWidth = .35 * u; x.beginPath(); x.moveTo(qx, ty); x.lineTo(qx, ty + 2.4 * u); x.stroke();
+      sty(K, P, .25); circ(qx, ty + 3 * u, u); x.fill(); x.stroke();
+      x.beginPath(); x.moveTo(qx - .8 * u, ty + 3.9 * u); x.lineTo(qx + .8 * u, ty + 3.9 * u); x.lineTo(qx + 2 * u, ty + 10 * u); x.lineTo(qx - 2 * u, ty + 10 * u); x.closePath(); sty(P, K, .3); x.fill(); x.stroke();
+      x.lineWidth = .2 * u; [-1, -.5, 0, .5, 1].forEach(k => { x.beginPath(); x.moveTo(qx + k * .55 * u, ty + 4.6 * u); x.lineTo(qx + k * 1.6 * u, ty + 10 * u); x.stroke(); });
+      x.fillStyle = K; x.fillRect(qx - u, ty + 3.8 * u, 2 * u, .9 * u);
+      const sx = cw * .6; x.strokeStyle = K; x.lineWidth = .25 * u; x.beginPath(); x.moveTo(sx, 8 * u); x.lineTo(sx, 12 * u); x.stroke();
+      at(sx, 14.4 * u, .1, () => { sty(P, K, .4); starP(2.7 * u, 1.15 * u, 5); x.fill(); x.stroke(); x.fillStyle = K; starP(1 * u, .43 * u, 5); x.fill(); }); }); });
+  // the flowered pelmet along the very top
+  layer(() => { x.fillStyle = K; x.beginPath(); x.moveTo(0, 0); x.lineTo(W, 0); x.lineTo(W, 3.4 * u); for (let k = 1; k <= 40; k++) x.lineTo(W - W * k / 40, 3.4 * u + Math.sin(k * 1.3) * .35 * u); x.closePath(); x.fill();
+    x.strokeStyle = P; x.lineWidth = .2 * u; x.beginPath(); x.moveTo(0, 2.6 * u); x.lineTo(W, 2.6 * u); x.stroke();
+    const kinds = ["daisy", "blossom", "lily", "bud", "daisy", "blossom"], row = []; let fx = 21 * u, k = 0;
+    while (fx < W - 20 * u) { const big = k % 3 === 0; row.push([kinds[k++ % kinds.length], fx, rr(1, 2.6) * u, (big ? rr(3.3, 3.9) : rr(2.2, 2.8)) * u, rr(-.6, .6)]); fx += rr(6.2, 8) * u; }
+    row.forEach(([, fx, fy]) => leaf(fx + rr(-2, 2) * u, fy + 1.5 * u, rr(3.4, 4.6) * u, rr(.9, 2.2), false));
+    row.forEach(([kd, fx, fy, r, a]) => flower(kd, fx, fy, r, a));
+    both(() => { leaf(4.5 * u, 5 * u, 6 * u, 1.25, false); leaf(11 * u, 3.5 * u, 5.4 * u, 1.75, false); leaf(16 * u, 3 * u, 4.2 * u, .6, false);
+      flower("daisy", 5 * u, 3.2 * u, 5 * u, .2); flower("blossom", 12.5 * u, 2 * u, 3.6 * u, .5); flower("bud", 17 * u, 4 * u, 2.2 * u, -.4); }); });
+  // the flower bed: a back row on tall stems in the grass
+  layer(() => { const kinds = ["daisy", "bud", "blossom", "lily", "daisy", "bud", "tulip"]; let fx = 16 * u, k = 0;
+    while (fx < W - 16 * u) { const kd = kinds[k++ % kinds.length], fy = H - rr(7.5, 10) * u, r = rr(1.9, 2.7) * u; stem(fx, H, fx + rr(-.6, .6) * u, fy, rr(-1, 1) * u, false); flower(kd, fx, fy, r, rr(-.6, .6)); fx += rr(5, 7) * u; }
+    grass(H - 4.6 * u, 2 * u, 4.5 * u, 1.3 * u); });
+  // the front row, on a black bank
+  layer(() => { x.fillStyle = K; x.beginPath(); x.moveTo(-u, H + u); for (let k = 0; k <= 60; k++) x.lineTo(W * k / 60, H - 2.4 * u - (Math.sin(k * .9) * .5 + Math.sin(k * 2.3) * .3) * u); x.lineTo(W + u, H + u); x.closePath(); x.fill();
+    const kinds = ["blossom", "tulip", "daisy", "lily", "tulip", "daisy", "blossom"]; let fx = 21 * u, k = 0;
+    while (fx < W - 21 * u) { const kd = kinds[k++ % kinds.length], fy = H - rr(3.4, 5.2) * u, r = rr(2.8, 3.8) * u; leaf(fx - .5 * u, fy + r * .6, rr(3.6, 4.6) * u, rr(3.3, 3.7), true); leaf(fx + .5 * u, fy + r * .6, rr(3.6, 4.6) * u, rr(-.6, -.2), true); flower(kd, fx, fy, r, rr(-.5, .5)); fx += rr(9, 12) * u; } });
+  // a big clump in each front corner, bellflowers arching up the drape
+  layer(() => both(() => { x.translate(0, H); x.scale(1.2, 1.2); x.translate(0, -H); stem(2 * u, H, 9 * u, H - 21 * u, -4 * u, false); [[.5, 2.5], [.72, 2.2], [.92, 1.9]].forEach(([t, r]) => { const bx = qp(t, 2 * u, 1.5 * u, 9 * u), by = qp(t, H, H - 10.5 * u, H - 21 * u); stem(bx, by, bx + 1.2 * u, by + 1.4 * u, 0, false); flower("bell", bx + 1.3 * u, by + 1.4 * u + r * .55 * u, r * u, .15); });
+    leaf(u, H - 3 * u, 6 * u, -1.2, true); leaf(6 * u, H - 2 * u, 5 * u, -.5, true); leaf(11 * u, H - 3 * u, 4.6 * u, -.9, true); leaf(4 * u, H - 9 * u, 4.2 * u, -.35, true);
+    flower("lily", 3.6 * u, H - 13 * u, 2.8 * u, .3); flower("daisy", 5 * u, H - 7.5 * u, 4 * u, .1); flower("tulip", 12.6 * u, H - 9.2 * u, 2.6 * u, .15); flower("blossom", 10.6 * u, H - 4 * u, 3.2 * u, .4); flower("bud", 15 * u, H - 5.5 * u, 1.6 * u, .3); }));
+  return cv;
+}
+function pboxFit() {                                  // the front drawn for this screen and cut into its four strips
+  const W = innerWidth, H = innerHeight; if (!W || !H) return; PBOX.w = W; PBOX.h = H;
+  const d = Math.min(2, devicePixelRatio || 1), art = pboxArt(W, H, d), u = Math.min(H / 100, W / 150), top = Math.min(H / 2, Math.ceil(18 * u)), bot = Math.min(H / 2, Math.ceil(15 * u)), side = Math.min(W / 2, Math.ceil(20 * u)), mid = Math.max(0, H - top - bot);
+  [[0, 0, W, top], [0, H - bot, W, bot], [0, top, side, mid], [W - side, top, side, mid]].forEach(([l, t, w, h], i) => { const c = PBOX.el.children[i]; c.width = Math.max(1, Math.round(w * d)); c.height = Math.max(1, Math.round(h * d));
+    c.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:${w}px;height:${h}px`; c.getContext("2d").drawImage(art, Math.round(l * d), Math.round(t * d), c.width, c.height, 0, 0, c.width, c.height); });
+}
+function pboxTick() {                                 // up only while you play in Crux's city (not on the title, a ride, the prologue or the mockup stages); drawn again when the screen changes size
+  const on = world === 7 && mode === "play" && !titleUp && !rideS && !pro && !shadeUp && !castUp;
+  if (on && (!PBOX.el || PBOX.w !== innerWidth || PBOX.h !== innerHeight)) {
+    if (!PBOX.el) { PBOX.el = document.createElement("div"); PBOX.el.id = "pbox"; PBOX.el.style.cssText = "position:fixed;inset:0;pointer-events:none;display:none"; for (let i = 0; i < 4; i++) PBOX.el.appendChild(document.createElement("canvas")); ((slideCv && slideCv.parentNode) ? slideCv : renderer.domElement).after(PBOX.el); }   // (straight after the 3D picture and its slide: over them, under everything else)
+    pboxFit(); }
+  if (on !== PBOX.on) { PBOX.on = on; if (PBOX.el) PBOX.el.style.display = on ? "" : "none"; }
+}
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
   requestAnimationFrame(frame);
   acc60 += Math.max(0, Math.min(.1, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
@@ -29767,7 +29878,7 @@ function frame(now) {                              // (the next frame is asked f
   const dt = ticks / 60, fT0 = performance.now();   // (the game's time in whole 60ths)
   try {
     if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
-    adaptQuality(dt);
+    adaptQuality(dt); pboxTick();   // (Crux's play box, up while you play in his city: 2026-11-07)
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
     pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
