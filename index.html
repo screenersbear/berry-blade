@@ -12091,7 +12091,7 @@ function updatePlayer(dt) {
     if (!still) { p.stillT = 0; p.fidget = null; }
     else { p.stillT = (p.stillT || 0) + dt;
       if (p.fidget) { p.fidget.t += dt; const S = KIT.STRIKES[p.fidget.kind]; if (!S || p.fidget.t >= S.dur) { p.fidget = null; p.fidgetWait = FG.every * rand(.65, 1.35); } }
-      else if (p.stillT >= FG.after && !(KIT.leanIdle && KIT.leanIdle(p)) && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) {   // (Rose with her sword grown: leant on it instead, charkit's swordLean, 2026-11-06) const id = String(p.rig.spec.id || p.rig.name || "").toLowerCase(), F = KIT.FIDGETS, L = F[id] || F.all, big = KIT.idleOf ? KIT.idleOf(p, id) : KIT.IDLES && KIT.IDLES[id], opts = L.filter(k => k !== p.fidgetLast);
+      else if (p.stillT >= FG.after && !(KIT.leanIdle && KIT.leanIdle(p)) && (p.fidgetWait = (p.fidgetWait ?? 0) - dt) <= 0) { const id = String(p.rig.spec.id || p.rig.name || "").toLowerCase(), F = KIT.FIDGETS, L = F[id] || F.all, big = KIT.idleOf ? KIT.idleOf(p, id) : KIT.IDLES && KIT.IDLES[id], opts = L.filter(k => k !== p.fidgetLast);   // (Rose with her sword grown: leant on it instead, charkit's swordLean, 2026-11-06 · this line's code was inside the comment from 132f855 till 2026-11-07: a fidget due threw every frame and the rest of the frame stopped)
         const k = big && p.stillT >= (FG.idle ?? 12) && !String(p.fidgetLast).startsWith(String(big).replace(/1$/, "")) ? big : opts[Math.floor(Math.random() * opts.length)] || L[0];   // (stood still a good while: her big idle every other time, the user 2026-11-02, KIT.IDLES)
         p.fidget = { kind: k, t: 0 }; p.fidgetLast = k; } } }   // (never the same one twice running)
   p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
@@ -15032,7 +15032,7 @@ function partHitFoe0(s, e, dir, kind, noJug) {             // a blow of theirs l
   sparks(e.x - dir * eHW(e) * .5, e.y - eH(e) * .55, 6); return true;
 }
 function partHang(s) { const S = KIT.STRIKES[s.atkKind] || {}; s.hangT = Math.min(.24, (S.dur || .4) - Math.max(0, s.atkT) + .06); s.vy = -40; s.vx *= .2; }   // (a blow landed up there: it hangs on a moment, as you do)
-function partGrav(s, dt) { s.budW = true; if (s.hangT > 0) { s.hangT -= dt; s.vy = Math.min(s.vy + GRAV * dt * .1, 40); } else s.vy = Math.min(s.vy + GRAV * (s.vy > 0 ? BUD_FALL : 1) * dt, 1150); }   // (coming down at BUD_FALL, as you do, and as fast at most: up and down alike at GRAV they floated (the user, 2026-11-06: "we need more weight and gravity to the buddies especially when they're being tossed or jumping"))
+function partGrav(s, dt) { s.budW = true; s.budGF = null; if (s.hangT > 0) { s.hangT -= dt; s.vy = Math.min(s.vy + GRAV * dt * .1, 40); } else { s.budGF = s.vy > 0 ? BUD_FALL : 1; s.vy = Math.min(s.vy + GRAV * s.budGF * dt, 1150); } }   // (budGF: the share of GRAV it used this frame, read by teamChargeTick for a flung one (2026-11-07) · (coming down at BUD_FALL, as you do, and as fast at most: up and down alike at GRAV they floated (the user, 2026-11-06: "we need more weight and gravity to the buddies especially when they're being tossed or jumping"))
 const BUD_FALL = 1.8, BUD_FLING = .75;   // (a buddy's fall against its rise: MOVEMENT's for you · a flung one's gravity, .45 till 2026-11-06)
 function budFallOf(s) { return s && s.budW ? BUD_FALL : 1; }   // (who falls that way: the ones partGrav moves (budW), not the pets on their own gravity)
 function budAirT(vy, dy, f = BUD_FALL) { const up = Math.max(0, -vy), H = up * up / (2 * GRAV); return up / GRAV + Math.sqrt(2 * Math.max(0, H + dy) / (GRAV * f)); }   // (its time in the air: up at GRAV, then down at its fall to dy under where it left (dy below 0: above))
@@ -17387,7 +17387,7 @@ function updateHazards(dt) {
     if (h.drag) h.vx *= 1 - h.drag * dt;
     if (h.g) {
       const gy = groundBelow(h); h.grounded = h.y + h.r >= gy - 3;
-      if (h.y + h.r >= gy && h.vy > 0) { h.y = gy - h.r; if (h.bounceSnd && h.vy > 120) SFX[h.bounceSnd](); if (h.onLand) h.onLand(h, gy); h.vy = -h.vy * h.bounce; h.vx *= .84; dust(h.x, gy, 3); }
+      if (h.y + h.r >= gy && h.vy > 0) { const hard = h.vy > h.g * dt * 1.5; h.y = gy - h.r; if (h.bounceSnd && h.vy > 120) SFX[h.bounceSnd](); if (h.onLand) h.onLand(h, gy); h.vy = -h.vy * h.bounce; h.vx *= .84; if (hard) dust(h.x, gy, 3); }   // (dust on a real landing only: one at rest lands again every frame, a frame's gravity at most, and puffed every time (B4's cannonballs: hundreds a volley; the user, 2026-11-07: "Yes, fix both"))
     }
     if (h.tick) h.tick(h, dt);
     const r = h.rf ? h.rf(h) : h.r;
@@ -28670,7 +28670,7 @@ const _tcV = new THREE.Vector3();
 function teamChargeTick(dt) {                       // (every frame, after the partners' own: where the team is through the charge, and the ones flung)
   const p = player; if (!p || mode !== "play") return; const lv = p.tcLv || 0;
   partnerList().forEach((P, k) => { const s = P.q, hum = P.kind !== "pet"; if (!s || s.worn || (s.post && s.post.kind === "btn")) return;   // (worn out: not this. Over B7's gap at its button: not back up on her arm)
-    if (s.tcFly) { const F = s.tcFly; F.t += dt; s.face = F.d; flungBreak(s, F); if (!s.onGround) s.vy -= (GRAV * (s.vy > 0 ? budFallOf(s) : 1) - GRAV * BUD_FLING) * dt;   // (BUD_FLING of gravity, up or down: .45 till 2026-11-06, a float (the user, 2026-11-06: "we need more weight and gravity to the buddies especially when they're being tossed or jumping"))   // flung: whoever it comes down on (a long flat flight: gravity half its own)
+    if (s.tcFly) { const F = s.tcFly; F.t += dt; s.face = F.d; flungBreak(s, F); if (!s.onGround) s.vy -= (GRAV * (s.budGF != null ? s.budGF : s.vy > 0 ? budFallOf(s) : 1) - GRAV * BUD_FLING) * dt; s.budGF = null;   // (the share partGrav used, not one picked again from the vy it left: at the top of the throw the two disagreed and it hung there till the 1.5 s cap (the user, 2026-11-07: "Yes, fix both")) (BUD_FLING of gravity, up or down: .45 till 2026-11-06, a float (the user, 2026-11-06: "we need more weight and gravity to the buddies especially when they're being tossed or jumping"))   // flung: whoever it comes down on (a long flat flight: gravity half its own)
       if (F.fire && Math.floor(F.t / .03) !== Math.floor((F.t - dt) / .03)) { flamesPx(s.x - F.d * 10, s.y - 40, 3, 30, 1.2); fireBurn(s.x, s.y - 40); }   // (on fire as it flies)
       if (F.tb) { const B = F.tb, u = Math.min(1, F.t / B.T), a4 = 4 * B.arc;   // (over B7's gap: along its arc, tbAim's, and down on the far side)
         s.x = lerp(B.x0, B.tx, u); s.y = lerp(B.y0, B.ty, u) - a4 * u * (1 - u); s.vx = (B.tx - B.x0) / B.T; s.vy = ((B.ty - B.y0) - a4 * (1 - 2 * u)) / B.T; s.onGround = false; s.plat = null;
