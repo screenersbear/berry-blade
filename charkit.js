@@ -3260,7 +3260,7 @@ function updatePoseHuman(p, dt) {
   if (m.float && a < 0 && p.hurtT <= 0 && sp <= 30 && p.onGround) { T.fNx = -.05; T.fFx = -.2; T.fNy = .05; T.fFy = .02; T.fP = .7; }   // floating in place: feet hang loose, toes down
   if (p.crouch && !p.crawl && p.onGround && a < 0 && p.hurtT <= 0) {
     Object.assign(T, CROUCH);
-    if (ST) { const sw = leadFar(p), A = { armF: ST.armF, elbF: ST.elbF + .2, armB: ST.armB + .1, elbB: ST.elbB }; for (const k in A) T[sw ? SWAP[k] : k] = A[k]; }
+    if (ST) { const sw = leadFar(p), A = { armF: ST.armF, elbF: ST.elbF + .2, armB: ST.armB + .1, elbB: ST.elbB }; for (const k in A) if (Number.isFinite(A[k])) T[sw ? SWAP[k] : k] = A[k]; }   // (only what the stance has: June's has no armF / elbF / elbB, and undefined + .2 left NaN in the arm's spring for good, 2026-11-07)
   }
   if ((p.block || p.tpose > 0) && a < 0 && p.hurtT <= 0) {    // guard up (and held long enough, opening out from it to the T)
     const B = { ...(SET.block || BLOCK_DEF), ...(m.guard || {}) }, sw = leadFar(p); for (const k in B) { const kk = sw ? SWAP[k] || k : k; if (kk in POSE_H0 && (p.onGround || !LEG_CH.has(kk))) T[kk] = B[k]; }   // (in the air the guard is the arms and body only: the legs keep the jump; a ground stance's feet up there contorted Chase's legs)
