@@ -1264,15 +1264,19 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     float vnoise(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
+    vec4 gbcAt(vec2 b) { vec2 s = tpx / (tpx.y * gbc), u = (b + .5) * s; vec4 t0 = texture2D(tex, u - s * .25), t1 = texture2D(tex, u + s * .25), t2 = texture2D(tex, u + s * vec2(.25, -.25)), t3 = texture2D(tex, u + s * vec2(-.25, .25)); float a = t0.a + t1.a + t2.a + t3.a;   // the beach house's big pixels: block b's colour, four looks inside it averaged (one look caught every grain line), and how much of it is a character (a: the frame's alpha, cleared before them, gbcMark)
+      vec3 k = a > 2.0 ? (t0.rgb * t0.a + t1.rgb * t1.a + t2.rgb * t2.a + t3.rgb * t3.a) / a : (t0.rgb + t1.rgb + t2.rgb + t3.rgb) * .25; return vec4(toSRGB(max(k, 0.0)), a * .25); }   // (a character's: its own colour only, none of the wall behind its edge)
+    float gbcMin(vec2 b) { vec2 s = tpx / (tpx.y * gbc), u = (b + .5) * s; vec3 w = vec3(.299, .587, .114); return min(min(dot(toSRGB(max(texture2D(tex, u - s * .25).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * .25).rgb, 0.0)), w)), min(dot(toSRGB(max(texture2D(tex, u + s * vec2(.25, -.25)).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * vec2(-.25, .25)).rgb, 0.0)), w))); }   // its darkest look (an eye, smaller than one big pixel)
     void main() {
       vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
+      vec2 gb = vec2(0.0); if (gbc > 0.0) { gb = floor(gl_FragCoord.xy * tpx.y * gbc); c = gbcAt(gb).rgb; }   // (in the beach house: the screen as GBC rows of big square pixels, gbc of them top to bottom, each one colour)
       float l = dot(c, vec3(.299, .587, .114));
       c = max(mix(vec3(l), c, 1.06), 0.0);              // keep the colour vibrant   // (never below nothing: a colour with none of one (Rink's yellow, no blue) went under it here, pow then made it NaN, and the ruin's grey (its dot of all three) spread that to the whole pixel: black bodies, black platforms, the land at war, any hour. The user, 2026-11-04: "it's literally black on different parts of their body")
       c = mix(c, vec3(1.0, .975, .94), .07 * warm);  // pastel: a light tint toward warm white
@@ -1283,7 +1287,15 @@ const gradeMat = new THREE.ShaderMaterial({
       if (ruin > 0.0) { float l2 = dot(c, vec3(.299, .587, .114)); c = mix(c, vec3(l2), .5 * ruin); c = mix(c, c * vec3(1.0, .86, .72), .4 * ruin); c *= 1.0 - .14 * ruin; }   // the land at war: washed out, sooty, darker (its dark edges gone too, 2026-10-26)
       if (bloom > 0.0) { float l3 = dot(c, vec3(.299, .587, .114)); c = max(mix(vec3(l3), c, 1.0 + .3 * bloom), 0.0); c = mix(c, pow(c, vec3(.85)), .5 * bloom); }   // set free: richer, brighter   // (max: the same NaN, in a world set free)
       if (bgOn > .5) { vec2 u = vec2(.5 + (vUv.x - .5) * min(1.0, scr / bgA), .5 + (vUv.y - .5) * min(1.0, bgA / scr)); u.x = mod(u.x + bgOff, bgPer); c = mix(texture2D(bgTex, u).rgb * .42, c, clamp(f.a, 0.0, 1.0)); }   // character select: the bep crowd behind (ungraded, darkened so the characters stand out)
-      { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
+      if (gbc > 0.0) { vec4 k0 = gbcAt(gb); float m0 = dot(k0.rgb, vec3(.299, .587, .114)), e = 0.0, ln = 1.0; vec3 ks = k0.rgb; bool s0 = k0.a > .5;   // THE BEACH HOUSE as a Game Boy Color game (the user, 2026-11-07: "when you go into the beach house, the aesthetic should change to match these pixelated gameboy color graphics for the player and the background")
+        for (int i = 0; i < 4; i++) { vec2 d = i == 0 ? vec2(1.0, 0.0) : i == 1 ? vec2(-1.0, 0.0) : i == 2 ? vec2(0.0, 1.0) : vec2(0.0, -1.0); vec4 kn = gbcAt(gb + d); bool sn = kn.a > .5; float mn = dot(kn.rgb, vec3(.299, .587, .114)), dc = length(kn.rgb - k0.rgb);
+          if (sn && !s0) e = 1.0; else if (sn == s0 && mn > m0) e = max(e, s0 ? ((mn - m0) > .55 ? 1.0 : 0.0) : dc);   // the outline: round a character, just outside it; the darker side of a hard edge in the scenery; inside a character, only the hardest (its red never eaten)
+          if (sn == s0 && dc < .2) { ln += 1.0; ks += kn.rgb; } }   // (its like neighbours, evening out the paint's mottle: no specks)
+        c = max(c + ks / ln - k0.rgb, 0.0); float g0 = dot(c, vec3(.299, .587, .114)), t = g0 < .3 ? .12 : g0 < .545 ? .42 : g0 < .77 ? .64 : .93;   // four shades a colour, as its palettes had (.545: between this room's side wall, .51, and its back wall, .58)
+        c = clamp(max(mix(vec3(g0), c, 1.3), 0.0) * t / max(g0, .02), 0.0, 1.0); c = clamp(t + floor((c - dot(c, vec3(.299, .587, .114))) / .14 + .5) * .14, 0.0, 1.0);   // (bolder, then flat: its shade exactly, its hue in coarse steps)
+        if (s0 && m0 - gbcMin(gb) > .3) e = 1.0;   // (a character's small dark details kept: eyes, seams)
+        if (e > .32) c = vec3(.06, .05, .1); }   // the black outline
+      if (gbc <= 0.0) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
         float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // (FINE, the one the user kept, 2026-10-29: "the papter fine setting which is one i wan tto keep for all versions")
         c *= 1.0 + g * .085 + mot * .06; c = mix(c, c * vec3(1.0, .985, .955), .5); }
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
@@ -1291,6 +1303,11 @@ const gradeMat = new THREE.ShaderMaterial({
   depthTest: false, depthWrite: false,
 });
 const gradeQuad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), gradeMat); gradeScene.add(gradeQuad);
+const GBC_ROWS = 144;                                // the beach house's pixels: as many rows of them as a Game Boy Color's screen had
+const _gbcCc = new THREE.Color();
+function gbcMark() {                                 // the beach house: the frame's alpha cleared after the scenery, so the characters drawn next mark where they are (their outline round them, not through them)
+  const gl = renderer.getContext(), a = renderer.getClearAlpha(); renderer.getClearColor(_gbcCc); renderer.state.buffers.color.setMask(true);
+  renderer.setClearColor(_gbcCc, 0); gl.colorMask(false, false, false, true); renderer.clear(true, false, false); gl.colorMask(true, true, true, true); renderer.setClearColor(_gbcCc, a); }
 // the menus' pictures of the characters through the game's own filter (the user, 2026-11-02: "the character preview in the menu shows the character like without the
 // filter on the actual game?"): the same grade pass, its colours and its paper, keeping the picture's see-through background (premul: for a canvas; else straight, to read back)
 const PV_FS = gradeMat.fragmentShader.replace("uniform sampler2D tex, bgTex;", "uniform sampler2D tex, bgTex; uniform float premul;")
@@ -1298,7 +1315,7 @@ const PV_FS = gradeMat.fragmentShader.replace("uniform sampler2D tex, bgTex;", "
   .replace("gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);", "gl_FragColor = premul > .5 ? vec4(clamp(c, 0.0, 1.0) * pa, pa) : vec4(clamp(c, 0.0, 1.0), pa);");
 function pvGradeMake() { const U = THREE.UniformsUtils.clone(gradeMat.uniforms); U.premul = { value: 1 }; U.bgTex.value = null; const m = new THREE.ShaderMaterial({ uniforms: U, vertexShader: gradeMat.vertexShader, fragmentShader: PV_FS, depthTest: false, depthWrite: false }), s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m)); return { m, s, rt: null }; }
 function pvUniforms(P, tex, w, h, R, premul) { const U = P.m.uniforms, G = gradeMat.uniforms;   // (the game's colour for the hour, as it is now; not the underground's dark)
-  U.tex.value = tex; U.tintC.value.copy(G.tintC.value); U.tintAmt.value = G.tintAmt.value; U.warm.value = G.warm.value; U.ruin.value = G.ruin.value; U.bloom.value = G.bloom.value; U.dim.value = 0; U.bgOn.value = 0;
+  U.tex.value = tex; U.tintC.value.copy(G.tintC.value); U.tintAmt.value = G.tintAmt.value; U.warm.value = G.warm.value; U.ruin.value = G.ruin.value; U.bloom.value = G.bloom.value; U.dim.value = 0; U.bgOn.value = 0; U.gbc.value = 0;
   U.tpx.value.set(1 / w, 1 / h); U.pstep.value = R.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.premul.value = premul ? 1 : 0; }
 const _pvSz = new THREE.Vector2();
 function pvRender(R, sc, cam, P) {                  // a preview's own renderer (its canvas see-through): the picture into its target, then through the filter onto the canvas
@@ -7663,7 +7680,7 @@ function openShading() {
   shadeUp = window.ShadingMockup.open({ THREE, renderer, frameRT, gradeScene, gradeCam, gradeMat, KIT, buildChar, lookOf, rosterSpecs, makeState, dressGear, undressGear, tropMats, tropPalm, tropTreeFern, tropPlantain,
     tropGroundFern, tropBromeliad, toon, GROUND, screens: WORLDS[0].screens, raw: fn => { shadeRaw = true; KIT.shadeRaw = true; try { return fn(); } finally { shadeRaw = false; KIT.shadeRaw = false; } },   // (raw: its own builds, the game's look as it is, even with a look applied)
     pipe: { pre() { },   // (render()'s own: nothing before the scene now, the characters' DEBUG textures gone 2026-11-05)
-      grade() { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; } },
+      grade() { const U = gradeMat.uniforms; U.gbc.value = 0; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; } },
     onClose() { shadeUp = null; showMainMenu(); showDev(); } });
 }
 let castUp = null, castQuiet = false;                // the viewer (null: shut) · (while a boss's attack runs in it: no hazards made)
@@ -7873,7 +7890,7 @@ function castFrame(dt) {
   C.cam.position.set(cx + Math.sin(C.yaw) * d, ty + H * .16, Math.cos(C.yaw) * d); C.cam.lookAt(cx, ty - H * .08, 0);
   if (wide) C.cam.setViewOffset(innerWidth, innerHeight, (300 - 290) / 2 * -1, 50, innerWidth, innerHeight); else C.cam.setViewOffset(innerWidth, innerHeight, 0, -innerHeight * .07, innerWidth, innerHeight);   // (the stage between the two panels, clear of the bar along the bottom)
   C.floor.position.x = cx; C.floor.scale.setScalar(H * .9);
-  const U = gradeMat.uniforms; U.ruin.value = 0; U.bloom.value = 0; U.bgOn.value = 0; renderer.setClearAlpha(1);
+  const U = gradeMat.uniforms; U.ruin.value = 0; U.bloom.value = 0; U.bgOn.value = 0; U.gbc.value = 0; renderer.setClearAlpha(1);
   renderer.setRenderTarget(frameRT); renderer.clear(); renderer.render(C.scene, C.cam); renderer.setRenderTarget(null); renderer.render(gradeScene, gradeCam);
   const L = s ? s.len(C.anim) : 0, lab = s ? (s.anims.find(x => x[0] === C.anim) || [, ""])[1] : "";
   $("cvRead").textContent = `${lab} · ${C.t.toFixed(2)} S${L ? " OF " + L.toFixed(2) : ""}${C.speed < 1 ? " · " + C.speed + "× SPEED" : ""}${C.paused ? " · PAUSED" : ""}`;
@@ -29709,6 +29726,7 @@ function render(dt) {
   gradeMat.uniforms.ruin.value = mode === "play" && !hideout && !rideS ? RUIN_GRADE[level.ruin || 0] : 0;   // (as the room was when you came in: the user, 2026-10-20)
   gradeMat.uniforms.bloom.value = mode === "play" && !hideout && !rideS && world !== 9 && freedNow() ? 1 : 0;
   if (!pan) gradeMat.uniforms.dim.value = !bepSel && !hideout && !rideS && !stronghold && !arena && level.w === world && !!(STAGES[level.s] || {}).dark ? 1 : 0;   // (the forest's underground rooms)
+  gradeMat.uniforms.gbc.value = mode === "play" && !hideout && !rideS && !bepSel && level.w === world && !!(STAGES[level.s] || {}).hut ? GBC_ROWS : 0;   // (in the beach house, the kids' home: big pixels, flat colours, black outlines)
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   renderer.setRenderTarget(frameRT);
@@ -29719,6 +29737,7 @@ function render(dt) {
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
   renderer.clearDepth();
   if (SHADE) { SHADE.pass(true); SHADE.U.mkGround.value = player ? Y(groundAt(player.x) ?? GROUND) : 0; }
+  if (gradeMat.uniforms.gbc.value) gbcMark();   // (in the beach house: where the characters are, for their outlines)
   renderer.render(actors, camera);
   if (SHADE) SHADE.pass(false);
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
@@ -29766,14 +29785,15 @@ let fadeT = 0; const fadeEl = document.getElementById("fade");
 // a string of bulbs, a drape each side tied back, flowers along the front). So while you play in Crux's city a paper theatre's front stands over the play, in black ink
 // on white paper: each cut-out casts a soft shadow on the one behind it, the last on the city. It's drawn once for the screen's size into four strips round the edge
 // (the middle's left clear), over the 3D picture and the room-change slide, under the hearts, the map and the menus.
+// Then the user, 2026-11-07: "can it be a flatter but 3d object?" So each cut-out is now a real 3D sheet, thin as card, printed with its drawing and standing a little
+// in front of the one behind: three.js builds and lights them (their cut edges show at the game camera's angle, their shadows are real), once for the screen's size.
 const PBOX = { on: false, w: 0, h: 0, el: null };
-function pboxArt(W, H, d) {                           // the whole front at W x H (CSS pixels, d device pixels each): a canvas
-  const cv = document.createElement("canvas"), tmp = document.createElement("canvas"); cv.width = tmp.width = Math.round(W * d); cv.height = tmp.height = Math.round(H * d);
-  const g = cv.getContext("2d"), x = tmp.getContext("2d"), u = Math.min(H / 100, W / 150), K = "#151515", P = "#fbfbf6", TAU = Math.PI * 2;   // (u: a hundredth of the screen's height, less on a tall narrow one)
+function pboxArt(W, H, d) {                           // the front's drawings at W x H (CSS pixels, d device pixels each): one canvas for each cut-out, back to front
+  const pw = Math.round(W * d), ph = Math.round(H * d), layers = []; let x = null;
+  const u = Math.min(H / 100, W / 150), K = "#151515", P = "#fbfbf6", TAU = Math.PI * 2;   // (u: a hundredth of the screen's height, less on a tall narrow one)
   let seed = 7; const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296, rr = (a, b) => a + rnd() * (b - a);   // (the same flowers every time)
   const sty = (f, s, lw) => { x.fillStyle = f; x.strokeStyle = s; x.lineWidth = lw * u; };
-  const layer = fn => { x.setTransform(1, 0, 0, 1, 0, 0); x.clearRect(0, 0, tmp.width, tmp.height); x.setTransform(d, 0, 0, d, 0, 0); x.lineJoin = x.lineCap = "round"; fn();
-    g.save(); g.shadowColor = "rgba(0, 0, 0, .5)"; g.shadowBlur = 2 * u * d; g.shadowOffsetX = .3 * u * d; g.shadowOffsetY = u * d; g.drawImage(tmp, 0, 0); g.restore(); };   // (one cut-out: its shadow falls on what's behind it)
+  const layer = fn => { const c = document.createElement("canvas"); c.width = pw; c.height = ph; x = c.getContext("2d"); x.setTransform(d, 0, 0, d, 0, 0); x.lineJoin = x.lineCap = "round"; fn(); layers.push(c); };   // (one cut-out, on its own canvas)
   const both = fn => { x.save(); fn(); x.restore(); x.save(); x.translate(W, 0); x.scale(-1, 1); fn(); x.restore(); };   // (the left side, then the same mirrored on the right)
   const at = (cx, cy, a, fn) => { x.save(); x.translate(cx, cy); x.rotate(a); fn(); x.restore(); };
   const circ = (cx, cy, r) => { x.beginPath(); x.arc(cx, cy, r, 0, TAU); };
@@ -29856,19 +29876,83 @@ function pboxArt(W, H, d) {                           // the whole front at W x 
   layer(() => both(() => { x.translate(0, H); x.scale(1.2, 1.2); x.translate(0, -H); stem(2 * u, H, 9 * u, H - 21 * u, -4 * u, false); [[.5, 2.5], [.72, 2.2], [.92, 1.9]].forEach(([t, r]) => { const bx = qp(t, 2 * u, 1.5 * u, 9 * u), by = qp(t, H, H - 10.5 * u, H - 21 * u); stem(bx, by, bx + 1.2 * u, by + 1.4 * u, 0, false); flower("bell", bx + 1.3 * u, by + 1.4 * u + r * .55 * u, r * u, .15); });
     leaf(u, H - 3 * u, 6 * u, -1.2, true); leaf(6 * u, H - 2 * u, 5 * u, -.5, true); leaf(11 * u, H - 3 * u, 4.6 * u, -.9, true); leaf(4 * u, H - 9 * u, 4.2 * u, -.35, true);
     flower("lily", 3.6 * u, H - 13 * u, 2.8 * u, .3); flower("daisy", 5 * u, H - 7.5 * u, 4 * u, .1); flower("tulip", 12.6 * u, H - 9.2 * u, 2.6 * u, .15); flower("blossom", 10.6 * u, H - 4 * u, 3.2 * u, .4); flower("bud", 15 * u, H - 5.5 * u, 1.6 * u, .3); }));
-  return cv;
+  return { layers, u };
 }
-function pboxFit() {                                  // the front drawn for this screen and cut into its four strips
+function pboxTrace(A, pw, ph, d) {                    // one cut-out's cut line (A: its pixels): its ink's outline traced on a 1 px grid (marching squares), as loops in screen pixels, each outline with its holes
+  const st = Math.max(1, Math.round(d)), nx = Math.ceil(pw / st), ny = Math.ceil(ph / st), NX = nx + 2;
+  const F = new Float32Array(NX * (ny + 2)).fill(-.5), has = new Uint8Array(ny + 2);   // (the ink's cover less a half, on a grid with a ring of nothing round it)
+  for (let j = 0; j < ny; j++) { const y = Math.min(ph - 1, j * st) * pw; for (let i = 0; i < nx; i++) { const v = A[(y + Math.min(pw - 1, i * st)) * 4 + 3] / 255 - .5; F[(j + 1) * NX + i + 1] = v; if (v > 0) has[j + 1] = 1; } }
+  const nxt = new Map(), pos = new Map(), k = st / d, f = (I, J) => F[J * NX + I];
+  const pt = (id, x, y) => { if (!pos.has(id)) pos.set(id, [(x - 1) * k, (y - 1) * k]); return id; };
+  for (let J = 0; J <= ny; J++) { if (!has[J] && !has[J + 1]) continue;
+    for (let I = 0; I <= nx; I++) { const a = f(I, J), b = f(I + 1, J), cc = f(I + 1, J + 1), e = f(I, J + 1), n = (a > 0 ? 8 : 0) | (b > 0 ? 4 : 0) | (cc > 0 ? 2 : 0) | (e > 0 ? 1 : 0); if (!n || n === 15) continue;
+      const T = () => pt((J * NX + I) * 2, I + a / (a - b), J), B = () => pt(((J + 1) * NX + I) * 2, I + e / (e - cc), J + 1), L = () => pt((J * NX + I) * 2 + 1, I, J + a / (a - e)), R = () => pt((J * NX + I + 1) * 2 + 1, I + 1, J + b / (b - cc));
+      const sg = (p, q) => nxt.set(p, q), mid = a + b + cc + e > 0;
+      switch (n) { case 1: sg(L(), B()); break; case 2: sg(B(), R()); break; case 3: sg(L(), R()); break; case 4: sg(R(), T()); break; case 6: sg(B(), T()); break; case 7: sg(L(), T()); break; case 8: sg(T(), L()); break; case 9: sg(T(), B()); break;
+        case 11: sg(T(), R()); break; case 12: sg(R(), L()); break; case 13: sg(R(), B()); break; case 14: sg(B(), L()); break;
+        case 5: if (mid) { sg(L(), T()); sg(R(), B()); } else { sg(L(), B()); sg(R(), T()); } break;
+        case 10: if (mid) { sg(T(), R()); sg(B(), L()); } else { sg(T(), L()); sg(B(), R()); } break; } } }
+  const rdp = (Q, eps) => { const n = Q.length, keep = new Uint8Array(n), S = [[0, n - 1]]; keep[0] = keep[n - 1] = 1;   // (the loop thinned to the points that matter, a quarter pixel either way)
+    while (S.length) { const [a, b] = S.pop(), [ax, ay] = Q[a], dx = Q[b][0] - ax, dy = Q[b][1] - ay, l2 = dx * dx + dy * dy || 1e-9; let m = -1, md = eps * eps;
+      for (let i = a + 1; i < b; i++) { let t = ((Q[i][0] - ax) * dx + (Q[i][1] - ay) * dy) / l2; t = t < 0 ? 0 : t > 1 ? 1 : t; const qx = ax + t * dx - Q[i][0], qy = ay + t * dy - Q[i][1], dd = qx * qx + qy * qy; if (dd > md) { md = dd; m = i; } }
+      if (m > 0) { keep[m] = 1; S.push([a, m], [m, b]); } }
+    return Q.filter((_, i) => keep[i]); };
+  const loops = [];
+  while (nxt.size) { const s = nxt.keys().next().value, P = []; let id = s;
+    while (id !== undefined) { P.push(pos.get(id)); const nn = nxt.get(id); nxt.delete(id); if (nn === s) break; id = nn; }
+    if (P.length < 4) continue; let far = 0, fd = -1; P.forEach(([x, y], i) => { const dd = (x - P[0][0]) ** 2 + (y - P[0][1]) ** 2; if (dd > fd) { fd = dd; far = i; } });
+    const Q = [...rdp(P.slice(0, far + 1), .25).slice(0, -1), ...rdp([...P.slice(far), P[0]], .25).slice(0, -1)]; if (Q.length < 3) continue;
+    let ar = 0, x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; Q.forEach(([x, y], i) => { const [u, v] = Q[(i + 1) % Q.length]; ar += x * v - u * y; x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+    if (Math.abs(ar / 2) > .8) loops.push({ p: Q, a: ar / 2, bb: [x0, y0, x1, y1], holes: [] }); }
+  if (!loops.length) return [];
+  const sg = Math.sign(loops.reduce((m, l) => Math.abs(l.a) > Math.abs(m.a) ? l : m).a), outs = loops.filter(l => Math.sign(l.a) === sg);   // (the biggest loop's always an outline: the ones that turn its way are outlines, the rest holes)
+  const inside = (P, [x, y]) => { let c = false; for (let i = 0, j = P.length - 1; i < P.length; j = i++) { const [xi, yi] = P[i], [xj, yj] = P[j]; if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  loops.forEach(h => { if (Math.sign(h.a) === sg) return; const [px, py] = h.p[0]; let best = null;
+    outs.forEach(o => { const b = o.bb; if (px >= b[0] && px <= b[2] && py >= b[1] && py <= b[3] && (!best || Math.abs(o.a) < Math.abs(best.a)) && inside(o.p, h.p[0])) best = o; }); if (best) best.holes.push(h.p); });
+  return outs;
+}
+function pbox3D(W, H, d) {                            // the front built as a real 3D object: each cut-out a thin sheet printed with its drawing, standing a little in front of the last, lit from the front and above, casting real shadows; rendered once
+  const { layers, u } = pboxArt(W, H, d), D = H / 2 / Math.tan(16 * Math.PI / 180), cx = W / 2, cy = H / 2, sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(32, W / H, D * .5, D * 2);   // (the game camera's own 32 degrees: the sheets' edges show as the city's would)
+  cam.position.set(cx, cy, D); cam.lookAt(cx, cy, 0);
+  const L = new THREE.Vector3(-.22, .38, 1).normalize(), sun = new THREE.DirectionalLight(0xffffff, .5 * Math.PI), S = sun.shadow, ext = Math.max(W, H) * .75;   // (a soft light from the front, up and to the left)
+  sc.add(new THREE.AmbientLight(0xffffff, .54 * Math.PI)); sun.position.set(cx, cy, 0).addScaledVector(L, 4 * D); sun.target.position.set(cx, cy, 0); sc.add(sun, sun.target);
+  sun.castShadow = true; S.mapSize.set(Math.max(W, H) * d > 2600 ? 4096 : 2048, Math.max(W, H) * d > 2600 ? 4096 : 2048); Object.assign(S.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: D, far: 7 * D }); S.camera.updateProjectionMatrix();
+  S.radius = Math.max(2, .9 * u * S.mapSize.x / (2 * ext)); S.bias = -.0004;   // (the shadows' softness: about a unit's worth on the screen)
+  const card = new THREE.MeshLambertMaterial({ color: 0xebe8e1, vertexColors: true }), T = k => k === 2 ? 1.1 * u : 1.8 * u, Z = k => .8 * u + k * 2.4 * u + T(k);   // (the sheets' card, seen at the cut: white, or black where the print is; how thick each is, and how far it stands out)
+  const catcher = new THREE.Mesh(new THREE.PlaneGeometry(W * 1.6, H * 1.6), new THREE.ShadowMaterial({ opacity: .4 })); catcher.position.set(cx, cy, 0); catcher.receiveShadow = true; sc.add(catcher);   // (only the shadows fall on the city behind)
+  layers.forEach((c, k) => { const parts = {}, pw = c.width, ph = c.height, A = c.getContext("2d").getImageData(0, 0, pw, ph).data, dl = .35 * u;
+    pboxTrace(A, pw, ph, d).forEach(o => { const [x0, y0, x1, y1] = o.bb, r = (y0 + y1) / 2 < H * .3 ? "t" : (y0 + y1) / 2 > H * .7 ? "b" : (x0 + x1) / 2 < cx ? "l" : "r"; (parts[r] ||= []).push(o); });   // (the pieces round each edge share one print)
+    for (const r in parts) { const G = parts[r], bx = Math.max(0, Math.floor(Math.min(...G.map(o => o.bb[0])) - 2)), by = Math.max(0, Math.floor(Math.min(...G.map(o => o.bb[1])) - 2));
+      const bw = Math.min(W, Math.ceil(Math.max(...G.map(o => o.bb[2])) + 2)) - bx, bh = Math.min(H, Math.ceil(Math.max(...G.map(o => o.bb[3])) + 2)) - by, tc = document.createElement("canvas");
+      tc.width = Math.max(1, Math.round(bw * d)); tc.height = Math.max(1, Math.round(bh * d)); tc.getContext("2d").drawImage(c, Math.round(bx * d), Math.round(by * d), tc.width, tc.height, 0, 0, tc.width, tc.height);
+      const tex = new THREE.CanvasTexture(tc); tex.colorSpace = THREE.SRGBColorSpace; tex.repeat.set(1 / bw, 1 / bh); tex.offset.set(-bx / bw, -(H - by - bh) / bh);   // (the print, placed by where on the screen each point is)
+      const shapes = G.map(o => { const s = new THREE.Shape(o.p.map(([x, y]) => new THREE.Vector2(x, H - y))); o.holes.forEach(h => s.holes.push(new THREE.Path(h.map(([x, y]) => new THREE.Vector2(x, H - y))))); return s; });
+      const geo = new THREE.ExtrudeGeometry(shapes, { depth: T(k), bevelEnabled: false, curveSegments: 1 }), pa = geo.attributes.position, na = geo.attributes.normal, col = new Float32Array(pa.count * 3);
+      for (let i = 0; i < pa.count; i++) { const px = Math.round((pa.getX(i) - na.getX(i) * dl) * d), py = Math.round((H - pa.getY(i) + na.getY(i) * dl) * d), q = (py * pw + px) * 4, ok = px >= 0 && py >= 0 && px < pw && py < ph;   // (each cut edge takes the colour a little way in from it, past the ink line)
+        col.fill(ok && A[q + 3] > 127 && A[q] + A[q + 1] + A[q + 2] > 380 ? 1 : .1, i * 3, i * 3 + 3); }
+      geo.setAttribute("color", new THREE.BufferAttribute(col, 3)); const m = new THREE.Mesh(geo, [new THREE.MeshLambertMaterial({ map: tex }), card]), s = (D - Z(k)) / D;
+      m.scale.set(s, s, 1); m.position.set(cx * (1 - s), cy * (1 - s), Z(k) - T(k)); m.castShadow = m.receiveShadow = true; sc.add(m); } });   // (shrunk by its distance, so its face falls on the screen just where it was drawn)
+  const R = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); R.setPixelRatio(d); R.setSize(W, H, false); R.setClearColor(0, 0); R.shadowMap.enabled = true; R.shadowMap.type = THREE.PCFShadowMap;   // (filtered, soft at the radius: VSM left a faint speckle over the open middle)
+  R.render(sc, cam); const out = document.createElement("canvas"); out.width = R.domElement.width; out.height = R.domElement.height; out.getContext("2d").drawImage(R.domElement, 0, 0);
+  sc.traverse(o => { if (o.geometry) o.geometry.dispose(); [].concat(o.material || []).forEach(mt => { if (mt.map) mt.map.dispose(); mt.dispose(); }); }); if (S.map) S.map.dispose(); R.dispose(); R.forceContextLoss();   // (its own renderer for the once: let go straight after)
+  return out;
+}
+function pboxFit() {                                  // the front built for this screen and cut into its four strips
   const W = innerWidth, H = innerHeight; if (!W || !H) return; PBOX.w = W; PBOX.h = H;
-  const d = Math.min(2, devicePixelRatio || 1), art = pboxArt(W, H, d), u = Math.min(H / 100, W / 150), top = Math.min(H / 2, Math.ceil(18 * u)), bot = Math.min(H / 2, Math.ceil(15 * u)), side = Math.min(W / 2, Math.ceil(20 * u)), mid = Math.max(0, H - top - bot);
+  const d = Math.min(2, devicePixelRatio || 1, 4096 / W), art = pbox3D(W, H, d), aw = art.width, ah = art.height, A = art.getContext("2d").getImageData(0, 0, aw, ah).data, s0 = Math.round(22 * Math.min(H / 100, W / 150) * d);   // (the strips sized to what's drawn, shadows and all)
+  let t = 0, b = ah, sd = 0; for (let y = 0; y < ah; y++) for (let x = s0; x < aw - s0; x += 2) if (A[(y * aw + x) * 4 + 3] > 2) { if (y < ah / 2) t = y + 1; else if (y < b) b = y; break; }
+  for (let y = t; y < b; y++) { const r = y * aw * 4; for (let x = 0; x < aw / 2; x++) { if (A[r + x * 4 + 3] > 2 && x + 1 > sd) sd = x + 1; if (A[r + (aw - 1 - x) * 4 + 3] > 2 && x + 1 > sd) sd = x + 1; } }
+  const top = Math.min(H / 2, Math.ceil(t / d) + 1), bot = Math.min(H / 2, Math.ceil((ah - b) / d) + 1), side = Math.min(W / 2, Math.ceil(sd / d) + 1), mid = Math.max(0, H - top - bot);
   [[0, 0, W, top], [0, H - bot, W, bot], [0, top, side, mid], [W - side, top, side, mid]].forEach(([l, t, w, h], i) => { const c = PBOX.el.children[i]; c.width = Math.max(1, Math.round(w * d)); c.height = Math.max(1, Math.round(h * d));
     c.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:${w}px;height:${h}px`; c.getContext("2d").drawImage(art, Math.round(l * d), Math.round(t * d), c.width, c.height, 0, 0, c.width, c.height); });
+  qT = qN = qSum = 0;   // (the build's one slow frame isn't the game running slow: the quality check starts its count again)
 }
-function pboxTick() {                                 // up only while you play in Crux's city (not on the title, a ride, the prologue or the mockup stages); drawn again when the screen changes size
-  const on = world === 7 && mode === "play" && !titleUp && !rideS && !pro && !shadeUp && !castUp;
-  if (on && (!PBOX.el || PBOX.w !== innerWidth || PBOX.h !== innerHeight)) {
+function pboxTick() {                                 // up only while you play in Crux's city (not on the title, a ride, the prologue or the mockup stages); built again once the screen's settled at a new size
+  const on = world === 7 && mode === "play" && !titleUp && !rideS && !pro && !shadeUp && !castUp, W = innerWidth, H = innerHeight;
+  if (on && (!PBOX.el || PBOX.w !== W || PBOX.h !== H)) {
     if (!PBOX.el) { PBOX.el = document.createElement("div"); PBOX.el.id = "pbox"; PBOX.el.style.cssText = "position:fixed;inset:0;pointer-events:none;display:none"; for (let i = 0; i < 4; i++) PBOX.el.appendChild(document.createElement("canvas")); ((slideCv && slideCv.parentNode) ? slideCv : renderer.domElement).after(PBOX.el); }   // (straight after the 3D picture and its slide: over them, under everything else)
-    pboxFit(); }
+    if (PBOX.sw !== W || PBOX.sh !== H) { PBOX.sw = W; PBOX.sh = H; PBOX.at = performance.now(); }
+    if (!PBOX.w || performance.now() - PBOX.at > 300) { try { pboxFit(); } catch (e) { console.warn("the play box couldn't be built", e); PBOX.w = W; PBOX.h = H; } } }   // (the first at once; after a resize, when it's held still a moment)
   if (on !== PBOX.on) { PBOX.on = on; if (PBOX.el) PBOX.el.style.display = on ? "" : "none"; }
 }
 function frame(now) {                              // (the next frame is asked for first: whatever goes wrong in this one, the game carries on, it doesn't freeze)
