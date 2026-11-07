@@ -7,12 +7,12 @@ window.BerryShading = (() => {
   // the game's look, shipped (the user, 2026-10-31, "okay first let's do this lighting for the game" + their exported CUSTOM): the characters flatter (lighting
   // .31), a soft 3-step ramp, a light rim, a touch of top light, richer colour; the scenery a little calmer, its shadows toward blue-grey. SHIPPED_ID: a choice
   // made in a browser before this look shipped (an APPLY, NO SHADING) doesn't hide it; one made after it does
-  const SHIPPED_ID = "20261105a", SHIPPED = {   // (a, 2026-11-05: the painted texture added, below. c, 2026-10-31: the user's second CUSTOM, lighting influence .04 (was .31). Every browser takes it, as a new id)
+  const SHIPPED_ID = "20261106a", SHIPPED = {   // (a, 2026-11-06: the characters' texture finer and lighter, below. 20261105a: the painted texture added. c, 2026-10-31: the user's second CUSTOM, lighting influence .04 (was .31). Every browser takes it, as a new id)
     character: { lightingInfluence: .04, toonRamp: { enabled: true, steps: 3, softness: .15 }, shadowTint: { enabled: false, color: "#6A4C8C", strength: .5 },
       rimLight: { enabled: true, color: "#FFFFFF", width: 0, intensity: 0 },   // (as the user's file has it: on, at width 0 and intensity 0, so nothing: the shader skips a rim that has no width)
       edgeHighlight: { enabled: false, color: "#FFFFFF", thickness: .017, intensity: .5 },
       fakeAO: { enabled: false, strength: .4 }, topLight: { enabled: true, strength: .08 }, specular: { enabled: false, intensity: .19 }, saturation: 1.4,   // (1.31 until 2026-11-05: a bit more colour, below)
-      texture: { enabled: true, strength: .3, late: true } },   // (the 90s anime look's painted coat, without its filters and lines, a little lighter on them (.3; late shows it more): the user, 2026-11-05 "is it possibly to give similar texture to the main aesthetic of the game now, but not the tv-ish filters and lines of the anime style?")
+      texture: { enabled: true, strength: .15, late: true } },   // (.15 from .3, 2026-11-06, with the coat made fine: a fine grain at .3 speckled their skin like dirt. the 90s anime look's painted coat, without its filters and lines, a little lighter on them (.3; late shows it more): the user, 2026-11-05 "is it possibly to give similar texture to the main aesthetic of the game now, but not the tv-ish filters and lines of the anime style?")
     environment: { lightingInfluence: 1, toonRamp: { enabled: false, steps: 2, softness: .3 }, saturation: 1.05, contrast: .93, shadowTint: { enabled: true, color: "#3E5A6E", strength: .4 },
       texture: { enabled: true, strength: .55 } }   // (saturation .9 and contrast .87 until 2026-11-05: the user, asked if the game look should get a bit more of the 90s anime look's saturation: "Yes, try it". Its full amount (1.5 / 1.18 / 1.0 here) made the woods neon)
   };
@@ -77,15 +77,17 @@ float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w 
     vec3 mkFlat = mkAlb * 1.05 + totalEmissiveRadiance;
     vec3 c = mix(mkFlat, mkLit, mkInfl); float mkTm = 1.0; vec3 mkTs = vec3(0.0);
     if (mkTexOn > .5) { vec3 q = mkTexObj > .5 ? vMkO : vMkW, d = vec3(dot(q.xy, vec2(.8, .6)), dot(q.xy, vec2(-.6, .8)), q.z);   // (a painted surface, not a plastic one: blotches of a thicker and thinner coat, brush strokes on a slant, a fine grain; a little more in the shade. Only with a look that asks for it, DEBUG > SHADER's 90S ANIME)
-      float m = mkNoise(q * 1.3) * .6 + mkNoise(q * 3.1 + 7.0) * .4, b = mkNoise(vec3(d.x * 2.4, d.y * 11.0, d.z * 11.0) + 3.0), g = mkNoise(q * 24.0 + 11.0);
-      float t = (m - .5) * .9 + (b - .5) * .55 + (g - .5) * .4; mkTm = 1.0 + t * mkTexStr * mix(1.0, 1.35, 1.0 - mkR); mkTs = (m - .5) * mkTexStr * vec3(.05, .015, -.04);
-      if (mkTexLate < .5) { c = c * mkTm + mkTs; mkTm = 1.0; mkTs = vec3(0.0); } }
+      if (mkTexLate > .5) { float m = mkNoise(q * 16.0) * .5 + mkNoise(q * 34.0 + 7.0) * .5, b = mkNoise(vec3(d.x * 8.0, d.y * 40.0, d.z * 40.0) + 3.0), g = mkNoise(q * 30.0 + 11.0);   // (the characters' coat, fine: a mottle a few pixels across, not blotches (they were 1.3 and 3.1 a unit, two or three across a girl, and grew with her: the user, 2026-11-06 "the texture effect on a bigger screen looks more like dirt on the characters and kind of dark"), strokes half the size, and no more of it in the shade
+        float t = (m - .5) * .6 + (b - .5) * .6 + (g - .5) * .5; mkTm = 1.0 + t * mkTexStr; mkTs = (m - .5) * mkTexStr * vec3(.04, .012, -.03); }
+      else { float m = mkNoise(q * 1.3) * .6 + mkNoise(q * 3.1 + 7.0) * .4, b = mkNoise(vec3(d.x * 2.4, d.y * 11.0, d.z * 11.0) + 3.0), g = mkNoise(q * 24.0 + 11.0);   // (the scenery's, as it was)
+        float t = (m - .5) * .9 + (b - .5) * .55 + (g - .5) * .4; mkTm = 1.0 + t * mkTexStr * mix(1.0, 1.35, 1.0 - mkR); mkTs = (m - .5) * mkTexStr * vec3(.05, .015, -.04);
+        c = c * mkTm + mkTs; mkTm = 1.0; mkTs = vec3(0.0); } }
     if (mkAOOn > .5) { float ao = clamp(-mkNW.y, 0.0, 1.0) * .65 + (1.0 - smoothstep(0.0, .7, vMkW.y - mkGround)) * .45; c *= 1.0 - mkAOStr * clamp(ao, 0.0, 1.0); }   // (creases face down; low down near the ground)
     if (mkTopOn > .5) c += mkAlb * mkTopStr * max(mkNW.y, 0.0);
     if (mkRimOn > .5 && mkRimW > .001 && mkRimI > .001) { float f = 1.0 - max(dot(mkN, mkV), 0.0); c += mkRimC * smoothstep(1.0 - mkRimW, 1.0, f) * mkRimI; }   // (no width: no rim; smoothstep(1, 1, f) is undefined)
     if (mkSpecOn > .5) { vec3 h = normalize(mkL + mkV); c += mkSun * smoothstep(mkSpecSz, mkSpecSz + (1.0 - mkSpecSz) * .42, dot(mkN, h)) * mkSpecI * .35; }   // (mkSpecSz: how near the light's mirror angle it shows, .94 as it always was; nearer 1, a smaller spot)
     float lu = dot(c, vec3(.299, .587, .114)); c = mix(vec3(lu), c, mkSat); c = (c - .22) * mkCon + .22;
-    if (mkTexLate > .5) c = min(max(c, 0.0), vec3(1.0)) * pow(max(mkTm, 0.0), 2.2) + mkTs;   // (late: on the colour as it shows, after the saturation; the game's characters are saturated past full (red .84 at 1.31), which flattened the coat on Camila's reds. 2.2: an even step to the eye, not in light)
+    if (mkTexLate > .5) { vec3 cs = pow(min(max(c, 0.0), vec3(1.0)), vec3(1.0 / 2.2)); float v = max(cs.r, max(cs.g, cs.b)); c = pow(min(max(cs + (mkTm - 1.0) * v, 0.0), vec3(1.0)), vec3(2.2)) + mkTs; }   // (2026-11-06: the coat as a step of lightness to the eye, the same on every channel (scaled by the brightest): the old multiply clipped the light spots off a colour at full (Camila's red), so only the dark ones showed and the girls came out darker. A grey takes it as before. (late: on the colour as it shows, after the saturation; the game's characters are saturated past full (red .84 at 1.31), which flattened the coat on Camila's reds. 2.2: an even step to the eye, not in light)
     outgoingLight = mkOn > .5 ? max(c, 0.0) : mkBase; }
 `;
   function patchShader(sh, U) {
