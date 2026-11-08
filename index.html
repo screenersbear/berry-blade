@@ -497,6 +497,19 @@
   #koScr.show { opacity: 1; pointer-events: auto; }
   #koScr .koIn { display: flex; flex-direction: column; align-items: center; gap: 22px; }
   #koUp { width: min(420px, 72vw); height: 24px; } #koUp.hidden { display: none; }
+  #koScr .koIn { transition: opacity .55s; } #koScr.dark .koIn { opacity: 0; }   /* (on to the spotlight: its words fade, the black stays) */
+  /* Camila in the spotlight (the user, 2026-11-08): all black but the cone of light from a lamp up above, the pool of it on the stage, and her in it, in the middle */
+  #spot { position: fixed; inset: 0; z-index: 60; background: #000; opacity: 0; pointer-events: none; transition: opacity .5s; overflow: hidden; }
+  #spot.show { opacity: 1; pointer-events: auto; }
+  #spot .pool, #spot .cam, #spot .beam { position: absolute; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity .7s; }
+  #spot.lit .pool, #spot.lit .cam, #spot.lit .beam { animation: spotOn .8s linear forwards; }   /* (the lamp clunks on, a flicker, then steady) */
+  #spot.lit.off .pool, #spot.lit.off .cam, #spot.lit.off .beam { animation: none; opacity: 0; }
+  @keyframes spotOn { 0%, 9% { opacity: 0; } 10%, 21% { opacity: 1; } 22%, 31% { opacity: .25; } 32%, 100% { opacity: 1; } }
+  #spot .pool { top: 87.5vh; width: 50vh; height: 9vh; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 246, 222, .8), rgba(255, 240, 205, .32) 58%, rgba(255, 240, 205, 0)); }
+  #spot .cam { bottom: 10vh; width: 48vh; height: 64vh; max-width: 92vw; } #spot .cam canvas { width: 100%; height: 100%; display: block; }
+  #spot .beam { top: -4vh; width: 64vh; height: 93vh; filter: blur(5px); mix-blend-mode: screen; pointer-events: none; }
+  #spot .beam i { position: absolute; inset: 0; clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); background: linear-gradient(to bottom, rgba(255, 247, 222, .5), rgba(255, 240, 205, .16) 72%, rgba(255, 240, 205, .06)); }
+  #voCap.spot { z-index: 61; }
   #fade .lockup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .2s; }
   #fade .lockup .bar, #loading .lockup .bar { margin-left: 0; }   /* (LOADING alone since 2026-10-30: centred, no block to sit under) */
   #fade.msg .lockup { opacity: 1; }
@@ -836,6 +849,7 @@
 <div id="bepArrow"><svg viewBox="0 0 40 40"><path d="M5 20 31 7 25 20 31 33Z" fill="#ffd203" stroke="#2f3b43" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
 <div id="team" class="hidden"></div>
 <div id="catHud" class="hidden"><b id="catName">CATCH THE CAT!</b><span id="catPaws"></span></div>
+<div id="spot"><div class="pool"></div><div class="cam" id="spotCam"></div><div class="beam"><i></i></div></div>
 <div id="koScr"><div class="koIn"><div class="lockup big"><div class="blk">KNOCKED OUT</div><div class="bar" id="koSub">&nbsp;</div></div><div id="koUp" class="up4 hidden"><i></i><i></i><i></i><i></i></div></div></div>
 <div id="fade"><div class="lockup big"><div class="bar">LOADING</div></div></div>
 <div id="proBlack"><div class="lockup big" id="proTitle"><div class="blk">BERRY WOODS</div></div></div>
@@ -1058,7 +1072,8 @@ function koShow() {                                 // knocked out in the story:
   const pen = upOn(world) && world !== 9 && !freedNow() && koRoom.get(kk) <= 5 ? 5 : 0; koStay++;   // (the beach tutorial: nothing lost. The user, 2026-11-03: "I died during the beach and the uprising went down")
   const was = upOn(world) ? upPct(world) : 0; if (pen) { const U = upStore(); U[world] = Math.max(0, (U[world] || 0) - upGoal(world) * pen / 100); }
   const lost = Math.round(was - (upOn(world) ? upPct(world) : 0));   // (what it really cost: nothing at 0%, less if there wasn't 5% to lose. It read −5% at 0%, the user 2026-10-22)
-  modalKind = "ko"; modalOpen = true; koScr = { t0: performance.now(), timer: setTimeout(() => onReset(), 2800) };
+  const sp = spotWant(lost);   // (Camila in the spotlight after it, now and then: spotOn)
+  modalKind = "ko"; modalOpen = true; koScr = { t0: performance.now(), want: sp, timer: setTimeout(() => sp ? spotFade() : onReset(), sp ? 2600 : 2800) }; if (sp) voLoad();
   $("koSub").textContent = lost > 0 ? `THE UPRISING DROPS TO ${Math.max(0, Math.floor(upPct(world)))}%` : "BACK IN A MOMENT"; $("koScr").classList.add("show");   // (one number, never a minus: "it shows two numbers", the user, 2026-10-23)
   { const kb = $("koUp"), on = upOn(world) && world !== 9 && !freedNow(); kb.classList.toggle("hidden", !on);   // (the uprising bar under it, the HUD's on its side: from where it was, down to where it is now)
     if (on) { up4Set(kb, Math.min(100, was)); if (lost > 0) setTimeout(() => up4Run(kb, Math.min(100, was), Math.min(100, upPct(world)), 700), 550); } }
@@ -5954,7 +5969,7 @@ function phonesMusic(dt, P) {                        // (syncMusic, the headphon
   const S = window.BerryScore, on = musicOn && !bgm.dataset.muted, rec = P.rec || null;
   { const v = !on || !P.tape ? null : rec ? (orig.getAttribute("src") === rec && !orig.paused ? orig.currentTime : null) : S && S.state.playing && S.state.song === P.song ? S.state.slot : null;   // (where it's got to: round to the start again = played through)
     if (v !== null) { if (phonesPos.id === P.id && v < phonesPos.v - (rec ? 1 : 0)) phonesNext(P); phonesPos = { id: P.id, v }; } }
-  voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5); sfxMuffle(on && P.id !== "off");
+  voDuck = approach(voDuck, voLoud() ? VO_DUCK : 1, dt / .5); sfxMuffle(on && P.id !== "off");
   if (rec && orig.getAttribute("src") !== rec && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = rec; }
   const ov = on && rec && orig.getAttribute("src") === rec ? MUSIC_VOL * voDuck : 0;
   if (ov > 0) recLevel = ov; recMix = approach(recMix, ov > 0 ? 1 : 0, dt / 1.2); orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1);
@@ -5964,7 +5979,7 @@ function phonesMusic(dt, P) {                        // (syncMusic, the headphon
   else if (S.state.playing) S.stop(1.2);
 }
 function consMusic(dt) {                             // (the BERRY CONSOLE on: no music at all, the world muffled as under the headphones: the user, 2026-10-30 "muffle all the sound around them ... but mute the music while they play")
-  sfxMuffle(true); voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);
+  sfxMuffle(true); voDuck = approach(voDuck, voLoud() ? VO_DUCK : 1, dt / .5);
   recMix = approach(recMix, 0, dt / .8); orig.volume = clamp(recLevel * Math.sin(recMix * Math.PI / 2), 0, 1); if (orig.volume < .003 && !orig.paused) orig.pause();
   const S = window.BerryScore; if (S && S.state.playing) S.stop(.8);
 }
@@ -5981,7 +5996,7 @@ function syncMusic(dt) {                         // every frame: the right music
   const rideM = !!rideS && !!rideS.road && !!window.BerryScore && window.BerryScore.RIDE !== undefined;   // (La Guagua driving: her own tune, the score's even on the PC page. The user, 2026-11-04: "when riding la guagua, change the music. make a new guagua theme")
   const S = window.BerryScore, h = pcTale || pcPro ? -1 : rideM ? 0 : scoreHour(), on = musicOn && !bgm.dataset.muted && !glosWait;
   const R = pcPro ? PC_REC.prologue : pcTale ? PC_REC.tale : PC_REC[world] || PC_REC[0];   // (this world's recording: swapped in once the last one has faded right out)
-  voDuck = approach(voDuck, vo && vo.src ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
+  voDuck = approach(voDuck, voLoud() ? VO_DUCK : 1, dt / .5);   // (under a voice-over)
   if (window.BERRY_PC && R && orig.getAttribute("src") !== R.src && (orig.paused || orig.volume < .003)) { orig.pause(); orig.volume = 0; orig.src = R.src; }
   const ov = on && h < 0 && (!R || orig.getAttribute("src") === R.src) ? MUSIC_VOL * (pcTale ? .6 : pcPro ? .75 : 1) * voDuck : 0;
   const hubNow = mode === "play" && (inHub() || !!hideout); if (musicHub && !hubNow) { musicQuick = 1.6; if (S && S.quickFade) S.quickFade(1.2); } musicHub = hubNow; musicQuick = Math.max(0, musicQuick - dt);   // (out of a hub or a hideout: the room's song back in 1.2 s, not 3. The user, 2026-10-25: "it takes too long to fade back")
@@ -7058,7 +7073,7 @@ function up4Set(el, pct) { [...el.querySelectorAll("i")].forEach((s, i) => s.sty
 function up4Run(el, a, b, T) { const t0 = performance.now(), tick = () => { const u = Math.min(1, (performance.now() - t0) / T); up4Set(el, a + (b - a) * (1 - (1 - u) * (1 - u))); if (u < 1) requestAnimationFrame(tick); }; requestAnimationFrame(tick); }
 function syncWeapon(dt) {
   const p = player, pk = rig && rig.spec && rig.spec.outfit && rig.spec.outfit.prop && rig.spec.outfit.prop.kind;
-  const on = mode === "play" && !!p && (pk === "sword" || pk === "gauntlet") && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && !castUp && !lvlOpen;   // (in play, whatever you're doing; not over a cutscene or a card)
+  const on = mode === "play" && !!p && (pk === "sword" || pk === "gauntlet") && !hideout && !opening && !cine && !comicUp && !statsUp && !edOpen && !castUp && !lvlOpen && menuUp !== "hero" && menuUp !== "bpick";   // (in play, whatever you're doing; not over a cutscene or a card; not while you pick Rose or Camila, the user 2026-11-08: "when picking rose or camila, in any mode, do not show their life and uprising bar")
   if (on) { const H = Math.round(clamp(innerHeight * .3, 140, 232)),   // (a little bigger: the user, 2026-10-24; .24, 112-186 before)
              key = rig.id + "|" + p.hp + "|" + (p.power || 0) + "|" + pk + "|" + H + "|" + bgearsOf(rig.id) + "|" + bpowOf(rig.id);
     if (key !== weaponKey) { const hurt = weaponKey.startsWith(rig.id + "|") && p.hp < weaponHp; weaponKey = key; weaponHp = p.hp; weaponEl.innerHTML = lifeSvg(rig, p.hp, bgearsOf(rig.id)); weaponEl.appendChild(nrgEl);   // (no number on it: the user, 2026-11-02, "the berry weapon hud should not show a life percentage") (the colour part only, lifeSvg: was weaponSvg, the whole weapon)
@@ -7397,7 +7412,7 @@ function pauseChoose(what) {
   if (what === "home") quitToTitle();   // (the title card, the real home screen: it used to open the old character and level select, the user, 2026-10-23)
   else if (what === "quit") quitToTitle();   // back to the title card (a story run saves first)
 }
-$("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
+$("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); }); $("spot").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const c = e.target.closest("[data-cyc]"), b = e.target.closest("[data-p]");   // (DEBUG → PARTNERS: its ‹ › tapped, the next one)
   if (c && b && dbgTeam) { setPauseSel(PAUSE_OPTS.indexOf(b.dataset.p)); dbgTeamCycle(+c.dataset.cyc); return; } if (b) pauseChoose(b.dataset.p); });
 $("songRows").addEventListener("click", e => { const b = e.target.closest("[data-sg]"); if (!b || menuUp !== "songs") return; if (b.dataset.sg === "done") return closeSongs(); songSel = +b.dataset.sg; songPick(songSel); markMenu(); });   // (0: on / off; 1..: the songs)
@@ -9245,7 +9260,7 @@ function buildRoad() {                               // the coast road at sunset
   U.rb.position.x = U.bx1 - 1.7;   // (the prologue's: the roll bar further back, so the two of them aren't on top of each other. The user, 2026-11-03: "have camila and rose better posed in the opening movie instead of just overlapping with each other")
   if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
   if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - 2.15, U.by + .08, .05, 1, -.5), hold: "F" });   // (facing on, her near hand's her right: hold "F", that arm up)
-  const A = ALLIES.find(a => a.id === "elpico"); if (A) { const r = allyRig(A); R.driver = { ...ride("elpico", r, U.cx1 - .92, 1.53, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (El Pico at the wheel: not green, so he stands out against the pink, the user 2026-10-26; now and then he turns to look out)   // (his head in the window, behind the wheel)
+  const A = BUS_DRIVER; if (A) { const r = allyRig(A); R.driver = { ...ride("elpico", r, U.cx1 - .92, 1.53, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (El Pico at the wheel: not green, so he stands out against the pink, the user 2026-10-26; now and then he turns to look out)   // (his head in the window, behind the wheel)
   return R;
 }
 function roadTick(R, dt) {                           // (every frame: the coast going by, the wheels turning, the body on its springs, them riding)
@@ -9376,7 +9391,7 @@ function rideBuild() {                               // behind the black: the ro
 }
 const rideCam = R => ({ x: R.busX + .3, y: 5.5, z: 24, tx: R.busX + .3, ty: 4.2, tz: 0 });   // (La Guagua in the middle, the world going by round it)
 function rideSeat(R) {                               // everyone into their places in La Guagua (at the start, and back in after a stop)
-  const U = R.bus.userData, A0 = ALLIES.find(a => a.id === "elpico"), H0 = A0 ? allyRig(A0).heightPx : 120, inCab = r => 1.53 + .72 * (H0 - r.heightPx) / 48;   // (sat in the cab: a first guess, then moved so the head's in the window, below)
+  const U = R.bus.userData, A0 = BUS_DRIVER, H0 = A0 ? allyRig(A0).heightPx : 120, inCab = r => 1.53 + .72 * (H0 - r.heightPx) / 48;   // (sat in the cab: a first guess, then moved so the head's in the window, below)
   const SL = { drive: [U.cx1 - .92, null, -.62, -.2], back: [U.cx1 - 2.16, null, .55, -Math.PI / 2 + .25], rear: [U.cx1 - 3.42, null, .55, -Math.PI / 2 + .25],   // (back: the middle window, its head in the middle of it · rear: the window behind)
     camila: [U.bx1 - .42, U.by + .3, .45, -Math.PI + .95], rose: [U.bx1 - 1.42, U.by + .08, -.5, -.62], pet0: [U.bx1 - 1.15, U.by + .08, .3, -Math.PI / 2 - .3], pet1: [U.bx1 - 1.85, U.by + .62, .75, -Math.PI / 2 + .35],
     bed0: [U.bx1 - 1.85, U.by + .08, .1, -Math.PI / 2], bed1: [U.bx1 - 2.3, U.by + .08, .3, -Math.PI / 2] };
@@ -10061,7 +10076,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261103u"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261108a"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -10074,6 +10089,63 @@ const vlogLine = id => { const [k, n] = String(id).split(":"), i = +n; if (k ===
 // a section for each telling, in the order you heard them, each under a title that sums it up; open one and its words are there to read
 const VLOG_TITLE = { pro1: "TOO YOUNG TO REMEMBER", pro2: "THE DAY GLOS CAME", rival: "THE ONES WHO TRIED TO WALK AWAY", glos: "GLOS COMES TO OUR BEACH", gift: "THE BEP WHO GAVE US OUR WEAPONS", weapon: "HOW OUR WEAPONS WORK", duo: "NORO AND DORYS SHOW UP", tale: "HOW THE BADDIES TOOK OUR ISLAND", woods: "WE DECIDE TO FIGHT",
   buddy: "THE BERRIES WHO JOINED US", pet: "THE ISLAND'S LITTLE ONES", sad: "THE SAD BERRIES", toll: "THE LAND TOOK A TOLL" };
+// Camila in the spotlight (the user, 2026-11-08: "when you die for the first time, show the uprising stat going down and then fade to black and pop back in a spotlight where we will have camila standing as if
+// on a stage. it's all black around her except the cone of light made by the spotlight on her. she's centered in the frame. she will speak and voiceover this"; and "use the same visual of camila talking and
+// have it show up intermittently and randomly for when you lose. make it rare, and have her say a couple encouraging phrases for now, but we will add lore through it"). After the knock-out's black screen
+// its words fade, the lamp clunks on over her and she says it: lose1 once, the first knock-out that costs the uprising something; after that, now and then (SPOT_P, never within SPOT_GAP knock-outs of the
+// last), one line of cheer, the ones not heard yet first. Each kept in story.vo ("lose1", "cheer:<n>"), so the save has them; the narration log too. More lore: more lines on the end of VO.cheer
+Object.assign(VO, { lose1: ["Every battle we lost set the resistance back, and some of the buddies we had won over bounced out of our berry weapons and back on the enemy's side.", "We had to stay vigilant and keep the movement growing."],   // (the user's words)
+  cheer: ["We didn't win every fight. But every time we got back up, a few more berries believed in us.", "Losing a battle never meant losing the island. As long as we kept going, so did the uprising.",
+    "Rose used to say a fall is just a running start. She was annoyingly right."] });   // (my words, for now: "a couple encouraging phrases")
+Object.assign(VLOG_TITLE, { lose1: "WHAT EVERY LOST BATTLE COST", cheer: "GETTING BACK UP" });
+const SPOT_P = .14, SPOT_GAP = 3, SPOT_YAW = -Math.PI / 2 + .18;   // (rare: a 1 in 7 chance a knock-out, never within 3 of the last time · her turn: nearly straight on to us)
+let spot = null, spotPv = null, spotKo = 0;   // (spot: her stage, up · spotPv: its renderer, its lights and her, kept for next time · spotKo: knock-outs since the last time)
+function voLoud() { return !!((vo && vo.src) || (spot && spot.src)); }   // (the music down under her)
+function spotWant(lost) {                            // (koShow) her stage after this knock-out, or none
+  if (!story || arena) return null; const V = story.vo || []; spotKo++;
+  if (!V.includes("lose1")) return lost > 0 ? "lose1" : null;   // (the first one that shows the uprising going down: none on the beach, or at 0%)
+  return spotKo > SPOT_GAP && Math.random() < SPOT_P ? "cheer" : null; }
+function spotFade() { const K = koScr; if (!K || !K.want || K.fading) return; K.fading = true; clearTimeout(K.timer); $("koScr").classList.add("dark"); K.timer = setTimeout(() => spotOn(K.want), 750); }   // (the words go, to black)
+function spotOn(id) {                                // the lamp on, her in it
+  const K = koScr; if (!K || spot) return; const L = VO[id] || []; let list = L.map((_, i) => i);
+  if (id === "cheer") { const V = story.vo || [], fresh = list.filter(i => !V.includes("cheer:" + i)), from = fresh.length ? fresh : list; list = from.length ? [from[Math.floor(Math.random() * from.length)]] : []; }
+  if (!list.length) { K.want = null; return onReset(); }
+  spot = K.spot = { id, list, k: -1, wait: 1.3, hold: 3, src: null, t0: performance.now(), out: false }; spotKo = 0;
+  story.vo = [...new Set([...(story.vo || []), id === "cheer" ? "cheer:" + list[0] : id])]; writeSave(); voLoad();
+  $("spot").classList.remove("lit", "off"); $("spot").classList.add("show");
+  try { spotDraw(0); } catch (e) { console.warn("spot", e); }
+  setTimeout(() => { if (spot && spot.id === id) { $("spot").classList.add("lit"); SFX.thud(); } }, 420);   // (a beat of black, then the lamp: "pop back in a spotlight")
+}
+function spotDraw(dt) {                              // her, standing in the light: the menus' renderer and filter (pvRender), lit from the lamp above, breathing in her stance
+  const box = $("spotCam"), src = roster.find(q => q.id === "camila"); if (!box || !src) return;
+  if (!spotPv) { const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#8d86a6", "#17121f", .75)); const d = new THREE.DirectionalLight("#fff2d8", 2.6); d.position.set(.8, 7, 3.2); sc.add(d);
+    spotPv = { R2, sc, cam: new THREE.PerspectiveCamera(22, .75, .1, 60), E: null, pg: pvGradeMake() }; box.appendChild(R2.domElement); }
+  const V = spotPv; let E = V.E;
+  if (!E || E.spec !== src.spec) { if (E) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
+    const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0 }; }
+  const W = gearState().wear.camila || {}; if (E.r.__gearKey !== JSON.stringify(W)) { dressGear(E.r, W); E.fresh = true; }
+  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { E.st.yaw = SPOT_YAW; E.st.face = 1; KIT.time = E.t += h; KIT.updatePose(E.st, h); E.r.sync(E.st, E.r, h); } KIT.time = T0;   // (her own clock: the game's stands still under the black)
+  if (E.fresh) { E.fresh = false; E.r.root.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(E.r.root); E.y0 = bb.min.y; E.y1 = bb.max.y; }   // (head to toe, settled into her stance)
+  const w = box.clientWidth, h = box.clientHeight; if (w && h && (V.w !== w || V.h !== h)) { V.w = w; V.h = h; V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
+  const H = (E.y1 - E.y0) * 1.08, cy = (E.y0 + E.y1) / 2, d = H / 2 / Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)); V.cam.position.set(0, cy, d); V.cam.lookAt(0, cy, 0);   // (all of her, her feet on the pool of light)
+  pvRender(V.R2, V.sc, V.cam, V.pg);
+}
+function spotTick(dt) {                              // (every frame while she's up) her lines, one after another, as the voice-overs go
+  const S = spot; if (!S) return; try { spotDraw(dt); } catch (e) { }
+  if (S.out) return;
+  if (S.k < 0 && voBank.state === "loading" && (S.hold -= dt) > 0) return;   // (a moment for her voice to come in)
+  if ((S.wait -= dt) > 0) return;
+  const k = S.k + 1; if (k >= S.list.length) return spotOut();
+  S.k = k; const i = S.list[k], line = VO[S.id][i], cap = $("voCap"); cap.style.bottom = ""; capWho(cap, "camila", line); cap.classList.add("show", "spot"); vlogMark(S.id + ":" + i);
+  const b = (voBank.bufs[S.id] || [])[i];
+  if (b && live() && sfxOn) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = VO_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime);
+    S.src = src; src.onended = () => { if (S.src === src) S.src = null; }; S.wait = b.duration + .7; }
+  else S.wait = 1.6 + line.split(" ").length * .32;   // (no voice: time to read it)
+}
+function spotOut() { const S = spot; if (!S || S.out) return; S.out = true; $("voCap").classList.remove("show"); $("spot").classList.add("off"); setTimeout(() => { if (spot === S) { spotEnd(); onReset(); } }, 900); }   // (said: the lamp off, then the room again)
+function spotSkip() { const S = spot; if (!S) return true; if (performance.now() - S.t0 < 1600) return false; spotEnd(); return true; }   // (a button: past her, once she's been up a moment)
+function spotEnd() { const S = spot; if (!S) return; if (S.src) { try { S.src.stop(); } catch (e) { } } spot = null; if (koScr) { koScr.spot = null; koScr.want = null; } $("voCap").classList.remove("show", "spot"); $("spot").classList.remove("show", "lit", "off"); }
 const vlogSections = () => { const S = []; vlogHeard().map(vlogLine).filter(Boolean).forEach(q => { let x = S.find(z => z.k === q.k); if (!x) S.push(x = { k: q.k, title: VLOG_TITLE[q.k] || "WHAT WE WERE TOLD", lines: [] }); x.lines[q.i] = q.text; });
   return S.map(x => ({ ...x, lines: x.lines.filter(Boolean) })); };
 // the game log (the user, 2026-10-25: "move "narration" to a game log menu that will also show other stats"): STATS (a file's numbers: in a
@@ -10139,7 +10211,7 @@ function voEnd() { voHush(); vo = null; $("voCap").classList.remove("show"); }
 function voDone(id) { voEnd(); if (VO_AFTER[id]) VO_AFTER[id](); const n = voQ.shift(); if (n) startVO(n); }   // (said in full: its card, then the next one waiting)
 function voTick(dt) {                                // (every frame, paused or not)
   const V = vo; if (!story || mode !== "play") { voQ = []; return voEnd(); }   // (off to the title or the map: it's dropped, and the ones waiting are left for next time)
-  if (paused || comicUp) { if (V.src) { voHush(); V.i--; V.wait = .5; } if (!cvo && !tale) $("voCap").classList.remove("show"); return; }   // (a comic's or the story's: its own line stays)   // (paused: that line again once you're back)
+  if (paused || comicUp || spot) { if (V.src) { voHush(); V.i--; V.wait = .5; } if (!cvo && !tale && !spot) $("voCap").classList.remove("show"); return; }   // (Camila in the spotlight: this one waits for her)   // (a comic's or the story's: its own line stays)   // (paused: that line again once you're back)
   const hb = $("hint").classList.contains("hidden") ? null : $("hint").getBoundingClientRect();   // (over the controls strip when it's up)
   $("voCap").style.bottom = hb && hb.height ? (innerHeight - hb.top + 12) + "px" : "";
   if (V.i < 0 && voBank.state === "loading" && (V.hold -= dt) > 0) return;   // (a moment for the voice to come in)
@@ -10205,11 +10277,11 @@ function openExit() {                                // the boss is down (or the
   const bossBeat = !!STAGES[stage].boss && bossIn;   // (the boss itself, just now)
   wayCue(bossBeat); if (!bossBeat && !mustClear()) return;   // (an ordinary room: nothing to say, every way on was open all along: the user, 2026-10-20)
   const b = $("banner");
-  b.innerHTML = `<div class="blk">${STAGES[stage].tutBoss && world === 9 ? (EJ_DEF || {}).name + " DEFEATED" : STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div><div class="bar">${wayOnText()}</div>`;
+  b.innerHTML = `<div class="blk">${STAGES[stage].tutBoss && world === 9 ? (EJ_DEF || {}).name + " DEFEATED" : STAGES[stage].boss && bossIn ? foe.name + " DEFEATED" : "PATCH CLEARED"}</div>${world === 9 ? "" : `<div class="bar">${wayOnText()}</div>`}`;   // (the beach: no word on where to go next, the user 2026-11-08 "remove text that says what's next where to go")
   b.classList.remove("show", "stay"); void b.offsetWidth; b.classList.add("show");
 }
 function wayCue(bossBeat) {                          // the way-on arrow: only where the way on had to be opened (past the boss, out of the world)
-  const on = exitOpen && !stronghold && !patrolLock && (bossBeat || mustClear()) && !doorBarred(stage) && !(tbHere() && !tbDown()); if (on) $("exitName").textContent = exitLabel(stage);   // (no NEXT arrow over B7's gap till its bridge is down. The label line sat inside this comment from 11-03 to 11-07, so the cue said NEXT → AFTERNOON everywhere: never ← NEXT, ← BACK, ↑ UP, ZIPLINE or the world's name)
+  const on = exitOpen && world !== 9 && !stronghold && !patrolLock && (bossBeat || mustClear()) && !doorBarred(stage) && !(tbHere() && !tbDown()); if (on) $("exitName").textContent = exitLabel(stage);   // (no NEXT arrow over B7's gap till its bridge is down. The label line sat inside this comment from 11-03 to 11-07, so the cue said NEXT → AFTERNOON everywhere: never ← NEXT, ← BACK, ↑ UP, ZIPLINE or the world's name)
   $("exitCue").classList.toggle("hidden", !on);
 }
 const nextOf = s => STAGES[s].next ?? (s + 1) % STAGES.length;   // the room past this one's right edge
@@ -11661,7 +11733,8 @@ function updateGifts(dt) {
 }
 function restartRun() { beaten = 0; cleared = 0; stage = runStart; startTrail(); oppSel = STAGES[stage].foe; foe = FOES[oppSel]; setScreen(stage); rollSad(); resetTrial(); }
 function onReset() {
-  if (koScr) { if (performance.now() - koScr.t0 < 1000) return; clearTimeout(koScr.timer); koScr = null; setTimeout(() => $("koScr").classList.remove("show"), 150); }   // (the black screen: not skipped in its first second)
+  if (koScr) { if (performance.now() - koScr.t0 < 1000) return; if (koScr.want && !koScr.spot) return spotFade(); if (koScr.spot && !spotSkip()) return;   // (her stage still to come: on to it, not past it · up: not skipped in its first moments)
+    clearTimeout(koScr.timer); koScr = null; setTimeout(() => $("koScr").classList.remove("show", "dark"), 150); }   // (the black screen: not skipped in its first second)
   if (arena) { arenaRestart(); return; } if (modalKind === "clear") restartRun(); else resetTrial(); musicRestart(); }
 function musicRestart() {                            // (the user, 2026-10-17: after a knock-out and reset, this room's music starts again from the top)
   const S = window.BerryScore; syncMusic(0); if (S && S.restart) S.restart(); try { orig.currentTime = 0; } catch (e) { }
@@ -14559,24 +14632,48 @@ function healHold(r, s) {                            // the basket sat on his le
   const g = r.__pile, H = r.hands; if (!g || !H || H.length < 2 || !r.chest) return; const { c } = handChest(r, 0);
   g.rotation.z = 0; g.position.set(c.x, c.y - .3, c.z);   // (carried by its handle, the hand at the top of it, blocking or not: his shield's in his right, shieldHold; it sat up on his palms when he held it in both)
 }
-// the blockers' shields (the user, 2026-11-05: "give blocker creatures a shield"): a round one in the left hand, steel, a ring of the buddy's own colour, a gold boss; flat at its side,
-// turned out to them while it blocks (Stilt's in his right hand, his basket in his left: healHold)
+// the blockers' shields (the user, 2026-11-05: "give blocker creatures a shield"; 2026-11-08: "all blockers should have a variation of a shield"): each its own, SHIELD_KIND by buddy (any other blocker
+// gets the round one: steel, a ring of the buddy's own colour, a gold boss). Held in the left hand, flat at its side, turned out to them while it blocks (Stilt's in his right, his basket in his left: healHold).
+// Each about the round one's size, its face out along +Y and its top along +Z: shieldHold keeps that top up, blocking too
+const SHIELD_KIND = { stilt: "kite", flora: "petal", brisa: "gust", burr: "spike", noro: "heater", bin: "clock", tusker: "tower", pincho: "star", caracol: "shell" };
 let shieldM = null; const _shQ = { side: null, front: null };
-function blkShield(r, col) {
-  const M = shieldM || (shieldM = { face: toon("#dfe3ea"), rim: toon("#3b3540"), boss: toon("#ffd21f") }), g = new THREE.Group(), ring = toon(col);   // (its face steel, not the buddy's colour: in front of Flora it was lost in her)
+function shFlat(sh, d) { const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false, curveSegments: 20 }); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI); g.translate(0, -d / 2, 0); return g; }   // (an outline cut out flat: its face out along +Y, its top along +Z)
+function shPoly(n, rf) { const s = new THREE.Shape(); for (let i = 0; i < n; i++) { const a = Math.PI / 2 + i / n * TAU, r = rf(a, i); if (i) s.lineTo(Math.cos(a) * r, Math.sin(a) * r); else s.moveTo(Math.cos(a) * r, Math.sin(a) * r); } s.closePath(); return s; }   // (round its middle from the top, r by the angle: a flower, a star)
+function blkShield(r, col, id) {
+  const M = shieldM || (shieldM = { face: toon("#dfe3ea"), rim: toon("#3b3540"), boss: toon("#ffd21f"), dark: toon("#2f3b43"), white: toon("#fbf7ee") }), g = new THREE.Group(), ring = toon(col), kind = SHIELD_KIND[id], UP = new THREE.Vector3(0, 1, 0);   // (its face steel, not the buddy's colour: in front of Flora it was lost in her)
   const add = (geo, m, x, y, z) => { const o = mk(geo, null, { mat: m, ol: .018 }); o.position.set(x, y, z); g.add(o); return o; };
-  add(new THREE.CylinderGeometry(.25, .25, .05, 24), M.face, 0, 0, 0); const rim = add(new THREE.TorusGeometry(.25, .03, 6, 24), M.rim, 0, 0, 0); rim.rotation.x = Math.PI / 2;
-  const band = add(new THREE.TorusGeometry(.15, .028, 6, 24), ring, 0, .03, 0); band.rotation.x = Math.PI / 2; add(new THREE.SphereGeometry(.065, 12, 8), M.boss, 0, .035, 0);
+  const flat = (shape, big, face, rim) => { add(shFlat(big, .04), rim, 0, -.012, 0); add(shFlat(shape, .05), face, 0, 0, 0); };   // (its face, and a bigger copy behind it for the rim)
+  const disc = (R, face, rim) => { add(new THREE.CylinderGeometry(R, R, .05, 28), face, 0, 0, 0); add(new THREE.TorusGeometry(R, .03, 6, 28), rim, 0, 0, 0).rotation.x = Math.PI / 2; };
+  const lay = (o, a) => { o.rotation.set(Math.PI / 2, 0, 0); o.rotateZ(a); return o; };   // (a ring or an arc laid flat on the face, turned a round it)
+  if (kind === "kite") { const K = k => { const s = new THREE.Shape(); s.moveTo(-.21 * k, .16 * k); s.quadraticCurveTo(-.21 * k, .33 * k, 0, .33 * k); s.quadraticCurveTo(.21 * k, .33 * k, .21 * k, .16 * k); s.quadraticCurveTo(.15 * k, -.12 * k, 0, -.38 * k); s.quadraticCurveTo(-.15 * k, -.12 * k, -.21 * k, .16 * k); return s; };
+    flat(K(1), K(1.13), M.white, ring); const cr = toon("#e8344a"); add(new THREE.BoxGeometry(.06, .02, .21), cr, 0, .035, .05); add(new THREE.BoxGeometry(.19, .02, .06), cr, 0, .035, .08); }   // (Stilt's: the healer's long kite, white, a red cross on it)
+  else if (kind === "petal") { const F = k => shPoly(96, a => k * (.165 + .09 * Math.pow(Math.abs(Math.cos(3 * (a - Math.PI / 2))), .6))); flat(F(1), F(1.12), toon("#ffc2da"), ring); add(new THREE.CylinderGeometry(.085, .085, .03, 18), M.boss, 0, .04, 0); }   // (Flora's: six petals round a gold middle)
+  else if (kind === "gust") { disc(.25, toon("#eefaff"), ring); [[.18, 0], [.12, 2.1], [.065, 4.2]].forEach(([R, a]) => lay(add(new THREE.TorusGeometry(R, .022, 6, 24, Math.PI * 1.25), ring, 0, .035, 0), a)); }   // (Brisa's: a swirl of wind on pale blue)
+  else if (kind === "spike") { disc(.21, M.face, ring); for (let i = 0; i < 8; i++) { const a = i / 8 * TAU; add(new THREE.ConeGeometry(.048, .15, 6), M.face, Math.cos(a) * .3, 0, Math.sin(a) * .3).quaternion.setFromUnitVectors(UP, new THREE.Vector3(Math.cos(a), 0, Math.sin(a))); } add(new THREE.ConeGeometry(.055, .12, 8), M.boss, 0, .085, 0); }   // (Burr's: a little buckler bristling all round, a spike out of its middle)
+  else if (kind === "heater") { const Hh = k => { const s = new THREE.Shape(); s.moveTo(-.22 * k, .28 * k); s.lineTo(.22 * k, .28 * k); s.lineTo(.22 * k, .04 * k); s.quadraticCurveTo(.2 * k, -.22 * k, 0, -.34 * k); s.quadraticCurveTo(-.2 * k, -.22 * k, -.22 * k, .04 * k); s.closePath(); return s; };
+    flat(Hh(1), Hh(1.12), ring, M.boss); add(shFlat(shPoly(8, (a, i) => i % 2 ? .04 : .12), .02), M.boss, 0, .035, 0); }   // (Noro's: a heater in his purple, edged in gold, a gold four-point star on it)
+  else if (kind === "clock") { disc(.24, toon("#fff6dc"), ring);
+    for (let i = 0; i < 12; i++) { const a = i / 12 * TAU; add(new THREE.BoxGeometry(i % 3 ? .018 : .03, .015, i % 3 ? .035 : .055), M.dark, Math.cos(a) * .185, .03, Math.sin(a) * .185).rotation.y = Math.PI / 2 - a; }
+    const hand = (a, L) => { add(new THREE.BoxGeometry(.022, .016, L), M.dark, Math.cos(a) * L / 2, .045, Math.sin(a) * L / 2).rotation.y = Math.PI / 2 - a; };
+    hand(Math.PI / 2, .16); hand(Math.PI / 6, .11); add(new THREE.CylinderGeometry(.025, .025, .03, 12), M.dark, 0, .05, 0);
+    [Math.PI * .3, Math.PI * .7].forEach(a => add(new THREE.SphereGeometry(.075, 14, 10), M.boss, Math.cos(a) * .26, -.01, Math.sin(a) * .26)); }   // (Bin and Bon's: an alarm clock's face, its two bells on top)
+  else if (kind === "tower") { const T = k => { const s = new THREE.Shape(), w = .19 * k, b = -.29 * k, t = .25 * k; s.moveTo(-w, b); s.lineTo(w, b); s.lineTo(w, t); s.quadraticCurveTo(0, t + .09 * k, -w, t); s.closePath(); return s; };
+    flat(T(1), T(1.1), ring, M.rim); [-.18, .16].forEach(z => add(new THREE.BoxGeometry(.4, .02, .035), M.rim, 0, .035, z));
+    [-1, 1].forEach(sd => lay(add(new THREE.TorusGeometry(.11, .03, 6, 14, Math.PI * .7), M.white, -sd * .085, .045, -.02), sd > 0 ? Math.PI * .15 : Math.PI * .15 + Math.PI * .3 + Math.PI)); }   // (Tusker's: a tall tower shield in his teal, two iron bands, two white tusks on it)
+  else if (kind === "star") { const S5 = k => shPoly(10, (a, i) => k * (i % 2 ? .13 : .29)); flat(S5(1), S5(1.13), toon("#ffa6c9"), toon("#7b4fb8")); add(new THREE.SphereGeometry(.055, 12, 8), M.boss, 0, .03, 0); }   // (Pincho's: a five-point star, pink, edged in his sweater's purple)
+  else if (kind === "shell") { disc(.25, toon("#ffd23a"), ring); const P = []; for (let i = 0; i <= 60; i++) { const t = i / 60, a = t * Math.PI * 3.4, R = .02 + .17 * t; P.push(new THREE.Vector3(Math.cos(a) * R, .035, Math.sin(a) * R)); }
+    add(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(P), 90, .019, 6), toon("#a2542a"), 0, 0, 0); }   // (Caracol's: a snail's shell on yellow, its spiral in brown)
+  else { disc(.25, M.face, M.rim); lay(add(new THREE.TorusGeometry(.15, .028, 6, 24), ring, 0, .03, 0), 0); add(new THREE.SphereGeometry(.065, 12, 8), M.boss, 0, .035, 0); }   // (the round one)
   r.chest.add(g); return g;
 }
 function shieldHold(r, s, i = 0) {                  // (i: the hand, 0 the left, 1 the right)
   const g = r.__shield; if (!g) return; const { c } = handChest(r, i), sh = !!(s && s.block), z = i ? .08 : -.08;
   if (!_shQ.side) { _shQ.side = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0)); _shQ.front = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2)); }
-  if (sh) { if (!_shQ.cw) Object.assign(_shQ, { cw: new THREE.Quaternion(), w: new THREE.Quaternion(), t: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0), n: new THREE.Vector3() }); r.chest.updateWorldMatrix(true, false); r.chest.getWorldQuaternion(_shQ.cw);
-    _shQ.w.setFromUnitVectors(_shQ.up, _shQ.n.set((s.face || 1) * .87, 0, .5).normalize()); g.quaternion.slerp(_shQ.t.copy(_shQ.cw).invert().multiply(_shQ.w), .3); }   // (its face out to the side it's guarding, the way it faces, a little to us so it still reads: the user, 2026-11-05 "when the blocker blocks, have the shield facing the enemy". It was turned in the chest's own terms, and came out facing us)
+  if (sh) { if (!_shQ.cw) Object.assign(_shQ, { cw: new THREE.Quaternion(), w: new THREE.Quaternion(), t: new THREE.Quaternion(), up: new THREE.Vector3(0, 1, 0), n: new THREE.Vector3(), x: new THREE.Vector3(), m: new THREE.Matrix4() }); r.chest.updateWorldMatrix(true, false); r.chest.getWorldQuaternion(_shQ.cw);
+    _shQ.n.set((s.face || 1) * .87, 0, .5).normalize(); _shQ.x.set(-_shQ.n.z, 0, _shQ.n.x); _shQ.w.setFromRotationMatrix(_shQ.m.makeBasis(_shQ.x, _shQ.n, _shQ.up)); g.quaternion.slerp(_shQ.t.copy(_shQ.cw).invert().multiply(_shQ.w), .3); }   // (its face out to the side it's guarding, the way it faces, a little to us so it still reads: the user, 2026-11-05 "when the blocker blocks, have the shield facing the enemy". It was turned in the chest's own terms, and came out facing us)
   else g.quaternion.slerp(_shQ.side, .3); if (sh) g.position.set(c.x + .12, c.y + .02, c.z); else g.position.set(c.x, c.y - .02, c.z + z);
 }
-const shieldHolds = () => allies.forEach(a => { if (!a.A || !blkRank(a) || !a.r || !a.r.chest || !a.r.hands || a.r.hands.length < 2) return; if (!a.r.__shield) a.r.__shield = blkShield(a.r, a.A.col || "#a9dcea"); shieldHold(a.r, a.st, a.A.heal ? 1 : 0); });   // (the healer's in his right: his basket's in his left)
+const shieldHolds = () => allies.forEach(a => { if (!a.A || !blkRank(a) || !a.r || !a.r.chest || !a.r.hands || a.r.hands.length < 2) return; if (!a.r.__shield) a.r.__shield = blkShield(a.r, a.A.col || "#a9dcea", a.A.id); shieldHold(a.r, a.st, a.A.heal ? 1 : 0); });   // (the healer's in his right: his basket's in his left)
 const healHolds = () => { allies.forEach(a => { if (a.A.heal && a.r.__pile && a.r.__pile.visible) healHold(a.r, a.st); }); shieldHolds(); };   // (after this frame's pose, so it never lags his hands)
 function healPick(need) { const B = bag(), have = HEAL_KINDS.filter(k => B[k] > 0 || itemsInf); return have.find(k => HEAL_AMT[k] >= need) || have[have.length - 1] || null; }
 function healerUse(H, why) {                         // one of what he's carrying, for everyone: the smallest that'll do (all of them, if nothing will)
@@ -15360,6 +15457,8 @@ const ALLIES = [
   { id: "caracol", name: "CARACOL", w: 9, hi: "SLOW AND STEADY!", hit: "punch", reach: 100, col: "#18c8ff" },   // the blue one with a snail's shell: big ringed eyes, a yellow body, orange feet
   { id: "mordi", name: "MORDI", w: 1, hi: "CHOMP CHOMP!", hit: "punch", reach: 115, col: "#ff1f8e" },   // the magenta block: its head splits open like jaws, a face on its big fist, a fin
 ];
+const BUD_CUT = ["tic", "tac", "pk", "elpico", "rotor", "oldvic", "boxcars"], BUS_DRIVER = ALLIES.find(a => a.id === "elpico") || null;   // out of the game (the user, 2026-11-08: "remove these buddies from the game: tic and tac, pk, el pico, rotor, old vic, and box cars"): off the roster, so no one meets, finds, rings for or brings them back from a save; their rigs and kits stay in the file, unused. El Pico still drives La Guagua (BUS_DRIVER), as a driver, not a buddy
+for (let i = ALLIES.length - 1; i >= 0; i--) if (BUD_CUT.includes(ALLIES[i].id)) ALLIES.splice(i, 1);
 const BEP_LIME = "#e0f040";                      // (the beps' lime bottoms and legs)
 const ALLY_RIGS = {};
 let allies = [], allyHere = null, allyBring = null;   // the ones with you (two partners along at most, any mix: the user, 2026-10-26) · the one waiting in this room · (a loaded game: the ones to bring back)
@@ -21771,7 +21870,7 @@ const BEACH_ROSTER = [   // Glos's own baddies, out of the forest and onto the s
   [],
   [["leafy", "leaf", 700], ["twiggy", "olive", 960], ["stumpy", "bark", 1200]],
   [],
-  [["leafy", "orange", 640], ["thornball", "moss", 900], ["acorn", "rust", 1180], ["twiggy", "yellow", { plat: 1, x: 1330 }], ["pinecone", "bark", 1560], ["leafy", "red", 2430]],   // (B3: the last two off the dune's slope, 2026-11-04)
+  [["leafy", "orange", 640], ["thornball", "moss", 900, "hat"], ["acorn", "rust", 1180], ["twiggy", "yellow", { plat: 1, x: 1330 }], ["pinecone", "bark", 1560, "hat"], ["leafy", "red", 2430]],   // (B3: the last two off the dune's slope, 2026-11-04)   // (two in pineapple hats, "hat": the user, 2026-11-08 "in b3 have two berries with pineapple head")
   [["leafy", "yellow", { plat: 0, x: 1050 }], ["acorn", "olive", { plat: 0, x: 1600 }], ["twiggy", "rust", { plat: 0, x: 2150 }], ["stumpy", "olive", 1250], ["thornball", "purple", 1750], ["pinecone", "rust", 2300], ["acorn", "rust", { plat: 0, x: 2420 }], ["leafy", "red", 1000]],   // (C5: the old B4's, its boardwalk a little shorter, from 700)   // (two more, one up on the boardwalk and one under it, 2026-11-04: "add two more baddies in c5 one on top and one on bottom")
   [["twiggy", "bark", { plat: 1, x: 1200 }], ["leafy", "orange", { plat: 1, x: 1330 }], ["stumpy", "bark", 1950], ["thornball", "olive", 2200]],   // (C8: the old B5's)
   [["leafy", "olive", { plat: 0, x: 860 }], ["stumpy", "bark", 1700]],   // (B4: the one the second buddy's fighting up on the shelf, and one down on the sand. B6's thirteen till 2026-11-04)
@@ -26200,7 +26299,7 @@ function spawnBaddies(k, revisit) {              // fill clearing k with its thr
     if (sleepy) { const b = makeSpawn(type, col, at); b.spot = spot; b.idx = i; if (b.r.segs) { disposeBaddy(b); return null; } b.sleep = true; b.zT = rand(0, 1); b.dir = Math.random() < .5 ? -1 : 1; return b; }   // ... and after dark, some asleep
     const b = makeSpawn((tag !== "mini" && pressSwap(k, i)) || type, col, at); b.spot = spot; if (tag === "mini") makeMini(b); tierUp(b);
     if (sadSpots.has(spot) && !(revisit && sadFate[sadHome.get(spot)] === "killed")) { const h = sadHome.get(spot); b.sad = true; sadFace(b); sadFate[h] = null; sadSpots = new Set([...sadSpots].filter(sp => sp === spot || sadHome.get(sp) !== h)); }   // (met it: that hideout's other candidates are dropped)   (one you popped comes back an ordinary baddy)
-    hatMaybe(b); shieldMaybe(b); return b;
+    if (tag === "hat") hatUp(b); else hatMaybe(b); shieldMaybe(b); return b;   // (a roster spot's own pineapple hat, "hat": always, tutorial or not)
   }).filter(Boolean);
   roomExtras(k);
   bossIn = !baddies.length && bossHere(k) && !STAGES[k].duo && !STAGES[k].mini; bossCue = 0;   // (Lossst: not waiting about, he drops in a moment after you, GUARDIAN OF GLOS'S DOOR: 2026-10-28)   // (Noro and Doir's room has no baddies (a boss room's the boss alone): they drop in together a moment after you come in, not the one boss waiting. 2026-10-23: Noro alone, invisible on the 3DS)
@@ -28228,7 +28327,7 @@ function bbTarget(b) {                            // who a baddy's after: you; b
 function updateBaddy(b, dt) {
   const T = b.T, p = b.tgt = bbTarget(b), A = BB_ATK[T.atk], AW = A ? windOf(b, A) : 0;   // (AW: its wind-up, COMBAT FEEL's TELEGRAPHS)
   if (b.miniCue && !transit && !b.dead) { b.miniCue = false; SFX.trumpet(); }
-  if (b.volley) gunVolley(b, dt); if (b.barr) bbBarrage(b, dt); if (b.jab) bbJabs(b, dt); if (b.hat && !hatTip) hatTipCheck(b);   // (no words over it: the user, 2026-10-25 "remove the mini boss text popup")
+  if (b.volley) gunVolley(b, dt); if (b.barr) bbBarrage(b, dt); if (b.jab) bbJabs(b, dt); if (b.hat && !hatTip && world !== 9) hatTipCheck(b);   // (no words over it: the user, 2026-10-25 "remove the mini boss text popup")
   b.inv = Math.max(0, b.inv - dt); b.flash = Math.max(0, b.flash - dt); b.hurtT = Math.max(0, b.hurtT - dt); if (b.offBal > 0) b.offBal = Math.max(0, b.offBal - dt);   // (offBal: reeling, counted down now it's read: a shield open, a trio's team attack broken, 2026-11-05)
   if (b.backAt !== undefined && time >= b.backAt) stepBack(b, false);   // (a string of your blows taken: a step back out of reach)
   bbEvade(b, p);
@@ -29973,7 +30072,7 @@ function frame(now) {                              // (the next frame is asked f
     adaptQuality(dt); pboxTick();   // (Crux's play box, up while you play in his city: 2026-11-07)
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale) taleTick(dt); if (pro) proTick(dt); if (rideS) rideTick(dt); if (vo) voTick(dt); if (spot) spotTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     keysPopCheck(dt);   // (the first time on a keyboard: the controls)
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
