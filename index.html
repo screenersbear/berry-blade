@@ -8960,7 +8960,7 @@ function twrTick(dt) {                                // (wavesFx's, every frame
 }
 function ladderTick(dt) {
   const S = roomOf(), L = S && S.ladder, R = roomLadder; if (!L || !R || R.s !== stage || R.done) return;
-  if (R.fall === null) { const P = partnerList().find(P => P.q && !P.q.worn && P.q.onGround && !P.q.tcFly && P.q.x >= L.pillar[0] && P.q.x <= L.pillar[1] && P.q.y <= L.base + 4); if (!P) return;
+  if (R.fall === null) { const P = partnerList().find(P => P.q && P.q.onGround && !P.q.tcFly && P.q.x >= L.pillar[0] && P.q.x <= L.pillar[1] && P.q.y <= L.base + 4); if (!P) return;
     R.fall = 0; SFX.wood(); P.q.face = -1; popText(P.q.x, P.q.y - 130, "HEAVE!", 900); }   // (a buddy up there: it gives it a shove)
   R.fall += dt; const u = Math.min(1, R.fall / 1.1); R.piv.rotation.z = -.05 + (Math.PI / 2 + .05) * u * u;   // (slow, then all at once)
   if (u < 1) return;
@@ -8969,7 +8969,7 @@ function ladderTick(dt) {
 }
 function padsTick() {
   const S = roomOf(), D = S && S.pads, R = roomPads; if (!D || !R || R.s !== stage) return;
-  const who = [player, ...partnerList().map(P => P.q)].filter(q => q && !q.dead && !q.worn && q.onGround); let all = true;
+  const who = [player, ...partnerList().map(P => P.q)].filter(q => q && !q.dead && q.onGround); let all = true;   // (a worn-out one's weight on one too, 2026-11-08)
   D.xs.forEach((x, i) => { const gy = groundAt(x) ?? GROUND, on = who.some(q => Math.abs(q.x - x) < 40 && Math.abs(q.y - gy) < 8);
     if (on !== R.on[i]) { R.on[i] = on; R.ms[i].material = on ? R.mOn : R.mOff; R.ms[i].position.y = R.y0[i] - (on ? .09 : 0); if (on) SFX.clack(); }
     if (!on) all = false; });
@@ -12572,9 +12572,9 @@ function syncBcStars() {                              // (render) the stars roun
 }
 const bcBusy = p => !!(p.bcm || p.bcGo || partnerList().some(P => P.q && P.q.bc));
 const bcLaunchOnly = p => !p.bcm && !p.bcGo && partnerList().every(P => !P.q || !P.q.bc || !!P.q.bc.launch || P.q.bc.k === "base");   // (only a launched one up: the launch's second step can go)
-function bcTeam() {                                   // who's in on it: the blocker (in front of you), the attacker (behind); near you and free
-  const p = player, ok = P => P && P.q && !P.q.worn && !P.q.post && !P.q.tcFly && !P.q.tcOn && !P.q.fleap && !P.q.dzap && !P.q.roll && !(P.q.bcStun > 0) && !P.q.homeW && Math.abs(P.q.x - p.x) < BC.near && Math.abs(P.q.y - p.y) < 160;
-  const L = partnerList().filter(ok), D0 = partDefender(), D = (D0 && L.find(P => P.q === D0.q)) || null, A = L.find(P => P !== D) || null;   // (partnerList's are new each time: matched by who they are)
+function bcTeam(tired) {                              // who's in on it: the blocker (in front of you), the attacker (behind); near you and free (tired: a worn-out one too, for the toss and the launch, 2026-11-08)
+  const p = player, ok = P => P && P.q && (tired || !P.q.worn) && !P.q.post && !P.q.tcFly && !P.q.tcOn && !P.q.fleap && !P.q.dzap && !P.q.roll && !(P.q.bcStun > 0) && !P.q.homeW && Math.abs(P.q.x - p.x) < BC.near && Math.abs(P.q.y - p.y) < 160;
+  const L = partnerList().filter(ok), D0 = partDefender(), D = (D0 && L.find(P => P.q === D0.q)) || null, A = L.find(P => P !== D && !P.q.worn) || L.find(P => P !== D) || null;   // (partnerList's are new each time: matched by who they are) · (one who can fight first)
   return { D, A };
 }
 function bcInput(p, dt, control) {                    // (updatePlayer, after the guard and its line) block held, a press of one of the four
@@ -12595,7 +12595,7 @@ function bcInput(p, dt, control) {                    // (updatePlayer, after th
   for (const [k] of BC_KEYS) if (now[k] && !was[k]) { if (!bcBusy(p)) bcPress(p, k); else if (k === "cir" && bcOutOnly(p)) bcPoke(p, bcTeam()); else if (k === "x" && bcLaunchOnly(p)) bcPress(p, k); break; }   // (your attacker up from the launch: ✕ again, you thrown up after it)   // (one out already: ○ again, the other one out, no wind-up)
 }
 function bcPress(p, k) {                              // a press with the guard up: winding up from here (let go before BC.tap, it's the tap's)
-  const T = bcTeam(), dir = defFace(); p.bcm = { k, t: 0, lv: 0, dir, D: T.D, A: T.A, done: 0 }; p.face = dir; jumpBuf = 0; atkBuf = 0;
+  const T = bcTeam(k === "tri" || k === "x"), dir = defFace(); p.bcm = { k, t: 0, lv: 0, dir, D: T.D, A: T.A, done: 0 };   // (△ and ✕: a worn-out one too, thrown or heaved up; held △'s dive is a blow: not it, bcDive) p.face = dir; jumpBuf = 0; atkBuf = 0;
   if (k === "sq") { SFX.huff(); [T.D, T.A].forEach(P => P && bcSet(P, { k: "guard" })); }   // (the bubble's making from the press: the two of them keep the guard up meanwhile)
 }
 function bcCancel(p) { p.bcm = null; partnerList().forEach(P => { const B = P.q && P.q.bc; if (B && (B.k === "chg" || B.k === "guard")) bcFree(P.q); }); }
@@ -12662,7 +12662,7 @@ const TOSS = { reach: 620, lv: 140, far: 360, farLv: 100, h: 200, clear: 90, g: 
 // L+△ held, the dive (it was ✕ held till 2026-11-05's batch, and came back here: the user, 2026-11-05 "L+triangle does the toss like a grenade but it's the charge that was missing. we already had it before, when it was L+X, that the charge would
 // launch both heros and the blocker would finish with an air attack slam"): off the blocker's back and down on the nearest you're facing. 1 your attacker, 2 it then you, 3 both then your blocker's own slam
 function bcDive(p, M) {
-  const { lv, dir, D, A } = M, Dq = D && D.q; SFX.release(lv); aura.flare = .3; aura.lv = lv;
+  const { lv, dir, D } = M, A = M.A && M.A.q && !M.A.q.worn ? M.A : null, Dq = D && D.q; SFX.release(lv); aura.flare = .3; aura.lv = lv;   // (a worn-out one: not in on a dive, 2026-11-08)
   const J = []; if (A) J.push(A); if (lv >= 2 || !A) J.push("h"); if (lv >= 3 && D) J.push(D);   // (the user, 2026-11-04: "first is one attacker, second charge it's both, third it's both and then the blocker also jumps")
   const tg = bcJumpFoe(p, dir);   // (all of them at the one baddy nearest you that you're facing, wherever it stands)
   J.forEach((P, i) => { const delay = i * .28, via = P === D ? null : Dq, pow = 1 + .3 * (lv - 1);
@@ -12675,7 +12675,7 @@ function tossFoe(x, y, dir, reach) {
   return L.find(e => e.shieldOn !== "riot") || L[0] || null;
 }
 function bcToss(p, A, Dq, dir, lv) {
-  const q = A.q, bx = Dq && !Dq.worn ? Dq.x : p.x, e = tossFoe(bx, p.y, dir, TOSS.reach + TOSS.lv * lv); let x1, L;
+  const q = A.q, bx = Dq && !Dq.worn ? Dq.x : p.x, e = q.worn ? null : tossFoe(bx, p.y, dir, TOSS.reach + TOSS.lv * lv); let x1, L;   // (a worn-out one: on ahead, at nobody)
   if (e) { L = bcLand(e); x1 = bcLandX(L, e.x - dir * (eHW(e) * .5 + 34)); }
   else { x1 = clamp(bx + dir * (TOSS.far + TOSS.farLv * lv), 40, WORLD - 40); for (let i = 0; i < 10 && landBelow(x1, q.y - 300) === null; i++) x1 = clamp(x1 - dir * 40, 40, WORLD - 40);
     const ly = landBelow(x1, q.y - 300) ?? q.y; L = { y: ly, plat: PLATFORMS.find(P => x1 >= P.x && x1 <= P.x + P.w && Math.abs(P.y - ly) < 2) || null }; }
@@ -12766,7 +12766,7 @@ function boostStep(s, B, dt, dir, to, ph) {           // (bcStep) a buddy boosti
 const airFoe = (x, y, r, up) => { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (e.dead || e.gone) continue; const flying = !e.onGround || (e.T && e.T.move === "float"), dx = Math.abs(e.x - x), dy = y - e.y;
     if (!flying || dx > r || dy < (up ? 90 : -140) || dy > (up || 220) || walled(e.x, x)) continue; const d = dx + Math.abs(dy) * .5; if (d < bd) { bd = d; best = e; } } return best; };   // (a flyer, or one knocked up: over it, up to up px; or about its height)
 function launchPlan(s, B) {                          // (bcLeap, at the start of its way up) what's up there for it: a flyer, a platform over it, or nothing
-  const R = B.reach ?? B.hi, af = airFoe(s.x, s.y, LAUNCH.air, R + 160);   // (R: how high it looks, higher than it goes on its own, 2026-11-08)
+  const R = B.reach ?? B.hi, af = s.worn ? null : airFoe(s.x, s.y, LAUNCH.air, R + 160);   // (worn out: no air combo)   // (R: how high it looks, higher than it goes on its own, 2026-11-08)
   if (af) { B.af = af; B.hiT = clamp(s.y - af.y + 20, 160, R + 160); B.px = clamp(af.x - B.dir * 40, 40, WORLD - 40); return; }
   let P0 = null, pd = 1e9; for (const P of PLATFORMS) { if (P.y > s.y - 70 || P.y < s.y - R + 10) continue; const cx = clamp(s.x + B.dir * 40, P.x + 26, P.x + P.w - 26), d = Math.abs(cx - s.x);
     if (d > LAUNCH.plat || walled(cx, s.x)) continue; if (d < pd) { pd = d; P0 = P; } }
@@ -12774,7 +12774,7 @@ function launchPlan(s, B) {                          // (bcLeap, at the start of
   B.px = s.x; B.hiT = B.hi;
 }
 function launchFocus(s) {                         // (off the launch, done up there or down on them) the nearest one about, fought, then back to you (the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting")
-  const P = partnerList().find(Q => Q.q === s); if (!P) return; let e = null, bd = 1e9; for (const f of partFoesAll()) { if (f.dead || f.gone || walled(f.x, s.x)) continue; const dx = Math.abs(f.x - s.x), dy = Math.abs(f.y - s.y); if (dx > 420 || dy > 260) continue; if (dx + dy < bd) { bd = dx + dy; e = f; } }
+  const P = partnerList().find(Q => Q.q === s); if (!P || s.worn) return; let e = null, bd = 1e9; for (const f of partFoesAll()) { if (f.dead || f.gone || walled(f.x, s.x)) continue; const dx = Math.abs(f.x - s.x), dy = Math.abs(f.y - s.y); if (dx > 420 || dy > 260) continue; if (dx + dy < bd) { bd = dx + dy; e = f; } }
   if (e) { focusSend(P, e); s.tagTxt = "ON IT!"; }
 }
 function launchAir(s, B, dt, kin) {                  // (bcLeap) at the top: a quick air combo on the flyer, held up at its height, then back down
@@ -12785,7 +12785,7 @@ function launchAir(s, B, dt, kin) {                  // (bcLeap) at the top: a q
   return true;
 }
 function bcStep(o, s, dt) {                           // (partHuman: a buddy's part in a block combo, a frame at a time; true: busy, its following waits)
-  const B = s.bc, p = player; if (!p || p.dead || mode !== "play" || s.worn || s.hurtT > 0) { bcFree(s); return false; }
+  const B = s.bc, p = player; if (!p || p.dead || mode !== "play" || s.hurtT > 0) { bcFree(s); return false; }   // (worn out: on, since 2026-11-08: the toss and the launch move one, partnerRest frees one mid-combo)
   if (o) { o.pcmd = o.pnext = null; if (o.pact) partEnd(o, s, true); o.stay = null; }
   B.t += dt; const dir = B.dir, H = (s.rig && s.rig.heightPx) || 80, kin = () => { s.vx = 0; s.vy = 0; s.onGround = false; s.plat = null; };   // (kin: put where it goes this frame, its physics only settling it)
   const to = tx => { s.vx = approach(s.vx, clamp((tx - s.x) * 12, -1100, 1100), 9000 * dt); s.sprint = Math.abs(s.vx) > 400; };
@@ -12848,10 +12848,11 @@ function bcTossFly(s, B) {                             // the heave: off your ha
 function bcTossLand(s, B, dir) {                       // down hard: squashed a moment, the ground shaking, dust out both ways, the ones by it reeling a moment
   s.x = B.x1; s.y = B.y1; s.vx = 0; s.vy = 0; s.onGround = true; s.plat = B.plat || null; s.rot = 0; s.ball = 0; s.sq = -.42; s.sqv = 0;
   dust(s.x - 16, s.y, 6, -1); dust(s.x + 16, s.y, 6, 1); SFX.thud(); SFX.stomp(); shake = Math.max(shake, 3.5); hitstop = Math.max(hitstop, .05); rumble(90, .5);
-  for (const e of partFoesAll()) { const dx = e.x - s.x; if (e === enemy || e.duel || e.dead || e.gone || Math.abs(dx) > TOSS.shock + eHW(e) * .5 || Math.abs(e.y - s.y) > 30 || walled(e.x, s.x)) continue; offBalance(e, Math.sign(dx) || dir, .45); e.vx *= .35; }   // (the ones on its ground by it: reeling a moment, a blow free for it · only a step back: the full shove took them 100 px off, out of its reach)
+  if (!s.worn) for (const e of partFoesAll()) { const dx = e.x - s.x; if (e === enemy || e.duel || e.dead || e.gone || Math.abs(dx) > TOSS.shock + eHW(e) * .5 || Math.abs(e.y - s.y) > 30 || walled(e.x, s.x)) continue; offBalance(e, Math.sign(dx) || dir, .45); e.vx *= .35; }   // (the ones on its ground by it: reeling a moment, a blow free for it · only a step back: the full shove took them 100 px off, out of its reach)
   B.ph = "land"; B.t = 0;
 }
 function bcTossDone(o, s, B, dir) {                    // (bcTossStep, up out of its crouch) on its own over there: at its one and the ones round it, then back to you; nobody there, it stays put a while
+  if (s.worn) return;   // (worn out: nothing for it to do there; back to you at its own pace)
   s.bcSolo = time + STAY.max + .5; const c = { type: "tap", up: false, down: false, fwd: false, air: false, fire: !!B.fire };   // (on its own over there: your guard doesn't call it back, bcSoloOn)
   const P = partnerList().find(Q => Q.q === s), e = bcTgOk(B.foe) ? B.foe : bcFoe(s.x - dir * 80, s.y, dir, 380);
   if (P && e) { focusSend(P, e); s.tagTxt = "ON IT!"; if (o) o.pcmd = c; }   // (at it, and the ones round it, then back to you: the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting, as opposed to when the player presses R and splits up the team")
@@ -12884,7 +12885,7 @@ function bcLeap(s, B, dt, dir, kin, ph) {             // up high (off the blocke
     if (u >= 1) { s.rot = 0; ph("hang"); } return true; }
   if (B.ph === "hang" && B.launch && B.t >= B.hold) { s.ball = 0;   // (the launch at its top: the flyer; the platform under it; else down on one ahead, or just back down)
     if (bcTgOk(B.af)) { ph("air"); B.an = 0; return true; }
-    if (B.toPlat || !bcJumpFoe(player, dir)) { bcFree(s); s.vy = 0; s.vx = 0; s.onGround = false; s.plat = null; launchFocus(s); return false; } }
+    if (B.toPlat || s.worn || !bcJumpFoe(player, dir)) { bcFree(s); s.vy = 0; s.vx = 0; s.onGround = false; s.plat = null; launchFocus(s); return false; } }
   if (B.ph === "hang") { kin(); s.y = B.y0; s.ball = .7; if (B.t >= B.hold) { const e = bcTgOk(B.tg) ? B.tg : bcJumpFoe(player, dir), L = e ? bcLand(e) : null;
       B.tx = clamp(bcLandX(L, e ? e.x - dir * (eHW(e) * .2 + 30 * (B.slot || 0)) : s.x + dir * B.aim), s.x - 640, s.x + 640); B.ly = L ? L.y : B.ys; B.lp = L ? L.plat : null; s.thruY = B.ly; s.ball = 0; ph("down"); SFX.whoosh(); } return true; }   // (down onto what its one stands on, through any platform over it: the user, 2026-11-04 "have them land on whatever platform the baddy they're targeting is on")
   if (B.ph === "down") { const u = Math.min(1, B.t / B.Td); kin(); bcPose(s, bcDown(s), .5);
@@ -14523,7 +14524,7 @@ const TEAM = { aroundR: 190, aroundCd: [.5, .9], shotCd: [.75, 1.15], spreadGap:
 let teamM = false, tLead = null; const teamB = [0, 1, 2].map(() => ({ on: false, t: 0, full: false, said: false }));
 const pO = P => P.kind === "ally" ? P.a : P.kind === "ej" ? ej : P.q;   // (whose step drives it: a buddy's, Noro's, a pet's own)
 const pHeal = P => !!(P && P.kind === "ally" && P.a && P.a.A.heal);
-const teamOn = () => partAble().some(P => P.q.post && !P.q.post.sent);   // (one sent off by a move of yours (focusSend: the toss, the launch) isn't the team split up: it was, and your L stopped being your block till it got back (the user, 2026-11-05: "it's not working the way it used to when it was originally L+x"))
+const teamOn = () => partCmd().some(P => P.q.post && !P.q.post.sent);   // (one sent off by a move of yours (focusSend: the toss, the launch) isn't the team split up: it was, and your L stopped being your block till it got back (the user, 2026-11-05: "it's not working the way it used to when it was originally L+x"))
 const teamAtk = L0 => { const L = L0.filter((P, i) => !pHeal(P) && !(i === 0 && L0.length > 1 && blkRank(P.a))), i = L.findIndex(P => P.q === tLead); return i > 0 ? [...L.slice(i), ...L.slice(0, i)] : L; };   // (the attackers: not the healer, not the blocker in front (again since 2026-11-03 late); the one who leads first: □ tapped swaps it, leadSwap)
 function nearFoe(s, R, x0 = s.x) { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (walled(e.x, s.x) || Math.abs(e.y - s.y) > 220) continue; const d = Math.abs(e.x - x0); if (d < R && d < bd) { bd = d; best = e; } } return best; }
 function teamInput(dt, ok) {                          // (in partInput, while they're on their own: △ and □ theirs; the block's just yours, since 2026-11-03)
@@ -14593,7 +14594,7 @@ function teamSplit(L) {                               // Y: one to a baddy, near
   tFocus = null; const p = player, room = STAGES[stage] || {}, S = room.trio;
   if (S && S.length) { L.slice(0, S.length).forEach((P, k) => { const T = S[k]; postSet(P, T.x, T.y ?? groundAt(T.x) ?? P.q.y, "trio", null); P.q.post.spot = T; }); trioDone = false; cry("split"); return; }   // (a room's three spots: one each, trioTick)
   const cx = L.reduce((a, P) => a + P.q.x, 0) / Math.max(1, L.length), foes = partFoesAll().filter(e => !walled(e.x, cx) && Math.abs(e.x - cx) < 1900 && Math.abs(e.x - p.x) < 2000);   // (farther off than before, the user, 2026-11-04: "when split from you, make them look for enemies even further away")
-  const free = new Set(foes), lone = [], A = teamAtk(L), order = [...A, ...L.filter(P => !A.includes(P))], pick = new Map(), ups = foes.filter(foeHigh), lows = foes.filter(e => !foeHigh(e));
+  const free = new Set(foes), lone = L.filter(P => P.q.worn), A = teamAtk(L.filter(P => !P.q.worn)), order = [...A, ...L.filter(P => !A.includes(P) && !P.q.worn)], pick = new Map(), ups = foes.filter(foeHigh), lows = foes.filter(e => !foeHigh(e));
   const F0 = order.filter(P => !pHeal(P)), F = F0.length > 1 ? F0 : order; if (F.length > 1 && ups.length && lows.length) { let bp = null, be = null, bd = 1e9; for (const P of F) for (const e of ups) { const d = Math.abs(e.x - P.q.x); if (d < bd) { bd = d; bp = P; be = e; } } if (bp) { pick.set(bp, be); free.delete(be); } }   // (some up on a platform, some down: the nearest of them to one up there goes up to it. The user, 2026-11-03: "they should always go to different enemies if possible so one should jump up a platform to fight the top enemies")   // (attackers only: the healer and the blocker stay out of it again, 2026-11-03 late)   // (any two that fight, the blocker too, since 2026-11-04: one up, one down)
   const topOnly = ups.length > 0 && !lows.length;   // (only ones up top: everyone up there after them, two to one if need be. The user, 2026-11-05 "if there is only a berry baddie above, both can jump. if baddies are on both top and bottom, the buddies should be split")
   order.forEach(P => { const q = P.q; if (pHeal(P) && !pick.has(P) && F0.length > 1) { lone.push(P); return; } let best = pick.get(P) || null, bd = 1e9;   // (the healer stood back only with two others to fight: with one, Stilt and Rink in C5, he's one of the two, 2026-11-05)   // (the healer too, when it's the one sent up there: Stilt with Rink in C5, one up top and one down below, 2026-11-04)
@@ -14610,7 +14611,7 @@ function teamSplit(L) {                               // Y: one to a baddy, near
 let trioDone = false;
 function trioTick() {                                 // (a room's three spots, all three on theirs: its trioDo, once. No room has them yet: the user, 2026-11-02 "this will also be used in places where all three have to interact with something in the environment")
   const room = STAGES[stage] || {}, S = room.trio; if (!S || trioDone) return;
-  const L = partAble(); if (S.every(T => L.some(P => P.q.post && P.q.post.spot === T && Math.abs(P.q.x - T.x) < 30 && P.q.onGround))) { trioDone = true; if (room.trioDo) room.trioDo(); }
+  const L = partCmd(); if (S.every(T => L.some(P => P.q.post && P.q.post.spot === T && Math.abs(P.q.x - T.x) < 30 && P.q.onGround))) { trioDone = true; if (room.trioDo) room.trioDo(); }
 }
 function teamShoot(o, s, T, dt) {                     // (spread out: a shot at the one that's there now and then, if it has a gun or magic; true while it does)
   const AR = archOfO(o), gun = !!(o.A && o.A.shoot), mage = !!(AR && AR === ARCH.mage); if (!gun && !mage) return false;
@@ -14957,7 +14958,8 @@ function defParry(s, D) {                            // its slide meets a baddy 
 // s.post: { x, y, kind, r }; the ring on the ground where it is, its mark over their heads when you tell them
 const POST_R = 270, POST_GO = 250, POST_SORTIE_V = 300, POST_SORTIE_MAX = 760, CHG_HOLD = .3;
 let chgB = { on: false, t: 0, dir: 0, up: false, sortie: false };
-const partAble = () => partnerList().filter(P => P.q && !P.q.worn && !P.q.tcOn && !P.q.tcFly);
+const partAble = () => partnerList().filter(P => P.q && !P.q.worn && !P.q.tcOn && !P.q.tcFly);   // (the ones who can fight)
+const partCmd = () => partnerList().filter(P => P.q && !P.q.tcOn && !P.q.tcFly);   // (the ones you can send places: the worn out too, every command of R's and the L moves that only move them, (the user, 2026-11-08: "you can always direct tired buddies on the field, they just cant attack or do other things"): at a tired walk, no blows, shots, guard or powers, wornPost)
 function postOf(P) { return P.q.post || null; }
 function postSet(P, x, y, kind, plat) { const q = P.q; q.post = { x: clamp(x, 40, WORLD - 40), y, kind, plat: plat || null, t: 0, idle: 0 }; q.homeW = q.wayE = null; q.tagT = Math.max(q.tagT || 0, 1.6); q.tagTxt = chgName(); if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; } else q.pact = q.pcmd = q.pnext = null; }
 function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); } }
@@ -14968,7 +14970,7 @@ function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); }
 function lvlLockSet(q) { const p = player; if (!q || !p || q.climb || q.zip) return; const off = q.y - (p.onGround ? p.y : (p.safe && p.safe.y) ?? p.y) > 40;   // (below you only, as asked: one up over you comes down to you. The user, 2026-11-04: "stilt got stuck on the platform on b8 and couldn tget off even when I called them")
   q.lvlLock = off && (q.onGround || !!q.plat); q.lvlSp = q.lvlLock ? supportSpan(q) : null; }
 function chgDrop(p) {                               // △ with ↓: off what they stand on, down a level, and after you
-  const L = partAble(); if (!L.length) return; let n = 0;
+  const L = partCmd(); if (!L.length) return; let n = 0;
   L.forEach(P => { const q = P.q; if (q.climb || q.zip) return; postClear(P); q.lvlLock = false; homeSet(q);
     if (q.onGround && q.plat) { Object.assign(q, { dropPlat: q.plat, dropT: .3, onGround: false, vy: 140, plat: null }); q.y += 2; n++; } });
   if (n) SFX.jump(); chgSignal(p, L, "DOWN!");
@@ -15012,16 +15014,16 @@ function chargeInput(dt) {                          // △: a press (with a way,
     const still = !chgB.dir && !chgB.jumped && !chgB.sortie && chgB.upT < 0 && !held.down && p.onGround && !p.climb && p.atkT < 0 && !p.combo && !p.block && !p.bubble;   // (held still: the hug)
     chgB.hs = still ? (chgB.hs || 0) + dt : 0;          // (how long it's been held still: the hug's own count)
     if (chgB.out && !chgB.hugged && chgB.t >= CHG_HOLD) { if (!still) { if (chgB.hug > 0) { chgB.hug = 0; hugEnd(); } }   // (out on their own, held still: back to you, and the hug; with you, held: nothing more than the tap)
-      else if (chgB.hs >= CHG_HOLD && !chgB.called) { chgB.called = true; if (!hugCan()) { chgB.back = true; teamBack(p, partAble()); heroNo(p, "ONE HUG A ROOM"); } }   // (had it already this room: just back, and you shake your head)
+      else if (chgB.hs >= CHG_HOLD && !chgB.called) { chgB.called = true; if (!hugCan()) { chgB.back = true; teamBack(p, partCmd()); heroNo(p, "ONE HUG A ROOM"); } }   // (had it already this room: just back, and you shake your head)
       else if (chgB.called && hugCan()) { chgB.hug = clamp((chgB.hs - CHG_HOLD) / (HUG.hold - CHG_HOLD), 0, 1); hugWind(p, chgB.hug); if (chgB.hug >= 1) { chgB.hugged = true; hugGo(p); } } } }
   if (!on && chgB.on) { chgB.on = false; if (chgB.upT >= 0) { chgJump(p, chgB.upT, ax); chgB.jumped = true; }   // (both let go at once: the jump goes)
     if (chgB.hug > 0 && !chgB.hugged) hugEnd();   // (let go before the hug: no hug, but back to you all the same)
-    if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped && !chgB.hugged) { if (chgB.called) { if (!chgB.back) teamBack(p, partAble()); } else if (chgB.dir) { if (!elemSend(p, chgB.dir)) chgStart(p, "go"); } else if (chgB.out) teamBack(p, partAble()); else teamSplitCmd(p); } }   // (a tap: out on their own, back to you; with you, split up. The user, 2026-11-03: "pressing the command button once again is what brings them back")
+    if (chgB.sortie) chgSortieEnd(p); else if (!chgB.jumped && !chgB.hugged) { if (chgB.called) { if (!chgB.back) teamBack(p, partCmd()); } else if (chgB.dir) { if (!elemSend(p, chgB.dir)) chgStart(p, "go"); } else if (chgB.out) teamBack(p, partCmd()); else teamSplitCmd(p); } }   // (a tap: out on their own, back to you; with you, split up. The user, 2026-11-03: "pressing the command button once again is what brings them back")
 }
 const CHG_JUMP = { lo: 170, hi: 420, wind: .1, full: .7, side: 280 };   // (a tap: a hop this high; held to full: this high; how long that takes; with a way held, this fast that way)
 function chgCoil(t) {                               // ↑ held with CHARGE!: the team crouched, wound up (the longer, the lower), their mark over them; full: a tick
   const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1);
-  partAble().forEach(P => { const q = P.q; q.coilT = .1; q.coilU = u; q.tagT = Math.max(q.tagT || 0, .3); q.tagTxt = chgName(); });
+  partCmd().forEach(P => { const q = P.q; q.coilT = .1; q.coilU = u; q.tagT = Math.max(q.tagT || 0, .3); q.tagTxt = chgName(); });
   if (u >= 1 && !chgB.full) { chgB.full = true; SFX.tick(); } else if (u < 1) chgB.full = false;
 }
 function chgHold(s, dt) {                            // (in the partner's own step, first: winding up for the jump, it stands and crouches; come down from it, its place is where it landed)
@@ -15031,7 +15033,7 @@ function chgHold(s, dt) {                            // (in the partner's own st
   return true;
 }
 function chgJump(p, t, ax) {                         // let go of ↑: they jump (from the ground; up already, a second time, once), and stay where they come down, to fight what comes
-  const L = partAble(); if (twrSend(p, partnerList().filter(P => P.q && !P.q.tcOn && !P.q.tcFly))) return; if (!L.length) return;   // (C9: one sent up the other lookout instead, 2026-11-04; a worn-out one too, 2026-11-08)
+  const L = partCmd(); if (twrSend(p, L)) return; if (!L.length) return;   // (C9: one sent up the other lookout instead, 2026-11-04; a worn-out one too, 2026-11-08)
   const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1), h = lerp(CHG_JUMP.lo, CHG_JUMP.hi, u), v = Math.sqrt(2 * GRAV * h); let n = 0;
   L.forEach((P, k) => { const q = P.q; if (q.climb || q.zip) return;
     if (q.onGround) q.chgAir = 1; else if (q.chgAir > 0) q.chgAir--; else return;
@@ -15041,7 +15043,7 @@ function chgJump(p, t, ax) {                         // let go of ↑: they jump
   if (n) { SFX.jump(); p.wave = Math.max(p.wave || 0, .3); }
 }
 function chgStart(p, how) {                         // the command: where to, and the signal (your hand up, a whistle, their mark; the rings where they're to be)
-  const L = partAble(); if (!L.length) return;
+  const L = partCmd(); if (!L.length) return;
   if (how === "hold" && L.some(P => P.q.post)) { teamBack(p, L); return; }   // (again, on its own: back to you; one on another level than yours, along it under (or over) you, lvlLock)
   const d = how === "go" || how === "sortie" ? (chgB.dir || p.face) : p.face;
   if (how === "hold") L.forEach(P => postSet(P, P.q.x, P.q.y, "hold", P.q.plat));
@@ -15067,7 +15069,7 @@ function splitNext(s, T) {                           // (split up: its own beate
   if (!best) return; Object.assign(T, { foe: best, x: best.x, y: best.y, kind: best.y < s.y - 40 ? "up" : "go", idle: 0 }); s.wayE = best;
 }
 function teamSplitCmd(p) {                           // COMMAND tapped, no way held (since 2026-11-03, the user: "pressing just the command button is to have them split up"): on their own, one to a baddy (teamSplit; none about, spread out round you)
-  const L = partAble(); if (!L.length) return; teamSplit(L); L.forEach(P => { P.q.tagT = Math.max(P.q.tagT || 0, 1.6); P.q.tagTxt = chgName(); }); cmdPoint(p, L);
+  const L = partCmd(); if (!L.length) return; teamSplit(L); L.forEach(P => { P.q.tagT = Math.max(P.q.tagT || 0, 1.6); P.q.tagTxt = chgName(); }); cmdPoint(p, L);
 }
 // □ while they're on their own (the user, 2026-11-03: "the square button is back together, not back to me. meaning they get back together while still being apart from
 // the hero. pressing the command button once again is what brings them back" · "the square button when they get back together, holding it should make them high five and
@@ -15138,10 +15140,10 @@ function hugWith(s, dt) {                            // (in a partner's step, fi
   return true;
 }
 function chgSortie(p, dt) {                          // held with a way: on that way as long as you hold it (to the edge of the room, or so far from you)
-  partAble().forEach((P, k) => { const T = P.q.post; if (!T || T.kind !== "sortie") return; const nx = clamp(T.x + chgB.dir * POST_SORTIE_V * dt, p.x - POST_SORTIE_MAX, p.x + POST_SORTIE_MAX); T.x = clamp(nx, 40, WORLD - 40); T.y = groundAt(T.x) ?? T.y; });
+  partCmd().forEach((P, k) => { const T = P.q.post; if (!T || T.kind !== "sortie") return; const nx = clamp(T.x + chgB.dir * POST_SORTIE_V * dt, p.x - POST_SORTIE_MAX, p.x + POST_SORTIE_MAX); T.x = clamp(nx, 40, WORLD - 40); T.y = groundAt(T.x) ?? T.y; });
 }
 function chgSortieEnd(p) {                           // let go: a fight there, and they stay at it; nothing, and they come back
-  partAble().forEach(P => { const T = P.q.post; if (!T || T.kind !== "sortie") return; if (postFoe(P.q, T)) T.kind = "go"; else T.back = true; });
+  partCmd().forEach(P => { const T = P.q.post; if (!T || T.kind !== "sortie") return; if (!P.q.worn && postFoe(P.q, T)) T.kind = "go"; else T.back = true; });
 }
 function chgSignal(p, L, say) {                     // (you tell them: your hand up a moment, a call, their mark)
   p.wave = Math.max(p.wave || 0, .45); SFX.confirm(); L.forEach(P => { P.q.tagT = Math.max(P.q.tagT || 0, 1.6); P.q.tagTxt = chgName(); });   // (no words: the mark says it)
@@ -15221,10 +15223,22 @@ function postStep(o, s, dt, pet) {                   // posted: what comes into 
   // (fire: at one with Glos's roots round it, one whose own is fire goes in with it first, as your button would: the user, 2026-11-02 "when you command the baddies to go on their
   // own, allow the attacker to use their elemental ability right away if applicable. so like if rink runs into a baddie with the weeds, make him use fire first")
   if ((T.kind === "sortie" || (T.split && !T.foe)) && !chgB.on && (T.idle = (T.idle || 0) + dt) > (T.split ? 2.4 : 1.2)) { T.back = true; return true; }   // (a sortie with nothing left there, or split up with no one left for it: home)
+  return postWalk(s, T, dt, 460);
+}
+const WORN_V = 210;   // (a worn-out one sent somewhere: a tired jog there, 2026-11-08)
+function wornPost(s, dt) {                           // (partHuman, partPet) worn out but sent somewhere (the user, 2026-11-08: "you can always direct tired buddies on the field, they just cant attack or do other things"): there at a tired jog, and it stands there; no blows, no shots, no baddy of its own
+  const T = s.post; T.t += dt; postRing(s, !T.focus);
+  if (T.back || T.foe || T.sent) { postClear({ q: s }); homeSet(s); return false; }   // (called back; or at a baddy when it wore out: back to you)
+  if (T.kind === "sortie" && !chgB.on && (T.idle = (T.idle || 0) + dt) > 1.2) { T.back = true; return true; }   // (sent on ahead and let go: nothing for it to do there)
+  if (s.onGround) s.stepHop = 0; else if (s.stepHop) s.vx = s.stepHop;
+  s.postHopT = Math.max(0, (s.postHopT || 0) - dt); s.defOn = false;
+  return postWalk(s, T, dt, WORN_V);
+}
+function postWalk(s, T, dt, v) {                     // (postStep's, wornPost's) to its place: up onto it, up a step in its way, along at v
   const dx = T.x - s.x; s.block = false;
   if (T.kind === "up" && s.onGround && s.y > T.y + 24 && Math.abs(dx) < 260) { s.vy = -Math.sqrt(2 * GRAV * (s.y - T.y + 60)); s.vx = clamp(dx * 2.2, -460, 460); s.onGround = false; s.plat = null; SFX.jump(); }   // up onto it
   else if (s.onGround && Math.abs(dx) > 18 && s.hitWall === Math.sign(dx) && !(s.postHopT > 0) && s.x > 60 && s.x < WORLD - 60) { s.postHopT = .5; if (!hopStep(s, Math.sign(dx))) postHopUp(s, Math.sign(dx)); }   // (a step up in its way: up it. Its one up on the higher ground, or its place up there, it stood at the foot of the step for good: the user, 2026-11-06 "sometimes when you split up the team, they wont jump up to an enemy on a platform above", C5's twiggy)
-  else if (s.onGround) s.vx = approach(s.vx, Math.abs(dx) < 12 ? 0 : clamp(dx * 6, -460, 460), 3200 * dt);
+  else if (s.onGround) s.vx = approach(s.vx, Math.abs(dx) < 12 ? 0 : clamp(dx * 6, -v, v), 3200 * dt);
   s.face = Math.abs(dx) > 24 ? Math.sign(dx) : Math.sign(player.x - s.x) || s.face; s.sprint = Math.abs(s.vx) > 400;
   return true;
 }
@@ -15383,7 +15397,8 @@ function partHuman(o, s, dt, X) {
   if (s.bcStun > 0) return bcStunStep(s, dt); if (s.bc) return bcStep(o, s, dt);   // (the guard held to nothing: seeing stars; its part in a block combo)
   if (s.gapHop) { if (s.onGround) s.gapHop = false; else { o.pcmd = o.pnext = null; if (o.pact) partEnd(o, s, true); return false; } }   // (over a gap on its way to you, edgeLeap: no blow at one on the way, or it comes down short)
   { const AR = archOfO(o); if (AR && AR.tick && AR.tick(o, s, dt, X)) return true; }   // (an archetype's own going on: a cast, a vanish, its charge special)   // (its charge move going: the flaming leap, the electric tackle)
-  if (s.worn) { o.pact = o.pcmd = o.pnext = o.stay = null; s.block = false; s.defOn = false; return false; }   // (worn out: it only follows, slowly)
+  if (s.worn) { o.pact = o.pcmd = o.pnext = o.stay = null; s.block = false; s.defOn = false;   // (worn out: no blows, no guard; it follows you slowly)
+    if (s.tcOn || s.tcFly) return true; if (s.post && s.post.kind === "btn") return tbStep(o, s, dt); if (chgHold(s, dt)) return true; return s.post ? wornPost(s, dt) : false; }   // (but still yours to send places, 2026-11-08: B7's winch button, R's jump, its place)
   if (s.tcOn || s.tcFly) return true;   // (Camila's team charge: where it puts them, teamChargeTick)
   if (s.post && s.post.kind === "btn") return tbStep(o, s, dt);   // (the beach's B7: flung over the gap, at the winch's button)
   if (chgHold(s, dt)) return true;                   // (winding up for CHARGE! + ↑)
@@ -15480,7 +15495,7 @@ function partJump(s, k, dx) {                       // you jumped: so does it, a
 }
 function partPet(q, k, dt) {                        // a pet on your command: its pounces (true while it's busy and its following waits)
   const p = player; if (q.fleap) return fleapStep(null, q, dt); if (q.dzap) return dzapStep(q, dt);   // (its charge move going)
-  if (q.worn) { q.pact = q.pcmd = q.pnext = null; q.block = false; q.defOn = false; return false; }
+  if (q.worn) { q.pact = q.pcmd = q.pnext = null; q.block = false; q.defOn = false; if (q.tcOn || q.tcFly) return true; if (q.post && q.post.kind === "btn") return tbStep(q, q, dt); if (chgHold(q, dt)) return true; return q.post ? wornPost(q, dt) : false; }   // (worn out: still yours to send places, as a buddy, 2026-11-08)
   if (q.tcOn || q.tcFly) return true;
   if (q.post && q.post.kind === "btn") return tbStep(q, q, dt);
   if (chgHold(q, dt)) return true;
@@ -15532,10 +15547,10 @@ function partnerHurt(P, d) {
   return true;
 }
 function partnerRest(P) {                         // out of hearts: worn out, with you still, till you heal (2026-11-01; they went off to rest before)
-  const q = P.q; q.php = 0; q.worn = true; q.heartT = 3; q.block = false; q.pact = q.pcmd = q.pnext = null;
+  const q = P.q; q.php = 0; q.worn = true; q.heartT = 3; q.block = false; q.pact = q.pcmd = q.pnext = null; if (q.bc) bcFree(q);   // (bcFree: out of any combo it was in the middle of: bcStep runs a worn-out one now, for the toss and the launch)
   if (P.kind === "ally" && P.a) { P.a.pact = P.a.pcmd = P.a.pnext = null; SFX.buddy(P.a.A.id, "rest"); }
   const nm = P.kind === "ally" ? P.a.A.name : P.kind === "pet" ? (petDef(petSp(P.t), P.t.w) || {}).name || "YOUR PET" : (EJ_DEF || {}).name || "EVIL JUNE";
-  toast(nm + (P.kind === "ally" && allyMany(P.a.A) ? " ARE" : " IS") + " WORN OUT · HEAL UP AND THEY'RE BACK", 2800);
+  toast(nm + (P.kind === "ally" && allyMany(P.a.A) ? " ARE" : " IS") + " WORN OUT · NO FIGHTING TILL YOU HEAL, BUT YOU CAN STILL SEND THEM PLACES", 3400);   // (2026-11-08: the worn out still go where you send them)
 }
 let healP = null, healHp = 0;
 function healTick() {                               // (every frame: a heal of yours, and the worn-out ones are up again, hearts full)
@@ -28983,13 +28998,13 @@ const teamChargeOK = p => p === player && !!wpnKind(p) && (p.power || 0) >= 3 &&
 const _tcV = new THREE.Vector3();
 function teamChargeTick(dt) {                       // (every frame, after the partners' own: where the team is through the charge, and the ones flung)
   const p = player; if (!p || mode !== "play") return; const lv = p.tcLv || 0;
-  partnerList().forEach((P, k) => { const s = P.q, hum = P.kind !== "pet"; if (!s || s.worn || (s.post && s.post.kind === "btn")) return;   // (worn out: not this. Over B7's gap at its button: not back up on her arm)
+  partnerList().forEach((P, k) => { const s = P.q, hum = P.kind !== "pet"; if (!s || (s.worn && !tbHere()) || (s.post && s.post.kind === "btn")) return;   // (worn out: not this, but at B7's gap, flung over it to the winch all the same (2026-11-08), harmless on the way. Over B7's gap at its button: not back up on her arm)
     if (s.tcFly) { const F = s.tcFly; F.t += dt; s.face = F.d; flungBreak(s, F); if (!s.onGround) s.vy -= (GRAV * (s.budGF != null ? s.budGF : s.vy > 0 ? budFallOf(s) : 1) - GRAV * BUD_FLING) * dt; s.budGF = null;   // (the share partGrav used, not one picked again from the vy it left: at the top of the throw the two disagreed and it hung there till the 1.5 s cap (the user, 2026-11-07: "Yes, fix both")) (BUD_FLING of gravity, up or down: .45 till 2026-11-06, a float (the user, 2026-11-06: "we need more weight and gravity to the buddies especially when they're being tossed or jumping"))   // flung: whoever it comes down on (a long flat flight: gravity half its own)
       if (F.fire && Math.floor(F.t / .03) !== Math.floor((F.t - dt) / .03)) { flamesPx(s.x - F.d * 10, s.y - 40, 3, 30, 1.2); fireBurn(s.x, s.y - 40); }   // (on fire as it flies)
       if (F.tb) { const B = F.tb, u = Math.min(1, F.t / B.T), a4 = 4 * B.arc;   // (over B7's gap: along its arc, tbAim's, and down on the far side)
         s.x = lerp(B.x0, B.tx, u); s.y = lerp(B.y0, B.ty, u) - a4 * u * (1 - u); s.vx = (B.tx - B.x0) / B.T; s.vy = ((B.ty - B.y0) - a4 * (1 - 2 * u)) / B.T; s.onGround = false; s.plat = null;
         if (u >= 1) { Object.assign(s, { y: B.ty, vy: 0, onGround: true, tcFly: null }); if (hum) { s.atkKind = null; s.atkT = -1; } if (B.perch) perchLand(P, s, B); else tbLand(P, s); } return; }
-      for (const e of partFoesAll()) { if (F.got.has(e) || walled(e.x, s.x)) continue; if (Math.abs(e.x - s.x) < eHW(e) * .5 + 40 && s.y > e.y - eH(e) - 50 && s.y - 90 < e.y) { F.got.add(e); s.pFire = F.fire; partHitFoe(s, e, F.d, "haymaker", true); s.pFire = false; s.vx *= .55;
+      for (const e of partFoesAll()) { if (s.worn || F.got.has(e) || walled(e.x, s.x)) continue; if (Math.abs(e.x - s.x) < eHW(e) * .5 + 40 && s.y > e.y - eH(e) - 50 && s.y - 90 < e.y) { F.got.add(e); s.pFire = F.fire; partHitFoe(s, e, F.d, "haymaker", true); s.pFire = false; s.vx *= .55;
         if (F.zap && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .6 : ZAP_T * .5); e.atk = null; for (let i = 0; i < 4; i++) zapFx(e); SFX.crackle(); }
         if (F.gust && !e.dead) { const boss = e === enemy || !!(duo && duo.some(d => d.e === e)), H = (s.rig && s.rig.heightPx) || 90; e.atk = null; e.windup = 0; e.atkCd = Math.max(e.atkCd || 0, 1);   // (a blocker black mage's own, BRISA's: a gust off her that blows them a long way back. The user, 2026-11-02 "for brisa give it a gust of wind that knocks them back further")
           for (let i = 0; i < 14; i++) spawn("smoke", X(s.x + F.d * rand(0, 60)), Y(s.y - H * rand(.2, .8)), rand(-.2, .4), V(F.d * rand(8, 14), rand(-1, 1.5), rand(-.6, .6)), rand(.3, .5), rand(.2, .36), { g: 0, drag: 3, spin: 3 }); SFX.whoosh();
