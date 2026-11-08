@@ -878,6 +878,7 @@
     <div><b>D<i>△</i></b>YOUR SHOT · HOLD: BIGGER</div><div><b>S<i>□</i></b>THE LINE: WHO GOES FIRST</div>
     <div><b>F<i>L</i></b>BLOCK, YOUR BLOCKER IN FRONT</div><div><b>V<i>R</i></b>SPLIT UP THE TEAM · AGAIN: BACK TO YOU</div>
     <div class="wide"><b>F + C Z D S</b>HOLD BLOCK AND PRESS ONE: A TEAM MOVE (TAP IT, OR HOLD IT TO CHARGE)</div>
+    <div class="wide"><b>C + D<i>○ △</i></b>TOGETHER: A TEAM ATTACK WITH YOUR BUDDY · A TRUE PAIR HAS ITS OWN, HOLD IT TO CHARGE</div>
     <div><b>/</b>ITEMS</div><div><b>ESC</b>PAUSE</div>
   </div>
   <small>Z or Enter to play</small>
@@ -2231,7 +2232,7 @@ function syncFoe(e, r, dt = 0) {
   const swell = e.dead ? 1 + e.deathT * .2 : 1, shudder = e.dead ? .06 : e.atk === "charge" ? .035 : e.atk === "act" ? .015 : 0;
   r.root.position.set(X(e.x) + rand(-shudder, shudder) + jolt(e), Y(e.y), e.z || 0);
   const ks = r.size || 1; r.root.scale.set((1 - e.sq * .5) * swell * ks, (1 + e.sq) * swell * ks, (1 - e.sq * .5) * swell * ks);
-  r.yaw.rotation.y = e.yaw;
+  r.yaw.rotation.y = e.yaw + twY(e);   // (twY: spun round in Flora's gust)
   const walking = e.onGround && Math.abs(e.vx) > 20 && e.windup <= 0, ph = e.phase;
   const fw = Math.sign(e.vx) * e.dir || 1, w = walking ? clamp(Math.abs(e.vx) / (e.def.speed || 80), .5, 1) : 0;   // fw: +1 walking the way it faces
   const sw = Math.sin(ph) * fw, cw = Math.cos(ph) * fw;
@@ -11895,7 +11896,7 @@ function updatePlayer(dt) {
   if (p.landLockT > 0) p.landLockT -= dt;
   if (p.point) pointTick(p, dt);
   cmdPointTick(p, dt);   // (pointing the team on: a moment, or as long as you hold it)
-  const control = p.hurtT <= 0 && !p.dead && !(intro && intro.lock) && !cine && !cheerHold && !(p.landLockT > 0) && !p.grow && !p.point && !(p.cmdPt > 0) && !(p.stunT > 0), cat = p.rig.kind === "cat";   // (p.point: pointing a partner at them, held there)   // (p.grow: its weapon bursting bigger, 2026-11-01)   // (landLockT: MOVEMENT's landing recovery)
+  const control = p.hurtT <= 0 && !p.dead && !(intro && intro.lock) && !cine && !cheerHold && !(p.landLockT > 0) && !p.grow && !p.point && !(p.cmdPt > 0) && !(p.stunT > 0) && !p.duoM, cat = p.rig.kind === "cat";   // (p.point: pointing a partner at them, held there)   // (p.grow: its weapon bursting bigger, 2026-11-01)   // (landLockT: MOVEMENT's landing recovery)
   if (p.combo && p.atkT < 0) p.combo = null;   // safety net: a combo with no move playing would lock jump, attack, charge and block for good
   if (ax && hintShown && time > 4) { hintShown = false; setTimeout(() => document.getElementById("hint").classList.add("hide"), 5000); }
   // ladders: ↑ at the foot of one (or in the air beside it), ↓ standing at its top, and you climb
@@ -11948,7 +11949,7 @@ function updatePlayer(dt) {
   } else { p.blockHold = 0; p.tpose = approach(p.tpose || 0, 0, dt * 5); }
   if (p.hugW > 0) p.tpose = Math.max(p.tpose || 0, p.hugW);   // (COMMAND held for the group hug: your arms open for them, and round them; hugTick)
   p.blockBtn = held.block; if (!p.bubble) p.popHold = 0; p.popB = p.bubble ? (p.popHold || 0) / BUBBLE_HOLD : 0; p.popSword = p.popB > 0 && !!(p.rig.spec && p.rig.spec.move && p.rig.spec.move.set === "sword");
-  guardMeter(p, dt); bcInput(p, dt, control); shotTick(p, dt, control);   // (the guard's line, and a press with it up: the block combos; △ on its own, the heroine's shot)
+  guardMeter(p, dt); bcInput(p, dt, control); shotTick(p, dt, control); duoTick(p, dt);   // (the guard's line, and a press with it up: the block combos; △ on its own, the heroine's shot)
   // the back-step (the user, 2026-10-25: "when they block and press back, away from where they are facing, they'll do a swift jump backwards a few
   // step. this is a sort of dodge/defensive measure. if you're holding block and press back, it should work, but also ... simultaneously hit back and
   // block"): back pressed with the guard up, or back and block within a moment of each other, whichever first
@@ -11967,7 +11968,7 @@ function updatePlayer(dt) {
   const ru = clamp(((p.runT || 0) - .35) / 1.5, 0, 1); p.runK = 1 + .5 * ru * ru * (3 - 2 * ru); p.sprint = p.runK > 1.3;   // up to half again as fast (the old sprint), gradually
   // charge: hold attack and it builds in three stages (CHARGE_STEP apart); let go for that many hits of the charged combo
   if (p.block || p.bcm || p.bcGo) { if (p.chargeT > 0) { p.chargeT = 0; p.chargeLv = 0; if (p === player) { aura.show = 0; aura.burst = 0; } } }      // a block (or a block combo) drops a charge: its glow off at once, and letting go fires nothing (it waited till 2026-11-05, the user: "if a player was charging their solo attack but then block, dont show the charge symbol, cancel it")
-  else if (held.atk && (control || p.landLockT > 0) && !p.combo && !(p.blockHold > 0) && !p.bubbleLock && !p.tackle && !p.tackleLock && !(nrgOut(p) && !teamChargeOK(p))) {   // (not while the guard's opening out to the bubble; a landing's recovery holds it, never lets it go: the user, 2026-11-02 "jumping for some reason makes the characters stop charging")
+  else if (held.atk && !p.duoNo && (control || p.landLockT > 0) && !p.combo && !(p.blockHold > 0) && !p.bubbleLock && !p.tackle && !p.tackleLock && !(nrgOut(p) && !teamChargeOK(p))) {   // (not while the guard's opening out to the bubble; a landing's recovery holds it, never lets it go: the user, 2026-11-02 "jumping for some reason makes the characters stop charging")
     p.chargeT = (p.chargeT || 0) + dt;
     const k = p.chargeT / CHARGE_STEP, lv = k >= 3 ? 3 : k >= 2 ? 2 : k >= 1 ? 1 : 0;
     if (lv > (p.chargeLv || 0)) { p.chargeLv = lv; chargeUp(p, lv); if (teamChargeOK(p) && lv >= 2 && partnerList()[lv - 2]) SFX.jump(); }
@@ -12041,7 +12042,7 @@ function updatePlayer(dt) {
   }
   const attacking = p.atkT >= 0, MV = attacking && p.atkKind ? (cat ? KIT.CAT_MOVES[p.atkKind] : KIT.STRIKES[p.atkKind]) : null;
   p.crouch = control && p.onGround && held.down && !attacking && !p.block && !p.tackle;
-  const mx = p.crouch || (p.block && p.onGround) || p.tpose > 0 || p.tired > 0 || p.upHop || p.bcm || p.bcGo || p.shot || p.shotF || (p === player && sqBusy(p)) ? 0 : ax;   // crouching, blocking, opening out to the bubble, puffed out, or into the jump up after a launch: no walking
+  const mx = p.crouch || (p.block && p.onGround) || p.tpose > 0 || p.tired > 0 || p.upHop || p.bcm || p.bcGo || p.shot || p.shotF || p.duoM || (p === player && sqBusy(p)) ? 0 : ax;   // crouching, blocking, opening out to the bubble, puffed out, or into the jump up after a launch: no walking
   const wet = deepIn(p), wasDive = p.dive; p.dive = !!wet;          // under the deep's water (world 13): swimming
   const mv = p.rig.spec.move, maxV = (p.crawl ? CRAWL_V : attacking ? (cat ? 140 : 100) : p.tkCharge ? 135 : p.tcLv ? 110 : walkCap || 300 * (p.runK || 1)) * mv.speed * (wet ? .78 : 1) * (1 - NRG.slow * (p.weary || 0));   // (the team charge: a walk, the team with her)   // (crawling: slow)   // (charging the tackle: a slow walk)   // gathering speed the longer you hold it
   const MOV = feelMove(), rate = wet ? (mx && control ? 820 : 420) : mx && control ? (p.onGround ? 2600 * MOV.groundAccel : 1700 * MOV.airControl) : p.hurtT > 0 && p.onGround ? 9000 : (p.onGround ? 2400 * MOV.groundStop : 500 * MOV.airControl);   // (MOVEMENT's multipliers: 1, the game's own)   // (in the water: slow to get going, slow to stop)
@@ -13012,7 +13013,8 @@ function shotHandPx(p, u) {                           // where it comes from: th
 }
 function shotReach(x, dir, L) { let d = 0; while (d < L) { const n = Math.min(L, d + 40), x2 = x + dir * n; if (x2 < 0 || x2 > WORLD || walled(x, x2)) break; d = n; } return Math.max(40, d); }   // (as far as it gets before a wall or the room's end)
 function shotHit(b, e, dir) {                         // one of its blows landing on e (your blow, its level's extra on it)
-  const sp = b.sp; shotPlus = sp.plus; shotNow = true; let ok = false; try { ok = partHitFoe0(player, e, dir, sp.kind, true); } finally { shotPlus = 0; shotNow = false; }   // (shotNow: a shield it hits knocked off, hitBaddy)
+  const sp = b.sp; shotPlus = sp.plus; shotNow = true; partFire = !!b.fire; let ok = false; try { ok = partHitFoe0(player, e, dir, sp.kind, true); } finally { shotPlus = 0; shotNow = false; partFire = false; }   // (fire in it, the pair's: roots burnt off)   // (shotNow: a shield it hits knocked off, hitBaddy)
+  if (ok && b.fire) { flamesPx(e.x, e.y - eH(e) * .55, 8, 24, 1.3); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); }
   if (ok) { if (sp.push) offBalance(e, dir, sp.push); hitSpark(e.x - dir * eHW(e) * .4, e.y - eH(e) * .55, sp.big ? 1.6 : 1); hitstop = Math.max(hitstop, sp.big ? .03 : .045); shake = Math.max(shake, sp.big ? 4 : 2); }
   return ok;
 }
@@ -13071,6 +13073,141 @@ Object.assign(SFX, {                                 // the heroines' shots, eac
   waveBig() {                                        // her full charge: a big ringing shing, a boom, the long roar of the wave going
     tone(2600, 2400, .7, { type: "sine", vol: .1 }); tone(3900, 3600, .55, { type: "sine", vol: .06 }); tone(1300, 1200, .5, { type: "triangle", vol: .07 });
     tone(110, 40, 1.0, { type: "sine", vol: .3, a: .02, delay: .03 }); noise(1.1, { vol: .3, f0: 500, f1: 2600, type: "bandpass", q: 1.2, a: .05, delay: .03 }); } });
+// ── the team's attack, △ and ○ together (the user, 2026-11-08: "we're going to add another attack to the battle system: pressing triangle and circle together. if the buddy pair is an actual
+// pair, it'll be a unique attack. so flora and a brisa are a pair so they'll have a unique one. if they are not a pair, it'll be the attacking buddy doing one of 3 generic attacks with the main
+// character"). The pair's, FIRESTORM: "a gust of wind and then fire enveloped in it that they shoot out. it can be charged so level 1 charge is the same but stronger, level two it's bigger, level
+// three will have them both spin together, able to hurt creatures in front of them and then the fire/wind attack comes out" (held, a level each DUO.step). Anyone else along, with you: TANDEM RUSH
+// (the two of you dashing on through them), PINCER (it over the one in front, the two of you at it from both sides) or TWIN RISE (an uppercut each, them up in the air), never the same twice running
+const DUO = { win: .12, step: .6, cd: .8, near: 560, pairs: { "brisa+flora": "storm" }, names: { storm: "FIRESTORM!", rush: "TANDEM RUSH!", pincer: "PINCER!", rise: "TWIN RISE!" },
+  gale: [{ r: 40, v: 640, T: .8, n: 2, plus: 0, kind: "punch", push: .3 }, { r: 44, v: 660, T: .85, n: 3, plus: 1, kind: "haymaker", push: .5 },
+         { r: 76, v: 620, T: 1, n: 3, plus: 2, kind: "smash", push: .8 }, { r: 112, v: 580, T: 1.4, n: 6, plus: 2, kind: "smash", push: 1, big: true }] };   // (win: how near together the two presses, s · step: a level each · cd: till the next · near: how far off a buddy can be and be in on it · the pair's shot at each level: size, speed, life, beats, extra on each blow)
+const duoS = { a: false, t: false, at: -9, tt: -9, last: null, cdT: -9 };
+const duoKey = (a, b) => [a, b].sort().join("+"), duoH = q => (q.rig && q.rig.heightPx) || 80;
+const duoCan = p => !!p && mode === "play" && !teamM && !paused && !menuUp && !modalOpen && !cine && !transit && !(intro && intro.lock) && time >= duoS.cdT && p.onGround && !p.dead && !(p.hurtT > 0) && !p.block && !held.block
+  && !p.combo && !p.tackle && !p.dodge && !p.bcm && !p.bcGo && !p.climb && !p.swim && !p.dive && !p.zip && !p.crawl && !p.cons && !p.sit && !p.point && !p.duoM && !p.shotF && !(p.shot && p.shot.ph !== "hold") && (p.atkT < 0 || p.atkT < DUO.win + .06);   // (a swing only just begun, or a shot only held: called off for it)
+const duoBuds = p => partnerList().filter(P => { const q = P.q; return P.kind !== "pet" && q && q.rig && q.rig.root.visible && !q.worn && !q.post && !q.fleap && !q.dzap && !q.bc && !q.tcOn && !q.tcFly && !q.pounce && !q.climb && !q.zipR && !q.sitAt && !q.hideAt
+  && !(q.hurtT > 0) && !(q.bcStun > 0) && Math.abs(q.x - p.x) < DUO.near && Math.abs(q.y - p.y) < 160; });
+function duoPinTgt(p, dir) {                          // (PINCER) the one in front it goes over: near, on your level, somewhere to come down past it
+  let best = null, bd = 1e9; for (const e of partFoesAll()) { const d = (e.x - p.x) * dir; if (e.dead || d <= 0 || d > 420 || Math.abs(e.y - p.y) > 120 || walled(e.x, p.x)) continue;
+    const lx = e.x + dir * (eHW(e) * .5 + 34); if (lx < 30 || lx > WORLD - 30 || walled(e.x, lx) || (groundAt(lx) === null && !e.plat)) continue; if (d < bd) { bd = d; best = e; } }
+  return best;
+}
+function duoIn(p, ok) {                               // (partInput, before the buttons) △ and ○ gone down together: the team's attack (duoStart); after it, both let go before they're your own again
+  const A = !!held.atk, T = !!held.part(1); if (A && !duoS.a) duoS.at = time; if (T && !duoS.t) duoS.tt = time; duoS.a = A; duoS.t = T;
+  if (p && p.duoNo && !A && !T) p.duoNo = false;
+  if (!ok || !A || !T || !p || p.duoNo || Math.abs(duoS.at - duoS.tt) > DUO.win || !duoCan(p)) return;
+  const L = duoBuds(p); if (!L.length) return;      // (nobody along and by you: the two presses are just what they are)
+  const id = P => P.kind === "ally" && P.a ? P.a.A.id : null, pk = L.length > 1 && id(L[0]) && id(L[1]) ? DUO.pairs[duoKey(id(L[0]), id(L[1]))] : null, dir = p.face || 1;
+  if (pk) { duoStart(p, pk, L.slice(0, 2), dir); return; }
+  const opts = ["rush", "pincer", "rise"].filter(x => x !== duoS.last); let k = opts[Math.floor(Math.random() * opts.length)], e = null;
+  if (k === "pincer" && !(e = duoPinTgt(p, dir))) k = duoS.last === "rush" ? "rise" : "rush";   // (nobody to go over: one of the other two)
+  duoS.last = k; duoStart(p, k, [L.find(P => !blkRank(P.a)) || L[0]], dir, e);   // (the attacker; only the blocker along, it)
+}
+function duoStart(p, k, crew, dir, e) {
+  if (p.shot) shotEnd(p); partBtn[1].shot = false;   // (△ down first: its shot, only held yet, called off)
+  if (p.atkT >= 0) { p.atkT = -1; p.atkKind = null; p.chain = null; p.queued = false; }   // (○ first: its swing, only just begun, called off)
+  p.chargeT = 0; p.chargeLv = 0; aura.show = 0; aura.burst = 0; atkBuf = 0; jumpBuf = 0; p.vx = 0;
+  const M = { k, dir, t: 0, ph: k === "storm" ? "hold" : "set", lv: 0, crew, e: e || null, got: new Set(), gotB: new Set() }; p.duoM = M; p.duoNo = true;
+  crew.forEach((P, i) => { const q = P.q, o = oOfP(P); if (o) { if (o.pact) partEnd(o, q, true); o.pcmd = o.pnext = null; o.stay = null; } postClear(P); q.block = false; q.defOn = false; q.abT = 0; q.duo = M; q.face = dir; });
+  if (k === "storm") { M.F = (crew.find(P => P.a && P.a.A.id === "flora") || crew[0]).q; M.B = (crew.find(P => P.a && P.a.A.id === "brisa") || crew[1]).q; }
+  else popText(p.x, p.y - (p.rig.heightPx || 92) - 30, DUO.names[k], 900);
+  SFX.confirm(); voice("jump");
+}
+function duoEnd(p) {
+  const M = p && p.duoM; if (!M) return; p.duoM = null; duoS.cdT = time + DUO.cd; p.spinY = 0;
+  M.crew.forEach(P => { const q = P.q; if (!q || q.duo !== M) return; q.duo = null; q.spinY = 0; q.ball = 0; q.rot = 0; q.pFire = false; q.atkKind = null; q.atkT = -1; q.pcharge = 0; q.vx = 0; q.sprint = false; });
+}
+function duoTo(q, tx, dt) { tx = clamp(tx, 30, WORLD - 30); if (walled(q.x, tx)) tx = q.x; q.vx = approach(q.vx || 0, clamp((tx - q.x) * 12, -1100, 1100), 9000 * dt); q.sprint = Math.abs(q.vx) > 400; }   // (to its place, as bcStep's)
+function duoPose(s, kind) { if (!kind || !KIT.STRIKES[kind]) return; s.atkKind = kind; s.atkT = 0; s.atkHits = []; s.atkIdx = 0; s.queued = false; if (s === player) { s.chain = null; s.combo = null; } }   // (a blow's pose: the blow's own, no energy for it)
+const duoHeroK = (p, k) => { const SET = KIT.giantSet(p) || setOf(p.rig.spec), G = ((SET && SET.ground) || ["punch"]).filter(x => KIT.STRIKES[x]); return k === "up" ? (SET && SET.up && KIT.STRIKES[SET.up] ? SET.up : "rise") : G[k === "big" ? G.length - 1 : 0] || "punch"; };
+const duoBudK = (q, k) => { const SET = setOf(q.rig.spec), G = ((SET && SET.ground) || ["punch"]).filter(x => KIT.STRIKES[x]); return k === "up" ? (KIT.STRIKES.upperhook ? "upperhook" : "rise") : G[k === "big" ? G.length - 1 : 0] || "punch"; };
+function duoReach(s, dir, L) {                       // (how far on it goes: not through a wall, not off the edge of its floor)
+  let d = 0; while (d < L) { const n = Math.min(L, d + 20), x2 = s.x + dir * n; if (x2 < 30 || x2 > WORLD - 30 || walled(s.x, x2)) break;
+    if (s.plat ? (x2 < s.plat.x + 8 || x2 > s.plat.x + s.plat.w - 8) : Math.abs((groundAt(x2) ?? 1e9) - s.y) > 26) break; d = n; }
+  return d;
+}
+function duoSweep(s, dir, fw, bk, kind, got, hero, push, fn) {   // (bcSweep's: whoever's in front of it, once each, and fn for each one it lands on)
+  let n = 0; for (const e of partFoesAll()) { if (got.has(e)) continue; const d = (e.x - s.x) * dir, hw = eHW(e) * .5;
+    if (d < -bk - hw || d > fw + hw || e.y - eH(e) > s.y + 20 || e.y < s.y - 190 || walled(e.x, s.x)) continue;
+    got.add(e); if (hero ? partHitFoe0(s, e, dir, kind, true) : partHitFoe(s, e, dir, kind)) { n++; if (push) offBalance(e, dir, push); if (fn) fn(e); } }
+  if (n) { hitstop = Math.max(hitstop, .05); shake = Math.max(shake, 3); } return n;
+}
+const duoFloor = (x, y) => { const P = PLATFORMS.find(q => x > q.x + 6 && x < q.x + q.w - 6 && Math.abs(q.y - y) < 70); return P ? P.y : (groundAt(x) ?? y); };   // (the floor there on your level: a platform's, or the ground)
+const duoPop = e => { if (e && e !== enemy && !e.dead && !(e.T && e.T.move === "float")) { e.vy = -760; e.onGround = false; e.plat = null; } };   // (up in the air off it)
+function duoTick(p, dt) {                             // (updatePlayer, after the shot) the team's attack going: you and whoever's in on it, a frame at a time
+  const M = p.duoM; if (!M) return; const Q = M.crew.map(P => P.q), dir = M.dir;
+  if (p.dead || mode !== "play" || transit || cine || p.hurtT > 0 || Q.some(q => !q || q.duo !== M || q.worn || q.hurtT > 0 || !q.rig || !q.rig.root.visible)) { duoEnd(p); return; }
+  M.t += dt; jumpBuf = 0; atkBuf = 0; p.face = dir; if (p.onGround && M.ph !== "dash") p.vx = 0;
+  const ph = n => { M.ph = n; M.t = 0; M.got = new Set(); M.gotB = new Set(); M.did = false; };
+  Q.forEach(q => { q.face = M.ph === "hit" && M.k === "pincer" ? -dir : dir; if (q.atkKind) { q.atkT += dt; if (q.atkT >= ((KIT.STRIKES[q.atkKind] || {}).dur || .45)) { q.atkKind = null; q.atkT = -1; } } });   // (its blow's pose played through)
+  const q = Q[0], kin = s => { s.vx = 0; s.vy = 0; s.onGround = false; s.plat = null; };
+  if (M.k === "rush") {
+    if (M.ph === "set") { duoTo(q, p.x + dir * 34, dt); if (M.t >= .16) { M.x0 = p.x; M.D = duoReach(p, dir, 300); duoPose(p, duoHeroK(p, "big")); duoPose(q, duoBudK(q, "big")); SFX.dash(); dust(p.x, p.y, 5, -dir); ph("dash"); } }
+    else if (M.ph === "dash") { const u = Math.min(1, M.t / .34); p.x = M.x0 + dir * M.D * easeOut(u); p.vx = 0; q.x = clamp(p.x + dir * 34, 30, WORLD - 30); q.vx = 0;   // (side by side, a step ahead of you)
+      if (Math.random() < dt * 30) { dust(p.x, p.y, 1, -dir); dust(q.x, q.y, 1, -dir); }
+      duoSweep(p, dir, 60, 30, "haymaker", M.got, true, .9); duoSweep(q, dir, 60, 30, "haymaker", M.gotB, false, .9); if (u >= 1) ph("end"); }
+    else if (M.t >= .22) duoEnd(p);
+    return; }
+  if (M.k === "pincer") { const e = M.e && !M.e.dead && !M.e.gone ? M.e : null;
+    if (M.ph === "set") { M.x0 = q.x; M.y0 = q.y; const tx = e ? e.x + dir * (eHW(e) * .5 + 34) : q.x + dir * 200; M.x1 = clamp(walled(q.x, tx) ? q.x : tx, 30, WORLD - 30); M.y1 = duoFloor(M.x1, p.y); SFX.jump(); ph("leap"); }
+    else if (M.ph === "leap") { const u = Math.min(1, M.t / .46); kin(q);
+      if (e) { e.vx = 0; e.atk = null; e.atkCd = Math.max(e.atkCd || 0, .6); e.hurtT = Math.max(e.hurtT || 0, .06); const tx = e.x + dir * (eHW(e) * .5 + 34); if (!walled(e.x, tx)) { M.x1 = clamp(tx, 30, WORLD - 30); M.y1 = duoFloor(M.x1, p.y); } }   // (it's caught, held where it is, and it comes down just past it)
+      q.x = lerp(M.x0, M.x1, u); q.y = lerp(M.y0, M.y1, u) - 150 * 4 * u * (1 - u); q.ball = Math.sin(Math.PI * u) * .8; q.rot = -dir * TAU * u;
+      if (e) { const hx = e.x - dir * (eHW(e) * .5 + 40); if (!walled(p.x, hx)) p.x = approach(p.x, hx, 700 * dt); }
+      if (u >= 1) { q.y = M.y1 - 1; q.ball = 0; q.rot = 0; q.vy = 0; dust(q.x, q.y, 4); duoPose(q, duoBudK(q, "big")); duoPose(p, duoHeroK(p, "big")); ph("hit"); } }
+    else if (M.ph === "hit") {
+      if (!M.did && M.t >= .08) { M.did = true;
+        if (e) { e.inv = 0; const a = partHitFoe(q, e, -dir, "smash"); e.inv = 0; const b = partHitFoe0(p, e, dir, "smash", true); M.got.add(e); M.gotB.add(e);
+          if (a || b) { offBalance(e, dir, 1, true); e.vx = 0; duoPop(e); hitstop = Math.max(hitstop, .08); shake = Math.max(shake, 6); hitSpark(e.x, e.y - eH(e) * .55, 1.4); } }
+        duoSweep(p, dir, 60, 10, "haymaker", M.got, true, .6); duoSweep(q, -dir, 60, 10, "haymaker", M.gotB, false, .6); }
+      if (M.t >= .36) ph("end"); }
+    else if (M.t >= .2) duoEnd(p);
+    return; }
+  if (M.k === "rise") {
+    if (M.ph === "set") { duoTo(q, p.x + dir * 36, dt); if (M.t >= .14) { SFX.jump(); for (const s of [p, q]) { s.vy = -720; s.onGround = false; s.plat = null; } duoPose(p, duoHeroK(p, "up")); duoPose(q, duoBudK(q, "up")); ph("up"); } }
+    else if (M.ph === "up") { if (q.vy < 0) q.vx = 0;
+      if (M.t < .3) { duoSweep(p, dir, 70, 20, "haymaker", M.got, true, 0, duoPop); duoSweep(q, dir, 70, 20, "haymaker", M.gotB, false, 0, duoPop); }
+      if ((M.t > .2 && p.onGround && q.onGround) || M.t > 1.2) ph("end"); }
+    else if (M.t >= .15) duoEnd(p);
+    return; }
+  // FIRESTORM: Flora (F) behind Brisa (B), in front of you; F's gust, B's fire in it, off on ahead (duoGale)
+  const Fq = M.F, Bq = M.B, HB = duoH(Bq);
+  if (M.ph === "hold") {
+    duoTo(Fq, p.x + dir * 50, dt); duoTo(Bq, p.x + dir * 120, dt); Fq.wingT = Math.max(Fq.wingT || 0, .12);
+    const lv = Math.min(3, Math.floor(M.t / DUO.step)); if (lv > M.lv) { M.lv = lv; chargeUp(p, lv); [Fq, Bq].forEach(s => sparks(s.x, s.y - duoH(s) * .5, 3 + lv * 2)); if (lv >= 3) popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "FULL!", 700); }
+    Fq.pcharge = Bq.pcharge = M.lv / 3; if (Math.random() < dt * (4 + 6 * M.lv)) flamesPx(Bq.x + dir * 22, Bq.y - HB * .55, 1, 10, .6 + .2 * M.lv);   // (their orbs filling; a flicker at her mouth)
+    if (!held.atk || !held.part(1)) { Fq.pcharge = Bq.pcharge = 0; popText(p.x, p.y - (p.rig.heightPx || 92) - 30, DUO.names.storm, 1000); voice("attack"); SFX.buddy("flora", "sp"); SFX.buddy("brisa", "sp");
+      if (M.lv >= 3) { M.cx = (Fq.x + Bq.x) / 2; M.D = duoReach(Bq, dir, 170); ph("spin"); } else ph("go"); }
+    return; }
+  if (M.ph === "spin") { const u = Math.min(1, M.t / 1.1), cx = M.cx + dir * M.D * u * u * (3 - 2 * u), a = M.t * 26;   // (the two of them round and round together, on a step at a time, through what's in front)
+    for (const [s, o] of [[Fq, -16], [Bq, 16]]) { s.x = clamp(cx + dir * o, 30, WORLD - 30); s.vx = 0; s.spinY = a; } Fq.wingT = .2; Bq.pFire = true;
+    for (let i = 0; i < 2; i++) { const b = a * .7 + i * Math.PI + rand(-.3, .3); spawn("smoke", X(cx + Math.cos(b) * 62), Y(Bq.y - HB * rand(.15, 1.1)), Math.sin(b) * .45 + .2, V(-Math.sin(b) * 5, rand(.5, 2), Math.cos(b) * 2), rand(.25, .4), rand(.14, .26), { g: 0, drag: 3, spin: 6 }); }
+    if (Math.random() < dt * 40) flamesPx(cx + rand(-34, 34), Bq.y - HB * rand(.2, .9), 1, 18, 1.2);
+    const beat = Math.floor(M.t / .16); if (beat !== M.beat) { M.beat = beat; M.gotB = new Set(); duoSweep(Bq, dir, 92, 46, "jab", M.gotB, false, .35); if (beat % 2 === 0) SFX.whoosh(); }
+    if (u >= 1) { Fq.spinY = Bq.spinY = 0; Bq.pFire = false; M.lv = 3; ph("go"); M.t = .12; }
+    return; }
+  if (M.ph === "go") {
+    if (M.t < .2) { Fq.wingT = .35; if (Math.random() < dt * 50) spawn("smoke", X(Fq.x + dir * rand(10, 40)), Y(Fq.y - duoH(Fq) * rand(.3, .8)), .3, V(dir * rand(6, 10), rand(-.5, .8), rand(-.4, .4)), rand(.2, .32), rand(.12, .2), { g: 0, drag: 3, spin: 3 });   // (her wings beating the gust up)
+      if (Math.random() < dt * 40) flamesPx(Bq.x + dir * (20 + 300 * M.t), Bq.y - HB * .55, 1, 14, 1 + .2 * M.lv); }   // (her fire into it)
+    if (!M.did && M.t >= .2) { M.did = true; duoGale(Bq.x + dir * 40, Bq.y - HB * .55, dir, M.lv); SFX.whoosh(); SFX.release(M.lv); shake = Math.max(shake, 3 + M.lv * 2); Fq.vx = -dir * 120; Bq.vx = -dir * 160; }
+    if (M.t >= .45) duoEnd(p); }
+}
+function duoGale(x, y, dir, lv) {                     // the pair's: a ball of their wind with the fire wrapped up in it, off on ahead through them (shotsUpdate, galeStep)
+  const sp = DUO.gale[lv], b = { k: "gale", sp, lv, dir, t: 0, hits: new Map(), x, y, fire: true };
+  b.glow = shotMesh(CAP_G, "#ff6200", haloTex(), true); b.core = shotMesh(CAP_G, "#ffe9a0", haloTex(), true); b.tr = [0, 1, 2].map(() => shotMesh(crescG(), "#eafcff", null));   // (the fire's glow and its heart; three arcs of wind round them)
+  shots.push(b); if (sp.big) { shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .05); rumble(300, 1); } return b;
+}
+function galeStep(b, dt, u, fade) {                   // (shotsUpdate) on its way: through whoever's in it, a beat at a time; turning, burning, smoking
+  const sp = b.sp, x0 = b.x; b.x += b.dir * sp.v * dt * (u < .15 ? .5 + u * 3.3 : 1); if (b.x < 0 || b.x > WORLD || walled(x0, b.x)) b.t = Math.max(b.t, sp.T * .85);   // (a wall: it breaks up on it)
+  const r = sp.r * (u < .12 ? .5 + u * 4.2 : 1), z = ((player && player.z) || 0) + .4, sc = r * 2 * S;
+  if (u < .85) shotFoes(b, b.x - r, b.x + r, b.y - r, b.y + r, b.dir);
+  b.glow.position.set(X(b.x), Y(b.y), z); b.glow.scale.set(sc * 1.5, sc * 1.5, 1); b.glow.material.opacity = .95 * fade;
+  b.core.position.set(X(b.x), Y(b.y), z + .01); b.core.scale.set(sc * .7, sc * .7, 1); b.core.material.opacity = .9 * fade;
+  b.tr.forEach((m, i) => { m.position.set(X(b.x), Y(b.y), z + .02); m.rotation.z = -b.dir * (b.t * 14 + i * TAU / 3); const k = r * S * (1 - .12 * i); m.scale.set(k, k, 1); m.material.opacity = (.75 - .15 * i) * fade; });
+  if (Math.random() < dt * (30 + b.lv * 12)) flamesPx(b.x + rand(-.5, .5) * r, b.y + rand(-.4, .4) * r, 1, r * .35, .9 + .25 * b.lv);
+  if (Math.random() < dt * 20) { const a = rand(0, TAU); spawn("smoke", X(b.x + Math.cos(a) * r), Y(b.y + Math.sin(a) * r), z - .05, V(-b.dir * rand(2, 4) - Math.sin(a) * 3, Math.cos(a) * 3, 0), rand(.25, .4), rand(.12, .2) * (1 + .3 * b.lv), { g: 0, drag: 3, spin: 4 }); }
+  if (sp.big) shake = Math.max(shake, 2);
+}
 function shotEnd(p) { const Q = p.shot; if (Q) shotOrbOff(Q); p.shot = null; p.pointKind = null; p.palm = 0; }
 function shotBeam(p, lv) {                            // Camila's: straight out of her palm, as far as its level, a wall, or the room's end lets it; the third her huge one
   const sp = SHOT.beam[lv], col = SHOT.col.gauntlet, b = { k: "beam", sp, lv, dir: p.face, t: 0, hits: new Map() };
@@ -13096,7 +13233,8 @@ function shotFoes(b, x1, x2, y1, y2, dir) {          // whoever's in its box, on
 function shotsUpdate(dt) {                            // (every frame, by the specials' light) the shots on their way, and the steam
   const p = player;
   shots = shots.filter(b => { b.t += dt; const sp = b.sp, u = b.t / sp.T, fade = u > .75 ? Math.max(0, (1 - u) / .25) : 1;
-    if (b.k === "beam") {
+    if (b.k === "gale") galeStep(b, dt, u, fade);   // (the pair's, duoGale)
+    else if (b.k === "beam") {
       const o = p && p.shot && p.shot.ph === "fire" ? shotHandPx(p) : (b.o || shotHandPx(p)); b.o = o; b.ox = o.x + b.dir * 12; b.oy = o.y;
       const full = shotReach(b.ox, b.dir, sp.L), L = full * Math.min(1, b.t / (sp.big ? .16 : .08)), th = sp.th * (1 + .1 * Math.sin(b.t * 70)) * (u < .1 ? .6 + 4 * u : 1) * fade;
       if (u < 1) shotFoes(b, Math.min(b.ox, b.ox + b.dir * L), Math.max(b.ox, b.ox + b.dir * L), b.oy - th * .5 - 20, b.oy + Math.max(th * .5 + 20, 62), b.dir);   // (62 under it at least: from her eyes it still takes the small ones, 2026-11-05)
@@ -13785,7 +13923,7 @@ let partInT = -9;                                    // (when you last gave the 
 // 6. "the charge attack for the blocker in the first stage will be an electric tackle that stuns up to 3 enemies bunched up and they get electricity goind around them and
 //    grow stiff and the player can take advantage and hit them a lot. this works onbosses too but doesnt last as long" (block held: it fills; let go full: defZap)
 const BUD_KIT = { 0: { fire: true, leap: "flame", tackle: "zap" } }, budKit = () => BUD_KIT[world] || BUD_KIT[0];
-const BUD_OWN = { rink: "fire", stilt: "zap" };   // (that kit is Rink's fire and Stilt's lightning, theirs alone: the user, 2026-11-02 "i did it with different buddies and they had properties that dont belong to them like the fire and lightning. they should only have properties of their own")
+const BUD_OWN = { brisa: "fire", stilt: "zap" };   // (Rink's fire Brisa's: the user, 2026-11-08 "brisa will have the fire ability that rink had")   // (that kit is Rink's fire and Stilt's lightning, theirs alone: the user, 2026-11-02 "i did it with different buddies and they had properties that dont belong to them like the fire and lightning. they should only have properties of their own")
 const budOwn = (P, what) => { const id = P && P.kind === "ally" && P.a && P.a.A ? P.a.A.id : null; return id ? BUD_OWN[id] === what : what === "fire" ? !!budKit().fire : budKit().tackle === "zap"; };   // (a buddy: its own; a kid partner: the world's, as before)   // (each world's own; Berry Woods' till a world has one)
 const budFireO = o => o && o.A ? BUD_OWN[o.A.id] === "fire" && !archOfO(o) : !!budKit().fire;   // (the same from the one fighting: a buddy's own fire (not an archetype's), a kid partner's the world's)
 // the fighter slot's archetypes (the user, 2026-11-02: "the game will expand exploration by creating opportunities for different character's abilities to open and interact
@@ -13805,16 +13943,17 @@ const ARCH_ABOUT = { thief: ["THIEF", "SPECIAL: CUTS THROUGH UP TO 3 BUNCHED TOG
   ninja: ["NINJA", "SPECIAL: TELEPORTS THE WHOLE TEAM ONTO THEM · PASSIVE: VANISHES IN A PUFF AND HITS FROM IN FRONT, FROM ABOVE OR FROM BEHIND"],
   monk: ["MONK · BLOCKER", "BLOCKER: BLOCKS IN FRONT OF YOU"],
   bmage: ["BLACK MAGE · BLOCKER", "BLOCKER: BLOCKS IN FRONT OF YOU · PASSIVE: A GUST SHOVES THEM BACK AS THE GUARD GOES UP; A PARRY SPINS THEM ROUND, DIZZY"] };
-const BUD_ABOUT = { stilt: ["HEALER · BLOCKER", "BLOCKER: BLOCKS IN FRONT OF YOU · PASSIVE: HEALS THE TEAM FROM HIS BASKET WHEN ONE OF YOU IS LOW, AND AFTER A FIGHT"],
-  rink: ["FIRE", "SPECIAL: A FLAMING LEAP THROUGH A ROW OF THEM · PASSIVE: FIRE PUNCHES THAT SET THEM BURNING"] };
+const BUD_ABOUT = { flora: ["HEALER · BLOCKER", "BLOCKER: HER WINGS SPREAD IN FRONT OF YOU · PARRY: A LITTLE GUST THAT SPINS THEM ROUND · PASSIVE: HEALS THE TEAM FROM HER BASKET WHEN ONE OF YOU IS LOW, AND AFTER A FIGHT"],
+  stilt: ["BLOCKER", "BLOCKER: BLOCKS IN FRONT OF YOU · PASSIVE: LIGHTNING IN HIS BLOWS THAT STIFFENS THEM"],
+  brisa: ["FIRE", "SPECIAL: A FLAMING LEAP THROUGH A ROW OF THEM · PASSIVE: FIRE PUNCHES THAT SET THEM BURNING"] };   // (the basket Flora's, the fire Brisa's, 2026-11-08: Stilt's and Rink's till then)
 const budAbout = A => BUD_ABOUT[A.id] || ARCH_ABOUT[BUD_ARCH[A.id]] || ["FIGHTER", "SPECIAL: A LEAP THROUGH A ROW OF THEM · PASSIVE: FIGHTS AT YOUR SIDE"];
 const archOfS = s => { if (!s) return null; const a = allies.find(a => a.st === s || (a.crew || []).some(m => m.st === s)); return a ? archOfO(a) : null; };
 // the blocker slot's archetypes (the user, 2026-11-02): the MONK (FLORA: block and forward, the whole team rolls past them and turns to face them) and the blocker
 // BLACK MAGE (BRISA: a gust that shoves them back as the guard goes up; a parry, a gust that spins them round, dizzy). Their entries: blocker, roll, blockStart(D), parry(D, e, dir)
 // and the rest (the user: "randomly assign these types and the same moveset for now for all the other buddies that have not been assigned one"): picked at random once,
 // written down here so each keeps its own. Stilt (the healer) and Rink (the woods' fire) keep their own kits
-Object.assign(BUD_ARCH, { flora: "monk", brisa: "bmage", burr: "bmage", coil: "mage", oldvic: "warrior", noro: "bmage", bin: "bmage", tusker: "monk", rotor: "monk", chispa: "ninja", tic: "ninja", tac: "warrior", pk: "warrior", estrella: "mage", pincho: "bmage", caracol: "bmage", mordi: "warrior" });
-Object.assign(ARCH, { monk: { blocker: true, blunt: true, roll: true }, bmage: { blocker: true, magic: true, blunt: false, blockStart: D => gustPush(D, false), parry: (D, e, dir) => gustPush(D, true, e, dir) } });
+Object.assign(BUD_ARCH, { flora: "wingmonk", stilt: "monk", burr: "bmage", coil: "mage", oldvic: "warrior", noro: "bmage", bin: "bmage", tusker: "monk", rotor: "monk", chispa: "ninja", tic: "ninja", tac: "warrior", pk: "warrior", estrella: "mage", pincho: "bmage", caracol: "bmage", mordi: "warrior" });
+Object.assign(ARCH, { monk: { blocker: true, blunt: true, roll: true }, wingmonk: { blocker: true, blunt: true, roll: true, parry: (D, e, dir) => wingGust(D, e, dir) }, bmage: { blocker: true, magic: true, blunt: false, blockStart: D => gustPush(D, false), parry: (D, e, dir) => gustPush(D, true, e, dir) } });
 const blkRank = a => (a && a.A && (a.A.heal || (ARCH[BUD_ARCH[a.A.id]] || {}).blocker)) ? 1 : 0;   // (a blocker type, or the healer: the block button's, the first of the two)
 function blkArch(name, ...a) { const D = partDefender(), AR = D && archOfP(D); if (AR && AR[name]) AR[name](D, ...a); }
 const parrySide = (p, e) => Math.sign(e.x - p.x) || p.face || 1;
@@ -13832,6 +13971,12 @@ function parryMelee(p, e, d) {                      // a blow parried (blocked j
   const dir = parrySide(p, e); offBalance(e, dir, 1.5); sparks(p.x + dir * 30, p.y - (p.rig.heightPx || 92) * .55, 12); SFX.parry(); popText(p.x, p.y - (p.rig.heightPx || 92) - 18, "PARRY!");
   hitstop = Math.max(hitstop, .09); shake = Math.max(shake, 5); blkArch("parry", e, dir);
 }
+function wingGust(D, e, dir) {                        // Flora's parry (the user, 2026-11-08: "when you parry with flora as the blocker, he will make enemies spin in a slight gust of wind"): a puff off her wings, it spun round in it as it reels (twY)
+  const s = D.q, H = (s.rig && s.rig.heightPx) || 110; if (!e || !s) return; s.wingT = Math.max(s.wingT || 0, .5);
+  for (let i = 0; i < 7; i++) spawn("smoke", X(s.x + dir * rand(20, 60)), Y(s.y - H * rand(.2, .7)), rand(-.2, .4), V(dir * rand(4, 8), rand(-.5, 1.5), rand(-.6, .6)), rand(.25, .4), rand(.14, .24), { g: 0, drag: 3.5, spin: 3 });
+  SFX.whoosh(); e.twirl = { t0: time, T: .8, n: 2 }; popText(e.x, e.y - eH(e) - 30, "WHOOSH!");
+}
+const twY = e => { const T = e && e.twirl; if (!T) return 0; const u = (time - T.t0) / T.T; if (u >= 1 || u < 0) { e.twirl = null; return 0; } return T.n * TAU * (1 - (1 - u) * (1 - u)); };   // (spun round: turns that ease off, its yaw's)
 const GUST = { reach: 150, up: 120, push: 560, lift: -380, hold: .6 };   // (the guard-up gust: reach px past your front, only the ones close · push/lift: a short heavy shove up off their feet · hold: they dig in when they land. Was 340 px, a 720 push and a long slide: the user, 2026-11-02 "way too much reach ... dont send them so far back and give them more momentum")
 function gustPush(D, parried, e0, dir0, big = 1) {           // the blocker black mage's gust: off it, the way you face; the guard going up: them shoved back to make room; a parry: spun round, dizzy
   const p = player, s = D.q, dir = dir0 || defFace(), ox = Number.isFinite(s.x) ? s.x : p.x, H = (s.rig && s.rig.heightPx) || 90;
@@ -14548,11 +14693,12 @@ function partInput(dt) {                             // the buddy button: a pres
   { const tm = teamOn(); if (tm !== teamM) { teamM = tm; teamSync(tm); } }   // (on their own, CHARGE!: X, Y and L theirs, teamInput)
   if (teamM) { teamInput(dt, ok); partFireFx(dt); partAuto(dt); healerTick(dt); teamFx(dt); return; }
   const L = ok ? partnerList() : [], bl0 = partBlocking() || !!(p && (p.bcm || p.bcGo));   // (a block combo winding up or going: as blocking, its buttons are the combo's)
+  duoIn(p, ok && !bl0);   // (△ and ○ together: the team's attack, duoIn)
   partBtn.forEach((B, i) => {
     B.bcL = !!((i === 1 ? held.part(1) : i === 2 ? held.part(2) : false) && (B.bcL || bl0)); const bl = bl0 || B.bcL;   // (pressed with the guard up: nothing of its own till it's let go)
     if (i === 0) { B.on = false; B.hold = false; return; }   // (the first button's the block now: its partner, the defender, answers to the guard, defendStep)
     if (i === 2) { lineBtn(B, ok && held.part(2) && !bl, dt); return; }   // (□: the line's order, not a buddy's button (two along at most since 2026-11-03))
-    if (i === 1) { const on1 = ok && held.part(1) && !bl; if (!shotIn(B, on1)) B.on = on1; return; }   // (△ on its own, no way held: the heroine's shot, 2026-11-04, shotIn)   // (and only ever hers now, any way held, never a buddy's blow or its charged leap: the user, 2026-11-04 "when he was the leader the triangle charge was done by him but the cool down was on rose. always do only rose's attack with triangle (her and camila only)")
+    if (i === 1) { const on1 = ok && held.part(1) && !bl; if (p && (p.duoM || p.duoNo)) { B.on = on1; B.shot = false; return; } if (!shotIn(B, on1)) B.on = on1; return; }   // (the team's attack on, or △ not let go since: not the shot's)   // (△ on its own, no way held: the heroine's shot, 2026-11-04, shotIn)   // (and only ever hers now, any way held, never a buddy's blow or its charged leap: the user, 2026-11-04 "when he was the leader the triangle charge was done by him but the cool down was on rose. always do only rose's attack with triangle (her and camila only)")
     const on = ok && held.part(i), P0 = L[i] || (L.length === 1 ? L[0] : null), P = P0 && !P0.q.worn && !(P0.kind === "ally" && P0.a && P0.a.A.heal) ? P0 : null, q = P && P.q;   // (the healer: not on your attack button)   // (one along: it's on this one too)   // (worn out: its button does nothing)   // (back again since 2026-11-03 late, the user, 2026-11-03 late: "I keep going back and forth on this but let's go back to where the second buddy was just the blocker with his passive ability and only one was the blocker")
     if (on && !B.on) { B.t = 0; B.full = false; if (q && !bl) { partInT = time; postClear(P); q.tagT = Math.max(q.tagT || 0, 1); partPressT = time; partCommand(P, "tap", true); } }   // (Rink's fire: no "FIRE!" from her any more, the user, 2026-11-04: "don't have the girls say "fire" for the fire buddy. they should mostly say something to the R related commands")   // (while you block: nothing at all, 2026-11-03 late)   // (a press: its next blow)
     if (on && q && !bl && !q.fleap) { B.t += dt; const k = clamp((B.t - PART_HOLD) / BUD_CHARGE, 0, 1); q.pcharge = k; if (k >= 1 && !B.full) { B.full = true; SFX.jcharge(); } }   // (filling: the orb round it, as yours, syncBudAura)
@@ -14629,13 +14775,14 @@ function handChest(r, i) {                           // (one hand of a rig's, in
   return { c, top };
 }
 function healHold(r, s) {                            // the basket sat on his left hand, wherever it is, so it's never through it (the user, 2026-11-03: "make stilt hold the basket without his hands clipping to it"; 2026-11-05, "for stilt, let's make him hold his basket with his left hand"); blocking, held out before him by it, its floor to them: his shield
-  const g = r.__pile, H = r.hands; if (!g || !H || H.length < 2 || !r.chest) return; const { c } = handChest(r, 0);
+  const g = r.__pile, H = r.hands; if (g && r.__basketAt) { g.rotation.z = 0; g.position.set(...r.__basketAt); return; }   // (one whose hands don't show, Flora: where it's held, __basketAt)
+  if (!g || !H || H.length < 2 || !r.chest) return; const { c } = handChest(r, 0);
   g.rotation.z = 0; g.position.set(c.x, c.y - .3, c.z);   // (carried by its handle, the hand at the top of it, blocking or not: his shield's in his right, shieldHold; it sat up on his palms when he held it in both)
 }
 // the blockers' shields (the user, 2026-11-05: "give blocker creatures a shield"; 2026-11-08: "all blockers should have a variation of a shield"): each its own, SHIELD_KIND by buddy (any other blocker
 // gets the round one: steel, a ring of the buddy's own colour, a gold boss). Held in the left hand, flat at its side, turned out to them while it blocks (Stilt's in his right, his basket in his left: healHold).
 // Each about the round one's size, its face out along +Y and its top along +Z: shieldHold keeps that top up, blocking too
-const SHIELD_KIND = { stilt: "kite", flora: "petal", brisa: "gust", burr: "spike", noro: "heater", bin: "clock", tusker: "tower", pincho: "star", caracol: "shell" };
+const SHIELD_KIND = { stilt: "kite", flora: "wings", brisa: "gust", burr: "spike", noro: "heater", bin: "clock", tusker: "tower", pincho: "star", caracol: "shell" };
 let shieldM = null; const _shQ = { side: null, front: null };
 function shFlat(sh, d) { const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false, curveSegments: 20 }); g.rotateX(-Math.PI / 2); g.rotateY(Math.PI); g.translate(0, -d / 2, 0); return g; }   // (an outline cut out flat: its face out along +Y, its top along +Z)
 function shPoly(n, rf) { const s = new THREE.Shape(); for (let i = 0; i < n; i++) { const a = Math.PI / 2 + i / n * TAU, r = rf(a, i); if (i) s.lineTo(Math.cos(a) * r, Math.sin(a) * r); else s.moveTo(Math.cos(a) * r, Math.sin(a) * r); } s.closePath(); return s; }   // (round its middle from the top, r by the angle: a flower, a star)
@@ -14673,7 +14820,7 @@ function shieldHold(r, s, i = 0) {                  // (i: the hand, 0 the left,
     _shQ.n.set((s.face || 1) * .87, 0, .5).normalize(); _shQ.x.set(-_shQ.n.z, 0, _shQ.n.x); _shQ.w.setFromRotationMatrix(_shQ.m.makeBasis(_shQ.x, _shQ.n, _shQ.up)); g.quaternion.slerp(_shQ.t.copy(_shQ.cw).invert().multiply(_shQ.w), .3); }   // (its face out to the side it's guarding, the way it faces, a little to us so it still reads: the user, 2026-11-05 "when the blocker blocks, have the shield facing the enemy". It was turned in the chest's own terms, and came out facing us)
   else g.quaternion.slerp(_shQ.side, .3); if (sh) g.position.set(c.x + .12, c.y + .02, c.z); else g.position.set(c.x, c.y - .02, c.z + z);
 }
-const shieldHolds = () => allies.forEach(a => { if (!a.A || !blkRank(a) || !a.r || !a.r.chest || !a.r.hands || a.r.hands.length < 2) return; if (!a.r.__shield) a.r.__shield = blkShield(a.r, a.A.col || "#a9dcea", a.A.id); shieldHold(a.r, a.st, a.A.heal ? 1 : 0); });   // (the healer's in his right: his basket's in his left)
+const shieldHolds = () => allies.forEach(a => { if (!a.A || !blkRank(a) || SHIELD_KIND[a.A.id] === "wings" || !a.r || !a.r.chest || !a.r.hands || a.r.hands.length < 2) return; if (!a.r.__shield) a.r.__shield = blkShield(a.r, a.A.col || "#a9dcea", a.A.id); shieldHold(a.r, a.st, a.A.heal ? 1 : 0); });   // (the healer's in his right: his basket's in his left)
 const healHolds = () => { allies.forEach(a => { if (a.A.heal && a.r.__pile && a.r.__pile.visible) healHold(a.r, a.st); }); shieldHolds(); };   // (after this frame's pose, so it never lags his hands)
 function healPick(need) { const B = bag(), have = HEAL_KINDS.filter(k => B[k] > 0 || itemsInf); return have.find(k => HEAL_AMT[k] >= need) || have[have.length - 1] || null; }
 function healerUse(H, why) {                         // one of what he's carrying, for everyone: the smallest that'll do (all of them, if nothing will)
@@ -14684,7 +14831,7 @@ function healerUse(H, why) {                         // one of what he's carryin
 }
 function healerTick(dt) {
   const H = healerP(), p = player; if (!H || !p || mode !== "play" || transit || p.dead) { if (H && H.a && H.a.r && H.a.r.__pile) healPile(H.a.r, null); return; }
-  const q = H.q, r = H.a.r, L = carryNow(), busy = !!((q.atkKind && !HEAL_KEEP.has(q.atkKind)) || q.dzap || q.fleap) || !!(q.crawl || q.climb); healPile(r, q.worn || busy ? null : L);   // (crawl, climb: both hands on the floor or the rungs, the basket put by meanwhile, 2026-11-05)   // (his special: his hands off his basket, and it's put by; his kicks, it stays in his hands)
+  const q = H.q, r = H.a.r, L = carryNow(), busy = !!((q.atkKind && !HEAL_KEEP.has(q.atkKind)) || q.dzap || q.fleap || q.duo) || !!(q.crawl || q.climb); healPile(r, q.worn || busy ? null : L);   // (crawl, climb: both hands on the floor or the rungs, the basket put by meanwhile, 2026-11-05)   // (his special: his hands off his basket, and it's put by; his kicks, it stays in his hands)
   q.cup = approach(q.cup || 0, q.worn || busy ? 0 : 1, dt * (busy ? 12 : 4)); q.cup2 = 0; q.cupL = true;   // (his left hand alone under it now, charkit cupArms: the user, 2026-11-05 "for stilt, let's make him hold his basket with his left hand")   // (both arms round his basket, full or not)
   healer.cd = Math.max(0, healer.cd - dt); if (q.worn || !r.root.visible || hideout) return;
   const near = foesAlive().some(e => !e.dead && Math.abs(e.x - p.x) < 1300 && Math.abs(e.y - p.y) < 500);
@@ -15119,7 +15266,7 @@ function partTarget(s, air) {                       // the one it goes for: near
   return best;
 }
 let partFire = false;
-function partHitFoe(...a) { partBlow = true; partBoost = (a[0] && a[0].fiveT > 0 ? FIVE.k : 1) * (a[0] && a[0].bcK > 0 ? a[0].bcK : 1); partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && (a[0].pFire || a[0].ownEl === "fire")); try { const r = partHitFoe0(...a); if (r && a[1] && a[0] && a[0].ownEl === "zap" && !a[1].dead) { const e = a[1], boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .2 : ZAP_T * .12); zapFx(e); } if (r && a[1] && a[0] && a[0].uniT > 0) uniHit(a[0], a[1]); if (r && partFire && a[1]) { const e = a[1]; flamesPx(e.x, e.y - eH(e) * .55, 12, 30, 1.5); puffs(e.x, e.y - eH(e) * .55, 3, 30, 140); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); } if (r && a[1]) { const AR = archOfS(a[0]); if (AR && AR.hit) AR.hit(a[0], a[1], a[2], a[3]); } return r; } finally { partBlow = false; partBoost = 1; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)   // (its own power in every blow: Rink's fire, Stilt's lightning, a jolt. The user, 2026-11-04: "always make a characters special element or ability be attributed to their regular attacks. so for rink, he should always hit with fire")
+function partHitFoe(...a) { partBlow = true; partLone = budAlone(a[0]); partBoost = (a[0] && a[0].fiveT > 0 ? FIVE.k : 1) * (a[0] && a[0].bcK > 0 ? a[0].bcK : 1); partWeak = !!(a[0] && a[0].pWeak); partFire = !!(a[0] && (a[0].pFire || a[0].ownEl === "fire")); try { const r = partHitFoe0(...a); if (r && a[1] && a[0] && a[0].ownEl === "zap" && !a[1].dead) { const e = a[1], boss = e === enemy || !!(duo && duo.some(d => d.e === e)); e.zapT = Math.max(e.zapT || 0, boss ? ZAP_BOSS * .2 : ZAP_T * .12); zapFx(e); } if (r && a[1] && a[0] && a[0].uniT > 0) uniHit(a[0], a[1]); if (r && partFire && a[1]) { const e = a[1]; flamesPx(e.x, e.y - eH(e) * .55, 12, 30, 1.5); puffs(e.x, e.y - eH(e) * .55, 3, 30, 140); e.burnT = Math.max(e.burnT || 0, 1.2); fireBurn(e.x, e.y - eH(e) * .5); } if (r && a[1]) { const AR = archOfS(a[0]); if (AR && AR.hit) AR.hit(a[0], a[1], a[2], a[3]); } return r; } finally { partBlow = false; partLone = false; partBoost = 1; partWeak = false; partFire = false; } }   // (a fire one: flames off it)   // (a partner's: not your weapon's power)   // (its own power in every blow: Rink's fire, Stilt's lightning, a jolt. The user, 2026-11-04: "always make a characters special element or ability be attributed to their regular attacks. so for rink, he should always hit with fire")
 function partHitFoe0(s, e, dir, kind, noJug) {             // a blow of theirs landing; up in the air, held at their height the way yours are (the last of an air combo sends it down)
   const D2 = duo && duo.find(d => d.e === e);
   if (D2) { withBoss(D2, () => hitEnemy(dir, kind)); return true; }
@@ -15193,6 +15340,7 @@ function partStrike(o, s, i, X) {                   // the next strike of the st
 // a buddy (or Noro) on your command: true while it's busy (blocking, or on a string of moves), when its following waits. X: { set, sp, plain, shoot, col, crew, voice }
 function partHuman(o, s, dt, X) {
   const p = player; if (s.fleap) return fleapStep(o, s, dt); if (s.dzap) return dzapStep(s, dt);
+  if (s.duo) { if (p && p.duoM === s.duo) { if (o) { o.pcmd = o.pnext = null; } return true; } s.duo = null; s.spinY = 0; s.ball = 0; s.rot = 0; s.pFire = false; }   // (in on the team's attack, duoTick; that over without it, a new room: free)
   if (s.bcStun > 0) return bcStunStep(s, dt); if (s.bc) return bcStep(o, s, dt);   // (the guard held to nothing: seeing stars; its part in a block combo)
   if (s.gapHop) { if (s.onGround) s.gapHop = false; else { o.pcmd = o.pnext = null; if (o.pact) partEnd(o, s, true); return false; } }   // (over a gap on its way to you, edgeLeap: no blow at one on the way, or it comes down short)
   { const AR = archOfO(o); if (AR && AR.tick && AR.tick(o, s, dt, X)) return true; }   // (an archetype's own going on: a cast, a vanish, its charge special)   // (its charge move going: the flaming leap, the electric tackle)
@@ -15325,6 +15473,8 @@ function partTag(q, i, dt) {                        // shown a moment in each ne
   const m = partTagTex(q.tagTxt && q.post ? q.tagTxt : partBtnName(i)); if (S.material.map !== m) { S.material.map = m; S.material.needsUpdate = true; }   // (told to a place: △)
   S.material.opacity = Math.min(1, q.tagT / .3); S.position.set(X(q.x), Y(q.y - ((q.rig.heightPx || 80) + (q.heartT > 0 ? 58 : 30))), (q.z || 0) + .4);
 }
+const BUD_PRESS = { cd: 2.2, rest: .4, grit: 2, near: 340 };   // (the user, 2026-11-08: "buddies can be too efficient fighting alone. when you first learn to split the party, they can basically go ahead and kill everyone. enemies need to attack more frequently so that the player needs to get involved more"): at a buddy on its own, it swings cd times as often; a buddy's blow holds it off rest s, not your 1.1; after grit of them in a row it comes on through the next and swings back (hitBaddy)
+const budAlone = s => !!s && s !== player && s.php !== undefined && (teamM || !!s.post || !player || player.dead || Math.abs(s.x - player.x) > BUD_PRESS.near);   // (a buddy's, off on its own: split up, posted, or you a way off)
 const PLAYER_FIRST = 170;                          // (how much nearer than you a partner has to be, px, before a baddy goes for it instead)
 function foeTgt(b) {                               // who a baddy (or the boss) goes for (the user, 2026-10-26: "make enemies also target them. the prioritize attacking whoever is closer, camila or rose of their partners, thoguh the player is first priority for them"): you, unless a partner's a good deal nearer
   const p = player; if (!p || mode !== "play" || hideout || arena) return p;
@@ -15424,7 +15574,7 @@ function syncCats(dt) {
 // your cat, then the ally
 const ALLIES = [
   { id: "burr", name: "BURR", w: 0, hi: "EN GARDE!", hit: "slash", reach: 100, col: "#93c93b" },   // the spiky one with the rapier: the berry woods
-  { id: "stilt", name: "STILT", w: 0, hi: "YES WAY!", hit: "punch", reach: 110, col: "#a9dcea", heal: true },   // (the woods' first since 2026-11-02, Burr's the waves': the team's healer, carrying what you've got)  // the lanky one: Cuss' Waves
+  { id: "stilt", name: "STILT", w: 1, hi: "YES WAY!", hit: "punch", reach: 110, col: "#a9dcea" },   // (home to the waves again, his basket Flora's: the user, 2026-11-08 "flora will also hold the fruit basket like stilt used to") (the woods' first since 2026-11-02, Burr's the waves': the team's healer, carrying what you've got)  // the lanky one: Cuss' Waves
   { id: "coil", name: "COIL", w: 2, hi: "BZZT! ON IT!", hit: "slash", reach: 100, col: "#7f9cb0" },   // the clockwork knight: Volt Keep
   { id: "elpico", name: "EL PICO", w: 3, hi: "VAMOS!", hit: "punch", reach: 105, col: "#2d5bd6" },   // the luchador, his scarf in the wind: Loof's sky
   { id: "oldvic", name: "OLD VIC", w: 6, hi: "LET'S ROLL!", hit: "punch", reach: 95, col: "#e8245a" },   // the foreman, a skater (young, not old: the user, 2026-11-02 "change the lines"): Vinella's candy works
@@ -15443,8 +15593,8 @@ const ALLIES = [
   { id: "tusker", name: "TUSKER", w: 5, hi: "CHAAARGE!", hit: "slash", reach: 120, col: "#2a9d8f" },   // the tusked bean with the flag ("he was really bad ass where he's from")
   { id: "rotor", name: "ROTOR", w: 4, hi: "OUTTA MY WAY!", hit: "punch", reach: 270, col: "#3a9aff", shoot: true },   // the cross kid with the propeller gun
   { id: "chispa", name: "CHISPA", w: 3, hi: "HEE HEE! LET'S GO!", hit: "punch", reach: 85, col: "#ffb400" },   // the little orange bep, a curl on top
-  { id: "brisa", name: "BRISA", w: 1, hi: "WHOOSH! I'M IN!", hit: "punch", reach: 95, col: "#00c8ff" },   // the blue bep, two tall ears and a long cape of wings
-  { id: "flora", name: "FLORA", w: 0, hi: "OHHH, A FIGHT!", hit: "punch", reach: 100, col: "#ff3a8c" },   // the big pink bep, a crown of petals, a great mantle of wings
+  { id: "brisa", name: "BRISA", w: 0, hi: "WHERE HAVE YOU BEEN? IT'S BEEN ALMOST A WEEK WITHOUT YOU GIRLS!", hit: "punch", reach: 95, col: "#ff3a8c", sayHi: true },   // the magenta bep, two tall ears and a long cape of wings (the woods' own with Flora, magenta, Rink's fire, her line as she joins: the user, 2026-11-08)
+  { id: "flora", name: "FLORA", w: 0, hi: "FINALLY! LET'S GO!", hit: "punch", reach: 100, col: "#00c8ff", heal: true, sayHi: true },   // the big blue bep, a crown of petals, a great mantle of wings (the woods' own with Brisa, blue, the basket, her line as she joins: the user, 2026-11-08)
   // the five of 2026-10-30 (the user's art): TIC and TAC from TIC TAC TOWER, PK and his pencil, the tall red one, the purple cat (the names past PK: my picks)
   { id: "tic", name: "TIC", w: 0, hi: "THREE IN A ROW!", hit: "punch", reach: 110, col: "#f4f4f4" },   // the X
   { id: "tac", name: "TAC", w: 0, hi: "O, YEAH!", hit: "punch", reach: 110, col: "#3a3a40" },   // the O
@@ -15584,9 +15734,9 @@ function allySpec(id) {
   move: { set: "brawler", bounce: 1.9, swing: 1.2, stride: .9, lean: .03, stance: { hop: .075, headRot: -.06 } } });   // the little orange bep: a figure of eight, its wings wrapped over the lime bottom, a big grin in their parting, a flame of a curl (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   if (id === "brisa") return M0(H, { id, name: "BRISA",
   body: { build: "chibi", scale: .95, head: 1.05, torso: 1.0, girth: 1.25, shoulders: 1, arms: .9, legs: 1.55, limbs: .6, hands: .7, feet: .75 },
-  face: { ears: 0 }, hair: noHair, colors: { skin: "#00c8ff", hair: "#00c8ff" },
-  outfit: { top: BEP_LIME, arm: "#00c8ff", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .07, len: .14, wide: 1 } },
-  move: { set: "brawler", bounce: 1.35, swing: .9, stride: 1.05, lean: .04, stance: { hop: .03, headRot: -.05, lean: .02 } } });   // the blue bep: broad leaf ears in a bow, big round eyes, a cape of wings parted over a lime body, long thin lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#ff3a8c", hair: "#ff3a8c" },
+  outfit: { top: BEP_LIME, arm: "#ff3a8c", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .07, len: .14, wide: 1 } },
+  move: { set: "brawler", bounce: 1.35, swing: .9, stride: 1.05, lean: .04, stance: { hop: .03, headRot: -.05, lean: .02 } } });   // the magenta bep (blue till 2026-11-08, the user: "swap their colors so Brisa is the magenta one"): broad leaf ears in a bow, big round eyes, a cape of wings parted over a lime body, long thin lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   if (id === "pincho") return M0(H, { id, name: "PINCHO",   // a big pink head (the rest in dress1031), a purple sweater, pale purple sleeves, blue gloves, magenta legs
     body: { build: "chibi", scale: 1.0, head: 1.25, torso: 1.0, girth: 1.35, shoulders: 1.15, arms: .95, legs: .8, limbs: 1.4, hands: 1.05, feet: 1.0 },
     face: { ears: 0 }, hair: noHair, colors: { skin: "#ffa6c9", hair: "#ffa6c9" },
@@ -15604,9 +15754,9 @@ function allySpec(id) {
     move: { set: "brawler", bounce: 1.3, swing: 1.3, stride: 1.1, stance: { hop: .03, armF: 1.25, elbF: 1.7, armB: 1.1, elbB: 1.75 } } });   // (its fists up in front, as the art holds the one with the face. Bigger fists, a bouncier waddle: 2026-11-02, the user: "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   if (id === "flora") return M0(H, { id, name: "FLORA",
   body: { build: "chibi", scale: 1.1, head: .95, torso: 1.1, girth: 1.8, shoulders: 1.3, arms: .9, legs: 1.35, limbs: 2.15, hands: .8, feet: 1.3 },
-  face: { ears: 0 }, hair: noHair, colors: { skin: "#ff3a8c", hair: "#ff3a8c" },
-  outfit: { top: BEP_LIME, arm: "#ff3a8c", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .12, len: .2, wide: 1.35 } },
-  move: { set: "brawler", bounce: .75, swing: .5, stride: .8, lean: -.02, stance: { lean: -.04, headRot: .06, bodyY: -.02 } } });   // the big pink bep: a crown of petals, one great bell of a cloak from her head, parted in an A over her open mouth and a white belly, chunky lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
+  face: { ears: 0 }, hair: noHair, colors: { skin: "#00c8ff", hair: "#00c8ff" },
+  outfit: { top: BEP_LIME, arm: "#00c8ff", leg: BEP_LIME, hand: { style: "bare" }, boot: { col: BEP_LIME, r: .12, len: .2, wide: 1.35 } },
+  move: { set: "brawler", bounce: .75, swing: .5, stride: .8, lean: -.02, stance: { lean: -.04, headRot: .06, bodyY: -.02 } } });   // the big blue bep (pink till 2026-11-08): a crown of petals, one great bell of a cloak from her head, parted in an A over her open mouth and a white belly, chunky lime legs (remodelled to the drawing, rounder, livelier: the user, 2026-11-02 "remodel them as closely as possible to the drawings concept art. make them rounder ... give them as much personality as possible")
   // the five of 2026-10-30 (the user's art, refs/batch1030b): TIC and TAC, the X and the O of TIC TAC TOWER ("they will carry and x and o and are from the ticktack
   // game. they swing their symbol to attack and their special is to throw it"); PK and his pencil ("similar attack pattern for PK"); VEJI, the tall red one ("keep him
   // tall so he stands out ... maybe a head taller" than Camila); ESTRELLA, the cat ("make the cat one purple"). Their bodies here, the rest in dress1030. Names: my picks
@@ -15811,9 +15961,9 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
       curl.rotation.z = Math.sin(t * 7) * .12 - sp * .3; curl.rotation.x = Math.sin(t * 5.3) * .08; wg.rotation.z = Math.sin(t * (6 + sp * 8)) * (.05 + sp * .08); mo.scale.y = 1 + Math.sin(t * 4) * .12;
       const h = Math.abs(Math.sin(t * 6.5)); bot.scale.set(1 + (1 - h) * .05, 1 - (1 - h) * .06, 1 + (1 - h) * .05); });
   } else if (id === "brisa") {   // (remodelled to its drawing, 2026-11-02)
-    const K = M("#1d1f24"), Wh = M("#ffffff"), Cy = M("#00c8ff"), Li = M(BEP_LIME);
+    const K = M("#1d1f24"), Wh = M("#ffffff"), Cy = M("#ff3a8c"), Li = M(BEP_LIME);   // (Cy: her colour, magenta since 2026-11-08)
     r.arms.forEach(a => { a.mesh.visible = false; }); r.hands.forEach(h => hideKids(h)); r.torso.mesh.visible = false;
-    const hd = new THREE.Group(); r.head.add(hd);   // a round cyan head, two broad leaf ears in a bow, big round eyes, no mouth to see
+    const hd = new THREE.Group(); r.head.add(hd);   // a round magenta head, two broad leaf ears in a bow, big round eyes, no mouth to see
     hd.add(P(new THREE.SphereGeometry(.31, 22, 16), Cy));
     const ears = [-1, 1].map(s => { const g = new THREE.Group(); pos(g, -.02, .24, s * .1); g.rotation.x = s * .62; hd.add(g);
       g.add(pos(P(new THREE.SphereGeometry(.14, 14, 10).scale(.3, 1.9, 1), Cy), 0, .25, 0)); const tip = P(new THREE.ConeGeometry(.06, .16, 8).scale(.3, 1, 1), Cy); pos(tip, 0, .55, 0); g.add(tip); return g; });
@@ -15824,14 +15974,14 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
     const mo = P(new THREE.SphereGeometry(.06, 10, 8).scale(.4, 1.2, 1), Wh); pos(mo, .23, .3, 0); bod.add(mo);
     post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
     const wg = new THREE.Group(); pos(wg, 0, -.24, 0); hd.add(wg);   // the long cape of her wings, from under her chin nearly to her feet, parted in front, ragged at the hem
-    cloakOf(r, wg, { top: 0, len: .6, rad: v => easePts([[0, .35], [.35, .36], [.7, .3], [1, .17]], v), gap: v => .14 + .85 * (1 - v), col: "#00c8ff", hem: .045, hemN: 8 });
+    cloakOf(r, wg, { top: 0, len: .6, rad: v => easePts([[0, .35], [.35, .36], [.7, .3], [1, .17]], v), gap: v => .14 + .85 * (1 - v), col: "#ff3a8c", hem: .045, hemN: 8 });
     post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0, t = time, air = p && !p.onGround;   // (a breeze: the cape trails and flutters as she goes, lifts as she jumps; the ears sway like leaves)
       wg.rotation.z = sp * .35 + (air ? .2 : 0) + Math.sin(t * (3 + sp * 9)) * (.03 + sp * .07); const f = 1 + sp * .08 + Math.sin(t * 3.4) * .03; wg.scale.set(f, 1, f);
       ears.forEach((g, i) => { g.rotation.z = Math.sin(t * 2.4 + i * 1.3) * .12 - sp * .25; }); });
   } else if (id === "flora") {   // (remodelled to her drawing, 2026-11-02)
-    const K = M("#1d1f24"), Wh = M("#ffffff"), Pk = M("#ff3a8c"), PkD = M("#d4126a"), Mo = M("#9e0c48"), Li = M(BEP_LIME);
+    const K = M("#1d1f24"), Wh = M("#ffffff"), Pk = M("#00c8ff"), PkD = M("#0a8fd0"), Mo = M("#0b3f73"), Li = M(BEP_LIME);   // (Pk: her colour, blue since 2026-11-08; PkD its darker; Mo the inside of her mouth)
     r.arms.forEach(a => { a.mesh.visible = false; }); r.hands.forEach(h => hideKids(h)); r.torso.mesh.visible = false;
-    const hd = new THREE.Group(); r.head.add(hd);   // a pink dome of a head, a crown of petals, sleepy eyes; the great cloak of her wings hangs from it
+    const hd = new THREE.Group(); r.head.add(hd);   // a blue dome of a head, a crown of petals, sleepy eyes; the great cloak of her wings hangs from it
     hd.add(P(new THREE.SphereGeometry(.34, 22, 16).scale(1, 1.05, 1.08), Pk));
     const crown = new THREE.Group(); pos(crown, -.02, .33, 0); hd.add(crown);
     [[0, 0, .3, PkD], [-.6, .25, .26, Pk], [.6, .25, .26, Pk], [-1.1, .2, .22, Pk], [1.1, .2, .22, Pk]].forEach(([rx, rz, h, m]) => { const pe = P(new THREE.SphereGeometry(.07, 10, 8).scale(1, h / .14, .55), m); pe.rotation.set(rx, 0, -.15 + rz * .3); pos(pe, 0, h * .45, Math.sin(rx) * .06); crown.add(pe); });
@@ -15843,15 +15993,28 @@ function dressNew(r, id, post, { M, P, pos, hideKids }) {
     bod.add(P(new THREE.LatheGeometry([[0, -.18], [.3, -.16], [.4, -.02], [.42, .16], [.36, .34], [.24, .46], [0, .5]].map(([x, y]) => new THREE.Vector2(x, y)), 22), Li));
     bod.add(pos(P(new THREE.SphereGeometry(.27, 16, 12).scale(.38, 1.1, 1), Wh), .35, .14, 0));
     post.push(() => { const p = r.torso.pts; bod.position.copy(p[1]); bod.rotation.z = -Math.atan2(p[4].x - p[1].x, p[4].y - p[1].y); });
+    r.__basketAt = [.42, -.16, 0];   // (the basket, hers since 2026-11-08: held up in front of her belly, her hands under the cloak, healHold)
     const cloak = new THREE.Group(); pos(cloak, 0, .02, 0); hd.add(cloak);   // the cloak of her wings: one great bell from her head nearly to the ground, parted in front in an A (narrow at her mouth, wide at the hem)
     { const RP = [[0, .5], [.22, .58], [.48, .57], [.72, .47], [.9, .34], [1, .27]], rad = v => { for (let i = 1; i < RP.length; i++) if (v <= RP[i][0]) { const [a, ra] = RP[i - 1], [b, rb] = RP[i], u = (v - a) / (b - a); return ra + (rb - ra) * u * u * (3 - 2 * u); } return .27; };
       const gap = v => .2 + .85 * (1 - v), at = (u, v) => { const g = gap(v), a = g + u * (Math.PI * 2 - 2 * g), rr = rad(v); return [Math.cos(a) * rr, -.94 + v * .98, Math.sin(a) * rr * 1.05]; };
       const cg = bellSheet(44, 16, at);
-      const MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }; cloak.add(P(cg, MX("#ff3a8c", { side: THREE.DoubleSide })));
+      const MX = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }; cloak.add(P(cg, MX("#00c8ff", { side: THREE.DoubleSide })));
       for (let k = 0; k < 9; k++) { const u = .08 + k * .105, g = gap(0), a = g + u * (Math.PI * 2 - 2 * g), c = P(new THREE.ConeGeometry(.05, .15, 6).rotateZ(Math.PI), Pk); pos(c, Math.cos(a) * .47, -.98, Math.sin(a) * .49); cloak.add(c); } }   // (ragged at the hem)
     post.push(p => { const sp = p ? Math.min(1, Math.abs(p.vx || 0) / 300) : 0, t = time;   // (the cloak sways with her shuffle and flares as she hurries, settles when she stops; the crown wobbles; the mouth breathes)
       cloak.rotation.z = sp * .22 + Math.sin(t * (2.2 + sp * 6)) * (.03 + sp * .06); cloak.rotation.x = Math.sin(t * 1.7) * .03; const f = 1 + sp * .1 + Math.sin(t * 2.2) * .02; cloak.scale.set(f, 1, f);
       crown.rotation.x = Math.sin(t * 2.6) * .06; crown.rotation.z = Math.sin(t * 1.9) * .05 + sp * .1; mo.scale.y = 1 + Math.sin(t * 1.6) * .08; });
+    // her wings spread (the user, 2026-11-08: "when flora blocks, she should open her wings wide and hold them in front of the other buddies"): out of the cloak, round from her back to in front
+    // of her and taller than she is, feathered at the hem; the cloak away while they're out. Blocking, or wingT (a gust off them: her parry, wingGust; the team's attack, duoTick)
+    const MXw = (col, x) => { const m = U.toonT(col, x); r.mats.push(m); return m; }, wingM = MXw("#00c8ff", { side: THREE.DoubleSide });
+    const bandM = MXw("#0a8fd0", { side: THREE.DoubleSide }), wings = [-1, 1].map(sd => { const g = new THREE.Group(); g.visible = false; hd.add(g);
+      const at = band => (u, v) => { const ph = Math.PI * (.9 - .74 * u), rho = (.22 + 1.02 * u) * (1 + .08 * Math.sin(Math.PI * v)) + (band ? .012 : 0), yt = -.1 + .92 * Math.sin(Math.PI * Math.min(1, u / .92) * .96),
+        yb0 = -.74 + .62 * Math.pow(u, 1.6), yb = yb0 + .1 * Math.abs(Math.sin(u * Math.PI * 5.5)) * (1 - .4 * u), top = band ? yb0 + (yt - yb0) * .45 : yt;
+        return [Math.cos(ph) * rho, yb + (top - yb) * v, sd * Math.sin(ph) * rho * 1.05]; };   // (u: from her back out to its tip, up over the wrist and down to a point · v: its hem, scalloped like feathers, up to its top. band: the darker flight feathers along the hem)
+      g.add(P(bellSheet(30, 12, at(false)), wingM)); g.add(P(bellSheet(30, 6, at(true)), bandM));
+      return g; });
+    let wk = 0, wAt = null; post.push(p => { const dt = Math.min(.05, Math.max(0, time - (wAt ?? time))); wAt = time; if (p && p.wingT > 0) p.wingT = Math.max(0, p.wingT - dt);
+      const on = !!p && (!!p.block || p.wingT > 0); wk = approach(wk, on ? 1 : 0, dt * (on ? 7 : 5)); const e = wk * wk * (3 - 2 * wk), fl = on ? Math.sin(time * 9) * .05 : 0;   // (opening out, folding back; a flutter held open)
+      cloak.visible = e < .5; wings.forEach((g, i) => { g.visible = e > .02; g.scale.set(.5 + .5 * e, .55 + .45 * e, .2 + .8 * e); g.rotation.x = (i ? -1 : 1) * fl; }); });
     }
 }
 // Bon: sat on Bin's clock, bobbing; out flying (glow kind "bon", set by bonThrow): wherever the throw has him (r.bonFly: world units), turning over and over
@@ -16625,9 +16788,9 @@ function meetJoin(M) {                              // it falls in behind you (n
   const s = M.st; M.phase = "done"; s.wave = 0; s.pinv = 0; s.sit = 0; s.sitGround = false; if (s.chair) { s.chair = false; s.seatLift = 0; s.z = 0; } if (M === meet) meet = { ...M, st: null, b: null }; else arrive = arrive.filter(m => m !== M);   // (the world's two: off the list)
   if (M.kind === "ally") {
     if (!M.own) noteBud(M.A);                       // (found: the hubs' bell calls it to you anywhere from now on; the world's own aren't, as ever)
-    if (teamAsks(M.A)) teamChoose({ name: M.A.name, kind: allyMany(M.A) ? "BERRY BUDDIES" : "BERRY BUDDY", A: M.A, r: M.r, st: s, keep: () => allyJoin(M.A, M.r, s, true, M.crew),
+    if (teamAsks(M.A)) teamChoose({ name: M.A.name, kind: allyMany(M.A) ? "BERRY BUDDIES" : "BERRY BUDDY", A: M.A, r: M.r, st: s, keep: () => { allyJoin(M.A, M.r, s, true, M.crew); joinSay(M.A, s, M.r); },
       home: () => [{ st: s, r: M.r }, ...(M.crew || [])].forEach(m => strays.push({ st: m.st, r: m.r, dir: s.x < player.x ? -1 : 1, t: 0 })) });
-    else allyJoin(M.A, M.r, s, true, M.crew);
+    else { allyJoin(M.A, M.r, s, true, M.crew); joinSay(M.A, s, M.r); }
     if (story) writeSave(); return; }
   const t = { w: M.w, sp: M.sp, r: M.r }; if (!M.own) noteCat(M.w, M.sp); const C = petDef(M.sp, M.w);
   if (!tamed) petAdd(t, s, false);
@@ -16644,6 +16807,12 @@ function allyRoom() {                              // into a room: this world's 
   for (let k = 0; k < 60 && at === undefined && (!solidAt(x) || shoreX(x) !== x); k++) x = clamp(x + (k % 2 ? 1 : -1) * 40 * (k + 1), 200, WORLD - 200);   // (on dry ground: not the cove's water)
   const st = makeState(x, r); Object.assign(st, { y: groundAt(x) ?? GROUND, vy: 0, onGround: true, face: Math.sign(player.x - x) || -1 });
   allyHere = { A, r, st, t: 0, said: false, full: false, waveT: 0, crew: crewOf(A, x, st.y) }; r.root.visible = r.shadow.visible = true;
+}
+let joinSayAt = 0;
+function joinSay(A, st, r) {                         // (meetJoin) a buddy with a line of its own for it (sayHi) says it as it falls in: Brisa's and Flora's (the user, 2026-11-08: "when brisa joins your team, she'll say,
+  if (!A || !A.sayHi || !A.hi || !st) return;       // "where have you been? it's been almost a week without you girls!"" · "when flora joins, he'll say, "finally! let's go!""). Two at once: one after the other
+  const now = performance.now(), wait = Math.max(0, joinSayAt - now), ms = clamp(1400 + A.hi.length * 45, 2000, 4200); joinSayAt = now + wait + ms;
+  setTimeout(() => { if (mode !== "play" || !st.rig) return; popText(st.x, st.y - ((r && r.heightPx) || 110) * 1.3 - 20, A.hi, ms); SFX.buddy(A.id, "hi"); st.wave = Math.max(st.wave || 0, 1); }, wait);
 }
 function allyJoin(A, r, st, quiet, crew) {         // it's with you now
   if (buddyAt.stay) delete buddyAt.stay[A.id];     // (one that waited at a rest stop: free to wander again once it's left you)
@@ -16670,7 +16839,7 @@ function allyLeave(msg, a = allies[0]) {           // it heads home: off out of 
 // stay in the level. but new ones that you find can be called up to any level"; asked: the world's berry buddy and its cat (or dog); "the two buddies that start the level
 // can only play with you in that level. but the ones you find on your own can be called from hubs to join you in any other level"). Into a world: its two join you
 // (teamFresh); out of it: the team stays behind. One you found (found fighting): the hub's bell-ringer calls it to you anywhere after
-const WORLD_DUO = { 0: ["stilt", "rink"] };   // (its third, Estrella, met fighting in the next room, gone again 2026-11-03: two buddies only)   // (a world's own two berry buddies: the woods' healer and its fighter, once the pets stopped being partners, 2026-11-02; Rink the fighter, with the fire, not Burr: the user, 2026-11-02)
+const WORLD_DUO = { 0: ["flora", "brisa"] };   // (Flora the healer, in the beach's chair; Brisa the fighter, at it on the shelf: the user, 2026-11-08 "flora and brisa will become the new opening buddies and the ones native to berry forest")   // (its third, Estrella, met fighting in the next room, gone again 2026-11-03: two buddies only)   // (a world's own two berry buddies: the woods' healer and its fighter, once the pets stopped being partners, 2026-11-02; Rink the fighter, with the fire, not Burr: the user, 2026-11-02)
 const worldPair = w => { const D = WORLD_DUO[w], A = D ? ALLIES.find(a => a.id === D[0]) || null : ALLIES.find(a => a.w === w && (!(a.id in BUDDY_ONLY) || BUDDY_ONLY[a.id] === w)) || null;
   return { A, A2: D ? ALLIES.find(a => a.id === D[1]) || null : null, A3: D && D[2] ? ALLIES.find(a => a.id === D[2]) || null : null, sp: petDef("cat", w) ? "cat" : petDef("dog", w) ? "dog" : null }; };
 let teamFresh = false;
@@ -16845,7 +17014,7 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
   if (s.wave > 0 && (ally.waveT -= dt) <= 0) s.wave = 0;
   ally.atkCd -= dt; ally.hopT -= dt;
   if (towerStep(s, dt, ally) || hugWith(s, dt) || climbWith(s, dt)) { ejLook(s, dt); crewStep(ally, dt, false); return; }   // (towerStep: C9, sent up a lookout to its button, 2026-11-04)   // (the group hug: in to you; up a climb after you)
-  s.ownEl = budFireO(ally) ? "fire" : BUD_OWN[A.id] === "zap" && !archOfO(ally) ? "zap" : null;   // (its own power, on its every blow: partHitFoe)
+  s.ownEl = budFireO(ally) ? "fire" : BUD_OWN[A.id] === "zap" ? "zap" : null;   // (its own power, on its every blow: partHitFoe)   // (Stilt's lightning, a monk now his basket's Flora's: an archetype of his own doesn't take it off him, 2026-11-08)
   s.blkR = !!blkRank(ally) && partDefender() && partDefender().a === ally;   // (the blocker in front: its guard a deep squat, charkit, 2026-11-04 "make stilt and any other blocker's stance more squatted so it's obvious what they're doing")
   const SET = setOf(r.spec), busy = partHuman(ally, s, dt, { set: SET, sp: KIT.BUDDY_SP[A.lead || A.id] || (SET.charge || [])[2], plain: (KIT.BUDDY_PLAIN || {})[A.lead || A.id], shoot: A.shoot, col: A.col, crew: ally.crew,
     voice: (sp, i) => { if (sp) SFX.buddy(A.id, "sp"); else if (i === 0 && Math.random() < .35) SFX.buddy(A.id, "atk"); } });   // (its voice: into a special always, a string now and then)
@@ -17446,7 +17615,7 @@ function addHz(h) {
 const AUTOBLK = { see: 320, reach: 460, T: .7 };   // (how near you a shot is when it's seen to · how far off your blocker can be and still get there · its guard up at most this long)
 function autoBlock(h, p) {                          // two of every three seen to: the blocker off in between to take it (abStep), caught on its shield there (abCatch)
   const D = partDefender(); if (!D || D.kind !== "ally" || !blkRank(D.a)) return false; const q = D.q;
-  if (q.worn || q.post || q.climb || q.zip || q.crawl || q.sit || q.chair || !q.onGround || q.atkKind || Math.abs(q.x - p.x) > AUTOBLK.reach || Math.abs(q.y - p.y) > 60) return false;
+  if (q.worn || q.post || q.climb || q.zip || q.crawl || q.sit || q.chair || q.duo || !q.onGround || q.atkKind || Math.abs(q.x - p.x) > AUTOBLK.reach || Math.abs(q.y - p.y) > 60) return false;
   q.abN = (q.abN || 0) + 1; if (q.abN % 3 === 0) return false;   // (the third: through)
   const d = Math.sign(h.x - p.x) || p.face; q.abT = AUTOBLK.T; q.abFace = d; q.abX = clamp(p.x + d * 46, 30, WORLD - 30); q.block = true; h.abBy = q;
   return true;
@@ -28347,7 +28516,7 @@ function updateBaddy(b, dt) {
   else if (b.sad) { if ((b.onGround || fly) && b.hurtT <= 0) updateSad(b, dt); else if (b.onGround) b.vx = approach(b.vx, 0, 900 * dt); }   // a sad berry never fights
   else if (b.atk) {
     b.atkT += dt;
-    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= AW) { b.atk = "go"; b.atkT = 0; b.sq = .24; b.sqv = 0; hzOwner = b; A.start(b); hzOwner = null; } }
+    if (b.atk === "wind") { b.vx = approach(b.vx, 0, 1600 * dt); if (b.atkT >= AW) { b.atk = "go"; b.atkT = 0; b.gritN = 0; b.sq = .24; b.sqv = 0; hzOwner = b; A.start(b); hzOwner = null; } }
     else if (b.atk === "go") { if (A.land ? (b.onGround && b.atkT > .1) || b.atkT > A.go : b.atkT >= A.go) { b.atk = "rest"; b.atkT = 0; if (A.land) { dust(b.x, b.y, 4); if (A.landFx && b.onGround) A.landFx(b); }
       if (!b.combo && BB_COMBO.has(T.atk) && !p.dead && (b.onGround || fly) && Math.abs(p.x - b.x) < T.range + 40 && Math.abs(p.y - b.y) < (T.vReach || 90) && Math.random() < .3 + .1 * (b.smart || 0) + (b.angry ? .15 : 0)) {
         b.combo = true; b.atk = "wind"; b.atkT = AW * .5; b.dir = Math.sign(p.x - b.x) || b.dir; b.sq = -.16; b.sqv = 0; } } }   // you still there: a quick second one, half the wind-up
@@ -28388,7 +28557,7 @@ function updateBaddy(b, dt) {
       if (p.chargeT > .25 || p.tkCharge || p.dizzy > 0) { rush = 1.35; cdRate = Math.max(cdRate, 2); }   // charging up, or seeing stars: it rushes you
     }
     const want = stop ? 0 : b.dir * T.speed * (near ? (b.angry ? 1.6 : melee ? 1.5 * rush : 1.25) : 1);
-    if (!b.dummy && (b.atkCd -= dt * cdRate * (1 + .15 * (b.smart || 0))) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; b.dashed = false; }
+    if (!b.dummy && (b.atkCd -= dt * cdRate * (1 + .15 * (b.smart || 0)) * (p !== player && !b.duel && budAlone(p) ? BUD_PRESS.cd : 1)) <= 0 && near && !hold && Math.abs(dx) < T.range && Math.abs(dy) < (T.vReach || 90)) { b.atk = "wind"; b.atkT = 0; b.sq = -.2; b.sqv = 0; b.vx = 0; b.dashed = false; }
     else if (melee && near && !hold && !stop && !b.dashed && b.onGround && b.atkCd < .3 && Math.abs(dx) > T.range && Math.abs(dx) < T.range + 130 && Math.abs(dy) < 40 && T.move !== "hop" && T.move !== "pogo" && T.move !== "float") {
       b.dashed = true; b.vx = b.dir * Math.max(T.speed * 3, 380); b.vy = -200; b.onGround = false; b.sq = -.18; b.sqv = 0; dust(b.x, b.y, 3, -b.dir); }   // just out of reach: a quick hop in
     else if (T.move === "pogo") { b.vy = -(T.hop || 470); b.vx = want * 1.4; b.onGround = false; b.sq = .28; b.sqv = 0; }   // boing, boing
@@ -28545,7 +28714,7 @@ function stepBack(e, boss) {                         // the step back itself: al
 // the weapon's size is its power now (the user, 2026-11-01: "in terms of damage, we'll use percentages. basic level is 25% and it increases damage as that goes";
 // asked, a power meter: 25 / 50 / 75 / 100%, a blow as it was the 25%, the biggest four times as hard). p.power: the size, 0–3. A partner's blow (partBlow): +1 a size, as it was
 const WPN_K = [1, 2, 3, 6], WKB_K = [1, 1.15, 1.3, 1.75];   // (a blow ×, its knock-back ×, by the weapon's size: the fully grown one twice the one before it (4× the base till the user, 2026-11-04: "the strongest form of the weapons should be noticeably stronger to justify for them getting fatigued"))
-const POWER_PCT = [25, 50, 75, 150]; let partBlow = false, partWeak = false, partBoost = 1, shotNow = false;   // (partWeak: a blow of one they went in with on their own, partAuto)
+const POWER_PCT = [25, 50, 75, 150]; let partBlow = false, partWeak = false, partBoost = 1, shotNow = false, partLone = false;   // (partWeak: a blow of one they went in with on their own, partAuto)
 const wKB = () => partBlow ? 1 : WKB_K[Math.min(3, player.power || 0)];   // (and its blows knock them further, the bigger it is)
 const CAMILA_EXTRA = 1, heroDmg = kind => { const z = player.power || 0; if (kind === "stomp") return 2; if (partBlow) return (partWeak ? 1 + Math.floor(z / 2) : 2 + z) * partBoost;   // (theirs: on your command, 2 + the size; on their own, lighter)
   return (2 + (player.rig && player.rig.id === "camila" ? CAMILA_EXTRA : 0) + (((player.atkT >= 0 && KIT.STRIKES[player.atkKind]) || {}).dmg || 0) + (player.dmgPlusT > time ? player.dmgPlus || 0 : 0) + shotPlus) * WPN_K[Math.min(3, z)] * (1 + GEAR_K * (player.powG || 0)); };   // (+ the blow's own dmg: Rose's charged cartwheels, 2026-10-28; the power-up's ×2 gone, the user, 2026-11-05 "can we remove the power multiplying item?")
@@ -28620,7 +28789,8 @@ function hitBaddy(b, dir, kind) {                   // (ATK power is the weapon'
   b.hp -= heroDmg(kind); if (b.sad) b.sadHits = (b.sadHits || 0) + 1; b.hitT = time;   // (hitT: when it last took a blow: no harm to touch for a moment after, see combat)
   const press = BB_PRESS.has(b.T.atk) && b.atk === "go" && !b.dead, brk = press && pressBreak(b);   // (a barrage or a flurry going: hurt by any blow, stopped only by one from above or a block strike)
   const arm = !popH && (bbArmored(b, kind) || (press && !brk)); if (arm) { b.armorAt = time; SFX.armor(); }   // (a big one in its heavy attack: hurt, but it doesn't flinch, the swing comes on)
-  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; if (!arm) { b.hurtT = (kind === "jab" || kind === "cut" ? .5 : .32) * feelStun(kind, b.hp <= 0); b.atk = null; b.atkCd = Math.max(b.atkCd, 1.1); } if (brk && !b.dead) pressStop(b);
+  b.inv = kind === "punch" || kind === "jab" || kind === "cut" || kind === "slash" ? .1 : .2; b.flash = .12; const lone = partBlow && partLone, grit = !arm && lone && (b.gritN || 0) >= BUD_PRESS.grit && b.hp > 0 && !b.duel; b.gritN = lone ? (b.gritN || 0) + 1 : 0;   // (a buddy on its own at it: two of its blows and it comes on through the next, BUD_PRESS)
+  if (grit) b.atkCd = Math.min(b.atkCd, .1); else if (!arm) { b.hurtT = (kind === "jab" || kind === "cut" ? .5 : .32) * feelStun(kind, b.hp <= 0); b.atk = null; b.atkCd = Math.max(b.atkCd, lone && !b.duel ? BUD_PRESS.rest : 1.1); } if (brk && !b.dead) pressStop(b);
   hitPitch = feelPitch(); if (kind === "stomp") SFX.stomp(); else { SFX.hit(HIT_W[kind] || 1, hitChain(), swordOn()); SFX.bite(swordOn(), HIT_W[kind] || 1); }
   SFX.body(b.h, false, kind === "stomp" ? .7 : HIT_W[kind] || 1); hitPitch = 1;   // (and the sound of it landing on its body)
   const KB = KBT[kind] || [300, -360], up = !b.onGround && b.y < (groundAt(b.x) ?? GROUND) - 12;
@@ -28828,7 +28998,7 @@ function syncBaddy(b, dt) {
   r.root.position.set(X(b.x) + jolt(b), Y(b.y), b.z);
   r.root.scale.set((1 - b.sq * .5) * sw, (1 + b.sq) * sw, (1 - b.sq * .5) * sw);
   if (b.web === undefined) { b.web = 0; if (baddies.includes(b) && !b.dummy) webOn(b); } if (b.webM) { const k = b.webM.scale.x; b.webM.scale.setScalar(k + (1 - k) * Math.min(1, dt * 12)); b.webM.visible = !b.dead; }   // (Glos's roots on it: put on as it first shows, a baddy only, never a bep or anyone you talk to; a hit shakes them)
-  r.yaw.rotation.y = b.yaw;
+  r.yaw.rotation.y = b.yaw + twY(b);   // (twY: spun round in Flora's gust)
   const walking = b.onGround && Math.abs(b.vx) > 15 && !b.atk, ph = b.phase, air = !b.onGround;
   const wind = b.atk === "wind", go = b.atk === "go", hurt = b.hurtT > 0 || b.dead;
   let lean = walking ? .12 : 0;                    // waddle and lean into the walk, rear back to wind up, throw forward on the move
@@ -29321,7 +29491,7 @@ function syncFurnace(e, r, dt = 0) {
   const shudder = e.dead ? .06 : e.atk === "charge" ? .035 : e.atk === "act" ? .02 : 0;
   r.root.position.set(X(e.x) + rand(-shudder, shudder) + jolt(e), Y(e.y), e.z || 0);
   const ks = r.size || 1; r.root.scale.set((1 - e.sq * .5) * swell * ks, (1 + e.sq) * swell * ks, (1 - e.sq * .5) * swell * ks);
-  r.yaw.rotation.y = e.yaw;
+  r.yaw.rotation.y = e.yaw + twY(e);   // (twY: spun round in Flora's gust)
   const walking = e.onGround && Math.abs(e.vx) > 20 && e.windup <= 0, ph = e.phase;
   const fw = Math.sign(e.vx) * e.dir || 1, w = walking ? clamp(Math.abs(e.vx) / 95, .5, 1) : 0;
   const air = !e.onGround, rising = air && e.vy < 0, crouch = e.windup > 0, charge = e.atk === "charge", act = e.atk === "act", hurt = e.hurtT > 0 || e.dead;
