@@ -8931,14 +8931,14 @@ function twrSend(p, L) {                              // (chgJump's, at the look
   const q = twrOf(); if (!q || itemGot(TWR_K.key)) return false;
   const busy = i => !!twrSt.who[i] || allies.some(a => a.st.twr && a.st.twr.i === i), mine = p.press ? p.press.i : q.towers.map((t, i) => i).sort((a, b) => Math.abs(twrAt(q, a).x - p.x) - Math.abs(twrAt(q, b).x - p.x))[0];
   const i = q.towers.map((t, k) => k).find(k => k !== mine && !busy(k)); if (i === undefined) return false;
-  const T = twrAt(q, i), B = L.filter(P => P.kind === "ally" && P.q && !P.q.twr && !P.q.climb && !P.q.zipR).sort((a, b) => Math.abs(a.q.x - T.L.x) - Math.abs(b.q.x - T.L.x))[0]; if (!B || !T.L) return false;
+  const T = twrAt(q, i), B = L.filter(P => P.kind === "ally" && P.q && !P.q.twr && !P.q.climb && !P.q.zipR).sort((a, b) => (!!a.q.worn - !!b.q.worn) || Math.abs(a.q.x - T.L.x) - Math.abs(b.q.x - T.L.x))[0]; if (!B || !T.L) return false;
   B.q.twr = { i, ph: "run", t: 0 }; SFX.jump(); p.wave = Math.max(p.wave || 0, .3); popText(B.q.x, B.q.y - 120, "ON IT!", 900); return true;
 }
 function towerStep(s, dt, ally) {                    // (updateAllyOne's, first: sent up a lookout. Over to its ladder, a hop onto it and up it, along its deck to the button, its hand on it)
   const W = s.twr; if (!W) return false; const q = twrOf(); if (!q || W.s !== undefined && W.s !== stage) { s.twr = null; s.climb = null; s.pointKind = null; return false; } W.s = stage;
   const T = twrAt(q, W.i), L = T.L, f = Math.sign(T.x - L.x) || 1; W.t += dt; Object.assign(s, { atkKind: null, atkT: -1, block: false, defOn: false, pinv: Math.max(s.pinv || 0, .2) });
   if (W.ph === "run") { const d = L.x - s.x; s.vy = Math.min(s.vy + GRAV * dt, 1100);
-    if (s.onGround) { s.face = Math.sign(d) || s.face; s.vx = Math.sign(d) * Math.min(TWR_K.run, Math.abs(d) / dt); s.sprint = Math.abs(d) > 200; }
+    if (s.onGround) { s.face = Math.sign(d) || s.face; s.vx = Math.sign(d) * Math.min(TWR_K.run * (s.worn ? .55 : 1), Math.abs(d) / dt); s.sprint = Math.abs(d) > 200; }
     moveBody(s, dt, 14); if (Math.abs(L.x - s.x) < 6 && s.onGround) { W.ph = "hop"; W.t = 0; W.y0 = s.y; W.x0 = s.x; dust(s.x, s.y, 3, 0); SFX.jump(); } return true; }
   if (W.ph === "hop") { const u = Math.min(1, W.t / .32); s.x = lerp(W.x0, L.x, u); s.y = W.y0 - 80 * u - Math.sin(Math.PI * u) * 40; Object.assign(s, { vx: 0, vy: 0, onGround: false, plat: null, sq: .2 });
     if (u >= 1) { W.ph = "climb"; s.climbPh = 0; } return true; }
@@ -12658,7 +12658,7 @@ function bcFire(p, M) {                               // the button let go: the 
 // L+△, the toss (the user, 2026-11-05: "for hold L and pressing x, first, let's change this to L + triangle. then make the toss go a little further, almost like tossing your buddy as a grenade ... when tossing the character in general, make sure they can go high enough to go over a big berry. tossing can also be used to get a buddy to do something across a platform or start a fight before you get there"): your attacker thrown over the shield and over whatever's in front, at the one
 // past it (the one behind a riot shield, not its front), high enough to clear a big one; onto what that one stands on, a platform too. Nobody there: on ahead, onto whatever's
 // there to land on. Held: further each level. Landed by one, it fights it, and the ones round it, then comes back to you (focusSend)
-const TOSS = { reach: 620, lv: 140, far: 360, farLv: 100, h: 320, clear: 90, T: .72 };   // (how far it looks for one, + each level · with nobody, how far on · its arc at least · over the tallest in the way by · its time)
+const TOSS = { reach: 620, lv: 140, far: 360, farLv: 100, h: 200, clear: 90, g: 1.15, lift: .16, hold: .12, land: .16, shock: 100 };   // (how far it looks for one, + each level · with nobody, how far on · its arc at least · over the tallest in the way by · its gravity against GRAV·WEIGHT, its time from that · up onto your hands at least this long · held up there, you sagging under it · crouched where it lands · the ones this near it reel)   // (2026-11-08, the user: "the buddy over head toss doesn't have a lot of weight to it": it was off from where it stood with your arm waved, 320 up, off the top of the screen, .72 s)
 // L+△ held, the dive (it was ✕ held till 2026-11-05's batch, and came back here: the user, 2026-11-05 "L+triangle does the toss like a grenade but it's the charge that was missing. we already had it before, when it was L+X, that the charge would
 // launch both heros and the blocker would finish with an air attack slam"): off the blocker's back and down on the nearest you're facing. 1 your attacker, 2 it then you, 3 both then your blocker's own slam
 function bcDive(p, M) {
@@ -12681,9 +12681,10 @@ function bcToss(p, A, Dq, dir, lv) {
     const ly = landBelow(x1, q.y - 300) ?? q.y; L = { y: ly, plat: PLATFORMS.find(P => x1 >= P.x && x1 <= P.x + P.w && Math.abs(P.y - ly) < 2) || null }; }
   x1 = clamp(x1, 40, WORLD - 40);
   let top = 0; for (const f of partFoesAll()) if ((f.x - q.x) * dir > 0 && (f.x - x1) * dir < 20) top = Math.max(top, q.y - (f.y - eH(f)));   // (over the tallest in the way: a big one too)
-  const h = Math.max(TOSS.h, top + TOSS.clear, q.y - L.y + 140);
-  p.wave = .45; SFX.whoosh(); if (lv) { SFX.release(lv); aura.flare = .3; aura.lv = lv; }
-  bcSet(A, { k: "toss", dir, T: TOSS.T + .05 * lv, h, x1, y1: L.y, plat: L.plat, foe: e, fire: budOwn(A, "fire") && !archOfP(A) });
+  const ay = Math.min(q.y - Math.max(TOSS.h, top + TOSS.clear), L.y - 140);   // (its arc's top: over the tallest in the way, or over where it lands)
+  SFX.huff(); if (lv) { SFX.release(lv); aura.flare = .3; aura.lv = lv; }
+  p.bcGo = { k: "toss", t: 0, dir, ph: "up", q, mv: true };   // (you: arms up for it, it on your hands over your head, the heave: heroTossTick)
+  bcSet(A, { k: "toss", dir, ph: "lift", ay, x1, y1: L.y, plat: L.plat, foe: e, fire: budOwn(A, "fire") && !archOfP(A) });
 }
 // L+✕, the launch (the user, 2026-11-05: "it will be an enhance jump/launch ability. pressing it will have the player's character lanuch the attacker up in the air while they're behind the attacker. the attacker will do a brief air combo on any creatures that are in the air ... or, it'll just launch them up to another platform ... when a player presses it successively, it'll first throw the buddy attacker. then the blocker will throw up the player and blocking will stop as the player is now in the air"; "if charged, step one launches just the buddy attacker but higher, releasing on two, high launches buddy attacker, then player, then blocking ends. launching on 3, same two launches happen but then the blocker does a high jump on their own"): a tap, your attacker onto your hands and heaved straight up: at
 // the top, a quick air combo on what's flying up there; none, onto the platform over it if there's one; none, down hard on the nearest on the ground ahead; none, back down.
@@ -12691,7 +12692,7 @@ function bcToss(p, A, Dq, dir, lv) {
 // blocker's own high jump, the same at the top as your attacker's. No attacker along: you're the one boosted; no one to boost you: you jump it yourself.
 // Since 2026-11-06 each one goes up off cupped hands (heroBoost, boostStep): you turned round to your attacker, crouched, hands cupped, it up onto them and heaved up; the second, your
 // blocker turned round to you to do it while your attacker's still up, or your attacker back down and round in front of you to; a held one's 2, your blocker turned round as you heave
-const LAUNCH = { hi: 380, hiC: 540, heroHi: 330, heroHiC: 470, heroK: 1.5, gap: .3, again: 2.4, air: 300, plat: 240 };   // (heroK: your fall's heavier than GRAV·WEIGHT on the way up, measured: 1255 px/s took you 221 px, not 330)   // (your attacker's height, charged · yours · between them · a second tap this soon after is the second step · how far out it looks for a flyer, a platform)
+const LAUNCH = { hi: 180, hiC: 230, look: 200, heroHi: 330, heroHiC: 470, heroK: 1.5, gap: .3, again: 2.4, air: 300, plat: 240 };   // (hi and hiC were 380 and 540 till 2026-11-08, the user: "the L + X lift up with hands is great and looks good but the first buddy goes up way too high when done": off the top of the screen (a room shows ~320 px over the ground, and its height's its feet's). 180 keeps its head in the picture, 230 charged a little over; look: how much higher than that it still looks for a flyer or a platform, as far as it did)   // (heroK: your fall's heavier than GRAV·WEIGHT on the way up, measured: 1255 px/s took you 221 px, not 330)   // (your attacker's height, charged · yours · between them · a second tap this soon after is the second step · how far out it looks for a flyer, a platform)
 const BOOST = { set: .12, onto: .24, stand: .08, heave: .12, rec: .24, hop: .2, ride: .06, gap: 64, far: 420, hand: [.21, .32] };   // a boost up (2026-11-06): into the crouch · the hop onto the hands · stood on them a beat · the heave · back up out of it · your hop onto a buddy's hands · on them a beat · how far in front of you a buddy does it · how far off your attacker still comes back from to do it · the cupped hands, out in front and up, by its height
 let boostV = null;
 function boostHand(q, fc) {                           // where the foot goes: its cupped hands, between the two as its rig has them now (out in front and toward you, as it's turned: its depth too); no rig hands, by its height
@@ -12715,7 +12716,7 @@ function launchBooster(p, A, D) {                     // the second step's: your
   return ok ? Ap : D || null;
 }
 function budLaunch(P, dir, hi, delay, self) {        // (self: up on its own, your blocker's jump; else onto your cupped hands first and heaved up)
-  bcSet(P, { k: "leap", launch: true, self, dir, ph: "wait", delay, via: null, hi, fw: 0, Tu: .42, hold: .08, Td: .22, pow: 1.3, aim: 200 });
+  bcSet(P, { k: "leap", launch: true, self, dir, ph: "wait", delay, via: null, hi, reach: hi + LAUNCH.look, fw: 0, Tu: clamp(Math.sqrt(2 * hi / (GRAV * WEIGHT)), .34, .6), hold: .08, Td: .22, pow: 1.3, aim: 200 });   // (Tu: its way up at gravity's pace for that height, 2026-11-08; it was .42 for any)
 }
 function heroBoost(p, A, dir, hi, then) {             // you, the first step: turned round to your attacker, down with your hands cupped; it up onto them, and you heave it up (the user, 2026-11-06: "the girls do it for the first buddy attacker first")
   p.bcGo = { k: "boost", t: 0, dir, fc: Math.sign(A.q.x - p.x) || -dir, ph: "set", Aq: A.q, then, mv: true };
@@ -12765,11 +12766,11 @@ function boostStep(s, B, dt, dir, to, ph) {           // (bcStep) a buddy boosti
 const airFoe = (x, y, r, up) => { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (e.dead || e.gone) continue; const flying = !e.onGround || (e.T && e.T.move === "float"), dx = Math.abs(e.x - x), dy = y - e.y;
     if (!flying || dx > r || dy < (up ? 90 : -140) || dy > (up || 220) || walled(e.x, x)) continue; const d = dx + Math.abs(dy) * .5; if (d < bd) { bd = d; best = e; } } return best; };   // (a flyer, or one knocked up: over it, up to up px; or about its height)
 function launchPlan(s, B) {                          // (bcLeap, at the start of its way up) what's up there for it: a flyer, a platform over it, or nothing
-  const af = airFoe(s.x, s.y, LAUNCH.air, B.hi + 160);
-  if (af) { B.af = af; B.hiT = clamp(s.y - af.y + 20, 160, B.hi + 160); B.px = clamp(af.x - B.dir * 40, 40, WORLD - 40); return; }
-  let P0 = null, pd = 1e9; for (const P of PLATFORMS) { if (P.y > s.y - 70 || P.y < s.y - B.hi + 10) continue; const cx = clamp(s.x + B.dir * 40, P.x + 26, P.x + P.w - 26), d = Math.abs(cx - s.x);
+  const R = B.reach ?? B.hi, af = airFoe(s.x, s.y, LAUNCH.air, R + 160);   // (R: how high it looks, higher than it goes on its own, 2026-11-08)
+  if (af) { B.af = af; B.hiT = clamp(s.y - af.y + 20, 160, R + 160); B.px = clamp(af.x - B.dir * 40, 40, WORLD - 40); return; }
+  let P0 = null, pd = 1e9; for (const P of PLATFORMS) { if (P.y > s.y - 70 || P.y < s.y - R + 10) continue; const cx = clamp(s.x + B.dir * 40, P.x + 26, P.x + P.w - 26), d = Math.abs(cx - s.x);
     if (d > LAUNCH.plat || walled(cx, s.x)) continue; if (d < pd) { pd = d; P0 = P; } }
-  if (P0) { B.toPlat = P0; B.px = clamp(s.x + B.dir * 40, P0.x + 26, P0.x + P0.w - 26); B.hiT = Math.max(B.hi * .8, s.y - P0.y + 100); return; }
+  if (P0) { B.toPlat = P0; B.px = clamp(s.x + B.dir * 40, P0.x + 26, P0.x + P0.w - 26); B.hiT = Math.max(B.hi * .8, s.y - P0.y + 70); return; }   // (70 over it, 100 till 2026-11-08: "way too high")
   B.px = s.x; B.hiT = B.hi;
 }
 function launchFocus(s) {                         // (off the launch, done up there or down on them) the nearest one about, fought, then back to you (the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting")
@@ -12812,14 +12813,7 @@ function bcStep(o, s, dt) {                           // (partHuman: a buddy's p
     case "rush": { const G = p.bcGo; if (!G || G.k !== "rush") { bcFree(s); return false; }
       s.block = B.role === "D"; s.defOn = false; s.tkDig = B.role === "D" ? .6 : .8; s.sprint = true; s.pinv = Math.max(s.pinv || 0, .15);
       s.vx = clamp((p.x + dir * B.off - s.x) / Math.max(dt, 1 / 120), -2400, 2400); return true; }   // (held at its place in the line, all the way)
-    case "toss": { const u = Math.min(1, B.t / B.T); s.block = false; s.defOn = false; s.pinv = Math.max(s.pinv || 0, .12); kin();
-      s.x = lerp(B.x0, B.x1, u); s.y = budArc(B.y0, B.y1 ?? B.y0, B.h, u); s.rot = dir * TAU * u; s.ball = Math.sin(Math.PI * u) * .9; flungBreak(s, B);   // (2026-11-06: a falling thing's arc, dropping faster than it rose, in place of an even one)
-      if (u >= 1) { s.y = B.y1 ?? B.y0; s.plat = B.plat || null; s.onGround = true; s.vy = 0; bcFree(s); dust(s.x, s.y, 5, 0); SFX.thud();
-        s.bcSolo = time + STAY.max + .5; const c = { type: "tap", up: false, down: false, fwd: false, air: false, fire: !!B.fire };   // (on its own over there: your guard doesn't call it back, bcSoloOn)
-        const P = partnerList().find(Q => Q.q === s), e = bcTgOk(B.foe) ? B.foe : bcFoe(s.x - dir * 80, s.y, dir, 380);
-        if (P && e) { focusSend(P, e); s.tagTxt = "ON IT!"; if (o) o.pcmd = c; }   // (at it, and the ones round it, then back to you: the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting, as opposed to when the player presses R and splits up the team")
-        else if (o) { o.pcmd = c; o.stay = { until: time + STAY.max, gap: STAY.gap[0], lost: 0, fire: !!B.fire, rk: allyRoomKey() }; } return false; }
-      return true; }
+    case "toss": s.block = false; s.defOn = false; s.pinv = Math.max(s.pinv || 0, .12); return bcTossStep(o, s, B, dt, dir, kin, ph);   // (2026-11-08: onto your hands, the heave, the arc, down hard: bcTossStep)
     case "leap": return bcLeap(s, B, dt, dir, kin, ph);
     case "boost": return boostStep(s, B, dt, dir, to, ph);
     case "out": return bcOutStep(s, B, dt, dir, to, ph);
@@ -12827,6 +12821,50 @@ function bcStep(o, s, dt) {                           // (partHuman: a buddy's p
   bcFree(s); return false;
 }
 const bcSoloOn = (o, s) => (s.bcSolo > time && !!(o && (o.stay || o.pact || o.pcmd))) || !!(s.post && s.post.sent && !s.post.back);   // (sent off at one: it fights on there while you keep the guard up, then back to its place by you)
+function bcTossStep(o, s, B, dt, dir, kin, ph) {        // (bcStep) the toss (2026-11-08, the user: "the buddy over head toss doesn't have a lot of weight to it"): up onto your hands over your head, held there a beat as you sag under it, the heave; a lower, heavier arc, one tumble over and out of it feet first; down hard, a moment crouched, then at them
+  const p = player, G = p.bcGo && p.bcGo.k === "toss" && p.bcGo.q === s ? p.bcGo : null;
+  if (B.ph === "lift" || B.ph === "held") { kin(); const h = boostHand(p, dir), hy = h.y + ((s.rig && s.rig.heightPx) || 80) * .12;   // (your hands up over your head: it sat on them, balled up)
+    if (B.z0 === undefined) { B.z0 = s.z || 0; B.Tl = clamp(.14 + Math.abs(h.x - s.x) / 1400, TOSS.lift, .4); }   // (from further off, a longer hop up onto them)
+    if (B.ph === "lift") { const u = Math.min(1, B.t / B.Tl); s.x = lerp(B.x0, h.x, u); s.y = lerp(B.y0, hy, u) - 60 * 4 * u * (1 - u); s.z = lerp(B.z0, h.z + .02, u); s.ball = .9 * u; s.rot = 0;
+      if (u < 1) return true; ph("held"); SFX.huff(); }
+    s.x = h.x; s.y = hy; s.z = h.z + .02; s.ball = .9;
+    if (B.t < TOSS.hold && G) return true;
+    bcTossFly(s, B); return true; }   // (the heave; or you hit meanwhile, it goes anyway)
+  if (B.ph === "fly") { const u = Math.min(1, B.t / B.T); kin();
+    s.x = lerp(B.x0, B.x1, u); s.y = budArc(B.y0, B.y1, B.h, u); s.z = lerp(B.zh, B.z0, Math.min(1, u * 2)); s.rot = dir * TAU * sstep(0, .82, u); s.ball = .9 * (1 - sstep(.72, .94, u)); flungBreak(s, B);   // (its own gravity's arc, budArc · one tumble over, done before it's down, and opened out to land feet first)
+    if (u >= 1) bcTossLand(s, B, dir); return true; }
+  s.vx = 0; s.vy = 0; s.y = B.y1; s.onGround = true; s.plat = B.plat || null; s.tkDig = Math.max(0, 1 - B.t / TOSS.land);   // ("land": crouched a moment under the jolt)
+  if (B.t < TOSS.land) return true;
+  bcFree(s); bcTossDone(o, s, B, dir); return false;
+}
+function bcTossFly(s, B) {                             // the heave: off your hands on its arc, at its gravity's pace (TOSS.g), so the lower its top the sooner it's down
+  const y0 = s.y, A = Math.min(B.ay, y0 - 90), g = GRAV * WEIGHT * TOSS.g;   // (up off your hands at least 90: thrown from up on a log over its ground, it went near flat)
+  B.h = Math.max(60, Math.min(y0, B.y1) - A + Math.abs(y0 - B.y1) / 2);   // (budArc's bump for that top)
+  B.T = clamp((Math.sqrt(2 * Math.max(1, y0 - A)) + Math.sqrt(2 * Math.max(1, B.y1 - A) / BUD_FALL)) / Math.sqrt(g), .45, 1.1);   // (up to it at g, down from it at g·BUD_FALL)
+  B.ph = "fly"; B.t = 0; B.x0 = s.x; B.y0 = y0; B.zh = s.z || 0;
+  hitstop = Math.max(hitstop, .045); shake = Math.max(shake, 1.5); SFX.whoosh(); SFX.toss();   // (a hitch on the heave)
+  const p = player, G = p && p.bcGo; if (G && G.k === "toss" && G.q === s) { G.ph = "go"; G.t = 0; p.sq = .16; p.sqv = 0; p.vx = G.dir * 280; }   // (you: up out of the sag, a step on after it)
+}
+function bcTossLand(s, B, dir) {                       // down hard: squashed a moment, the ground shaking, dust out both ways, the ones by it reeling a moment
+  s.x = B.x1; s.y = B.y1; s.vx = 0; s.vy = 0; s.onGround = true; s.plat = B.plat || null; s.rot = 0; s.ball = 0; s.sq = -.42; s.sqv = 0;
+  dust(s.x - 16, s.y, 6, -1); dust(s.x + 16, s.y, 6, 1); SFX.thud(); SFX.stomp(); shake = Math.max(shake, 3.5); hitstop = Math.max(hitstop, .05); rumble(90, .5);
+  for (const e of partFoesAll()) { const dx = e.x - s.x; if (e === enemy || e.duel || e.dead || e.gone || Math.abs(dx) > TOSS.shock + eHW(e) * .5 || Math.abs(e.y - s.y) > 30 || walled(e.x, s.x)) continue; offBalance(e, Math.sign(dx) || dir, .45); e.vx *= .35; }   // (the ones on its ground by it: reeling a moment, a blow free for it · only a step back: the full shove took them 100 px off, out of its reach)
+  B.ph = "land"; B.t = 0;
+}
+function bcTossDone(o, s, B, dir) {                    // (bcTossStep, up out of its crouch) on its own over there: at its one and the ones round it, then back to you; nobody there, it stays put a while
+  s.bcSolo = time + STAY.max + .5; const c = { type: "tap", up: false, down: false, fwd: false, air: false, fire: !!B.fire };   // (on its own over there: your guard doesn't call it back, bcSoloOn)
+  const P = partnerList().find(Q => Q.q === s), e = bcTgOk(B.foe) ? B.foe : bcFoe(s.x - dir * 80, s.y, dir, 380);
+  if (P && e) { focusSend(P, e); s.tagTxt = "ON IT!"; if (o) o.pcmd = c; }   // (at it, and the ones round it, then back to you: the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting, as opposed to when the player presses R and splits up the team")
+  else if (o) { o.pcmd = c; o.stay = { until: time + STAY.max, gap: STAY.gap[0], lost: 0, fire: !!B.fire, rk: allyRoomKey() }; }
+}
+function heroTossTick(p, G, dt) {                     // (bcGoTick) you in the toss: arms up for it, sagging under it on your hands, the heave, a step on after it
+  const q = G.q, B = q && q.bc && q.bc.k === "toss" ? q.bc : null; p.block = false; p.blockHold = 0; p.tpose = 0;
+  if (G.ph === "up") { p.vx = 0; p.heaveK = Math.min(1, (p.heaveK || 0) + dt / .12);
+    if (B && B.ph === "held") { p.sq = -.16 * Math.min(1, B.t / .08); p.sqv = 0; }   // (its weight on you: down into your knees)
+    if (!B || B.ph === "land" || G.t > 1.2) bcGoEnd(p); return; }   // (off your hands without the heave: your arms down again)
+  p.heaveK = Math.max(0, 1 - G.t / .2); p.vx = approach(p.vx, 0, 1800 * dt);   // ("go": your arms over and down after it)
+  if (G.t >= .26) bcGoEnd(p);
+}
 function bcLeap(s, B, dt, dir, kin, ph) {             // up high (off the blocker's back, if it's there to go off) and down hard on them
   s.block = false; s.defOn = false; s.pinv = Math.max(s.pinv || 0, .12);
   if (B.ph === "wait") { if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); s.tkDig = 1; if (B.t >= B.delay) { s.tkDig = 0; ph(B.launch && !B.self ? "onto" : B.via && B.via.rig && !B.via.worn ? "hop" : "up"); if (B.ph === "up") { SFX.jump(); dust(s.x, s.y, 5, 0); if (B.launch) launchPlan(s, B); } } return true; }
@@ -12868,6 +12906,7 @@ function bcGoTick(p, dt) {                            // (bcInput) your part of 
   if (G.k === "jump") { bcJump(p, G); return; }
   if (G.k === "launch") { heroLaunchTick(p, G, dt); return; }
   if (G.k === "boost") { heroBoostTick(p, G, dt); return; }
+  if (G.k === "toss") { heroTossTick(p, G, dt); return; }
   if (G.k === "out") { bcOutHero(p, G, dt); return; }
   bcGoEnd(p);
 }
@@ -13733,7 +13772,7 @@ const lineGap = k => { const O = lineOrder(), j = O.indexOf(k); if (j < 0) retur
 const lineFront = () => { const O = lineOrder(); return O[0] === "h" ? null : partnerList()[O[0]] || null; };
 const partBtn = [0, 1, 2].map(() => ({ on: false, t: 0, full: false }));   // (the block's, the two attackers')
 let pJumpCue = null, partRoomK = "", partSeen = new Set();   // (pJumpCue: your last jump, for them to jump with you: { t, vy, dbl })
-const partBlocking = () => !teamM && !!player && !player.dead && mode === "play" && (!!player.block || (player.blockHold || 0) > 0 || (player.gbT > 0 && held.block) || !!(player.bcGo && (player.bcGo.k === "boost" || player.bcGo.k === "launch")));   // (yours broken: theirs stays up, 2026-11-01)   // (you down boosting one up, or waiting to be: your blocker's still guarding the front, 2026-11-06)
+const partBlocking = () => !teamM && !!player && !player.dead && mode === "play" && (!!player.block || (player.blockHold || 0) > 0 || (player.gbT > 0 && held.block) || !!(player.bcGo && (player.bcGo.k === "boost" || player.bcGo.k === "launch" || player.bcGo.k === "toss")));   // (yours broken: theirs stays up, 2026-11-01)   // (you down boosting one up, or waiting to be: your blocker's still guarding the front, 2026-11-06; one up on your hands for the toss too, 2026-11-08)
 const partSlot = q => { const L = partnerList(), i = L.findIndex(P => P.q === q); if (i >= 0) return Math.min(i, 2); const j = [pal, pal2].indexOf(q); return j < 0 ? 0 : Math.min(Math.min(L.length, 3) + j, 4); };   // (a buddy: its own place, each of the three. Was Math.min(i, 1): the second and third shared one, walking inside each other. The user, 2026-11-03: "the buddies should all be staggered and not walking and clipping over each other")   // (a pet: the next place free after the buddies, never on one of theirs. The user, 2026-11-02 "the cat joined our team and he was overlapping with the berry buddies")
 const partCount = () => Math.min(partnerList().length, 3) + (pal ? 1 : 0) + (pal2 ? 1 : 0);
 // never in one another, nor in you (the user, 2026-11-04, of the anime mockup's pictures: "in those screenshots it shows a big problem that keeps happening. make sure buddies
@@ -14992,7 +15031,7 @@ function chgHold(s, dt) {                            // (in the partner's own st
   return true;
 }
 function chgJump(p, t, ax) {                         // let go of ↑: they jump (from the ground; up already, a second time, once), and stay where they come down, to fight what comes
-  const L = partAble(); if (!L.length) return; if (twrSend(p, L)) return;   // (C9: one sent up the other lookout instead, 2026-11-04)
+  const L = partAble(); if (twrSend(p, partnerList().filter(P => P.q && !P.q.tcOn && !P.q.tcFly))) return; if (!L.length) return;   // (C9: one sent up the other lookout instead, 2026-11-04; a worn-out one too, 2026-11-08)
   const u = clamp((t - CHG_JUMP.wind) / (CHG_JUMP.full - CHG_JUMP.wind), 0, 1), h = lerp(CHG_JUMP.lo, CHG_JUMP.hi, u), v = Math.sqrt(2 * GRAV * h); let n = 0;
   L.forEach((P, k) => { const q = P.q; if (q.climb || q.zip) return;
     if (q.onGround) q.chgAir = 1; else if (q.chgAir > 0) q.chgAir--; else return;
