@@ -50,7 +50,7 @@ window.BerryRoots = (() => {
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat()), grp = new THREE.Group(); grp.name = "glosRoots"; grp.add(mesh); grp.userData.verts = nV; return grp;
     }
-    return { limb, add, merge, V3 };
+    return { limb, add, merge, V3, mark: () => parts.length, drop: n => parts.splice(n).forEach(g => g.dispose()) };   // (mark, drop: a part made and then thrown away, the random numbers still used up as before)
   }
   function build(THREE, o) {
     const R0 = rng(o.seed | 0), R = (a, b) => a + R0() * (b - a), S = o.S, G0 = o.GROUND, W = o.width, X = x => x * S, Y = y => (G0 - y) * S;
@@ -88,7 +88,7 @@ window.BerryRoots = (() => {
       const cy = ceilAt(x), gy = ground(x), z = R(-4.2, -1.9), top = cy !== null ? Y(cy) + .1 : (gy === null ? 9.5 : Y(gy) + R(9.6, 11)), len = R(2, cy !== null ? 3.2 : 4.2);
       const floor = gy === null ? -99 : Y(gy); if (top - len < floor + 4.8) continue;   // (well above where you walk: not something to climb)
       const k = 6, pts = [], sw = R(-.9, .9); for (let i = 0; i <= k; i++) { const u = i / k; pts.push(V3(X(x) + sw * u * u + Math.sin(u * 4 + n) * .25, top - len * u, z)); }
-      const r0 = R(.12, .22); limb(pts, r0, r0 * .5, n % 2 ? GRNd : GRN, { hand: true }); n++; }
+      const r0 = R(.12, .22), m0 = K.mark(); limb(pts, r0, r0 * .5, n % 2 ? GRNd : GRN, { hand: true }); if (cy === null) K.drop(m0); n++; }   // (only under the earth overhead: with open sky over it there's no canopy to hang from, and it hung there from nothing, the user 2026-11-09 "c3 has a hanging vine when you walk in from the left that isnt connected to anything". Still made and dropped, so the roots after it grow where they did)
 
     // 5. far back: one great arm arching over (half in the haze), on the rows with ground
     if (row !== "A" || R0() < .5) { const x0 = R(200, W * .5), x1 = x0 + R(800, 1400), z = R(-8.5, -7), g0 = ground(x0), g1 = ground(Math.min(W - 40, x1));

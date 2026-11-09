@@ -345,7 +345,7 @@ window.BerryClayRoom = (function () {
     const oF = Object.assign({}, o, { lod: (o.lod ?? 1) * .55 });   // (far back, half the size on screen: fewer cuts)
     const bigBush = (x, y, z, i, s, far = false) => { const k = i % 4; stamp(near, proto(T, far ? oF : o, "bush" + k, Q => Q.bush(0, 0, 0, 1, BCOLS[k], BBER[k], 21 + k * 6)), at(x, y, z, 0, (Hw(i, 9) - .5) * .5, 0, s)); };
     const bambooAt = (x, y, z, i, far = true) => { const k = i % 3, w = .95 + Hw(i, 16) * .15; stamp(near, proto(T, far ? oF : o, "bamboo" + k, Q => Q.bamboo(0, 0, 0, 16, .42, 41 + k * 3, 0)), at(x, y, z, 0, Hw(i, 14) * 6, (Hw(i, 15) - .5) * .07, w, 1, w)); };
-    const up = o.row === "A" ? .05 : .55, bank = runs.map(([a, b], i) => [i ? a : xL - 14, i < runs.length - 1 ? b : xR + 14]);
+    const up = o.row === "A" ? .05 : .55, bank = o.tops ? [] : runs.map(([a, b], i) => [i ? a : xL - 14, i < runs.length - 1 ? b : xR + 14]);   // (o.tops: up in the trees over the drop, BB2: no bank of land behind the path)
     bank.forEach(([a, b], i) => { const [ra, rb] = runs[i]; K.grassSlab(a, b, 0, -9.5, -3.25, .5, 9, true, x => topIn(x, ra, rb) + up); });
     const bankAt = x => { for (let i = 0; i < bank.length; i++) if (x >= bank[i][0] && x <= bank[i][1]) return topIn(x, runs[i][0], runs[i][1]) + up; return null; };
     along(xL - 6, xR + 6, o.row === "A" ? 11 : 6.2, 2.6, 5, (x, i) => { const y = bankAt(x); if (y !== null) bigBush(x, y - .05, -4.3 - Hw(i, 6) * .3, i, (o.row === "A" ? .8 : 1.05) + Hw(i, 7) * .3); });
@@ -379,8 +379,14 @@ window.BerryClayRoom = (function () {
       along(xL - 16, xR + 16, 3.6, 3.2, 630, (x, i) => { const z = -11.6 - Hw(i, 631) * 4.4; treeAt(x, slopeY(z), z, i, 1); });
       along(xL - 24, xR + 24, 3.2, 2.8, 650, (x, i) => trunkAt(x, bt - .15, -18 - Hw(i, 651) * 4, .36 + Hw(i, 652) * .16, i + 1, BARKF, true));
       frontTrunks(-7.7, 1.1);
-    } else if (o.row === "A") {   // (up in the treetops: palm crowns and tree ferns standing up out of the canopy below, behind the path)
-      along(xL - 12, xR + 12, 5.5, 4, 670, (x, i) => { const z = -6.5 - Hw(i, 671) * 6, h = Hw(i, 672); if (h < .5) stamp(near, palmP(m3(i), true), at(x, -7.5 + Hw(i, 673) * 2.5, z, 0, Hw(i, 674) * 6.28, 0, 1.1), null, true); else if (h < .8) stamp(near, tfernP(m3(i)), at(x, -3.4 + Hw(i, 675) * 1.6, z, 0, Hw(i, 676) * 6.28, 0, 1.15), null, true); });
+    } else if (o.row === "A" || o.tops) {   // (up in the treetops: palm crowns and tree ferns standing up out of the canopy below, behind the path)
+      const ty = o.tops ? o.fy ?? 0 : 0;   // (BB2's: its treetops lower, the floor BD under the rest)
+      along(xL - 12, xR + 12, 5.5, 4, 670, (x, i) => { const z = -6.5 - Hw(i, 671) * 6, h = Hw(i, 672); if (h < .5) stamp(near, palmP(m3(i), true), at(x, ty - 7.5 + Hw(i, 673) * 2.5, z, 0, Hw(i, 674) * 6.28, 0, 1.1), null, true); else if (h < .8) stamp(near, tfernP(m3(i)), at(x, ty - 3.4 + Hw(i, 675) * 1.6, z, 0, Hw(i, 676) * 6.28, 0, 1.15), null, true); });
+      if (o.tops) { const crownP = k => proto(T, oF, "crown" + k, Q => Q.bush(0, 0, 0, 1, [["#3aa648", "#4cbf4c", "#2b8c3d"], ["#46b04a", "#2f9440", "#5ac454"], ["#3f9f47", "#55bb50", "#2b8c3d"]][k], null, 230 + k * 5));   // (the sea of crowns under the branches: lumpy treetops right across the room and on back, nothing to land on, you fall through them. The user, 2026-11-09: "the bottom of BB2 should look more like tree tops and tree and green in the background, but youy just cant land on it.. and again, the background behind where they player is standing on the tree branches should not look like regular land. it should look like you're high up among the trees and can fall through other trees")
+        [2.6, -.6, -4, -7.6, -11.4, -15.6, -20.2, -25].forEach((z, r) => along(xL - 10 - r * 2, xR + 10 + r * 2, 3.6 + r * .5, 1.6, 680 + r, (x, i) => { const s = 2.3 + Hw(i, 681 + r) * 1 + r * .12;
+          stamp(near, crownP(m3(i + r)), at(x, ty - .9 - s * .95 + r * .12 + Hw(i, 682 + r) * .45, z - Hw(i, 683 + r) * 1.2, 0, (Hw(i, 684 + r) - .5) * .6, 0, s, s * .8, s), null, z < -1); }));
+        const btreeP = k => proto(T, oF, "btree" + k, Q => Q.tree(0, 0, 0, [7.5, 9, 10.5][k], 1, 240 + k * 7, false));   // (big trees standing up out of them behind the path, their crowns about you: in among the trees, green round you)
+        along(xL - 14, xR + 14, 6, 4, 690, (x, i) => { if (Hw(i, 691) < .12) return; stamp(near, btreeP(m3(i)), at(x, ty - 5 - Hw(i, 692) * 1.5, -9.5 - Hw(i, 693) * 11, 0, Hw(i, 694) * 6.28, 0, 1.1 + Hw(i, 695) * .3), null, true); }); }
     } else { const fy = o.bgY + .3;   // (row B: the woods' floor runs on back behind the bank, trees all over it)
       K.grassSlab(xL - 26, xR + 26, fy, -30, -9.4, .5, 23, true);
       along(xL - 8, xR + 8, 7, 4, 11, (x, i) => { const y = bankAt(x); if (Hw(i, 12) > .6) bambooAt(x, (y ?? o.bgY + .55) - 2.5, -7 - Hw(i, 13) * 1.2, i); });
@@ -418,23 +424,26 @@ window.BerryClayRoom = (function () {
     // far off (made once a room's width and row, kept): the clouds, the pressed hills (round the woods' own ground, bgY; under the treetops, lower)
     const ks = Math.round(WX), bx0 = -34, bx1 = WX + 34, farG = new T.Group(); farG.name = "clayFar";
     const kept = (parts, grp) => vcOf(T, o, parts).forEach(({ cast, geo }) => { const m = new T.Mesh(geo, matV(o.toon)); m.userData.keepMat = m.userData.keepGeo = true; if (cast) m.layers.enable(o.layer ?? 7); grp.add(m); });
-    const cloudG = new T.Group(); cloudG.position.y = o.row === "A" ? -8 : 0; farG.add(cloudG);   // (up in the treetops the camera's higher: the clouds down into sight)
+    const cloudG = new T.Group(); cloudG.position.y = o.row === "A" ? -8 : o.tops ? -8 + (o.fy ?? 0) : 0; farG.add(cloudG);   // (up in the treetops the camera's higher: the clouds down into sight)
     kept(proto(T, o, "clouds" + ks, Q => { for (let x = bx0 + 4, i = 0; x < bx1; x += 15 + hsh(i, 1, 1, 8) * 6, i++) Q.cloud(x, 17.5 + hsh(i, 2, 2, 8) * 5, -30, 1.8 + hsh(i, 3, 3, 8) * .9); }), cloudG);
-    const tops = o.row !== "A" ? null : proto(T, o, "tops" + ks, Q => {   // (the treetops' far view: the mogotes standing up out of the forest, the hills' layers in front)
+    const tops = o.row !== "A" && !o.tops ? null : proto(T, o, "tops" + ks, Q => {   // (the treetops' far view: the mogotes standing up out of the forest, the hills' layers in front)
       for (let x = bx0 + 6, i = 0; x < bx1; x += 13 + hsh(i, 11, 11, 8) * 9, i++) Q.cutout(Q.mogote(x, -8, 9 + hsh(i, 12, 12, 8) * 6, 13 + hsh(i, 13, 13, 8) * 6, i), .5, i % 2 ? "#a3cfaa" : "#97c8a0", -40 + hsh(i, 14, 14, 8) * 2);
       Q.cutout(Q.blobLine(bx0, bx1, -8, 4.2, Math.round((bx1 - bx0) * .098), 3), .5, "#8fd0a8", -26);
       Q.cutout(Q.blobLine(bx0 + 6, bx1 - 6, -8, 2.4, Math.round((bx1 - bx0 - 12) * .1375), 7), .55, "#5daf73", -18);
       Q.cutout(Q.blobLine(bx0 + 12, bx1 - 12, -8, .9, Math.round((bx1 - bx0 - 24) * .19), 11), .6, "#3f9a52", -11.5); });
-    const woods = o.row === "A" ? null : proto(T, o, "woods" + ks, Q => {   // (the far woods: pressed trunks two layers deep, hazier as they go, a canopy over them)
+    const fl = Math.round(((o.fy ?? 0) - (o.bgY ?? 0)) * 2) / 2, tT = Math.max(3, fl + 8 + 8);   // (fl: the room's floor, from the far woods' foot; tT: the trunks' height, up into the crowns)
+    const crowns = (Q, top, foot, nT, nF, sd) => [...Q.blobLine(bx0, bx1, foot, top, nT, sd).slice(1, -1), ...Q.hangLine(bx0, bx1, top, foot, nF, sd + 1).slice(1, -1)];   // (a band of crowns: bumpy over the top, lobes hanging under)
+    const woods = o.row === "A" || o.tops ? null : proto(T, o, "woods" + ks + "f" + fl, Q => {   // (the far woods: pressed trunks two layers deep, hazier as they go, their crowns over them)
       Q.cutout(Q.blobLine(bx0, bx1, -8, 1.6, Math.round((bx1 - bx0) * .09), 3), .5, "#a8cdae", -36);
-      for (let x = bx0 + 1, i = 0; x < bx1; x += 2.4 + hsh(i, 4, 4, 8) * 2.2, i++) Q.cutout(Q.trunkSil(x, -8, 34, .3 + hsh(i, 5, 5, 8) * .16, i), .3, "#c2d3b8", -32 + hsh(i, 6, 6, 8));
-      for (let x = bx0 + 2, i = 0; x < bx1; x += 3 + hsh(i, 7, 7, 8) * 2.6, i++) Q.cutout(Q.trunkSil(x, -8, 34, .4 + hsh(i, 8, 8, 8) * .2, i + 40), .35, "#b2c3a2", -26.5 + hsh(i, 9, 9, 8));
-      Q.cutout(Q.hangLine(bx0, bx1, 34, 14.5, Math.round((bx1 - bx0) * .12), 21), .6, "#8ec497", -29);
-      Q.cutout(Q.hangLine(bx0, bx1, 34, 16, Math.round((bx1 - bx0) * .1), 23), .6, "#79b583", -23.5); });
-    const hillG = new T.Group(); hillG.name = "clayHills"; hillG.position.y = o.row === "A" ? -5 : o.bgY; kept(woods || tops, hillG); farG.add(hillG);
-    if (o.row === "A") { const cg = proto(T, o, "canopy" + ks, Q => { Q.cutout(Q.blobLine(bx0, bx1, -14, -3.2, Math.round((bx1 - bx0) * .16), 17), .7, "#4fae5a", -9);
+      Q.cutout(Q.blobLine(bx0, bx1, -8, fl + 8.5, Math.round((bx1 - bx0) * .2), 25), .4, "#86bd90", -37.5);   // (the woods deeper in, behind the hills: green from them up to the crowns, so no sky shows under the canopy when the camera's up high, B4's)
+      for (let x = bx0 + 1, i = 0; x < bx1; x += 2.4 + hsh(i, 4, 4, 8) * 2.2, i++) Q.cutout(Q.trunkSil(x, -8, tT + hsh(i, 10, 10, 8) * 1.5, .3 + hsh(i, 5, 5, 8) * .16, i), .3, "#c2d3b8", -32 + hsh(i, 6, 6, 8));
+      for (let x = bx0 + 2, i = 0; x < bx1; x += 3 + hsh(i, 7, 7, 8) * 2.6, i++) Q.cutout(Q.trunkSil(x, -8, tT - .5 + hsh(i, 11, 11, 8) * 1.2, .4 + hsh(i, 8, 8, 8) * .2, i + 40), .35, "#b2c3a2", -26.5 + hsh(i, 9, 9, 8));
+      Q.cutout(crowns(Q, fl + 10.4, fl + 5, Math.round((bx1 - bx0) * .3), Math.round((bx1 - bx0) * .2), 21), .6, "#6cb470", -30.5);   // (the canopy low enough to see now, green right up near the top and only a strip of sky over it: it hung 14.5 and 16 over the woods' foot, off the top of most rooms, so you saw bare trunks and sky. The user, 2026-11-09: "for backgrounds, I can see too much sky. the trees look better in the background but use more green and sky only towards the very top")
+      Q.cutout(crowns(Q, fl + 8.8, fl + 6.2, Math.round((bx1 - bx0) * .26), Math.round((bx1 - bx0) * .17), 23), .6, "#55a35c", -24.5); });
+    const hillG = new T.Group(); hillG.name = "clayHills"; hillG.position.y = o.row === "A" ? -5 : o.tops ? -5 + (o.fy ?? 0) : o.bgY; kept(woods || tops, hillG); farG.add(hillG);   // (BB2 the treetops' far view too, down with its floor: no trunks standing on far-off land)
+    if (o.row === "A" || o.tops) { const cg = proto(T, o, "canopy" + ks, Q => { Q.cutout(Q.blobLine(bx0, bx1, -14, -3.2, Math.round((bx1 - bx0) * .16), 17), .7, "#4fae5a", -9);
       Q.cutout(Q.blobLine(bx0 + 4, bx1 - 4, -14, -4.6, Math.round((bx1 - bx0) * .2), 19), .7, "#3a9a4c", -6); });   // (the treetops' crowns, below)
-      kept(cg, farG); }
+      const cgG = new T.Group(); cgG.position.y = o.tops ? o.fy ?? 0 : 0; kept(cg, cgG); farG.add(cgG); }   // (BB2's lower with its floor)
     return [meshes(T, o, near, "clayNear"), farG];
   }
 
