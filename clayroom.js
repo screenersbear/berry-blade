@@ -601,7 +601,8 @@ window.BerryClayRoom = (function () {
       }
       const cast = o.cast ? o.cast(m, cen, size, thick) : (cen.z > -11 && size > .8 && Math.min(thin, thick) > .3);   // (thin things (a vine, a rope, a spike) cast no clay shadow: on themselves they'd only speckle)
       stats.n++; stats.tris += g.index.count / 3;
-      if (live) { olds.add(m.geometry); olds.add(m.material); m.geometry = g; m.material = matOf(side); m.userData.keepMat = !o.own; if (g.userData.clayShared) m.userData.keepGeo = true;
+      if (live) { olds.add(m.geometry); olds.add(m.material); m.geometry = g; m.material = o.each ? Object.assign(o.toon("#ffffff"), { vertexColors: true, side }) : matOf(side); m.userData.keepMat = !o.own && !o.each;   // (each: its own, for a piece the game may tint (a door's hole as it opens): on the shared one it'd tint the room)
+        if (g.userData.clayShared) m.userData.keepGeo = true;
         m.userData.clayDone = true; if (cast) m.layers.enable(layer); m.castShadow = m.receiveShadow = false; }
       else { const k = (cast ? "c" : "n") + side; (merged.get(k) || merged.set(k, []).get(k)).push(g); m.userData.clayGone = true; olds.add(m.geometry); olds.add(m.material); }
     }
