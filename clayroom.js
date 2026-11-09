@@ -441,9 +441,11 @@ window.BerryClayRoom = (function () {
     const SHAPE = [[1, 1], [1.55, .7], [.78, 1.25], [1.25, .92], [1.05, .8]];   // (round; spread wide and flat, a ceiba's; tall, a mango's; broad; low)
     const woods = o.row === "A" || o.tops ? null : proto(T, o, "woods" + ks + "f" + fl, Q => {   // (the far woods: pressed trunks two layers deep, hazier as they go, each its own crown)
       Q.cutout(Q.blobLine(bx0, bx1, -8, 1.6, Math.round((bx1 - bx0) * .09), 3), .5, "#a8cdae", -36);
+      Q.cutout(Q.blobLine(bx0, bx1, -8, fl + 13, Math.round((bx1 - bx0) * .2), 27), .4, "#a2cdab", -39.5);   // (and further off, paler, higher: a thin strip of sky over it from the usual height, little more from up high)
       Q.cutout(Q.blobLine(bx0, bx1, -8, fl + 10.6, Math.round((bx1 - bx0) * .24), 25), .4, "#8fc299", -37.5);   // (the woods deeper in, behind the hills: hazy green from them up near the top, so between the crowns and under them it's more woods, not sky (B4's, the camera up high); the sky only over it)
       const layer = (x0, gap, rnd, salt, tz, trR, trC, cols, big) => { for (let x = x0, i = 0; x < bx1; x += gap + hsh(i, salt, salt, 8) * rnd, i++) { const h = k => hsh(i, salt + k, salt + k, 8), z = tz + h(1);
-        if (h(2) < .28) { Q.cutout(Q.trunkSil(x, -8, 34, trR + h(3) * trR * .5, i + salt), .3, trC, z); continue; }   // (now and then a trunk running on up out of sight, its crown over the top)
+        if (h(2) < .28) { const S3 = SHAPE[Math.floor(h(10) * SHAPE.length)], R3 = big * (1.3 + h(11) * .8), cy3 = fl + 13.5 + h(12) * 3.5;   // (now and then a tall one, its crown up over the rest: in sight only when the camera's up high, C3's raised start, where you saw past them into the sky. The user, 2026-11-09: "in places like this though, there should be less blue sky")
+          Q.cutout(Q.trunkSil(x, -8, cy3 + 8, trR + h(3) * trR * .5, i + salt), .3, trC, z); Q.cutout(crownSil(x + (h(7) - .5) * .8, cy3 + R3 * S3[1] * .35, R3 * S3[0], R3 * S3[1], i * 7 + salt + 3), .55, cols[Math.floor(h(13) * cols.length)], z + .25 + h(9) * .3); continue; }
         const S2 = SHAPE[Math.floor(h(4) * SHAPE.length)], R = big * (1 + h(5) * .9), cy = fl + 5.6 + h(6) * 4.4, rx = R * S2[0], ry = R * S2[1];
         Q.cutout(Q.trunkSil(x, -8, cy + 8, trR + h(3) * trR * .5, i + salt), .3, trC, z);
         Q.cutout(crownSil(x + (h(7) - .5) * .8, cy + ry * .35, rx, ry, i * 7 + salt), .55, cols[Math.floor(h(8) * cols.length)], z + .25 + h(9) * .3); } };
