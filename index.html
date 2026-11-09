@@ -13000,7 +13000,7 @@ function blockHit(p, d) {                  // a blocked hit: pushed back a littl
 //   □ held: the bubble's making from the press, a step each: yours, your attacker's, your blocker's
 // and the guard's line shrinks while it's up, in from its ends to its middle, back out while it's down; held to nothing, you and whoever's guarding with you are stunned a second
 // (the user: "it's a thick bubble line as it is now and then shrinks towards the center in which case your characters get stunned for a second if you don't let go before then")
-const BC = { life: 3.2, back: 1.6, stun: 1, tap: .2, step: .45, max: 3, near: 420 };   // (s: the line held to nothing · back to full · stunned · a press shorter than this is a tap · a hold's level each · levels · a buddy this near is in on it)
+const BC = { life: 3.2, back: 1.6, stun: 1, tap: .2, step: .45, max: 3, near: 420, queue: 1.6 };   // (s: the line held to nothing · back to full · stunned · a press shorter than this is a tap · a hold's level each · levels · a buddy this near is in on it · a press while the last one's still going, kept this long: bcInput)
 const BC_KEYS = [["cir", () => held.atk], ["x", () => held.jump], ["tri", () => held.part(1)], ["sq", () => held.part(2)]];
 const oOfP = P => P ? (P.kind === "ally" ? P.a : P.kind === "ej" ? ej : null) : null;   // (a partner's brain: partHuman's o)
 // the guard takes five (the user, 2026-11-04: "the shield can take 5 hits to break, but you can hold it indefinitely if you're not getting hit"): each blow on it, yours or
@@ -13045,7 +13045,9 @@ function bcTeam(tired) {                              // who's in on it: the blo
 }
 function bcInput(p, dt, control) {                    // (updatePlayer, after the guard and its line) block held, a press of one of the four
   const now = {}; for (const [k, f] of BC_KEYS) now[k] = !!f(); const was = p.bcWas || {}; p.bcWas = now;
-  if (p.bcGo) { bcGoTick(p, dt); if (p.bcGo && p.bcGo.k === "out" && now.cir && !was.cir) bcPoke(p, bcTeam()); return; }   // (you out from behind the shield: ○ again sends your attacker too)
+  if (held.block && !teamM && !p.bcm && (p.block || p.bcGo)) for (const [k] of BC_KEYS) if (now[k] && !was[k]) { p.bcQ = { k, at: time }; break; }   // (a press with the guard up or a move going, kept till it can go (not mid-blow: that ○ is the blow's): one that came while the last move was still going was lost, with no sound, the user 2026-11-09 "sometimes when you're holding block, it'll not let you do the other commands, idk if it's because you just did one")
+  if (!held.block || teamM || p.dead || (p.bcQ && time - p.bcQ.at > BC.queue)) p.bcQ = null;   // (let go of block, or kept too long: dropped)
+  if (p.bcGo) { bcGoTick(p, dt); if (p.bcGo && p.bcGo.k === "out" && p.bcQ && p.bcQ.k === "cir") { p.bcQ = null; bcPoke(p, bcTeam()); } return; }   // (you out from behind the shield: ○ again sends your attacker too)
   const M = p.bcm;
   if (M) {
     if (!control || p.dead || teamM || (!p.onGround && M.k !== "sq")) { bcCancel(p); return; }
@@ -13058,7 +13060,8 @@ function bcInput(p, dt, control) {                    // (updatePlayer, after th
     return;
   }
   if (!held.block || !p.block || teamM || !control || !p.onGround || p.climb || p.atkT >= 0 || p.combo || p.tackle || p.dodge) return;   // (on their own, CHARGE!: block's just yours, no combos)
-  for (const [k] of BC_KEYS) if (now[k] && !was[k]) { if (!bcBusy(p) && bcNoTeam()) { SFX.nope(); break; } if (!bcBusy(p)) bcPress(p, k); else if (k === "cir" && bcOutOnly(p)) bcPoke(p, bcTeam()); else if (k === "x" && bcLaunchOnly(p)) bcPress(p, k); break; }   // (your attacker up from the launch: ✕ again, you thrown up after it)   // (one out already: ○ again, the other one out, no wind-up)   // (both worn out: the game's can't-do buzz, no words, the user 2026-11-08: "let's work with less text on the screen. instead, for the team being worn out example, just play an error sound")
+  const Q = p.bcQ; if (!Q) return; const k = Q.k, busy = bcBusy(p);   // (the press, now or kept from while the last move was going: a tap let go meanwhile still goes, as a tap)
+  if (!busy && bcNoTeam()) { p.bcQ = null; SFX.nope(); return; } if (!busy) { p.bcQ = null; bcPress(p, k); } else if (k === "cir" && bcOutOnly(p)) { p.bcQ = null; bcPoke(p, bcTeam()); } else if (k === "x" && bcLaunchOnly(p)) { p.bcQ = null; bcPress(p, k); }   // (your attacker up from the launch: ✕ again, you thrown up after it)   // (one out already: ○ again, the other one out, no wind-up)   // (both worn out: the game's can't-do buzz, no words, the user 2026-11-08: "let's work with less text on the screen. instead, for the team being worn out example, just play an error sound")
 }
 function camTopY() {                                   // the highest the camera keeps in view: your head, or a buddy's thrown up by a toss or a launch (the toss's higher arc, 2026-11-08: it went off the top of the screen)
   const t0 = Y(player.y) + 3.4; let t = t0; for (const P of partnerList()) { const q = P.q, B = q && q.bc; if (!q || q.onGround || !B || !(B.k === "toss" || B.launch)) continue; t = Math.max(t, Y(q.y) + ((q.rig && q.rig.heightPx) || 80) * S + 1.1); }
