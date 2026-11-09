@@ -726,7 +726,7 @@
 </style>
 <script src="charkit.js?v=20261107"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="shading.js?v=20261108c"></script>
+<script src="shading.js?v=20261108d"></script>
 <script src="score.js?v=20261104a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
@@ -1291,10 +1291,10 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, clayT: { value: 0 },tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
-    uniform sampler2D tex, bgTex; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform float clayT; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     float vnoise(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
@@ -1302,7 +1302,10 @@ const gradeMat = new THREE.ShaderMaterial({
       vec3 k = a > 2.0 ? (t0.rgb * t0.a + t1.rgb * t1.a + t2.rgb * t2.a + t3.rgb * t3.a) / a : (t0.rgb + t1.rgb + t2.rgb + t3.rgb) * .25; return vec4(toSRGB(max(k, 0.0)), a * .25); }   // (a character's: its own colour only, none of the wall behind its edge)
     float gbcMin(vec2 b) { vec2 s = tpx / (tpx.y * gbc), u = (b + .5) * s; vec3 w = vec3(.299, .587, .114); return min(min(dot(toSRGB(max(texture2D(tex, u - s * .25).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * .25).rgb, 0.0)), w)), min(dot(toSRGB(max(texture2D(tex, u + s * vec2(.25, -.25)).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * vec2(-.25, .25)).rgb, 0.0)), w))); }   // its darkest look (an eye, smaller than one big pixel)
     void main() {
-      vec4 f = texture2D(tex, vUv); vec3 c = toSRGB(max(f.rgb, 0.0));
+      vec4 f = texture2D(tex, vUv);
+      if (clayT > 0.0) { vec3 a = mat3(.59719, .07600, .02840, .35458, .90834, .13383, .04823, .01566, .83777) * (max(f.rgb, 0.0) * 1.75); a = (a * (a + .0245786) - .000090537) / (a * (.983729 * a + .432951) + .238081);   // (CLAY LOOK: filmic, the mockup's ACES)
+        f.rgb = mix(f.rgb, clamp(mat3(1.60475, -.10208, -.00327, -.53108, 1.10813, -.07276, -.07367, -.00605, 1.07602) * a, 0.0, 1.0), clayT); }
+      vec3 c = toSRGB(max(f.rgb, 0.0));
       vec2 gb = vec2(0.0); if (gbc > 0.0) { gb = floor(gl_FragCoord.xy * tpx.y * gbc); c = gbcAt(gb).rgb; }   // (in the beach house: the screen as GBC rows of big square pixels, gbc of them top to bottom, each one colour)
       float l = dot(c, vec3(.299, .587, .114));
       c = max(mix(vec3(l), c, 1.06), 0.0);              // keep the colour vibrant   // (never below nothing: a colour with none of one (Rink's yellow, no blue) went under it here, pow then made it NaN, and the ruin's grey (its dot of all three) spread that to the whole pixel: black bodies, black platforms, the land at war, any hour. The user, 2026-11-04: "it's literally black on different parts of their body")
@@ -1411,6 +1414,39 @@ let clayOn = (() => { try { return localStorage.getItem("bb_clay") === "1"; } ca
 function claySet(on, save) { clayOn = !!on; if (window.BerryShading && BerryShading.setClay) BerryShading.setClay(clayOn); if (SHADE) SHADE.H.mat.visible = !clayOn;   // (no light edge round them in clay)
   if (save) try { localStorage.setItem("bb_clay", clayOn ? "1" : "0"); } catch (e) { } }
 claySet(clayOn);
+// CLAY's light (the user, 2026-11-08 "Yes, build it": the mockup's light, which the first CLAY LOOK left out, so its characters looked like felt). Before each frame,
+// the characters' solid parts drawn as depth twice: from the sun (their soft shadows, on them and on everything round them) and from the camera (the creases where
+// their parts meet); the frame then graded filmic (ACES, as the mockup was). Rose's glowing blade as solid clay, its halo gone. Only with CLAY LOOK on; not in the
+// beach house or character select. CLAYL: the shadow map's size, how far past the screen it reaches, its softness and bias (units)
+const CLAYL = { sz: 2048, ext: 1.2, soft: .07, bias: .05 };
+let clayRT = null, clayAoRT = null;
+const clayCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 160), clayDM = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, colorWrite: false }), clayHid = [], clayOff = [], claySwap = [], clayBlade = new Map();
+const _cv = new THREE.Vector3(), _cf = new THREE.Vector3(), _cl = new THREE.Vector3();
+function clayWalk(o) {                                // (the characters' solid parts kept for the depth; glows, sparks, cards and see-through bits put away for it)
+  if (!o.visible) return; const m = o.material;
+  if (m && !Array.isArray(m) && (o.isMesh || o.isSprite || o.isPoints || o.isLine)) {
+    if (m.blending === THREE.AdditiveBlending && o.geometry && o.geometry.type === "ExtrudeGeometry") {   // (the sword's glow: the blade itself as clay, its halo gone)
+      const g = o.geometry; if (!g.userData.clayBB) { g.computeBoundingBox(); g.userData.clayBB = g.boundingBox.getSize(new THREE.Vector3()); } const b = g.userData.clayBB;
+      if (b.y <= .4 && b.x >= .8) { let c = clayBlade.get(m); if (!c) { c = toon(m.color.clone()); clayBlade.set(m, c); } claySwap.push([o, m]); o.material = c; }
+      else { o.visible = false; clayOff.push(o); return; } }
+    else if (o.isSprite || o.isPoints || o.isLine || m.transparent || m.blending !== THREE.NormalBlending || m.side === THREE.BackSide || !m.colorWrite || !m.visible) { o.visible = false; clayHid.push(o); return; } }
+  for (const c of o.children) clayWalk(c);
+}
+function clayPre(skip) {
+  const U = SHADE && SHADE.U, on = !!U && clayOn && !skip; gradeMat.uniforms.clayT.value = on ? 1 : 0; if (!U) return; U.mkShOn.value = 0; U.mkAoOn.value = 0; if (!on) return;
+  if (!clayRT) { clayRT = new THREE.WebGLRenderTarget(CLAYL.sz, CLAYL.sz, { depthTexture: new THREE.DepthTexture(CLAYL.sz, CLAYL.sz) }); clayAoRT = new THREE.WebGLRenderTarget(1, 1, { depthTexture: new THREE.DepthTexture(1, 1) }); }
+  const aw = Math.max(1, frameRT.width >> 1), ah = Math.max(1, frameRT.height >> 1); if (clayAoRT.width !== aw || clayAoRT.height !== ah) clayAoRT.setSize(aw, ah);
+  camera.updateMatrixWorld(); camera.getWorldDirection(_cv); const t = _cv.z < -.05 ? -camera.position.z / _cv.z : 17.5; _cf.copy(camera.position).addScaledVector(_cv, t);   // (where the camera looks, at the characters' depth)
+  const hh = t * Math.tan(camera.fov * Math.PI / 360), e = Math.max(hh * camera.aspect, hh) * CLAYL.ext; _cl.copy(sun.position).sub(sun.target.position).normalize();
+  clayCam.left = clayCam.bottom = -e; clayCam.right = clayCam.top = e; clayCam.updateProjectionMatrix(); clayCam.position.copy(_cf).addScaledVector(_cl, 80); clayCam.lookAt(_cf); clayCam.updateMatrixWorld();
+  clayWalk(actors); const cp = renderer.clippingPlanes, fg = actors.fog, pr = renderer.getRenderTarget(); renderer.clippingPlanes = []; actors.overrideMaterial = clayDM; actors.fog = null;
+  renderer.setRenderTarget(clayRT); renderer.clear(true, true, false); renderer.render(actors, clayCam);
+  renderer.setRenderTarget(clayAoRT); renderer.clear(true, true, false); renderer.render(actors, camera);
+  actors.overrideMaterial = null; actors.fog = fg; renderer.clippingPlanes = cp; renderer.setRenderTarget(pr); clayHid.forEach(o => { o.visible = true; }); clayHid.length = 0;
+  U.mkShM.value.multiplyMatrices(clayCam.projectionMatrix, clayCam.matrixWorldInverse); U.mkShT.value = clayRT.depthTexture; U.mkShR.value = CLAYL.soft / (2 * e); U.mkShB.value = CLAYL.bias / 159; U.mkShOn.value = 1;
+  U.mkAoT.value = clayAoRT.depthTexture; U.mkAoPx.value.set(1 / frameRT.width, 1 / frameRT.height); U.mkAoN.value = camera.near; U.mkAoF.value = camera.far; U.mkAoFoc.value = frameRT.height / (2 * Math.tan(camera.fov * Math.PI / 360)); U.mkAoOn.value = 1;
+}
+function clayPost() { if (SHADE) { SHADE.U.mkShOn.value = 0; SHADE.U.mkAoOn.value = 0; } clayOff.forEach(o => { o.visible = true; }); clayOff.length = 0; claySwap.forEach(([o, m]) => { o.material = m; }); claySwap.length = 0; }   // (after the frame: other drawings (portraits, the cast) without them)
 function shadeHulls(root) {                          // (the look's edge highlight: its light hull on each of a character's toon parts, once)
   if (!SHADE || !SHADE.edge || shadeRaw || !root) return;
   root.traverse(o => { if (!o.isMesh || o.userData.mkHull || o.userData.mkHullMesh || !o.material || !o.material.isMeshToonMaterial || !o.geometry || !o.geometry.attributes.normal) return;
@@ -30309,6 +30345,7 @@ function render(dt) {
   scene.background = bepSel ? null : FOG; renderer.setClearAlpha(bepSel ? 0 : 1); gradeMat.uniforms.bgOn.value = bepSel ? 1 : 0; gradeMat.uniforms.scr.value = innerWidth / innerHeight;
   if (bepSel) { const U = gradeMat.uniforms; U.bgOff.value = (U.bgOff.value + Math.min(dt || 0, .1) * .007) % U.bgPer.value; }   // (drifting along slowly: about a screen's width every 80 seconds)
   const gbcCam = gradeMat.uniforms.gbc.value ? gbcSnap() : null;   // (in the beach house: the camera on the big pixels' grid, so the walls don't shimmer as it moves; put back after)
+  clayPre(bepSel || !!gradeMat.uniforms.gbc.value);   // (CLAY LOOK's shadows and creases, drawn first)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
   if (SHADE) { SHADE.pass(false); if (gradeMat.uniforms.gbc.value) SHADE.U.mkTexOn.value = 0; } if (riseX) risePre();   // (an applied look: the level's settings, then the characters'; in the beach house, no painted coat: its brush marks broke up into specks)
@@ -30323,6 +30360,7 @@ function render(dt) {
   if (hm) hm.forEach(([o, m]) => { o.layers.mask = m; });
   if (pan) panFg(); else if (peek) panFg(peek); else if (level.subs && !bepSel) { fgSeeThru(dt); bigFg(); } else if (nbOn() && !bepSel && nbFgAny()) { fgSeeThru(dt); viewScene(nbCells(true), true); } else if (level.fg && level.fg.length && !bepSel) { fgSeeThru(dt); const bg = scene.background; scene.background = null; camera.layers.set(1); renderer.render(scene, camera); camera.layers.set(0); scene.background = bg; }   // (the foreground: in front of everyone, the user 2026-10-24)
   if (gbcCam) { camera.position.copy(gbcCam); camera.updateMatrixWorld(); }
+  clayPost();
   renderer.setRenderTarget(null);
   { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);

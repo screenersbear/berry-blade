@@ -53,7 +53,10 @@ window.BerryShading = (() => {
   const unifs = () => ({ mkOn: { value: 1 }, mkInfl: { value: 1 }, mkRampOn: { value: 0 }, mkSteps: { value: 3 }, mkSoft: { value: .15 }, mkTintOn: { value: 0 }, mkTint: { value: null }, mkTintStr: { value: .5 },
     mkRimOn: { value: 0 }, mkRimC: { value: null }, mkRimW: { value: .3 }, mkRimI: { value: .6 }, mkAOOn: { value: 0 }, mkAOStr: { value: .4 }, mkTopOn: { value: 0 }, mkTopStr: { value: .15 },
     mkSpecOn: { value: 0 }, mkSpecI: { value: 0 }, mkSat: { value: 1 }, mkCon: { value: 1 }, mkGround: { value: 0 }, mkTexOn: { value: 0 }, mkTexStr: { value: 0 }, mkTexObj: { value: 0 }, mkSpecSz: { value: .94 }, mkTexLate: { value: 0 },
-    mkClay: { value: 0 }, mkClayF: { value: 3 }, mkClayB: { value: 1 }, mkClayD: { value: 0 } });
+    mkClay: { value: 0 }, mkClayF: { value: 3 }, mkClayB: { value: 1 }, mkClayD: { value: 0 },
+    mkClayK: { value: 1 }, mkClayFl: { value: 1 }, mkClayW: { value: .3 }, mkClayS: { value: 0 }, mkClayG: { value: 1 }, mkClayFog: { value: 1 },   // (clay's light: the key (the sun), the fill (the sky), how far the key wraps round, the sheen, the grain, how much of the fog)
+    mkShOn: { value: 0 }, mkShT: { value: null }, mkShM: { value: null }, mkShR: { value: .001 }, mkShB: { value: .0005 },   // (clay's shadows: the characters' depth seen from the sun, set each frame by the game (clayPre))
+    mkAoOn: { value: 0 }, mkAoT: { value: null }, mkAoPx: { value: null }, mkAoN: { value: .1 }, mkAoF: { value: 300 }, mkAoFoc: { value: 1000 }, mkAoR: { value: .14 }, mkAoI: { value: 1.2 } });   // (and its creases: the characters' depth from the camera)
   // CLAY (pause > DEBUG > CLAY LOOK, the user 2026-11-08: "yes let's do the clay debug shader to see", after the clay mockup in mockups/clay): everything pressed out of
   // modelling clay. The surface: dents, smears, grain and pokes bent into the normal (a bump with no texture: the height's change across the pixel); the light soft, with
   // no toon steps, the dents a touch darker, a soft sheen; and the shapes a little lumpy. The lumps move space itself (the same point, the same push), not along each
@@ -75,10 +78,21 @@ float mkNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 
   return mix(mix(mix(mkHash(i), mkHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(mkHash(i + vec3(0.0, 1.0, 0.0)), mkHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
              mix(mix(mkHash(i + vec3(0.0, 0.0, 1.0)), mkHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(mkHash(i + vec3(0.0, 1.0, 1.0)), mkHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z); }
 float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w = max(mkSoft, .001) * .5; return clamp((f + smoothstep(.5 - w, .5 + w, y - f)) / s, 0.0, 1.0); }
-uniform float mkClay, mkClayF, mkClayB;
+uniform float mkClay, mkClayF, mkClayB, mkClayK, mkClayFl, mkClayW, mkClayS, mkClayG, mkClayFog, mkShOn, mkShR, mkShB, mkAoOn, mkAoN, mkAoF, mkAoFoc, mkAoR, mkAoI;
+uniform sampler2D mkShT, mkAoT; uniform mat4 mkShM; uniform vec2 mkAoPx;
+float mkShadow(vec3 w) { vec3 q = (mkShM * vec4(w, 1.0)).xyz * .5 + .5; if (q.x <= 0.0 || q.x >= 1.0 || q.y <= 0.0 || q.y >= 1.0 || q.z >= 1.0) return 1.0;   // CLAY's shadows: 16 looks round a soft disc in the sun's depth of the characters
+  float e = 0.0; for (int i = 0; i < 4; i++) { float a = float(i) * 1.5708 + .785; e += step(q.z - mkShB, texture2D(mkShT, q.xy + vec2(cos(a), sin(a)) * mkShR).r); }   // (four round the edge first: all lit or all dark, done; most of the screen is)
+  if (e < .5 || e > 3.5) return e * .25;
+  float s = 0.0; for (int i = 0; i < 16; i++) { float r = sqrt((float(i) + .5) / 16.0), a = float(i) * 2.39996; s += step(q.z - mkShB, texture2D(mkShT, q.xy + vec2(cos(a), sin(a)) * r * mkShR).r); }
+  return s / 16.0; }
+float mkLinZ(float d) { return mkAoN * mkAoF / (mkAoF - d * (mkAoF - mkAoN)); }
+float mkCrease(float z) { vec2 uv = gl_FragCoord.xy * mkAoPx, dz = clamp(vec2(dFdx(z), dFdy(z)), -.04, .04); float rp = clamp(mkAoR * mkAoFoc / z, 2.0, 48.0), o = 0.0;   // CLAY's creases: round this pixel, how much of the characters stands nearer than its own surface would (the slope taken out)
+  for (int i = 0; i < 8; i++) { float a = float(i) * .785398 + .39; vec2 d = vec2(cos(a), sin(a)) * rp * (mod(float(i), 2.0) < .5 ? 1.0 : .5); float e = z + dot(dz, d) - mkLinZ(texture2D(mkAoT, uv + d * mkAoPx).r);
+    o += smoothstep(.012, .07, e) * (1.0 - smoothstep(mkAoR * 2.5, mkAoR * 5.0, e)); }
+  return 1.0 - mkAoI * o / 8.0; }
 float mkClayH(vec3 q) { float h = (mkNoise(q * 1.1) - .5) * 1.1 + (mkNoise(q * 2.3 + 5.0) - .5) * .55;   // (broad dents and thumb smears)
-  h += (mkNoise(vec3(q.x * .9, q.y * 5.0, q.z * .9) + 20.0) - .5) * .25;   // (drag streaks)
-  h += (mkNoise(q * 7.0) - .5) * .14 + (mkNoise(q * 17.0) - .5) * .06;   // (grain)
+  h += (mkNoise(vec3(q.x * .9, q.y * 5.0, q.z * .9) + 20.0) - .5) * .25 * mkClayG;   // (drag streaks)
+  h += ((mkNoise(q * 7.0) - .5) * .14 + (mkNoise(q * 17.0) - .5) * .06) * mkClayG;   // (grain)
   return h - smoothstep(.72, .92, mkNoise(q * 3.6 + 40.0)) * .3; }   // (little pokes)
 vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = cross(sy, sn), r2 = cross(sn, sx); float det = dot(sx, r1) * fd; return normalize(abs(det) * sn - sign(det) * (dH.x * r1 + dH.y * r2)); }
 `;
@@ -93,14 +107,17 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
     #endif
     float mkNL = dot(mkN, mkL), mkX = clamp(mkNL * .5 + .5, 0.0, 1.0), mkR = mkRampOn > .5 ? mkRamp(mkX) : smoothstep(.35, .65, mkX);
     vec3 mkLit = mkRampOn > .5 ? mkAlb * (mkSun * mix(.5, 1.0, mkR) + mkHemi) * RECIPROCAL_PI + totalEmissiveRadiance : mkBase;   // (stepped: the sun in bands over the sky's fill; its shadow band keeps half the sun, as the game's own ramp keeps .71)
-    if (mkClay > .5) { float ch = mkClayH((mkTexObj > .5 ? vMkO : vMkW) * mkClayF);   // CLAY: the bent normal, lit soft (wrapped round, no steps), the dents darker, a soft sheen
+    if (mkClay > .5) { float ch = mkClayH((mkTexObj > .5 ? vMkO : vMkW) * mkClayF);   // CLAY: the bent normal; one warm key light (the sun) that wraps a little round, its shadows; the sky's fill; the creases and dents darker; a soft sheen
       mkN = mkClayBend(-vViewPosition, mkN, vec2(dFdx(ch), dFdy(ch)) * mkClayB * .02, faceDirection);
-      float cl = clamp((dot(mkN, mkL) + .45) / 1.45, 0.0, 1.0); cl = cl * cl * (3.0 - 2.0 * cl); vec3 chm = mkHemi;
+      float sh = mkShOn > .5 ? mkShadow(vMkW + mkNW * .04) : 1.0, ao = mkAoOn > .5 && mkTexObj > .5 ? mkCrease(vViewPosition.z) : 1.0;
+      if (mkTexObj > .5) sh = mix(.45, 1.0, sh);   // (a character's own shadows, half: her hair kept the whole of her face dark)
+      float cl = clamp((dot(mkN, mkL) + mkClayW) / (1.0 + mkClayW), 0.0, 1.0); cl = cl * cl * (3.0 - 2.0 * cl) * sh; vec3 chm = mkHemi;
       #if NUM_HEMI_LIGHTS > 0
         { float hk = dot(mkN, hemisphereLights[0].direction) * .5 + .5; chm = mix(hemisphereLights[0].groundColor, hemisphereLights[0].skyColor, hk); }
       #endif
-      mkR = cl; mkLit = (mkAlb * (mkSun + chm) * mix(.62, 1.22, cl) * RECIPROCAL_PI) * (1.0 - clamp(-ch * .5, 0.0, .3)) + totalEmissiveRadiance;   // (all the light as if from the sun's side: the game's is mostly sky fill, which gave the dents nothing to catch)
-      mkLit += mkSun * mkAlb * pow(max(dot(mkN, normalize(mkL + mkV)), 0.0), 14.0) * .1 + chm * pow(1.0 - max(dot(mkN, mkV), 0.0), 3.0) * .04; }
+      float cf = mkTexObj > .5 ? max(dot(mkN, vec3(.33, .19, .92)), 0.0) * .22 : 0.0;   // (and on the characters a soft front light from beside the camera, as the mockup's, so faces read)
+      mkR = cl; mkLit = mkAlb * (mkSun * (cl * mkClayK * mix(1.0, ao, .6) + cf * ao) + chm * mkClayFl * ao) * RECIPROCAL_PI * (1.0 - clamp(-ch * .5, 0.0, .3)) + totalEmissiveRadiance;
+      mkLit += mkSun * pow(max(dot(mkN, normalize(mkL + mkV)), 0.0), 10.0) * mkClayS * sh * (.4 + .6 * mkAlb) + chm * mkAlb * pow(1.0 - max(dot(mkN, mkV), 0.0), 3.0) * .06 * ao; }
     if (mkTintOn > .5) { float l = max(dot(mkTint, vec3(.299, .587, .114)), .05); vec3 tc = mkTint / l * .82; mkLit = mix(mkLit, mkLit * tc, (1.0 - mkR) * mkTintStr); }   // (the shadow side shifted toward the tint, not greyed)
     vec3 mkFlat = mkAlb * 1.05 + totalEmissiveRadiance;
     vec3 c = mix(mkFlat, mkLit, mkInfl); float mkTm = 1.0; vec3 mkTs = vec3(0.0);
@@ -118,11 +135,20 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
     if (mkTexLate > .5) { vec3 cs = pow(min(max(c, 0.0), vec3(1.0)), vec3(1.0 / 2.2)); float v = max(cs.r, max(cs.g, cs.b)); c = pow(min(max(cs + (mkTm - 1.0) * v, 0.0), vec3(1.0)), vec3(2.2)) + mkTs; }   // (2026-11-06: the coat as a step of lightness to the eye, the same on every channel (scaled by the brightest): the old multiply clipped the light spots off a colour at full (Camila's red), so only the dark ones showed and the girls came out darker. A grey takes it as before. (late: on the colour as it shows, after the saturation; the game's characters are saturated past full (red .84 at 1.31), which flattened the coat on Camila's reds. 2.2: an even step to the eye, not in light)
     outgoingLight = mkOn > .5 ? max(c, 0.0) : mkBase; }
 `;
+  const FOG_CLAY = `#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    float fogFactor = 1.0 - exp(-fogDensity * fogDensity * vFogDepth * vFogDepth);
+  #else
+    float fogFactor = smoothstep(fogNear, fogFar, vFogDepth);
+  #endif
+  if (mkClay > .5) fogFactor *= mkClayFog;   // (clay: less haze, as the mockup's clear air)
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fogFactor);
+#endif`;
   function patchShader(sh, U) {
     Object.assign(sh.uniforms, U);
     sh.vertexShader = VERT + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>" + VERT_CLAY).replace("#include <project_vertex>", "#include <project_vertex>" + VERT_MAIN);
     const tail = sh.fragmentShader.includes("#include <opaque_fragment>") ? "#include <opaque_fragment>" : "#include <output_fragment>";
-    sh.fragmentShader = FRAG + sh.fragmentShader.replace(tail, FRAG_MAIN + tail);
+    sh.fragmentShader = FRAG + sh.fragmentShader.replace(tail, FRAG_MAIN + tail).replace("#include <fog_fragment>", FOG_CLAY);
   }
   function setChar(a, C) {                               // a look's character settings into a uniform set
     a.mkOn.value = 1; a.mkInfl.value = C.lightingInfluence; a.mkRampOn.value = C.toonRamp.enabled ? 1 : 0; a.mkSteps.value = C.toonRamp.steps; a.mkSoft.value = C.toonRamp.softness;
@@ -135,10 +161,13 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
   }
   // CLAY's settings, over a look's (off: the look as it is). The painted coat and the glossy spot go (the clay is the texture); the characters, nearly flat in the
   // game's look (lighting .04), take the light, or the clay wouldn't show on them
-  const CLAY = { char: { f: 3.4, b: 4, d: .022, infl: .8, sat: 1.4 }, env: { f: 1.1, b: 6, d: .07, infl: 1, sat: 1.18 } };   // (f: dents a unit (a girl is 2.75 units); b: how deep (1-2 barely showed in the game: its light is mostly sky fill); d: the lumps, in units; sat: at least this much colour)
+  // (2026-11-08, later: the light part too, the user "Yes, build it": the game's characters looked like felt, flat colour with bumps in an even light. Now one warm key
+  // light with shadows (the characters' own, onto everything), the creases between their parts darker, a broad soft sheen, bigger gentler dents, less fog and colour)
+  const CLAY = { char: { f: 1.6, b: 3.2, d: .022, g: .45, sat: 1.1, k: 1, fl: 1.15, w: .25, s: .07 }, env: { f: 1.0, b: 5, d: .07, g: .8, sat: 1.08, k: 1, fl: 1.3, w: .3, s: .03 }, fog: .45 };   // (f: dents a unit (a girl is 2.75 units); b: how deep (1-2 barely showed in the game: its light is mostly sky fill); d: the lumps, in units; sat: at least this much colour)
   let clayOn = false;
   function clayOver(a, K) { a.mkClay.value = clayOn ? 1 : 0; if (!clayOn) return;
-    a.mkClayF.value = K.f; a.mkClayB.value = K.b; a.mkClayD.value = K.d; a.mkInfl.value = Math.max(a.mkInfl.value, K.infl); a.mkSat.value = Math.max(a.mkSat.value, K.sat); a.mkTexOn.value = 0; a.mkSpecOn.value = 0; a.mkRampOn.value = 0; }
+    a.mkClayF.value = K.f; a.mkClayB.value = K.b; a.mkClayD.value = K.d; a.mkClayG.value = K.g; a.mkClayK.value = K.k; a.mkClayFl.value = K.fl; a.mkClayW.value = K.w; a.mkClayS.value = K.s; a.mkClayFog.value = CLAY.fog;
+    a.mkInfl.value = 1; a.mkSat.value = K.sat; a.mkCon.value = 1; a.mkTexOn.value = 0; a.mkSpecOn.value = 0; a.mkRampOn.value = 0; a.mkRimOn.value = 0; a.mkTintOn.value = 0; a.mkTopOn.value = 0; }
   const setClay = on => { clayOn = !!on; };
   function setEnv(b, E) {                                // and its environment settings (no rim, AO, top light or specular on the scenery)
     b.mkOn.value = 1; b.mkInfl.value = E.lightingInfluence; b.mkRampOn.value = E.toonRamp.enabled ? 1 : 0; b.mkSteps.value = E.toonRamp.steps; b.mkSoft.value = E.toonRamp.softness;
@@ -147,7 +176,7 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
     b.mkTexOn.value = E.texture && E.texture.enabled ? 1 : 0; b.mkTexStr.value = E.texture ? E.texture.strength || 0 : 0; b.mkTexObj.value = 0; b.mkTexLate.value = 0;
     clayOver(b, CLAY.env);
   }
-  function newUnifs(THREE) { const U = unifs(); U.mkTint.value = new THREE.Color(); U.mkRimC.value = new THREE.Color(); return U; }
+  function newUnifs(THREE) { const U = unifs(); U.mkTint.value = new THREE.Color(); U.mkRimC.value = new THREE.Color(); U.mkShM.value = new THREE.Matrix4(); U.mkAoPx.value = new THREE.Vector2(1, 1); return U; }
   function hullMat(THREE) {                              // the light edge (inverted hull): the mesh pushed out along its normals, its back faces in the highlight colour.
     const th = { value: .01 }, m = new THREE.MeshBasicMaterial({ color: "#ffffff", side: THREE.BackSide, fog: false });   // (a MeshBasic, not a shader of its own: the
     m.onBeforeCompile = sh => { sh.uniforms.mkTh = th; sh.vertexShader = "uniform float mkTh;\n" + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n transformed += normal * mkTh;"); };   // game's walks
