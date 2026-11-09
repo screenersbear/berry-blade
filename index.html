@@ -510,17 +510,11 @@
   #koScr .koIn { display: flex; flex-direction: column; align-items: center; gap: 22px; }
   #koUp { width: min(420px, 72vw); height: 24px; } #koUp.hidden { display: none; }
   #koScr .koIn { transition: opacity .55s; } #koScr.dark .koIn { opacity: 0; }   /* (on to the spotlight: its words fade, the black stays) */
-  /* Camila in the spotlight (the user, 2026-11-08): all black but the cone of light from a lamp up above, the pool of it on the stage, and her in it, in the middle */
+  /* Camila at her desk, where the spotlight was (the user, 2026-11-08: "instead of it being a black screen with a spotlight, the conceit of the game is that this is a story camila is illustrating"): her room fills the screen, on the black */
   #spot { position: fixed; inset: 0; z-index: 60; background: #000; opacity: 0; pointer-events: none; transition: opacity .5s; overflow: hidden; }
   #spot.show { opacity: 1; pointer-events: auto; }
-  #spot .pool, #spot .cam, #spot .beam { position: absolute; left: 50%; transform: translateX(-50%); opacity: 0; transition: opacity .7s; }
-  #spot.lit .pool, #spot.lit .cam, #spot.lit .beam { animation: spotOn .8s linear forwards; }   /* (the lamp clunks on, a flicker, then steady) */
-  #spot.lit.off .pool, #spot.lit.off .cam, #spot.lit.off .beam { animation: none; opacity: 0; }
-  @keyframes spotOn { 0%, 9% { opacity: 0; } 10%, 21% { opacity: 1; } 22%, 31% { opacity: .25; } 32%, 100% { opacity: 1; } }
-  #spot .pool { top: 87.5vh; width: 50vh; height: 9vh; transform: translate(-50%, -50%); border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 246, 222, .8), rgba(255, 240, 205, .32) 58%, rgba(255, 240, 205, 0)); }
-  #spot .cam { bottom: 10vh; width: 48vh; height: 64vh; max-width: 92vw; } #spot .cam canvas { width: 100%; height: 100%; display: block; }
-  #spot .beam { top: -4vh; width: 64vh; height: 93vh; filter: blur(5px); mix-blend-mode: screen; pointer-events: none; }
-  #spot .beam i { position: absolute; inset: 0; clip-path: polygon(45% 0, 55% 0, 100% 100%, 0 100%); background: linear-gradient(to bottom, rgba(255, 247, 222, .5), rgba(255, 240, 205, .16) 72%, rgba(255, 240, 205, .06)); }
+  #spot .cam { position: absolute; inset: 0; opacity: 0; transition: opacity 1s; } #spot .cam canvas { width: 100%; height: 100%; display: block; }
+  #spot.lit .cam { opacity: 1; } #spot.lit.off .cam { opacity: 0; transition-duration: .85s; }   /* (her room up out of the black, and back into it) */
   #voCap.spot { z-index: 61; }
   #fade .lockup { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0; transition: opacity .2s; }
   #fade .lockup .bar, #loading .lockup .bar { margin-left: 0; }   /* (LOADING alone since 2026-10-30: centred, no block to sit under) */
@@ -861,7 +855,7 @@
 <div id="bepArrow"><svg viewBox="0 0 40 40"><path d="M5 20 31 7 25 20 31 33Z" fill="#ffd203" stroke="#2f3b43" stroke-width="3.5" stroke-linejoin="round"/></svg></div>
 <div id="team" class="hidden"></div>
 <div id="catHud" class="hidden"><b id="catName">CATCH THE CAT!</b><span id="catPaws"></span></div>
-<div id="spot"><div class="pool"></div><div class="cam" id="spotCam"></div><div class="beam"><i></i></div></div>
+<div id="spot"><div class="cam" id="spotCam"></div></div>
 <div id="koScr"><div class="koIn"><div class="lockup big"><div class="blk">KNOCKED OUT</div><div class="bar" id="koSub">&nbsp;</div></div><div id="koUp" class="up4 hidden"><i></i><i></i><i></i><i></i></div></div></div>
 <div id="growFlash"></div><div id="fade"><div class="lockup big"><div class="bar">LOADING</div></div></div>
 <div id="proBlack"><div class="lockup big" id="proTitle"><div class="blk">BERRY WOODS</div></div></div>
@@ -6472,7 +6466,7 @@ addEventListener("keydown", e => {
   startMusic();
   if (titleUp) { dismissTitle(); return; }
   if (statsUp) { if (!e.repeat) { e.preventDefault(); statsUp.ask ? askKey(e.code) : statsGo(); } return; }
-  if (spot && spot.then) { e.preventDefault(); if (!e.repeat) spotPast(); return; }   // (one of her stories: a button past her)
+  if (spot && spot.then && !(spot.cut && menuUp)) { e.preventDefault(); if (!e.repeat) { if (!spot.cut) spotPast(); else if (["Enter", "Escape"].includes(e.code)) cutPause(); } return; }   // (one of her stories: a button past her · the desk after the beach: a cutscene, Start pauses it)
   if (mode === "play" && player && player.cons && !paused && !menuUp) { e.preventDefault(); consDown[e.code] = 1; if (!e.repeat) { const K = CONS_KEYS[e.code]; if (K) consInput(K); } return; }   // (the BERRY CONSOLE's buttons)   // the stats card between worlds: any key goes on (or answers its question)
   if (transit && mode !== "play") return;
   if (achOpen) { if (["Escape", "Enter", "Backspace", "Space", "KeyC", "KeyZ", "KeyS", "KeyT"].includes(e.code)) { e.preventDefault(); closeAch(); } return; }
@@ -6613,7 +6607,7 @@ function pollPad() {
       if (pr("j")) { const q = B[modalSel]; modalWas = false; if (q) q.click(); else onReset(); }   // (no buttons showing: on, as ever)
       padPrev = { ...pad }; return; }
     if (!modalOpen) modalWas = false; }
-  if (spot && spot.then) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a) || (pad.st && !padPrev.st)) spotPast(); padPrev = { ...pad }; return; }   // (one of her stories)
+  if (spot && spot.then && !(spot.cut && menuUp)) { if (spot.cut) { if (pad.st && !padPrev.st) cutPause(); } else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a) || (pad.st && !padPrev.st)) spotPast(); padPrev = { ...pad }; return; }   // (one of her stories · the desk after the beach: Start pauses it)
   if (tutHold) { if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a) || (pad.st && !padPrev.st)) tutGo(); padPrev = { ...pad }; return; }
   if (comicUp && !menuUp) { if (tale) { if (pad.st && !padPrev.st) cutPause(); } else if ((pad.j && !padPrev.j) || (pad.a && !padPrev.a)) comicNext(); padPrev = { ...pad }; return; }
   if (cutOn() && !menuUp && pad.st && !padPrev.st) { cutPause(); padPrev = { ...pad }; return; }
@@ -7438,7 +7432,7 @@ function pauseChoose(what) {
   if (what === "home") quitToTitle();   // (the title card, the real home screen: it used to open the old character and level select, the user, 2026-10-23)
   else if (what === "quit") quitToTitle();   // back to the title card (a story run saves first)
 }
-$("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); }); $("spot").addEventListener("pointerdown", e => { e.preventDefault(); if (spot && spot.then) spotPast(); else onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
+$("koScr").addEventListener("pointerdown", e => { e.preventDefault(); onReset(); }); $("spot").addEventListener("pointerdown", e => { e.preventDefault(); if (spot && spot.cut) cutPause(); else if (spot && spot.then) spotPast(); else onReset(); });   // (the knock-out's black screen: a tap, once it's been up a moment, carries on)
 $("pbtns").addEventListener("click", e => { const c = e.target.closest("[data-cyc]"), b = e.target.closest("[data-p]");   // (DEBUG → PARTNERS: its ‹ › tapped, the next one)
   if (c && b && dbgTeam) { setPauseSel(PAUSE_OPTS.indexOf(b.dataset.p)); dbgTeamCycle(+c.dataset.cyc); return; } if (b) pauseChoose(b.dataset.p); });
 $("songRows").addEventListener("click", e => { const b = e.target.closest("[data-sg]"); if (!b || menuUp !== "songs") return; if (b.dataset.sg === "done") return closeSongs(); songSel = +b.dataset.sg; songPick(songSel); markMenu(); });   // (0: on / off; 1..: the songs)
@@ -8744,7 +8738,7 @@ function openingPicked(id) {                         // you're June (or Chase): 
 function endOpening() { const o = opening; if (!o) return; finishOpening(); o.kids.forEach(k => { actors.remove(k.fruit); if (k.r !== rig) k.r.root.visible = k.r.shadow.visible = false; }); opening = null; $("skipHint").classList.remove("show"); }
 let pro = null, proCam = null;                       // a new game's prologue (the user, 2026-10-26: "when you hit new game, play beach sounds. screen is black the whole time. camile starts the voice over ... then it starts to fade into the beach scene ... then it fades to black again. then it fades into a scene of camila and rose on la guagua being driven by one of the berry buddies across a high way next to a sandy beach road, sun setting in the background. the opening narration plays with the comic strips appearing over the sky above la guagua"; "at the end of her voice over, fade to black as the car speeds up out of frame and then the berry woods title appears and the first map beings"): ph black · in · beach · out · bus · pick · go · title
 const GUAGUA_B = { body: "#e8a5b0", roof: "#e8a5b0", belt: "#93c393", beltDk: "#6b9898", arch: "#6b9898", bed: "#e8a5b0", rail: "#93c393" };   // (La Guagua's colours: the user's pick, 2026-10-26, "B: pink top")
-const proFrozen = () => !!pro && (!!pro.road || (pro.ph === "title" && !pro.dropped) || pro.ph === "tutOut");   // (on the road, and under the black before the woods: the game waits, the prologue moves itself)
+const proFrozen = () => !!pro && (!!pro.road || (pro.ph === "title" && !pro.dropped) || pro.ph === "tutOut" || pro.ph === "desk");   // (on the road, and under the black before the woods: the game waits, the prologue moves itself)
 function startPrologue() {
   pro = { ph: "black", t: 0, a: 1 }; const B = $("proBlack"); B.style.opacity = 1; B.classList.add("show"); $("proTitle").classList.remove("on");
   $("skipHint").classList.add("pro"); voLoad(); taleLoad(); guaguaLoad();
@@ -8759,7 +8753,8 @@ function proTick(dt) {                               // (every frame, paused or 
   else if (P.ph === "out") { fade(1, 1.3); if (P.a >= 1 && P.t > (P.skip ? .3 : 1.6)) { proBus(); P.ph = "bus"; P.t = 0; } }
   else if (P.ph === "bus") { fade(0, P.skip ? 1 : 2.4); if (!P.told && P.t > (P.skip ? 1 : 2.2)) { P.told = true; if (P.skip) { if (story) story.tale = true; proPickNow(); } else startTale(proPickNow, { sky: true }); } }   // the story so far, its panels over the sky above them (skipped: straight on to who are you?)
   else if (P.ph === "go") { const R = P.road; if (P.t > .35) { R.v = Math.min(R.v + 15 * dt, 42); R.busX += R.v * dt; } if (P.t > 1.2) fade(1, .9); if (P.a >= 1 && P.t > 2.3) { P.ph = "title"; P.t = 0; } }   // off it goes, out of the picture (no BERRY WOODS on the black after it: 2026-10-30)
-  else if (P.ph === "tutOut") { fade(1, 1.1); if (P.a >= 1 && P.t > 1.3) { P.ph = "title"; P.t = 0; } }   // (off the end of the beach, its tutorial done: to black, then the woods)
+  else if (P.ph === "tutOut") { fade(1, 1.1); if (P.a >= 1 && P.t > 1.3) { P.ph = "desk"; P.t = 0; deskIntro(); } }   // (off the end of the beach, its tutorial done: to black, her desk (deskIntro), then the woods)
+  else if (P.ph === "desk") { }   // (her at her desk over the black: on to the woods when she's done, its then)
   else if (P.ph === "title") { if (!P.built && P.t > .9) { P.built = true; P.woods ? proWoods() : proBeach(); }   // the beach tutorial on the black (since 2026-11-03), or after it the Berry Woods, built under it
     if (P.built && !transit && P.t > (P.woods ? 1.6 : 2.6)) { if (!P.dropped) { P.dropped = true; $("proTitle").classList.remove("on"); P.woods ? startIntro() : tutStart(); } fade(0, P.woods ? 1.5 : 3.6); if (P.a <= 0) proDone(); } }   // (into the beach: a longer black, a slower light. The user, 2026-11-03: "havea. longer black fade in to the beach level")   // (the two of them drop into the woods as it lifts)
   if (P.road) roadTick(P.road, dt);
@@ -8786,7 +8781,7 @@ function proDone() { pro = null; $("proBlack").classList.remove("show"); $("skip
 function proAbort() {                                // (off to the title in the middle of it)
   if (!pro) return; const R = pro.road; pro = null; if (R) disposeRoad(R); proCam = null; $("proBlack").classList.remove("show"); $("proTitle").classList.remove("on"); $("skipHint").classList.remove("pro");
 }
-const cutOn = () => !!tale || (!!pro && ["black", "in", "beach", "out", "bus", "go"].includes(pro.ph));   // (the opening cutscene: Camila on the black, La Guagua, the story so far over the sky)
+const cutOn = () => !!tale || (!!pro && ["black", "in", "beach", "out", "bus", "go"].includes(pro.ph)) || (!!spot && spot.cut);   // (the opening cutscene: Camila on the black, La Guagua, the story so far over the sky)
 let cutHeld = false, cutCls = false;   // (paused in it: its voice, its story and the road held where they are)
 function cutPause() {                               // Start (Esc, Enter, a tap) in the opening: paused, back to it or past it (the user, 2026-11-08: "in opening cutscene, remove 'skip options' and 'any button for the next one' from the screen. let the player be able to hit the start menu to pause it and then show return or skip cutscene options")
   if (cutHeld || menuUp || !cutOn()) return; cutHeld = true; for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
@@ -8795,6 +8790,7 @@ function cutPause() {                               // Start (Esc, Enter, a tap)
 }
 function cutSkip() {                                // past the lot, to who are you? on La Guagua
   SFX.tick(); voEnd(); voQ = []; if (tale) { endTale(); return; }   // (the story so far: its end goes on to the pick)
+  if (spot && spot.cut) { const S = spot; spotEnd(); if (S.then) S.then(); return; }   // (her desk after the beach: on into the woods)
   const P = pro; if (!P) return; P.skip = true;
   if (["black", "in", "beach"].includes(P.ph)) { if (opening && !opening.asked) { opening.asked = true; finishOpening(); } P.over = true; P.ph = "out"; P.t = 0; }
   else if (P.ph === "go") P.t = Math.max(P.t, 1.2);
@@ -9103,7 +9099,7 @@ function proBeach() {                                // under the black: the roa
   const U = story.uprise || (story.uprise = {}); U[9] = Math.max(U[9] || 0, Math.round(upGoal(9) * TUT_UP.start));   // (from nothing: the weapon at its base size)
   tutHold = null; tutZoom = null; tutT.s = -1; storyRun(9, 0, false);
 }
-function tutStart() { Object.assign(player, { x: 600, y: groundAt(600) ?? GROUND, vx: 0, vy: 0, face: 1, onGround: true, plat: null }); tutT.s = -1; }   // (by the house, as the black lifts)
+function tutStart() { Object.assign(player, { x: 600, y: groundAt(600) ?? GROUND, vx: 0, vy: 0, face: 1, onGround: true, plat: null }); tutT.s = -1; DESK_BOOK.desk.pages.forEach(deskTex); }   // (by the house, as the black lifts · her desk's pages for after it, on their way in)
 function tutEnd() {                                  // off the end of the beach, its tutorial done: into the black, and on into the woods as a new game had them
   if (pro || transit) return; btS().done = true; if (story) writeSave();
   pro = { ph: "tutOut", t: 0, a: 0, woods: true }; const B = $("proBlack"); B.style.opacity = 0; B.classList.add("show"); for (const k in keys) keys[k] = false;
@@ -10039,14 +10035,14 @@ function showTutor(id) {
 // so it plays from a folder too). A press: on
 // to the next panel; Start / Esc (or SKIP): the lot
 const TALE = [                                       // (told by Camila, grown up: the user, 2026-10-24 "the opening cutscene should only be told by camila. I meant that we'll insert rose in different places")
-  { img: "story/p1.jpg", who: "camila", top: true, text: "Berry Island, as you can imagine, was peaceful... until the baddies came." },
-  { img: "story/p2.jpg?v=20261024", who: "camila", text: "They convinced the berries to let them build upon their land." },   // (Trumpeto talking them round: King P only on the fourth, the user 2026-10-24)
-  { img: "story/p3.jpg", who: "camila", text: "Soon, factories, casinos, and military bases appeared all over the island." },
-  { img: "story/p4.jpg", who: "camila", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
-  { img: "story/p5.jpg", who: "camila", text: "But now, our lives are not our own. And we've been without peace for too long..." },
-  { img: "story/p6.jpg", who: "camila", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
-  { img: "story/p8.jpg", who: "camila", text: "It's been a year now since the elders granted us these relics," },   // (the last two new, the user 2026-10-26: "its been a year now since the elders granted these relics to us, imploring us to quite literally beat some sense into the other berries and fight back against the greedy rulers...")
-  { img: "story/p7.jpg", who: "camila", text: "imploring us to quite literally beat some sense into the other berries, and fight back against the greedy rulers..." },
+  { img: "story/k1.jpg?v=20261108", who: "camila", top: true, text: "Berry Island, as you can imagine, was peaceful... until the baddies came." },
+  { img: "story/k2.jpg?v=20261108", who: "camila", text: "They convinced the berries to let them build upon their land." },   // (Trumpeto talking them round: King P only on the fourth, the user 2026-10-24)
+  { img: "story/k3.jpg?v=20261108", who: "camila", text: "Soon, factories, casinos, and military bases appeared all over the island." },
+  { img: "story/k4.jpg?v=20261108", who: "camila", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
+  { img: "story/k5.jpg?v=20261108", who: "camila", text: "But now, our lives are not our own. And we've been without peace for too long..." },
+  { img: "story/k6.jpg?v=20261108", who: "camila", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
+  { img: "story/k7.jpg?v=20261108", who: "camila", text: "It's been a year now since the elders granted us these relics," },   // (the last two new, the user 2026-10-26: "its been a year now since the elders granted these relics to us, imploring us to quite literally beat some sense into the other berries and fight back against the greedy rulers...")
+  { img: "story/k8.jpg?v=20261108", who: "camila", text: "imploring us to quite literally beat some sense into the other berries, and fight back against the greedy rulers..." },
 ];
 const TALE_P1 = 5, TALE_VOL = .9;                   // (louder since 2026-10-23, the user: "the voice which was kind of low, and then loud background sounds": the sea and the bugs go quiet under it now)                   // (the first page's panels; then it turns over)
 let tale = null; const taleVo = { state: "idle", bufs: [] };
@@ -10133,7 +10129,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261108a"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261108b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -10155,6 +10151,8 @@ Object.assign(VO, { lose1: ["Every battle we lost set the resistance back, and s
   cheer: ["We didn't win every fight. But every time we got back up, a few more berries believed in us.", "Losing a battle never meant losing the island. As long as we kept going, so did the uprising.",
     "Rose used to say a fall is just a running start. She was annoyingly right."] });   // (my words, for now: "a couple encouraging phrases")
 Object.assign(VLOG_TITLE, { lose1: "WHAT EVERY LOST BATTLE COST", cheer: "GETTING BACK UP" });
+Object.assign(VO, { uprise: ["Every baddy we beat was a berry won back: caught in our weapons, and back on our side.", "Each part of the island had its own uprising. As we won back its berries, it grew: the villains' hold on the land started to crack, and their baddies fought harder to keep it.", "At 100%, the uprising was ready: we could take on the villain who took that part of the island in a final showdown, and set it free.", "So we had our work cut out for us."] });   // (at her desk after the woods lines: THE UPRISING card's words in hers, the user, 2026-11-08: "she'll turn to a page that has 3 drawings on it that show how it works and her voiceover will explain it with the text from the tutorial and end with "so we had our work cut out for us."")
+Object.assign(VLOG_TITLE, { uprise: "HOW THE UPRISING WORKS" });
 const TALE_STORIES = [{ id: "glosday", lines: [["pro2", 0]] }];   // (her stories, told in the spotlight after a world's CLEARED card, now and then: the user, 2026-11-08 "cut glos portion from intro. instead, that'll be one of the stories that camila tells at level complete screens after closing out. we'll have this happen randomly as well". Each told once, in the order they come up; more to come)
 const STORY_P = .34;   // (a 1 in 3 chance a world, not the beach's)
 function storyAfter(then) {                          // (statsGo) one of her stories first, or straight on
@@ -10172,43 +10170,110 @@ function spotWant(lost) {                            // (koShow) her stage after
   if (!V.includes("lose1")) return lost > 0 ? "lose1" : null;   // (the first one that shows the uprising going down: none on the beach, or at 0%)
   return spotKo > SPOT_GAP && Math.random() < SPOT_P ? "cheer" : null; }
 function spotFade() { const K = koScr; if (!K || !K.want || K.fading) return; K.fading = true; clearTimeout(K.timer); $("koScr").classList.add("dark"); K.timer = setTimeout(() => spotOn(K.want), 750); }   // (the words go, to black)
-function spotOn(id, then, lines) {                   // the lamp on, her in it (then, lines: one of her stories after a CLEARED card, storyAfter: its lines [VO key, line] and on after it)
+// Camila at her desk, where the spotlight was (the user, 2026-11-08: "the conceit of the game is that this is a story camila is illustrating ... open to a shot of camila drawing at her desk in her house. the camera will be where we can see her face and her drawing but angled up and at a lower angle so we see her hands with a colored pencil moving but we dont see what she's drawing. the camera will swing around her and down to the paper and then there the story will appear in drawings"; the drawings IMG_1399 and IMG_1401)
+const DESK_PAGES = { woods1: "story/desk/woods1.jpg?v=20261108", woods2: "story/desk/woods2.jpg?v=20261108", uprise: "story/desk/uprise.jpg?v=20261108", glosday: "story/desk/glosday.jpg?v=20261108", lose1a: "story/desk/lose1a.jpg?v=20261108", lose1b: "story/desk/lose1b.jpg?v=20261108", cheer1: "story/desk/cheer1.jpg?v=20261108", cheer2: "story/desk/cheer2.jpg?v=20261108", cheer3: "story/desk/cheer3.jpg?v=20261108" };   // (her pages, colored pencil on the sketchbook's tan paper: drawn by .claude/berry-tools/sketch, each written out whole so the phone build finds it)
+const DESK_BOOK = { desk: { pages: ["woods1", "woods2", "uprise"], lines: [["woods", 0, 0], ["woods", 1, 1], ["uprise", 0, 2, 1], ["uprise", 1, 2, 2], ["uprise", 2, 2, 3], ["uprise", 3, 2, 0]], lap: [2], k: 1, skip: 0 },   // (after the beach, deskIntro: the woods voice-over, then how the uprising works, its page's three drawings one at a time · lines: [VO key, line, its page, the drawing on it to look at, 0 the whole page] · lap: the pages she sits back from, her hands out of the close ones)
+  "story:glosday": { pages: ["glosday"], k: .85, skip: 2.6 }, lose1: { pages: ["lose1a", "lose1b"], k: .7, skip: 4 }, cheer: { pages: ["cheer1", "cheer2", "cheer3"], k: .7, skip: 4 } };   // (no lines: a page a line, the line's own · k: the camera's moves quicker · skip: in from round her side, not from in front)
+const DESK = { top: 1, nx: -.06, nz: .98, pw: .92, pd: .69, fov: 30, flip: 1.4, tA: 2.6, tB: 2.8, tC: 2.1 };   // (the desk's top, the sketchbook's middle and size, the lens, a page's turn, the three shots' lengths)
+const DESK_FOCUS = [null, [178, 420, 620], [500, 420, 620], [822, 420, 620]];   // (the uprising page's three drawings: across, down, how tall, on its 1000 by 750)
+const deskTexes = {};
+function deskTex(n) { let t = deskTexes[n]; if (!t && DESK_PAGES[n]) { t = deskTexes[n] = new THREE.TextureLoader().load(DESK_PAGES[n], q => { q.userData.ok = true; }); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; } return t || null; }   // (ok once it's in: till then the page is plain paper, not black)
+function deskSet(m, tx) { const w = tx && tx.userData.ok ? tx : null; if (m.map !== w) { m.map = w; m.color.set(w ? "#ffffff" : "#efe2c4"); m.needsUpdate = true; } }
+function deskRoom(sc) {                              // her room at night: the desk, her chair, the sketchbook open with its spiral along the top, her pencils, the lamp; the window, her corkboard, a shelf, a poster
+  const T = DESK, G = new THREE.Group(), mat = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o }); sc.add(G);
+  const add = (geo, c, x, y, z, o) => { const m = new THREE.Mesh(geo, c && c.isMaterial ? c : mat(c, o)); m.position.set(x, y, z); G.add(m); return m; };
+  const box = (w, h, d, c, x, y, z, o) => add(new THREE.BoxGeometry(w, h, d), c, x, y, z, o), cyl = (r0, r1, h, c, x, y, z, o) => add(new THREE.CylinderGeometry(r0, r1, h, 16), c, x, y, z, o);
+  const TOP = T.top, Z0 = .42, Z1 = 1.55, PW = T.pw, PD = T.pd, NX = T.nx, NZ = T.nz;
+  box(2.5, .07, Z1 - Z0, "#b98a5e", 0, TOP - .035, (Z0 + Z1) / 2); [[-1.18, Z0 + .05], [1.18, Z0 + .05], [-1.18, Z1 - .05], [1.18, Z1 - .05]].forEach(([x, z]) => box(.08, TOP - .07, .08, "#9a6e46", x, (TOP - .07) / 2, z)); box(2.4, .22, .04, "#a8794f", 0, TOP - .18, Z1 - .06);   // (the desk, its legs, its back)
+  box(.72, .06, .62, "#c2855a", 0, .42, -.05); [[-.32, -.32], [.32, -.32], [-.32, .22], [.32, .22]].forEach(([x, z]) => box(.06, .42, .06, "#9a6440", x, .21, z)); box(.72, .5, .05, "#c2855a", 0, .95, -.36); box(.06, .55, .06, "#9a6440", -.32, .7, -.35); box(.06, .55, .06, "#9a6440", .32, .7, -.35);   // (her chair)
+  box(PW + .04, .012, PD + .03, "#6b4a33", NX, TOP + .006, NZ); box(PW, .014, PD, "#efe2c4", NX, TOP + .019, NZ);   // (the sketchbook's board, its pages)
+  const page = add(new THREE.PlaneGeometry(PW, PD), new THREE.MeshLambertMaterial({ color: "#efe2c4" }), NX, TOP + .0265, NZ); page.rotation.set(-Math.PI / 2, 0, Math.PI);   // (the page it's open at: its top to the spiral)
+  const ring = mat("#9aa0a8"); for (let i = 0; i < 26; i++) add(new THREE.TorusGeometry(.022, .0035, 6, 14), ring, NX - PW / 2 + .03 + i * (PW - .06) / 25, TOP + .025, NZ + PD / 2 - .012).rotation.y = Math.PI / 2;   // (the spiral)
+  const N = 18, sg = new THREE.BufferGeometry(), UV = [], I = []; for (let j = 0; j <= N; j++) for (let c = 0; c < 2; c++) UV.push(c, 1 - j / N); for (let j = 0; j < N; j++) { const a = j * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
+  sg.setAttribute("position", new THREE.BufferAttribute(new Float32Array((N + 1) * 6), 3)); sg.setAttribute("uv", new THREE.Float32BufferAttribute(UV, 2)); sg.setIndex(I);
+  const sheetF = new THREE.Mesh(sg, new THREE.MeshLambertMaterial({ color: "#efe2c4" })), sheetB = new THREE.Mesh(sg, mat("#dcc6a0", { side: THREE.BackSide })); [sheetF, sheetB].forEach(m => { m.visible = false; m.frustumCulled = false; G.add(m); });   // (a page going over, deskSheet: its drawing up, plain paper behind)
+  cyl(.07, .065, .17, "#5e8fb8", .92, TOP + .085, 1.3); ["#d8352a", "#2e5fbf", "#3c9a38", "#f4c81e", "#7a3fb0", "#ef7f22"].forEach((c, i) => { const a = i / 6 * Math.PI * 2; cyl(.011, .011, .32, c, .92 + Math.cos(a) * .03, TOP + .2, 1.3 + Math.sin(a) * .03).rotation.set(Math.sin(a) * .2, 0, Math.cos(a) * .2); });   // (her pencil cup)
+  box(.09, .03, .05, "#f39bb8", .62, TOP + .015, .72); [["#22b2e0", .58, .5], ["#ee6f9e", .66, .2]].forEach(([c, x, r]) => cyl(.011, .011, .3, c, x, TOP + .012, 1.05).rotation.set(Math.PI / 2, 0, r));   // (an eraser, two pencils out)
+  const lc = "#3d6e5a", lx = -.22, lz = .06; cyl(.13, .15, .04, lc, -.88 + lx, TOP + .02, 1.32 + lz); cyl(.018, .018, .55, lc, -.88 + lx, TOP + .29, 1.27 + lz).rotation.x = -.25; cyl(.018, .018, .45, lc, -.72 + lx, TOP + .6, 1.08 + lz).rotation.set(.2, 0, 1.05);
+  add(new THREE.ConeGeometry(.16, .22, 18, 1, true), mat(lc, { side: THREE.DoubleSide }), -.52 + lx, TOP + .62, 1.02 + lz).rotation.z = -.55; add(new THREE.SphereGeometry(.055, 12, 10), new THREE.MeshBasicMaterial({ color: "#fff3c4" }), -.5 + lx, TOP + .56, 1 + lz);
+  const L = new THREE.PointLight("#ffd9a0", 2.6, 4.5, 1.3); L.position.set(-.45 + lx, TOP + .5, .98 + lz); G.add(L);   // (her desk lamp, the room's light: out past the page's edge, clear of the camera in close on it)
+  add(new THREE.PlaneGeometry(8, 8), "#a47452", 0, 0, 0).rotation.x = -Math.PI / 2;
+  const wall = (w, c, x, z, ry) => { add(new THREE.PlaneGeometry(w, 3.6), c, x, 1.8, z).rotation.y = ry; }; wall(8, "#e9c9a8", 0, 2, Math.PI); wall(8, "#d9b6a0", 0, -2.2, 0); wall(5, "#e2c0a2", -2.6, 0, Math.PI / 2); wall(5, "#e2c0a2", 2.6, 0, -Math.PI / 2);   // (the walls face in: the camera out past one sees through it)
+  box(1.3, .9, .02, "#203a6a", -.1, 2.25, 1.97); [[1.42, .06, -.1, 2.72], [1.42, .06, -.1, 1.78], [.06, .96, -.79, 2.25], [.06, .96, .59, 2.25], [.04, .9, -.1, 2.25]].forEach(([w, h, x, y]) => box(w, h, .06, "#f4ece0", x, y, 1.94));   // (the window, night out)
+  const sky = new THREE.MeshBasicMaterial({ color: "#fff4cf" }); [[.25, 2.5, .09], [-.5, 2.55, .018], [-.3, 2.05, .014], [.05, 2.62, .012], [-.62, 2.2, .015], [.42, 2.02, .013]].forEach(([x, y, r]) => { add(new THREE.CircleGeometry(r, r > .05 ? 18 : 6), sky, x, y, 1.955).rotation.y = Math.PI; });   // (the moon, stars)
+  box(.03, .6, .9, "#c89a6a", -2.57, 2, .4); [["#f4b48a", .58, 2.08], ["#9fd0f0", .28, 2.12], ["#f6e04c", .4, 1.86]].forEach(([c, z, y]) => box(.01, .18, .24, c, -2.55, y, z));   // (her corkboard, drawings pinned up: on the side wall, out of the camera's way round her)
+  box(1.4, .05, .3, "#b98a5e", -1.4, 1.6, -2.05); [["#d8352a", -1.9], ["#2e5fbf", -1.75], ["#3c9a38", -1.6], ["#f4c81e", -1.45]].forEach(([c, x]) => box(.1, .32, .22, c, x, 1.79, -2.05)); box(1, .7, .03, "#9fc0e0", .9, 2.1, -2.17);   // (a shelf of books behind her, a poster)
+  return { G, page, sheetF, sheetB, sg };
+}
+function deskPencil() {                              // her blue pencil, in her right hand
+  const g = new THREE.Group(), m = c => new THREE.MeshLambertMaterial({ color: c }), b = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, .4, 6), m("#2e5fbf")); b.position.y = .04; g.add(b);
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(.016, .05, 6), m("#e8c79a")); tip.position.y = -.185; tip.rotation.x = Math.PI; g.add(tip); const lead = new THREE.Mesh(new THREE.ConeGeometry(.006, .018, 6), m("#2e5fbf")); lead.position.y = -.216; lead.rotation.x = Math.PI; g.add(lead);
+  const L = new THREE.Vector3(-.84, -.54, .03).normalize(); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), L); g.position.copy(L).multiplyScalar(-.146); return g;   // (aimed in her hand's own frame, as desk_draw holds it: its point down on the paper by her fist, the rest of it up and back out of it)
+}
+function deskSheet(R, u) {                           // a page going over: lifted at its bottom edge, up and back over the spiral, its edge leading (u: 0 to 1)
+  const T = DESK, N = 18, pos = R.sg.attributes.position, e = u * u * (3 - 2 * u), phi = Math.PI * .92 * e; let y = T.top + .029, z = T.nz + T.pd / 2;
+  for (let j = 0; j <= N; j++) { if (j) { const a = Math.min(Math.PI, phi + .55 * (j / N) * Math.sin(phi)); y += Math.sin(a) * T.pd / N; z -= Math.cos(a) * T.pd / N; }
+    for (let c = 0; c < 2; c++) pos.setXYZ(j * 2 + c, T.nx + T.pw / 2 - c * T.pw, y, z); }
+  pos.needsUpdate = true; R.sg.computeVertexNormals();
+}
+function deskCam(S, V, dt) {                         // (spotDraw) low in front of her, under the page's edge (her face, the pencil going, not what she draws); round her left side and over her shoulder; down onto the page, and on it to the drawing for the line
+  const T = DESK, cam = V.cam, u = S ? S.ct / S.ck + (S.book.skip || 0) : 99, ez = x => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); }, A = T.tA, B = A + T.tB, lerp = THREE.MathUtils.lerp;
+  const tn = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)), fit = (w, d) => Math.max(d / 2 / tn, w / 2 / tn / cam.aspect), F = S && S.focus ? DESK_FOCUS[S.focus] : null;
+  const want = F ? [T.nx + T.pw / 2 - F[0] / 1000 * T.pw, T.top + fit(T.pw * .34, T.pd * F[2] / 750), T.nz + T.pd / 2 - F[1] / 750 * T.pd] : [T.nx, T.top + fit(T.pw * 1.06, T.pd * 1.08), T.nz];   // (the whole page, or one drawing on it)
+  if (!V.pc || V.pcS !== S) { V.pc = want.slice(); V.pcS = S; } else { const k = 1 - Math.exp(-(dt || 0) * 2.2); for (let i = 0; i < 3; i++) V.pc[i] += (want[i] - V.pc[i]) * k; }
+  const orb = (th, r, y) => new THREE.Vector3(Math.sin(th) * r, y, .55 + Math.cos(th) * r), P = new THREE.Vector3(), L = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), fA = new THREE.Vector3(0, 1.5, .3), fB = new THREE.Vector3(.08, 1.04, .95);
+  if (u < A) { P.copy(orb(-.2, 2.3 - .25 * ez(u / A), 1.07)); L.copy(fA); }   // (in front, low, pushing in: from out past the wall, which only faces in)
+  else if (u < B) { const s = ez((u - A) / T.tB); P.copy(orb(lerp(-.2, 2.2, s), lerp(2.05, 1.65, s) + .3 * Math.sin(Math.PI * s), lerp(1.07, 2.45, 1 - (1 - s) * (1 - s)))); L.lerpVectors(fA, fB, s); }   // (round by her gauntlet, wide of it, and up over her shoulder)
+  else { const s = ez((u - B) / T.tC), pc = V.pc; P.lerpVectors(orb(2.2, 1.65, 2.45), new THREE.Vector3(pc[0], pc[1], pc[2]), s); L.lerpVectors(fB, new THREE.Vector3(pc[0], T.top, pc[2]), s); up.set(0, 1 - s, s).normalize(); }   // (down onto the page, its top up the screen)
+  cam.position.copy(P); cam.up.copy(up); cam.lookAt(L);
+}
+function spotOn(id, then, lines) {                   // her room on the black, her at the desk (then, lines: one of her stories after a CLEARED card, storyAfter, or the start of it all after the beach, deskIntro: its lines [VO key, line] and on after it)
   const K = koScr; if ((!K && !then) || spot) return; const L = VO[id] || []; let list = lines || L.map((_, i) => i);
   if (id === "cheer") { const V = story.vo || [], fresh = list.filter(i => !V.includes("cheer:" + i)), from = fresh.length ? fresh : list; list = from.length ? [from[Math.floor(Math.random() * from.length)]] : []; }
   if (!list.length) { if (K) K.want = null; return then ? then() : onReset(); }
-  spot = { id, list, k: -1, wait: 1.3, hold: 3, src: null, t0: performance.now(), out: false, then }; if (K && !then) K.spot = spot;   // (a story: not the knock-out's)
+  const book = DESK_BOOK[id] || DESK_BOOK["story:glosday"], ck = book.k || 1, pageOf = n => { const q = book.lines && book.lines[n]; if (q) return q[2]; const e = list[n]; return Math.min(Array.isArray(e) ? e[1] : e, book.pages.length - 1); };   // (the line's page: its own, or the one for that line)
+  spot = { id, list, k: -1, wait: (DESK.tA + DESK.tB + DESK.tC - (book.skip || 0)) * ck + .2, hold: 3, src: null, t0: performance.now(), out: false, then,   // (her first line as the camera comes onto the page)
+    book, ck, ct: 0, page: pageOf(0), pageOf, focusOf: n => (book.lines && book.lines[n] && book.lines[n][3]) || 0, focus: 0, flip: null, pose: "desk_draw", cut: id === "desk" }; if (K && !then) K.spot = spot;   // (a story: not the knock-out's · cut: the opening's, paused and skipped as a cutscene)
   if (!then) spotKo = 0;
-  story.vo = [...new Set([...(story.vo || []), id === "cheer" ? "cheer:" + list[0] : id])]; writeSave(); voLoad();
+  story.vo = [...new Set([...(story.vo || []), id === "cheer" ? "cheer:" + list[0] : id])]; writeSave(); voLoad(); book.pages.forEach(deskTex);
   $("spot").classList.remove("lit", "off"); $("spot").classList.add("show");
   try { spotDraw(0); } catch (e) { console.warn("spot", e); }
-  setTimeout(() => { if (spot && spot.id === id) { $("spot").classList.add("lit"); SFX.thud(); } }, 420);   // (a beat of black, then the lamp: "pop back in a spotlight")
+  setTimeout(() => { if (spot && spot.id === id) $("spot").classList.add("lit"); }, 420);   // (a beat of black, then her room)
 }
-function spotDraw(dt) {                              // her, standing in the light: the menus' renderer and filter (pvRender), lit from the lamp above, breathing in her stance
-  const box = $("spotCam"), src = roster.find(q => q.id === "camila"); if (!box || !src) return;
-  if (!spotPv) { const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
-    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#8d86a6", "#17121f", .75)); const d = new THREE.DirectionalLight("#fff2d8", 2.6); d.position.set(.8, 7, 3.2); sc.add(d);
-    spotPv = { R2, sc, cam: new THREE.PerspectiveCamera(22, .75, .1, 60), E: null, pg: pvGradeMake() }; box.appendChild(R2.domElement); }
+function spotDraw(dt) {                              // her room through the menus' renderer and filter (pvRender): her at the desk on her own clock, the page open at the drawing for the line, a page going over
+  const box = $("spotCam"), src = roster.find(q => q.id === "camila"), S = spot; if (!box || !src) return;
+  if (!spotPv) { const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
+    const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#c9c4e6", "#3a2a30", .85)); const d1 = new THREE.DirectionalLight("#bcd0ff", .45); d1.position.set(-.5, 3, 4); sc.add(d1); const d2 = new THREE.DirectionalLight("#ffe6c8", .7); d2.position.set(-1.5, 2.5, 2.5); sc.add(d2);   // (the night in at the window, the lamp's warm light)
+    spotPv = { R2, sc, cam: new THREE.PerspectiveCamera(DESK.fov, 16 / 9, .02, 40), E: null, pg: pvGradeMake(), room: deskRoom(sc) }; box.appendChild(R2.domElement); }
   const V = spotPv; let E = V.E;
   if (!E || E.spec !== src.spec) { if (E) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
-    const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0 }; }
+    if (r.hands && r.hands[1]) r.hands[1].add(deskPencil()); const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0 }; }
   const W = gearState().wear.camila || {}; if (E.r.__gearKey !== JSON.stringify(W)) { dressGear(E.r, W); E.fresh = true; }
-  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { E.st.yaw = SPOT_YAW; E.st.face = 1; KIT.time = E.t += h; KIT.updatePose(E.st, h); E.r.sync(E.st, E.r, h); } KIT.time = T0;   // (her own clock: the game's stands still under the black)
-  if (E.fresh) { E.fresh = false; E.r.root.updateMatrixWorld(true); const bb = new THREE.Box3().setFromObject(E.r.root); E.y0 = bb.min.y; E.y1 = bb.max.y; }   // (head to toe, settled into her stance)
-  const w = box.clientWidth, h = box.clientHeight; if (w && h && (V.w !== w || V.h !== h)) { V.w = w; V.h = h; V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
-  const H = (E.y1 - E.y0) * 1.08, cy = (E.y0 + E.y1) / 2, d = H / 2 / Math.tan(THREE.MathUtils.degToRad(V.cam.fov / 2)); V.cam.position.set(0, cy, d); V.cam.lookAt(0, cy, 0);   // (all of her, her feet on the pool of light)
-  pvRender(V.R2, V.sc, V.cam, V.pg);
+  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = 1; st.tcPose = S ? S.pose : "desk_draw"; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false;   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip) · hp 1: no glow over the page)
+  const R = V.room; if (S) { deskSet(R.page.material, deskTex(S.book.pages[S.page])); const F = S.flip; R.sheetF.visible = R.sheetB.visible = !!F; if (F) { deskSet(R.sheetF.material, deskTex(S.book.pages[F.from])); deskSheet(R, clamp(F.t / DESK.flip, 0, 1)); } }
+  const w = box.clientWidth, h = box.clientHeight, pr = Math.min(1.5, window.devicePixelRatio || 1, 2200 / Math.max(1, w)); if (w && h && (V.w !== w || V.h !== h || V.pr !== pr)) { V.w = w; V.h = h; V.pr = pr; V.R2.setPixelRatio(pr); V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
+  deskCam(S, V, dt); pvRender(V.R2, V.sc, V.cam, V.pg);
 }
-function spotTick(dt) {                              // (every frame while she's up) her lines, one after another, as the voice-overs go
-  const S = spot; if (!S) return; try { spotDraw(dt); } catch (e) { }
-  if (S.out) return;
+function spotTick(dt) {                              // (every frame while she's up) the camera, her pencil, her lines one after another as the voice-overs go, a page over for each new drawing
+  const S = spot; if (!S) return; S.ct += dt; const arrive = (DESK.tA + DESK.tB + DESK.tC - (S.book.skip || 0)) * S.ck;
+  const rest = (S.book.lap || []).includes(S.page) ? "desk_lap" : "desk_rest";
+  if (S.pose === "desk_draw" && S.ct > arrive - .7 * S.ck) S.pose = rest;   // (the pencil still as the camera comes down onto the page)
+  const F = S.flip; if (F) { F.t += dt; if (F.t > DESK.flip * .55) S.pose = rest; if (F.t >= DESK.flip) S.flip = null; }
+  try { spotDraw(dt); } catch (e) { }
+  if (S.out || S.flip) return;
   if (S.k < 0 && voBank.state === "loading" && (S.hold -= dt) > 0) return;   // (a moment for her voice to come in)
   if ((S.wait -= dt) > 0) return;
   const k = S.k + 1; if (k >= S.list.length) return spotOut();
-  S.k = k; const e = S.list[k], [vk, i] = Array.isArray(e) ? e : [S.id, e], line = VO[vk][i], cap = $("voCap"); cap.style.bottom = ""; capWho(cap, "camila", line); cap.classList.add("show", "spot"); vlogMark(vk + ":" + i);   // (a story's line: another voice-over's, [its key, the line])
+  const pg = S.pageOf(k); if (pg !== S.page) { S.flip = { t: 0, from: S.page }; S.page = pg; S.focus = 0; S.pose = "desk_flip"; SFX.page(); S.wait = .3; return; }   // (a new drawing: she turns the page first, then says it)
+  S.k = k; S.focus = S.focusOf(k); const e = S.list[k], [vk, i] = Array.isArray(e) ? e : [S.id, e], line = VO[vk][i], cap = $("voCap"); cap.style.bottom = ""; capWho(cap, "camila", line); cap.classList.add("show", "spot"); vlogMark(vk + ":" + i);   // (a story's line: another voice-over's, [its key, the line])
   const b = (voBank.bufs[vk] || [])[i];
   if (b && live() && sfxOn) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = VO_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime);
     S.src = src; src.onended = () => { if (S.src === src) S.src = null; }; S.wait = b.duration + .7; }
   else S.wait = 1.6 + line.split(" ").length * .32;   // (no voice: time to read it)
+}
+function deskIntro() {                               // (proTick, off the end of the beach) the woods voice-over and how the uprising works, told at her desk, then down into the Berry Woods (the user, 2026-11-08: "her voice over should be the woods one and then have her actually explain the uprising system ... and end with "so we had our work cut out for us." and it fades to black and then they land in berry woods")
+  if (story) { story.cards = [...new Set([...(story.cards || []), "uprise"])]; writeSave(); }   // (THE UPRISING card: she's told it, its words hers now)
+  spotOn("desk", () => { const P = pro; if (P && P.ph === "desk") { P.ph = "title"; P.t = 0; } }, DESK_BOOK.desk.lines.map(q => [q[0], q[1]]));
 }
 function spotOut() { const S = spot; if (!S || S.out) return; S.out = true; $("voCap").classList.remove("show"); $("spot").classList.add("off"); setTimeout(() => { if (spot === S) { spotEnd(); if (S.then) S.then(); else onReset(); } }, 900); }   // (said: the lamp off, then the room again (a story: on, storyAfter))
 function spotPast() { const S = spot; if (S && S.then && spotSkip()) S.then(); }   // (a story: a button past her, once she's been up a moment)
@@ -11103,7 +11168,7 @@ function updateIntro(dt) {
     if (c.phase === "fall") { s.vy = Math.min(s.vy + GRAV * 1.15 * dt, 1100); s.y += s.vy * dt;
       if (s.y >= GROUND) { s.y = GROUND; s.vy = 0; s.onGround = true; s.sq = -.38; s.sqv = 0; dust(s.x, s.y, 8); SFX.land(); c.phase = "land"; c.t = 0; } }
     else if (c.phase === "land" && c.t > .6) { c.phase = "wave"; c.t = 0; s.wave = 1; SFX.tick(); }
-    else if (c.phase === "wave" && c.t > 1.25) { c.phase = "run"; c.t = 0; s.wave = 0; s.face = 1; startVO("woods"); }   // (Camila's voice-over as they go: once a story)
+    else if (c.phase === "wave" && c.t > 1.25) { c.phase = "run"; c.t = 0; s.wave = 0; s.face = 1; }   // (Camila's voice-over that was here, told at her desk now: deskIntro)
     else if (c.phase === "run") { s.vx = approach(s.vx, 560, 2400 * dt); s.x += s.vx * dt; s.sprint = true;
       if (s.x > WORLD + 140) { c.phase = "gone"; c.r.root.visible = c.r.shadow.visible = false; } }
     const yT = c.phase === "wave" ? -Math.PI / 2 : s.face > 0 ? -.85 : -Math.PI + .85;
@@ -30435,7 +30500,7 @@ function frame(now) {                              // (the next frame is asked f
     adaptQuality(dt); pboxTick();   // (Crux's play box, up while you play in his city: 2026-11-07)
     if (shadeUp) { syncMusic(dt); shadeUp.frame(dt); return; }   // (the SHADING MOCKUP: its own stage)
     if (castUp) { syncMusic(dt); castFrame(dt); return; }   // (ENEMIES & NPCS: its own stage on the game's canvas)
-    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale && !cutHeld) taleTick(dt); if (pro && !cutHeld) proTick(dt); { const c = cutOn(); if (c !== cutCls) { cutCls = c; document.body.classList.toggle("cutOn", c); } } if (rideS) rideTick(dt); if (vo && !cutHeld) voTick(dt); if (spot) spotTick(dt); else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
+    pollPad(); audioWatch(performance.now()); syncMusic(dt); guaHumTick(dt); if (tale && !cutHeld) taleTick(dt); if (pro && !cutHeld) proTick(dt); { const c = cutOn(); if (c !== cutCls) { cutCls = c; document.body.classList.toggle("cutOn", c); } } if (rideS) rideTick(dt); if (vo && !cutHeld) voTick(dt); if (spot) { if (!(cutHeld && spot.cut)) spotTick(dt); } else if (voQ.length && story && mode === "play" && !paused && !comicUp && !rideS) startVO(voQ.shift()); if (cvo) comicVoTick(dt); tutTick(dt); tbFrame(dt); roomFx(dt); if (bPick) beachPickTick(); syncBugs(); syncShore(dt); syncDawn(dt); syncWeapon(dt); syncCoinHud();
     keysPopCheck(dt);   // (the first time on a keyboard: the controls)
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
