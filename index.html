@@ -446,7 +446,7 @@
   #beachPick.show { display: block; }
   #beachPick .lockup { position: absolute; top: 8%; left: 50%; transform: translateX(-50%); text-align: center; white-space: nowrap; }
   #bpHint { position: absolute; bottom: 8%; left: 50%; transform: translateX(-50%); font: 600 12px "Jost", sans-serif; letter-spacing: .3em; color: var(--y); background: var(--s); padding: 6px 14px; white-space: nowrap; }
-  .bpArr { position: absolute; width: 40px; height: 36px; transform: translate(-50%, -100%); opacity: .4; transition: opacity .2s; }
+  .bpArr { position: absolute; width: 40px; height: 36px; transform: translate(-50%, -100%); opacity: 0; transition: opacity .2s; }   /* (only the one you're on: a faded second one stood over the other girl, the user 2026-11-08 "when showing which girl to pick, only show one arrow at a time, not a faded second one") */
   .bpArr svg { width: 100%; height: 100%; overflow: visible; } .bpArr path { fill: var(--y); stroke: var(--s); stroke-width: 4; stroke-linejoin: round; }
   .bpArr.on { opacity: 1; animation: bpBob .55s ease-in-out infinite alternate; }
   @keyframes bpBob { from { margin-top: -8px; } to { margin-top: 2px; } }
@@ -726,7 +726,7 @@
 </style>
 <script src="charkit.js?v=20261107"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="shading.js?v=20261106b"></script>
+<script src="shading.js?v=20261108c"></script>
 <script src="score.js?v=20261104a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
@@ -1405,6 +1405,12 @@ let shadeRaw = false;                                // (the SHADING MOCKUP buil
 const SHADE = (() => { const B = window.BerryShading, A = B && B.active(); if (!A) return null; const U = B.newUnifs(THREE), H = B.hullMat(THREE);
   const o = { A, U, H, edge: B.setHull(H, A.cfg.character), patch: sh => B.patchShader(sh, U), pass(ch) { const C = A.cfg; if (ch) B.setChar(U, C.character); else B.setEnv(U, C.environment); } }; return o; })();
 function shadeMat(m) { if (SHADE && !shadeRaw) { m.onBeforeCompile = sh => SHADE.patch(sh); m.customProgramCacheKey = () => "shade"; } return m; }
+// CLAY LOOK (pause > DEBUG; the user, 2026-11-08: "yes let's do the clay debug shader to see", after the clay mockup): shading.js's clay over the game's look, off
+// unless switched on there, kept in this browser (bb_clay). Just the shader: the scenery keeps its own shapes, with clay on them
+let clayOn = (() => { try { return localStorage.getItem("bb_clay") === "1"; } catch (e) { return false; } })();
+function claySet(on, save) { clayOn = !!on; if (window.BerryShading && BerryShading.setClay) BerryShading.setClay(clayOn); if (SHADE) SHADE.H.mat.visible = !clayOn;   // (no light edge round them in clay)
+  if (save) try { localStorage.setItem("bb_clay", clayOn ? "1" : "0"); } catch (e) { } }
+claySet(clayOn);
 function shadeHulls(root) {                          // (the look's edge highlight: its light hull on each of a character's toon parts, once)
   if (!SHADE || !SHADE.edge || shadeRaw || !root) return;
   root.traverse(o => { if (!o.isMesh || o.userData.mkHull || o.userData.mkHullMesh || !o.material || !o.material.isMeshToonMaterial || !o.geometry || !o.geometry.attributes.normal) return;
@@ -1673,7 +1679,7 @@ function saveFile(name, text) { try { const a = document.createElement("a"); a.h
 function pickFile(cb) { const i = document.createElement("input"); i.type = "file"; i.accept = ".json,application/json"; i.style.display = "none"; i.addEventListener("change", async () => { const f = i.files && i.files[0]; i.remove(); if (f) cb(await f.text()); }); document.body.appendChild(i); i.click(); }
 function copyText(text, said) { (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(() => toast(said, 1600), () => { prompt("Copy these settings:", text); }); }
 // all of them in one file: the combat feel, a look applied from the SHADING MOCKUP (and the mockup's own). From pause > DEBUG or the DEVELOPER menu
-const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_fps", "bbBigRoom", "bbItemsInf"];   // (the big room test and unlimited items too, 2026-11-01; the SHADER, 2026-11-04)
+const DEBUG_KEYS = ["berry.feel.v2", "berry.shading.v1", "berry.shadingMockup.v1", "bb_fps", "bbBigRoom", "bbItemsInf", "bb_clay"];   // (the big room test and unlimited items too, 2026-11-01; the SHADER, 2026-11-04; the CLAY LOOK, 2026-11-08)
 try { localStorage.removeItem("bb_look"); localStorage.removeItem("bb_shader"); } catch (e) { }   // (DEBUG's TEXTURE and SHADER tries are gone, and what a browser kept of them: the user, 2026-11-05 "it looks like there's more texture on the regular graphics correct? let's leave that and remove the other shaders and filters")
 function debugExport() { const o = { berryDebug: 1, at: new Date().toISOString(), keys: {} }; for (const k of DEBUG_KEYS) { try { const v = localStorage.getItem(k); if (v != null) o.keys[k] = JSON.parse(v); } catch (e) { } } return JSON.stringify(o, null, 2); }
 function debugImport(text) { const o = JSON.parse(text); if (!o || !o.berryDebug || !o.keys) throw new Error("not a debug settings file"); for (const k of DEBUG_KEYS) if (k in o.keys) localStorage.setItem(k, JSON.stringify(o.keys[k])); }
@@ -7383,7 +7389,7 @@ function pauseChoose(what) {
     $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "qno") { SFX.tick(); $("pAsk").classList.add("hidden"); pauseButtons(); setPauseSel(PAUSE_OPTS.indexOf("quit")); return; }
   if (what === "qyes") what = "quit";
-  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dlog", "dfeel", "dfps", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
+  if (what === "debug") { SFX.confirm(); $("pause").classList.add("dbg"); PAUSE_OPTS = ["dgo", "dlog", "dfeel", "dfps", "dclay", "dbig", "dhero", "dteam", "dwpn", "dinf", "dreset", "dup", "dexp", "dimp", "dtale", "dback"]; $("pbtns").innerHTML = PAUSE_OPTS.map(q => `<button data-p="${q}">${q === "dup" ? upLabel() : q === "dwpn" ? wpnLabel() : q === "dfps" ? "FPS COUNTER: " + (fpsOn ? "ON" : "OFF") : q === "dclay" ? "CLAY LOOK: " + (clayOn ? "ON" : "OFF") : q === "dbig" ? "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF") : q === "dinf" ? "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF") : q === "dhero" ? "PLAY AS " + otherHero().name.toUpperCase() : PAUSE_LABEL[q]}</button>`).join("");
     $("pAsk").innerHTML = "DEBUG<br>GO TO ANY ROOM OF THIS WORLD, PLAY AS THE OTHER GIRL, OR SET THIS ROOM BACK TO NEW"; $("pAsk").classList.remove("hidden"); setPauseSel(0); return; }
   if (what === "dgo") { SFX.confirm(); dbgPick = { sel: stage }; $("pause").classList.add("dpick"); PAUSE_OPTS = ["dback"]; $("pbtns").innerHTML = `<button data-p="dback">BACK</button>`;
     $("pAsk").innerHTML = "DEBUG: PICK A ROOM ON THE MAP<br>ARROWS TO MOVE · Z / ✕ TO GO THERE<br><b class='dbgRoom'></b>"; $("pAsk").classList.remove("hidden"); setPauseSel(0); drawPauseMap(); return; }
@@ -7407,6 +7413,7 @@ function pauseChoose(what) {
   if (what === "dbig") { SFX.tick(); bigOn = !bigOn; try { localStorage.setItem("bbBigRoom", bigOn ? "1" : "0"); } catch (e) {} const b = $("pbtns").querySelector('[data-p="dbig"]'); if (b) b.textContent = "BIG ROOM TEST: " + (bigOn ? "ON" : "OFF");
     toast(bigOn ? "BERRY WOODS A2 A3 B2 B3: ONE ROOM, FROM THE NEXT TIME YOU GO IN" : "BERRY WOODS A2 A3 B2 B3: FOUR SCREENS AGAIN, FROM THE NEXT TIME YOU GO IN", 3200); return; }   // (the big room test, 2026-11-01)
   if (what === "dfps") { SFX.tick(); fpsSet(!fpsOn); const b = $("pbtns").querySelector('[data-p="dfps"]'); if (b) b.textContent = "FPS COUNTER: " + (fpsOn ? "ON" : "OFF"); return; }   // (2026-10-31)
+  if (what === "dclay") { SFX.tick(); claySet(!clayOn, true); const b = $("pbtns").querySelector('[data-p="dclay"]'); if (b) b.textContent = "CLAY LOOK: " + (clayOn ? "ON" : "OFF"); return; }   // (2026-11-08)
   if (what === "dinf") { SFX.tick(); itemsInf = !itemsInf; try { localStorage.setItem("bbItemsInf", itemsInf ? "1" : "0"); } catch (e) {} const b = $("pbtns").querySelector('[data-p="dinf"]'); if (b) b.textContent = "UNLIMITED ITEMS: " + (itemsInf ? "ON" : "OFF");
     toast(itemsInf ? "UNLIMITED ITEMS: USE ANY OF THEM AS OFTEN AS YOU LIKE (KEPT IN THIS BROWSER)" : "ITEMS: AS MANY AS YOU'RE CARRYING AGAIN", 3000); return; }   // (2026-11-01)
   if (what === "dexp") { SFX.confirm(); debugFileOut(); return; }   // (every debug setting in one file, and back: 2026-10-31)
@@ -9311,7 +9318,7 @@ function buildRoad() {                               // the coast road at sunset
   const U = bus.userData, ride = (id, r, lx, ly, lz, face, yaw, extra) => { const st = makeState(0, r); Object.assign(st, { face, yaw, onGround: true, vx: 0, vy: 0 }, extra || {}); r.root.visible = r.shadow.visible = true; return { id, r, st, lx, ly, lz, yaw }; };
   const rc = roster.find(q => q.id === "camila"), rr = roster.find(q => q.id === "rose"); R.kids = [];
   U.rb.position.x = U.bx1 - 1.7;   // (the prologue's: the roll bar further back, so the two of them aren't on top of each other. The user, 2026-11-03: "have camila and rose better posed in the opening movie instead of just overlapping with each other")
-  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
+  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80, rest: 1 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
   if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - 2.15, U.by + .08, .05, 1, -.5), hold: "F" });   // (facing on, her near hand's her right: hold "F", that arm up)
   const A = BUS_DRIVER; if (A) { const r = allyRig(A); R.driver = { ...ride("noro", r, U.cx1 - .92, 1.2, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (Noro at the wheel, El Pico's place till 2026-11-08: the user, "cut him as we'll have noro driving"; now and then he turns to look out) · 1.2: his mask in the window, his big hair up to the roof (cabLy's 1.66 hid his head)   // (his head in the window, behind the wheel)
   return R;
@@ -9328,8 +9335,9 @@ function roadTick(R, dt) {                           // (every frame: the coast 
     s.yaw = c.look ? c.yaw - .75 * Math.pow(Math.max(0, Math.sin(R.t * .62)), 1.6) : c.yaw;   // (the driver: a look out of the window, and back to the road)
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
     if (c.hold) { const o = s.out, F = c.hold === "F"; o[F ? "armF" : "armB"] = 2.55; o[F ? "elbF" : "elbB"] = .35; o.lean = (o.lean || 0) + .05; }
+    if (c.rest) Object.assign(s.out, BUS_REST);   // (sat back against the cab, her hands on her knees: busSword)
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .1 * Math.sin(R.t * 2.1);   // (his head bobbing along)   // (her other hand up on the roll bar: the blade's in the first)
-    c.r.sync(s, c.r, dt); };
+    c.r.sync(s, c.r, dt); if (c.rest) busSword(c, R); };
   R.kids.forEach(place); if (R.driver) place(R.driver);
 }
 function disposeRoad(R) {
@@ -9418,7 +9426,7 @@ function rideSeats(oth0) {                           // who's in La Guagua and w
   const me = rideMe(), other = me === "rose" ? "camila" : "rose", R = [], mine = { st: player, r: rig };
   const oR = roster.find(q => q.id === other), oth = oth0 || (oR ? { st: makeState(0, oR), r: oR } : null), girl = id => id === me ? mine : oth;
   const people = []; allies.forEach(a => [a, ...(a.crew || [])].forEach(m => people.push({ st: m.st, r: m.r })));
-  const seat = (c, o) => { if (c) R.push({ ...c, ...o }); }, CAB = { look: true, sit: 1 }, SPOT = { back: CAB, rear: CAB, camila: { sit: 1 }, rose: { hold: true }, bed0: { sit: 1 }, bed1: { sit: 1 } };
+  const seat = (c, o) => { if (c) R.push({ ...c, ...o }); }, CAB = { look: true, sit: 1 }, SPOT = { back: CAB, rear: CAB, camila: { sit: 1, rest: 1 }, rose: { hold: true }, bed0: { sit: 1 }, bed1: { sit: 1 } };
   const shuffle = L => { for (let i = L.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [L[i], L[j]] = [L[j], L[i]]; } return L; };
   // a fresh mix every time (the user, 2026-10-26: "randomize everyone's positions each time ... if they didnt finish with a partner, camila drives, but rose can be either in
   // the back, passenger seat, or back seat behind the passenger side. then if there are partners, the one buddy should always drive, but camila and rose's and any extra
@@ -9510,10 +9518,11 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
     s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .75 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
     s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
     if (c.hold) { const o = s.out, F = c.hold === "F"; o[F ? "armF" : "armB"] = 2.55; o[F ? "elbF" : "elbB"] = .35; o.lean = (o.lean || 0) + .05; }   // (a hand up on the roll bar)
+    if (c.rest) Object.assign(s.out, BUS_REST);   // (the seat up by the cab: sat back against it, hands on the knees, a sword stood beside them, busSword)
     if (c.slot === "back" || c.slot === "rear") { const o = s.out; o.armF = .2; o.elbF = .45; o.armB = .2; o.elbB = .45;   // (turned to the window: hands down in the lap, not out through the door)
       if (c.r.prop && c.r.prop.kind === "sword") o.wrist = BLADE_TUCK - (o.armF + o.elbF); }   // (a sword: stood up beside her, inside. It went out through the door: the user, 2026-10-26 "tuck it unless it naturally goes over not through")
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .08 * Math.sin(R.t * 2.1 + c.lz);
-    c.r.sync(s, c.r, dt); c.r.root.visible = c.r.shadow.visible = true; }
+    c.r.sync(s, c.r, dt); if (c.rest) busSword(c, R); c.r.root.visible = c.r.shadow.visible = true; }
 }
 function rideTick(dt) {                              // (every frame, paused or not)
   const P = rideS, Bl = $("proBlack"); P.t += dt; const fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); };
@@ -10177,7 +10186,8 @@ const DESK_BOOK = { desk: { pages: ["woods1", "woods2", "uprise"], lines: [["woo
 const DESK = { top: 1, nx: -.06, nz: .98, pw: .92, pd: .69, fov: 30, flip: 1.4, tA: 2.6, tB: 2.8, tC: 2.1 };   // (the desk's top, the sketchbook's middle and size, the lens, a page's turn, the three shots' lengths)
 const DESK_FOCUS = [null, [178, 420, 620], [500, 420, 620], [822, 420, 620]];   // (the uprising page's three drawings: across, down, how tall, on its 1000 by 750)
 const deskTexes = {};
-function deskTex(n) { let t = deskTexes[n]; if (!t && DESK_PAGES[n]) { t = deskTexes[n] = new THREE.TextureLoader().load(DESK_PAGES[n], q => { q.userData.ok = true; }); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; } return t || null; }   // (ok once it's in: till then the page is plain paper, not black)
+function deskTex(n) { let t = deskTexes[n]; const U = t && t.userData; if (U && U.fail && performance.now() - U.fail > 1500 && U.tries < 4) t = null;   // (ok once it's in: till then the page is plain paper, not black · one that didn't come in: tried again, a few times)
+  if (!t && DESK_PAGES[n]) { const k = U ? U.tries + 1 : 0; t = deskTexes[n] = new THREE.TextureLoader().load(DESK_PAGES[n] + (k ? "&r=" + k : ""), q => { q.userData.ok = true; }, undefined, e => { t.userData.fail = performance.now(); console.warn("desk page", n, e); }); t.userData.tries = k; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; } return t || null; }
 function deskSet(m, tx) { const w = tx && tx.userData.ok ? tx : null; if (m.map !== w) { m.map = w; m.color.set(w ? "#ffffff" : "#efe2c4"); m.needsUpdate = true; } }
 function deskRoom(sc) {                              // her room at night: the desk, her chair, the sketchbook open with its spiral along the top, her pencils, the lamp; the window, her corkboard, a shelf, a poster
   const T = DESK, G = new THREE.Group(), mat = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o }); sc.add(G);
@@ -12118,7 +12128,8 @@ function updatePlayer(dt) {
     const both = bk && held.block && (bkEdge || (p.blkDownT === time && time - (p.backDownT ?? -9) < .15));   // (holding block, back pressed; or block pressed just after back)
     if (both && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startDodge(p);
     { const fw = p.face > 0 ? held.right : held.left, fwEdge = fw && !p.fwWas; p.fwWas = fw;   // (the monk along: block and forward, the team roll, 2026-11-02 · off since 2026-11-03 late: "remove any button inputs paired with block for now" ... "except for backflip or step back")
-      if (false && fwEdge && held.block && !teamM && monkOn() && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startRoll(p); }
+      if (fwEdge) p.fwDownT = time; const go = (fwEdge && held.block) || (fw && p.blkDownT === time && time - (p.fwDownT ?? -9) < .15);   // (holding block, forward pressed; or block pressed just after forward)
+      if (go && !teamM && control && p.onGround && !p.dodge && !(p.dodgeCd > 0) && p.atkT < 0 && !p.combo && !p.tackle && !p.tkCharge && !p.tackleLock && !p.climb && !p.swim && !deepIn(p)) startRoll(p); }   // (back on, for everyone, 2026-11-08: the user, "what happened to the rolling forward? ... holding L and pressing forward was supposed to have the characters slide forward around an enemy")
     // (forward with the guard up was a slide, yours or the defender's: gone, 2026-11-01. Back only)
   }
   // sprint: two quick taps the same way, then keep holding
@@ -12267,7 +12278,8 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
-  if (p.dodge && p.dodge.fwd) { const D = p.dodge; D.t += dt; p.vx = p.face * 780 * Math.max(0, 1 - D.t / .46); if (Math.random() < dt * 30) dust(p.x - p.face * 10, p.y, 1, -p.face);   // the slide forward: carried on, slowing
+  if (p.dodge && p.dodge.bump && (p.x - p.dodge.bump.x) * p.face >= -2) rollBump(p);   // (rolled up against the one you couldn't get round)
+  if (p.dodge && p.dodge.fwd) { const D = p.dodge; D.t += dt; p.vx = p.face * 780 * (D.k || 1) * Math.max(0, 1 - D.t / .46); if (Math.random() < dt * 30) dust(p.x - p.face * 10, p.y, 1, -p.face);   // the slide forward: carried on, slowing
     p.z = Math.sin(clamp(D.t / .4, 0, 1) * Math.PI) * 1.3;   // (out round in front of them and back onto her line: running round them, 2026-10-31)
     D.air = p.onGround ? 0 : (D.air || 0) + dt; if (D.t > .4 || D.air > .12) { p.dodge = null; p.vx *= .2; p.z = 0; const vis = p.yaw + ((p.pose && p.pose.spin) || 0) * p.face; p.face = -p.face; p.yaw = vis; if (p.pose) p.pose.spin = 0; p.pivotT = 0; } }   // (its end: facing back the way she came, the user 2026-10-31. The turn its keys made taken into her facing just as it is, so she's left all the way round and nothing swings back)
   else if (p.dodge && (((p.dodge.t += dt) > .08 && p.onGround) || p.dodge.t > (p.dodge.T ? p.dodge.T + .2 : .7))) { p.dodge = null; p.vx *= .25; if (p.onGround) dust(p.x, p.y, 4, -p.face); }   // (down again: the back-step done)
@@ -12869,17 +12881,19 @@ function bcLaunch(p, M) {                             // (the user, 2026-11-06: 
   const { lv, dir, D, A } = M, H = p.rig.heightPx || 92, aUp = !!(A && A.q && (A.q.bc || !A.q.onGround));   // (aUp: your attacker still up off the last one)
   if (!lv) { const second = p.lnN === 1 && time - (p.lnAt ?? -9) < LAUNCH.again;
     if (!second && A && !aUp) { p.lnN = 1; p.lnAt = time; heroBoost(p, A, dir, LAUNCH.hi, null); SFX.whoosh(); return; }
-    p.lnN = 0; heroLaunch(p, launchBooster(p, A, D), dir, LAUNCH.heroHi, 0); return; }
+    p.lnN = 0; const Bp = launchBooster(p, A, D); if (!Bp) { heroNo(p, ""); return; } heroLaunch(p, Bp, dir, LAUNCH.heroHi, 0); return; }   // (no one fresh close by to go up off: no jump at all. It was your own, half as high again as theirs: the user, 2026-11-08 "when one buddy is down, your jump move holding L and pressing X sends the player way too high up" and "if your buddies are not near you, you shouldn't be able to do the hold L and X high jump")
+  const Dn = D && boostNear(D.q, p) ? D : null; if (!(A && !aUp) && !Dn) { p.lnN = 0; heroNo(p, ""); return; }   // (charged: the same)
   p.lnN = 0; SFX.release(lv); aura.flare = .3; aura.lv = lv;
-  if (A && !aUp) heroBoost(p, A, dir, LAUNCH.hiC, lv >= 2 ? { D, hi: LAUNCH.heroHiC, after: lv >= 3 ? LAUNCH.hiC : 0 } : null);   // (2 and 3: then your blocker turned round to boost you; 3, it jumps up after)
-  else heroLaunch(p, D, dir, LAUNCH.heroHiC, lv >= 3 ? LAUNCH.hiC : 0);
+  if (A && !aUp) heroBoost(p, A, dir, LAUNCH.hiC, lv >= 2 && Dn ? { D: Dn, hi: LAUNCH.heroHiC, after: lv >= 3 ? LAUNCH.hiC : 0 } : null);   // (2 and 3: then your blocker turned round to boost you; 3, it jumps up after)
+  else heroLaunch(p, Dn, dir, LAUNCH.heroHiC, lv >= 3 ? LAUNCH.hiC : 0);
   if (lv >= 3) popText(p.x, p.y - H - 18, "ALL UP!", 800);
 }
 function launchBooster(p, A, D) {                     // the second step's: your attacker, if it's down again and near (back from what it went off at), else your blocker (the user, 2026-11-06: "if the attacker is in the air, the girl just jumps off the blocker for her jump, or if the buddy has landed, the attacking buddy does it for her")
-  const Dq = D && D.q, D0 = partDefender(), Ap = A || partnerList().find(P => P.q && P.q !== Dq && (!D0 || P.q !== D0.q)) || null, q = Ap && Ap.q;
-  const ok = q && !q.worn && !q.bc && q.onGround && !(q.hurtT > 0) && !(q.bcStun > 0) && !q.bubble && !q.tcFly && !q.tcOn && !q.fleap && !q.dzap && !q.roll && !q.homeW && Math.abs(q.x - p.x) < BOOST.far && Math.abs(q.y - p.y) < 90 && !walled(q.x, p.x);
-  return ok ? Ap : D || null;
+  const Dq = D && D.q, D0 = partDefender(), L = [A, ...partnerList().filter(P => P.q && P.q !== Dq && (!D0 || P.q !== D0.q) && (!A || P.q !== A.q))];   // (your attacker, else another one beside you fresh and down: the one you heaved up's still up there)
+  const ok = P => { const q = P && P.q; return !!q && !q.worn && !q.bc && q.onGround && !(q.hurtT > 0) && !(q.bcStun > 0) && !q.bubble && !q.tcFly && !q.tcOn && !q.fleap && !q.dzap && !q.roll && !q.homeW && Math.abs(q.x - p.x) < BOOST.far && Math.abs(q.y - p.y) < 90 && !walled(q.x, p.x); };
+  return L.find(ok) || (D && boostNear(D.q, p) ? D : null);
 }
+const boostNear = (q, p) => !!q && !q.worn && !(q.hurtT > 0) && !q.bubble && !q.roll && !q.tcFly && !q.fleap && Math.abs(q.x - p.x) < BOOST.far && Math.abs(q.y - p.y) < 90 && !walled(q.x, p.x);   // (a fresh buddy close by on your level, to go up off its hands: a worn-out one, or one away up or down a level, and you don't go up at all)
 function budLaunch(P, dir, hi, delay, self) {        // (self: up on its own, your blocker's jump; else onto your cupped hands first and heaved up)
   bcSet(P, { k: "leap", launch: true, self, dir, ph: "wait", delay, via: null, hi, reach: hi + LAUNCH.look, fw: 0, Tu: clamp(Math.sqrt(2 * hi / (GRAV * WEIGHT)), .34, .6), hold: .08, Td: .22, pow: 1.3, aim: 200 });   // (Tu: its way up at gravity's pace for that height, 2026-11-08; it was .42 for any)
 }
@@ -12895,7 +12909,7 @@ function heroBoostTick(p, G, dt) {                    // (bcGoTick) the crouch t
     if (B.ph === "ride" && B.t >= BOOST.stand) { ph("heave"); p.sq = -.2; p.sqv = 0; if (G.then) G.then.Bq = boostSet(G.then.D, G.dir, G.then.after); }   // (a charged one's: your blocker turning round to you meanwhile)
     return; }
   if (G.ph === "heave") { p.bstK = Math.max(0, 1 - G.t / .07); p.heaveK = Math.min(1, G.t / .09);
-    if (G.t >= BOOST.heave) { if (G.then) heroLaunchGo(p, G.then.Bq || null, G.dir, G.then.hi); else ph("rec"); } return; }
+    if (G.t >= BOOST.heave) { if (G.then && G.then.Bq) heroLaunchGo(p, G.then.Bq, G.dir, G.then.hi); else ph("rec"); } return; }   // (no blocker to boost you after all: just back up out of it, never up on your own)
   p.bstK = 0; p.heaveK = Math.max(0, 1 - G.t / BOOST.rec); if (G.t >= BOOST.rec) bcGoEnd(p);
 }
 function boostSet(Pb, dir, after) { if (!Pb || !Pb.q || Pb.q.worn) return null; bcSet(Pb, { k: "boost", dir, ph: "go", after: after || 0 }); return Pb.q; }   // (a buddy to boost you: boostStep; after, its own jump up once you're up)
@@ -12904,7 +12918,7 @@ function heroLaunchGo(p, Bq, dir, hi) { p.bcGo = { k: "launch", t: 0, dir, hi, B
 function heroLaunchTick(p, G, dt) {                  // (bcGoTick) waiting for its hands, the hop onto them, a beat on them, and up: the guard over, in the air and yours to steer
   const Bq = G.B, Bb = Bq && Bq.bc && Bq.bc.k === "boost" ? Bq.bc : null, ph = n => { G.ph = n; G.t = 0; G.x0 = p.x; G.y0 = p.y; G.z0 = p.z || 0; };
   p.block = false; p.blockHold = 0; p.tpose = 0; p.bstK = 0; p.heaveK = Math.max(0, (p.heaveK || 0) - dt * 6);
-  if (G.ph !== "go" && !Bb) ph("go");
+  if (G.ph !== "go" && !Bb) { if (G.ph !== "ride") { p.perch = false; bcGoEnd(p); return; } ph("go"); }   // (its hands gone before you were up on them, hit or worn out: called off, not up on your own from the ground at half as high again)
   if (G.ph === "wait") { p.vx = 0; p.tkDig = .5; if (Bb.ready || G.t > 1.4) ph("hop"); return; }
   p.tkDig = 0;
   if (G.ph === "hop") { const h = boostHand(Bq, Bq.face), u = Math.min(1, G.t / BOOST.hop);   // (a step up onto them)
@@ -14211,16 +14225,27 @@ const ROLL = { T: .46, v: 980, team: 230 };
 function startRoll(p) {                             // the monk's: block and forward, a roll on past them, turned round to face them at the end; the whole team rolls with you
   Object.assign(p, { dodge: { t: 0, fwd: true, roll: true }, dodgeCd: .6, vx: p.face * ROLL.v, block: false, blockHold: 0, tpose: 0, chargeT: 0, chargeLv: 0, sq: -.15, sqv: 0 });
   p.inv = Math.max(p.inv || 0, ROLL.T + .1); SFX.dash(); dust(p.x, p.y, 6, -p.face); const dir = p.face;
-  teamRoll(dir);
+  const W = rollBlock(p, dir), bump = W && W.stuck ? W : null; if (bump) p.dodge.bump = bump; else if (W) p.dodge.k = W.k; teamRoll(dir, bump);   // (k: stretched to carry you right round the one in front)
 }
-function teamRoll(dir) {                             // (the team rolling on, as you do, or without you: the monk's special)
-  partnerList().forEach(P => { const s = P.q; if (!s || s.worn || s.post) return; let x1 = clamp(s.x + dir * ROLL.team, 40, WORLD - 40); const g0 = groundAt(s.x), g1 = groundAt(x1);
-    if (g1 === null || (g0 !== null && Math.abs(g1 - g0) > 40)) x1 = s.x; s.roll = { t: 0, x0: s.x, x1, dir }; s.block = false; s.defOn = false; });
+function rollBlock(p, dir) {                         // (rolling on: the foe close in front, and whether you get all the way round it. Too wide for the roll to get past, or no footing past it (a drop, the water, a step, the map's end): a bump against it instead. The user, 2026-11-08 "if the player was not able to get all the way around, there was supposed to be an animation of them bumping against the enemy")
+  let e = null, bd = 1e9; for (const q of partFoesAll()) { if (!q || q.dead || q.gone) continue; const dx = (q.x - p.x) * dir; if (dx < -10 || dx > 170 || Math.abs(q.y - p.y) > 60 || dx >= bd) continue; bd = dx; e = q; }
+  if (!e) return null; const hw = eHW(e), past = e.x + dir * (hw + 40), g = groundAt(past), need = (past - p.x) * dir;
+  const stuck = need > 280 || past < 40 || past > WORLD - 40 || g === null || Math.abs(g - p.y) > 40;   // (280: the furthest the roll stretches, 1.6 times its own ~176)
+  return { e, x: e.x - dir * (hw + 16), stuck, k: clamp(need / 176, 1, 1.6) };
+}
+function rollBump(p) {                               // (the roll stopped short against it: knocked back off it a step, a little hop, still facing it)
+  const B = p.dodge.bump; p.x = B.x; p.dodge = null; p.z = 0; p.zBack = false; Object.assign(p, { vx: -p.face * 300, vy: -240, onGround: false, plat: null, hurtT: .28, sq: -.3, sqv: 0 }); p.inv = Math.max(p.inv || 0, .35);
+  SFX.thud(); dust(p.x + p.face * 14, p.y, 6, -p.face); shake = Math.max(shake, 3); if (B.e && !B.e.dead) B.e.vx = (B.e.vx || 0) + p.face * 60;
+}
+function teamRoll(dir, bump) {                       // (the team rolling on, as you do, or without you: the monk's special. bump: you stopped short against one, so they stop behind you, still facing it)
+  const stop = (x0, x1, i) => { if (!bump) return x1; const lim = bump.x - dir * (40 + 34 * i); return (x1 - lim) * dir > 0 ? ((lim - x0) * dir > 0 ? lim : x0) : x1; };
+  partnerList().forEach((P, i) => { const s = P.q; if (!s || s.worn || s.post) return; let x1 = stop(s.x, clamp(s.x + dir * ROLL.team, 40, WORLD - 40), i); const g0 = groundAt(s.x), g1 = groundAt(x1);
+    if (g1 === null || (g0 !== null && Math.abs(g1 - g0) > 40)) x1 = s.x; s.roll = { t: 0, x0: s.x, x1, dir, bump: !!bump }; s.block = false; s.defOn = false; });
   [pal, pal2].forEach(q => { if (q && !q.roll) { const x1 = clamp(q.x + dir * ROLL.team, 40, WORLD - 40); q.roll = { t: 0, x0: q.x, x1: groundAt(x1) === null ? q.x : x1, dir }; } });
 }
 function rollTick(s, dt) {                          // a frame of a roll (the hero's rides her dodge; a partner's, its own here): tucked, turning over, turned round at the end
   const R = s.roll; if (!R) return; R.t += dt; const u = Math.min(1, R.t / ROLL.T); s.block = false; s.defOn = false; s.x = lerp(R.x0, R.x1, 1 - Math.pow(1 - u, 2)); s.vx = 0; s.face = R.dir; s.ball = Math.sin(Math.PI * u) * 1.1; s.rot = R.dir * TAU * u;
-  if (u >= 1) { s.roll = null; s.ball = 0; s.rot = 0; s.face = -R.dir; }
+  if (u >= 1) { s.roll = null; s.ball = 0; s.rot = 0; s.face = R.bump ? R.dir : -R.dir; }   // (stopped short behind you: still facing it)
 }
 function rollTeamTick(dt) { partnerList().forEach(P => rollTick(P.q, dt)); [pal, pal2].forEach(q => { if (q) rollTick(q, dt); });
   const p = player; if (p && p.dodge && p.dodge.roll) { const u = Math.min(1, p.dodge.t / .4); p.ball = Math.sin(Math.PI * u) * 1.1; p.rot = p.face * TAU * u; p.rolled = true; }
@@ -15136,7 +15161,10 @@ function postClear(P) { if (P && P.q) { P.q.post = null; postRing(P.q, false); }
 // your level, otherwise they just follow you there until there's a split"): called back while on another level, a buddy keeps to its own (the floor or platform it's on, end to
 // end), under you or over you, and goes along with you there; △ + ↑ (a jump) or △ + ↓ (down off it) brings it to you, and once it's level with you it's with you as ever
 function lvlLockSet(q) { const p = player; if (!q || !p || q.climb || q.zip) return; const off = q.y - (p.onGround ? p.y : (p.safe && p.safe.y) ?? p.y) > 40;   // (below you only, as asked: one up over you comes down to you. The user, 2026-11-04: "stilt got stuck on the platform on b8 and couldn tget off even when I called them")
-  q.lvlLock = off && (q.onGround || !!q.plat); q.lvlSp = q.lvlLock ? supportSpan(q) : null; }
+  q.lvlLock = off && (q.onGround || !!q.plat) && !stairsTo(q, p); q.lvlSp = q.lvlLock ? supportSpan(q) : null; }   // (stairsTo: no split level, just steps up to you)
+const stairsTo = (q, p) => { if (!q || !p || q.plat || p.plat) return false; const tx = p.onGround ? p.x : (p.safe && !p.safe.plat ? p.safe.x : null); if (tx === null) return false;   // (the ground from it to you, every step up on it one it hops: C5's stairs. Locked to the step it stood on, it never came up them after you: the user, 2026-11-08 "in berry woods, c5, they wont jump up after me when I call them back. they stay at the lower level")
+  const d = Math.sign(tx - q.x) || 1; let g0 = groundAt(q.x); if (g0 === null) return false;
+  for (let x = q.x + d * 10; (tx - x) * d > 0; x += d * 10) { const g = groundAt(x); if (g === null || g0 - g > 120) return false; g0 = g; } return true; };
 function chgDrop(p) {                               // △ with ↓: off what they stand on, down a level, and after you
   const L = partCmd(); if (!L.length) return; let n = 0;
   L.forEach(P => { const q = P.q; if (q.climb || q.zip) return; postClear(P); q.lvlLock = false; homeSet(q);
@@ -15643,15 +15671,23 @@ function partFollow(s, k, dt) {                     // its place: a step behind 
   s.folT = time;                                     // (following: sepStep leaves the line's spacing to the line)
   { const rk = allyRoomKey(); if (s.inRk !== rk) { s.inRk = rk; s.inWait = .1 + k * .28; } }   // (into a room: off one after another, the first in line first, not all as one. The user, 2026-11-04: "when you start a new room, the team is too bunched up and they all stop moving together. let them start moving in a staggered way so they hit the normal separation/rhythm")
   if (s.inWait > 0 && s.onGround && !s.lvlLock) { s.inWait -= dt; s.vx = approach(s.vx, 0, 3400 * dt); s.face = p.face; s.sprint = false; return 0; }
-  if (s.lvlLock && s.onGround && p.onGround && s.y - p.y < 40) s.lvlLock = false;   // (level with you again, or you down under it now: with you, and down off it to you. Called while you were up over it, it kept to its plank end to end after you'd dropped below it, stood at the edge: the user, 2026-11-05 "i was in c8 calling my buddies off of the platform, and I guess the code written to make them not jump off at edges was stopping them from jumping down and coming to me")
+  if (s.lvlLock && s.onGround && p.onGround && (s.y - p.y < 40 || stairsTo(s, p))) s.lvlLock = false;   // (level with you again, or you down under it now: with you, and down off it to you. Called while you were up over it, it kept to its plank end to end after you'd dropped below it, stood at the edge: the user, 2026-11-05 "i was in c8 calling my buddies off of the platform, and I guess the code written to make them not jump off at edges was stopping them from jumping down and coming to me")
   if (s.lvlLock && s.onGround) s.lvlSp = supportSpan(s) || s.lvlSp; const sp = s.lvlLock ? s.lvlSp : followSpan(s);   // (on its own level: what it stands on, end to end)
   ledgeWait(s); if (ledgeSqueeze(s, k, sp)) return 0;   // (a ledge with no place for it: below, at its foot)
-  const want = s.upX ?? shoreX(sepWant(s, crossWait(s, partWant(k, sp, gap)))), dx = want - s.x; s.wantX = want;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
-  const wv = s.worn ? 120 : 700, v = Math.abs(dx) < 3 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv);   // (worn out: a slow walk)
+  const want = edgeStop(s, s.upX ?? shoreX(sepWant(s, crossWait(s, partWant(k, sp, gap))))), dx = want - s.x; s.wantX = want;   // (on what you're stood on: never behind you off the end of the bridge, or a ledge. The user, 2026-11-02: "on the bridge, the buddies kept falling under it")
+  const wv = s.worn ? 120 : 700, v0 = Math.abs(dx) < 3 && Math.abs(p.vx) < 30 ? 0 : clamp(p.vx + clamp(dx * 5, -360, 360), -wv, wv), v = s.edgeD && Math.sign(v0) === s.edgeD ? 0 : v0;   // (worn out: a slow walk)   // (edgeD: stopped at an edge, not on at your speed either)
   s.zLine = partZ(k, sp); s.z = approach(s.z || 0, s.zLine - (s.zBackA || 0), 1.4 * dt);   // (its depth in the line, and any step back to get by one, sepStep)
   if (s.onGround || s.mirrorJ) s.vx = approach(s.vx, s.wave > 0 ? 0 : v, (s.onGround ? 3400 : 1500) * dt); s.sprint = Math.abs(s.vx) > 430;   // (in the air on a hop of its own, over a gap: its own way on)
   s.face = Math.abs(s.vx) > 60 ? Math.sign(s.vx) : p.face;
   if (!s.lvlLock) partJump(s, k, dx); return dx;   // (on its own level: not your jumps either)
+}
+function edgeStop(s, want) {                          // (following, on its feet: on toward its place, but never on off an edge into the water or a gap just because its place is out past it; stopped short of it, edgeD the way it won't go. The user, 2026-11-08 "I had the attacker leading and he walks oiffinto the water or ledges. they should not walk off of ledges that drop them in water or off a map just because it was their normal path. they should stop themsvels short")
+  s.edgeD = 0; if (!s.onGround || s.mirrorJ || s.lvlLock) return want; const d = Math.abs(s.vx) > 40 ? Math.sign(s.vx) : Math.sign(want - s.x); if (!d || (want - s.x) * d < 0 && Math.abs(s.vx) <= 40) return want;
+  const x = s.x + d * (48 + s.vx * s.vx / 6800), g = groundAt(x);   // (as far on as it takes to stop from its speed, and past the 40 updateAlly's gap jump looks: at 24 it saw the edge first and jumped into the sea)
+  if ((s.plat && (R => x >= R[0] && x <= R[1])(stepRun(s.plat))) || (g !== null && g - s.y < 14)) return want;   // (more of what it's on, or ground no lower: a step up's its hop's)
+  if (landBelow(x, s.y + 4) !== null) return want;   // (a drop onto something: down after you, as ever)
+  for (let k = 0, xx = x + d * 20; k < 28; k++, xx += d * 10) if (landBelow(xx, s.y - 160) !== null) return want;   // (a gap with land across it, in a jump: over it, as ever (updateAlly's gap jump); only the sea or a drop to nothing stops it)
+  s.edgeD = d; return s.x;
 }
 function partJump(s, k, dx) {                       // you jumped: so does it, a beat after (the second a beat after that), as high; your double jump too
   const c = pJumpCue; if (s.onGround) s.airJ = 1; if (!c) return;
@@ -15689,7 +15725,7 @@ function partTagTex(g) {                            // the button's mark over it
     x.fillStyle = "#ffffff"; x.font = `900 ${g.length > 1 ? 30 : 46}px sans-serif`; x.textAlign = "center"; x.textBaseline = "middle"; x.fillText(g, w / 2, h / 2 + 3); });
 }
 function partTag(q, i, dt) {                        // shown a moment in each new room, when it joins, and while its button's held
-  q.tagT = Math.max(0, (q.tagT || 0) - dt); const show = q.tagT > 0 && q.rig && q.rig.root && q.rig.root.visible && mode === "play" && !paused;
+  q.tagT = Math.max(0, (q.tagT || 0) - dt); const show = false && q.tagT > 0 && q.rig && q.rig.root && q.rig.root.visible && mode === "play" && !paused;   // (never, since 2026-11-08: the user, "don't show buttons over the buddies since they are not controlled individually in that way anymore")
   if (!q.tagSpr) { if (!show) return; q.tagSpr = new THREE.Sprite(new THREE.SpriteMaterial({ transparent: true, depthTest: false, depthWrite: false, fog: false })); q.tagSpr.scale.set(.5, .5, 1); q.tagSpr.renderOrder = 6; actors.add(q.tagSpr); HEART_HAS.add(q); }
   const S = q.tagSpr; S.visible = show; if (!show) return;
   const m = partTagTex(q.tagTxt && q.post ? q.tagTxt : partBtnName(i)); if (S.material.map !== m) { S.material.map = m; S.material.needsUpdate = true; }   // (told to a place: △)
@@ -26133,11 +26169,11 @@ function propTip(pr) {                               // (how far its point is ou
   pr.inner.traverse(o => { if (o.isMesh && o.geometry) { if (!o.geometry.boundingBox) o.geometry.computeBoundingBox(); q.copy(o.geometry.boundingBox).applyMatrix4(M.multiplyMatrices(_cpM, o.matrixWorld)); b.union(q); } });
   return (pr.innerX = isFinite(b.max.x) ? b.max.x : 1.2);
 }
-function propTo(pr, P, d, n, so) {                   // (the sword out of her hand, put where it's wanted: its grip at P, its blade along d, its flat facing n (all in the world), at scale so; its hand on show)
+function propTo(pr, P, d, n, so, rg = rig) {                   // (the sword out of her hand, put where it's wanted: its grip at P, its blade along d, its flat facing n (all in the world), at scale so; its hand on show)
   pr.inner.rotation.set(0, 0, 0); _cpY.crossVectors(n, d); _cpM.makeBasis(d, _cpY, n); _cpQ.setFromRotationMatrix(_cpM);
   _cpV.copy(P).sub(_cpX.set(0, -.085 * so, 0).applyQuaternion(_cpQ));
   _cpM.compose(_cpV, _cpQ, _cpS.setScalar(so)); pr.group.parent.updateMatrixWorld(true); _cpM.premultiply(new THREE.Matrix4().copy(pr.group.parent.matrixWorld).invert()); _cpM.decompose(pr.group.position, pr.group.quaternion, pr.group.scale);
-  rig.hands.forEach(h => { h.visible = true; });
+  rg.hands.forEach(h => { h.visible = true; });
 }
 function zipHands() {                                // (render, after her rig's sync: on the zip line, how high her hands reach over her feet; her feet hung that far under the handle's bar, zipH)
   const p = player; if (!p || !p.zip || !rig || !rig.hands) return; let top = -1e9; rig.root.updateMatrixWorld(true); rig.hands.forEach(h => { h.getWorldPosition(_cpV); top = Math.max(top, _cpV.y); });
@@ -26160,6 +26196,17 @@ function backProp() {                                // (render, after her rig's
   _cpD.set(0, -Math.cos(a), Math.sin(a)).applyQuaternion(_cpQ).normalize(); _cpX.set(-1, 0, 0).applyQuaternion(_cpQ).normalize();   // (down her back, a little across it; its flat facing out from her back)
   _cpN.set(-cr, 0, 0); ch.localToWorld(_cpN); _cpN.addScaledVector(_cpD, -L * .42);   // (its middle on her back, the grip up over her shoulder)
   propTo(pr, _cpN, _cpD, _cpX.clone(), so);
+}
+const BUS_REST = { lean: -.16, arch: .02, headRot: .06, armF: .42, elbF: .75, spF: .12, armB: .38, elbB: .8, spB: .12 };   // (La Guagua's seat up by the cab: sat back against it, both hands down on the knees)
+function busSword(c, R) {                            // (after the rider's sync: in La Guagua's seat up by the cab, her sword stood point down on the bed beside her, out past her knees by the near side, leant back toward her; both hands her own. The user, 2026-11-08 "on la guagua, rose sshould be sitting down with her sword next to her and back against la guagua")
+  const pr = c.r.prop; if (!pr || pr.kind !== "sword" || !pr.group.parent) return;
+  const U = R.bus.userData, bob = U.B.position.y, so = pr.group.getWorldScale(_cpS).x, big = Math.max(0, pr.inner.scale.x - 1), L = propTip(pr) * pr.inner.scale.x * so, t = -.12 + .12 * big;
+  _cpD.set(Math.sin(t), -Math.cos(t), -.15).normalize(); const n = new THREE.Vector3(0, 0, 1).addScaledVector(_cpD, -_cpD.z).normalize();   // (in at the top against the near side; its flat to you)
+  _cpN.set(R.busX + (c.lx - .38 - .3 * big) * BUS_K, (U.by + .29 + bob) * BUS_K, R.busZ + .8 * BUS_K).addScaledVector(_cpD, -L);   // (its point on the cushion she sits on, by her knees; by the cab or behind her, the cab's corner and the bed's sides hid it, and on the floor only its hilt showed over the side)
+  propTo(pr, _cpN, _cpD, n, so, c.r);
+}
+function busProp() {                                 // (render, after your rig's sync: riding in that seat yourself)
+  const R = rideS && rideS.road; if (!R || !R.riders || R.out) return; const c = R.riders.find(q => q.r === rig && q.rest); if (c) busSword(c, R);
 }
 const consOn = () => !!(player && player.cons && (player.cons.ph === "on" || player.cons.ph === "flip"));   // (syncMusic: the music off, the world muffled)
 
@@ -30244,7 +30291,7 @@ function render(dt) {
     if (ej && ej.st && !ej.away) { ej.r.sync(ej.st, ej.r, dt); ej.r.root.visible = ej.r.shadow.visible = true; }
     for (const q of [...allies.filter(a => !a.away), allyHere]) if (q) [q, ...(q.crew || [])].forEach(m => m.r.sync(m.st, m.r, dt)); healHolds();
     meetSyncs().forEach(m => m.r.sync(m.st, m.r, dt));   // (one found fighting a berry)
-    rig.sync(player, rig, dt); syncEat(player, dt); consHold(); chairProp(); backProp(); zipHands(); consDraw(); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
+    rig.sync(player, rig, dt); syncEat(player, dt); consHold(); chairProp(); backProp(); busProp(); zipHands(); consDraw(); rig.root.visible = rig.shadow.visible = !player.sunk && !opening;
     if (opening) { opening.kids.forEach(k => { k.r.sync(k.st, k.r, dt); k.r.root.visible = k.r.shadow.visible = true; if (k.fruit.visible) { k.r.hands[k.st.face > 0 ? 1 : 0].getWorldPosition(k.fruit.position); k.fruit.position.z += .16; } });
       opening.G.sync(opening.ge, opening.G.rig, dt); opening.mobs.forEach(b => syncBaddy(b, dt)); }
     if (gift) syncBaddy(gift.b, dt); if (duo) duo.forEach(d => { if (!d.e.gone) d.D.sync(d.e, d.D.rig, dt); }); palsAll().forEach(q => q.rig.sync(q, q.rig, dt)); syncCats(dt); if (bossIn && !duo) { foe.sync(enemy, foe.rig, dt); if (foe.post) foe.post(enemy, foe.rig, dt); } baddies.forEach(b => { syncBaddy(b, dt); if (b.calm) calmPose(b); }); syncFriends(dt); if (trap) syncTrap(dt); }

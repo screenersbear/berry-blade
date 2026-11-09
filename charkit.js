@@ -2941,20 +2941,20 @@ Object.assign(STRIKES, {
     bodyY: [[0, 0], [.22, -.2], [.45, .06], [.6, -.02], [1.6, 0], [2.1, 0]] } },
 });
 const ADMIRE = { gauntlet: [null, "adm_g1", "adm_g2", "adm_g3"], sword: [null, "adm_s1", "adm_s2", "adm_s3"] };   // (by the size it's grown to)
-// Camila at her desk, telling the story (index.html's desk scene, 2026-11-08, the user: "a shot of camila drawing at her desk in her house ... we see her hands with a colored
+// Camila at her desk, telling the story (index.html's desk scene, 2026-11-08, the user: "a shot of camila drawing at her desk in her house ... we see her hands with a colored   // (her head only a little down, the lean doing the rest: tipped further, her chin went into her collar, the user 2026-11-08 "make sure her face is not tucked into her chest even though she is looking down")
 // pencil moving"): sat up in her chair (p.sit with these as p.tcPose, which loop), leaning in over the sketchbook, her head down at it. Her right hand (B, sat facing us) draws
 // in little strokes; her left, the gauntlet (F), rests on the desk beside the book. desk_rest: the pencil hand still, out by the page's right edge; desk_flip: the gauntlet up off the desk, turning the page
 const DESK_SIT = { bodyY: [[0, -.3], [3, -.3]], fNx: [[0, .3], [3, .3]], fFx: [[0, .25], [3, .25]], fNy: [[0, 0], [3, 0]], fFy: [[0, 0], [3, 0]] };
 Object.assign(STRIKES, {
-  desk_draw: { dur: 2.4, pose: true, keys: { ...DESK_SIT, lean: [[0, .3], [1.2, .32], [2.4, .3]], headRot: [[0, .36], [1.2, .41], [2.4, .36]], headY: [[0, 0], [.8, -.05], [1.6, .04], [2.4, 0]],
+  desk_draw: { dur: 2.4, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [1.2, .43], [2.4, .41]], headRot: [[0, .05], [1.2, .09], [2.4, .05]], headY: [[0, 0], [.8, -.05], [1.6, .04], [2.4, 0]],
     armF: [[0, .8], [2.4, .8]], elbF: [[0, .9], [2.4, .9]], spF: [[0, .35], [2.4, .35]],
     armB: [[0, 1.0], [.3, 1.04], [.6, .98], [.9, 1.05], [1.2, 1.0], [1.5, 1.03], [1.8, .97], [2.1, 1.04], [2.4, 1.0]], elbB: [[0, .65], [.3, .58], [.6, .72], [.9, .6], [1.2, .7], [1.5, .6], [1.8, .68], [2.1, .62], [2.4, .65]],
     spB: [[0, -.15], [.45, -.05], [.9, -.2], [1.35, -.08], [1.8, -.22], [2.4, -.15]], wB: [[0, 0], [.6, .15], [1.2, -.1], [1.8, .12], [2.4, 0]] } },
-  desk_rest: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .3], [1.5, .33], [3, .3]], headRot: [[0, .38], [1.5, .42], [3, .38]], headY: [[0, 0], [3, 0]],
+  desk_rest: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [1.5, .43], [3, .41]], headRot: [[0, .07], [1.5, .11], [3, .07]], headY: [[0, 0], [3, 0]],
     armF: [[0, .8], [3, .8]], elbF: [[0, .9], [3, .9]], spF: [[0, .35], [3, .35]], armB: [[0, 1.0], [1.5, 1.02], [3, 1.0]], elbB: [[0, .65], [3, .65]], spB: [[0, .5], [3, .5]], wB: [[0, 0], [3, 0]] } },
-  desk_lap: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .14], [1.5, .17], [3, .14]], headRot: [[0, .3], [1.5, .34], [3, .3]], headY: [[0, 0], [3, 0]],   // (sat back, both hands in her lap under the desk: the camera in close on a page's drawings, her mittens out of them)
+  desk_lap: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .14], [1.5, .17], [3, .14]], headRot: [[0, .1], [1.5, .14], [3, .1]], headY: [[0, 0], [3, 0]],   // (sat back, both hands in her lap under the desk: the camera in close on a page's drawings, her mittens out of them)
     armF: [[0, .1], [3, .1]], elbF: [[0, 1.2], [3, 1.2]], spF: [[0, .1], [3, .1]], armB: [[0, .1], [3, .1]], elbB: [[0, 1.2], [3, 1.2]], spB: [[0, .1], [3, .1]], wB: [[0, 0], [3, 0]] } },
-  desk_flip: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .33], [3, .33]], headRot: [[0, .4], [3, .4]], headY: [[0, .05], [3, .05]],
+  desk_flip: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .43], [3, .43]], headRot: [[0, .1], [3, .1]], headY: [[0, .05], [3, .05]],
     armF: [[0, 1.2], [3, 1.2]], elbF: [[0, .55], [3, .55]], spF: [[0, .2], [3, .2]], armB: [[0, 1.0], [3, 1.0]], elbB: [[0, .65], [3, .65]], spB: [[0, .5], [3, .5]], wB: [[0, 0], [3, 0]] } },
 });
 api.ADMIRE = ADMIRE;
