@@ -1606,9 +1606,9 @@ const SWORD_LEAN_IDLE = { rose: [[
   { armF: 1.0, elbF: 1.4, spF: .6, blade: -1.0, armB: .08, elbB: .35, spB: .12, lean: .25, arch: -.04, bodyY: -.05, fNx: .32, fFx: .12, fNz: -.2, fFz: .14, headRot: .1, headY: -.3, lid: 0 },   // (2: upright by her front foot like a staff, her hand on it at her shoulder)
   { armF: 2.3, elbF: .5, spF: .5, blade: -1.1, armB: .08, elbB: .35, spB: .12, lean: .25, arch: -.1, bodyY: -.06, fNx: .34, fFx: .1, fNz: -.2, fFz: .14, headRot: .14, headY: -.25, lid: 0 },   // (3: slanting out ahead, her arm up over her head on it)
   { armF: 2.0, elbF: .9, spF: .7, blade: -.95, armB: .08, elbB: .35, spB: .12, lean: .3, arch: 0, bodyY: -.07, fNx: .3, fFx: -.02, fNz: -.18, fFz: .14, headRot: .22, headY: -.2, lid: .35 } ], [   // (4: the slab propped out ahead at a slant, eyes half shut)
-  { armF: 2.6, elbF: .9, spF: 1.3, blade: -1.45, armB: .08, elbB: .35, spB: .12, lean: -.5, arch: -.04, bodyY: -.12, fNx: .32, fFx: .12, fNz: -.2, fFz: .14, headRot: .1, headY: -.3, lid: 0 },   // (2: a tall staff slanting back, her hand on it at her shoulder, leant back into it; any higher and its point hung off the ground)
-  { armF: 2.45, elbF: .35, spF: .5, blade: -1.78, armB: .08, elbB: .35, spB: .12, lean: -.42, arch: -.1, bodyY: -.06, fNx: .34, fFx: .1, fNz: -.2, fFz: .14, headRot: .14, headY: -.25, lid: 0 },   // (3: up over her head at arm's length, further back into it)
-  { armF: 2.6, elbF: .9, spF: .9, blade: -2.0, armB: .08, elbB: .35, spB: .12, lean: -.4, arch: -.16, bodyY: -.07, fNx: .3, fFx: -.02, fNz: -.18, fFz: .14, headRot: .22, headY: -.2, lid: .35 } ]] };   // (4: the slab propped behind her, slanting; the hilt up by her head, out of her face; her back to it, eyes half shut)
+  { armF: 2.6, elbF: .9, spF: 1.3, blade: -1.45, armB: .08, elbB: .35, spB: .12, lean: -.2, arch: -.13, bodyY: -.1, fNx: .3, fFx: .12, fNz: -.2, fFz: .14, headRot: -.13, headY: -.15, lid: 0 },   // (2: a tall staff slanting back, her hand on it at her shoulder, leant back into it; any higher and its point hung off the ground)   // (leant back a little from the hips, straight, her head level: lean -.5 bent her back over in an arch, chest out and chin up, the user 2026-11-08 "her head should still be facing forward just body leaning a little back. not a full chest forward in an arch like this")
+  { armF: 2.45, elbF: .35, spF: .5, blade: -1.78, armB: .08, elbB: .35, spB: .12, lean: -.18, arch: -.11, bodyY: -.06, fNx: .32, fFx: .1, fNz: -.2, fFz: .14, headRot: -.11, headY: -.12, lid: 0 },   // (3: up over her head at arm's length, further back into it)
+  { armF: 2.6, elbF: .9, spF: .9, blade: -2.0, armB: .08, elbB: .35, spB: .12, lean: -.18, arch: -.11, bodyY: -.07, fNx: .3, fFx: -.02, fNz: -.18, fFz: .14, headRot: -.1, headY: -.1, lid: .35 } ]] };   // (4: the slab propped behind her, slanting; the hilt up by her head, out of her face; her back to it, eyes half shut)
 const LEAN_IDLE = { after: 1, in: 1.4, out: 7 };   // (stood still this long, s; then into it at in/s, out of it at out/s)
 const leanIdleOf = p => { const L = SWORD_LEAN_IDLE[p.rig.spec.id]; return L && p.rig.prop && p.rig.prop.kind === "sword" && giantOf(p) > .5 ? L : null; };
 api.leanIdle = p => !!leanIdleOf(p);
@@ -2577,10 +2577,10 @@ Object.assign(STRIKES, {
     armF: [.4, 1.35, 1.25, 1.95, 1.95, 1.95, 1.95, 1.9, .5], elbF: [1.0, .25, .3, 1.5, 1.5, 1.5, 1.5, 1.4, 1.0], blade: [.3, -.25, -.15, 1.45, 1.2, 1.45, 1.2, 1.35, .3],
     lean: [.05, .2, .18, -.08, -.08, -.08, -.08, -.06, .05], headRot: [0, .05, .05, -.28, -.3, -.28, -.3, -.25, 0], twist: [0, .2, .2, -.15, -.15, -.15, -.15, -.1, 0],
     armB: [.3, .5, .5, .3, .3, .3, .3, .3, .3], elbB: [1.4, 1.2, 1.2, 1.5, 1.5, 1.5, 1.5, 1.5, 1.4], fNx: [.2, .38, .38, .24, .24, .24, .24, .24, .2], fFx: [-.2, -.4, -.4, -.24, -.24, -.24, -.24, -.24, -.2] }) },
-  gg4_tc1: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.38, .4, .38], arch: [.1, .12, .1], bodyY: [-.46, -.48, -.46], headRot: [-.2, -.18, -.2], armF: [.35, .38, .35], elbF: [.25, .25, .25], spF: [.25, .25, .25],   // charge 1: down in a crouch, the arm on the ground before her
-    fNx: [.42, .42, .42], fFx: [-.46, -.46, -.46], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
-  gg4_tc2: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.24, .26, .24], arch: [-.05, -.04, -.05], bodyY: [-.4, -.42, -.4], twist: [-.3, -.32, -.3], headRot: [-.2, -.18, -.2], armF: [-.95, -1.0, -.95], elbF: [.55, .55, .55], spF: [.32, .32, .32],   // charges 2 and 3: the arm cocked back (they get up on it)   // (twist the other way since 2026-11-05: side-on to the way she faces, the arm back along the screen with the team on it, not turned to us with it out of sight behind her. The user: "she should be facing forward so the player can see both buddies climbing on her arm")
-    fNx: [.46, .46, .46], fFx: [-.52, -.52, -.52], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+  gg4_tc1: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.38, .4, .38], arch: [.1, .12, .1], bodyY: [-.26, -.28, -.26], headRot: [-.2, -.18, -.2], armF: [.35, .38, .35], elbF: [.25, .25, .25], spF: [.25, .25, .25],   // charge 1: down in a crouch, the arm on the ground before her
+    fNx: [.25, .25, .25], fFx: [-.29, -.29, -.29], fFy: [.07, .07, .07], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },   // (knelt, as Rose's: the same crouch had a knee under the floor, 2026-11-08)
+  gg4_tc2: { dur: 1.2, wsize: 3, giant: "gauntlet", keys: PT({ lean: [.24, .26, .24], arch: [-.05, -.04, -.05], bodyY: [-.26, -.28, -.26], twist: [-.3, -.32, -.3], headRot: [-.2, -.18, -.2], armF: [-.95, -1.0, -.95], elbF: [.55, .55, .55], spF: [.32, .32, .32],   // charges 2 and 3: the arm cocked back (they get up on it)   // (twist the other way since 2026-11-05: side-on to the way she faces, the arm back along the screen with the team on it, not turned to us with it out of sight behind her. The user: "she should be facing forward so the player can see both buddies climbing on her arm")
+    fNx: [.25, .25, .25], fFx: [-.29, -.29, -.29], fFy: [.07, .07, .07], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
   tc_hands: { dur: 1.2, keys: PT({ lean: [.18, .2, .18], armF: [1.75, 1.8, 1.75], elbF: [.55, .55, .55], armB: [1.75, 1.8, 1.75], elbB: [.55, .55, .55], spF: [-.1, -.1, -.1], spB: [-.1, -.1, -.1], bodyY: [-.06, -.08, -.06] }) },   // a partner's hands on her shoulders
   tc_ride: { dur: 1.2, keys: PT({ lean: [.35, .38, .35], bodyY: [-.42, -.44, -.42], armF: [.9, .9, .9], elbF: [.9, .9, .9], armB: [.8, .8, .8], elbB: [.9, .9, .9], fNx: [.3, .3, .3], fFx: [-.2, -.2, -.2], fNy: [.2, .2, .2], fFy: [.15, .15, .15] }) },   // crouched on her arm, holding on
 });
@@ -2603,10 +2603,10 @@ STRIKES.pl_s4 = lng(GW.leap(GIANT_S[3], 3), { step: 600, wsize: 3, giant: "sword
 // Rose's too (the user, 2026-11-01: "for rose, the charge attack with heavy sword will have them jump on her sword"): crouched, the team round her; the blade drawn
 // back flat behind her, one of them up on it, then the other; let go, she swings it round and over and they're flung on off it
 Object.assign(STRIKES, {
-  gs4_tc1: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.36, .38, .36], arch: [.1, .12, .1], bodyY: [-.46, -.48, -.46], headRot: [-.2, -.18, -.2], armF: [.55, .58, .55], elbF: [.5, .5, .5], blade: [-.25, -.22, -.25], grip: [1, 1, 1],   // charge 1: down in a crouch, the blade on the ground before her
-    fNx: [.42, .42, .42], fFx: [-.46, -.46, -.46], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
-  gs4_tc2: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.22, .24, .22], arch: [-.05, -.04, -.05], bodyY: [-.4, -.42, -.4], twist: [.45, .48, .45], headRot: [-.2, -.18, -.2], armF: [-.55, -.58, -.55], elbF: [.45, .45, .45], blade: [3.1, 3.12, 3.1], grip: [1, 1, 1],   // charges 2 and 3: drawn back flat behind her (they get up on it)
-    fNx: [.46, .46, .46], fFx: [-.52, -.52, -.52], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
+  gs4_tc1: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.36, .38, .36], arch: [.1, .12, .1], bodyY: [-.26, -.28, -.26], headRot: [-.2, -.18, -.2], armF: [.55, .58, .55], elbF: [.5, .5, .5], blade: [-.25, -.22, -.25], grip: [1, 1, 1],   // charge 1: down in a crouch, the blade on the ground before her
+    fNx: [.25, .25, .25], fFx: [-.29, -.29, -.29], fFy: [.07, .07, .07], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },   // (knelt, the back knee on the floor and the front foot under the knee: the hips were down at the floor between feet a leg apart, the back knee under it, the user 2026-11-08 "when rose is charging her team throw with O by itself, she's floating above the ground")
+  gs4_tc2: { dur: 1.2, wsize: 3, giant: "sword", keys: PT({ lean: [.22, .24, .22], arch: [-.05, -.04, -.05], bodyY: [-.26, -.28, -.26], twist: [.45, .48, .45], headRot: [-.2, -.18, -.2], armF: [-.55, -.58, -.55], elbF: [.45, .45, .45], blade: [3.1, 3.12, 3.1], grip: [1, 1, 1],   // charges 2 and 3: drawn back flat behind her (they get up on it)
+    fNx: [.25, .25, .25], fFx: [-.29, -.29, -.29], fFy: [.07, .07, .07], fNz: [.12, .12, .12], fFz: [.1, .1, .1] }) },
 });
 STRIKES.gs4_team = { ...GW.slash(GIANT_S[3], 3), wsize: 3, giant: "sword", step: 420, fling: .17 * GIANT_S[3], sfx2: [.26 * GIANT_S[3], "slam"], quake: [.34 * GIANT_S[3], 3],   // (the team off it as it comes round: they're there as it lands, knocking them on, not up)
   hits: [GH(.22, .4, "cleave", GIANT_S[3], { reach: 200, back: 60, y0: 230, y1: -20, wide: true }), GH(.3, .42, "haymaker", GIANT_S[3], { reach: 240, back: 20, y0: 60, y1: -20, wide: true })],
@@ -2905,6 +2905,43 @@ STRIKES.idle_camila1 = { ...STRIKES.idle_camila, keys: { ...STRIKES.idle_camila.
   rise: [[0, 0], [4.1, 0], [4.65, 1.55], [7.0, 1.55], [7.55, 0], [8.6, 0]] } };   // (up as high as the grown arm is long, her weight right up on it)
 const IDLES = { rose: "idle_rose", camila: "idle_camila" };   // (the big idle of each, above)
 const idleOf = (p, id) => id === "camila" && giantOf(p) > .3 ? "idle_camila1" : IDLES[id];   // (Camila's: on one hand with the big arm, both when they're the same size)
+// the weapon a size bigger (the user, 2026-11-08: "we need an animation the character does at each stage where they check out the new weapon size/arm size"): played by the
+// game (growTick) once it's burst into its new size, one for each size it grows to; ownArms the whole way, so the grown arm or blade goes where her arm puts it. F is the
+// weapon's hand; each starts and ends on her grown standing pose (the blade over her shoulder, 2.6; its angle: 0 out in front, PI/2 straight up, PI back)
+Object.assign(STRIKES, {
+  adm_g1: { dur: 1.7, pose: true, ownArms: [0, 1.7], keys: {   // CAMILA, its second size: the grown arm up before her, turned this way and that, a squeeze or two of the fist
+    armF: [[0, .15], [.35, 1.35], [1.3, 1.4], [1.7, .15]], elbF: [[0, .4], [.35, 1.6], [1.3, 1.65], [1.7, .4]],
+    wF: [[0, 0], [.45, .4], [.75, -.4], [1.0, .3], [1.3, 0]], gF: [[0, 0], [1.0, 0], [1.08, .22], [1.16, 0], [1.24, .22], [1.32, 0]],
+    twistU: [[0, 0], [.35, .3], [1.3, .3], [1.7, 0]], headY: [[0, 0], [.4, .35], [1.3, .35], [1.7, 0]], headRot: [[0, 0], [.35, -.1], [1.3, -.1], [1.7, 0]], lean: [[0, 0], [.35, -.1], [1.3, -.08], [1.7, 0]],
+    bodyY: [[0, 0], [.15, -.08], [.35, .02], [1.3, 0], [1.7, 0]] } },
+  adm_g2: { dur: 1.9, pose: true, ownArms: [0, 1.9], keys: {   // its third: two jabs at the air to feel its weight, then the fist up by her face, squeezed, a nod
+    armF: [[0, .15], [.28, -.15], [.4, 1.5], [.55, .55], [.68, 1.5], [.92, 1.35], [1.5, 1.4], [1.9, .15]], elbF: [[0, .4], [.28, 1.35], [.4, .1], [.55, 1.45], [.68, .1], [.92, 1.65], [1.5, 1.7], [1.9, .4]],
+    gF: [[0, 0], [.3, .22], [.92, .22], [1.05, 0], [1.12, .22], [1.2, 0], [1.28, .22], [1.5, .22], [1.9, 0]],
+    twistU: [[0, 0], [.28, -.25], [.4, .3], [.55, -.1], [.68, .3], [.92, .25], [1.5, .25], [1.9, 0]], lean: [[0, 0], [.28, -.06], [.4, .12], [.55, 0], [.68, .12], [.92, -.06], [1.5, -.06], [1.9, 0]],
+    headY: [[0, 0], [.92, 0], [1.1, .35], [1.5, .35], [1.9, 0]], headRot: [[0, 0], [.92, -.06], [1.18, .14], [1.32, -.04], [1.5, 0], [1.9, 0]],
+    bodyY: [[0, 0], [.28, -.08], [.4, -.04], [.55, -.08], [.68, -.04], [.92, 0], [1.9, 0]] } },
+  adm_g3: { dur: 2.1, pose: true, ownArms: [0, 2.1], keys: {   // its last, the biggest: thrust up overhead, fist to the sky, head back; her other hand on her hip
+    armF: [[0, .15], [.2, .5], [.45, 2.95], [1.6, 2.95], [2.1, .15]], elbF: [[0, .4], [.2, 1.4], [.45, .08], [1.6, .08], [2.1, .4]], spF: [[0, .2], [.45, .3], [1.6, .3], [2.1, .2]],
+    gF: [[0, 0], [.45, .22], [1.6, .22], [2.1, 0]],
+    armB: [[0, .1], [.45, .45], [1.6, .45], [2.1, .1]], elbB: [[0, .3], [.45, 1.9], [1.6, 1.9], [2.1, .3]], spB: [[0, .1], [.45, .95], [1.6, .95], [2.1, .1]],
+    headRot: [[0, 0], [.2, .1], [.5, -.28], [1.6, -.28], [2.1, 0]], lean: [[0, 0], [.2, .12], [.5, -.12], [1.6, -.12], [2.1, 0]], arch: [[0, 0], [.5, -.12], [1.6, -.12], [2.1, 0]],
+    bodyY: [[0, 0], [.22, -.2], [.45, .06], [.6, -.02], [1.6, 0], [2.1, 0]] } },
+  adm_s1: { dur: 1.8, pose: true, ownArms: [0, 1.8], keys: {   // ROSE, its second size: the blade stood up before her, her eyes up along it, turned to the light
+    armF: [[0, .3], [.35, 1.3], [1.4, 1.3], [1.8, .3]], elbF: [[0, 1.55], [.35, .45], [1.4, .45], [1.8, 1.55]], blade: [[0, 2.6], [.35, 1.5], [1.4, 1.5], [1.8, 2.6]],
+    roll: [[0, 0], [.6, 1.0], [1.0, -.6], [1.4, 0], [1.8, 0]], headRot: [[0, 0], [.35, -.2], [1.4, -.24], [1.8, 0]], lean: [[0, 0], [.35, -.08], [1.4, -.08], [1.8, 0]],
+    bodyY: [[0, 0], [.15, -.06], [.35, .02], [1.4, 0], [1.8, 0]] } },
+  adm_s2: { dur: 2.0, pose: true, ownArms: [0, 2.0], keys: {   // its third: hoisted up over her head, the blade flat across behind her, and hefted twice, her knees giving under it; back onto her shoulder
+    armF: [[0, .3], [.4, 2.75], [.62, 2.5], [.8, 2.75], [1.0, 2.5], [1.18, 2.75], [1.45, 2.75], [2.0, .3]], elbF: [[0, 1.55], [.4, .3], [1.45, .3], [2.0, 1.55]], blade: [[0, 2.6], [.4, 3.0], [1.45, 3.0], [2.0, 2.6]],   // (swung down out in front of her, from this side of her it hung down over her, 2026-11-08)
+    headRot: [[0, 0], [.4, -.24], [1.45, -.24], [2.0, 0]], lean: [[0, 0], [.4, -.1], [1.45, -.1], [2.0, 0]], arch: [[0, 0], [.4, -.08], [1.45, -.08], [2.0, 0]],
+    bodyY: [[0, 0], [.4, .03], [.62, -.12], [.8, .02], [1.0, -.12], [1.18, .02], [1.45, 0], [2.0, 0]] } },
+  adm_s3: { dur: 2.1, pose: true, ownArms: [0, 2.1], keys: {   // its last, the biggest: held up high, its point to the sky, head back; her other hand on her hip
+    armF: [[0, .3], [.2, .6], [.45, 2.9], [1.6, 2.9], [2.1, .3]], elbF: [[0, 1.55], [.2, 1.4], [.45, .1], [1.6, .1], [2.1, 1.55]], blade: [[0, 2.6], [.2, 2.2], [.45, 1.57], [1.6, 1.57], [2.1, 2.6]],
+    armB: [[0, .1], [.45, .45], [1.6, .45], [2.1, .1]], elbB: [[0, .3], [.45, 1.9], [1.6, 1.9], [2.1, .3]], spB: [[0, .1], [.45, .95], [1.6, .95], [2.1, .1]],
+    headRot: [[0, 0], [.2, .1], [.5, -.28], [1.6, -.28], [2.1, 0]], lean: [[0, 0], [.2, .12], [.5, -.12], [1.6, -.12], [2.1, 0]], arch: [[0, 0], [.5, -.12], [1.6, -.12], [2.1, 0]],
+    bodyY: [[0, 0], [.22, -.2], [.45, .06], [.6, -.02], [1.6, 0], [2.1, 0]] } },
+});
+const ADMIRE = { gauntlet: [null, "adm_g1", "adm_g2", "adm_g3"], sword: [null, "adm_s1", "adm_s2", "adm_s3"] };   // (by the size it's grown to)
+api.ADMIRE = ADMIRE;
 Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
 // the archetypes' own moves, the same for every buddy of one (the user, 2026-11-02: "we will use archetypes for the buddies"; the thief's "sleek attack animations"):
 // the THIEF: a low claw swipe whipped up across, a snatch (in fast, the hand flicked up, back to the chest), the dashing knife-hand; its charge special's dash, held
@@ -3119,7 +3156,7 @@ const STANCE_LEGS = ["fNx", "fFx", "fNz", "fFz", "hN", "hF", "fP", "bodyY"];
 // the air legs (the user, 2026-10-23: "camila's legs are all twisted and distorted in so many moves, especially the ones in the air ... make them be in
 // natural leg positions"): no more both knees folded up under her (a kneel in mid-air, the boots piled together); a fighter's leap instead, the lead
 // knee driving forward and up, the other leg trailing back and down, toes pointed, the hips' width apart (on api: tuned live from a page)
-api.airLegs = (w, up) => ({ fNx: .28 + .08 * w, fNy: .38 + .06 * w + .05 * up, fFx: -.3 - .1 * w, fFy: .16 + .04 * up, fP: -.6, fNz: .06, fFz: .04, hN: 0, hF: 0 });
+api.airLegs = (w, up) => ({ fNx: .2 + .06 * w, fNy: .24 + .04 * w + .03 * up, fFx: -.3 - .1 * w, fFy: .16 + .04 * up, fP: -.6, fNz: .06, fFz: .04, hN: 0, hF: 0 });   // (the lead knee level with the hip at most: fNy .38-.49 had the foot at hip height and the knee by her chin, 2026-11-08)
 // the feet's spread in the air (the user, 2026-10-26: "rose's legs get twisted in the air. i looked at the animations and most of them seemed fine though so
 // it's like something happening in game"): the editor shows every move standing, with the character's stance under it, and Rose's stance sets her feet
 // apart (fNz / fFz .34); off the ground that was dropped, her feet came in under her and both knees folded in across each other. Her stance's spread now
@@ -3137,6 +3174,12 @@ api.reachNow = (r, face) => {                         // [in front, behind] in p
   if (r.lungePx) { fw += r.lungePx; bw -= r.lungePx; }   // (a lunge of the body, a stretch's reach: the root's out ahead of p.x by it)
   const kind = r.spec && r.spec.outfit && r.spec.outfit.prop ? r.spec.outfit.prop.kind : "none"; return [fw, bw, sword ? HIT_PAD.blade : kind === "gauntlet" ? HIT_PAD.gauntlet : HIT_PAD.fist];
 };
+const LUNGE_W = .8;                               // the widest a move sets the feet apart on the ground, front foot to back (in steps)
+function lungeCap(o) {                            // a lunge, never a split: feet out past a deep lunge come in to it, and the hips down no lower than one keeps them (the user, 2026-11-08: "she's floating above the ground": the big sword's drag and chop set the feet a leg apart each way under hips a hand off the floor, so she hung in a split on nothing)
+  const hi = Math.max(o.fNx || 0, o.fFx || 0), lo = Math.min(o.fNx || 0, o.fFx || 0), sp = hi - lo;
+  if (sp > LUNGE_W) { const k = LUNGE_W / sp; o.fNx *= k; o.fFx *= k; }
+  const minY = lerp(-.6, -.3, clamp((sp - .5) / .2, 0, 1)); if (o.bodyY < minY) o.bodyY = minY;   // (feet together, a squat may go deeper)
+}
 function airSplay(p, T, ST) { if (!ST || p.onGround) return; const sw = leadFar(p); for (const k of AIR_SPLAY) if (k in ST) { const kk = sw ? SWAP[k] || k : k; T[kk] = Math.max(T[kk] || 0, ST[k]); } }
 function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move's leg keys are left out
   if (p.onGround) { if (ST) { const sw = leadFar(p); for (const k of STANCE_LEGS) if (k in ST) T[sw ? SWAP[k] || k : k] = ST[k]; } return false; }
@@ -3242,9 +3285,9 @@ function updatePoseHuman(p, dt) {
     // (the user, 2026-10-31: "when the girls are in the air, their legs should feel that way": the knee higher going up, both tucked at the top, then a stride apart
     // and loose coming down, swaying, trailing the way she drifts; only a fast drop reaches down for the ground)
     const fk = clamp((p.vy - 300) / 800, 0, 1), sway = Math.sin(t * 7.5) * .035 * (1 - fk * .5), drift = clamp((p.vx || 0) * (p.face || 1) / 400, -1, 1) * .06;
-    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .34, fNy: .52, fFx: -.32, fFy: .1, fP: -.7, fNz: .07, fFz: .05 }), layPose(T, m.rise, p);   // rising: the lead knee driven high, the other leg pushing down and back, toes pointed
-    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .24, fNy: .5, fFx: -.2, fFy: .4, fP: -.55, fNz: .07, fFz: .05 }), layPose(T, m.top, p);   // the top: both knees up, tucked, still a stride apart
-    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: lerp(.26, .3, fk) + sway - drift, fNy: lerp(.4, .46, fk), fFx: lerp(-.3, -.36, fk) - sway - drift, fFy: lerp(.3, .38, fk), fP: lerp(-.5, -.55, fk), fNz: .09, fFz: .07 }), layPose(T, m.fall, p);   // dropping: both knees bent, the front one up, the back foot tucked up behind, swaying (they're turned to us, so heights read, front and back don't: hung straight down they looked stood in mid-air)
+    if (p.vy < -160) Object.assign(T, { lean: .02, armF: 2.7, elbF: .2, armB: -.5, elbB: .4, fNx: .24, fNy: .26, fFx: -.32, fFy: .1, fP: -.7, fNz: .07, fFz: .05 }), layPose(T, m.rise, p);   // rising: the lead knee driven high, the other leg pushing down and back, toes pointed (the knee up level with the hip, not at her chin: fNy .52 put the foot at hip height, the user 2026-11-08 "legs ... too unnaturally posed")
+    else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .2, fNy: .3, fFx: -.2, fFy: .32, fP: -.55, fNz: .07, fFz: .05 }), layPose(T, m.top, p);   // the top: both knees up, tucked, still a stride apart (lower: the lead knee was up past her hips, 2026-11-08)
+    else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: lerp(.22, .2, fk) + sway - drift, fNy: lerp(.22, .16, fk), fFx: lerp(-.3, -.36, fk) - sway - drift, fFy: lerp(.3, .34, fk), fP: lerp(-.5, -.55, fk), fNz: .09, fFz: .07 }), layPose(T, m.fall, p);   // dropping: both knees bent, the front one up, the back foot tucked up behind, swaying (they're turned to us, so heights read, front and back don't: hung straight down they looked stood in mid-air)
     airSplay(p, T, ST);                              // (the stance's spread, if it's wider: the user, 2026-10-26)
   } else if (p.brake) Object.assign(T, brakePose(p, t));
   else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
@@ -3342,6 +3385,7 @@ function updatePoseHuman(p, dt) {
       let v = kv(p, KK, k, a) * (sw && TWISTS.has(k) ? -1 : 1);
       if (TURNS.has(k)) v += TAU * Math.round(((o[kk] ?? 0) - v) / TAU);   // the same turn, counted from wherever the body is now: blends take the short way round (the cartwheel's wheel too, 2026-10-28)
       o[kk] = lerp(o[kk] ?? 0, v, w); }
+    if (p.onGround && !p.airLegs) lungeCap(o);
     if (KK.blade) { let bv = kv(p, KK, "blade", a) - (sw ? o.armB + o.elbB : o.armF + o.elbF); if (a < SK.dur - (SK.giant ? .3 : .12)) bv += TAU * Math.round((o.wrist - bv) / TAU);   // (eased in the short way from the stance's angle; eased out as keyed, so a blade low in front comes back up in front to her shoulder, not down through the ground)
       o.wrist = lerp(o.wrist, bv, w); } }
   else {                                                     // the sword's angle in the ready stance, or held upright when blocking
@@ -3735,6 +3779,7 @@ function keepNeck(p) {                             // the neck keeps its own len
   _nk.multiplyScalar(1 / d); p.neck.copy(_P[3]).addScaledVector(_nk, L); p.neckV.addScaledVector(_nk, -p.neckV.dot(_nk));
 }
 function syncHuman(p, r, dt = 0) {
+  { const up = !p.onGround && !p.perch && !p.climb; p.airK = dt > 0 ? approach(p.airK || 0, up ? 1 : 0, dt * (up ? 7 : 20)) : up ? 1 : 0; }   // (off the ground: the feet turn with the shins, eased in and out, 2026-11-08)
   const o = p.out, Bd = r.spec.body, Hr = r.spec.hair, D = r.D, gw = Bd.girth, sc = Bd.scale, ds = D.step;
   const H_HIP = D.hip * Bd.legs, H_TH = D.th * Bd.legs, H_SH = D.sh * Bd.legs, H_SPINE = D.spine * Bd.torso, H_UA = D.ua * Bd.arms, H_FA = D.fa * Bd.arms;
   const fs = p.face > 0 ? 1 : -1;
@@ -3753,7 +3798,7 @@ function syncHuman(p, r, dt = 0) {
   if (o.rise) r.root.position.y += o.rise * sc;   // (rise: all of her up off the ground, a cartwheel going over her hands)
   r.root.updateMatrixWorld(true);
   const near = fs;
-  const y0 = H_HIP + o.bodyY * ds + (sqq < 0 ? sqq * H_HIP * .55 : 0), ang = [o.lean * .5 + o.arch * .4, o.lean * .9, o.lean - o.arch * .4].map(a => clamp(a, -1, 1.45));   // (squashed: the hips down, the knees taking it)
+  const y0 = H_HIP + o.bodyY * (o.bodyY < 0 ? 1 - (p.airK || 0) : 1) * ds + (sqq < 0 ? sqq * H_HIP * .55 : 0), ang = [o.lean * .5 + o.arch * .4, o.lean * .9, o.lean - o.arch * .4].map(a => clamp(a, -1, 1.45));   // (squashed: the hips down, the knees taking it)   // (a move's crouch is left out in the air: with nothing under her the hips came down onto feet kept at standing height, the knees up by her chin, 2026-11-08)
   _P[0].set(0, y0 - .12, 0); _P[1].set(0, y0, 0);
   for (let i = 0; i < 3; i++) _P[i + 2].set(_P[i + 1].x + Math.sin(ang[i]) * H_SPINE * kS, _P[i + 1].y + Math.cos(ang[i]) * H_SPINE * kS, 0);
   if (!p.neck) p.neck = _P[4].clone();
@@ -3886,14 +3931,18 @@ function syncHuman(p, r, dt = 0) {
       if (dt > 0 && d0 != null && Math.abs(dN - d0) < Lg * 1.2 && Math.abs(dN - d0) > Lg * 10 * dt) { const dT = d0 + Math.sign(dN - d0) * Lg * 10 * dt; _Hk.sub(_H).setLength(dT).add(_H); _F.set(_Hk.x, Math.max(0, _Hk.y - D.ankle), _Hk.z); }
       lp[i] = _H.distanceTo(_Hk); }
     kneeIK(_H, _Hk, _K, H_TH, H_SH, s, o.kOut || 0);
-    const heel = (isNear ? o.hN : o.hF) || 0;
+    let heel = (isNear ? o.hN : o.hF) || 0;
+    if (fy < .02 && !p.airK) { const ax = _K.x - _Hk.x, ay = _K.y - _Hk.y; if (ax > 0) heel = Math.max(heel, clamp(1.08 - Math.atan2(ay, ax), 0, 1)); }   // a planted foot the shin leans far out over comes up on its toes (the most an ankle bends is about 28 degrees past square: Rose's back foot stood flat under a shin 50 off upright, the user 2026-11-08 "legs ... bent, twisted, or too unnaturally posed")
     if (heel > .001 && fy < .02) {                                    // up on the ball of the foot (heel raised, toe still down), the leg reaching just as far so the knee doesn't fold more
       const L = (.07 + r.spec.outfit.boot.len * .5) * D.foot * Bd.feet, d0 = _H.distanceTo(_Hk);
       _F.y += L * Math.sin(heel); const vy = _H.y - _F.y - D.ankle, dz = _F.z - _H.z, dx = Math.sqrt(Math.max(0, d0 * d0 - vy * vy - dz * dz));
       _F.x = _H.x + (Math.sign(_F.x - _H.x) || -1) * dx; _Hk.set(_F.x, _F.y + D.ankle, _F.z); kneeIK(_H, _Hk, _K, H_TH, H_SH, s, o.kOut || 0); pitch -= heel;
     }
+    const sx = _Hk.x - _K.x, sy = _Hk.y - _K.y, sL = Math.hypot(sx, sy) || 1, psi = Math.atan2(sx, -sy);   // the shin's swing off hanging straight down (+: the ankle out in front of the knee)
+    const relK = Math.max(p.airK || 0, p.onGround ? clamp((-psi - .35) / .4, 0, 1) : 0) * clamp((_F.y - .02) / .1, 0, 1), ex = psi * relK;   // (off the ground, or a foot kicked up behind on it: lifted only, a planted foot stays flat)
+    if (ex) { pitch += ex; _F.set(_Hk.x + D.ankle * Math.sin(ex), _Hk.y - D.ankle * Math.cos(ex), _F.z); }   // the foot turns with the shin, round the ankle (the user, 2026-11-08: "the girls' legs sometimes still look funky. especially in the air": the foot kept its angle to the ground, so a leg tucked up behind had its toes pointing into its own shin)
     const t = r.legs[i];
-    t.pts[0].set(_H.x, _H.y + .1, _H.z); t.pts[1].copy(_H); t.pts[2].copy(_K); t.pts[3].copy(_Hk); t.pts[4].set(_Hk.x + .01, _Hk.y - .06, _Hk.z);
+    t.pts[0].set(_H.x, _H.y + .1, _H.z); t.pts[1].copy(_H); t.pts[2].copy(_K); t.pts[3].copy(_Hk); t.pts[4].set(_Hk.x + lerp(.01, sx / sL * .06, relK), _Hk.y + lerp(-.06, sy / sL * .06, relK), _Hk.z);   // (the leg's end runs on down the shin into the boot)
     r.feet[i].position.copy(_F); r.feet[i].rotation.z = pitch; r.feet[i].rotation.y = tH; r.feet[i].scale.setScalar(D.foot * Bd.feet);
     const shaft = r.feet[i].userData.shaft; if (shaft) shaft.rotation.z = Math.atan2(-(_K.x - _Hk.x), _K.y - _Hk.y) - pitch;
     if (Math.abs(tH) > 1e-4) { _tq.setFromAxisAngle(UPV, tH); t.pts.forEach(v => v.sub(_P[1]).applyQuaternion(_tq).add(_P[1])); r.feet[i].position.sub(_P[1]).applyQuaternion(_tq).add(_P[1]); }   // the hip twist: the whole leg, boot and all
