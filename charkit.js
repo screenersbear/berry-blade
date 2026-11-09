@@ -266,7 +266,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
+  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, heel: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -3336,8 +3336,8 @@ function updatePoseHuman(p, dt) {
   const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && !p.brake && a < 0 && !p.crouch && !p.crawl && !p.upHop && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
   const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
-  const pump = D.run && pumpRun, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk = lerp(R[1], Wl[1], wk) * (1 + .3 * sk);   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
-    return { th, pt: lerp(R[2], Wl[2], wk), fx: Math.sin(th) * TH + Math.sin(th - tk) * SH, dy: Math.cos(th) * TH + Math.cos(th - tk) * SH }; };
+  const pump = D.run && pumpRun, hk = m.heel ?? 1, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk1 = lerp(R[1], Wl[1], wk) * (1 + .3 * sk), tk = tk1 > .5 ? .5 + (tk1 - .5) * hk : tk1;   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
+    const pt0 = lerp(R[2], Wl[2], wk); return { th, pt: pt0 < 0 ? pt0 * hk : pt0, fx: Math.sin(th) * TH + Math.sin(th - tk) * SH, dy: Math.cos(th) * TH + Math.cos(th - tk) * SH }; };   // (hk, move.heel: under 1, a lower kick-back of the heel behind and less of a flip of the foot as it leaves the ground, the stance untouched. Rose's, the user, 2026-11-08: "rose's walking animnation looks a little stilted. and her foot flips back pretty long")
   const L0 = D.run ? leg(0) : null, LS = D.run ? leg(stS) : null;
   const runPx = D.run ? Math.max(20, (L0.fx - LS.fx) / stS * 40 * (Bd.scale || 1) * Math.cos(p.bodyYaw ?? 0)) : 118 * L;   // planted feet keep pace with the ground (at the character's size)
   if (p.onGround) p.gaitPh += dt * sp * TAU / runPx;        // chibi: one stride per 118px, long relaxed steps
