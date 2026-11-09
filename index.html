@@ -725,12 +725,12 @@
 </style>
 <script src="charkit.js?v=20261107"></script>
 <script src="characters.js?v=20261014t"></script>
-<script src="shading.js?v=20261109c"></script>
+<script src="shading.js?v=20261109d"></script>
 <script src="score.js?v=20261104a"></script>
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="roots.js?v=20261102e"></script>
-<script src="clayroom.js?v=20261109g"></script>
+<script src="clayroom.js?v=20261109j"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -1418,6 +1418,8 @@ claySet(clayOn);
 // their parts meet); the frame then graded filmic (ACES, as the mockup was). Rose's glowing blade as solid clay, its halo gone. Only with CLAY LOOK on; not in the
 // beach house or character select. CLAYL: the shadow map's size, how far past the screen it reaches, its softness and bias (units)
 const CLAYL = { sz: 2048, ext: 1.2, soft: .07, bias: .05, exp: 1.5, skyS: 1.25, skyT: .78, skyM: .4, roomSky: "#d6eef4", roomAo: 1.2, roomExp: 1.25, lod: .5 }, CLAY_CAST = 7;   // (room: the CLAY TEST ROOM's haze, how deep its scenery's creases, its exposure: its set is brighter than the woods', 1.25 matched the mockup's spread of darks and lights)   // (sky: the room's own hue, paler: the mockup's far bushes fade to a pale haze, so the picture has depth)   // (exp: the filmic grade's exposure; 1.05 as the mockup's came out darker than the game: the user, 2026-11-09 "theres something much brighter and vibrant about the mockup")
+let clayWorld = false;
+const CLAY_WORLDS = new Set([0, 1, 9]);   // (the hand-made worlds in clay: the woods, the waves, the beach)
 const CLAY_LITE = (() => { try { const q = new URLSearchParams(location.search).get("lite"); if (q !== null) return q !== "0"; } catch (e) { } return true; })();   // (phone build: on. The lighter clay: coarser pieces, same light and passes. The phone build's is on; ?lite / ?lite=0 tries either)
 let clayRT = null, clayAoRT = null, clayFogC = false;
 const clayCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 160), clayDM = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, colorWrite: false }), clayHid = [], clayOff = [], claySwap = [], clayBlade = new Map();
@@ -2457,6 +2459,7 @@ function frondGeo(len, w, { rise = .3, fall = .9, segs = 10, saw = .45, fold = .
 }
 function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0, coco = false } = {}) {   // (coco: a coconut palm on the beach)   // a sierra palm (a ringed grey trunk bending a little, fronds arching, orange fruit stalks under the crown) or a royal palm (tall, smooth, pale, swelling in the middle, a green crownshaft)
   const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); let top;
+  if (clayWorld && CLAY_WORLDS.has(world) && window.BerryClayRoom && BerryClayRoom.palm) { g.add(BerryClayRoom.palm(THREE, { toon, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1 }, { h, lean, royal, coco, seed: Math.floor(rng() * 1e6) })); return g; }   // (in clay: a clay palm, its fronds rounded and arching)
   if (royal) {
     g.add(mk(new THREE.LatheGeometry([[.4, -.5], [.38, h * .12], [.47, h * .45], [.36, h * .82], [.3, h]].map(([r, v]) => new THREE.Vector2(r, v)), 8), null, { mat: M.royal, ol }));
     g.add(at(mk(new THREE.CylinderGeometry(.27, .31, h * .15, 8), null, { mat: M.crown, ol }), 0, h * 1.075, 0)); top = new THREE.Vector3(0, h * 1.15, 0);
@@ -3156,7 +3159,7 @@ function dropTextures() {                            // free the last room's pic
 // sea stacks and vermilion piers to cross on, cliffs with a pagoda and pines, mountains and swirl clouds, gulls by day.
 // The sea, the big curling waves and the foam all move slowly and keep moving (level.tick).
 const SEA_VS = `uniform float uT;
-varying float vH; varying vec3 vW;
+varying float vH; varying vec3 vW; varying vec3 vN;
 #include <fog_pars_vertex>
 float swell(vec2 p, float t) {
   return sin(p.x * .31 + p.y * .17 + t * .5) * .5 + sin(p.x * .67 - p.y * .29 - t * .36) * .26
@@ -3166,13 +3169,14 @@ void main() {
   vec4 w = modelMatrix * vec4(position, 1.0);
   float amp = mix(.2, 1.15, smoothstep(-3.0, -30.0, w.z)) + .32 * smoothstep(4.0, 11.0, w.z);   // swells grow out to sea (and toward you)
   float h = swell(w.xz, uT);
+  vN = normalize(vec3(-(swell(w.xz + vec2(.15, 0.0), uT) - h) * amp / .15, 1.0, -(swell(w.xz + vec2(0.0, .15), uT) - h) * amp / .15));   // (its slope, for the clay sea's light)
   w.y += h * amp; vH = h; vW = w.xyz;
   vec4 mvPosition = viewMatrix * w;
   gl_Position = projectionMatrix * mvPosition;
   #include <fog_vertex>
 }`;
-const SEA_FS = `uniform vec3 cDeep, cMid, cLight, cFoam, cLine; uniform float uT;
-varying float vH; varying vec3 vW;
+const SEA_FS = `uniform vec3 cDeep, cMid, cLight, cFoam, cLine; uniform float uT, uClay;
+varying float vH; varying vec3 vW; varying vec3 vN;
 #include <fog_pars_fragment>
 float band(float q, float w) { float fw = fwidth(q), d = abs(fract(q) - .5) * 2.0; return (1.0 - smoothstep(fw * 1.5, fw * 3.0 + w, d)) * (1.0 - smoothstep(.2, .6, fw)); }
 void main() {
@@ -3183,6 +3187,12 @@ void main() {
   c = mix(c, cFoam, band(vH * 6.0 - vW.z * .05, .06) * smoothstep(.6, .82, k) * .55);            // pale lines up the wave faces
   float n = sin(vW.x * 2.6 + uT * .5 + sin(vW.z * 1.7)) * .5 + sin(vW.z * 3.4 - uT * .35 + vW.x * .7) * .5;
   c = mix(c, cFoam, smoothstep(.85, .88, k + n * .045));                                             // foam torn along the crests
+  if (uClay > .5) {   // (the clay sea: no print lines; its swells lit as clay, soft bands of blue, blobs of foam on the crests)
+    vec3 nn = normalize(vN), L = normalize(vec3(-.5, .65, .55)); float d = dot(nn, L) * .5 + .5;
+    vec3 cc = mix(cDeep, cMid, smoothstep(.2, .55, k)); cc = mix(cc, cLight, smoothstep(.6, .86, k));
+    float q = sin(vW.x * 1.3 + uT * .4 + sin(vW.z * .9)) * .5 + sin(vW.z * 1.9 - uT * .3 + vW.x * .5) * .5;
+    cc = mix(cc, cFoam, smoothstep(.8, .84, k + q * .07));
+    c = cc * (.7 + .44 * d) + pow(max(dot(reflect(-L, nn), vec3(0.0, .35, .94)), 0.0), 10.0) * .1; }
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
   #include <fog_fragment>
@@ -3196,7 +3206,7 @@ const CURL_VS = `varying vec3 vP;
 void main() { vP = position; vec4 mvPosition = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mvPosition;
 #include <fog_vertex>
 }`;
-const CURL_FS = `uniform vec3 cDeep, cMid, cLight, cFoam, cLine; uniform vec2 uC;
+const CURL_FS = `uniform vec3 cDeep, cMid, cLight, cFoam, cLine; uniform vec2 uC; uniform float uClay;
 varying vec3 vP;
 #include <fog_pars_fragment>
 float band(float q, float w) { float fw = fwidth(q), d = abs(fract(q) - .5) * 2.0; return (1.0 - smoothstep(fw * 1.5, fw * 3.0 + w, d)) * (1.0 - smoothstep(.25, .6, fw)); }
@@ -3206,6 +3216,7 @@ void main() {
   c = mix(c, cLight, smoothstep(.5, .85, y));
   c = mix(c, cLine, band(r * 2.4, .06) * .5 * (1.0 - smoothstep(.65, .9, y)));
   c = mix(c, cFoam, band(r * 2.4 + .5, .04) * smoothstep(.4, .85, y) * .6);
+  if (uClay > .5) { vec3 nn = normalize(cross(dFdx(vP), dFdy(vP))); c = mix(cDeep, cMid, smoothstep(.05, .4, y)); c = mix(c, cLight, smoothstep(.5, .85, y)); c = mix(c, cFoam, smoothstep(.84, .92, y)); c *= .78 + .3 * abs(nn.z); }   // (the clay wave: smooth, no print lines)
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
   #include <fog_fragment>
@@ -3232,7 +3243,7 @@ void main() {
 const clipVS = vs => "#include <clipping_planes_pars_vertex>\n" + vs.replace("gl_Position = projectionMatrix * mvPosition;", "gl_Position = projectionMatrix * mvPosition;\n  #include <clipping_planes_vertex>");   // (cut at a screen's edge while the camera pans to the next, as the rest of it is: the sea, the waves' curls and every rock
 const clipFS = fs => "#include <clipping_planes_pars_fragment>\n" + fs.replace("void main() {", "void main() {\n  #include <clipping_planes_fragment>");   //  went on drawn whole, the new screen's over the old one's half: the user 2026-10-25, "things that pop in and out ... as you change screens")
 const shaderMat = (vs, fs, u, extra) => new THREE.ShaderMaterial({ uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, u]), vertexShader: clipVS(vs), fragmentShader: clipFS(fs), fog: true, clipping: true, ...extra });
-const seaCols = () => ({ cDeep: { value: new THREE.Color() }, cMid: { value: new THREE.Color() }, cLight: { value: new THREE.Color() }, cFoam: { value: new THREE.Color() }, cLine: { value: new THREE.Color() } });
+const seaCols = () => ({ uClay: { value: 0 }, cDeep: { value: new THREE.Color() }, cMid: { value: new THREE.Color() }, cLight: { value: new THREE.Color() }, cFoam: { value: new THREE.Color() }, cLine: { value: new THREE.Color() } });
 const SUN_DIR = new THREE.Vector3(-.5, .65, .55).normalize();
 const rockMat = () => shaderMat(ROCK_VS, ROCK_FS, { cBase: { value: new THREE.Color() }, cLit: { value: new THREE.Color() }, uSun: { value: SUN_DIR } });
 const CURL = (() => {                                // a breaking wave in profile (heading +x), its hollow left open
@@ -4940,6 +4951,7 @@ function shipCabin(P, g, s, R) {                    // inside the S.S. Pineapple
   const plate = (txt, pw, ph, bg, fg, px = 64) => new THREE.Mesh(new THREE.PlaneGeometry(pw, ph), new THREE.MeshBasicMaterial({ map: tex(512, Math.round(512 * ph / pw), (c, W, H) => { c.fillStyle = bg; c.fillRect(0, 0, W, H); c.fillStyle = fg; c.font = `900 ${px}px sans-serif`; c.textAlign = "center"; c.textBaseline = "middle"; const L = String(txt).split("\n"); L.forEach((ln, i) => c.fillText(ln, W / 2, H / 2 + (i - (L.length - 1) / 2) * px * 1.1, W * .9)); }) }));
   const pal = sty === "bed" ? ["#7fb3c9", "#6aa0b8"] : sty === "office" ? ["#9a6a3c", "#8a5a32"] : ["#8a5a32", "#74492a"], mW = toon(pal[0]), mW2 = toon(pal[1]), beam = toon("#5e3a1e"), brass = toon("#d9a93a"), glass = toon("#9ad8f0"), wd = toon("#a0703c"), iron = toon("#3d3a44");
   for (let y = gy - 4, i = 0; y < top + 9; y += .9, i++) put(box(w, .88, .3, i % 2 ? mW : mW2, 0), cx, y + .45, -3.4);   // the back wall's planks
+  put(box(w, top + 13 - gy, .2, toon("#3e2616"), 0), cx, (gy + top + 5) / 2, -3.7);   // (and boards behind them: in clay the planks round off at their edges, and the seams between them would show the sea)
   put(box(w, 8, 1, beam, 0), cx, top + 4.2, -1); for (let x = x0 + 3; x < x1; x += 6.5) { put(box(.55, .6, 6.8, beam), x, top - .25, -.3); put(box(.5, top - gy + 2, .5, beam), x, (gy + top) / 2 - 1, -3.1); }   // the ceiling, its beams, the ribs
   put(box(w, 9, 7.6, toon("#4a2e1a"), 0), cx, gy - 5.2, -.1); for (let y = gy - 1.6; y > gy - 9; y -= 1.1) put(box(w, .06, .05, beam, 0), cx, y, 3.72);   // the hull under the floor (not the sea: you're inside her), its planks' seams
   for (let x = x0 + 6.2; x < x1 - 3; x += 6.5) { const y = gy + (top - gy) * .58; put(mk(new THREE.TorusGeometry(.62, .13, 8, 24), null, { mat: brass, ol: .02 }), x, y, -3.15); put(mk(new THREE.CircleGeometry(.6, 22), null, { mat: glass, ol: 0 }), x, y, -3.2); }   // portholes, the sea's light in them
@@ -5733,6 +5745,7 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
   level = typeof STAGES[s].home === "string" ? buildHome(h, s) : STAGES[s].hut ? buildHut(h, s) : STAGES[s].woods ? buildLevel(h, 901 + s * 2, null, STAGES[s]) : STAGES[s].cove ? buildBeach(h, s) : world === 13 ? buildDeep(h, s) : frNow && (world === 2 || world === 6) ? buildFreed(h, s) : world === 12 ? buildCastle(h, s) : world === 11 ? buildCasino(h, s) : world === 10 ? buildBazaar(h, s) : world === 9 ? buildBeach(h, s) : world === 8 ? buildLakebed(h, s) : world === 7 ? buildCruxCity(h, s) : world === 6 ? buildCandyFactory(h, s) : world === 5 ? buildKeshGarden(h, s) : world === 4 ? buildDunes(h, s) : world === 3 ? buildSkyland(h, s) : world === 1 || (world === 2 && STAGES[s].outside) ? buildWaves(h, s) : world === 2 ? buildFactory(h, s) : buildLevel(h, (c * 2 + (STAGES[s].boss ? 0 : 1)) * 2 + 1, STAGES[s].bep, STAGES[s]);   // seeded as before the patches moved first, so each clearing keeps its trees   // (home a string: the castle's rooms. The beach's house, home: true, was being built as one of them, a hall of wood: 2026-11-03)
   level.s = s; level.w = world; level.h = h;
   if (clayWorld && world === 0 && typeof STAGES[s].home !== "string" && !STAGES[s].hut && !STAGES[s].cove && !STAGES[s].clayRoom) clayWorldDress(s);   // (CLAY TEST WORLD: the room in clay)
+  else if (clayWorld && CLAY_WORLDS.has(world) && !STAGES[s].clayRoom) level.clayConv = true;   // (the beach, the waves, a house: its own pieces made clay once all are built, below)
   if (LADDERS.length) level.objs.push(...buildLadders());
   if (STAGES[s].climbUp && !STAGES[s].climbWall) PLATFORMS.push(...climbLedges(STAGES[s].climbUp));   // (a bare climbing wall: no ledges)
   if (mode === "play" && STAGES[s].bep && hideFound(world, s) && level.openBep) level.openBep();   // (the beps' way in: open, once you've found it)       // (a climb's ledges: drawn with the room's other pieces, not by the world's own builder)
@@ -5746,7 +5759,8 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
   ruinFx = null; level.ruin = tierNow; if (tierNow) level.objs.push(buildRuin(s, tierNow));
   bloomFx = null; level.freed = frNow; if (frNow) level.objs.push(buildBloom(s));
   if (STAGES[s].clayRoom) clayRoomSet();
-  if (level.clayWorld) { const off = level.objs.filter(o => o.userData && (o.userData.setK === "woodsFar" || (o.userData.setP && clayEnd(o.userData.setP)))); if (off.length) { disposeLevel({ objs: off }); level.objs = level.objs.filter(o => !off.includes(o)); } }   // (the woods small in the distance: the clay hills there instead)
+  if (level.clayConv) clayWorldConvert(s);
+  if (level.clayWorld && !level.clayConv) { const off = level.objs.filter(o => o.userData && (o.userData.setK === "woodsFar" || o.userData.setK === "earthBack" || (o.userData.setP && clayEnd(o.userData.setP)))); if (off.length) { disposeLevel({ objs: off }); level.objs = level.objs.filter(o => !off.includes(o)); } clayLevel(s); }   // (the woods small in the distance: the clay hills there instead; the rest of the room's own pieces made clay)
 }
 // ONE BIG ROOM (a test: the user, 2026-11-01: "can we test having screens that load several screens at once? so like in berry woods where there are those i believe
 // 4 screens that connect the big trees and have the bridge at the top? is it possible ot make it one continuous map without screens and the player can move freely
@@ -7421,9 +7435,8 @@ const clayRoomIn = () => !!(level && level.clayRoom && STAGES[stage] && STAGES[s
 // CLAY TEST WORLD (the user, 2026-11-09: "this will be the direction we're going to use for the game ... can we build the berry woods like this and have it be just in
 // the menu as the clay test world?"): Berry Woods as ever from C1, its play untouched, each room's floor, pits, platforms and the land overhead built in clay from its
 // own layout (clayroom.js dress), the woods round about in clay too, its sky flat; the woods' set pieces (the great trees, bridges, the rock) as they were, in CLAY LOOK.
-// Main menu only; off again at the menu
-let clayWorld = false;
-const clayWorldIn = () => !!(clayWorld && world === 0 && mode !== "select" && level && level.clayWorld);
+// Main menu only; off again at the menu (clayWorld, CLAY_WORLDS: up with CLAY_LITE, the builders ask for them at the start)
+const clayWorldIn = () => !!(clayWorld && CLAY_WORLDS.has(world) && mode !== "select" && level && level.clayWorld);
 function clayWorldGo() { closeMenus(); story = null; clayWorld = true; levelGo(0, "room", 0, GEAR_HEROES.includes(lvlHero) ? lvlHero : "camila"); }
 const claySkyC = [];
 function claySkyTex(h) { const k = clamp(h | 0, 0, 6); if (claySkyC[k]) return claySkyC[k];   // (an hour's sky: one flat clay colour)
@@ -7444,6 +7457,49 @@ function clayWorldDress(s) {                         // (screenBuild: the woods'
     trees: !(st.set || []).some(P => ["ceiba", "giant", "leaner", "bgTree", "willow", "treetops"].includes(P.k)) });
   scene.add(near, far); level.objs.push(near, far); level.clayWorld = true; level.clayMs = performance.now() - t0;
 }
+// the room's own pieces (its set pieces, Glos's roots, the climbs, the ladders, the hole's ceiling) made clay where they stand, once all are built (clayroom.js
+// clayify: divided, rounded, pressed lumpy, their colours and pictures baked into their vertices). What never moves is merged into a draw or two; what the game
+// moves, swaps or opens (CLAY_LIVE) is made clay piece by piece in its place; the foreground, which fades when you're behind it, keeps a material of its own
+const CLAY_TRIS = 130000;   // (how many triangles a room's own pieces may come to in clay, at full detail)
+const CLAY_STILL = new Set(["rocks", "crag", "wall", "coveRocks"]);   // (the waves' and beach's pieces that never move: merged; the rest of theirs in place)
+const CLAY_LIVE = new Set(["gong", "ladder", "pads", "gate", "crack", "dark", "hatch", "cannon", "mine", "zip", "flag"]);
+const clayOx = s => { const m = String((STAGES[s] && STAGES[s].cell) || "").match(/(-?\d+)$/); return m ? +m[1] * X(WORLD) : 0; };   // (where the room lies in the world: its column)
+const _cHSL = {}, clayCol = c => { const q = c.clone(); q.getHSL(_cHSL, THREE.SRGBColorSpace); if (_cHSL.l < .3) q.setHSL(_cHSL.h, Math.min(_cHSL.s, .55), .3 + _cHSL.l * .35, THREE.SRGBColorSpace); return q; };   // (clay is never near black: a dark piece lifted to a mid tone, keeping its hue)
+// the waves' rocks (ROCK_FS: lit by facet, dark strata lines) in clay: their two colours mixed, bands of strata pressed across them, softer and wider
+const clayRockCol = mt => { const U = mt.uniforms; return U.cBase.value.clone().lerp(U.cLit.value, .38); };
+const clayRockV = mt => { if (!(mt.uniforms && mt.uniforms.cBase && mt.uniforms.cLit)) return null; const B = mt.uniforms.cBase.value, Lt = mt.uniforms.cLit.value, mx = (a, b, t) => a + (b - a) * t;   // (purple clay, coral pressed on the faces the sun finds, as the print had it)
+  return (x, y, z, c, nx, ny, nz) => { const d = nx * SUN_DIR.x + ny * SUN_DIR.y + nz * SUN_DIR.z, t = d > .8 ? 1 : d > .62 ? .45 : d > .3 ? .1 : 0, dk = t === 0 ? (ny < -.3 ? .78 : .92) : 1;
+    const q = y * .8 + Math.sin(x * .55 + z * .35) * .45, s = Math.abs(q - Math.floor(q) - .5) * 2, k = (s < .2 ? .7 : 1) * dk;
+    c[0] = mx(B.r, Lt.r, t) * k; c[1] = mx(B.g, Lt.g, t) * k; c[2] = mx(B.b, Lt.b, t) * k; }; };
+const clayConvert = (root, o) => window.BerryClayRoom && BerryClayRoom.clayify ? BerryClayRoom.clayify(THREE, root, Object.assign({ toon, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1, colOf: mt => mt.isShaderMaterial ? clayCol(clayRockCol(mt)) : clayCol(mt.color || new THREE.Color(1, 1, 1)), shaderOk: mt => !!(mt.uniforms && mt.uniforms.cBase && mt.uniforms.cLit && !mt.uniforms.cDeep), vcolOf: clayRockV }, o)) : null;
+function clayWorldConvert(s) {                       // (the beach, the waves, a house inside: built by its own world as ever, then made clay where it stands; the sky flat clay, clay clouds on it)
+  if (!window.BerryClayRoom || !BerryClayRoom.clayify) return; const t0 = performance.now(), hr = clamp(level.h ?? 0, 0, 6);
+  try { if (level.relight) level.relight(SCREENS[hr] || look); } catch (e) { }   // (the hour's colours first: they're baked into the clay)
+  const pv = new Map(); level.objs.forEach(o => o && o.traverse(m => { const p = m.geometry && m.geometry.attributes && m.geometry.attributes.position; if (p) pv.set(m, p.version); }));
+  try { if (level.tick) { level.tick(time + 1.3, 1 / 60); level.tick(time + 2.1, 1 / 60); } } catch (e) { }
+  pv.forEach((v, m) => { if (m.geometry && m.geometry.attributes.position && m.geometry.attributes.position.version !== v) m.userData.noClay = true; });   // (what the room moves vertex by vertex itself, the sea and its waves: as it was)
+  if (level.sky && level.sky.material && level.sky.material.map !== undefined && !STAGES[s].hut && typeof STAGES[s].home !== "string") {
+    level.sky.material.map = claySkyTex(hr); level.sky.material.needsUpdate = true; level.skyFor = claySkyTex; level.sky.children.forEach(c => { c.visible = false; });
+    level.objs.forEach(o => o && o.traverse(m => { if (m.isMesh && m !== level.sky && m.material && m.material.isMeshBasicMaterial && m.material.transparent && m.material.map && m.getWorldPosition(new THREE.Vector3()).z < -25) m.visible = false; }));   // (the painted clouds)
+    const cl = BerryClayRoom.clouds(THREE, { toon, mergeGeometries, lod: CLAY_LITE ? CLAYL.lod : 1, W: X(WORLD), y: -8 }); scene.add(cl); level.objs.push(cl); }
+  level.objs.forEach(o => o && o.traverse(m => { if (m.material && m.material.uniforms && m.material.uniforms.uClay) m.material.uniforms.uClay.value = 1; }));   // (the sea and its great waves in clay)
+  clayLevel(s); level.clayWorld = true; level.clayMs = performance.now() - t0;
+}
+function clayLevel(s) {
+  const t0 = performance.now(), ox = clayOx(s), fg = new Set(level.fg || []), win = [0, X(WORLD)], skipG = g => !g || g === level.sky || g === level.motes || /^clay/.test(g.name || "") || (g.userData && g.userData.clayDone);
+  const eOf = BerryClayRoom.budget ? BerryClayRoom.budget(THREE, level.objs.filter(g => !skipG(g)), CLAY_TRIS * (CLAY_LITE ? CLAYL.lod : 1), win) : null;
+  const cast = typeof STAGES[s].home === "string" || STAGES[s].hut ? (m, cen, size, thick) => cen.z > -11 && size > .8 && size < 8 && thick > .3 : undefined;   // (indoors: the furniture casts, not the walls, floor and roof: from the sun they'd lay dark smears over the floor)   // (the room's clay about CLAY_TRIS triangles, shared out by size and nearness)
+  for (const g of level.objs) { if (skipG(g)) continue;
+    const k = g.userData && g.userData.setK;
+    try { if (fg.has(g)) clayConvert(g, { ox, own: true, eOf, win, cast }); else clayConvert(g, { ox, eOf, win, cast, merge: (world === 0 ? !!k && !CLAY_LIVE.has(k) : CLAY_STILL.has(k)) || g.name === "glosRoots" }); } catch (e) { console.warn("clay: " + (k || g.name || "?") + ": " + e.message); } }
+  level.clayConvMs = performance.now() - t0;
+}
+function clayRide(R) {                               // La Guagua's road in clay (CLAY TEST WORLD's whole game: the prologue's drive, the rides between its worlds): its pieces made clay where they are (they go by and wrap round: nothing merged), its sea the clay one, the bus too; whoever's on it as they are
+  if (!clayWorld || !R || !R.G) return; const t0 = performance.now();
+  const chars = new Set([...roster.map(q => q.root), R.driver && R.driver.r && R.driver.r.root, ...(R.kids || []).map(k => k.r && k.r.root)].filter(Boolean)), skip = m => { for (let q = m; q; q = q.parent) if (chars.has(q)) return true; return false; };
+  [R.G, R.bus].forEach(g => g && g.traverse(m => { const u = m.material && m.material.uniforms; if (u && u.uClay) u.uClay.value = 1; }));
+  try { clayConvert(R.G, { skip }); if (R.bus) clayConvert(R.bus, { skip, edge: .22 }); } catch (e) { console.warn("clay ride: " + e.message); }
+  R.clay = true; R.clayMs = performance.now() - t0; }
 function clayRoomTick() { const want = clayRoomIn() || clayWorldIn();   // (in the clay room or world: CLAY LOOK on, the haze light; out of it: as you had it)
   if (want && clayRoomWas === null) { clayRoomWas = clayOn; clayRoomFog = BerryShading.CLAY.fog; claySet(true); BerryShading.CLAY.fog = .15; }
   else if (!want && clayRoomWas !== null) { claySet(clayRoomWas); BerryShading.CLAY.fog = clayRoomFog; clayRoomWas = null; } }
@@ -8375,7 +8431,7 @@ function fitMenus() {
 setInterval(fitMenus, 250); addEventListener("resize", fitMenus); addEventListener("orientationchange", () => setTimeout(fitMenus, 300)); if (window.visualViewport) visualViewport.addEventListener("resize", fitMenus);
 function closeMenus() { vlogHush(); ["menu", "dev", "settings", "slots", "hero", "map", "vlog", "keysPop"].forEach(id => $(id).classList.remove("show")); $("gear").classList.remove("show"); $("hero").classList.remove("dim"); if (menuUp === "keys") paused = false; menuUp = null; }   // (the first-time controls popup paused the game itself: closed this way it comes back, not yet seen)
 function showMainMenu() {                            // over the bep crowd: NEW GAME, LOAD GAME, and the gear
-  closeMenus(); story = null; mapSeen = {}; clayWorld = false;
+  closeMenus(); story = null; mapSeen = {}; clayWorld = false; { const MB = $("mbtns"); if (MB.dataset.clay) { MB.innerHTML = mainBtns; delete MB.dataset.clay; } }   // (back from CLAY TEST WORLD's choices: the main ones)
   if (mode !== "select") showSelect();
   $("select").classList.add("hidden"); selRing.visible = false; roster.forEach(r => { r.root.visible = r.shadow.visible = false; });
   const any = loadSaves().some(Boolean), MB = $("mbtns"), LD = MB.querySelector("[data-m=load]"), NW = MB.querySelector("[data-m=new]");
@@ -8396,7 +8452,13 @@ function devChoose(d) {
   else if (d === "dimp") debugFileIn();     // (COMBAT FEEL's panel: its settings tuned, then a LEVEL SELECT to try them)
   else showSettings();                              // (BACK: to GAME SETTINGS, where it's opened from)
 }
-function mainChoose(m) { SFX.confirm(); if (m !== "set" && m !== "voices") clayWorld = false; if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else if (m === "quick") showQuick(); else if (m === "clay") clayRoomGo(); else if (m === "clayw") clayWorldGo(); else showSlots(m); }
+function mainChoose(m) { SFX.confirm(); if (m !== "set" && m !== "voices") clayWorld = false; if (m === "set") showSettings(); else if (m === "voices") showVlog("main"); else if (m === "quick") showQuick(); else if (m === "clay") clayRoomGo(); else if (m === "clayw") clayMenu(); else if (m === "cwWoods") clayWorldGo(); else if (m === "cwBack") showMainMenu();
+  else if (m === "cwNew" || m === "cwLoad") { clayWorld = true; showSlots(m === "cwNew" ? "new" : "load"); } else showSlots(m); }
+let mainBtns = null;
+function clayMenu() {                                // CLAY TEST WORLD's own choices (the user, 2026-11-09: "let's build the full game like this. the intros, cutscenes, beach world, berry forest, cuss' waves"): the woods straight in, or a whole game in clay from its start (the prologue, the beach, La Guagua, her desk) or from a save; the game's own look stays as it is otherwise
+  const MB = $("mbtns"); if (mainBtns === null) mainBtns = MB.innerHTML; const any = loadSaves().some(Boolean);
+  MB.innerHTML = '<button data-m="cwWoods">BERRY WOODS</button><button data-m="cwNew">NEW GAME IN CLAY</button><button data-m="cwLoad"' + (any ? "" : ' class="off"') + '>LOAD GAME IN CLAY</button><button data-m="cwBack">\u2039 BACK</button>';
+  MB.dataset.clay = "1"; mainSel = 0; markMenu(); }
 // game settings: the music and the sound effects, on or off (kept on this device)
 const SET_KEY = "berry.settings.v1", MUTED = new URLSearchParams(location.search).has("mute");
 function settingsGet() { try { return { music: true, sfx: true, shake: true, flash: true, ...JSON.parse(localStorage.getItem(SET_KEY) || "{}") }; } catch { return { music: true, sfx: true, shake: true, flash: true }; } }
@@ -8489,7 +8551,7 @@ function menuNav(d, ok, back, vert) {               // (vert: the press was ↑ 
   if (M === "team") { if (!teamAsk) return; if (d) { teamAsk.sel = step(teamAsk.sel, teamAsk.L.length); SFX.tick(); markMenu(); } if (ok) teamPick(teamAsk.sel); return; }   // (no going back from it: someone has to go)
   if (M === "main") { const B = [...$("mbtns").children];
     if (d) { do mainSel = step(mainSel, B.length); while (B[mainSel].classList.contains("off")); SFX.tick(); markMenu(); }
-    if (ok) mainChoose(B[mainSel].dataset.m); }
+    if (ok) mainChoose(B[mainSel].dataset.m); else if (back && $("mbtns").dataset.clay) { SFX.tick(); showMainMenu(); } }
   else if (M === "vlog") { const n = $("vlList").querySelectorAll("button").length + 1; if (d && n === 1) $("vlList").scrollBy(0, d * 90); else if (d) { vlogSel = step(vlogSel, n); SFX.tick(); markMenu(); } if (ok) { if (vlogSel === n - 1) vlogBack(); else vlogPick(vlogSel); } if (back) vlogBack(); }   // (a page of words or stats, nothing to pick: up / down scroll it)
   else if (M === "dev") { const B = [...$("dbtns").children]; if (d) { devSel = step(devSel, B.length); SFX.tick(); markMenu(); } if (ok) devChoose(B[devSel].dataset.d); if (back) showSettings(); }
   else if (M === "settings") { const B = [...$("setBtns").children]; if (d) { setgSel = step(setgSel, B.length); SFX.tick(); markMenu(); } if (ok) settingsChoose(B[setgSel].dataset.g); if (back) settingsChoose("back"); }
@@ -8896,7 +8958,7 @@ function proBus() {                                  // behind the black: the be
   level.objs.forEach(o => { o.visible = false; }); (level.fg || []).forEach(o => { o.visible = false; });
   dawnNow = false; dayHeld = 4; setLook(4);          // (SUNSET's light)
   rig = bareRig("camila"); Object.assign(player, { x: -4000, y: GROUND, vx: 0, vy: 0, onGround: true, plat: null });   // (you, out of the way: the two on the bus are the roster's own, so not yours)
-  pro.road = buildRoad(); const R = pro.road; R.camW = { x: R.busX + .1, y: 5.6, z: 30, tx: R.busX + .1, ty: 4.3, tz: 0 }; R.camC = { x: R.cx, y: 4.7, z: 17, tx: R.cx, ty: 3.75, tz: 0 }; R.zk = 0; proCam = { ...R.camW };   // (wide and scenic while the story's told, the bus small in the middle; in close for who are you? and off it goes: the user, 2026-10-26)
+  pro.road = buildRoad(); const R = pro.road; clayRide(R); R.camW = { x: R.busX + .1, y: 5.6, z: 30, tx: R.busX + .1, ty: 4.3, tz: 0 }; R.camC = { x: R.cx, y: 4.7, z: 17, tx: R.cx, ty: 3.75, tz: 0 }; R.zk = 0; proCam = { ...R.camW };   // (wide and scenic while the story's told, the bus small in the middle; in close for who are you? and off it goes: the user, 2026-10-26)
 }
 function proPickNow() { const P = pro; if (!P) return; P.ph = "pick"; P.t = 0; paused = true; if (P.road) P.road.zoomIn = true; beachPick(); }   // the story told: in close, and who are you?
 function proPicked(id) { const P = pro; if (!P) return; story.char = id; sel = roster.findIndex(r => r.id === id); P.ph = "go"; P.t = 0; SFX.whoosh(); }
@@ -9596,7 +9658,7 @@ function rideBuild() {                               // behind the black: the ro
   // day light setting of when the player left the last world and slowly transition to the next daytime setting by the time they arrive to the next world"). The casino: night at its end
   const nA = !!RIDE_KIT[P.from].night, nB = !!RIDE_KIT[P.to].night, H1 = hourAt(P.to, (dayPos() + 1) % HOUR_OF.length);
   const L0 = lookFrom(nA ? WORLDS[P.from].screens[6] : dawnNow ? dawnLook(P.from) : WORLDS[P.from].screens[dayHeld]), L1 = lookFrom(nB ? WORLDS[P.to].screens[6] : H1.dawn ? dawnLook(P.to) : WORLDS[P.to].screens[H1.h]); lookLerp(L0, L1, 0);
-  P.road = buildRide(P.from, P.to, nA ? 6 : Math.min(6, dayHeld), nB ? 6 : Math.min(6, H1.h)); const R = P.road, S2 = rideSeats(); R.riders = S2.R; R.oth = S2.oth; R.L0 = L0; R.L1 = L1;
+  P.road = buildRide(P.from, P.to, nA ? 6 : Math.min(6, dayHeld), nB ? 6 : Math.min(6, H1.h)); if (CLAY_WORLDS.has(P.from) || CLAY_WORLDS.has(P.to)) clayRide(P.road); const R = P.road, S2 = rideSeats(); R.riders = S2.R; R.oth = S2.oth; R.L0 = L0; R.L1 = L1;
   R.ev = { kind: rideRollEv(), ph: "wait", at: RIDE_T * .4, t: 0 };   // (a stop on the way, or none: see RIDE_EV)
   rideSeat(R); proCam = rideCam(R);
 }
@@ -9636,6 +9698,7 @@ function rideFill(R, s, K) {                         // a slot's piece: one of t
   if (s.g) { R.G.remove(s.g); s.g.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); }); s.g = null; }
   const L = K[s.row] || []; if (!L.length) return; const g = rPick(R.rng, L)(R.rng); if (!g) return;
   R.G.add(g); g.position.set(s.x, s.row === "back" ? -.4 : 0, s.z); g.rotation.y += (R.rng() - .5) * .6; if (s.row === "mid") g.scale.multiplyScalar(.85 + R.rng() * .3); s.g = g;
+  if (R.clay) { const t0 = performance.now(); try { clayConvert(g, { edge: .45 }); } catch (e) { } R.fillMs = (R.fillMs || 0) + performance.now() - t0; R.fills = (R.fills || 0) + 1; }   // (in clay: what comes by made clay as it comes)
 }
 // La Guagua's sound (the user, 2026-10-26: "find a license free car driving hum sound to play whenever it is on screen and moving. also have a sound for when it's
 // breaking, either to be attacked or to park somewhere"): sfx.js's engine loop (CC0), pitched down to a van's hum, under the road while it moves, deeper and quieter
@@ -9718,7 +9781,8 @@ function rideArena(cam) {                            // (what that camera sees o
 }
 function rideEvTick(P, R, E, dt) {                   // (the stop's own steps, every frame: on the way in, braking, out under the black, back in, and off again)
   E.t += dt; const Bl = $("proBlack"), fade = (to, sec) => { P.a = approach(P.a, to, dt / sec); Bl.style.opacity = P.a.toFixed(3); }, D = RIDE_EV[E.kind];
-  if (E.ph === "lead") { if (D.lead(P, R, E, dt)) { E.ph = "brake"; E.t = 0; } }
+  if (E.ph === "lead") { const done = D.lead(P, R, E, dt); if (R.clay && !E.clay) { E.clay = true; [E.G, E.GA].forEach(g => { if (g) try { clayConvert(g, { own: true, edge: .3 }); } catch (e) { } }); }   // (in clay: the stop's own things too, the cars, the stand)
+    if (done) { E.ph = "brake"; E.t = 0; } }
   else if (E.ph === "brake") { R.v = Math.max(0, R.v - E.dec * dt); if (D.brake) D.brake(P, R, E, dt); if (R.v <= 0) { R.v = 0; E.ph = "outA"; E.t = 0; } }
   else if (E.ph === "outA") { fade(1, .45); if (P.a >= 1 && E.t > .5) { rideOut(P, R, E); E.ph = "inA"; E.t = 0; } }
   else if (E.ph === "inA") { fade(0, .6); if (P.a <= 0) { E.ph = "play"; E.t = 0; } }
@@ -10338,6 +10402,10 @@ function deskTex(n) { let t = deskTexes[n]; const U = t && t.userData; if (U && 
   if (!t && DESK_PAGES[n]) { const k = U ? U.tries + 1 : 0; t = deskTexes[n] = new THREE.TextureLoader().load(file && BERRY_DESK[n] ? BERRY_DESK[n] : DESK_PAGES[n] + (k ? "&r=" + k : ""), q => { q.userData.ok = true; }, undefined, e => { t.userData.fail = performance.now(); console.warn("desk page", n, e); }); t.userData.tries = k; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; } return t || null; }
 let deskDataEl = null; function deskData() { if (deskDataEl) return; deskDataEl = document.createElement("script"); deskDataEl.src = "story/desk" + ".js?v=20261109"; deskDataEl.onerror = () => { window.BERRY_DESK = {}; }; document.head.appendChild(deskDataEl); }   // (its name in two: only the PC page wants it, so the phone build leaves it out (make_desk_js.py makes it))
 function deskSet(m, tx) { const w = tx && tx.userData.ok ? tx : null; if (m.map !== w) { m.map = w; m.color.set(w ? "#ffffff" : "#efe2c4"); m.needsUpdate = true; } }
+function deskClay(V) {                               // her room in clay (CLAY TEST WORLD's whole game), or back as it was: built again, then made clay where it stands; the open page and a page going over as they are (their drawings)
+  const want = !!clayWorld; if (V.clay !== undefined || !want) { V.sc.remove(V.room.G); V.room.G.traverse(m => { if (m.geometry && !m.userData.keepGeo) m.geometry.dispose(); if (m.material && !m.userData.keepMat && !Array.isArray(m.material)) m.material.dispose(); }); V.room = deskRoom(V.sc); }
+  V.clay = want; if (!want) return; const R = V.room; [R.page, R.sheetF, R.sheetB].forEach(m => { m.userData.noClay = true; });
+  try { clayConvert(R.G, { edge: .07, amp: .3, freq: 6, round: .6, own: true }); } catch (e) { console.warn("clay desk: " + e.message); } }
 function deskRoom(sc) {                              // her room at night: the desk, her chair, the sketchbook open with its spiral along the top, her pencils, the lamp; the window, her corkboard, a shelf, a poster
   const T = DESK, G = new THREE.Group(), mat = (c, o = {}) => new THREE.MeshLambertMaterial({ color: c, ...o }); sc.add(G);
   const add = (geo, c, x, y, z, o) => { const m = new THREE.Mesh(geo, c && c.isMaterial ? c : mat(c, o)); m.position.set(x, y, z); G.add(m); return m; };
@@ -10404,7 +10472,7 @@ function spotDraw(dt) {                              // her room through the men
   if (!spotPv) { const R2 = new THREE.WebGLRenderer({ antialias: true, alpha: true }); R2.outputColorSpace = renderer.outputColorSpace; R2.setClearColor(0x000000, 0);
     const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight("#c9c4e6", "#3a2a30", .85)); const d1 = new THREE.DirectionalLight("#bcd0ff", .45); d1.position.set(-.5, 3, 4); sc.add(d1); const d2 = new THREE.DirectionalLight("#ffe6c8", .7); d2.position.set(-1.5, 2.5, 2.5); sc.add(d2);   // (the night in at the window, the lamp's warm light)
     spotPv = { R2, sc, cam: new THREE.PerspectiveCamera(DESK.fov, 16 / 9, .02, 40), E: null, pg: pvGradeMake(), room: deskRoom(sc) }; box.appendChild(R2.domElement); }
-  const V = spotPv; let E = V.E;
+  const V = spotPv; if (!!V.clay !== !!clayWorld) deskClay(V); let E = V.E;
   if (!E || E.spec !== src.spec) { if (E) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
     const pen = deskPencil(); if (r.hands && r.hands[1]) r.hands[1].add(pen); const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0, pen }; }
   if (S) deskPencilSet(E.pen, S.pencil);
@@ -10412,7 +10480,8 @@ function spotDraw(dt) {                              // her room through the men
   const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = E.r.prop && E.r.prop.rings ? E.r.prop.rings.length : 3; st.noGlow = true; st.palm = 1; st.tcPose = S ? S.pose : "desk_draw"; st.tcT0 = S ? S.poseT0 : 0; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false;   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip), her pencil hand's little moves (desk_face, desk_point, desk_out, each from its start: tcT0) · hp: every gauntlet ring in its colour, as at full health (the user, 2026-11-09 "have her gauntlet show all the colors like when she's at full health"), noGlow: still no glow over the page · palm: the gauntlet open, flat on the page)
   const R = V.room; if (S) { deskSet(R.page.material, deskTex(S.book.pages[S.page])); const F = S.flip; R.sheetF.visible = R.sheetB.visible = !!F; if (F) { deskSet(R.sheetF.material, deskTex(S.book.pages[F.from])); deskSheet(R, clamp(F.t / DESK.flip, 0, 1)); } }
   const w = box.clientWidth, h = box.clientHeight, pr = Math.min(1.5, window.devicePixelRatio || 1, 2200 / Math.max(1, w)); if (w && h && (V.w !== w || V.h !== h || V.pr !== pr)) { V.w = w; V.h = h; V.pr = pr; V.R2.setPixelRatio(pr); V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
-  deskCam(S, V, dt); pvRender(V.R2, V.sc, V.cam, V.pg);
+  deskCam(S, V, dt); const fU = V.clay && SHADE && SHADE.U, f0 = fU ? [fU.mkClayF.value, fU.mkClayPF.value] : null; if (fU) { fU.mkClayF.value *= 2.4; fU.mkClayPF.value *= 2.4; }   // (in clay: her room's smears and prints finer, it's small and seen close)
+  pvRender(V.R2, V.sc, V.cam, V.pg); if (fU) { fU.mkClayF.value = f0[0]; fU.mkClayPF.value = f0[1]; }
 }
 function spotTick(dt) {                              // (every frame while she's up) the camera, her pencil, her lines one after another as the voice-overs go, a page over for each new drawing
   const S = spot; if (!S) return; S.ct += dt; const arrive = (DESK.tA + DESK.tB + DESK.tC - (S.book.skip || 0)) * S.ck;

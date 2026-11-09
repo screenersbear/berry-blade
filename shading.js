@@ -116,7 +116,7 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
     vec3 mkLit = mkRampOn > .5 ? mkAlb * (mkSun * mix(.5, 1.0, mkR) + mkHemi) * RECIPROCAL_PI + totalEmissiveRadiance : mkBase;   // (stepped: the sun in bands over the sky's fill; its shadow band keeps half the sun, as the game's own ramp keeps .71)
     if (mkClay > .5) { vec3 cq = mkTexObj > .5 ? vMkO : vMkW; float ch = mkClayH(cq * mkClayF); vec2 cp = mkClayPP > 0.0 ? mkPrints(cq * mkClayPF, mkTexObj > .5 ? vMkON : vMkN) : vec2(0.0); ch += cp.x;   // CLAY: the bent normal; one warm key light (the sun) that wraps a little round, its shadows; the sky's fill; the creases and dents darker; a soft sheen
       mkN = mkClayBend(-vViewPosition, mkN, vec2(dFdx(ch), dFdy(ch)) * mkClayB * .02, faceDirection);
-      float sh = mkShOn > .5 ? mkShadow(vMkW + mkNW * .04) : 1.0, ao = mkAoOn > .5 && (mkTexObj > .5 || mkAoE > 0.0) ? mkCrease(vViewPosition.z, mkTexObj > .5 ? mkAoI : mkAoE) : 1.0;
+      float sh = mkShOn > .5 ? mkShadow(vMkW + mkNW * (mkTexObj > .5 ? .04 : .14)) : 1.0, ao = mkAoOn > .5 && (mkTexObj > .5 || mkAoE > 0.0) ? mkCrease(vViewPosition.z, mkTexObj > .5 ? mkAoI : mkAoE) : 1.0;
       sh = mix(1.0 - mkClaySh, 1.0, sh);   // (a character's own shadows, half: her hair kept the whole of her face dark)
       float cl = clamp((dot(mkN, mkL) + mkClayW) / (1.0 + mkClayW), 0.0, 1.0); cl = cl * cl * (3.0 - 2.0 * cl) * sh; vec3 chm = mkHemi;
       #if NUM_HEMI_LIGHTS > 0
