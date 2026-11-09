@@ -10,7 +10,7 @@
 // 2026-10-20: "make the player able to scroll through menues with virtual control arrows or actual control, not just touch screen"):
 // the d-pad moves through a menu and ✕ (or ○) picks; the menus can still be tapped directly.
 // The partner controls (the user, 2026-10-31: the 3DS pad as the model; "phone yes"): □ and △ send in a partner each (C and V), and two shoulder
-// buttons sit over the four, L the block buddy (S) and R the attack buddy (D), the keyboard's since 2026-11-01: on the right, so a thumb can block and the other push the d-pad (block and a way: the dodge).
+// buttons sit over the d-pad, L the block buddy (S) and R the attack buddy (D), the keyboard's since 2026-11-01: L2 a row above them (until 2026-11-09 over the four, on the right; the user, 2026-11-09: "in the phone version move the L and R buttons to over the dpad on the screen controller").
 // Over the d-pad, an L2 button (the user, 2026-10-21: "a left trigger button over the d-pad on the virtual controller"): hold it and
 // the game stops with your items over it; press a button on one (✕ ○ □) to use it. It holds the / key down, as the keyboard does.
 // Sitting down in the beps' hideout, they all fade away, and a tap anywhere gets you up again (the user, 2026-10-19).
@@ -35,13 +35,13 @@
   #tBtns .b svg * { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
   #touch.gp #tPad, #touch.gp #tBtns, #touch.gp #tLT, #touch.gp .tSh { display: none; }
   #touch.kb #tPad, #touch.kb #tBtns, #touch.kb #tLT, #touch.kb #tCorner, #touch.kb .tSh { display: none; }   /* (a keyboard: none of it, 2026-10-24) */
-  #tLT { left: calc(66px + env(safe-area-inset-left)); bottom: calc(184px + env(safe-area-inset-bottom)); width: 60px; height: 34px; border-radius: 17px; border: 2.5px solid #fff;
-    background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center; font: 13px/1 "Bungee", sans-serif; box-sizing: border-box; padding-top: 2px; }
+  #tLT { left: calc(66px + env(safe-area-inset-left)); bottom: calc(226px + env(safe-area-inset-bottom)); width: 60px; height: 34px; border-radius: 17px; border: 2.5px solid #fff;
+    background: rgba(255, 255, 255, .16); color: #fff; opacity: .34; display: flex; align-items: center; justify-content: center; font: 13px/1 "Bungee", sans-serif; box-sizing: border-box; padding-top: 2px; }   /* (L2: a row above L and R, still over the d-pad, 2026-11-09) */
   #tLT.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }
-  .tSh { bottom: calc(206px + env(safe-area-inset-bottom)); width: 78px; height: 36px; border-radius: 18px; border: 2.5px solid #fff; background: rgba(255, 255, 255, .16); color: #fff; opacity: .34;
+  .tSh { bottom: calc(182px + env(safe-area-inset-bottom)); width: 72px; height: 36px; border-radius: 18px; border: 2.5px solid #fff; background: rgba(255, 255, 255, .16); color: #fff; opacity: .34;
     display: flex; flex-direction: column; align-items: center; justify-content: center; font: 13px/1 "Bungee", sans-serif; box-sizing: border-box; padding-top: 2px; }
   .tSh i { font: 600 7px/1 "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 2px; }
-  #tL { right: calc(112px + env(safe-area-inset-right)); } #tR { right: calc(14px + env(safe-area-inset-right)); }   /* (over the four buttons: L on the left, R on the right) */
+  #tL { left: calc(18px + env(safe-area-inset-left)); } #tR { left: calc(102px + env(safe-area-inset-left)); }   /* (over the d-pad, L on the left and R on the right, the user, 2026-11-09: "move the L and R buttons to over the dpad"; they were over the four buttons) */
   .tSh.on { background: rgba(255, 255, 255, .62); color: #2f3b43; }   /* (a controller in use: no on-screen pad) */
   #tBtns .b i { font: 600 8px/1 "Jost", sans-serif; letter-spacing: .14em; font-style: normal; margin-top: 3px; }
   #tBtns .bY { left: 58px; top: 0; } #tBtns .bX { left: 0; top: 58px; } #tBtns .bB { left: 116px; top: 58px; } #tBtns .bA { left: 58px; top: 116px; }
