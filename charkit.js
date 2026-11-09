@@ -2947,15 +2947,25 @@ const ADMIRE = { gauntlet: [null, "adm_g1", "adm_g2", "adm_g3"], sword: [null, "
 const DESK_SIT = { bodyY: [[0, -.3], [3, -.3]], fNx: [[0, .3], [3, .3]], fFx: [[0, .25], [3, .25]], fNy: [[0, 0], [3, 0]], fFy: [[0, 0], [3, 0]] };
 Object.assign(STRIKES, {
   desk_draw: { dur: 2.4, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [1.2, .43], [2.4, .41]], headRot: [[0, .05], [1.2, .09], [2.4, .05]], headY: [[0, 0], [.8, -.05], [1.6, .04], [2.4, 0]],
-    armF: [[0, .8], [2.4, .8]], elbF: [[0, .9], [2.4, .9]], spF: [[0, .35], [2.4, .35]],
+    armF: [[0, .75], [2.4, .75]], elbF: [[0, .95], [2.4, .95]], spF: [[0, .05], [2.4, .05]], wF: [[0, -.13], [2.4, -.13]],   // (the gauntlet open and flat on the page, its back up: the user, 2026-11-09 "her left hand should also be flat on the page, where we see the back of her hand, not the open palm")
     armB: [[0, 1.0], [.3, 1.04], [.6, .98], [.9, 1.05], [1.2, 1.0], [1.5, 1.03], [1.8, .97], [2.1, 1.04], [2.4, 1.0]], elbB: [[0, .65], [.3, .58], [.6, .72], [.9, .6], [1.2, .7], [1.5, .6], [1.8, .68], [2.1, .62], [2.4, .65]],
     spB: [[0, -.15], [.45, -.05], [.9, -.2], [1.35, -.08], [1.8, -.22], [2.4, -.15]], wB: [[0, 0], [.6, .15], [1.2, -.1], [1.8, .12], [2.4, 0]] } },
   desk_rest: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [1.5, .43], [3, .41]], headRot: [[0, .07], [1.5, .11], [3, .07]], headY: [[0, 0], [3, 0]],
-    armF: [[0, .8], [3, .8]], elbF: [[0, .9], [3, .9]], spF: [[0, .35], [3, .35]], armB: [[0, 1.0], [1.5, 1.02], [3, 1.0]], elbB: [[0, .65], [3, .65]], spB: [[0, .5], [3, .5]], wB: [[0, 0], [3, 0]] } },
+    armF: [[0, .75], [3, .75]], elbF: [[0, .95], [3, .95]], spF: [[0, .38], [3, .38]], wF: [[0, -.13], [3, -.13]], armB: [[0, .75], [1.5, .77], [3, .75]], elbB: [[0, 1.1], [3, 1.1]], spB: [[0, .32], [3, .32]], wB: [[0, -.35], [3, -.35]] } },   // (both on the page, the pencil hand on its right, the user 2026-11-09 "make her right hand visible over the notebook")
   desk_lap: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .14], [1.5, .17], [3, .14]], headRot: [[0, .1], [1.5, .14], [3, .1]], headY: [[0, 0], [3, 0]],   // (sat back, both hands in her lap under the desk: the camera in close on a page's drawings, her mittens out of them)
     armF: [[0, .1], [3, .1]], elbF: [[0, 1.2], [3, 1.2]], spF: [[0, .1], [3, .1]], armB: [[0, .1], [3, .1]], elbB: [[0, 1.2], [3, 1.2]], spB: [[0, .1], [3, .1]], wB: [[0, 0], [3, 0]] } },
   desk_flip: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .43], [3, .43]], headRot: [[0, .1], [3, .1]], headY: [[0, .05], [3, .05]],
-    armF: [[0, 1.2], [3, 1.2]], elbF: [[0, .55], [3, .55]], spF: [[0, .2], [3, .2]], armB: [[0, 1.0], [3, 1.0]], elbB: [[0, .65], [3, .65]], spB: [[0, .5], [3, .5]], wB: [[0, 0], [3, 0]] } },
+    armF: [[0, 1.2], [3, 1.2]], elbF: [[0, .55], [3, .55]], spF: [[0, .2], [3, .2]], armB: [[0, .75], [3, .75]], elbB: [[0, 1.1], [3, 1.1]], spB: [[0, .32], [3, .32]], wB: [[0, -.35], [3, -.35]] } },
+  // her pencil hand's little moves while a page is up (the user, 2026-11-09: "create a couple brief movements of her right hand where she might move it out of frame, briefly over whatever is being shown on the notebook like to touch her face, etc."): from desk_rest and back to it, played once each from its start (the game's p.tcT0)
+  desk_face: { dur: 2.6, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [.6, .37], [2, .37], [2.6, .41]], headRot: [[0, .07], [.6, .01], [2, .01], [2.6, .07]], headY: [[0, 0], [2.6, 0]],   // (up to her cheek, the pencil by her face, a little tap of it, and back down)
+    armF: [[0, .75], [2.6, .75]], elbF: [[0, .95], [2.6, .95]], spF: [[0, .38], [2.6, .38]], wF: [[0, -.13], [2.6, -.13]],
+    armB: [[0, .75], [.6, 1.5], [2, 1.5], [2.6, .75]], elbB: [[0, 1.1], [.6, 1.8], [1, 1.72], [1.4, 1.84], [2, 1.8], [2.6, 1.1]], spB: [[0, .32], [.6, -.5], [2, -.5], [2.6, .32]], wB: [[0, -.35], [.6, .2], [2, .2], [2.6, -.35]] } },
+  desk_point: { dur: 2.2, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [.5, .45], [1.6, .45], [2.2, .41]], headRot: [[0, .07], [2.2, .07]], headY: [[0, 0], [2.2, 0]],   // (over the drawing, the pencil's end tapping it twice, and back)
+    armF: [[0, .75], [2.2, .75]], elbF: [[0, .95], [2.2, .95]], spF: [[0, .38], [2.2, .38]], wF: [[0, -.13], [2.2, -.13]],
+    armB: [[0, .75], [.5, 1.15], [.8, 1.1], [1, 1.15], [1.2, 1.1], [1.6, 1.15], [2.2, .75]], elbB: [[0, 1.1], [.5, .55], [.8, .62], [1, .55], [1.2, .62], [1.6, .55], [2.2, 1.1]], spB: [[0, .32], [.5, -.3], [1.6, -.3], [2.2, .32]], wB: [[0, -.35], [.5, -.1], [1.6, -.1], [2.2, -.35]] } },
+  desk_out: { dur: 2.4, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [.6, .39], [1.6, .39], [2.4, .41]], headRot: [[0, .07], [2.4, .07]], headY: [[0, 0], [2.4, 0]],   // (off the page's side, out of the picture a moment, and back)
+    armF: [[0, .75], [2.4, .75]], elbF: [[0, .95], [2.4, .95]], spF: [[0, .38], [2.4, .38]], wF: [[0, -.13], [2.4, -.13]],
+    armB: [[0, .75], [.6, 1.0], [1.6, 1.0], [2.4, .75]], elbB: [[0, 1.1], [.6, .9], [1.6, .9], [2.4, 1.1]], spB: [[0, .32], [.6, .8], [1.6, .8], [2.4, .32]], wB: [[0, -.35], [.6, 0], [1.6, 0], [2.4, -.35]] } },
 });
 api.ADMIRE = ADMIRE;
 Object.assign(BUDDY_PLAIN, { pincho: ["pincho_poke"], caracol: ["caracol_bonk"], mordi: ["mordi_punch"] });
@@ -3287,7 +3297,7 @@ function updatePoseHuman(p, dt) {
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
   else if (p.crawl && a < 0 && p.hurtT <= 0) Object.assign(T, crawlPose(p));
-  else if ((p.pointKind || p.tcPose) && a < 0 && p.hurtT <= 0 && STRIKES[p.pointKind || p.tcPose]) { const k = p.pointKind || p.tcPose; Object.assign(T, poseKeys(p, k, api.time % STRIKES[k].dur) || {});
+  else if ((p.pointKind || p.tcPose) && a < 0 && p.hurtT <= 0 && STRIKES[p.pointKind || p.tcPose]) { const k = p.pointKind || p.tcPose; Object.assign(T, poseKeys(p, k, (api.time - (p.tcT0 || 0)) % STRIKES[k].dur) || {});   // (tcT0: when the game started it, so a one-off move of her desk scene plays from its start, 2026-11-09)
     if (p.kick > 0) { const u = p.kick; T.lean = (T.lean || 0) - .22 * u; T.arch = (T.arch || 0) - .12 * u; T.elbF = (T.elbF || 0) + .6 * u; T.headRot = (T.headRot || 0) - .14 * u; } }   // (the shot's kick: thrown back off it, the elbow giving, eased out by the game's p.kick. The user, 2026-11-05 "have a little recoil to her when she shoots them and bigger recoil when she shoots the bigger one")   // (pointing a partner at them; the team charge)   // crawling through a low hole (2026-10-28)
   else if (p.upCoil && a < 0 && p.hurtT <= 0) Object.assign(T, poseKeys(p, "upcoil", Math.min(p.upCoil.t, STRIKES.upcoil.dur)) || {});   // the air up attack's coil, before the strike (2026-10-31)
   else if (p.upHop && a < 0 && p.hurtT <= 0 && (!p.upHop.up || p.upHop.t < STRIKES.uphop.dur)) Object.assign(T, poseKeys(p, "uphop", Math.min(p.upHop.t, STRIKES.uphop.dur)) || {});   // up after the launched one: the crouch and the push off (2026-10-28; then the jump's own rising pose)
@@ -3932,7 +3942,7 @@ function syncHuman(p, r, dt = 0) {
         if (X.stud) X.stud.visible = pg >= i * 2 + 2; X.g.scale.setScalar(s.x); X.g.visible = s.x > .01; }); }
   }
   if (pr && pr.glow) {                                                // full health: the sword / gauntlet glows; a hit puts it out
-    const want = hp >= 3 && !p.dead ? 1 : 0;
+    const want = hp >= 3 && !p.dead && !p.noGlow ? 1 : 0;   // (noGlow: her desk scene, at full health for its colours but no glow over the page, 2026-11-09)
     r.glowA = r.glowA === undefined ? want : approach(r.glowA, want, (dt || 1 / 60) * (want ? 1.6 : 6));
     const k = r.glowA * (.78 + .22 * Math.sin(api.time * 6)), c = pr.glowCol;
     const kg = pr.kind === "sword" ? 1 - .7 * clamp(giantOf(p), 0, 1) : 1; pr.glow.forEach(m => { m.material.opacity = k * kg * m.userData.a; m.visible = k * kg > .01; });   // (a grown blade's glow, fainter: it hid her)
