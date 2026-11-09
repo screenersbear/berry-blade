@@ -2599,18 +2599,23 @@ function propFeet(p, two) {
 // (they'd stood on nothing past the path's ground, their feet lost in the fog), undergrowth along it, and two far stands of trees, their crowns packed together, in deep
 // greens the fog turns sage: between the trunks, more forest, not the pale sky. Rows B and C (row A looks out over the canopy below; the ravine has its own floor)
 const FAR_C = { floor: "#4a733a", bush: ["#2f5c38", "#3a6b40", "#467845"], crown: ["#28522f", "#315c37", "#3d6a40", "#4a7848"], bark: ["#54463a", "#6a5d4f", "#8a8476"] };
-function farForest(par, bgY, WS0) {                // (WS0: the screen's slots, wPlace)
+function farForest(par, bgY, WS0, tops = false) {   // (WS0: the screen's slots, wPlace; tops: up in the treetops over the drop, BB2, no floor down there but a sea of crowns)
   let rng = Math.random; const inSlot = slotRun(() => rng, v => { rng = v; }), R = (a, b) => a + rng() * (b - a), q = new THREE.Quaternion(), e3 = new THREE.Euler(), m4 = new THREE.Matrix4(), V = (x, y, z) => new THREE.Vector3(x, y, z);
-  if (bgY <= .5) par.add(at(mk(new THREE.BoxGeometry(WX + 160, .45, 72), null, { mat: toon(FAR_C.floor), ol: 0 }), WX / 2, bgY - .24, -45.5));   // (the forest floor on back, from the path's ground's back edge)
+  if (bgY <= .5 && !tops) par.add(at(mk(new THREE.BoxGeometry(WX + 160, .45, 72), null, { mat: toon(FAR_C.floor), ol: 0 }), WX / 2, bgY - .24, -45.5));   // (the forest floor on back, from the path's ground's back edge)
   const inst = (geo, cols, list) => cols.forEach((c, i) => { const L = list.filter(o => o.c === i); if (!L.length) return; const im = new THREE.InstancedMesh(geo, toon(c), L.length);
     L.forEach((o, j) => { q.setFromEuler(e3.set(0, o.ry || 0, o.rz || 0)); m4.compose(V(o.x, o.y, o.z), q, V(o.sx, o.sy, o.sz)); im.setMatrixAt(j, m4); }); im.instanceMatrix.needsUpdate = true; par.add(im); });
   const bush = [], trunk = [], crown = [];
-  for (const sl of WS0.steps(1.6, 3.2, 70, 70, 2201)) inSlot(sl, x => { const r = R(1.2, 2.6); bush.push({ x, y: bgY + r * .35, z: -R(36, 42), sx: r * 1.5, sy: r * .8, sz: r, c: Math.floor(rng() * 3), ry: R(0, TAU) }); });   // undergrowth along its foot
+  if (!tops) for (const sl of WS0.steps(1.6, 3.2, 70, 70, 2201)) inSlot(sl, x => { const r = R(1.2, 2.6); bush.push({ x, y: bgY + r * .35, z: -R(36, 42), sx: r * 1.5, sy: r * .8, sz: r, c: Math.floor(rng() * 3), ry: R(0, TAU) }); });   // undergrowth along its foot
   const band = (z0, z1, gap, h0, h1, rk) => { for (const sl of WS0.steps(gap * .6, gap * 1.3, 90, 90, 2202 + Math.round(z0))) inSlot(sl, x => { const z = -R(z0, z1), h = R(h0, h1), w = R(.35, .7) * rk;   // a stand: trunks, a crown of four over each
     trunk.push({ x, y: bgY + h / 2, z, sx: w, sy: h + 1, sz: w, c: Math.floor(rng() * 3), rz: R(-.06, .06) });
     for (let c = 0; c < 4; c++) { const r = R(2.2, 3.8) * rk; crown.push({ x: x + R(-2.6, 2.6) * rk, y: bgY + h + R(-1.2, 1.8) * rk, z: z + R(-1.4, 1.4), sx: r * 1.35, sy: r * .7, sz: r, c: Math.floor(rng() * 4), ry: R(0, TAU) }); } }); };
   band(44, 50, 4.5, 9, 13, 1); band(54, 62, 5.5, 12, 17, 1.3);
   inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.bush, bush); inst(new THREE.CylinderGeometry(.5, .7, 1, 6), FAR_C.bark, trunk); inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.crown, crown);
+  if (tops) { const sr = rngF(2210), R2 = (a, b) => a + sr() * (b - a), sea = [];   // the canopy below, all the way back: crown on crown, lumpy, a little higher the farther off (the trees round about stand in it, their feet out of sight). The user, 2026-11-08: "in bb2, it's good that there's no ground immediately behind the place the characters are walking but it's weird that there is ground in the bakground. this area should feel like tree tops so the background should all be the tops of trees and you shouldnt see where those trees touch the ground"
+    for (let z = -10; z > -82; z -= R2(2.6, 3.4)) for (let x = -80; x < WX + 80; x += R2(3, 4.2)) { const r = R2(2.2, 3.6), k = clamp((-z - 10) / 60, 0, 1);
+      sea.push({ x: x + R2(-1, 1), y: bgY + R2(-.6, 1.2) + k * 1.5, z: z + R2(-.8, .8), sx: r * 1.4, sy: r * .75, sz: r, c: Math.floor(sr() * 4), ry: R2(0, TAU) });
+      if (z > -24) { const r2 = R2(2.8, 4.2); sea.push({ x: x + R2(-1.5, 1.5), y: bgY - R2(2.6, 4.8), z: z + R2(-1, 1), sx: r2 * 1.3, sy: r2 * .9, sz: r2, c: Math.floor(sr() * 2), ry: R2(0, TAU) }); } }   // (its front rows deeper, hanging on down into the haze: not a flat underside over it)
+    inst(new THREE.IcosahedronGeometry(1, 0), FAR_C.crown, sea); }
 }
 function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   const before = new Set(scene.children);
@@ -2781,7 +2786,7 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
   if (!(bgY < -.5)) for (const sl of W.scatter(Math.round(14 * WS), 10, 10, 2111)) inSlot(sl, x => { const z = -R(5, 12);   // lianas hanging out of the canopy
     if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) return; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); });
   for (const sl of W.steps(14, 24, 30, 30, 2112)) inSlot(sl, x => tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22)));   // the mogotes far off
-  if (bgY > -.5 || (st.bgRow && st.drop)) farForest(scene, bgY, W);
+  if (bgY > -.5 || (st.bgRow && st.drop)) farForest(scene, bgY, W, !!(st.bgRow && st.drop && st.open && (st.gaps || []).length));   // (tops: an open room with the drop under its path, BB2; BB3's path is ground, its floor on back kept)
   if (st.bgRow && st.drop && st.open) { const runs = []; let a = -80; (st.gaps || []).map(([g0, g1]) => [g0 <= 0 ? -1e9 : X(g0), g1 >= WORLD ? 1e9 : X(g1)]).sort((p, q) => p[0] - q[0]).forEach(([g0, g1]) => { if (g0 > a) runs.push([a, g0]); a = Math.max(a, g1); }); runs.push([a, WX + 80]);   // (only where it has a floor: BB2's vine hangs out over the open air. The user, 2026-11-08: "in BB2, there should be no ground behind the vine. the vine should be suspended in the air")
     runs.forEach(([xa, xb]) => { xa = Math.max(xa, -80); xb = Math.min(xb, WX + 80); const w = xb - xa, cx = (xa + xb) / 2; if (w < .05) return; scene.add(at(mk(new THREE.BoxGeometry(w, .35, 7.4), null, { mat: mGrass, ol: 0 }), cx, bgY - .175, -6)); scene.add(at(mk(new THREE.BoxGeometry(w, 1.7, 7.2), null, { mat: mDirt, ol: 0 }), cx, bgY - 1.2, -6.1)); scene.add(at(mk(new THREE.BoxGeometry(w, 9, 7.2), null, { mat: toon("#122018"), ol: 0 }), cx, bgY - 6.5, -6.1)); }); }   // (open, BB2 and BB3: the bank behind, from the path back to the forest floor, whole over BB2's pit, as the woods' own pits have it)   // (the forest filled in behind: placed in the world's drawing too. The background's row BB too, down at its floor: the user, 2026-11-05 "fill in the background with floor etc like we did to the front part of the map's backgrounds")
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
