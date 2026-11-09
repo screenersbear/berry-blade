@@ -1284,15 +1284,16 @@ const BG_FAR_Z = -22, BG_KINDS = new Set(["deck", "vine", "branch", "crown", "tu
 const BG_RINGS = [[620, 470, 280, 170, 0], [1180, 455, 280, 150, 1.3], [1740, 470, 280, 160, 2.6]];   // (BA4's three loops of vine: across, top (px), half wide, half high, a twist)
 let BG_FAR = null;
 // everything renders into this target, then a grading pass gives the soft, chalky pastel palette
-const frameRT = new THREE.WebGLRenderTarget(1, 1, { samples: 4 });
+const frameRT = new THREE.WebGLRenderTarget(1, 1, { samples: 4 }); frameRT.texture.colorSpace = THREE.SRGBColorSpace;   // (kept as sRGB, its steps where the eye sees them: in plain 8-bit linear the clay's darks, drawn dim and lifted x2.5 by the grade, came out in bands, lines across every soft shadow and the sky. The user, 2026-11-09: "the shadows on the ground look a little streaky like a lot of lines next to each other on the beach.")
 frameRT.texture.colorSpace = THREE.SRGBColorSpace;
 function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.floor(innerWidth * d), Math.floor(innerHeight * d)); }
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, tex: { value: frameRT.texture }, clayT: { value: 0 }, clayX: { value: 1.75 }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
+  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, soft: { value: 0 }, softR: { value: 1 }, tex: { value: frameRT.texture }, clayT: { value: 0 }, clayX: { value: 1.75 }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
+    uniform float soft, softR;   // (BIG SCREENS: how far into the softening (0 on a phone), and the size of one phone-like pixel in frame pixels)
     uniform sampler2D tex, bgTex; uniform float clayT, clayX; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc; varying vec2 vUv;
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
@@ -1302,12 +1303,13 @@ const gradeMat = new THREE.ShaderMaterial({
     float gbcMin(vec2 b) { vec2 s = tpx / (tpx.y * gbc), u = (b + .5) * s; vec3 w = vec3(.299, .587, .114); return min(min(dot(toSRGB(max(texture2D(tex, u - s * .25).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * .25).rgb, 0.0)), w)), min(dot(toSRGB(max(texture2D(tex, u + s * vec2(.25, -.25)).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * vec2(-.25, .25)).rgb, 0.0)), w))); }   // its darkest look (an eye, smaller than one big pixel)
     void main() {
       vec4 f = texture2D(tex, vUv);
+      if (soft > 0.0 && gbc <= 0.0) { vec2 o = tpx * softR * .6; vec3 b = (texture2D(tex, vUv + o).rgb + texture2D(tex, vUv - o).rgb + texture2D(tex, vUv + vec2(o.x, -o.y)).rgb + texture2D(tex, vUv - vec2(o.x, -o.y)).rgb) * .25; f.rgb = mix(f.rgb, b, .5 * soft); }   // BIG SCREENS: the edges a little soft, as small as they look on a phone (its alpha kept sharp) (the user, 2026-11-09: "in small screens it looks great but in a bigger screen, it has a sort of regular 3d feel that takes away from the artifice of the clay")
       if (clayT > 0.0) { vec3 a = mat3(.59719, .07600, .02840, .35458, .90834, .13383, .04823, .01566, .83777) * (max(f.rgb, 0.0) * clayX); a = (a * (a + .0245786) - .000090537) / (a * (.983729 * a + .432951) + .238081);   // (CLAY LOOK: filmic, the mockup's ACES)
         f.rgb = mix(f.rgb, clamp(mat3(1.60475, -.10208, -.00327, -.53108, 1.10813, -.07276, -.07367, -.00605, 1.07602) * a, 0.0, 1.0), clayT); }
       vec3 c = toSRGB(max(f.rgb, 0.0));
       vec2 gb = vec2(0.0); if (gbc > 0.0) { gb = floor(gl_FragCoord.xy * tpx.y * gbc); c = gbcAt(gb).rgb; }   // (in the beach house: the screen as GBC rows of big square pixels, gbc of them top to bottom, each one colour)
       float l = dot(c, vec3(.299, .587, .114));
-      c = max(mix(vec3(l), c, 1.06), 0.0);              // keep the colour vibrant   // (never below nothing: a colour with none of one (Rink's yellow, no blue) went under it here, pow then made it NaN, and the ruin's grey (its dot of all three) spread that to the whole pixel: black bodies, black platforms, the land at war, any hour. The user, 2026-11-04: "it's literally black on different parts of their body")
+      c = max(mix(vec3(l), c, 1.06 + .07 * soft), 0.0);              // keep the colour vibrant (on big screens a little more: "maybe even with a little saturation")   // (never below nothing: a colour with none of one (Rink's yellow, no blue) went under it here, pow then made it NaN, and the ruin's grey (its dot of all three) spread that to the whole pixel: black bodies, black platforms, the land at war, any hour. The user, 2026-11-04: "it's literally black on different parts of their body")
       c = mix(c, vec3(1.0, .975, .94), .07 * warm);  // pastel: a light tint toward warm white
       c = mix(c, c * tintC, tintAmt);                  // the hour's colour: golden, orange, blue, night
       c = pow(max(c, 0.0), vec3(.95));                 // slightly brighter midtones   // (max: pow of anything under nothing is NaN)
@@ -1326,7 +1328,8 @@ const gradeMat = new THREE.ShaderMaterial({
         if (e > .32) c = vec3(.06, .05, .1); }   // the black outline
       if (gbc <= 0.0) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
         float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // (FINE, the one the user kept, 2026-10-29: "the papter fine setting which is one i wan tto keep for all versions")
-        c *= 1.0 + (g * .085 + mot * .06) * (1.0 - clayT); c = mix(c, c * vec3(1.0, .985, .955), .5); }   // (CLAY LOOK: no grain or mottle, its warmth kept: the user, 2026-11-09, "I dont think it needs the grain though")
+        c *= 1.0 + (g * .085 + mot * .06) * (1.0 - clayT); c = mix(c, c * vec3(1.0, .985, .955), .5);
+        if (soft > 0.0) { float g2 = hash(floor(gl_FragCoord.xy / softR) + sd + 7.0) - .5; c *= 1.0 + g2 * .07 * soft * clayT; } }   // (BIG SCREENS, CLAY LOOK: a fine grain back, its specks the size of a phone pixel: "maybe sort of grainy like before")   // (CLAY LOOK: no grain or mottle, its warmth kept: the user, 2026-11-09, "I dont think it needs the grain though")
       gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
     }`,
   depthTest: false, depthWrite: false,
@@ -1346,7 +1349,7 @@ const PV_FS = gradeMat.fragmentShader.replace("uniform sampler2D tex, bgTex;", "
   .replace("gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);", "gl_FragColor = premul > .5 ? vec4(clamp(c, 0.0, 1.0) * pa, pa) : vec4(clamp(c, 0.0, 1.0), pa);");
 function pvGradeMake() { const U = THREE.UniformsUtils.clone(gradeMat.uniforms); U.premul = { value: 1 }; U.bgTex.value = null; const m = new THREE.ShaderMaterial({ uniforms: U, vertexShader: gradeMat.vertexShader, fragmentShader: PV_FS, depthTest: false, depthWrite: false }), s = new THREE.Scene(); s.add(new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m)); return { m, s, rt: null }; }
 function pvUniforms(P, tex, w, h, R, premul) { const U = P.m.uniforms, G = gradeMat.uniforms;   // (the game's colour for the hour, as it is now; not the underground's dark)
-  U.tex.value = tex; U.tintC.value.copy(G.tintC.value); U.tintAmt.value = G.tintAmt.value; U.warm.value = G.warm.value; U.ruin.value = G.ruin.value; U.bloom.value = G.bloom.value; U.dim.value = 0; U.bgOn.value = 0; U.gbc.value = 0;
+  U.tex.value = tex; U.tintC.value.copy(G.tintC.value); U.tintAmt.value = G.tintAmt.value; U.warm.value = G.warm.value; U.ruin.value = G.ruin.value; U.bloom.value = G.bloom.value; U.dim.value = 0; U.bgOn.value = 0; U.gbc.value = 0; if (U.soft) U.soft.value = 0;
   U.tpx.value.set(1 / w, 1 / h); U.pstep.value = R.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.premul.value = premul ? 1 : 0; }
 const _pvSz = new THREE.Vector2();
 function pvRender(R, sc, cam, P) {                  // a preview's own renderer (its canvas see-through): the picture into its target, then through the filter onto the canvas
@@ -1404,8 +1407,8 @@ grad.minFilter = grad.magFilter = THREE.NearestFilter; grad.generateMipmaps = fa
 // toon() or the kit's toonT gets its step at load; render() sets the one shared uniform set for each pass, the level's to the look's environment settings and
 // the actors' (the girls, partners, baddies, pets) to its character settings. None applied: nothing here touches a thing
 let shadeRaw = false;                                // (the SHADING MOCKUP building its own: the game's look as it is, unpatched)
-const SHADE = (() => { const B = window.BerryShading, A = B && B.active(); if (!A) return null; const U = B.newUnifs(THREE), H = B.hullMat(THREE);
-  const o = { A, U, H, edge: B.setHull(H, A.cfg.character), patch: sh => B.patchShader(sh, U), pass(ch) { const C = A.cfg; if (ch) B.setChar(U, C.character); else B.setEnv(U, C.environment); } }; return o; })();
+const SHADE = (() => { const B = window.BerryShading, A = B && B.active(); if (!A) return null; const U = B.newUnifs(THREE), H = B.hullMat(THREE), LC = THREE.ShaderChunk.lights_fragment_begin, LS = "#if ( NUM_SPOT_LIGHTS > 0 ) && defined( RE_Direct )", LK = "#if ( NUM_DIR_LIGHTS > 0 ) && defined( RE_Direct )", LFB = LC.includes(LS) && LC.includes(LK) ? "#define MK_XTRA\nvec3 mkXtra = vec3(0.0), mkXtra0 = vec3(0.0);\n" + LC.replace(LS, "mkXtra0 = reflectedLight.directDiffuse;\n" + LS).replace(LK, "mkXtra = reflectedLight.directDiffuse - mkXtra0;\n" + LK) : null;   // (the spotlights' own light, kept aside for the clay look, which draws its own from the sun and sky: three's lights go points, spots, then the sun. Spots alone: her lamp's point light flooded her whole room orange)
+  const o = { A, U, H, edge: B.setHull(H, A.cfg.character), patch: sh => { B.patchShader(sh, U); if (LFB) sh.fragmentShader = sh.fragmentShader.replace("#include <lights_fragment_begin>", LFB); }, pass(ch) { const C = A.cfg; if (ch) B.setChar(U, C.character); else B.setEnv(U, C.environment); } }; return o; })();
 function shadeMat(m) { if (SHADE && !shadeRaw) { m.onBeforeCompile = sh => SHADE.patch(sh); m.customProgramCacheKey = () => "shade"; } return m; }
 // CLAY LOOK (pause > DEBUG; the user, 2026-11-08: "yes let's do the clay debug shader to see", after the clay mockup): shading.js's clay over the game's look, off
 // unless switched on there, kept in this browser (bb_clay). Just the shader: the scenery keeps its own shapes, with clay on them
@@ -1417,7 +1420,7 @@ claySet(clayOn);
 // the characters' solid parts drawn as depth twice: from the sun (their soft shadows, on them and on everything round them) and from the camera (the creases where
 // their parts meet); the frame then graded filmic (ACES, as the mockup was). Rose's glowing blade as solid clay, its halo gone. Only with CLAY LOOK on; not in the
 // beach house or character select. CLAYL: the shadow map's size, how far past the screen it reaches, its softness and bias (units)
-const CLAYL = { sz: 2048, ext: 1.2, soft: .07, bias: .05, exp: 1.5, skyS: 1.25, skyT: .78, skyM: .4, roomSky: "#d6eef4", roomAo: 1.2, roomExp: 1.25, lod: .5 }, CLAY_CAST = 7;   // (room: the CLAY TEST ROOM's haze, how deep its scenery's creases, its exposure: its set is brighter than the woods', 1.25 matched the mockup's spread of darks and lights)   // (sky: the room's own hue, paler: the mockup's far bushes fade to a pale haze, so the picture has depth)   // (exp: the filmic grade's exposure; 1.05 as the mockup's came out darker than the game: the user, 2026-11-09 "theres something much brighter and vibrant about the mockup")
+const CLAYL = { sz: 2048, ext: 1.2, soft: .07, bias: .05, exp: 1.5, skyS: 1.25, skyT: .78, skyM: .4, roomSky: "#d6eef4", roomAo: 1.2, roomExp: 1.25, lod: .5 }, CLAY_CAST = 7, CLAY_RECV = 8;   // (room: the CLAY TEST ROOM's haze, how deep its scenery's creases, its exposure: its set is brighter than the woods', 1.25 matched the mockup's spread of darks and lights)   // (sky: the room's own hue, paler: the mockup's far bushes fade to a pale haze, so the picture has depth)   // (exp: the filmic grade's exposure; 1.05 as the mockup's came out darker than the game: the user, 2026-11-09 "theres something much brighter and vibrant about the mockup")
 let clayWorld = true;                                // the game's look in its hand-made worlds (CLAY_WORLDS): clay (the user, 2026-11-09: "this should all be live in the main game now, not in new game in clay"; till then only behind CLAY TEST WORLD)
 const CLAY_WORLDS = new Set([0, 1, 9]);   // (the hand-made worlds in clay: the woods, the waves, the beach)
 const CLAY_LITE = (() => { try { const q = new URLSearchParams(location.search).get("lite"); if (q !== null) return q !== "0"; } catch (e) { } return true; })();   // (phone build: on. The lighter clay: coarser pieces, same light and passes. The phone build's is on; ?lite / ?lite=0 tries either)
@@ -1446,7 +1449,7 @@ function clayPre(skip) {
   renderer.setRenderTarget(clayRT); renderer.clear(true, true, false); renderer.render(actors, clayCam);
   const sb = scene.background, sf = scene.fog, cm = camera.layers.mask; if (room) { scene.overrideMaterial = clayDM; scene.background = null; scene.fog = null; clayCam.layers.set(CLAY_CAST); clayDepth(clayCam); clayCam.layers.set(0); }   // (the clay room's own set: its shadows and creases too)
   renderer.setRenderTarget(clayAoRT); renderer.clear(true, true, false); renderer.render(actors, camera);
-  if (room) { camera.layers.set(CLAY_CAST); clayDepth(camera); camera.layers.mask = cm; scene.overrideMaterial = null; scene.background = sb; scene.fog = sf; }
+  if (room) { camera.layers.set(CLAY_CAST); camera.layers.enable(CLAY_RECV); clayDepth(camera); camera.layers.mask = cm; scene.overrideMaterial = null; scene.background = sb; scene.fog = sf; }   // (CLAY_RECV: the floors too thin to cast, in the creases' depth but not the sun's. The user, 2026-11-09: "the shadows on the ground look a little streaky like a lot of lines next to each other on the beach.")
   actors.overrideMaterial = null; actors.fog = fg; renderer.clippingPlanes = cp; renderer.setRenderTarget(pr); clayHid.forEach(o => { o.visible = true; }); clayHid.length = 0;
   U.mkShM.value.multiplyMatrices(clayCam.projectionMatrix, clayCam.matrixWorldInverse); U.mkShT.value = clayRT.depthTexture; U.mkShR.value = CLAYL.soft / (2 * e); U.mkShB.value = CLAYL.bias / 159; U.mkShOn.value = 1;
   U.mkAoT.value = clayAoRT.depthTexture; U.mkAoPx.value.set(1 / frameRT.width, 1 / frameRT.height); U.mkAoN.value = camera.near; U.mkAoF.value = camera.far; U.mkAoFoc.value = frameRT.height / (2 * Math.tan(camera.fov * Math.PI / 360)); U.mkAoOn.value = 1; U.mkAoE.value = room ? CLAYL.roomAo : 0;
@@ -3188,11 +3191,15 @@ void main() {
   float n = sin(vW.x * 2.6 + uT * .5 + sin(vW.z * 1.7)) * .5 + sin(vW.z * 3.4 - uT * .35 + vW.x * .7) * .5;
   c = mix(c, cFoam, smoothstep(.85, .88, k + n * .045));                                             // foam torn along the crests
   if (uClay > .5) {   // (the clay sea: no print lines; its swells lit as clay, soft bands of blue, blobs of foam on the crests)
-    vec3 nn = normalize(vN), L = normalize(vec3(-.5, .65, .55)); float d = dot(nn, L) * .5 + .5;
-    vec3 cc = mix(cDeep, cMid, smoothstep(.2, .55, k)); cc = mix(cc, cLight, smoothstep(.6, .86, k));
+    vec2 p = vW.xz; float fd = 1.0 - smoothstep(.25, 1.1, fwidth(p.x * 2.6) + fwidth(p.y * 2.6));   // (pressed in: thumb dents and smears in its surface, fading out far off where they'd only shimmer)
+    float d1 = sin(p.x * 2.6 + sin(p.y * 1.9)) * sin(p.y * 2.3 + p.x * .7), d2 = sin(p.x * 6.1 - p.y * 4.3 + sin(p.x * 1.4)) * .5;
+    vec3 nn = normalize(normalize(vN) + vec3(d1 * .2 + d2 * .07, 0.0, d1 * .14 - d2 * .1) * fd), L = normalize(vec3(-.5, .65, .55)); float d = dot(nn, L) * .5 + .5;
+    d = mix(d, floor(d * 4.0 + .5) / 4.0, .3);   // (the light in soft steps, as on the clay)
+    float kk = mix(k, floor(k * 6.0 + .5) / 6.0, .4);   // (its blues laid on in bands)
+    vec3 cc = mix(cDeep, cMid, smoothstep(.2, .55, kk)); cc = mix(cc, cLight, smoothstep(.6, .86, kk));
     float q = sin(vW.x * 1.3 + uT * .4 + sin(vW.z * .9)) * .5 + sin(vW.z * 1.9 - uT * .3 + vW.x * .5) * .5;
-    cc = mix(cc, cFoam, smoothstep(.8, .84, k + q * .07));
-    c = cc * (.7 + .44 * d) + pow(max(dot(reflect(-L, nn), vec3(0.0, .35, .94)), 0.0), 10.0) * .1; }
+    cc = mix(cc, cFoam, smoothstep(.8, .83, k + q * .07 + d1 * .025 * fd));   // (the foam's edge lumpy)
+    c = cc * (.74 + .38 * d) + pow(max(dot(reflect(-L, nn), vec3(0.0, .35, .94)), 0.0), 6.0) * .035; }   // (matt: the plastic shine (.1) down to a clay's dull sheen. The user, 2026-11-09: "can the water in backgrounds looks. little more claylike?")
   gl_FragColor = vec4(c, 1.0);
   #include <colorspace_fragment>
   #include <fog_fragment>
@@ -5355,7 +5362,7 @@ function authorForest() {
   room("B4", { dark: true, ground: [[0, 0]], noLeft: true, next: C.B5, ceils: [[-600, 3200, -200]], items: [["tape", 1010, 110, "tape1"]], camUp: 1,   // (the roof 160 px higher, room to jump up to the top ledge; the camera up only half as far. The user, 2026-10-29: "it looked like i bumped with the ceiling and couldn't reach it. also we don't need the camera to go up that high to see it. we just need room for the character to go up")
     plats: [[560, 380, 220, "slab"], [900, 290, 220, "slab"], [560, 200, 220, "slab"], [900, 110, 220, "slab"]], crumble: { t: .7, look: "ledge" },
     set: [{ k: "earth", side: -1, col: TAN, col2: TAN2 }, { k: "earthBack", x0: 470, x1: 1210, col: TAN, col2: TAN2 }, { k: "canopy" }] }, [["acorn", "rust", 1750], ["leafy", "leaf", 2250]]);   // (four ledges up the back wall, zigzagging, each giving way a moment after you land: a cassette on the top one. The user, 2026-10-27: "the platforms break and they have to do it quickly")
-  room("B5", { dark: true, ground: [[0, 0]], gaps: FOREST_HOLE_B5, below: C.C5, prev: C.B4, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 360]],
+  room("B5", { ground: [[0, 0]], gaps: FOREST_HOLE_B5, below: C.C5, prev: C.B4, next: C.B6, ceils: [[-600, 3200, 130]], items: [["fruit", 360]],   // (no longer one of the dark rooms. The user, 2026-11-09: "in berry woods, b5 shouldn't get dark.")
     secret: { who: "camila", x: 60, side: -1, door: true }, set: [{ k: "earth", side: -1, col: TAN, col2: TAN2, door: true }, { k: "canopy" }] }, [["acorn", "rust", 650], ["leafy", "leaf", 1250]]);
   // B6: the giant tree's trunk in front of you, dark under the canopy
   room("B6", { dark: true, ground: [[0, 0]], prev: C.B5, next: C.B7, set: [{ k: "giant", part: "trunk", x: TX, fg: true }, { k: "canopy" }] }, [["leafy", "leaf", 550], ["stumpy", "olive", 2200]]);   // (two baddies: the user, 2026-10-24)
@@ -6124,14 +6131,16 @@ function startMusic() {
   audio();
   if (bgm.paused && !bgm.dataset.muted) bgm.play().then(() => { musicErr = null; }).catch(err => { musicErr = musicErr || (err && err.name) || "blocked"; });
 }
-function toast(msg, ms = 2600) {
+function textHush() { try { return mode === "play" && !paused && !modalOpen && !npcUp && !comicUp; } catch { return false; } }   // (playing: no words on the screen. Menus, the pause screen and shops keep theirs) (the user, 2026-11-09: "remove all dialogue popups whetehr it's brisa talking in the beginning or "parry!" or other such notifications through text on screen. except for the ones by the rock wall. keep the tutorial popups on the beach level")
+function toast(msg, ms = 2600, keep) {
+  if (!keep && textHush()) return;   // (keep: the rock wall's, the sound keys')
   const t = $("toast"); t.textContent = msg; t.classList.add("show");
   clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove("show"), ms);
 }
 function reportSound() {
-  if (bgm.paused && !bgm.dataset.muted) toast("BROWSER BLOCKED SOUND · CLICK ANYWHERE TO ENABLE", 6000);
-  else if (!ac || ac.state !== "running") toast("SOUND EFFECTS BLOCKED · CLICK ANYWHERE", 6000);
-  else toast("♪ SOUND ON");
+  if (bgm.paused && !bgm.dataset.muted) toast("BROWSER BLOCKED SOUND · CLICK ANYWHERE TO ENABLE", 6000, true);
+  else if (!ac || ac.state !== "running") toast("SOUND EFFECTS BLOCKED · CLICK ANYWHERE", 6000, true);
+  else toast("♪ SOUND ON", 2600, true);
 }
 
 // ── sound effects: synthesized on the fly from tones and filtered noise, except the hits and swords, which are recordings (sfx.js, below)
@@ -6172,7 +6181,7 @@ function audioWatch(now) {                          // (every frame: a look ever
   const ct = ac.currentTime, stuck = acW.t && ac.state === "running" && ct - acW.ct < .2; acW.t = now; acW.ct = ct;
   if (stuck) { try { ac.close(); } catch (e) { } ac = null; audio(); return; }
   const want = sfxOn || (!bgm.dataset.muted && musicOn);
-  if (ac.state !== "running" && want && !titleUp) { if (++acW.off >= 2 && !acW.told) { acW.told = true; toast("SOUND PAUSED · TAP TO BRING IT BACK", 4000); } ac.resume().catch(() => {}); } else { acW.off = 0; acW.told = false; }
+  if (ac.state !== "running" && want && !titleUp) { if (++acW.off >= 2 && !acW.told) { acW.told = true; toast("SOUND PAUSED · TAP TO BRING IT BACK", 4000, true); } ac.resume().catch(() => {}); } else { acW.off = 0; acW.told = false; }
 }
 function env(g, t, a, d, v) { g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(.0001, t + a + d); }
 const sfxPitch = () => (mode === "play" ? SCREENS[hour].sfxPitch || 1 : 1) * hitPitch;   // night drops every sound effect a few notes lower
@@ -6544,10 +6553,10 @@ addEventListener("keydown", e => {
   if (castUp) { castKey(e); return; }      // (and the enemies & npcs viewer, while it's up)
   if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(e.code)) e.preventDefault();
   const consK = mode === "play" && player && player.cons;   // (the BERRY CONSOLE up: N and M don't switch the game's sound off under you, 2026-10-31)
-  if (e.code === "KeyN" && !e.repeat && !consK) { sfxOn = !sfxOn; toast("SOUND EFFECTS " + (sfxOn ? "ON" : "OFF") + " · N", 1600); return; }   // (said out loud now: it was silent, and easy to hit by mistake)
+  if (e.code === "KeyN" && !e.repeat && !consK) { sfxOn = !sfxOn; toast("SOUND EFFECTS " + (sfxOn ? "ON" : "OFF") + " · N", 1600, true); return; }   // (said out loud now: it was silent, and easy to hit by mistake)
   if (e.code === "KeyM" && !e.repeat && !consK) {
     if (bgm.dataset.muted) { delete bgm.dataset.muted; bgm.play().catch(() => {}); } else { bgm.dataset.muted = "1"; bgm.pause(); }
-    toast("MUSIC " + (bgm.dataset.muted ? "OFF" : "ON") + " · M", 1600); return;
+    toast("MUSIC " + (bgm.dataset.muted ? "OFF" : "ON") + " · M", 1600, true); return;
   }
   startMusic();
   if (titleUp) { dismissTitle(); return; }
@@ -7471,7 +7480,7 @@ const clayRockV = mt => { if (!(mt.uniforms && mt.uniforms.cBase && mt.uniforms.
   return (x, y, z, c, nx, ny, nz) => { const d = nx * SUN_DIR.x + ny * SUN_DIR.y + nz * SUN_DIR.z, t = d > .8 ? 1 : d > .62 ? .45 : d > .3 ? .1 : 0, dk = t === 0 ? (ny < -.3 ? .78 : .92) : 1;
     const q = y * .8 + Math.sin(x * .55 + z * .35) * .45, s = Math.abs(q - Math.floor(q) - .5) * 2, k = (s < .2 ? .7 : 1) * dk;
     c[0] = mx(B.r, Lt.r, t) * k; c[1] = mx(B.g, Lt.g, t) * k; c[2] = mx(B.b, Lt.b, t) * k; }; };
-const clayConvert = (root, o) => window.BerryClayRoom && BerryClayRoom.clayify ? BerryClayRoom.clayify(THREE, root, Object.assign({ toon, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1, colOf: mt => mt.isShaderMaterial ? clayCol(clayRockCol(mt)) : clayCol(mt.color || new THREE.Color(1, 1, 1)), shaderOk: mt => !!(mt.uniforms && mt.uniforms.cBase && mt.uniforms.cLit && !mt.uniforms.cDeep), vcolOf: clayRockV }, o)) : null;
+const clayConvert = (root, o) => window.BerryClayRoom && BerryClayRoom.clayify ? BerryClayRoom.clayify(THREE, root, Object.assign({ toon, mergeGeometries, layer: CLAY_CAST, recv: CLAY_RECV, lod: CLAY_LITE ? CLAYL.lod : 1, colOf: mt => mt.isShaderMaterial ? clayCol(clayRockCol(mt)) : clayCol(mt.color || new THREE.Color(1, 1, 1)), shaderOk: mt => !!(mt.uniforms && mt.uniforms.cBase && mt.uniforms.cLit && !mt.uniforms.cDeep), vcolOf: clayRockV }, o)) : null;
 function clayWorldConvert(s) {                       // (the beach, the waves, a house inside: built by its own world as ever, then made clay where it stands; the sky flat clay, clay clouds on it)
   if (!window.BerryClayRoom || !BerryClayRoom.clayify) return; const t0 = performance.now(), hr = clamp(level.h ?? 0, 0, 6);
   try { if (level.relight) level.relight(SCREENS[hr] || look); } catch (e) { }   // (the hour's colours first: they're baked into the clay)
@@ -7479,7 +7488,7 @@ function clayWorldConvert(s) {                       // (the beach, the waves, a
   try { if (level.tick) { level.tick(time + 1.3, 1 / 60); level.tick(time + 2.1, 1 / 60); } } catch (e) { }
   pv.forEach((v, m) => { if (m.geometry && m.geometry.attributes.position && m.geometry.attributes.position.version !== v) m.userData.noClay = true; });   // (what the room moves vertex by vertex itself, the sea and its waves: as it was)
   if (level.sky && level.sky.material && level.sky.material.map !== undefined && !STAGES[s].hut && typeof STAGES[s].home !== "string") {
-    level.sky.material.map = claySkyTex(hr); level.sky.material.needsUpdate = true; level.skyFor = claySkyTex; level.sky.children.forEach(c => { c.visible = false; });
+    level.sky.material.map = claySkyTex(hr); level.sky.material.needsUpdate = true; level.skyFor = claySkyTex; if (!level.sky.userData.clayBig) { level.sky.userData.clayBig = true; level.sky.scale.x *= 4; level.sky.scale.y *= 3; } level.sky.children.forEach(c => { c.visible = false; });   // (its plane four times as wide, three as tall: one flat colour, so nothing stretches; zoomed out, its ends showed the white past them. The user, 2026-11-09: "the sky in both ends and you see white instead of blue when the screen zooms out")
     level.objs.forEach(o => o && o.traverse(m => { if (m.isMesh && m !== level.sky && m.material && m.material.isMeshBasicMaterial && m.material.transparent && m.material.map && m.getWorldPosition(new THREE.Vector3()).z < -25) m.visible = false; }));   // (the painted clouds)
     const cl = BerryClayRoom.clouds(THREE, { toon, mergeGeometries, lod: CLAY_LITE ? CLAYL.lod : 1, W: X(WORLD), y: -8 }); scene.add(cl); level.objs.push(cl); }
   level.objs.forEach(o => o && o.traverse(m => { if (m.material && m.material.uniforms && m.material.uniforms.uClay) m.material.uniforms.uClay.value = 1; }));   // (the sea and its great waves in clay)
@@ -7651,7 +7660,7 @@ let achOpen = false;
 function unlockAch(id) {
   const got = achGot(), A = ACH.find(a => a.id === id); if (!A || got[id]) return;
   got[id] = Date.now(); try { localStorage.setItem(ACH_KEY, JSON.stringify(got)); } catch { }
-  $("achName").textContent = A.name; const el = $("achPop"); el.classList.add("show"); SFX.achieve();
+  SFX.achieve(); if (textHush()) return; $("achName").textContent = A.name; const el = $("achPop"); el.classList.add("show");   // (found and kept all the same: the pause screen's ACHIEVEMENTS lists it; while playing only its chime)
   clearTimeout(unlockAch.h); unlockAch.h = setTimeout(() => el.classList.remove("show"), 3400);
 }
 function showAch() {
@@ -9197,7 +9206,7 @@ function twrTick(dt) {                                // (wavesFx's, every frame
   const q = twrOf(), p = player; if (!q || !p) { twrSt.s = -1; if (p && p.press) twrLet(p); return; }
   if (twrSt.s !== stage) { twrSt.s = stage; twrSt.who = q.towers.map(() => null); twrSt.openT = -1; if (p.press) twrLet(p); }
   twrSt.who = twrSt.who.map((w, i) => w === "you" ? (p.press && p.press.i === i ? w : null) : w && w.twr && w.twr.i === i && w.twr.ph === "hold" && allies.some(a => a.st === w) ? w : null);
-  const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i] || itemGot(TWR_K.key); if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); b.cap.material.color.set(on ? "#5ccf5f" : "#e0402e"); } });
+  const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i] || itemGot(TWR_K.key); if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); const M2 = twrTick.m || (twrTick.m = { on: toon("#5ccf5f"), off: toon("#e0402e") }); b.cap.material = on ? M2.on : M2.off; } });   // (its own two materials, swapped: tinting the one it had (the clay's, its red baked in) turned it a muddy brown here, and on the phone the sand green with it. The user, 2026-11-09: "on the beach, when we hit the switch the sand and parts of the level turned green all the way till the end. this happened on the phone")
   if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; twrJoin(p); }
   if (twrSt.openT >= 0 && (twrSt.openT += dt) > 1.4) { twrSt.openT = -1; allies.forEach(a => { const s = a.st; if (s.twr) { s.twr = null; s.pointKind = null; s.wave = 1; a.waveT = 1.2; } }); }   // (a beat on, the buddies let go and cheer)
   if (!btSeen("btn") && p.onGround && p.plat && q.towers.some((t, i) => Math.abs(p.plat.y - twrAt(q, i).y) < 4)) { btMark("btn"); tutPop(`PRESS ${tutTag("j")} AT THE BUTTON · HOLD ${tutTag("ch")} AND PRESS <span class="key">↑</span> TO SEND A BUDDY TO THE OTHER ONE`, 6); }   // (one press: your hand stays on it. It read "PRESS A OR X AT THE BUTTON TO HOLD IT DOWN": the user, 2026-11-08 "why do the instructions here say something about holding x or y?")   // (up on a lookout the first time: how)
@@ -9363,6 +9372,7 @@ function tutBuds() {                                 // B4 (B3 till 2026-11-04):
     if (b) { const x = sh ? clamp(b.x - 110, sh.x + 30, sh.x + sh.w - 30) : clamp(b.x - 100, 120, WORLD - 120); place(A2, x, sh ? sh.y : groundAt(x) ?? GROUND, sh || null, b); } else place(A2, 900, groundAt(900) ?? GROUND, null, null); }
 }
 function tutShow(id) {                               // the game stopped, a word on the screen; a button (after a moment) to go on
+  if (world !== 9) { btMark(id); return; }   // (the beach's only: the woods' THE UPRISING bar pointer gone with the other words)
   btMark(id); for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
   tutHold = { id, t: 0 }; const B = $("tutBox"); B.querySelector(".tt").innerHTML = TUT_TXT[id]();
   B.querySelector(".tgo").textContent = window.BERRY_TOUCH ? "TAP TO GO ON" : "PRESS ANY BUTTON TO GO ON";
@@ -9375,7 +9385,7 @@ function tutShut() {
   for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0; if (tutZoom && (id === "tired" || id === "zoom")) tutZoom.out = true;
 }
 $("tutBox").addEventListener("pointerdown", e => { e.preventDefault(); tutGo(); });
-function tutPop(html, sec = 4.5) { const P = $("tutPop"); P.innerHTML = html; P.classList.remove("show"); void P.offsetWidth; P.classList.add("show"); clearTimeout(tutPop.tm); tutPop.tm = setTimeout(() => P.classList.remove("show"), sec * 1000); SFX.tick(); }   // (a word that doesn't stop the game)
+function tutPop(html, sec = 4.5) { if (world !== 9) return; const P = $("tutPop"); P.innerHTML = html; P.classList.remove("show"); void P.offsetWidth; P.classList.add("show"); clearTimeout(tutPop.tm); tutPop.tm = setTimeout(() => P.classList.remove("show"), sec * 1000); SFX.tick(); }   // (a word that doesn't stop the game)
 const TUTV = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
 function tutCam() {                                  // B6: from where it was, slowly in close on you (and back out after)
   const k0 = tutZoom.k, k = k0 * k0 * (3 - 2 * k0); if (k <= 0) return;
@@ -9479,7 +9489,7 @@ function buildGuagua(look = {}) {
   const later = [];                                 // the logo, just the little bus G, on each cab door: no word (the user, 2026-10-26: "make la guagua not have the text of the logo on it but just the logo on the door")
   for (const s of [-1, 1]) { const z = s * (half + .012);
     B.add(at(P(bx(.05, 1.12, .05), M("beltDk")), cx1 - 1.42, 1.5, z)); B.add(at(P(bx(.24, .07, .06), chrome), cx1 - 1.62, 1.95, z + s * .02));   // the cab door's seam and handle
-    later.push(decal("g", .56, m => { if (s < 0) m.rotation.y = Math.PI; at(m, (cx0 + cx1 - 1.42) / 2, 1.66, z + s * .01); B.add(m); })); }   // (in the middle of the white panel behind the door's seam, under the window divider: the user, 2026-10-26 "move the guagua logo to the center of the bus" · "it should be in the center of that white panel")
+    later.push(decal("g", .56, m => { if (s < 0) m.rotation.y = Math.PI; at(m, (cx0 + cx1 - 1.42) / 2, 1.5, z + s * .01); B.add(m); })); }   // (1.5, was 1.66: the middle of the white between the chassis and the belt's line, the user, 2026-11-09: "on la guagua, the G needs to be a little lower so it's more in the center of that white panel")   // (in the middle of the white panel behind the door's seam, under the window divider: the user, 2026-10-26 "move the guagua logo to the center of the bus" · "it should be in the center of that white panel")
   if (guaguaPics) guaguaPics.onload = () => later.forEach(f => f());
   const bx0 = -3.62, bx1 = cx0 - .02, bl = bx1 - bx0, bm = (bx0 + bx1) / 2, by = 1.12;           // the bed: low sides with a rail, a tailgate, a roll bar with two lamps, a cushion against the cab, a spare, a cool box
   B.add(at(P(bx(bl, .16, Wd - .1), toon("#a7754f")), bm, by - .04, 0)); for (let k = 0; k < 4; k++) B.add(at(P(bx(bl - .1, .03, .05), toon("#8a5e3e")), bm, by + .05, -1.05 + k * .7));
@@ -9526,9 +9536,9 @@ function buildRoad() {                               // the coast road at sunset
   const U = bus.userData, ride = (id, r, lx, ly, lz, face, yaw, extra) => { const st = makeState(0, r); Object.assign(st, { face, yaw, onGround: true, vx: 0, vy: 0 }, extra || {}); r.root.visible = r.shadow.visible = true; return { id, r, st, lx, ly, lz, yaw }; };
   const rc = roster.find(q => q.id === "camila"), rr = roster.find(q => q.id === "rose"); R.kids = [];
   U.rb.position.x = U.bx1 - 1.7;   // (the prologue's: the roll bar further back, so the two of them aren't on top of each other. The user, 2026-11-03: "have camila and rose better posed in the opening movie instead of just overlapping with each other")
-  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1 }), h: 80, rest: 1 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
-  if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - 2.215, U.by + .08, .875, 1, -.85), hold: "F", grip: { arm: 2.45, elb: .15, lean: .5, bodyY: .1, sp: -.4 } });   // (facing on, her near hand's her right: hold "F", that arm up · grip: her fist on the roll bar's near top corner, stood up straight by its near post and turned a little more to us, her face clear of the post: with her knees bent her hand stopped short under the bar, and anywhere along its top the bar, its post and its lamps hid it. The user, 2026-11-09: "make sure camila is holding to the guagua like before")
-  const A = BUS_DRIVER; if (A) { const r = allyRig(A); R.driver = { ...ride("noro", r, U.cx1 - .92, 1.2, -.62, 1, -.2, { sit: 1 }), look: true }; }   // (Noro at the wheel, El Pico's place till 2026-11-08: the user, "cut him as we'll have noro driving"; now and then he turns to look out) · 1.2: his mask in the window, his big hair up to the roof (cabLy's 1.66 hid his head)   // (his head in the window, behind the wheel)
+  if (rr) R.kids.push({ ...ride("rose", rr, U.bx1 - .42, U.by + .3, .45, -1, -Math.PI + .95, { sit: 1, sitGround: true }), h: 80, rest: 1 });   // (Rose sat back against the cab looking out the back, her back to the rest of it, where Camila sat; Camila stood behind the roll bar, her right hand up on its top: the user, 2026-11-05: "in the intro cutscene, have rose sitting in the flatbed with her back to the rest of la guagua, and have camila standing with her right hand holding the frame that rose is holding now")
+  if (rc) R.kids.push({ ...ride("camila", rc, U.bx1 - 2.215, U.by + .08, .875, 1, -.85), hold: "F", grip: { arm: 1.45, elb: .6, lean: .2, bodyY: .02, sp: -.3, set: { fNx: .1, fFx: -.08, fNz: 0, fFz: 0, armB: .18, elbB: .35 } } });   // (facing on, her near hand's her right: hold "F", that arm up · grip: her fist on the roll bar's near top corner, stood up straight by its near post and turned a little more to us, her face clear of the post: with her knees bent her hand stopped short under the bar, and anywhere along its top the bar, its post and its lamps hid it. The user, 2026-11-09: "make sure camila is holding to the guagua like before")   // (her right hand on the post at her chest now, not up at the bar's top corner by her head; her feet together, her gauntlet down at her side (set): the user, 2026-11-09: "it looks like camila is missing an arm as her hand is going through her hair and he foot is outside of the bus." Her fighting stance's back foot was out past the tailgate)
+  const A = BUS_DRIVER; if (A) { const r = allyRig(A); R.driver = { ...ride("noro", r, U.cx1 - .92, 1.57, -.62, 1, -.2, { sit: 1, sitGround: true }), look: true }; }   // (Noro at the wheel, El Pico's place till 2026-11-08: the user, "cut him as we'll have noro driving"; now and then he turns to look out) · 1.2: his mask in the window, his big hair up to the roof (cabLy's 1.66 hid his head)   // (his head in the window, behind the wheel)   // (1.57, was 1.2: sat now, his head in the window as rideSeat does it)
   return R;
 }
 function roadTick(R, dt) {                           // (every frame: the coast going by, the wheels turning, the body on its springs, them riding)
@@ -9540,10 +9550,11 @@ function roadTick(R, dt) {                           // (every frame: the coast 
   U.B.position.y = bob; U.B.rotation.x = roll; R.bus.position.x = R.busX;
   U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
   const place = c => { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.onGround = true;
-    s.yaw = c.look ? c.yaw - .75 * Math.pow(Math.max(0, Math.sin(R.t * .62)), 1.6) : c.yaw;   // (the driver: a look out of the window, and back to the road)
+    s.yaw = c.look ? c.yaw - .28 * Math.pow(Math.max(0, Math.sin(R.t * .62)), 1.6) : c.yaw;   // (the driver: a look out of the window, and back to the road)
     s.blink -= dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
-    if (c.hold) { const o = s.out, F = c.hold === "F", G = c.grip; o[F ? "armF" : "armB"] = G ? G.arm : 2.55; o[F ? "elbF" : "elbB"] = G ? G.elb : .35; o.lean = G ? G.lean : (o.lean || 0) + .05; if (G) { o.bodyY = G.bodyY; if (G.sp !== undefined) o[F ? "spF" : "spB"] = G.sp; } }
+    if (c.hold) { const o = s.out, F = c.hold === "F", G = c.grip; o[F ? "armF" : "armB"] = G ? G.arm : 2.55; o[F ? "elbF" : "elbB"] = G ? G.elb : .35; o.lean = G ? G.lean : (o.lean || 0) + .05; if (G) { o.bodyY = G.bodyY; if (G.sp !== undefined) o[F ? "spF" : "spB"] = G.sp; if (G.set) Object.assign(o, G.set); } }
     if (c.rest) Object.assign(s.out, BUS_REST);   // (sat back against the cab, her hands on her knees: busSword)
+    if (c === R.driver) Object.assign(s.out, BUS_DRIVE);   // (his hands on the wheel, a glance out (.28, was .75) and back to the road: the user, 2026-11-09: "noro in la guagua is moving around and doesn't look like he's driving.")
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .1 * Math.sin(R.t * 2.1);   // (his head bobbing along)   // (her other hand up on the roll bar: the blade's in the first)
     c.r.sync(s, c.r, dt); if (c.rest) busSword(c, R); };
   R.kids.forEach(place); if (R.driver) place(R.driver);
@@ -9666,7 +9677,7 @@ function rideSeat(R) {                               // everyone into their plac
     camila: [U.bx1 - .42, U.by + .3, .45, -Math.PI + .95], rose: [U.bx1 - 1.42, U.by + .08, -.5, -.62], pet0: [U.bx1 - 1.15, U.by + .08, .3, -Math.PI / 2 - .3], pet1: [U.bx1 - 1.85, U.by + .62, .75, -Math.PI / 2 + .35],
     bed0: [U.bx1 - 1.85, U.by + .08, .1, -Math.PI / 2], bed1: [U.bx1 - 2.3, U.by + .08, .3, -Math.PI / 2] };
   R.riders.forEach(c => { const [lx, ly, lz, yaw] = SL[c.slot] || SL.bed0; Object.assign(c, { lx, ly: ly ?? inCab(c.r), lz, yaw });
-    Object.assign(c.st, { sit: c.sit || 0, face: 1, yaw, vx: 0, vy: 0, onGround: true, plat: null, atkT: -1, atkKind: null, combo: null, wave: 0, sprint: false, climb: null, tackle: null, block: false, hurtT: 0, inv: 0, bus: true });
+    Object.assign(c.st, { sit: c.sit || 0, sitGround: !!c.sit, face: 1, yaw, vx: 0, vy: 0, onGround: true, plat: null, atkT: -1, atkKind: null, combo: null, wave: 0, sprint: false, climb: null, tackle: null, block: false, hurtT: 0, inv: 0, bus: true });   // (sitGround too: sit alone, the standing idle took over and they stood, the driver bobbing on his toes, since 2026-11-01. The user, 2026-11-09: "noro in la guagua is moving around and doesn't look like he's driving." · "rose is also not sitting down")
     c.r.root.visible = c.r.shadow.visible = true; });
   for (let i = 0; i < 24; i++) rideRoadTick(R, 1 / 30);   // (all sat down: then each one in the cab up or down till its head's in the window, whatever its size or its legs)
   const hv = new THREE.Vector3(); R.riders.forEach(c => { if (!["drive", "back", "rear"].includes(c.slot) || !c.r.head) return; c.r.root.updateMatrixWorld(true); c.r.head.getWorldPosition(hv); c.ly += 2.84 - hv.y / BUS_K; });
@@ -9725,10 +9736,11 @@ function rideRoadTick(R, dt) {                       // (every frame: the road g
   const U = R.bus.userData, bob = R.v > .5 ? .028 * Math.sin(R.t * 10.5) + .016 * Math.sin(R.t * 4.1) : 0; U.B.position.y = bob; U.B.rotation.x = R.v > .5 ? .007 * Math.sin(R.t * 3.3) : 0; if (!R.out) R.bus.position.x = R.busX;
   U.wheels.forEach(w => { w.rotation.y += (R.v / (.62 * BUS_K)) * dt; });
   if (!R.out) for (const c of R.riders) { const s = c.st; s.x = (R.busX + c.lx * BUS_K) * 40; s.y = GROUND - (c.ly + bob) * BUS_K * 40; s.z = R.busZ + c.lz * BUS_K; s.vx = 0; s.vy = 0; s.onGround = true;
-    s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .75 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
+    s.yaw = c.look ? c.yaw - (c.slot === "drive" ? .28 : -.3) * Math.pow(Math.max(0, Math.sin(R.t * .62 + c.lz * 2)), 1.6) : c.yaw;   // (the driver: a look out of the window and back to the road; the others: a turn to the view)
     s.blink = (s.blink ?? 2) - dt; if (s.blink < -.12) s.blink = 2 + Math.random() * 2.5; spring(s, dt); updatePose(s, dt);
-    if (c.hold) { const o = s.out, F = c.hold === "F", G = c.grip; o[F ? "armF" : "armB"] = G ? G.arm : 2.55; o[F ? "elbF" : "elbB"] = G ? G.elb : .35; o.lean = G ? G.lean : (o.lean || 0) + .05; if (G) { o.bodyY = G.bodyY; if (G.sp !== undefined) o[F ? "spF" : "spB"] = G.sp; } }   // (a hand up on the roll bar)
+    if (c.hold) { const o = s.out, F = c.hold === "F", G = c.grip; o[F ? "armF" : "armB"] = G ? G.arm : 2.55; o[F ? "elbF" : "elbB"] = G ? G.elb : .35; o.lean = G ? G.lean : (o.lean || 0) + .05; if (G) { o.bodyY = G.bodyY; if (G.sp !== undefined) o[F ? "spF" : "spB"] = G.sp; if (G.set) Object.assign(o, G.set); } }   // (a hand up on the roll bar)
     if (c.rest) Object.assign(s.out, BUS_REST);   // (the seat up by the cab: sat back against it, hands on the knees, a sword stood beside them, busSword)
+    if (c.slot === "drive") Object.assign(s.out, BUS_DRIVE);   // (hands on the wheel, BUS_DRIVE)
     if (c.slot === "back" || c.slot === "rear") { const o = s.out; o.armF = .2; o.elbF = .45; o.armB = .2; o.elbB = .45;   // (turned to the window: hands down in the lap, not out through the door)
       if (c.r.prop && c.r.prop.kind === "sword") o.wrist = BLADE_TUCK - (o.armF + o.elbF); }   // (a sword: stood up beside her, inside. It went out through the door: the user, 2026-10-26 "tuck it unless it naturally goes over not through")
     if (c.look) s.out.headRot = (s.out.headRot || 0) + .08 * Math.sin(R.t * 2.1 + c.lz);
@@ -9749,7 +9761,7 @@ function rideTick(dt) {                              // (every frame, paused or 
 function rideClear(R) {                              // (the road and the bus gone; whoever rode, off the bus)
   const E = R.ev; rideEvClear(E); if (E && R.out) { if (E.sv) { STAGES.splice(0, STAGES.length, ...E.sv.st); stage = E.sv.s; } clearBaddies(); bossIn = false; clearHz(); if (npcUp) closeNpc(); npcs.forEach(disposeBaddy); npcs = []; allies = allies.filter(a => !a.A.temp); document.body.classList.remove("ridePlay"); R.out = false; }
   scene.remove(R.G); actors.remove(R.bus); [R.G, R.bus].forEach(G => G.traverse(o => { if (o.isMesh && o.geometry) o.geometry.dispose(); })); R.mats.forEach(m => m.dispose()); if (R.seaM) R.seaM.dispose();
-  if (R.oth) R.oth.r.root.visible = R.oth.r.shadow.visible = false; (R.riders || []).forEach(c => { c.st.sit = 0; c.st.z = 0; c.st.bus = false; });
+  if (R.oth) R.oth.r.root.visible = R.oth.r.shadow.visible = false; (R.riders || []).forEach(c => { c.st.sit = 0; c.st.sitGround = false; c.st.z = 0; c.st.bus = false; });
 }
 function rideEnd() {                                 // under the black: off the road and on into the new world, built under it; its name comes up on the black, then the black lifts
   const P = rideS; proCam = null; $("skipHint").classList.remove("pro", "show"); for (const k in keys) keys[k] = false; jumpBuf = atkBuf = 0;
@@ -9795,7 +9807,7 @@ function rideOut(P, R, E) {                          // under the black: La Guag
   E.cam = E.cam || rideCamEv(R); E.follow = E.kind === "ambush" || E.kind === "stand"; E.arena = E.follow ? [R.cx / S - RIDE_HALF, R.cx / S + RIDE_HALF] : rideArena(E.cam); proCam = { ...E.cam };
   { const bb = new THREE.Box3().setFromObject(R.bus); E.busZone = [bb.min.x / S + 30, bb.max.x / S - 30]; E.away = false; E.ready = false; }   // (stood in front of La Guagua: back at it)
   const cx = R.cx / S, gy = GROUND, A = E.arena; P.play = true; document.body.classList.add("ridePlay");
-  for (const c of R.riders) { Object.assign(c.st, { sit: 0, bus: false, z: 0, vx: 0, vy: 0, onGround: true, plat: null, y: gy }); if (c.r.root) c.r.root.visible = c.r.shadow.visible = true; }
+  for (const c of R.riders) { Object.assign(c.st, { sit: 0, sitGround: false, bus: false, z: 0, vx: 0, vy: 0, onGround: true, plat: null, y: gy }); if (c.r.root) c.r.root.visible = c.r.shadow.visible = true; }
   Object.assign(player, { x: cx + 40, y: gy, vx: 0, vy: 0, face: 1, onGround: true, plat: null, climb: null, carry: 0, atkT: -1, combo: null, chargeT: 0, chargeLv: 0, tackle: null, block: false, sunk: false, safe: { x: cx, y: gy, plat: null } });
   palsPut({ x: cx - 40, y: gy, vx: 0, vy: 0, onGround: true, plat: null, pounce: null, sit: 0, z: 0 });
   allies.forEach((a, k) => { a.away = false; allyPlace(cx - 150 - k * 75, gy, 1, a); allyShow(a); });
@@ -10410,7 +10422,7 @@ function deskRoom(sc) {                              // her room at night: the d
   const TOP = T.top, Z0 = .42, Z1 = 1.55, PW = T.pw, PD = T.pd, NX = T.nx, NZ = T.nz;
   box(2.5, .07, Z1 - Z0, "#b98a5e", 0, TOP - .035, (Z0 + Z1) / 2); [[-1.18, Z0 + .05], [1.18, Z0 + .05], [-1.18, Z1 - .05], [1.18, Z1 - .05]].forEach(([x, z]) => box(.08, TOP - .07, .08, "#9a6e46", x, (TOP - .07) / 2, z)); box(2.4, .22, .04, "#a8794f", 0, TOP - .18, Z1 - .06);   // (the desk, its legs, its back)
   box(.72, .06, .62, "#c2855a", 0, .42, -.05); [[-.32, -.32], [.32, -.32], [-.32, .22], [.32, .22]].forEach(([x, z]) => box(.06, .42, .06, "#9a6440", x, .21, z)); box(.72, .5, .05, "#c2855a", 0, .95, -.36); box(.06, .55, .06, "#9a6440", -.32, .7, -.35); box(.06, .55, .06, "#9a6440", .32, .7, -.35);   // (her chair)
-  box(PW + .04, .012, PD + .03, "#6b4a33", NX, TOP + .006, NZ); box(PW, .014, PD, "#efe2c4", NX, TOP + .019, NZ);   // (the sketchbook's board, its pages)
+  box(PW + .04, .012, PD + .03, "#6b4a33", NX, TOP + .006, NZ); box(PW, .014, PD, "#efe2c4", NX, TOP + .019, NZ).userData.noClay = true;   // (the sketchbook's board, its pages) (its pages left smooth in clay: their lumps came up through the open page as a grey patch)
   const page = add(new THREE.PlaneGeometry(PW, PD), new THREE.MeshLambertMaterial({ color: "#efe2c4" }), NX, TOP + .0265, NZ); page.rotation.set(-Math.PI / 2, 0, Math.PI);   // (the page it's open at: its top to the spiral)
   const ring = mat("#9aa0a8"); for (let i = 0; i < 26; i++) add(new THREE.TorusGeometry(.022, .0035, 6, 14), ring, NX - PW / 2 + .03 + i * (PW - .06) / 25, TOP + .025, NZ + PD / 2 - .012).rotation.y = Math.PI / 2;   // (the spiral)
   const N = 18, sg = new THREE.BufferGeometry(), UV = [], I = []; for (let j = 0; j <= N; j++) for (let c = 0; c < 2; c++) UV.push(c, 1 - j / N); for (let j = 0; j < N; j++) { const a = j * 2; I.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); }
@@ -10425,15 +10437,39 @@ function deskRoom(sc) {                              // her room at night: the d
   const wall = (w, c, x, z, ry) => { add(new THREE.PlaneGeometry(w, 3.6), c, x, 1.8, z).rotation.y = ry; }; wall(8, "#e9c9a8", 0, 2, Math.PI); wall(8, "#d9b6a0", 0, -2.2, 0); wall(5, "#e2c0a2", -2.6, 0, Math.PI / 2); wall(5, "#e2c0a2", 2.6, 0, -Math.PI / 2);   // (the walls face in: the camera out past one sees through it)
   box(1.3, .9, .02, "#203a6a", -.1, 2.25, 1.97); [[1.42, .06, -.1, 2.72], [1.42, .06, -.1, 1.78], [.06, .96, -.79, 2.25], [.06, .96, .59, 2.25], [.04, .9, -.1, 2.25]].forEach(([w, h, x, y]) => box(w, h, .06, "#f4ece0", x, y, 1.94));   // (the window, night out)
   const sky = new THREE.MeshBasicMaterial({ color: "#fff4cf" }); [[.25, 2.5, .09], [-.5, 2.55, .018], [-.3, 2.05, .014], [.05, 2.62, .012], [-.62, 2.2, .015], [.42, 2.02, .013]].forEach(([x, y, r]) => { add(new THREE.CircleGeometry(r, r > .05 ? 18 : 6), sky, x, y, 1.955).rotation.y = Math.PI; });   // (the moon, stars)
+  { const WX = 2.57, WY = 2.1, WZ = 1.2; box(.02, .9, 1.04, "#22407a", WX, WY, WZ); [[.06, .06, 1.16, WY + .48, WZ], [.06, .06, 1.16, WY - .48, WZ], [.06, 1.02, .06, WY, WZ - .55], [.06, 1.02, .06, WY, WZ + .55], [.04, .9, .04, WY, WZ], [.04, .04, 1.04, WY + .05, WZ]].forEach(([w, h, d, y, z]) => box(w, h, d, "#f4ece0", WX - .03, y, z)); box(.14, .05, 1.2, "#f4ece0", WX - .07, WY - .52, WZ);   // (a second window, on her left by the front: its frame, its sill, the night through it. The user, 2026-11-09: "can we have a window in front and to the left of camila when she's on her room so there can be more dynamic light there?")
+    const st = new THREE.MeshBasicMaterial({ color: "#fff4cf" }); [[2.4, .95, .013], [1.85, 1.5, .016], [2.3, 1.62, .011], [1.95, .8, .012]].forEach(([y, z, r]) => { add(new THREE.CircleGeometry(r, 6), st, WX - .015, y, z).rotation.y = -Math.PI / 2; });   // (stars in it)
+    const cv = document.createElement("canvas"); cv.width = cv.height = 128; const cx = cv.getContext("2d"); cx.fillStyle = "#000"; cx.fillRect(0, 0, 128, 128); cx.filter = "blur(2px)"; cx.fillStyle = "#fff"; [[22, 22], [68, 22], [22, 68], [68, 68]].forEach(([x, y]) => cx.fillRect(x, y, 38, 38));   // (its four panes, the bars between them dark: the light's shape)
+    const M = new THREE.SpotLight("#9fb4ff", 3, 30, .07, .1, 0); M.map = new THREE.CanvasTexture(cv); M.target.position.set(.25, TOP, .95); M.position.copy(M.target.position).addScaledVector(new THREE.Vector3(WX, WY, WZ).sub(M.target.position).normalize(), 10.6); G.add(M, M.target); }   // (the moonlight in through it, cool, the window's panes laid across her and the desk from her left: the lamp warm on her right) (from far off through the window's middle, so its panes come out about the window's size; its reach (30) past it: the panes' map stops at the light's reach, and its penumbra never 0, the cone's edge undefined then; on the desk before her, her hands and the book's edge: on her face it took the warmth out of her skin)
   box(.03, .6, .9, "#c89a6a", -2.57, 2, .4); [["#f4b48a", .58, 2.08], ["#9fd0f0", .28, 2.12], ["#f6e04c", .4, 1.86]].forEach(([c, z, y]) => box(.01, .18, .24, c, -2.55, y, z));   // (her corkboard, drawings pinned up: on the side wall, out of the camera's way round her)
   box(1.4, .05, .3, "#b98a5e", -1.4, 1.6, -2.05); [["#d8352a", -1.9], ["#2e5fbf", -1.75], ["#3c9a38", -1.6], ["#f4c81e", -1.45]].forEach(([c, x]) => box(.1, .32, .22, c, x, 1.79, -2.05)); box(1, .7, .03, "#9fc0e0", .9, 2.1, -2.17);   // (a shelf of books behind her, a poster)
   return { G, page, sheetF, sheetB, sg };
 }
 const DESK_PENCILS = ["#2e5fbf", "#d8323c", "#2f9a4a", "#f2a516", "#8a46c8", "#ff6fae", "#1fb5c4", "#f06a24"];   // (her colored pencils: a new one each time she sits down to it, the user 2026-11-09 "holding a color pencil that changes color everytime we go to this scene")
+function deskGrip(hand, pen) {                      // her right glove at the desk, holding the pencil as you draw (the user, 2026-11-09: "the other hand has the glove part tearing through skin, the pencil is going through it, and the fingers look weird and the thump is also on the wrong side of the hand"): her mitten and its cuff hidden for a glove of fingers
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z), up = V3(0, 1, 0), ball = hand.children.find(m => m.geometry && m.geometry.type === "SphereGeometry"), cuff = hand.children.find(m => m.geometry && m.geometry.type === "CylinderGeometry");   // (in the hand's own frame: x up off the page, -y on to the fingertips, z out to her right; the thumb's on the -z side, in by the page)
+  const mk = k => { const b = ball && ball.material; if (!b) return new THREE.MeshLambertMaterial({ color: "#ec1c24" }); const m = b.clone(); m.onBeforeCompile = b.onBeforeCompile; m.customProgramCacheKey = b.customProgramCacheKey; m.color.multiplyScalar(k); return m; };   // (the glove's own, shaded as it is; the fingers a shade darker so each one reads)
+  const mt = mk(1), mf = mk(.92), mc = mk(1), g = new THREE.Group(); mc.side = THREE.DoubleSide; g.userData.hide = [ball, cuff].filter(Boolean);
+  const seg = (r, a, b) => { const d = b.clone().sub(a), o = new THREE.Mesh(new THREE.CapsuleGeometry(r, d.length(), 4, 10), mf); o.position.copy(a).add(b).multiplyScalar(.5); o.quaternion.setFromUnitVectors(up, d.normalize()); g.add(o); return o; };   // (a finger from its knuckle to its tip)
+  const palm = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 12), mt); palm.scale.set(.052, .08, .074); palm.position.set(.01, -.075, 0); g.add(palm);   // (the palm down on the page)
+  const cf = new THREE.Mesh(new THREE.CylinderGeometry(.09, .086, .1, 16, 1, true), mc); cf.position.y = .01; g.add(cf);   // (its cuff wide all down, so her wrist bends inside it, not out through it (narrower at the hand, her arm came out through its side))
+  seg(.019, V3(.035, -.15, -.05), V3(.008, -.225, -.042)); seg(.019, V3(.02, -.15, -.017), V3(-.035, -.215, -.02));   // (the first finger over the pencil, the middle one under it)
+  seg(.018, V3(.005, -.145, .017), V3(-.035, -.165, .02)); seg(.016, V3(0, -.135, .05), V3(-.03, -.152, .052));   // (the last two curled under, onto the page)
+  seg(.021, V3(0, -.07, -.065), V3(.012, -.195, -.068));   // (the thumb along the pencil's inner side)
+  const T = V3(-.045, -.235, -.05), D = V3(.8, .5, .25).normalize(); pen.quaternion.setFromUnitVectors(up, D); pen.position.copy(T).addScaledVector(D, .225);   // (its point on the paper past her fingertips, held between her thumb and first finger, the rest of it up over her knuckles and back, clear of her wrist)
+  hand.add(g); return g; }
+function deskFlat(r) {                               // (spotDraw) the gauntlet flat on the page, back up: rolled level across its knuckles, set down onto the paper, its fingers bent down to it, so its thumb lies on the page by the book, not in the desk (the user, 2026-11-09: "again the thumb is missing on the right side of the glove hand")
+  const pr = r.prop; if (!pr || !pr.wr || !pr.open || !pr.open.visible) return; const top = DESK.top, B = deskFlat.B || (deskFlat.B = new THREE.Box3()), lo = o => { B.makeEmpty(); B.expandByObject(o, true); return B.min.y; };
+  const blk = pr.fist.children.find(c => c.geometry && c.geometry.type === "ExtrudeGeometry"); if (!blk) return; r.root.updateMatrixWorld(true);
+  const w = 1 - THREE.MathUtils.smoothstep(lo(blk) - top, 0, .06), e = pr.wr.matrixWorld.elements; if (w <= 0) return;   // (all of it down on the page; less and less as it lifts off to turn one over)
+  if (Math.abs(e[1]) > .05) { pr.wr.rotation.y += Math.atan(-e[9] / e[1]) * w; r.root.updateMatrixWorld(true); }   // (it lay tipped in onto its thumb side: its thumb went down into the desk)
+  const dy = top - .008 - lo(blk); if (dy > 0) { pr.group.position.y += dy / r.root.matrixWorld.elements[5]; r.root.updateMatrixWorld(true); }   // (the back of the hand's block sat in the desk: up onto the paper, never pushed down)
+  pr.open.children.forEach(f => { if (!f.visible) return; f.rotation.z = 0; f.updateMatrixWorld(true); if (lo(f) <= top + .002) return; let a = 0, b = .9; for (let i = 0; i < 9; i++) { const m = (a + b) / 2; f.rotation.z = m; f.updateMatrixWorld(true); if (lo(f) > top + .002) a = m; else b = m; } f.rotation.z = b * w; f.updateMatrixWorld(true); });   // (each finger and its thumb bent down just till it's on the paper)
+}
 function deskPencil() {                              // her colored pencil, in her right hand (deskPencilSet: its colour)
   const g = new THREE.Group(), m = c => new THREE.MeshLambertMaterial({ color: c }), b = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, .4, 6), m("#2e5fbf")); b.position.y = .04; g.add(b);
   const tip = new THREE.Mesh(new THREE.ConeGeometry(.016, .05, 6), m("#e8c79a")); tip.position.y = -.185; tip.rotation.x = Math.PI; g.add(tip); const lead = new THREE.Mesh(new THREE.ConeGeometry(.006, .018, 6), m("#2e5fbf")); lead.position.y = -.216; lead.rotation.x = Math.PI; g.add(lead); g.userData.paint = [b.material, lead.material];
-  const L = new THREE.Vector3(-.84, -.54, .03).normalize(); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), L); g.position.copy(L).multiplyScalar(-.146); return g;   // (aimed in her hand's own frame, as desk_draw holds it: its point down on the paper by her fist, the rest of it up and back out of it)
+  return g;   // (deskGrip puts it in her hand)
 }
 function deskSheet(R, u) {                           // a page going over: lifted at its bottom edge, up and back over the spiral, its edge leading (u: 0 to 1)
   const T = DESK, N = 18, pos = R.sg.attributes.position, e = u * u * (3 - 2 * u), phi = Math.PI * .92 * e; let y = T.top + .029, z = T.nz + T.pd / 2;
@@ -10471,14 +10507,14 @@ function spotDraw(dt) {                              // her room through the men
     spotPv = { R2, sc, cam: new THREE.PerspectiveCamera(DESK.fov, 16 / 9, .02, 40), E: null, pg: pvGradeMake(), room: deskRoom(sc) }; box.appendChild(R2.domElement); }
   const V = spotPv; if (!!V.clay !== !!clayWorld) deskClay(V); let E = V.E;
   if (!E || E.spec !== src.spec) { if (E) { V.sc.remove(E.r.root); undressGear(E.r); KIT.dispose(E.r); } const r = buildChar(src.spec); V.sc.add(r.root); if (r.shadow && r.shadow.parent) r.shadow.parent.remove(r.shadow);
-    const pen = deskPencil(); if (r.hands && r.hands[1]) r.hands[1].add(pen); const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0, pen }; }
+    const pen = deskPencil(); let grip = null; if (r.hands && r.hands[1]) { r.hands[1].add(pen); grip = deskGrip(r.hands[1], pen); } const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0, pen, grip }; }
   if (S) deskPencilSet(E.pen, S.pencil);
   const W = gearState().wear.camila || {}; if (E.r.__gearKey !== JSON.stringify(W)) { dressGear(E.r, W); E.fresh = true; }
-  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = E.r.prop && E.r.prop.rings ? E.r.prop.rings.length : 3; st.noGlow = true; st.palm = 1; st.tcPose = S ? S.pose : "desk_draw"; st.tcT0 = S ? S.poseT0 : 0; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false;   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip), her pencil hand's little moves (desk_face, desk_point, desk_out, each from its start: tcT0) · hp: every gauntlet ring in its colour, as at full health (the user, 2026-11-09 "have her gauntlet show all the colors like when she's at full health"), noGlow: still no glow over the page · palm: the gauntlet open, flat on the page)
+  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = E.r.prop && E.r.prop.rings ? E.r.prop.rings.length : 3; st.noGlow = true; st.palm = 1; st.palmBack = true; st.tcPose = S ? S.pose : "desk_draw"; st.tcT0 = S ? S.poseT0 : 0; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false; deskFlat(E.r); if (E.grip) E.grip.userData.hide.forEach(m => { m.visible = false; });   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip), her pencil hand's little moves (desk_face, desk_point, desk_out, each from its start: tcT0) · hp: every gauntlet ring in its colour, as at full health (the user, 2026-11-09 "have her gauntlet show all the colors like when she's at full health"), noGlow: still no glow over the page · palm: the gauntlet open, flat on the page)
   const R = V.room; if (S) { deskSet(R.page.material, deskTex(S.book.pages[S.page])); const F = S.flip; R.sheetF.visible = R.sheetB.visible = !!F; if (F) { deskSet(R.sheetF.material, deskTex(S.book.pages[F.from])); deskSheet(R, clamp(F.t / DESK.flip, 0, 1)); } }
   const w = box.clientWidth, h = box.clientHeight, pr = Math.min(1.5, window.devicePixelRatio || 1, 2200 / Math.max(1, w)); if (w && h && (V.w !== w || V.h !== h || V.pr !== pr)) { V.w = w; V.h = h; V.pr = pr; V.R2.setPixelRatio(pr); V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
-  deskCam(S, V, dt); const fU = V.clay && SHADE && SHADE.U, f0 = fU ? [fU.mkClayF.value, fU.mkClayPF.value] : null; if (fU) { fU.mkClayF.value *= 2.4; fU.mkClayPF.value *= 2.4; }   // (in clay: her room's smears and prints finer, it's small and seen close)
-  pvRender(V.R2, V.sc, V.cam, V.pg); if (fU) { fU.mkClayF.value = f0[0]; fU.mkClayPF.value = f0[1]; }
+  deskCam(S, V, dt); const fU = V.clay && SHADE && SHADE.U, f0 = fU ? [fU.mkClayF.value, fU.mkClayPF.value] : null; if (fU) { fU.mkClayF.value *= 2.4; fU.mkClayPF.value *= 2.4; fU.mkXtraI.value = 1; }   // (in clay: her room's smears and prints finer, it's small and seen close; her lamp's light and the moon's through the window on it too (the user, 2026-11-09: "can we have a window in front and to the left of camila when she's on her room so there can be more dynamic light there?"))
+  pvRender(V.R2, V.sc, V.cam, V.pg); if (fU) { fU.mkClayF.value = f0[0]; fU.mkClayPF.value = f0[1]; fU.mkXtraI.value = 0; }
 }
 function spotTick(dt) {                              // (every frame while she's up) the camera, her pencil, her lines one after another as the voice-overs go, a page over for each new drawing
   const S = spot; if (!S) return; S.ct += dt; const arrive = (DESK.tA + DESK.tB + DESK.tC - (S.book.skip || 0)) * S.ck;
@@ -10589,7 +10625,7 @@ Object.assign(SFX, { page() { if (!live()) return; const t = ac.currentTime, s =
   s.buffer = noiseBuf; f.type = "bandpass"; f.Q.value = .8; f.frequency.setValueAtTime(700, t); f.frequency.exponentialRampToValueAtTime(2600, t + .32); env(g, t, .09, .42, .16);
   s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + .6); } });
 $("tale").addEventListener("pointerdown", e => { e.preventDefault(); cutPause(); });   // (a tap: paused, as Start)
-window.addEventListener("pointerdown", () => { if (window.BERRY_TOUCH && !tale && !menuUp && cutOn()) cutPause(); });   // (the prologue on a phone: a tap anywhere, as Start)
+window.addEventListener("pointerdown", e => { if (window.BERRY_TOUCH && !tale && !menuUp && cutOn() && !(e.target.closest && e.target.closest("#tPad, #tBtns, #tCorner, #tLT, .tSh"))) cutPause(); });   // (the prologue on a phone: a tap anywhere, as Start)   // (not a press of the pad's own buttons: ✕ brought the menu up, the user, 2026-11-09: "the skip cutscene menu pops up when just pressing x in the intro"; its Start button still does)
 function armHeroes() {                               // on with the weapons: you, and the other one
   const id = story ? story.char : null, r = roster.find(q => q.id === id); if (!r) return;
   const old = player; rig.root.visible = rig.shadow.visible = false; rig = r;
@@ -11838,7 +11874,7 @@ function secretChestRig() {
 function secretHit(d, kind) {                        // a blow on the wall: only the right hero's charged combo counts, a part at a time
   const B = secret; if (!B || B.hp <= 0) return false; const p = player, c = p.combo;
   if (!c || !(p.rig.id === B.who || (B.who === "fire" && p.rig.id === "rose"))) { SFX.block(); sparks(B.x, p.y - 60, 4); B.wob = .4;   // (Glos's vines, Rink's to burn: Rose's sword cuts them too, a charged combo. The user, 2026-11-04: "i had rose and ... even with fully charged attack i couldn't cut the ba3 vines")
-    if (!B.said && B.who !== "rose" && B.who !== "fire") { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "IT’LL TAKE MUCH GREATER FORCE TO BREAK THROUGH HERE…" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800); }
+    if (!B.said && B.who !== "rose" && B.who !== "fire") { B.said = true; toast(p.rig.id !== B.who ? (B.who === "camila" ? "IT’LL TAKE MUCH GREATER FORCE TO BREAK THROUGH HERE…" : "ONLY A SWORD COULD CUT THROUGH THIS THICKET") : (B.who === "camila" ? "IT'S CRACKED... A CHARGED COMBO MIGHT DO IT" : "IT'S THICK... A CHARGED COMBO MIGHT CUT IT"), 2800, true); }
     return true; }
   if (B.lastC === c && B.lastIdx === c.idx) return true; B.lastC = c; B.lastIdx = c.idx;   // (a part counts once, however many hits it has)
   B.hp--; B.wob = 1; shake = Math.max(shake, 4); SFX[B.who === "camila" ? "crack" : "slash"](); puffs(B.x + 20, p.y - 70, 4, 30, 160);
@@ -11854,7 +11890,7 @@ function secretGone(B, burnt) {                     // the wall's down (cut, sma
   for (let i = 0; i < 26; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(.22, .18, .18), burnt ? (i % 3 ? SECRET_M.crack : EMBER_M) : B.who === "camila" ? (i % 2 ? SECRET_M.rock : SECRET_M.rock2) : (i % 2 ? SECRET_M.grass : SECRET_M.grass2)); m.position.set(X(B.x + 60) + rand(-.6, .6), Y(GROUND) + rand(.3, 7), rand(-.4, .4)); actors.add(m);
     parts.push({ m, v: V(rand(-3, 8), rand(2, 9), rand(-3, 3)), life: rand(.7, 1.3), t: 0, size: rand(.8, 1.5), g: 22, spin: 9, drag: .25, kind: "drop" }); }
   if (burnt) flames(X(B.x + 60), Y(B.gy) + 2.5, .5, 22, 1.8, 1.5);
-  if (B.who === "camila") toast("THE ROCKS GIVE WAY!", 2600); if (story) writeSave();   // (Rose's tangle: not a word, she works it out. The user, 2026-11-02)
+  if (B.who === "camila") toast("THE ROCKS GIVE WAY!", 2600, true); if (story) writeSave();   // (Rose's tangle: not a word, she works it out. The user, 2026-11-02)
   return true;
 }
 function updateSecret(dt) {
@@ -12304,6 +12340,7 @@ function updatePlayer(dt) {
   if (!p.zip) zipPark();   // (its trolley waiting by the post: the user, 2026-10-25 "make the grips of the zipline or something be there because it looks like just string")
   if (!p.zip && control && STAGES[stage].zip && !p.onGround && !p.dead && !transit) zipGrab(p);   // (A1: the zipline, jumped up to)
   if (p.zip) { zipStep(p, dt); return; }
+  if (p.ledge) { ledgeStep(p, dt); return; }   // (caught a ledge: hanging from it, pulling up)
 
   // drop: two quick taps down while standing on a platform falls through it to the level below
   p.dropT = Math.max(0, (p.dropT || 0) - dt);
@@ -12498,6 +12535,7 @@ function updatePlayer(dt) {
   if (p.floatB) p.vy = Math.min(p.vy, 280);
 
   p.prevY = moveBody(p, dt, 16);
+  if (control && !p.onGround) ledgeGrab(p, ax, dt); else p.ledgeCd = 0;   // (jumped at a ledge, near enough: caught it)
   if (p.dodge && p.dodge.bump && (p.x - p.dodge.bump.x) * p.face >= -2) rollBump(p);   // (rolled up against the one you couldn't get round)
   if (p.dodge && p.dodge.fwd) { const D = p.dodge; D.t += dt; p.vx = p.face * 780 * (D.k || 1) * Math.max(0, 1 - D.t / .46); if (Math.random() < dt * 30) dust(p.x - p.face * 10, p.y, 1, -p.face);   // the slide forward: carried on, slowing
     p.z = Math.sin(clamp(D.t / .4, 0, 1) * Math.PI) * 1.3;   // (out round in front of them and back onto her line: running round them, 2026-10-31)
@@ -12686,6 +12724,42 @@ function zipPan(ns) {                                // on down the line into th
     enterStage(ns, back); spawnEscort(back); clearArrival(clamp(x, 60, WORLD - 60));
   });
 }
+// LEDGES: jump at one, near enough, and she catches its edge and pulls herself up onto it (the user, 2026-11-09: "add a ledge grabbing animation where if the player jumps towards a ledge and is close enough to it, the character will catch it and pull herself up onto the level. make sure they do not awkwardly snap from big gaps between them and a ledge before or behind them")
+const LEDGE = { reach: 12, back: 9, lo: .05, sag: .8, hi: 1.1, top: 1.2, hang: .2, pull: .32, low: .2, over: .16 };   // (reach / back: how far she's carried to it, forward or back, px; lo..top: how far under its top her feet are, in her heights (past hi she reaches up a few px, no more; caught higher than sag, under lo she steps straight up, between she sinks into the hang at her arms' length); the hang, the pull up, a quick step up for a low one, and over onto it, s)
+function ledgeFind(p, dir) {                       // the ledge ahead of her, in reach: its edge, its top, and the platform if it is one (never one behind her)
+  const H = p.rig.heightPx || 92, hx = 13, inY = ly => { const d = p.y - ly; return d >= H * LEDGE.lo && d <= H * LEDGE.top; };
+  const room = (ex, ly) => !CEILS.some(([c0, c1, cy]) => ex + dir * 20 > c0 && ex + dir * 20 < c1 && cy < ly && cy > ly - H);   // (room to stand up there)
+  let best = null; const take = (ex, ly, q) => { const c = (ex - p.x) * dir; if (c < hx - LEDGE.back || c > hx + LEDGE.reach || !inY(ly) || !room(ex, ly)) return; if (!best || Math.abs(c - hx) < Math.abs(best.c - hx)) best = { ex, ly, q, c, d: p.y - ly }; };
+  for (const q of PLATFORMS) { if (q.sky || q.step || q.kind === "shelf" || q.noGrab || q.w < 40 || (p.dropT > 0 && q === p.dropPlat) || (p.thruY !== undefined && q.y < p.thruY - 8)) continue; take(dir > 0 ? q.x : q.x + q.w, q.y, q); }
+  if (PROFILE.length) for (let k = 2; k <= hx + LEDGE.reach; k += 2) { const x = p.x + dir * k, g = groundAt(x); if (g === null || g >= p.y - 4) continue;   // a sheer step up out of reach of her feet: its face here
+    const g2 = groundAt(x + dir * 22), gb = groundAt(x - dir * 4); if (g2 !== null && Math.abs(g2 - g) < 12 && (gb === null || gb > g + 30)) take(x, Math.min(g, g2), null); break; }   // (flat on top, and sheer: a slope you walk)
+  return best;
+}
+function ledgeGrab(p, ax, dt) {                        // in the air, falling (or at the top of the jump), going at a ledge: catch it
+  p.ledgeCd = Math.max(0, (p.ledgeCd || 0) - dt);
+  if (p.onGround || p.vy < -40 || p.ledgeCd > 0 || held.down || p.climb || p.zip || p.swim || p.dive || p.crawl || p.sunk || p.auto || p.dead || p.hurtT > 0 || p.atkT >= 0 || p.combo || p.tackle || p.dodge || p.upHop || p.upCoil || p.bounceT >= 0 || p.perch || p.grow || transit || cine) return;
+  const dir = ax || (Math.abs(p.vx) > 60 ? Math.sign(p.vx) : 0); if (!dir) return;   // (towards it: held that way, or carried that way)
+  const F = ledgeFind(p, dir); if (!F) return; const H = p.rig.heightPx || 92;
+  p.ledge = { ...F, dir, t: 0, x0: p.x, y0: p.y, dd: clamp(F.d, H * LEDGE.sag, H * LEDGE.hi), low: F.d < H * .55, deep: clamp((clamp(F.d, H * LEDGE.sag, H * LEDGE.hi) - H * LEDGE.sag) / (H * (LEDGE.hi - LEDGE.sag)), 0, 1), hang: 0, pull: 0, over: 0 };
+  Object.assign(p, { vx: 0, vy: 0, mAirVy: 0, face: dir, plat: null, jcharging: false, jcharge: 0, chargeT: 0, chargeLv: 0, block: false, tpose: 0, bounceT: -1 }); jumpBuf = 0;
+  SFX.rockGrip();
+}
+function ledgeStep(p, dt) {                        // hanging from it a moment, then up: her feet up the face, over the top, and stood on it
+  const L = p.ledge, q = L.q, ez = u => u * u * (3 - 2 * u);
+  if (q) { if (!PLATFORMS.includes(q)) { p.ledge = null; p.ledgeCd = .3; return; } L.ex = L.dir > 0 ? q.x : q.x + q.w; L.ly = q.y; }   // (one that moves: its edge where it is now)
+  if (L.low) L.dd = L.y0 - L.ly;   // (a low one: no hang, straight up from where she is)
+  if (p.hurtT > 0 || p.dead || (held.down && !L.pull)) { p.ledge = null; p.ledgeCd = .4; p.vy = 40; p.onGround = false; return; }   // (hit, or ↓ while hanging: let go)
+  L.t += dt; const tH = L.low ? 0 : LEDGE.hang, tP = L.low ? LEDGE.low : LEDGE.pull, tO = LEDGE.over;
+  L.hang = clamp(L.t / Math.max(tH, .001), 0, 1); L.pull = clamp((L.t - tH) / tP, 0, 1); L.over = clamp((L.t - tH - tP) / tO, 0, 1);
+  const hx = L.ex - L.dir * 10, sx = L.ex + L.dir * 20, c = ez(Math.min(1, L.t / (.08 + .1 * Math.abs(L.y0 - L.ly - L.dd) / 30))), e = ez(L.pull), o = ez(L.over);   // (into the hang eased: a few px, never a jump across)
+  const xh = lerp(L.x0, hx, c), yh = lerp(L.y0, L.ly + L.dd, c);   // (into the hang: sinking to her arms' length, the slower the further)
+  p.x = lerp(lerp(xh, hx + L.dir * 6, ez(clamp((L.pull - .55) / .45, 0, 1))), sx, o); p.y = lerp(yh, L.ly, e);
+  p.vx = 0; p.vy = 0; p.onGround = false; p.prevY = p.y; p.face = L.dir; p.rot = 0; p.atkT = -1;
+  if (L.over >= 1) { p.ledge = null; p.ledgeCd = .25; p.x = sx; p.y = L.ly; p.onGround = true; p.plat = q || null; p.footY = L.ly; p.sq = .1; p.sqv = 0; SFX.land(floorUnder(p), .15); }   // (up and stood on it)
+  p.yaw = lerp(p.yaw, L.dir > 0 ? -.45 : -Math.PI + .45, 1 - Math.exp(-dt * 14));   // (to the face, round to us enough that her face shows)
+  p.blink -= dt; if (p.blink < -.12) p.blink = 2 + Math.random() * 2.5;
+  spring(p, dt); updatePose(p, dt);
+}
 function climbStep(p, dt) {                        // on a ladder: ↑ / ↓ climb, jump lets go; over the top (or at the foot) you step off
   const L = p.climb, upHeld = keys.ArrowUp || keys.KeyW || pad.u, dir = p.climbAuto || ((held.down ? 1 : 0) - (upHeld ? 1 : 0));   // (climbAuto: climbing on in from the room before)
   if (dir) p.climbDir = dir;                         // (the way you're going on it: the team after you, up or down, climbWith)
@@ -12861,7 +12935,7 @@ const BRAKE = { T: .55, cut: .65, v: 380 };
 const brakeHold = p => !!(p.brake && p.brake.u < BRAKE.cut);
 function brakeCheck(p, dt, mx, attacking, control, wet) {
   if (p.brake && (!p.onGround || p.hurtT > 0 || attacking || p.tackle || p.dodge || p.climb || p.dead)) p.brake = null;
-  if (p.brake || p !== player || p.rig.kind === "cat" || !p.onGround || !control || attacking || p.tackle || p.dodge || p.block || p.bcGo || wet || p.climb || p.crawl) return;
+  if (p.brake || p !== player || p.rig.kind === "cat" || !p.onGround || !control || attacking || p.tackle || p.dodge || p.block || p.bcGo || wet || p.climb || p.crawl || p.shot || p.kick > 0) return;   // (a shot's kick back is no sprint to skid out of: it turned her round, the user, 2026-11-09 "when camila shoots the big beam, it looks like she gets turned around at the end")
   if (Math.abs(p.vx) > BRAKE.v * p.rig.spec.move.speed && (!mx || mx === -Math.sign(p.vx))) { p.brake = { t: 0, u: 0, dir: Math.sign(p.vx), v0: Math.abs(p.vx) }; p.face = p.brake.dir; p.runT = 0; SFX.land && SFX.land(floorUnder(p), .5); }   // (only a sprint gets past BRAKE.v: a run's top is 300)
 }
 function brakeStep(p, dt) {
@@ -12992,7 +13066,7 @@ function camTopY() {                                   // the highest the camera
 }
 const bcNoTeam = () => !partnerList().some(P => P.q && !P.q.worn);   // (nobody fresh beside you: no L moves at all, the user 2026-11-08: "you shouldnt be able to do any of the L moves when both your teammates are worn out. so you shouldnt be able like now to just jump really high by yourself")
 function bcPress(p, k) {                              // a press with the guard up: winding up from here (let go before BC.tap, it's the tap's)
-  const T = bcTeam(k === "tri" || k === "x"), dir = defFace(); p.bcm = { k, t: 0, lv: 0, dir, D: T.D, A: T.A, done: 0 };   // (△ and ✕: a worn-out one too, thrown or heaved up; held △'s dive is a blow: not it, bcDive) p.face = dir; jumpBuf = 0; atkBuf = 0;
+  const T = bcTeam(k === "tri" || k === "x"), dir = defFace(); p.bcm = { k, t: 0, lv: 0, dir, D: T.D, A: T.A, done: 0 }; jumpBuf = 0; atkBuf = 0;   // (△ and ✕: a worn-out one too, thrown or heaved up; held △'s dive is a blow: not it, bcDive)   // (the two buffer resets were swallowed by that comment from 2026-11-08 to 11-09; p.face = dir left out: the dive goes the way you face, 2026-11-09)
   if (k === "sq") { SFX.huff(); [T.D, T.A].forEach(P => P && bcSet(P, { k: "guard" })); }   // (the bubble's making from the press: the two of them keep the guard up meanwhile)
 }
 function bcCancel(p) { p.bcm = null; partnerList().forEach(P => { const B = P.q && P.q.bc; if (B && (B.k === "chg" || B.k === "guard")) bcFree(P.q); }); }
@@ -13059,9 +13133,9 @@ const TOSS = { reach: 620, lv: 140, far: 360, farLv: 100, h: 250, clear: 90, g: 
 // L+△ held, the dive (it was ✕ held till 2026-11-05's batch, and came back here: the user, 2026-11-05 "L+triangle does the toss like a grenade but it's the charge that was missing. we already had it before, when it was L+X, that the charge would
 // launch both heros and the blocker would finish with an air attack slam"): off the blocker's back and down on the nearest you're facing. 1 your attacker, 2 it then you, 3 both then your blocker's own slam
 function bcDive(p, M) {
-  const { lv, dir, D } = M, A = M.A && M.A.q && !M.A.q.worn ? M.A : null, Dq = D && D.q; SFX.release(lv); aura.flare = .3; aura.lv = lv;   // (a worn-out one: not in on a dive, 2026-11-08)
+  const { lv, D } = M, dir = p.face || M.dir, A = M.A && M.A.q && !M.A.q.worn ? M.A : null, Dq = D && D.q; SFX.release(lv); aura.flare = .3; aura.lv = lv;   // (a worn-out one: not in on a dive, 2026-11-08)
   const J = []; if (A) J.push(A); if (lv >= 2 || !A) J.push("h"); if (lv >= 3 && D) J.push(D);   // (the user, 2026-11-04: "first is one attacker, second charge it's both, third it's both and then the blocker also jumps")
-  const tg = bcJumpFoe(p, dir);   // (all of them at the one baddy nearest you that you're facing, wherever it stands)
+  const tg = bcJumpFoe(p, dir);   // (all of them at the one baddy nearest you that you're facing, wherever it stands; only one in front, the user, 2026-11-09: "the L and triangle hold and jump should hone on enemies but only enemies in front. right now it hones on enemies on back")
   J.forEach((P, i) => { const delay = i * .28, via = P === D ? null : Dq, pow = 1 + .3 * (lv - 1);
     if (P === "h") p.bcGo = { k: "jump", t: 0, ph: "wait", delay, dir, via, mv: true, pow, x0: p.x, y0: p.y, ys: p.y, tg };
     else bcSet(P, { k: "leap", dir, ph: "wait", delay, via, hi: 300, fw: 70, Tu: .34, hold: .08, Td: .2, pow, aim: 200 + 50 * i, tg, slot: i }); });
@@ -13089,7 +13163,7 @@ function bcToss(p, A, Dq, dir, lv) {
 // blocker's own high jump, the same at the top as your attacker's. No attacker along: you're the one boosted; no one to boost you: you jump it yourself.
 // Since 2026-11-06 each one goes up off cupped hands (heroBoost, boostStep): you turned round to your attacker, crouched, hands cupped, it up onto them and heaved up; the second, your
 // blocker turned round to you to do it while your attacker's still up, or your attacker back down and round in front of you to; a held one's 2, your blocker turned round as you heave
-const LAUNCH = { hi: 190, hiC: 240, look: 200, heroHi: 330, heroHiC: 470, heroK: 1.5, gap: .3, again: 2.4, air: 300, plat: 240 };   // (hi and hiC were 380 and 540 till 2026-11-08, the user: "the L + X lift up with hands is great and looks good but the first buddy goes up way too high when done": off the top of the screen (a room shows ~320 px over the ground, and its height's its feet's). 180 keeps its head in the picture, 230 charged a little over; look: how much higher than that it still looks for a flyer or a platform, as far as it did)   // (heroK: your fall's heavier than GRAV·WEIGHT on the way up, measured: 1255 px/s took you 221 px, not 330)   // (your attacker's height, charged · yours · between them · a second tap this soon after is the second step · how far out it looks for a flyer, a platform)   // (hi 190: up as high as you go off its hands, measured 230 px over the ground for either of yours (heroHi or heroHiC, tapped or held), it 231; and launchPlan sends it no lower for a platform, where it rose only 70 over one (140-170 px in the woods), the user 2026-11-08: "when holding L and pressing x, the attacker buddy should go as high as the main character goes when tossed up that way. right now they dont go very high")
+const LAUNCH = { hi: 190, hiC: 240, look: 200, heroHi: 330, heroHiC: 470, heroK: 1.5, gap: .3, again: 2.4, air: 150, fw: 60, fwDown: 70, plat: 240 };   // (hi and hiC were 380 and 540 till 2026-11-08, the user: "the L + X lift up with hands is great and looks good but the first buddy goes up way too high when done": off the top of the screen (a room shows ~320 px over the ground, and its height's its feet's). 180 keeps its head in the picture, 230 charged a little over; look: how much higher than that it still looks for a flyer or a platform, as far as it did)   // (heroK: your fall's heavier than GRAV·WEIGHT on the way up, measured: 1255 px/s took you 221 px, not 330)   // (your attacker's height, charged · yours · between them · a second tap this soon after is the second step · how far out it looks for a flyer, a platform)   // (hi 190: up as high as you go off its hands, measured 230 px over the ground for either of yours (heroHi or heroHiC, tapped or held), it 231; and launchPlan sends it no lower for a platform, where it rose only 70 over one (140-170 px in the woods), the user 2026-11-08: "when holding L and pressing x, the attacker buddy should go as high as the main character goes when tossed up that way. right now they dont go very high")
 const BOOST = { set: .12, onto: .24, stand: .08, heave: .12, rec: .24, hop: .2, ride: .06, gap: 64, far: 420, hand: [.21, .32] };   // a boost up (2026-11-06): into the crouch · the hop onto the hands · stood on them a beat · the heave · back up out of it · your hop onto a buddy's hands · on them a beat · how far in front of you a buddy does it · how far off your attacker still comes back from to do it · the cupped hands, out in front and up, by its height
 let boostV = null;
 function boostHand(q, fc) {                           // where the foot goes: its cupped hands, between the two as its rig has them now (out in front and toward you, as it's turned: its depth too); no rig hands, by its height
@@ -13165,12 +13239,12 @@ function boostStep(s, B, dt, dir, to, ph) {           // (bcStep) a buddy boosti
 const airFoe = (x, y, r, up) => { let best = null, bd = 1e9; for (const e of partFoesAll()) { if (e.dead || e.gone) continue; const flying = !e.onGround || (e.T && e.T.move === "float"), dx = Math.abs(e.x - x), dy = y - e.y;
     if (!flying || dx > r || dy < (up ? 90 : -140) || dy > (up || 220) || walled(e.x, x)) continue; const d = dx + Math.abs(dy) * .5; if (d < bd) { bd = d; best = e; } } return best; };   // (a flyer, or one knocked up: over it, up to up px; or about its height)
 function launchPlan(s, B) {                          // (bcLeap, at the start of its way up) what's up there for it: a flyer, a platform over it, or nothing
-  const R = B.reach ?? B.hi, af = s.worn ? null : airFoe(s.x, s.y, LAUNCH.air, R + 160);   // (worn out: no air combo)   // (R: how high it looks, higher than it goes on its own, 2026-11-08)
+  const R = B.reach ?? B.hi, af = s.worn ? null : airFoe(s.x, s.y, LAUNCH.air, R + 160);   // (LAUNCH.air: about over it only since 2026-11-09)   // (worn out: no air combo)   // (R: how high it looks, higher than it goes on its own, 2026-11-08)
   if (af) { B.af = af; B.hiT = clamp(s.y - af.y + 20, 160, R + 160); B.px = clamp(af.x - B.dir * 40, 40, WORLD - 40); return; }
   let P0 = null, pd = 1e9; for (const P of PLATFORMS) { if (P.y > s.y - 70 || P.y < s.y - R + 10) continue; const cx = clamp(s.x + B.dir * 40, P.x + 26, P.x + P.w - 26), d = Math.abs(cx - s.x);
     if (d > LAUNCH.plat || walled(cx, s.x)) continue; if (d < pd) { pd = d; P0 = P; } }
   if (P0) { B.toPlat = P0; B.px = clamp(s.x + B.dir * 40, P0.x + 26, P0.x + P0.w - 26); B.hiT = Math.max(B.hi, s.y - P0.y + 70); return; }   // (all the way up and down onto it: B.hi .8 and 70 over a low one was short of yours, 2026-11-08)   // (70 over it, 100 till 2026-11-08: "way too high")
-  B.px = s.x; B.hiT = B.hi;
+  const fx = clamp(s.x + B.dir * LAUNCH.fw, 40, WORLD - 40); B.px = walled(fx, s.x) ? s.x : fx; B.hiT = B.hi;   // (forward on the way up, the user, 2026-11-09: "the buddy jumps backwards also. he should jump forward")
 }
 function launchFocus(s) {                         // (off the launch, done up there or down on them) the nearest one about, fought, then back to you (the user, 2026-11-05: "whenever characters are separate by an L move, they should focus on fighting and then come back to the player after finishing fighting")
   const P = partnerList().find(Q => Q.q === s); if (!P || s.worn) return; let e = null, bd = 1e9; for (const f of partFoesAll()) { if (f.dead || f.gone || walled(f.x, s.x)) continue; const dx = Math.abs(f.x - s.x), dy = Math.abs(f.y - s.y); if (dx > 420 || dy > 260) continue; if (dx + dy < bd) { bd = dx + dy; e = f; } }
@@ -13282,15 +13356,17 @@ function bcLeap(s, B, dt, dir, kin, ph) {             // up high (off the blocke
     if (B.hiT === undefined) B.hiT = Math.max(B.hi, bcTgOk(B.tg) ? B.y0 - bcLand(B.tg).y + 150 : 0);   // (its one up on a platform: high enough to come down onto it)
     s.x = B.launch ? lerp(B.x0, B.px ?? B.x0, e) : B.x0 + dir * B.fw * u; s.y = B.y0 - B.hiT * e; s.ball = Math.min(1, u * 2) * .7; s.rot = dir * TAU * u;
     if (u >= 1) { s.rot = 0; ph("hang"); } return true; }
-  if (B.ph === "hang" && B.launch && B.t >= B.hold) { s.ball = 0;   // (the launch at its top: the flyer; the platform under it; else down on one ahead, or just back down)
+  if (B.ph === "hang" && B.launch && B.t >= B.hold) { s.ball = 0;   // (the launch at its top: the flyer; else back down, onto the platform under it if there is one)
     if (bcTgOk(B.af)) { ph("air"); B.an = 0; return true; }
-    if (B.toPlat || s.worn || !bcJumpFoe(player, dir)) { bcFree(s); s.vy = 0; s.vx = 0; s.onGround = false; s.plat = null; launchFocus(s); return false; } }
+    if (!B.toPlat) { const tx = clamp(s.x + dir * LAUNCH.fwDown, 40, WORLD - 40), x2 = walled(tx, s.x) ? s.x : tx, ly = landBelow(x2, s.y);   // (down on its feet ahead, no blow: freed up there it fell back to its place behind you)
+      if (ly !== null && ly > s.y) { B.tx = x2; B.ly = ly; B.lp = PLATFORMS.find(Q => x2 >= Q.x && x2 <= Q.x + Q.w && Math.abs(Q.y - ly) < 2) || null; B.soft = true; B.Td = clamp(Math.sqrt(2 * (ly - s.y) / (GRAV * WEIGHT)), .28, .6); ph("down"); return true; } }
+    bcFree(s); s.vy = 0; s.vx = 0; s.onGround = false; s.plat = null; if (B.toPlat) launchFocus(s); return false; }   // (nothing in the air: back down, or onto the platform over it; never down on one ahead, the user, 2026-11-09: "when you throw a buddy up with hold l and x, it shouldn't home forward and attack just go straight up and hit anything in the air")
   if (B.ph === "hang") { kin(); s.y = B.y0; s.ball = .7; if (B.t >= B.hold) { const e = bcTgOk(B.tg) ? B.tg : bcJumpFoe(player, dir), L = e ? bcLand(e) : null;
       B.tx = clamp(bcLandX(L, e ? e.x - dir * (eHW(e) * .2 + 30 * (B.slot || 0)) : s.x + dir * B.aim), s.x - 640, s.x + 640); B.ly = L ? L.y : B.ys; B.lp = L ? L.plat : null; s.thruY = B.ly; s.ball = 0; ph("down"); SFX.whoosh(); } return true; }   // (down onto what its one stands on, through any platform over it: the user, 2026-11-04 "have them land on whatever platform the baddy they're targeting is on")
-  if (B.ph === "down") { const u = Math.min(1, B.t / B.Td); kin(); bcPose(s, bcDown(s), .5);
-    s.x = lerp(B.x0, B.tx, u); s.y = lerp(B.y0, B.ly ?? B.ys, u * u);
-    if (u >= 1) { s.y = B.ly ?? B.ys; s.onGround = true; s.plat = B.lp || null; s.thruY = undefined; bcSlam(s, s.x, s.y, dir, false, B.pow); ph("rec"); } return true; }
-  s.atkKind = null; s.atkT = -1; if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); if (B.t >= .28) { bcFree(s); if (B.launch) launchFocus(s); return false; } return true;   // (rec: back up off it; off the launch, on at what's about, launchFocus)
+  if (B.ph === "down") { const u = Math.min(1, B.t / B.Td); kin(); if (!B.soft) bcPose(s, bcDown(s), .5);   // (soft: the launch's way down with nothing hit, on its feet)
+    s.x = lerp(B.x0, B.tx, B.soft ? Math.sqrt(u) : u); s.y = lerp(B.y0, B.ly ?? B.ys, u * u);
+    if (u >= 1) { s.y = B.ly ?? B.ys; s.onGround = true; s.plat = B.lp || null; s.thruY = undefined; if (B.soft) { s.sq = -.25; s.sqv = 0; dust(s.x, s.y, 4, 0); } else bcSlam(s, s.x, s.y, dir, false, B.pow); ph("rec"); } return true; }
+  s.atkKind = null; s.atkT = -1; if (s.onGround) s.vx = approach(s.vx, 0, 4000 * dt); if (B.t >= (B.soft ? .14 : .28)) { bcFree(s); if (B.launch && !B.soft) launchFocus(s); return false; } return true;   // (rec: back up off it; off the launch, on at what's about, launchFocus)
 }
 function bcGoTick(p, dt) {                            // (bcInput) your part of a combo going, a frame at a time (its speed's its own: updatePlayer leaves it be)
   const G = p.bcGo; G.t += dt; jumpBuf = 0; atkBuf = 0; p.face = G.dir; p.brake = null;
@@ -13312,7 +13388,7 @@ function bcGoTick(p, dt) {                            // (bcInput) your part of 
 }
 function bcGoEnd(p) { p.bcGo = null; p.thruY = undefined; p.bstK = 0; p.heaveK = 0; p.perch = false; }
 function bcJumpFoe(p, dir) {                          // the charged ✕'s one baddy: in front of you, in reach, the nearest you (the user, 2026-11-04: "home in on a target within reasonable range, prefering always the one closest to the player that they are also facing")
-  let best = null, bd = 1e9; for (const e of partFoesAll()) { const dx = (e.x - p.x) * dir, dy = e.y - p.y; if (dx < -40 || dx > 640 || dy < -460 || dy > 320 || walled(e.x, p.x)) continue; const d = Math.hypot(e.x - p.x, dy * .8); if (d < bd) { bd = d; best = e; } }
+  let best = null, bd = 1e9; for (const e of partFoesAll()) { const dx = (e.x - p.x) * dir, dy = e.y - p.y; if (dx < 0 || dx > 640 || dy < -460 || dy > 320 || walled(e.x, p.x)) continue; const d = Math.hypot(e.x - p.x, dy * .8); if (d < bd) { bd = d; best = e; } }
   return best;
 }
 function bcLand(e) {                                  // what it stands on, to come down onto: its platform, or the ground under it
@@ -13438,10 +13514,17 @@ let BEAM_TEX = null, DISC_TEX = null;   // (crisp, not hazy: the user, 2026-11-0
 const beamTex = () => BEAM_TEX || (BEAM_TEX = tex(128, 256, (g, w, h) => { const G = g.createLinearGradient(0, 0, 0, h); [[0, 0], [.025, 1], [.975, 1], [1, 0]].forEach(([u, a]) => G.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = G; g.fillRect(0, 0, w, h);
   g.globalCompositeOperation = "destination-in"; const E = g.createLinearGradient(0, 0, w, 0); [[0, 0], [.03, 1], [1, 1]].forEach(([u, a]) => E.addColorStop(u, `rgba(255,255,255,${a})`)); g.fillStyle = E; g.fillRect(0, 0, w, h); }));   // (a beam's band: solid, its edges only a touch soft)
 const discTex = () => DISC_TEX || (DISC_TEX = tex(256, 256, g => { const r = g.createRadialGradient(128, 128, 0, 128, 128, 126); r.addColorStop(0, "rgba(255,255,255,1)"); r.addColorStop(.96, "rgba(255,255,255,1)"); r.addColorStop(1, "rgba(255,255,255,0)"); g.fillStyle = r; g.fillRect(0, 0, 256, 256); }));   // (its ball and its end: a solid disc)
-function crescG() {                                   // a crescent, bulging out along +x (the slash's: its tips back toward her)
-  if (CRESC_G) return CRESC_G; const sh = new THREE.Shape(), a = 1.15, c = .45, R = Math.hypot(Math.cos(a) + c, Math.sin(a)), b = Math.atan2(Math.sin(a), Math.cos(a) + c);
-  sh.absarc(0, 0, 1, -a, a, false); sh.absarc(-c, 0, R, b, -b, true); return (CRESC_G = new THREE.ShapeGeometry(sh, 28));
+function crescShape() { const sh = new THREE.Shape(), a = 1.15, c = .45, R = Math.hypot(Math.cos(a) + c, Math.sin(a)), b = Math.atan2(Math.sin(a), Math.cos(a) + c); sh.absarc(0, 0, 1, -a, a, false); sh.absarc(-c, 0, R, b, -b, true); return sh; }   // (a crescent, bulging out along +x: the slash's, its tips back toward her)
+function crescG() { return CRESC_G || (CRESC_G = new THREE.ShapeGeometry(crescShape(), 28)); }
+let CLAYSHOT = null;                                  // the girls' shots in clay (the user, 2026-11-09: "the girl's beams from triangle need to be remade to the clay style projectiles"): solid lit pieces, not drawn light
+function clayShotKit() {                              // Camila's: a cyan coil with a white ridge along its front and a deep blue rim behind, a knob at its end; Rose's: a thick pink crescent with a white one pressed on
+  if (CLAYSHOT) return CLAYSHOT; const cres = new THREE.ExtrudeGeometry(crescShape(), { depth: .22, bevelEnabled: true, bevelThickness: .14, bevelSize: .07, bevelSegments: 3, curveSegments: 30 }); cres.translate(0, 0, -.11); cres.computeVertexNormals();
+  const em = (c, e) => toon(c, { emissive: new THREE.Color(e) });   // (a little of their own light kept: still the brightest things about)
+  return (CLAYSHOT = { tube: new THREE.CylinderGeometry(1, 1, 1, 24, 1, false).rotateZ(Math.PI / 2), ball: new THREE.SphereGeometry(1, 24, 16), cres,
+    beam: em("#5ad4f4", "#134c66"), rim: em(SHOT.rim.gauntlet, "#0c2e5c"), core: em("#ffffff", "#55666c"), wave: em("#ff92cf", "#5e2244"), waveC: em("#ffffff", "#665760") });
 }
+function clayPart(geo, mat) { const m = new THREE.Mesh(geo, mat); m.userData.keepMat = true; m.renderOrder = 6; m.frustumCulled = false; m.scale.setScalar(1e-4); actors.add(m); return m; }   // (shared materials: kept when the shot's gone)
+function clayBall(m, x, y, z, r) { m.position.set(x, y, z); m.scale.setScalar(Math.max(r, 1e-4)); }
 function shotMesh(geo, col, map, add) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, map: map || null, transparent: true, opacity: 0, depthWrite: false, fog: false, side: THREE.DoubleSide, blending: add ? THREE.AdditiveBlending : THREE.NormalBlending })); m.renderOrder = 6; actors.add(m); return m; }
 function shotHandPx(p, u) {                           // where it comes from: the palm (the big hand's), or a way along the blade (u, 0 to 1); in the game's px, z its depth
   const r = p.rig, pr = r && r.prop, gi = r && r.giant && r.giant.on && r.giant.hand && r.giant.hand.g; let o = null, x = .04, y = -.17;
@@ -13483,12 +13566,11 @@ function shotTick(p, dt, control) {                  // (updatePlayer, after the
 }
 function shotOrb(p, Q, dt) {                          // charging: the light gathering in her palm, bigger each level
   const o = shotHandPx(p), k = Math.min(1, Q.t / (SHOT.step * 3)), col = SHOT.col.gauntlet;
-  if (!Q.orb) { Q.orb = shotMesh(CAP_G, col, haloTex()); Q.orbC = shotMesh(CAP_G, "#ffffff", haloTex()); }
-  const r = (18 + 46 * k + 6 * Math.sin(time * 30)) * S; Q.orb.position.set(X(o.x + p.face * 10), Y(o.y), o.z + .08); Q.orb.scale.set(r * 2.4, r * 2.4, 1); Q.orb.material.opacity = .85;
-  Q.orbC.position.copy(Q.orb.position); Q.orbC.position.z += .01; Q.orbC.scale.set(r * 1.1, r * 1.1, 1); Q.orbC.material.opacity = 1;
+  if (!Q.orb) { const K = clayShotKit(); Q.orb = clayPart(K.ball, K.beam); Q.orbC = clayPart(K.ball, K.core); }   // (a ball of clay swelling in her palm, a white one pressed on its front: a glow till 2026-11-09)
+  const r = (18 + 46 * k + 2 * Math.sin(time * 30)) * S * .62; clayBall(Q.orb, X(o.x + p.face * 10), Y(o.y), o.z + .08, r); clayBall(Q.orbC, X(o.x + p.face * 10), Y(o.y + 3), o.z + .08 + r * .62, r * .45);
   if (Math.random() < dt * (6 + 14 * k)) { const a = rand(0, TAU), d = rand(40, 80); spawn("spark", X(o.x + Math.cos(a) * d), Y(o.y + Math.sin(a) * d), o.z + .1, V(-Math.cos(a) * 4, Math.sin(a) * 4, 0), .22, rand(.06, .1), { g: 0, spin: 6 }); }   // (motes drawn in)
 }
-function shotOrbOff(Q) { [Q.orb, Q.orbC].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } }); Q.orb = Q.orbC = null; }
+function shotOrbOff(Q) { [Q.orb, Q.orbC].forEach(m => { if (m) { actors.remove(m); if (!m.userData.keepMat) m.material.dispose(); } }); Q.orb = Q.orbC = null; }
 function shotFire(p, Q) {                             // △ let go: off it goes, at the level it got to
   const lv = Q.lv, H = p.rig.heightPx || 92; shotOrbOff(Q); Q.ph = "fire"; Q.t = 0; aura.flare = .35; aura.lv = lv; SFX.release(lv); voice("attack");
   if (Q.k === "gauntlet") { const sp = SHOT.beam[lv]; Q.big = !!sp.big; Q.until = time + sp.T + .22; shotBeam(p, lv);
@@ -13652,17 +13734,17 @@ function galeStep(b, dt, u, fade) {                   // (shotsUpdate) on its wa
 function shotEnd(p) { const Q = p.shot; if (Q) shotOrbOff(Q); p.shot = null; p.pointKind = null; p.palm = 0; }
 function shotBeam(p, lv) {                            // Camila's: straight out of her palm, as far as its level, a wall, or the room's end lets it; the third her huge one
   const sp = SHOT.beam[lv], col = SHOT.col.gauntlet, b = { k: "beam", sp, lv, dir: p.face, t: 0, hits: new Map() };
-  const rc = SHOT.rim.gauntlet; b.rim = shotMesh(CAP_G, rc, beamTex()); b.glow = shotMesh(CAP_G, col, beamTex()); b.core = shotMesh(CAP_G, "#ffffff", beamTex());   // (a drawn beam, three bands, not a glow: the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
-  b.ballR = shotMesh(CAP_G, rc, discTex()); b.ball = shotMesh(CAP_G, col, discTex()); b.ballC = shotMesh(CAP_G, "#ffffff", discTex()); b.tipR = shotMesh(CAP_G, rc, discTex()); b.tip = shotMesh(CAP_G, col, discTex()); b.tipC = shotMesh(CAP_G, "#ffffff", discTex());
+  const K = clayShotKit(); b.rim = clayPart(K.tube, K.rim); b.glow = clayPart(K.tube, K.beam); b.core = clayPart(K.tube, K.core);   // (in clay since 2026-11-09: three coils, see clayShotKit)   // (a drawn beam, three bands, not a glow: the user, 2026-11-05: "camila's projectile blast should be more narrow and the graphic more defined instead of hazy. same for the smoke when they both need to recharge their weapon.")
+  b.ballR = clayPart(K.ball, K.rim); b.ball = clayPart(K.ball, K.beam); b.ballC = clayPart(K.ball, K.core); b.tipR = clayPart(K.ball, K.rim); b.tip = clayPart(K.ball, K.beam); b.tipC = clayPart(K.ball, K.core);
   shots.push(b); if (sp.big) SFX.beamBig(); else SFX.beamShot(lv);   // (her own sounds: the user, 2026-11-05: "add a soundeffect for both of the girls' projectile moves as well as for the fully charged version")
 }
 function shotWave(p, lv, tilt = 0) {                  // Rose's: a crescent of light off the blade, on ahead through everything in its way (tilt: leant the way the swipe went, 2026-11-06)
   const sp = SHOT.wave[lv], col = SHOT.col.sword, H = p.rig.heightPx || 92, dir = p.face;
   const w = { k: "wave", sp, lv, dir, tilt, t: 0, hits: new Map(), x: p.x + dir * (30 + sp.r * .4), y: sp.big ? Math.min(p.y - 70, (groundAt(p.x) ?? p.y) - sp.r * .62) : p.y - H * .55, x0: p.x };
-  w.glow = shotMesh(crescG(), col, null); w.core = shotMesh(crescG(), "#ffffff", null); w.tr = [0, 1].map(() => shotMesh(crescG(), col, null));
+  const K = clayShotKit(); w.glow = clayPart(K.cres, K.wave); w.core = clayPart(K.cres, K.waveC); w.tr = [0, 1].map(() => clayPart(K.cres, K.wave));   // (in clay since 2026-11-09: thick crescents, solid)
   shots.push(w); if (sp.big) SFX.waveBig(); else SFX.waveShot(lv); if (sp.big) { shake = Math.max(shake, 9); hitstop = Math.max(hitstop, .05); rumble(300, 1); }
 }
-function shotEndOne(b) { [b.rim, b.glow, b.core, b.ballR, b.ball, b.ballC, b.tipR, b.tip, b.tipC, ...(b.tr || [])].forEach(m => { if (m) { actors.remove(m); m.material.dispose(); } }); }
+function shotEndOne(b) { [b.rim, b.glow, b.core, b.ballR, b.ball, b.ballC, b.tipR, b.tip, b.tipC, ...(b.tr || [])].forEach(m => { if (m) { actors.remove(m); if (!m.userData.keepMat) m.material.dispose(); } }); }
 function shotsClear() { shots.forEach(shotEndOne); shots = []; steamL.forEach(q => actors.remove(q.m)); steamL = []; if (player && player.shot) shotEnd(player); }
 function shotFoes(b, x1, x2, y1, y2, dir) {          // whoever's in its box, once each (the big ones: again each of its n beats)
   const sp = b.sp, beat = sp.n > 1 ? Math.floor(b.t / (sp.T / sp.n)) : 0;
@@ -13677,28 +13759,24 @@ function shotsUpdate(dt) {                            // (every frame, by the sp
     if (b.k === "gale") galeStep(b, dt, u, fade);   // (the pair's, duoGale)
     else if (b.k === "beam") {
       const o = p && p.shot && p.shot.ph === "fire" ? shotHandPx(p) : (b.o || shotHandPx(p)); b.o = o; b.ox = o.x + b.dir * 12; b.oy = o.y;
-      const full = shotReach(b.ox, b.dir, sp.L), L = full * Math.min(1, b.t / (sp.big ? .16 : .08)), th = sp.th * (1 + .1 * Math.sin(b.t * 70)) * (u < .1 ? .6 + 4 * u : 1) * fade;
+      const full = shotReach(b.ox, b.dir, sp.L), L = full * Math.min(1, b.t / (sp.big ? .16 : .08)), th = sp.th * (1 + .04 * Math.sin(b.t * 30)) * (u < .1 ? .6 + 4 * u : 1) * fade;   // (its wobble slower and less: clay, 2026-11-09)
       if (u < 1) shotFoes(b, Math.min(b.ox, b.ox + b.dir * L), Math.max(b.ox, b.ox + b.dir * L), b.oy - th * .5 - 20, b.oy + Math.max(th * .5 + 20, 62), b.dir);   // (62 under it at least: from her eyes it still takes the small ones, 2026-11-05)
-      const cx = X(b.ox + b.dir * L / 2), cy = Y(b.oy), z = o.z + .06;
-      b.rim.position.set(cx, cy, z - .006); b.rim.scale.set(L * S, th * 1.75 * S, 1); b.rim.material.opacity = fade;   // (narrower and solid: its glow was 2.3 times as wide and see-through)
-      b.glow.position.set(cx, cy, z); b.glow.scale.set(L * S, th * 1.4 * S, 1); b.glow.material.opacity = fade;
-      b.core.position.set(cx, cy, z + .01); b.core.scale.set(L * S, th * .6 * S, 1); b.core.material.opacity = fade;
-      const br = (sp.th * (sp.big ? .92 : 1.35) + 3 * Math.sin(b.t * 50)) * S, bx = X(b.ox), tx = X(b.ox + b.dir * L), bz = sp.big ? z - .8 : z;   // (the full charge's ball behind her, so she stays in sight punching it out)
-      b.ballR.position.set(bx, cy, bz + .016); b.ballR.scale.set(br * 2.1, br * 2.1, 1); b.ballR.material.opacity = fade;
-      b.ball.position.set(bx, cy, bz + .02); b.ball.scale.set(br * 1.75, br * 1.75, 1); b.ball.material.opacity = fade;
-      b.ballC.position.set(bx, cy, bz + .03); b.ballC.scale.set(br * .95, br * .95, 1); b.ballC.material.opacity = fade;
-      b.tipR.position.set(tx, cy, z - .004); b.tipR.scale.set(th * 1.75 * S, th * 1.75 * S, 1); b.tipR.material.opacity = fade;   // (its end rounded off, the three bands)
-      b.tip.position.set(tx, cy, z + .002); b.tip.scale.set(th * 1.4 * S, th * 1.4 * S, 1); b.tip.material.opacity = fade;
-      b.tipC.position.set(tx, cy, z + .012); b.tipC.scale.set(th * .6 * S, th * .6 * S, 1); b.tipC.material.opacity = fade;
+      const cx = X(b.ox + b.dir * L / 2), cy = Y(b.oy), z = o.z + .06, r = th * .5 * S, LS = Math.max(L * S, 1e-4);   // (in clay, 2026-11-09: the cyan coil; the deep blue one behind it shows as its rim; the white one pressed along its front)
+      b.glow.position.set(cx, cy, z); b.glow.scale.set(LS, Math.max(r, 1e-4), Math.max(r, 1e-4));
+      b.rim.position.set(cx, cy, z - r * 1.3); b.rim.scale.set(LS, Math.max(r * 1.3, 1e-4), Math.max(r * 1.3, 1e-4));
+      b.core.position.set(cx, cy, z + r * .75); b.core.scale.set(LS, Math.max(r * .45, 1e-4), Math.max(r * .45, 1e-4));
+      const br = (sp.th * (sp.big ? .92 : 1.35) + Math.sin(b.t * 30)) * S * .55 * fade, bx = X(b.ox), tx = X(b.ox + b.dir * L), bz = sp.big ? z - .8 : z;   // (the full charge's ball behind her, so she stays in sight punching it out)
+      clayBall(b.ballR, bx, cy, bz - br * .9, br * 1.5); clayBall(b.ball, bx, cy, bz, br * 1.25); clayBall(b.ballC, bx, cy, bz + br * .8, br * .55);   // (each ball the same three: a deep blue rim behind, cyan, a white bump on its front)
+      clayBall(b.tipR, tx, cy, z - r * .9, r * 1.5); clayBall(b.tip, tx, cy, z, r * 1.25); clayBall(b.tipC, tx, cy, z + r * .8, r * .55);   // (its end a knob)
       if (sp.big && Math.random() < dt * 40) spawn("spark", X(b.ox + b.dir * rand(0, L)), cy + rand(-1, 1) * th * .5 * S, z + .1, V(b.dir * rand(4, 9), rand(-2, 2), rand(-1, 1)), .3, rand(.08, .14), { g: 0, spin: 8 });
       if (sp.big) shake = Math.max(shake, 3);
     } else {
       const x0 = b.x; b.x += b.dir * sp.v * dt; if (b.x < 0 || b.x > WORLD || walled(x0, b.x)) b.t = Math.max(b.t, sp.T * .8);   // (a wall: it breaks up on it)
       if (u < .8) shotFoes(b, b.x - sp.r * .7, b.x + sp.r * .55, b.y - sp.r, b.y + sp.r, b.dir);
-      const sc = sp.r * S * (1 + .25 * Math.min(1, u * 3)), z = (p && p.z || 0) + .4;
-      b.glow.position.set(X(b.x), Y(b.y), z); b.glow.scale.set(b.dir * sc, sc * 1.05, 1); b.glow.material.opacity = .85 * fade; const rz = (b.tilt || 0) * b.dir; b.glow.rotation.z = rz; b.core.rotation.z = rz; b.tr.forEach(m => { m.rotation.z = rz; });   // (a swipe down leans its top back, one up its top ahead: mirrored, so times the way it goes)
-      b.core.position.set(X(b.x + b.dir * sp.r * .06), Y(b.y), z + .01); b.core.scale.set(b.dir * sc * .82, sc * .62, 1); b.core.material.opacity = fade;
-      b.tr.forEach((m, i) => { m.position.set(X(b.x - b.dir * sp.r * (.35 + .3 * i)), Y(b.y), z - .01); m.scale.set(b.dir * sc * (.9 - .15 * i), sc * (.95 - .15 * i), 1); m.material.opacity = (.4 - .15 * i) * fade; });
+      const sc = sp.r * S * (1 + .25 * Math.min(1, u * 3)) * fade, z = (p && p.z || 0) + .4, zs = Math.max(sc * .6, 1e-4), sn = Math.max(sc, 1e-4);   // (in clay, 2026-11-09: it shrinks away instead of fading)
+      b.glow.position.set(X(b.x), Y(b.y), z); b.glow.scale.set(b.dir * sn, sn * 1.05, zs); const rz = (b.tilt || 0) * b.dir; b.glow.rotation.z = rz; b.core.rotation.z = rz; b.tr.forEach(m => { m.rotation.z = rz; });   // (a swipe down leans its top back, one up its top ahead: mirrored, so times the way it goes)
+      b.core.position.set(X(b.x + b.dir * sp.r * .06), Y(b.y), z + zs * .3); b.core.scale.set(b.dir * sn * .78, sn * .6, zs * .5);   // (the white one pressed onto its front)
+      b.tr.forEach((m, i) => { const k = (.62 - .2 * i) * Math.min(1, u * 4); m.position.set(X(b.x - b.dir * sp.r * (.45 + .35 * i)), Y(b.y), z - zs * (.4 + .3 * i)); m.scale.set(b.dir * Math.max(sn * k, 1e-4), Math.max(sn * k * 1.05, 1e-4), Math.max(zs * k, 1e-4)); });   // (two smaller ones after it)
       if (sp.big && Math.random() < dt * 30) spawn("spark", X(b.x + rand(-.3, .3) * sp.r), Y(b.y + rand(-1, 1) * sp.r), z + .1, V(-b.dir * rand(2, 5), rand(-2, 2), rand(-1, 1)), .3, rand(.08, .14), { g: 0, spin: 8 });
     }
     if (b.t >= sp.T) { shotEndOne(b); return false; } return true; });
@@ -15128,7 +15206,7 @@ const CRY_VOL = .5, CRY_VOICE = false, CRY_SND = { split: "attack", spread: "att
 function cry(k, i) {                                  // her line for it (i: which; none, the next in turn), heard and in a bubble over her
   const p = player, who = rig && VOICE_OF[rig.id], T = who && CRY[who] && CRY[who][k]; if (!p || !T) return;
   if (i === undefined) i = (cryN[k] = ((cryN[k] ?? -1) + 1)) % T.length;
-  const el = $("cryB"); if (el) { el.textContent = T[i]; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); cryB.t = 1.1; cryTick(0); }
+  const el = $("cryB"); if (el && !textHush()) { el.textContent = T[i]; el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); cryB.t = 1.1; cryTick(0); }   // (no bubble while playing, textHush)
   if (!CRY_VOICE) { if (CRY_SND[k]) voice(CRY_SND[k]); return; }   // (not the made-up lines (cries.js, off): a take of her own from the voice pack, CRY_SND)
   if (vox.state === "idle") voiceInit(); const L = vox.bank[who + "_cry_" + k], b = L && L[i]; if (!b || !live() || !sfxOn) return;
   if (vox.src) try { vox.src.stop(); } catch (e) { }
@@ -18120,6 +18198,7 @@ function abStep(s, dt) {                            // (its own step, before it 
 const PARRY_WIN = .3;
 const _popV = new THREE.Vector3();
 function popText(x, y, text, ms = 520) {   // (ms: how long it stays up; □'s line order, three names, longer)
+  if (textHush() && /[A-Za-z0-9]/.test(text)) return;   // (no PARRY!, RUSH!, Brisa's hello and the rest while playing; an arrow or a ! alone, a cue, still shows)
   const el = $("pop"); el.textContent = text; _popV.set(X(x), Y(y), 0).project(camera);
   const w = el.offsetWidth, hw = Math.min(w / 2 + 12, innerWidth / 2), cue = $("exitCue"), top = clamp((1 - _popV.y) / 2 * innerHeight, 90, innerHeight - 60);   // (w: its own width, so a long word isn't cut at the screen's edge: B3's WIN THEM ALL BACK FIRST! was, 2026-11-07)
   let left = clamp((_popV.x + 1) / 2 * innerWidth, hw, innerWidth - hw);
@@ -22501,7 +22580,8 @@ let WAVE_FOES = null;
 // forest begins, Noro and Doir waiting there. Always morning: the forest's day starts after it
 const BEACH_HOUR = [0, 0, 0, 0, 0, 0, 0, 0];
 const CARIB_SEA = { deep: "#0b7896", mid: "#13adc0", light: "#7fe6d4", foam: "#ffffff", line: "#0a5570" };
-const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#f4e4b4", plats: [], plats2: [] }));
+const BEACH_WARM = [{ sun: ["#ffe4be", 2.3, 14], hemi: ["#f5e2c6", "#3a6a66", 1.08] }, { sun: ["#ffdfb6", 2.25, 12], hemi: ["#f2dcbc", "#36665f", 1.04] }];   // (the beach's morning and midday: the waves' near-white sun at 2.6 and its white sky light warmed and eased; the user, 2026-11-09: "things look too pale on the beach senomehow. the characters skin needs little more warmth and pinkness and the sand should not look so white. Also can the water in backgrounds looks. little more claylike?")
+const BEACH_SCREENS = WAVE_SCREENS.map((w, k) => ({ ...w, ...(BEACH_WARM[k] || {}), waveK: k, name: k ? w.name : "MORNING", bugs: [0, 0], shore: [.85, .8], sea: CARIB_SEA, sand: "#ebcf98", plats: [], plats2: [] }));   // (sand #ebcf98, was #f4e4b4: golden, not white)
 const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's drawings, IMG_1198/1199): row C the beach itself, row B up on the bluff over it. plats: [x, y, w, kind] · kind: "drift" (driftwood on two rocks), "rock", "boat" (a fishing boat up on blocks), "plank" (a boardwalk), "tee" (a plank on one post)
   { h: 0, foe: 0, cell: "C1", elev: 0, tut: true, name: "HOME BEACH", home: true, prev: 15, tutLeft: true, next: 1, mine: { x: 224, to: 9, tx: 270 }, plats: [[760, 390, 170, "drift"], [1180, 320, 200, "rock"], [1560, 372, 190, "boat"], [1960, 310, 200, "rock"], [2300, 380, 160, "drift"]] },   // (the house, as the opening had it)
   { h: 0, foe: 0, cell: "C2", elev: 0, tut: true, name: "PALM SHORE", prev: 0, noRight: true, peekOff: true, steps: [[2160, -400]], wayUp: 2, wayTip: "↑ ON UP: OFF THE TALL ONE AND ONTO THE BLUFF", camUp: 1,
@@ -26418,6 +26498,7 @@ function backProp() {                                // (render, after her rig's
   _cpN.set(-cr, 0, 0); ch.localToWorld(_cpN); _cpN.addScaledVector(_cpD, -L * .42);   // (its middle on her back, the grip up over her shoulder)
   propTo(pr, _cpN, _cpD, _cpX.clone(), so);
 }
+const BUS_DRIVE = { armF: 1.3, elbF: .65, spF: 0, armB: 1.3, elbB: .65, spB: 0, lean: .08 };   // (at the wheel: both hands out on it, the user, 2026-11-09: "noro in la guagua is moving around and doesn't look like he's driving.")
 const BUS_REST = { lean: -.16, arch: .02, headRot: .06, armF: .42, elbF: .75, spF: .12, armB: .38, elbB: .8, spB: .12 };   // (La Guagua's seat up by the cab: sat back against it, both hands down on the knees)
 function busSword(c, R) {                            // (after the rider's sync: in La Guagua's seat up by the cab, her sword stood point down on the bed beside her, out past her knees by the near side, leant back toward her; both hands her own. The user, 2026-11-08 "on la guagua, rose sshould be sitting down with her sword next to her and back against la guagua")
   const pr = c.r.prop; if (!pr || pr.kind !== "sword" || !pr.group.parent) return;
@@ -30550,7 +30631,7 @@ function render(dt) {
   if (gbcCam) { camera.position.copy(gbcCam); camera.updateMatrixWorld(); }
   clayPost();
   renderer.setRenderTarget(null);
-  { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
+  { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.soft.value = THREE.MathUtils.smoothstep(Math.min(innerHeight, innerWidth / 1.6), 440, 760); U.softR.value = Math.max(1, frameRT.height / 720); }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam);
 }
 

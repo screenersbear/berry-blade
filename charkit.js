@@ -1050,15 +1050,26 @@ function carvedEyes(S, mesh, M) {
       const pos = []; for (let i = 0; i < poly.length; i++) { const j = (i + 1) % poly.length; pos.push(A[i].x, A[i].y, A[i].z, A[j].x, A[j].y, A[j].z, B[j].x, B[j].y, B[j].z, A[i].x, A[i].y, A[i].z, B[j].x, B[j].y, B[j].z, B[i].x, B[i].y, B[i].z); }
       const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3)); geo.computeVertexNormals();
       const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: c.lash, side: THREE.DoubleSide })); pivot.add(m); };
+    const dome = (poly, hOf, mat, h0Of) => {            // a raised piece, as a bit of clay pressed on (the user, 2026-11-09: "can we make the girl's eyes made of clay as well) same shape and look as now just an actual 3d object"): its top domed, each point hOf out from the face, its side down to h0Of
+      const n = poly.length; if (n < 3) return; const cu = poly.reduce((a, p) => a + p[0], 0) / n, cv = poly.reduce((a, p) => a + p[1], 0) / n, RS = [0, .3, .6, .85], V = [], I = [];
+      const at2 = (p2, h) => { const v = lift(p2, h); if (!v) throw 0; V.push(v); return V.length - 1; };
+      const tri = (a, b, c3, o) => { const A = V[a], nn = new THREE.Vector3().subVectors(V[b], A).cross(new THREE.Vector3().subVectors(V[c3], A)); if ((o ? nn.dot(o) : nn.z) < 0) I.push(a, c3, b); else I.push(a, b, c3); };   // (every face turned out of the face, or out its side)
+      try { const rg = RS.map(t => poly.map(p2 => { const q = [p2[0] + (cu - p2[0]) * t, p2[1] + (cv - p2[1]) * t]; return at2(q, hOf(q)); })), c0 = at2([cu, cv], hOf([cu, cv]));   // (rings in toward its middle)
+        rg.forEach((r, k) => r.forEach((a, i) => { const j = (i + 1) % n; if (k + 1 < rg.length) { tri(a, r[j], rg[k + 1][j]); tri(a, rg[k + 1][j], rg[k + 1][i]); } else tri(a, r[j], c0); }));
+        if (h0Of) { const top = poly.map(p2 => at2(p2, hOf(p2))), bot = poly.map(p2 => at2(p2, h0Of(p2))); for (let i = 0; i < n; i++) { const j = (i + 1) % n, o = new THREE.Vector3().subVectors(V[top[i]], V[c0]).setZ(0); tri(bot[i], bot[j], top[j], o); tri(bot[i], top[j], top[i], o); } } }   // (its side a crisp edge under the top)
+      catch (e) { return; }
+      const geo = new THREE.BufferGeometry().setFromPoints(V); geo.setIndex(I); geo.computeVertexNormals(); const m = new THREE.Mesh(geo, mat); pivot.add(m); return m; };   // (lit round, its own shape: no longer the face's normals under it)
     const oval = (u, v, ru, rv) => { const o = []; for (let i = 0; i < 40; i++) { const a = i / 40 * TAU; o.push(pix(u + Math.cos(a) * ru, v + Math.sin(a) * rv)); } return o; };
-    patch(open, w * .015, mWhite);                                                   // the white
+    const bx = open.map(p2 => p2[0]), by = open.map(p2 => p2[1]), ox = (Math.min(...bx) + Math.max(...bx)) / 2, oy = (Math.min(...by) + Math.max(...by)) / 2, rx = (Math.max(...bx) - Math.min(...bx)) / 2 || 1, ry = (Math.max(...by) - Math.min(...by)) / 2 || 1;
+    const hw = p2 => w * .012 + w * .1 * Math.sqrt(Math.max(0, 1 - ((p2[0] - ox) / rx) ** 2 - ((p2[1] - oy) / ry) ** 2));   // (the white's height out from the face: a dome, highest in its middle)
+    dome(open, hw, mWhite, () => w * .002);                                          // the white
     const ic = [ex + f.lookX * E.iris[0] * .55, ey + f.lookY * E.iris[1] * .45];
     const hull = hull2(open);                                                        // (the opening's outline isn't always convex: cut to its hull)
-    patch(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris, E.iris[1] * f.iris), hull), w * .03, mIris);   // the iris, inside the opening
-    patch(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris * .48, E.iris[1] * f.iris * .48), hull), w * .042, mPupil);   // the pupil
+    dome(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris, E.iris[1] * f.iris), hull), p2 => hw(p2) + w * .014, mIris, hw);   // the iris, inside the opening, on the white
+    dome(clipConvex(oval(ic[0], ic[1], E.iris[0] * f.iris * .48, E.iris[1] * f.iris * .48), hull), p2 => hw(p2) + w * .026, mPupil, p2 => hw(p2) + w * .014);   // the pupil, on the iris
     const lash = pts(E.lash); ridge(lash, w * .005, w * .1, mLash);                  // the lash line, standing off the face
     if (E.low) ridge(pts(E.low), w * .005, w * .05, mLash);                          // the lower lash
-    const G = lift(pix(ic[0] - E.iris[0] * f.iris * .35, ic[1] - E.iris[1] * f.iris * .35), w * .055);   // the glint, up and in
+    const gp = pix(ic[0] - E.iris[0] * f.iris * .35, ic[1] - E.iris[1] * f.iris * .35), G = lift(gp, hw(gp) + w * .045);   // the glint, up and in, on the pupil's dome
     if (G) { const gl = new THREE.Mesh(new THREE.SphereGeometry(w * .07, 10, 8), mGlint); gl.scale.z = .4; gl.position.copy(G); pivot.add(gl); }
     const outer = lash.reduce((a, p) => (p[0] - a[0]) * s > 0 ? p : a), top = lash.reduce((a, p) => p[1] < a[1] ? p : a);   // three lashes flicking out of the outer corner
     [0, .35, .7].forEach((k, i) => { const at2 = [outer[0] + (top[0] - outer[0]) * k * .5, outer[1] + (top[1] - outer[1]) * k * .5], base = lift(at2, w * .06); if (!base) return;
@@ -1439,7 +1450,7 @@ function giantHandPose(H, c, ts, pt = 0) {            // c: 0 open (dragged alon
   H.thumbs.forEach(T => { const on = T.s === ts; T.g.visible = on; if (!on) return; T.g.rotation.set(ts * lerp(.55, -.35, c), 0, lerp(.25, 1.05, c)); T.m.rotation.z = lerp(.12, 1.1, c); });
 }
 function giantArmBuild(r) {                          // (once, the first time it grows)
-  const pr = r.prop, G = { c: { ...GIANT_ARM[1] }, grp: group(r.body), rings: [], ringsOf: null, fist: 0, on: false, skin: (r.spec.colors && r.spec.colors.skin) || "#f2c3a3" };
+  const pr = r.prop, G = { c: { ...GIANT_ARM[1] }, grp: group(r.body), rings: [], ringsOf: null, fist: 0, on: false, skin: r.skinC || (r.spec.colors && r.spec.colors.skin) || "#f2c3a3" };
   G.prof = giantArmProf(G); G.tex = giantArmTex(pr.Q, G.skin); G.mat = pr.M("#ffffff", { map: G.tex });
   G.tube = new Tube(G.grp, 7, 56, 28, G.prof, G.mat);
   G.hand = buildGiantHand(G.grp, pr.M, pr.P, pr.Q);
@@ -1470,6 +1481,7 @@ function giantRings(G, pr) {                         // her hearts: the gauntlet
   G.uB = G.uB === undefined ? uB : G.uB + (uB - G.uB) * .35;
   if (G.ep !== LOSS_EP || Math.abs((G.uBp ?? -1) - G.uB) > .006) { G.ep = LOSS_EP; G.uBp = G.uB; giantArmPaint(G.tex, pr.Q, G.skin, G.uB, u); }   // (and again if the 3D picture was lost: painted live, never settled)
 }
+const _gpQ = new THREE.Quaternion(), _gpN = new THREE.Vector3(), _gpW = new THREE.Vector3(), _gpF = new THREE.Vector3(), _gpB = new THREE.Box3();   // (a handstand on the grown arm: her body's turn, its up, the wrist in the world, ahead)
 function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the shoulder S, along her own arm's elbow E and wrist W: its points, the hand, the rings, and where her other hand holds it
   const pr = r.prop, G = r.giant || (r.giant = giantArmBuild(r)), g = giantOf(p), c = G.c = giantAt(GIANT_ARM, g), A = G.tube.pts, fy = giantFloor(p, r);
   const S = _gSh.copy(S0), dz = Math.max(0, .2 * r.spec.body.girth * D.chest * 1.45 * .92 - Math.abs(S0.z)); S.z += s * dz;   // (out at her shoulder's side, where her chest ends: grown out of it there, not through her top. The user, 2026-11-01: "camila's arm is still goign through through her chest")
@@ -1495,24 +1507,31 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
   const keep = () => { giantBody(r, A, G, s, chest, D); for (let i = 1; i < 7; i++) { const u = i / 6, rr = G.prof(u), q = A[i];
     if (q.y < fyK + rr * .92) q.y = fyK + rr * .92;                            // the ground: it rests on it and drags, never through it
     if (q.y < hipY + rr && Math.abs(q.x) < .42 + rr) { const zm = legOut + rr * .95 + .02; if (q.z * s < zm) q.z = s * zm; } } };   // her legs: it keeps out to her side of them   // her body: out of it, every point and what's between them (the user, 2026-11-01: "as her arm goes across her chest, it clips through her chest")
-  keep();
+  r.body.getWorldQuaternion(_gpQ); _gpN.set(0, 1, 0).applyQuaternion(_gpQ); const FSp = p.fidget && STRIKES[p.fidget.kind], plant = !!(FSp && FSp.ownArms) && p.onGround !== false && _gpN.y < .5;   // (upside down on the ground: a handstand on it. Its ground in her body's terms is then the wrong way up and pushed the arm flat along the floor in an L, the user, 2026-11-09: "when camila does a handstand with her big arm, it bends. instead it should just raise her higher and open the palm and properly touch the ground")
+  G.pk = approach(G.pk || 0, plant ? 1 : 0, 8 / 60); if (G.pk > .001) { _gpQ.invert(); _gpF.set(0, -1, 0).applyQuaternion(_gpQ); _gpQ.invert(); let Lg = _gu.length() + _gv.length(); if (r.head) { r.head.getWorldPosition(_gpW); r.body.worldToLocal(_gpW); Lg = Math.max(Lg, _gpW.sub(A[0]).dot(_gpF) * 1.6); }   // (long enough that her head is well up off the ground: she stands high on it)
+    for (let i = 1; i <= 6; i++) A[i].lerp(_gpW.copy(A[0]).addScaledVector(_gpF, Lg * i / 6), G.pk); }   // (the arm straight down under her shoulder to the ground, not out at a slant)
+  { let need = 0; if (plant) { _gpW.copy(A[6]); r.body.localToWorld(_gpW); need = Math.max(0, Y(p.y) - (p.airPx || 0) / 40 + .16 * D.prop * r.spec.outfit.prop.size * c.hand * r.root.scale.y - _gpW.y); }   // (how far she must go up for the straight arm's wrist to stand a hand's depth over the ground)
+    G.plift = approach(G.plift || 0, need, (need > (G.plift || 0) ? 7 : 4) / 60); if (G.plift > 1e-4) { r.root.position.y += G.plift; r.root.updateMatrixWorld(true); } }   // (all of her up on it: eased, and down again after)
+  if (!plant) keep();
   const H = G.hand, hs = D.prop * r.spec.outfit.prop.size * c.hand, at0 = p.atkT >= 0 && p.atkKind && !(STRIKES[p.atkKind] || {}).openHand;
-  G.fist = p.zip || p.climb ? G.lk : 0; G.pt = approach(G.pt || 0, p.pointKind && !(STRIKES[p.pointKind] || {}).openHand ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
+  G.fist = p.zip || p.climb ? G.lk : approach(G.fist || 0, at0 || p.tackle ? 1 : 0, (at0 || p.tackle ? 9 : 4) / 60);   // (a fist when she hits with it and in the run's lunge, open again after: the user, 2026-11-09 "when camila's big arm lunges forward in the run attack, it should make a fist . it should also be a fist when she's attacking") G.pt = approach(G.pt || 0, p.pointKind && !(STRIKES[p.pointKind] || {}).openHand ? 1 : 0, (p.restNow ? 99 : 8) * (1 / 60));   // (always open: the user, 2026-11-01, "the fingers on her hand aren't all that visible. keep the hand open"; pt: pointing the team on)
   const place = () => {                              // the hand on the end, along the forearm's last stretch: the palm down to the ground (toward her, hanging straight down)
     _gx.subVectors(A[6], A[5]).normalize();
     const hl = .34 * hs, need = (fyK + .06 * hs - A[6].y) / hl;                // near the ground it bends at the wrist to lie along it (dragged), never into it
     if (_gx.y < need) { _gy.set(_gx.x, 0, _gx.z); if (_gy.lengthSq() < .09) _gy.subVectors(A[6], A[2]).setY(0); if (_gy.lengthSq() < 1e-4) _gy.set(-1, 0, 0);
       const y = clamp(need, -1, 1); _gx.copy(_gy.normalize().multiplyScalar(Math.sqrt(1 - y * y))).setY(y); }
     _gy.set(0, -.25, -s);                                                         // the palm toward her, its back (the fingers spread, the orb) to you
+    if (plant) { _gpQ.invert(); _gy.set(0, -1, 0).applyQuaternion(_gpQ); _gx.set(p.face > 0 ? 1 : -1, 0, 0).applyQuaternion(_gpQ).addScaledVector(_gy, -_gx.dot(_gy)).normalize(); _gpQ.invert(); }   // (the handstand: palm flat down on the ground, the fingers out ahead along it)
     _gy.addScaledVector(_gx, -_gy.dot(_gx)); if (_gy.lengthSq() < 1e-5) _gy.set(1, 0, 0); _gy.normalize();
     _gz.crossVectors(_gx, _gy); _gM.makeBasis(_gy, _gw.copy(_gx).negate(), _gz); H.g.quaternion.setFromRotationMatrix(_gM);
     H.g.position.copy(A[6]); H.g.scale.setScalar(hs);
     giantHandPose(H, G.fist, _gz.x + _gz.y * .5 >= 0 ? 1 : -1, G.pt);
   };
   place();
+  if (plant) { r.root.updateMatrixWorld(true); _gpB.setFromObject(H.g, true); const d = _gpB.min.y - (Y(p.y) - (p.airPx || 0) / 40) + .012; if (Math.abs(d) > .002) { r.body.getWorldScale(_gpW); const k = d / Math.max(1e-4, _gpW.y); for (let i = 1; i <= 6; i++) A[i].addScaledVector(_gpF, k * i / 6); place(); } }   // (the handstand: the arm as long as it takes for the palm to press on the ground, never over it, the user, 2026-11-09: "just make sure her hand is always firmly on the ground and not floating above it")
   H.g.updateMatrix(); let lo = 1e9; const fc = G.fist;
   for (const [x, y, z] of [[.06, -.19, .1], [.06, -.19, -.1], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), .08], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), -.08], [-.06, -.12, 0]]) lo = Math.min(lo, _gv.set(x, y, z).applyMatrix4(H.g.matrix).y);
-  if (lo < fyK + .004) { const d = Math.min(.25, fyK + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
+  if (!plant && lo < fyK + .004) { const d = Math.min(.25, fyK + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
   G.tube.update(FWD); giantRings(G, pr);
   const ug = clamp((G.uB ?? .5) + .035, .2, .8);     // (where her other hand holds it: the gauntlet's base, just under its rim)
   G.tube.curve.getPoint(ug, _gv); G.tube.curve.getTangent(ug, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
@@ -1665,8 +1684,11 @@ function giantPose(p, o, dt = 1 / 60) {                // not in a move: too hea
   // (her other arm posed in it: still holding the grown arm, where and as she posed it, holdSolve. It let go before, 2026-11-01, and her posed hand ended up by her chin facing the other way)
 }
 
+const warmSkin = h => { if (typeof h !== "string" || h[0] !== "#") return h; const q = new THREE.Color(h), o = {}; q.getHSL(o, THREE.SRGBColorSpace); if (o.h < .028 || o.h > .125 || o.s < .2 || o.l < .4) return h;   // (a skin tone a touch warmer and pinker as built: the spec keeps its own. Skin tones only: a creature's green or blue as it is.
+  q.setHSL(o.h - .012, Math.min(1, o.s + .1), o.l - .02, THREE.SRGBColorSpace); return "#" + q.getHexString(THREE.SRGBColorSpace); };   // The user, 2026-11-09: "the characters skin needs little more warmth and pinkness")
 function buildHuman(R) {
-  const S = R.spec, c = S.colors, O = S.outfit, mats = [], texs = [], D = BUILDS[S.body.build] || BUILDS.chibi;
+  const S0 = R.spec, c = { ...S0.colors, skin: warmSkin(S0.colors.skin) }, S = { ...S0, colors: c }, O = S.outfit, mats = [], texs = [], D = BUILDS[S.body.build] || BUILDS.chibi;   // (S: the spec with that skin, for the face's painting too; R.skinC: the grown arm's)
+  R.skinC = c.skin;
   const col = v => v === "skin" ? c.skin : v === "hair" ? c.hair : v;
   const M = (k, extra) => { const m = toonT(col(k), extra); mats.push(m); return m; };
   const T = t => { texs.push(t); return settleTex(t); };   // (drawn once: kept as a bitmap, its canvas let go)
@@ -2058,6 +2080,15 @@ function climbPose(p, cat) {
 function dodgePose(p) {                            // the back-step (2026-10-25): leaning back into the hop, the guard up, knees drawn up a little, the front foot trailing (its keys: STRIKES.backstep)
   const D = p.dodge, fl = D.flip && STRIKES.backflip;   // (Rose's backflip, 2026-11-01: its keys over the time she's up, however long that is)
   return poseKeys(p, D.fwd ? "fwdslide" : fl ? "backflip" : "backstep", fl && D.T ? Math.min(1, (D.t || 0) / D.T) * STRIKES.backflip.dur : D.t || 0) || {};   // (or the slide forward: block + forward, 2026-10-31)
+}
+function ledgePose(p, T, cat) {                   // caught a ledge (the game's p.ledge, 2026-11-09): hanging from it by both hands, then up, the arms pressing down on its top and a knee up onto it, then stood
+  const L = p.ledge, pk = L.pull || 0, w = 1 - sstep(0, 1, L.over || 0), deep = L.low ? 0 : clamp(L.deep ?? 1, 0, 1), sw = Math.sin(api.time * 6) * .04 * (1 - pk);
+  const up = 1 - sstep(0, .75, pk), bend = Math.sin(Math.PI * clamp(pk / .8, 0, 1)), kn = sstep(.35, .9, pk);   // (up: the arms over her head; bend: the elbows as she hauls; kn: the near knee coming up over the top)
+  const arm = lerp(.35, L.low ? 1.3 : lerp(2.15, 2.85, deep), up), elb = lerp(.3, L.low ? .6 : lerp(1.25, .25, deep), up) + .9 * bend * deep;   // (deep: at her arms' length, straight up; higher, the elbows bent, her forearms over its edge; a low one: her hands down on it in front of her)
+  const P = { lean: lerp(.1, .5, sstep(.2, 1, pk)), arch: .05, bodyY: -.04 - .1 * sstep(.5, 1, pk), headRot: lerp(.25, -.05, pk), armF: arm, elbF: elb, armB: arm, elbB: elb, spF: .12, spB: .12,
+    fNx: .06 + sw + .32 * kn, fNy: .06 + .42 * kn, fFx: -.04 - sw, fFy: .03, fP: lerp(-.35, -.1, pk) };
+  if (cat) Object.assign(P, { tailBase: 1.1, tailCurl: .15, tailSwish: .2 * sw * 10 });
+  for (const k in P) T[k] = lerp(T[k] ?? 0, P[k], w);   // (into her standing pose as she steps over)
 }
 function zipPose(p) {                              // hanging from the zipline's trolley (the waves, 2026-10-25): both hands up on its bar, legs swinging a little under you
   const s = Math.sin(p.zipPh || 0);
@@ -2452,6 +2483,14 @@ const GA = {                                         // the arm's moves, by what
     keys: KZ([0, .12, .22, .34, .6], { armF: [-.3, .45, 1.6, 3.0, 2.2], elbF: [.1, .2, .3, .1, .3], spF: [.25, .3, .3, .2, .25], twist: [0, .1, -.1, -.32, -.05], lean: [.2, .44, .1, -.22, .05], bodyY: [-.12, -.38, -.12, 0, -.05], fNy: [0, 0, .2, .3, .1], fFy: [0, 0, .1, .2, .05] }, S) }),
   down: (S, z) => ({ dur: 1.1, grav: 1, dive: [.12 * S, 1000 + 100 * z], diveStill: true, landEnd: true, slamLand: true, quake: [9, z], sq: .1, sfx: "whoosh", hits: [GH(.1, 1.1, "smash", 1, { reach: 70 + 15 * z, back: 40 + 15 * z, y0: 60, y1: -80, wide: true })],   // ↓ in the air: fist first, straight down
     keys: KZ([0, .1, .2, 1.1], { armF: [1.0, 2.6, .25, .25], elbF: [.2, .3, .05, .05], spF: [.25, .2, .2, .2], lean: [0, -.2, .5, .5], arch: [0, -.2, .2, .2] }, S) }),
+  jab: (S, z) => ({ dur: .62 * S, chain: .5 * S, step: 130 + 30 * z, sq: .06, sfx: "whoosh", hits: [GH(.24, .38, "hook", S)],   // a big straight punch: drawn back, the elbow bent, and out straight in front at their height (the user, 2026-11-09: "can we give her a big arm big slow punching animations rather than slow swing animations?")
+    keys: KZ([0, .16, .26, .4, .62], { armF: [-.4, -.55, 1.5, 1.5, .9], elbF: [.1, 2.3, .05, .05, .3], spF: [.22, .36, .08, .08, .2], twist: [0, .25, -.28, -.32, -.05], lean: [.1, -.06, .42, .44, .2], bodyY: [-.12, -.2, -.25, -.25, -.14],
+      fNx: [.3, .28, .46, .46, .36], fFx: [-.35, -.38, -.55, -.55, -.42] }, S) }),
+  cross: (S, z) => ({ dur: .72 * S, chain: .6 * S, step: 200 + 40 * z, sq: .08, sfx: "whoosh", hits: [GH(.3, .45, "haymaker", S)],   // the second: drawn further back, her whole body turned into it
+    keys: KZ([0, .2, .3, .47, .72], { armF: [-.4, -.95, 1.55, 1.55, 1.0], elbF: [.1, 2.6, .02, .02, .25], spF: [.22, .46, .05, .05, .2], twist: [0, .48, -.46, -.5, -.1], lean: [.1, -.2, .6, .62, .3], bodyY: [-.12, -.28, -.3, -.3, -.16],
+      fNx: [.3, .26, .55, .55, .4], fFx: [-.35, -.4, -.64, -.64, -.45] }, S) }),
+  upper: (S, z) => ({ dur: .82 * S, chain: .68 * S, step: 100 + 20 * z, sq: .1, sfx: "whoosh", hits: [GH(.3, .46, "launch", S, { y0: 240, y1: -20 })],   // the last: down low, and up from under them: up they go
+    keys: KZ([0, .18, .3, .48, .82], { armF: [-.4, -.5, 2.0, 2.1, 1.2], elbF: [.1, 1.7, .95, .85, .3], spF: [.22, .3, .15, .15, .2], twist: [0, .22, -.3, -.32, 0], lean: [.1, .24, -.16, -.2, .2], bodyY: [-.12, -.34, -.04, -.02, -.14] }, S) }),
   haymaker: (S, z) => ({ dur: .6 * S, chain: .5 * S, step: 360 + 40 * z, sq: .08, sfx: "whoosh", hits: [GH(.26, .4, "haymaker", S)],   // charged: a step and the biggest swing she has (2026-11-02: cocked up behind her head where it shows, not low behind her)
     keys: KZ([0, .14, .22, .28, .36, .6], { armF: [-.5, 1.6, 2.9, 2.1, 1.6, 1.2], elbF: [.1, 1.3, 1.5, .5, .05, .2], spF: [.25, .45, .4, .4, .3, .25], twist: [0, .2, .35, -.1, -.5, -.2], lean: [.1, -.1, -.15, .35, .56, .35],
       bodyY: [-.12, -.14, -.12, -.26, -.33, -.2], fNx: [.3, .28, .26, .45, .56, .45], fFx: [-.35, -.37, -.4, -.55, -.62, -.5] }, S) }),
@@ -2530,8 +2569,9 @@ const GIANT_NAMES = {};
 [["gauntlet", "gg", GA], ["sword", "gs", GW]].forEach(([kind, pre, T]) => [1, 2, 3].forEach(z => {
   const S = GIANT_S[z], add = (name, st) => { const k = `${pre}${z + 1}_${name}`; STRIKES[k] = giantPace({ ...st, wsize: z, giant: kind }, z); GIANT_NAMES[k] = name; return k; };
   const A = kind === "gauntlet", one = n => add(n, T[n](S, z));
-  const set = z === 1 ? { ground: [one(A ? "hook" : "slash"), one("back"), one(A ? "slam" : "chop")] }
-    : z === 2 ? { ground: [one(A ? "scoop" : "rise"), one(A ? "slam" : "chop"), one("sweep")] }
+  const set = A ? { ground: [one("jab"), one("cross"), one("upper")] }   // (the gauntlet's: three big punches at every size, slower as it grows (GIANT_S); its swings, hook, backhand, slam, scoop, sweep and drag, till 2026-11-09)
+    : z === 1 ? { ground: [one("slash"), one("back"), one("chop")] }
+    : z === 2 ? { ground: [one("rise"), one("chop"), one("sweep")] }
     : { ground: [one("drag"), one("sweep")] };
   set.groundB = z === 1 ? [add(A ? "haymaker_b" : "thrust_b", (A ? T.haymaker : T.thrust)(S, z)), set.ground[1], set.ground[2]] : z === 2 ? [add(A ? "rocket_b" : "thrust_b", (A ? T.rocket : T.thrust)(S, z)), set.ground[1]] : [set.ground[0], set.ground[1]];
   set.air = set.air1 = z < 3 ? [one("airSwing"), one(A ? "airHammer" : "airChop")] : [one(A ? "airHammer" : "airChop")];
@@ -3220,7 +3260,7 @@ function strikeLegs(p, T, ST, S, a) {             // true: in the air, the move'
 }
 const POSE_W = { headRot: 13, tailBase: 9, tailCurl: 9, tailSwish: 9, hatLift: 13, bodyY: 22, arch: 20, twist: 20, twistU: 20, twistH: 20, wrist: 22 };   // how quickly each part follows (the rest at 26): the head and tail trail the body a beat
 function smoothPose(p, T, dt) {
-  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb) || !!p.upHop || p.heaveK > 0;   // (the crouch and jump up after a launch too: quick, or the crouch never shows)   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
+  const k = 1 - Math.exp(-dt * 16), hit = p.atkT >= 0 || !!(p.climb && p.climb.wallClimb) || !!p.upHop || p.heaveK > 0 || !!p.ledge;   // (the crouch and jump up after a launch too: quick, or the crouch never shows)   // (a ledge caught: her hands up on it at once, 2026-11-09)   // (up a rock wall too: her punches land, 2026-10-27)   // (mid-swing the limbs land on their keys, not trailing and wobbling after them: the user, 2026-10-26, "remove the sort of spacey, doughy feel of their animations and how they contact against enemies")
   for (const key in T) {
     if (p.pose[key] === undefined) p.pose[key] = T[key];
     if (SPRUNG.has(key)) {
@@ -3293,6 +3333,7 @@ function updatePoseHuman(p, dt) {
   else if (p.sit && p.chair) { Object.assign(T, { bodyY: -.3, fNx: .3, fFx: .25 });   // (in a chair, 2026-10-27: sat up higher than on a log, the feet under the knees)
     const gA = giantOf(p) > .3 && p.rig.prop && p.rig.prop.kind === "gauntlet" ? (leadFar(p) ? "B" : "F") : null;   // (the grown arm: down off the side of it, giantArm)
     ["F", "B"].forEach(k => { if (k !== gA) Object.assign(T, { ["arm" + k]: .12, ["elb" + k]: 1.45, ["sp" + k]: .34 }); }); }   // (her own hands on its arms, the elbow down on it and the forearm along it: the user, 2026-11-05: "when camila sits down to rest on the chair, have her properly sit. her big arm should go off the side but the other shouldbe at an arm rest")
+  else if (p.ledge) ledgePose(p, T, false);   // caught a ledge, pulling up onto it
   else if (p.zip) Object.assign(T, zipPose(p));   // down the zipline, hanging from its trolley
   else if (p.dodge && p.atkT < 0) Object.assign(T, dodgePose(p));   // the back-step: a hop back behind the guard
   else if (p.climb) Object.assign(T, climbPose(p, false));   // sitting on a stump or a rock, taking in the view
@@ -3470,6 +3511,7 @@ function updatePoseCat(p, dt) {
   const T = { ...POSE0 }, t = api.time, sp = Math.abs(p.vx), m = p.rig.spec.move, Bd = p.rig.spec.body;
   if (p.sit) Object.assign(T, { lean: .05, arch: .1, bodyY: -.36, armF: .55, elbF: 1.0, armB: .45, elbB: 1.0, fNx: .3, fFx: .24, fP: .35, tailBase: .5, tailCurl: .35, tailSwish: .25, headRot: .08 });
   else if (p.climb) Object.assign(T, climbPose(p, true));   // sat down, tail curled round
+  else if (p.ledge) ledgePose(p, T, true);   // (caught a ledge)
   else if (p.dodge && p.atkT < 0) Object.assign(T, poseKeys(p, "backstep", p.dodge.t || 0) || {});   // his back-step (CAT_MOVES.backstep)
   else if (p.hurtT > 0) Object.assign(T, { lean: -.35, arch: -.2, armF: 2.6, elbF: .4, armB: 2.2, fNx: .15, fNy: .2, fFx: -.1, fFy: .1, tailBase: 1.9, tailCurl: .1, hatLift: .1, hatTilt: -.3 }), layPose(T, m.hurt, p);
   else if (p.atkT >= 0 && !(p.atkKind && CAT_MOVES[p.atkKind])) {
@@ -3902,8 +3944,8 @@ function syncHuman(p, r, dt = 0) {
     r.hands[i].visible = !(pr && pr.hideHand && s === propS);
     if (gArm) { t.mesh.visible = s !== propS; if (s === propS) giantArm(p, r, s, _S, _E, _W, D); }   // grown: its own arm in place of hers
     if (pr && s === propS) {                                          // the prop hand
-      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { const op = !!pr.open && s === propS && (p.palm || 0) > .5; pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk + wb; pr.wr.rotation.y = -near * GAUNT.turn * fk + (op ? Math.PI : 0); pr.thumbs[0].visible = !op && s < 0; pr.thumbs[1].visible = !op && s > 0;
-        if (pr.open) { pr.open.visible = op; pr.curl.visible = !op; pr.openT[0].visible = op && s > 0; pr.openT[1].visible = op && s < 0; }   // (the hand open, palm out: p.palm, the game's heroine shot, 2026-11-04)
+      pr.group.position.copy(_W).add(_fd.set(0, 0, s * .02)); pr.group.quaternion.setFromEuler(_ae.set(0, 0, fa)).premultiply(qa); pr.group.scale.setScalar(D.prop * r.spec.outfit.prop.size * (1 + st * .1)); if (pr.fist) { const op = !!pr.open && s === propS && (p.palm || 0) > .5; pr.fist.scale.setScalar(gr); pr.fist.rotation.z = GAUNT.flex * fk + wb; pr.wr.rotation.y = op ? -near * GAUNT.turn * fk + Math.PI : s * GAUNT.turn * fk; pr.thumbs[0].visible = !op && s < 0; pr.thumbs[1].visible = !op && s > 0;   // (the fist turned the same way on her arm whichever way she faces: its palm side seen from the far side, the back of the hand with its orb from the near side. It was turned to the camera both ways, palm out on the near side, the user, 2026-11-09: "revisit camilas in game model fist with the gauntlet. it looks backwards?")
+        if (pr.open) { const tb = !!p.palmBack; pr.open.visible = op; pr.curl.visible = !op; pr.openT[0].visible = op && (s > 0) !== tb; pr.openT[1].visible = op && (s < 0) !== tb; }   // (the hand open, palm out: p.palm, the game's heroine shot, 2026-11-04) (p.palmBack: its back up instead, at her desk, so its thumb goes over to the other side, in by the page. The user, 2026-11-09: "in the sketchbook cutscene, her gauntlet arm has the fist on the wrong side")
         if (pr.spikeAim && pr.spikeSide !== s) { pr.spikeSide = s; pr.spikeAim.forEach(k => { k.sp.position.z = s * k.z; k.aim.quaternion.copy(k.q[s > 0 ? 1 : 0]); }); } }   // (the knuckle spikes: over to the thumb's side)
       if (pr.inner) { pr.inner.rotation.z = (o.wrist ?? -.6) + wristFix; pr.inner.rotation.x = o.roll || 0; if (pr.kind === "sword") giantSword(p, r, pr, s); }
       if (gArm) pr.group.visible = false;

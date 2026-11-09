@@ -413,7 +413,7 @@ window.BerryClayRoom = (function () {
         K.mesh(K.lumpify(new T.CapsuleGeometry(.36, Math.max(.1, w - .72), K.sg(6, 3), K.sg(20, 8)).rotateZ(Math.PI / 2), .02, 3, 70 + i), "#9a5a2e", cx, p.top - .36, 0);
         for (let x = p.xa + .6; x < p.xb - .5; x += .7) K.mesh(new T.TorusGeometry(.37, .04, K.sg(6, 3), K.sg(20, 8)).rotateY(Math.PI / 2), "#7a4220", x, p.top - .36, 0);
       } else { K.grassSlab(p.xa, p.xb, p.top, -1.3, 1.3, .45, 30 + i + sd);
-        K.mesh(K.lumpify(K.rbox(Math.max(.6, w - .3), 1.05, 2.2, .35, K.step(w, .18), K.sg(7, 4), K.sg(9, 4)), .06, 1.3, 40 + i), P.soil, cx, p.top - .95, 0); } });
+        K.mesh(K.lumpify(K.rbox(Math.max(.6, w - .3), 1.05, 1.15, .35, K.step(w, .18), K.sg(7, 4), K.sg(9, 4)), .06, 1.3, 40 + i), P.soil, cx, p.top - .95, -.78); } });   // (its soil set back behind the path, 1.15 deep at z -.78 (was 2.2 at 0): walking under it her head came up behind its face, cut off, the user, 2026-11-09: "there's a weird overlap and shadow when she goes over certain platforms")
     gather(T, K.W, near);
     // far off (made once a room's width and row, kept): the clouds, the pressed hills (round the woods' own ground, bgY; under the treetops, lower)
     const ks = Math.round(WX), bx0 = -34, bx1 = WX + 34, farG = new T.Group(); farG.name = "clayFar";
@@ -600,18 +600,19 @@ window.BerryClayRoom = (function () {
         else if (live) { g.applyMatrix4(new T.Matrix4().copy(m.matrixWorld).invert()); g.computeVertexNormals(); }
       }
       const cast = o.cast ? o.cast(m, cen, size, thick) : (cen.z > -11 && size > .8 && Math.min(thin, thick) > .3);   // (thin things (a vine, a rope, a spike) cast no clay shadow: on themselves they'd only speckle)
+      const recv = !cast && o.recv != null && cen.z > -11 && sz.y < .3 && Math.max(sz.x, sz.z) > 1;   // (a floor too thin to cast, the beach's sand under its slabs: in the creases' depth all the same (o.recv, a layer of its own, not the sun's). Left out, the creases saw through it where it showed between the slabs' lumps, dark blotches and lines over the sand)
       stats.n++; stats.tris += g.index.count / 3;
       if (live) { olds.add(m.geometry); olds.add(m.material); m.geometry = g; m.material = o.each ? Object.assign(o.toon("#ffffff"), { vertexColors: true, side }) : matOf(side); m.userData.keepMat = !o.own && !o.each;   // (each: its own, for a piece the game may tint (a door's hole as it opens): on the shared one it'd tint the room)
         if (g.userData.clayShared) m.userData.keepGeo = true;
-        m.userData.clayDone = true; if (cast) m.layers.enable(layer); m.castShadow = m.receiveShadow = false; }
-      else { const k = (cast ? "c" : "n") + side; (merged.get(k) || merged.set(k, []).get(k)).push(g); m.userData.clayGone = true; olds.add(m.geometry); olds.add(m.material); }
+        m.userData.clayDone = true; if (cast) m.layers.enable(layer); else if (recv) m.layers.enable(o.recv); m.castShadow = m.receiveShadow = false; }
+      else { const k = (cast ? "c" : recv ? "r" : "n") + side; (merged.get(k) || merged.set(k, []).get(k)).push(g); m.userData.clayGone = true; olds.add(m.geometry); olds.add(m.material); }
     }
     if (merged.size) { const gone = []; root.traverse(m => { if (m.userData.clayGone) gone.push(m); }); gone.forEach(m => { const p = m.parent; if (!p) return; [...m.children].forEach(c => p.attach(c)); p.remove(m); }); }   // (its own kept bits (a lamp's glow) left where they were)
     root.traverse(m => { if (m.isMesh || m.isPoints || m.isLine) { olds.delete(m.geometry); (Array.isArray(m.material) ? m.material : [m.material]).forEach(q => olds.delete(q)); } });   // (what's no longer drawn freed: three makes it again if it's ever drawn elsewhere)
     olds.forEach(q => { if (!q || q.userData && q.userData.clayShared) return; if (q.isMaterial) { if (q.map && !o.keepTex) q.map.dispose(); } q.dispose(); });
     if (merged.size) {
       merged.forEach((gs, k) => { const geo = gs.length === 1 ? gs[0] : o.mergeGeometries(gs, false); if (gs.length > 1) gs.forEach(q => q.dispose()); if (!geo) return; geo.computeBoundingSphere();
-        const mm = new T.Mesh(geo, matOf(+k[1])); mm.userData.keepMat = !o.own; mm.userData.clayDone = true; if (k[0] === "c") mm.layers.enable(layer); root.add(mm); }); }
+        const mm = new T.Mesh(geo, matOf(+k[1])); mm.userData.keepMat = !o.own; mm.userData.clayDone = true; if (k[0] === "c") mm.layers.enable(layer); else if (k[0] === "r") mm.layers.enable(o.recv); root.add(mm); }); }
     return stats; }
   function clouds(T, o) {   // the clay sky's clouds for a room built by its own world (the beach, the waves): far off, the same along the world
     const ks = Math.round(o.W), g = new T.Group(); g.name = "clayClouds"; g.position.y = o.y ?? 0;

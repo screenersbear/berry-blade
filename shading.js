@@ -56,38 +56,41 @@ window.BerryShading = (() => {
     mkClay: { value: 0 }, mkClayF: { value: 3 }, mkClayB: { value: 1 }, mkClayD: { value: 0 },
     mkClayK: { value: 1 }, mkClayFl: { value: 1 }, mkClayW: { value: .3 }, mkClayS: { value: 0 }, mkClayG: { value: 1 }, mkClayFog: { value: 1 }, mkClayBo: { value: 0 }, mkClayPP: { value: 0 }, mkClayPF: { value: 4 }, mkClaySh: { value: 1 },   // (clay's light: the key (the sun), the fill (the sky), how far the key wraps round, the sheen, the grain, how much of the fog)
     mkShOn: { value: 0 }, mkShT: { value: null }, mkShM: { value: null }, mkShR: { value: .001 }, mkShB: { value: .0005 },   // (clay's shadows: the characters' depth seen from the sun, set each frame by the game (clayPre))
-    mkAoOn: { value: 0 }, mkAoE: { value: 0 }, mkAoT: { value: null }, mkAoPx: { value: null }, mkAoN: { value: .1 }, mkAoF: { value: 300 }, mkAoFoc: { value: 1000 }, mkAoR: { value: .14 }, mkAoI: { value: 1.5 } });   // (and its creases: the characters' depth from the camera)
+    mkAoOn: { value: 0 }, mkAoE: { value: 0 }, mkAoT: { value: null }, mkAoPx: { value: null }, mkAoN: { value: .1 }, mkAoF: { value: 300 }, mkAoFoc: { value: 1000 }, mkAoR: { value: .14 }, mkAoI: { value: 1.5 }, mkXtraI: { value: 0 } });   // (and its creases: the characters' depth from the camera)
   // CLAY (pause > DEBUG > CLAY LOOK, the user 2026-11-08: "yes let's do the clay debug shader to see", after the clay mockup in mockups/clay): everything pressed out of
   // modelling clay. The surface: dents, smears, grain and pokes bent into the normal (a bump with no texture: the height's change across the pixel); the light soft, with
   // no toon steps, the dents a touch darker, a soft sheen; and the shapes a little lumpy. The lumps move space itself (the same point, the same push), not along each
   // face's normal, so the scenery's faceted meshes don't split at their edges. A character's clay is its own (object space: it goes along with her), the scenery's the world's
   const VERT_CLAY = `
- if (mkClay > .5 && mkClayD > 0.0) { vec3 cs = vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz)), cw = (mkTexObj > .5 ? transformed * cs : (modelMatrix * vec4(transformed, 1.0)).xyz) * mkClayF * .45;
-   vec3 co = (vec3(mkVN(cw), mkVN(cw + 17.3), mkVN(cw + 41.7)) * 2.0 - 1.0) * mkClayD; transformed += mkTexObj > .5 ? co / max(cs, vec3(1e-4)) : inverse(mat3(modelMatrix)) * co; }
+ vec3 mkDv = vec3(0.0); if (mkClay > .5 && mkClayD > 0.0) { vec3 cs = vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz)), cw = (mkTexObj > .5 ? transformed * cs : (modelMatrix * vec4(transformed, 1.0)).xyz) * mkClayF * .45;
+   vec3 co = (vec3(mkVN(cw), mkVN(cw + 17.3), mkVN(cw + 41.7)) * 2.0 - 1.0) * mkClayD; mkDv = mkTexObj > .5 ? co / max(cs, vec3(1e-4)) : inverse(mat3(modelMatrix)) * co; transformed += mkDv; }
 `;
-  const VERT = `varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO; varying vec3 vMkON; uniform float mkClay, mkClayF, mkClayD, mkTexObj;
+  const VERT = `varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO; varying vec3 vMkON; varying float vMkZ0; uniform float mkClay, mkClayF, mkClayD, mkTexObj;
 float mkVH(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float mkVN(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(mkVH(i), mkVH(i + vec3(1.0, 0.0, 0.0)), f.x), mix(mkVH(i + vec3(0.0, 1.0, 0.0)), mkVH(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
              mix(mix(mkVH(i + vec3(0.0, 0.0, 1.0)), mkVH(i + vec3(1.0, 0.0, 1.0)), f.x), mix(mkVH(i + vec3(0.0, 1.0, 1.0)), mkVH(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z); }
-`, VERT_MAIN = `\n vMkW = (modelMatrix * vec4(transformed, 1.0)).xyz; vMkN = normalize(mat3(modelMatrix) * objectNormal); vMkO = transformed * vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz)); vMkON = objectNormal;\n`;   // (vMkO: where on the part itself, at its size in the world: a texture on a character that goes along with it, not one it walks through)
+`, VERT_MAIN = `\n vMkW = (modelMatrix * vec4(transformed, 1.0)).xyz; vMkN = normalize(mat3(modelMatrix) * objectNormal); vMkO = transformed * vec3(length(modelMatrix[0].xyz), length(modelMatrix[1].xyz), length(modelMatrix[2].xyz)); vMkON = objectNormal; vMkZ0 = (modelViewMatrix * vec4(mkDv, 0.0)).z - mvPosition.z;\n`;   // (vMkO: where on the part itself, at its size in the world: a texture on a character that goes along with it, not one it walks through) (vMkZ0: how far off the surface is without the clay's lumps, the creases' own measure: their depth is drawn without them, so a dent read as a deep crease, dark patches over the beach sand)
   const FRAG = `uniform float mkOn, mkInfl, mkRampOn, mkSteps, mkSoft, mkTintOn, mkTintStr, mkRimOn, mkRimW, mkRimI, mkAOOn, mkAOStr, mkTopOn, mkTopStr, mkSpecOn, mkSpecI, mkSat, mkCon, mkGround, mkTexOn, mkTexStr, mkTexObj, mkSpecSz, mkTexLate;
-uniform vec3 mkTint, mkRimC; varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO; varying vec3 vMkON;
+uniform vec3 mkTint, mkRimC; varying vec3 vMkW; varying vec3 vMkN; varying vec3 vMkO; varying vec3 vMkON; varying float vMkZ0;
 float mkHash(vec3 p) { p = fract(p * .3183099 + .1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float mkNoise(vec3 x) { vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(mix(mkHash(i), mkHash(i + vec3(1.0, 0.0, 0.0)), f.x), mix(mkHash(i + vec3(0.0, 1.0, 0.0)), mkHash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
              mix(mix(mkHash(i + vec3(0.0, 0.0, 1.0)), mkHash(i + vec3(1.0, 0.0, 1.0)), f.x), mix(mkHash(i + vec3(0.0, 1.0, 1.0)), mkHash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z); }
 float mkRamp(float x) { float s = max(mkSteps, 1.0), y = x * s, f = floor(y), w = max(mkSoft, .001) * .5; return clamp((f + smoothstep(.5 - w, .5 + w, y - f)) / s, 0.0, 1.0); }
-uniform float mkClayBo, mkClayPP, mkClayPF, mkClaySh, mkAoE; uniform float mkClay, mkClayF, mkClayB, mkClayK, mkClayFl, mkClayW, mkClayS, mkClayG, mkClayFog, mkShOn, mkShR, mkShB, mkAoOn, mkAoN, mkAoF, mkAoFoc, mkAoR, mkAoI;
-uniform sampler2D mkShT, mkAoT; uniform mat4 mkShM; uniform vec2 mkAoPx;
-float mkShadow(vec3 w) { vec3 q = (mkShM * vec4(w, 1.0)).xyz * .5 + .5; if (q.x <= 0.0 || q.x >= 1.0 || q.y <= 0.0 || q.y >= 1.0 || q.z >= 1.0) return 1.0;   // CLAY's shadows: 16 looks round a soft disc in the sun's depth of the characters
-  float e = 0.0; for (int i = 0; i < 4; i++) { float a = float(i) * 1.5708 + .785; e += step(q.z - mkShB, texture2D(mkShT, q.xy + vec2(cos(a), sin(a)) * mkShR).r); }   // (four round the edge first: all lit or all dark, done; most of the screen is)
+uniform float mkClayBo, mkClayPP, mkClayPF, mkClaySh, mkAoE; uniform float mkClay, mkClayF, mkClayB, mkClayK, mkClayFl, mkClayW, mkClayS, mkClayG, mkClayFog, mkShOn, mkShR, mkShB, mkAoOn, mkAoN, mkAoF, mkAoFoc, mkAoR, mkAoI, mkXtraI;
+uniform highp sampler2D mkShT, mkAoT; uniform mat4 mkShM; uniform vec2 mkAoPx;   // (highp: left to their default the depth maps read at low precision, and on a Mac or an iPhone the beach came back in depth steps over a unit apart, bands and blotches of crease over the sand. The user, 2026-11-09: "the shadows on the ground look a little streaky like a lot of lines next to each other on the beach.")
+float mkShadow(vec3 w) { vec3 q = (mkShM * vec4(w, 1.0)).xyz * .5 + .5; vec3 qx = dFdx(q), qy = dFdy(q);   // (its slope across the screen, before any early way out)
+  if (q.x <= 0.0 || q.x >= 1.0 || q.y <= 0.0 || q.y >= 1.0 || q.z >= 1.0) return 1.0;   // CLAY's shadows: 16 looks round a soft disc in the sun's depth of the characters
+  float dt = qx.x * qy.y - qy.x * qx.y; vec2 dz = abs(dt) > 1e-14 ? vec2(qy.y * qx.z - qx.y * qy.z, qx.x * qy.z - qy.x * qx.z) / dt : vec2(0.0);   // (the surface's own depth slope in the sun's view: each look round the disc compared with the surface there, not with this point's depth, so a slope doesn't shade itself in stripes)
+  float rot = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715))));   // (the looks turned a different way each pixel: their fixed pattern laid lines through every soft edge; now a fine grain. The user, 2026-11-09: "the shadows on the ground look a little streaky like a lot of lines next to each other on the beach.")
+  float e = 0.0; for (int i = 0; i < 4; i++) { float a = float(i) * 1.5708 + .785 + rot; vec2 o = vec2(cos(a), sin(a)) * mkShR; e += step(q.z + clamp(dot(dz, o), -.004, .004) - mkShB, texture2D(mkShT, q.xy + o).r); }   // (four round the edge first: all lit or all dark, done; most of the screen is)
   if (e < .5 || e > 3.5) return e * .25;
-  float s = 0.0; for (int i = 0; i < 16; i++) { float r = sqrt((float(i) + .5) / 16.0), a = float(i) * 2.39996; s += step(q.z - mkShB, texture2D(mkShT, q.xy + vec2(cos(a), sin(a)) * r * mkShR).r); }
+  float s = 0.0; for (int i = 0; i < 16; i++) { float r = sqrt((float(i) + .5) / 16.0), a = float(i) * 2.39996 + rot; vec2 o = vec2(cos(a), sin(a)) * r * mkShR; s += step(q.z + clamp(dot(dz, o), -.004, .004) - mkShB, texture2D(mkShT, q.xy + o).r); }
   return s / 16.0; }
 float mkLinZ(float d) { return mkAoN * mkAoF / (mkAoF - d * (mkAoF - mkAoN)); }
-float mkCrease(float z, float I) { vec2 uv = gl_FragCoord.xy * mkAoPx, dz = clamp(vec2(dFdx(z), dFdy(z)), -.04, .04); float rp = clamp(mkAoR * mkAoFoc / z, 2.0, 48.0), o = 0.0;   // CLAY's creases: round this pixel, how much of the characters stands nearer than its own surface would (the slope taken out)
-  for (int i = 0; i < 8; i++) { float a = float(i) * .785398 + .39; vec2 d = vec2(cos(a), sin(a)) * rp * (mod(float(i), 2.0) < .5 ? 1.0 : .5); float e = z + dot(dz, d) - mkLinZ(texture2D(mkAoT, uv + d * mkAoPx).r);
+float mkCrease(float z, vec2 dz0, float I) { vec2 dz = clamp(dz0, -.12, .12); if (mkTexObj < .5) { vec2 h0 = floor(gl_FragCoord.xy * .5); z = mkLinZ(texelFetch(mkAoT, ivec2(h0), 0).r) + dot(dz, gl_FragCoord.xy - (h0 + .5) * 2.0); } float rp = clamp(mkAoR * mkAoFoc / z, 2.0, 48.0), o = 0.0;   // CLAY's creases: round this pixel, how much of the characters stands nearer than its own surface would (the slope taken out) (the slope followed to .12 a pixel, was .04: a floor seen low was still steeper than that) (the scenery's own depth read from that same copy, not its own: measured apart, the sand came out a little off it in patches, dark blotches and streaks under everyone on the beach)
+  for (int i = 0; i < 8; i++) { float a = float(i) * .785398 + .39; vec2 d = vec2(cos(a), sin(a)) * rp * (mod(float(i), 2.0) < .5 ? 1.0 : .5), h = floor((gl_FragCoord.xy + d) * .5), c = (h + .5) * 2.0; float e = z + dot(dz, c - gl_FragCoord.xy) - mkLinZ(texelFetch(mkAoT, ivec2(h), 0).r);   // (each look at the half-size depth's own pixel and the ground's slope carried to just there: read in between, a tilted floor came out up to a pixel off in each pair of rows, rows of dark lines across the beach. The user, 2026-11-09: "the shadows on the ground look a little streaky like a lot of lines next to each other on the beach.")
     o += smoothstep(.012, .07, e) * (1.0 - smoothstep(mkAoR * 2.5, mkAoR * 5.0, e)); }
   return 1.0 - I * o / 8.0; }
 float mkClayH(vec3 q) { float h = (mkNoise(q * 1.1) - .5) * 1.1 + (mkNoise(q * 2.3 + 5.0) - .5) * .55;   // (broad dents and thumb smears)
@@ -95,16 +98,13 @@ float mkClayH(vec3 q) { float h = (mkNoise(q * 1.1) - .5) * 1.1 + (mkNoise(q * 2
   h += ((mkNoise(q * 7.0) - .5) * .14 + (mkNoise(q * 17.0) - .5) * .06) * mkClayG;   // (grain)
   return h - smoothstep(.72, .92, mkNoise(q * 3.6 + 40.0)) * .3; }   // (little pokes)
 vec2 mkPrints(vec3 q, vec3 n) {   // CLAY's marks: fingerprint swirls (a few rings pressed in, here and there) and pores, on the face of the part that's most square to it; x: the height, y: how much darker
-  vec3 a = abs(n); vec2 p = a.x > a.y && a.x > a.z ? q.yz : a.y > a.z ? q.xz : q.xy; vec2 i = floor(p), f = fract(p); float r = 0.0;
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) { vec2 g = vec2(float(x), float(y)); float k = mkHash(vec3(i + g, 3.7));
-    if (k > .74) { vec2 c = g + .2 + vec2(mkHash(vec3(i + g, 9.1)), mkHash(vec3(i + g, 5.3))) * .6; float rad = .24 + (k - .74) * .4, t = length(c - f) / rad;
-      if (t < 1.0) r = max(r, (.5 + .5 * cos(t * 18.85)) * (1.0 - t * t)); } }
+  vec3 a = abs(n); vec2 p = a.x > a.y && a.x > a.z ? q.yz : a.y > a.z ? q.xz : q.xy; float r = 0.0;   // (no fingerprint swirls any more, just the pores: the user, 2026-11-09 "can we remove the swirls on the textures?" On the ground, seen low, their rings were rows of lines: "the shadows on the ground look a little streaky like a lot of lines next to each other")
   float po = smoothstep(.82, .95, mkNoise(vec3(p * 7.0, 1.3)));   // (pores: few, small, a little darker, hardly any depth: deep ones read as dirt)
   return vec2(-(r * .2 + po * .1), r * .04 + po * .08) * mkClayPP; }
 vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = dFdy(sp), r1 = cross(sy, sn), r2 = cross(sn, sx); float det = dot(sx, r1) * fd; return normalize(abs(det) * sn - sign(det) * (dH.x * r1 + dH.y * r2)); }
 `;
   const FRAG_MAIN = `
-  { vec3 mkBase = outgoingLight, mkAlb = diffuseColor.rgb, mkN = normalize(normal), mkV = normalize(vViewPosition), mkNW = normalize(vMkN);
+  { vec2 mkZd = vec2(dFdx(vMkZ0), dFdy(vMkZ0)); vec3 mkBase = outgoingLight, mkAlb = diffuseColor.rgb, mkN = normalize(normal), mkV = normalize(vViewPosition), mkNW = normalize(vMkN);
     vec3 mkL = vec3(0.0, 1.0, 0.0), mkSun = vec3(0.0); vec3 mkHemi = vec3(0.0);
     #if NUM_DIR_LIGHTS > 0
       mkL = directionalLights[0].direction; mkSun = directionalLights[0].color;
@@ -116,7 +116,7 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
     vec3 mkLit = mkRampOn > .5 ? mkAlb * (mkSun * mix(.5, 1.0, mkR) + mkHemi) * RECIPROCAL_PI + totalEmissiveRadiance : mkBase;   // (stepped: the sun in bands over the sky's fill; its shadow band keeps half the sun, as the game's own ramp keeps .71)
     if (mkClay > .5) { vec3 cq = mkTexObj > .5 ? vMkO : vMkW; float ch = mkClayH(cq * mkClayF); vec2 cp = mkClayPP > 0.0 ? mkPrints(cq * mkClayPF, mkTexObj > .5 ? vMkON : vMkN) : vec2(0.0); ch += cp.x;   // CLAY: the bent normal; one warm key light (the sun) that wraps a little round, its shadows; the sky's fill; the creases and dents darker; a soft sheen
       mkN = mkClayBend(-vViewPosition, mkN, vec2(dFdx(ch), dFdy(ch)) * mkClayB * .02, faceDirection);
-      float sh = mkShOn > .5 ? mkShadow(vMkW + mkNW * (mkTexObj > .5 ? .04 : .14)) : 1.0, ao = mkAoOn > .5 && (mkTexObj > .5 || mkAoE > 0.0) ? mkCrease(vViewPosition.z, mkTexObj > .5 ? mkAoI : mkAoE) : 1.0;
+      float sh = mkShOn > .5 ? mkShadow(vMkW + mkNW * (mkTexObj > .5 ? .04 : .14)) : 1.0, ao = mkAoOn > .5 && (mkTexObj > .5 || mkAoE > 0.0) ? mkCrease(vMkZ0, mkZd, mkTexObj > .5 ? mkAoI : mkAoE) : 1.0;
       sh = mix(1.0 - mkClaySh, 1.0, sh);   // (a character's own shadows, half: her hair kept the whole of her face dark)
       float cl = clamp((dot(mkN, mkL) + mkClayW) / (1.0 + mkClayW), 0.0, 1.0); cl = cl * cl * (3.0 - 2.0 * cl) * sh; vec3 chm = mkHemi;
       #if NUM_HEMI_LIGHTS > 0
@@ -124,7 +124,11 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
       #endif
       float cf = mkTexObj > .5 ? max(dot(mkN, vec3(.33, .19, .92)), 0.0) * .22 : 0.0;   // (and on the characters a soft front light from beside the camera, as the mockup's, so faces read)
       mkR = cl; mkLit = mkAlb * (mkSun * (cl * mkClayK * mix(1.0, ao, .6) + cf * ao) + chm * mkClayFl * ao) * RECIPROCAL_PI * (1.0 - clamp(-ch * .5, 0.0, .3)) * (1.0 - cp.y) + totalEmissiveRadiance;
-      mkLit += mkSun * pow(max(dot(mkN, normalize(mkL + mkV)), 0.0), 10.0) * mkClayS * sh * (.4 + .6 * mkAlb) + chm * mkAlb * pow(1.0 - max(dot(mkN, mkV), 0.0), 3.0) * .06 * ao; }
+      mkLit += mkSun * pow(max(dot(mkN, normalize(mkL + mkV)), 0.0), 10.0) * mkClayS * sh * (.4 + .6 * mkAlb) + chm * mkAlb * pow(1.0 - max(dot(mkN, mkV), 0.0), 3.0) * .06 * ao;
+      #ifdef MK_XTRA
+        mkLit += mkXtra * mkXtraI * mix(1.0, ao, .6) * (mkTexObj > .5 ? .4 : 1.0);   // (a spotlight's own light too, where a scene asks for it (mkXtraI): the moon in at her room's window. The clay light was the sun and the sky alone) (on the characters a little of it: in bands on her face it took the warmth out of her skin)
+      #endif
+    }
     if (mkTintOn > .5) { float l = max(dot(mkTint, vec3(.299, .587, .114)), .05); vec3 tc = mkTint / l * .82; mkLit = mix(mkLit, mkLit * tc, (1.0 - mkR) * mkTintStr); }   // (the shadow side shifted toward the tint, not greyed)
     vec3 mkFlat = mkAlb * 1.05 + totalEmissiveRadiance;
     vec3 c = mix(mkFlat, mkLit, mkInfl); float mkTm = 1.0; vec3 mkTs = vec3(0.0);
