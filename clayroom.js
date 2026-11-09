@@ -592,7 +592,8 @@ window.BerryClayRoom = (function () {
         const pf = o.prof, t0 = pf ? performance.now() : 0;
         const S = soup(T, m.geometry, shareK ? new T.Matrix4().makeScale(sc.x, sc.y, sc.z) : M4, mt, colOf, o.vcolOf); if (S.tri.length < 3) { stats.kept++; continue; }
         thick = thickOf(S); const t1 = pf ? performance.now() : 0;
-        tess(S, E, cap, shareK ? null : o.win); const t2 = pf ? performance.now() : 0; round(S, Math.min(.16, thin * .3 + .01) * (o.round ?? 1), size < .4 ? 2 : 3); const t3 = pf ? performance.now() : 0;
+        tess(S, lod < 1 ? E * 1.41 : E, cap, shareK ? null : o.win);   // (the light clay: cuts √2 longer, as the grids' doubling overshoots its share about twice)
+        const t2 = pf ? performance.now() : 0; round(S, Math.min(.16, thin * .3 + .01) * (o.round ?? 1), size < .4 ? 2 : 3); const t3 = pf ? performance.now() : 0;
         g = geoOf(T, S); press(g, Math.min(.07, .012 + size * .012) * (o.amp ?? 1), (o.freq ?? 1.5) / (1 + far / 10), shareK ? 0 : ox, o.seed ?? 3);
         if (pf) { const t4 = performance.now(); pf.soup = (pf.soup || 0) + t1 - t0; pf.tess = (pf.tess || 0) + t2 - t1; pf.round = (pf.round || 0) + t3 - t2; pf.geo = (pf.geo || 0) + t4 - t3; pf.n = (pf.n || 0) + 1; pf.tri = (pf.tri || 0) + S.tri.length / 3; }
         if (shareK) { g.scale(1 / sc.x, 1 / sc.y, 1 / sc.z); g.computeVertexNormals(); g.userData.clayShared = true; g.userData.thick = thick; SHAREC.set(shareK, g); }
