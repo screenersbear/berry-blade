@@ -1268,7 +1268,9 @@ let camZoom = 1; const ZOOM_V = new THREE.Vector3();   // (a room zoomed out, BA
 const SIL_FOG = new THREE.Fog("#3a2c34", 0, 40);    // (BA4's team "almost silhouetted": the characters' pass fogged dark, a trace of their colours left; they shade without the lights, so dimming those can't do it)
 function actorFog() { const q = STAGES[stage]; if (!q || !q.sil || camZoom < 1.003 || hideout || arena || stronghold) return scene.fog;
   const d = camera.getWorldDirection(ZOOM_V), t = -camera.position.z / Math.min(-.05, d.z); SIL_FOG.far = t / Math.max(.02, .86 * clamp((camZoom - 1) / .8, 0, 1)); return SIL_FOG; }   // (as dark as the zoom is out: none of it on the way in)
-const zoomWant = () => (mode === "play" && !hideout && !arena && !stronghold && STAGES[stage] && (STAGES[stage].zoom || tbZoom() || peekZoom())) || 1;   // (tbZoom: the beach's B7, out as you near its gap)
+const zoomWant = () => (mode === "play" && !hideout && !arena && !stronghold && STAGES[stage] && (zoneZoom(STAGES[stage]) || tbZoom() || peekZoom())) || 1;
+const zoneZoom = S => S.zoom && (!S.zoomAt || (player && ((player.x >= S.zoomAt[0] && player.x <= S.zoomAt[1]) || (S.zoomAt[2] !== undefined && player.y < S.zoomAt[2])))) ? S.zoom : 0;   // (room.zoomAt [x0, x1, y]: zoomed out only with you between them, or up over y. C9's lookouts: the user, 2026-11-08 "in c9, don't zoom out until the player steps towards the middle of the two towers")
+const zoneK = (s = stage) => { const S = STAGES[s]; return S && S.zoomAt && S.zoom > 1 ? clamp((camZoom - 1) / (S.zoom - 1), 0, 1) : 1; };   // (how far out it's got: its camera's lift and its hold on the middle go with it)   // (tbZoom: the beach's B7, out as you near its gap)
 let bwalkS = null, bwPrev = false, bwHint = false;     // (over a bridge between the woods and its background: the show, the key held, the ↑ shown)
 const BW_DECK = 60, BW_NEAR = 1.6, BW_FAR = 20, BW_STAIR = 2.4, BW_GO = 5.2;   // (the walkway: px over the floor; where its stairs top out, this end and the far one, units back; the stairs' length; walking, units a second)
 const BG_RED = "#b5382d", BG_RED2 = "#93291f", BG_PLANK = "#a5452f", BG_PLANK2 = "#8a3826";   // (the two-tiered bridge: lacquered red, its planks a deeper red-brown)
@@ -2730,7 +2732,8 @@ function buildLevel(k = 0, seed = k, bep = null, st = {}) {
     if (Math.abs(x - WX / 2) < 4 || CEILS.some(([c0, c1, , hd]) => !hd && x > X(c0) - 1 && x < X(c1) + 1)) return; tropLiana(scene, M, x, (z < -9.5 ? bgY : 0) + R(10, 13.5), z, R(4, 8), rng); });
   for (const sl of W.steps(14, 24, 30, 30, 2112)) inSlot(sl, x => tropMogote(scene, M, x, Math.min(bgY, 0) - 2, -R(48, 66), rng, R(6, 10), R(13, 22)));   // the mogotes far off
   if (bgY > -.5 || (st.bgRow && st.drop)) farForest(scene, bgY, W);
-  if (st.bgRow && st.drop && st.open) { scene.add(at(mk(new THREE.BoxGeometry(WX + 160, .35, 7.4), null, { mat: mGrass, ol: 0 }), WX / 2, bgY - .175, -6)); scene.add(at(mk(new THREE.BoxGeometry(WX + 160, 1.7, 7.2), null, { mat: mDirt, ol: 0 }), WX / 2, bgY - 1.2, -6.1)); scene.add(at(mk(new THREE.BoxGeometry(WX + 160, 9, 7.2), null, { mat: toon("#122018"), ol: 0 }), WX / 2, bgY - 6.5, -6.1)); }   // (open, BB2 and BB3: the bank behind, from the path back to the forest floor, whole over BB2's pit, as the woods' own pits have it)   // (the forest filled in behind: placed in the world's drawing too. The background's row BB too, down at its floor: the user, 2026-11-05 "fill in the background with floor etc like we did to the front part of the map's backgrounds")
+  if (st.bgRow && st.drop && st.open) { const runs = []; let a = -80; (st.gaps || []).map(([g0, g1]) => [g0 <= 0 ? -1e9 : X(g0), g1 >= WORLD ? 1e9 : X(g1)]).sort((p, q) => p[0] - q[0]).forEach(([g0, g1]) => { if (g0 > a) runs.push([a, g0]); a = Math.max(a, g1); }); runs.push([a, WX + 80]);   // (only where it has a floor: BB2's vine hangs out over the open air. The user, 2026-11-08: "in BB2, there should be no ground behind the vine. the vine should be suspended in the air")
+    runs.forEach(([xa, xb]) => { xa = Math.max(xa, -80); xb = Math.min(xb, WX + 80); const w = xb - xa, cx = (xa + xb) / 2; if (w < .05) return; scene.add(at(mk(new THREE.BoxGeometry(w, .35, 7.4), null, { mat: mGrass, ol: 0 }), cx, bgY - .175, -6)); scene.add(at(mk(new THREE.BoxGeometry(w, 1.7, 7.2), null, { mat: mDirt, ol: 0 }), cx, bgY - 1.2, -6.1)); scene.add(at(mk(new THREE.BoxGeometry(w, 9, 7.2), null, { mat: toon("#122018"), ol: 0 }), cx, bgY - 6.5, -6.1)); }); }   // (open, BB2 and BB3: the bank behind, from the path back to the forest floor, whole over BB2's pit, as the woods' own pits have it)   // (the forest filled in behind: placed in the world's drawing too. The background's row BB too, down at its floor: the user, 2026-11-05 "fill in the background with floor etc like we did to the front part of the map's backgrounds")
   if (petalsAt.length) { const pm = new THREE.InstancedMesh(new THREE.OctahedronGeometry(.07, 0), M.flame[0], petalsAt.length * 40); let n = 0;   // the flamboyanes' red petals fallen on the ground
     petalsAt.forEach(([px, pz]) => { for (let j = 0; j < 40; j++) { const x = px + R(-3.5, 3.5), z = Math.min(pz + R(-1.5, 2.5), 4.5); m4.compose(new THREE.Vector3(x, gAt(x) + .03, z), q.identity(), new THREE.Vector3(1.4, .25, 1)); pm.setMatrixAt(n++, m4); } }); scene.add(pm); }
   for (const sl of W.scatter(Math.round(70 * WS), 12, 12, 2113)) inSlot(sl, x => {          // undergrowth along the back of the path: malanga, heliconias, plantains, ferns, bromeliads, bushes
@@ -4078,10 +4081,10 @@ function buildDeepBits(s) {
       else for (let y = y0 + .6; y < y0 + 10; y += .9 + R() * .9) [-1, 1].forEach(sd => lump(x + sd * (1.05 + R() * .15), y, -1 + R() * .5, .22 + R() * .25));
       g.add(at(mk(new THREE.BoxGeometry(2.5, .3, 1.6), null, { mat: mT, ol: .02 }), x, y0 + .45, -1.1));
     } else if (groundAt(L.face - L.wall * 30) !== null) {   // going down through a floor (no drop beside it): a hatch, its lid open
-      const y = Y(L.top); g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.1, .04, 1.1), new THREE.MeshBasicMaterial({ color: "#121218" })), x, y + .02, -.4));
-      [-.58, .58].forEach(dz => g.add(at(mk(new THREE.BoxGeometry(1.3, .08, .14), null, { mat: mT, ol: .01 }), x, y + .05, -.4 + dz)));
-      [-.62, .62].forEach(dx => g.add(at(mk(new THREE.BoxGeometry(.14, .08, 1.3), null, { mat: mT, ol: .01 }), x + dx, y + .05, -.4)));
-      const lid = mk(new THREE.BoxGeometry(1.1, .06, 1.1), null, { mat: mW, ol: .02 }); lid.rotation.x = -1.2; at(lid, x, y + .5, -1.05); g.add(lid);
+      const y = Y(L.top), k = S0.hatchK || 1; g.add(at(new THREE.Mesh(new THREE.BoxGeometry(1.1 * k, .04, 1.1 * k), new THREE.MeshBasicMaterial({ color: "#121218" })), x, y + .02, -.4));   // (k: room.hatchK, a bigger hole: BA3's, the user 2026-11-08 "make the hole in the ground with the ladder in BA3 bigger")
+      [-.58, .58].forEach(dz => g.add(at(mk(new THREE.BoxGeometry(1.1 * k + .2, .08, .14), null, { mat: mT, ol: .01 }), x, y + .05, -.4 + dz * k)));
+      [-.62, .62].forEach(dx => g.add(at(mk(new THREE.BoxGeometry(.14, .08, 1.1 * k + .2), null, { mat: mT, ol: .01 }), x + dx * k, y + .05, -.4)));
+      const lid = mk(new THREE.BoxGeometry(1.1 * k, .06, 1.1 * k), null, { mat: mW, ol: .02 }); lid.rotation.x = -1.2; at(lid, x, y + .5 * k, -.4 - .65 * k); g.add(lid);
     }
   });
   const cu = S0.noClimbFace || S0.climbSide ? null : S0.climbUp;    // (noClimbFace: the room draws its own, e.g. ledges on the forest's giant tree · climbSide: the grips are on the end wall, camSide)
@@ -5286,7 +5289,7 @@ function authorForest() {
     ceils: [[-600, 3200, 100]] }, [["leafy", "leaf", 560], ["thornball", "purple", 2100], ["acorn", "rust", 1700]]);   // (two more: one on the left, one more on the right. The user, 2026-10-29)   // (the ceiling: the woods' own, drawn for its ceils; a second one on top of it flickered, 2026-10-24)
   // C5: the other side of the grass (the same grass: cut once, cut for good, from either side); stairs up to the hole from B5 (jump up it: on
   // to B6 that way); 3 baddies; the wall at the far end (C6 is beyond it)
-  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -120], [1900, -120], [1900, -240], [2560, -240]], noRight: true, prev: C.C4, hopY: 70, ceils: holeCeil(FOREST_HOLE_B5, -80), upLift: GROUND - ROW_H + SEAM_T + 80, plats: [[2140, 120, 220, "slab"]],   // (the slab: a ledge at the top of the steps under the hole, up onto it and on up into B5. The user, 2026-10-26: "add an actual paltform at the top of the "steps" that lead to the opening in the ceiling")   // (up the steps; over the top one, the gap in the land overhead: B5's hole, straight up. Was a slab at the very top under it, and a strip of ceiling that looked like a ledge: the user, 2026-10-26)   // (its roof 200 px over the slab, was 160, and its own: B5's floor really sits 90 px over the slab, so a look up into B5 laid B5's slab and hole down right over yours. upLift: how much higher than the stitch B5 sits over this roof (its floor's underside on it), so the way up is the hole as a shaft (upShaft: a held jump, or a double jump, up into it and off to one side) and the drop down pans in with the two lined up. The user, 2026-11-05: "the transition from c5 to b5 is still insane ... it's partly because the ceiling is so low too")
+  const c5 = room("C5", { ground: [[0, 0], [1360, 0], [1360, -100], [1900, -100], [1900, -180], [2090, -180], [2090, -240], [2410, -240], [2410, -180], [2560, -180]], noRight: true, prev: C.C4, hopY: 70, ceils: holeCeil(FOREST_HOLE_B5, GROUND - ROW_H + 70),   // (on the grid at last, one piece with B5: its roof is B5's floor (its underside, as C4's is B4's), seen from either room the same, and up through the hole is the same as any other way up. The steps 20 px and 60 px lower for headroom under it, and a block of rock right under the hole, its top 200 px under B5's floor: up onto it, then a double jump (or a wound-up jump) up through. Was a roof of its own 196 px higher (upLift), up its hole as up a shaft with a fade. The user, 2026-11-08: "when jumping up from c5 to be5, it shows a long brown wall and then transforms into b5. i thought they were all one geometry now?")   // (the slab: a ledge at the top of the steps under the hole, up onto it and on up into B5. The user, 2026-10-26: "add an actual paltform at the top of the "steps" that lead to the opening in the ceiling")   // (up the steps; over the top one, the gap in the land overhead: B5's hole, straight up. Was a slab at the very top under it, and a strip of ceiling that looked like a ledge: the user, 2026-10-26)   // (its roof 200 px over the slab, was 160, and its own: B5's floor really sits 90 px over the slab, so a look up into B5 laid B5's slab and hole down right over yours. upLift: how much higher than the stitch B5 sits over this roof (its floor's underside on it), so the way up is the hole as a shaft (upShaft: a held jump, or a double jump, up into it and off to one side) and the drop down pans in with the two lined up. The user, 2026-11-05: "the transition from c5 to b5 is still insane ... it's partly because the ceiling is so low too")   // (the rock under the hole wider than it, 2090-2410, room up there for the team by you: the user, 2026-11-08 "I called them up to me when I was on the elevated platform and they came to the elevated part but didnt jump up on their own". At 180 wide, you in the middle of it, only one had a place, the other waited at its foot)
     secret: { who: "rose", x: -20, side: -1, door: true, tall: true, key: "grass:C4C5" }, set: [{ k: "earth", side: 1, col: EARTH }] },
     [["leafy", "leaf", 700], ["acorn", "rust", 1150], ["twiggy", "olive", 1650]]); nm(c5, "STAIRS");
   // C6: in front of the giant tree; a ledge with a baddie, a mango up on a small platform, two baddies; the hole the tree's ledges climb up
@@ -5354,7 +5357,7 @@ function authorForest() {
     [["leafy", "leaf", { plat: 0, x: 690 }], ["pinecone", "rust", { plat: 0, x: 1530 }], ["acorn", "rust", 300], ["twiggy", "olive", 1040], ["leafy", "orange", 1830]], "RED BRIDGE");
   // BA3: the bridge ends, land after it ("that's how the player can approach the vines"); Glos's vines over the far side, "burnable by fire to open the next area";
   // the ladder down through the land to BB3's treetops
-  bg("BA3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BA2, next: BG.BA4, down: BG.BB3, downX: 1950, plats: [[-40, DECK, 1700, "deck"]],
+  bg("BA3", { open: true, noRoots: true, ground: [[0, 0]], prev: BG.BA2, next: BG.BA4, down: BG.BB3, downX: 1950, hatchK: 2.2, plats: [[-40, DECK, 1700, "deck"]],
     secret: { who: "fire", x: 2240, tall: true, door: true, key: "bgVines" },
     set: [{ k: "redBridge", x0: -300, x1: 1800, end1: true }, { k: "bgLand", x0: 1780, x1: 2900, ...LAND, fg: true },
       { k: "glos", paths: [V([[2150, 470, -3], [2120, 330, -3.4], [2200, 150, -3], [2380, 60, -2.5], [2600, 110, -3]], .5, .26, { hand: true }), V([[2650, 470, -4.2], [2580, 300, -4.6], [2460, 120, -4], [2290, 30, -3.6]], .55, .3, { hand: true }),
@@ -5384,7 +5387,7 @@ function authorForest() {
     plats: [[620, 400 + BD, 380, "branch"], [180, 325 + BD, 330, "branch"], [620, 245 + BD, 320, "branch"], [330, 160 + BD, 480, "crown"], [1150, 435 + BD, 650, "vine", ST], [1790, 455 + BD, 225, "vine", ST], [1250, 120, 230, "crown"]], items: [["power", 570, 160 + BD], ["fruit", 1365, 120]],
     peek: { x0: 150, x1: 1010, y: 330 + BD, zoom: .95, lean: 380, up: .6 }, fling: [{ from: [300, 1010, 250 + BD], face: 1, to: [1330, 120] }],   // (up the tree, the camera out to show a treetop off to the right only the team flung gets to. The user, 2026-11-04: "when the player goes up on the tree with the branches, zoom out the screen to show a platform to the right of the tree that can only be reached by launching buddies")
     set: [{ k: "bgTree", x: 560, base: BBG + 600, top: 220 + BD, r: 1.4, z: -1.8, reach: 600 }, { k: "bgTree", x: 1365, base: BBG + 600, top: 180, r: .9, z: -1.8, reach: 160 }, { k: "treetops", x0: 1980, x1: 2900, y: BBG },
-      { k: "glos", dy: BD, paths: [V([[980, 800, -.6], [1040, 600, -.3], [1130, 470, 0], [1300, 452, .1], [1470, 450, 0], [1640, 452, -.1], [1810, 470, 0], [1900, 600, .3], [1960, 800, .5]], .44, .4)] }] },
+      { k: "glos", dy: BD, paths: [V([[980, 800, -.6], [1040, 600, -.3], [1130, 470, 0], [1300, 452, .1], [1470, 450, 0], [1640, 452, -.1], [1810, 470, 0], [1960, 473, -.1], [2040, 486, -.4], [2100, 560, -.8], [2140, 700, -1.1]], .44, .4)] }] },   // (its right end on along under your feet to the treetops and down into them: it curled away down 150 px short of them. The user, 2026-11-08: "connect the vine to be closer to the ground on the right so it doesnt look like there's a gap there")
     [["acorn", "rust", { plat: 0, x: 860 }], ["leafy", "leaf", { plat: 1, x: 300 }], ["twiggy", "olive", { plat: 2, x: 820 }], ["pinecone", "rust", { plat: 4, x: 1470 }], ["leafy", "orange", 2250]], "TREETOPS");
   // BB3: the ladder down from BA3 "ends at the top of a tree. the player is walking on top of the tree. theres a smaller tree that extends high and has a branch"
   bg("BB3", { open: true, noRoots: true, drop: BD, ground: [[0, BD]], prev: BG.BB2, next: BG.BB4, up: BG.BA3, upX: 1965, upLen: 360 + BD, plats: [[900, 290 + BD, 380, "branch"]],
@@ -6957,7 +6960,7 @@ function playableSpecs() {
 let roster = playableSpecs().map(sp => buildChar(lookOf(sp))), pets = rosterSpecs().filter(isPet).map(buildChar);   // pets: companions like Luna, never playable
 let pal = null, pal2 = null;                      // the companion following the player this round (a state, like the player's); pal2: a second pet (two at once since 2026-10-23: a cat and a dog, say)
 const palsAll = () => [pal, pal2].filter(Boolean);
-function palsPut(o) { [pal, pal2].forEach((q, i) => { if (!q) return; Object.assign(q, o); if (i) q.x = clamp(q.x - ((player && player.face) || 1) * 55, 30, WORLD - 30); }); }   // (both pets to a spot: the second a step further back)
+function palsPut(o) { [pal, pal2].forEach((q, i) => { if (!q) return; Object.assign(q, o); if (i) q.x = clamp(q.x - ((player && player.face) || 1) * 55, 30, WORLD - 30); q.x = offPit(q.x); }); }   // (both pets to a spot: the second a step further back)
 pets.forEach(q => { q.root.visible = q.shadow.visible = false; });
 const furnace = buildFurnace(); let level = buildLevel(0, 1); level.s = 0; level.w = 0;
 const FOES = [
@@ -8949,14 +8952,21 @@ function towerStep(s, dt, ally) {                    // (updateAllyOne's, first:
   s.x = tx; s.vx = 0; s.pointKind = "press"; twrSt.who[W.i] = s;   // (W.ph "hold": its hand on it till the fence is open)
   return true;
 }
+function twrJoin(p) {                                // (the fence open: the buddy on the other lookout's button over beside you on yours, at once. The user, 2026-11-08: "when you press your button, your buddy who hit the other button should teleport to the tower you're on")
+  const P = p.plat; if (!p.press || !P) return;
+  twrSt.who.forEach((w, i) => { if (!w || w === "you" || i === p.press.i) return; const a = allies.find(A => A.st === w);
+    sparks(w.x, w.y - 60, 10); dust(w.x, w.y, 4, 0); const x = clamp(p.x - p.face * 70, P.x + 24, P.x + P.w - 24);
+    Object.assign(w, { x, y: P.y, vx: 0, vy: 0, onGround: true, plat: P, climb: null, twr: null, pointKind: null, face: p.face, wave: 1, sq: .25, sqv: 0 }); if (a) a.waveT = 1.2;
+    sparks(x, P.y - 60, 10); SFX.whoosh(); });
+}
 function twrTick(dt) {                                // (wavesFx's, every frame: the buttons down while held, and both down at once, the fence open)
   const q = twrOf(), p = player; if (!q || !p) { twrSt.s = -1; if (p && p.press) twrLet(p); return; }
   if (twrSt.s !== stage) { twrSt.s = stage; twrSt.who = q.towers.map(() => null); twrSt.openT = -1; if (p.press) twrLet(p); }
   twrSt.who = twrSt.who.map((w, i) => w === "you" ? (p.press && p.press.i === i ? w : null) : w && w.twr && w.twr.i === i && w.twr.ph === "hold" && allies.some(a => a.st === w) ? w : null);
-  const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i]; if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); b.cap.material.color.set(on ? "#5ccf5f" : "#e0402e"); } });
-  if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; }
+  const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i] || itemGot(TWR_K.key); if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); b.cap.material.color.set(on ? "#5ccf5f" : "#e0402e"); } });
+  if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; twrJoin(p); }
   if (twrSt.openT >= 0 && (twrSt.openT += dt) > 1.4) { twrSt.openT = -1; allies.forEach(a => { const s = a.st; if (s.twr) { s.twr = null; s.pointKind = null; s.wave = 1; a.waveT = 1.2; } }); }   // (a beat on, the buddies let go and cheer)
-  if (!btSeen("btn") && p.onGround && p.plat && q.towers.some((t, i) => Math.abs(p.plat.y - twrAt(q, i).y) < 4)) { btMark("btn"); tutPop(`PRESS ${tutTag("j")} OR ${tutTag("atk")} AT THE BUTTON TO HOLD IT DOWN · HOLD ${tutTag("ch")} AND <span class="key">↑</span> TO SEND A BUDDY UP THE OTHER LOOKOUT`, 6); }   // (up on a lookout the first time: how)
+  if (!btSeen("btn") && p.onGround && p.plat && q.towers.some((t, i) => Math.abs(p.plat.y - twrAt(q, i).y) < 4)) { btMark("btn"); tutPop(`PRESS ${tutTag("j")} AT THE BUTTON · HOLD ${tutTag("ch")} AND PRESS <span class="key">↑</span> TO SEND A BUDDY TO THE OTHER ONE`, 6); }   // (one press: your hand stays on it. It read "PRESS A OR X AT THE BUTTON TO HOLD IT DOWN": the user, 2026-11-08 "why do the instructions here say something about holding x or y?")   // (up on a lookout the first time: how)
 }
 function ladderTick(dt) {
   const S = roomOf(), L = S && S.ladder, R = roomLadder; if (!L || !R || R.s !== stage || R.done) return;
@@ -10519,7 +10529,7 @@ let panLift = 0;                                     // (the next swapPan's lift
 function swapPan(dir, ns, work) {                   // as swapSlide, for a stitched world's neighbouring screens (else it is swapSlide)
   const o0 = cellOff(stage), o1 = cellOff(ns), lift = panLift; panLift = 0;   // (lift: the room you leave set that much higher (3D units) than the stitch puts it, from the new one: woods C5's own roof under B5, upLift)
   if (!STITCH.has(world) || !o0 || !o1 || Math.abs(o0.x - o1.x) > WX + .01 || Math.abs(o0.y - o1.y) > ROW_H * S + .01 || hideout || stronghold || arena || mode !== "play" || !player) return swapSlide(dir, work);
-  transit = true; if (pan) panEnd(); const s0 = stage; nbSkip = s0;   // (nbSkip: the room you're leaving, not built again as a ghost of the new one: kept at the pan's end)
+  transit = true; if (pan) panEnd(); if (riseX) riseEnd(false); const s0 = stage; nbSkip = s0;   // (nbSkip: the room you're leaving, not built again as a ghost of the new one: kept at the pan's end)
   const dx = o0.x - o1.x, dy = o0.y - o1.y + lift, pos0 = camera.position.clone().add(new THREE.Vector3(dx, dy, 0)), quat0 = camera.quaternion.clone(), L0 = lookGrab();   // (dx, dy: the old screen, in the new one's terms; the camera where it was, in them too)
   const was = q => q ? { q, x: q.x + dx / S, y: q.y - dy / S, rx: q.x, ry: q.y } : null;   // (rx, ry: where it was in the old room's own terms, to tell who the room change put somewhere)
   const movers = [player, ...palsAll(), ...allies.map(a => a.st), ej && ej.st].filter(Boolean).map(was);
@@ -10542,7 +10552,7 @@ function swapPan(dir, ns, work) {                   // as swapSlide, for a stitc
   if (onb) [onb.up, onb.dn].forEach(g => { if (g) { g.G.position.add(G.position); g.G.updateMatrixWorld(true); } });   // (the room you're leaving's neighbours: in their places by it)
   pan = { t: 0, T: ax ? .52 : .6, pos0, quat0, pos1, quat1, L0, L1, G, N, old, skyS, cutOld, cutNew, ends, pos: pos0.clone(), quat: quat0.clone(), s0, onb, oclip: onb ? nbClip(onb).map(pl => pl.clone().translate(G.position)) : [] };
   { const up = upWant(stage); if (up >= 0 && up !== s0 && !peekCache && (nbOf(stage) || {}).up !== up) peekCache = buildGhost(up); }   // (not if it's a neighbour: built as that, a frame or two on)   // (a room with an open way up you can't come out of: the room above built now, under the pan's pause, for a look up into it)
-  if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = riseFadeT = RISE_FADE; render(0); return; }   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
+  if (pic && pos0.distanceTo(pos1) < .3 && quat0.angleTo(quat1) < .02) { panEnd(false); if ((nbKeep && nbKeep.level === old) || (peekCache && peekCache.level === old)) riseStart(old, G, L0, L1); else { slideCv.style.display = "block"; slideCv.style.opacity = 1; riseFade = riseFadeT = RISE_FADE; } render(0); return; }   // (riseStart: the room you left kept, by this one: its sky and far backdrop blended off live. Else, as before, its picture faded off)   // (the camera already where it'd go (the beach's C2 bluff up into B2): no pan to wait through, the room you left fading off this one while you go on. The user, 2026-11-03 late: "the b2 skip up screen is still weird")
   panTick(0); render(0);                             // (drawn at once, where the camera was: the frame warmFrame drew is never seen)
 }
 function panTick(dt) {
@@ -10556,6 +10566,27 @@ let riseFade = 0, riseFadeT = .35; const RISE_FADE = .35;   // (riseFadeT: this 
 function slideGrab() { try { render(0); const C = renderer.domElement; if (!slideCv) { slideCv = document.createElement("canvas"); slideCv.style.cssText = "position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;display:none"; C.after(slideCv); }
   slideCv.width = C.width; slideCv.height = C.height; slideCv.getContext("2d").drawImage(C, 0, 0); slideCv.style.transform = C.style.transform = ""; return true; } catch (e) { return false; } }   // (the picture as it is, kept on slideCv, not shown yet)
 function riseFadeTick(dt) { riseFade = Math.max(0, riseFade - dt); if (!slideCv) return; slideCv.style.opacity = riseFade / riseFadeT; if (!riseFade) { slideCv.style.display = "none"; slideCv.style.opacity = 1; } }
+let riseX = null, riseRT = null, riseQ = null; const RISE_X = .5;   // (riseX: up into the room above with the camera just where it was, the two rooms' skies, far backdrops and light eased from one to the other over RISE_X s)
+function riseStart(old, G, L0, L1) {                // (swapPan's, up into the room above with the camera just where it was: the beach's C2 bluff into B2, the woods' BB5 span into BA5, C5 into B5. All of it one world, drawn the same from either room; only the sky, the far backdrop and the light are each room's own, so those ease from the room you left into this one's, live, the game going on. It was a picture of the room you left laid over this one and faded off: everything moving under it showed twice. The user, 2026-11-08: "why is there still a weird screen skip when jumping up to b2?", "when jumping from BB5 to BA5 it has a similar skip/overlay as in that beach levle jump up. it should be smooth")
+  nbClass(old); const top = [...new Set([...old.objs.filter(o => o.userData.nbFar && o.visible), ...(old.sky ? [old.sky] : []), ...(G.userData.skyHid || [])])], vis = [];   // (its far backdrop as it was showing, its sky, its sun and moon)
+  top.forEach(o => o.traverse(c => { c.layers.enable(5); if (c === o || c.visible) vis.push(c); }));   // (layer 5: drawn alone in risePre)
+  const lights = []; scene.traverse(o => { if (o.isLight && !o.layers.isEnabled(5)) { o.layers.enable(5); lights.push(o); } });
+  riseX = { t: 0, T: RISE_X, e: 0, L0, L1, top, vis, lights, G, s: stage, w: world, on: false };
+}
+function riseTick(dt) { const R = riseX; if (!R) return; R.t += dt; R.e = easeInOut(Math.min(1, R.t / R.T)); if (R.t >= R.T || mode !== "play") riseEnd(true); }
+function riseEnd(look) { const R = riseX; if (!R) return; riseX = null; R.top.forEach(o => o.traverse(c => c.layers.disable(5))); R.lights.forEach(o => o.layers.disable(5)); if (look && stage === R.s && world === R.w) lookLerp(R.L0, R.L1, 1); }   // (look: this room's light, all of it, once it's over; not if you've gone on somewhere else)
+function risePre() {                                 // (render's, before the frame: the room you left's sky and far backdrop, in its own light, drawn alone into riseRT; then this frame's light, part way from that one to this room's)
+  const R = riseX; if (stage !== R.s || world !== R.w || !R.G.parent) { riseEnd(false); return; }
+  R.on = nbOn(); if (!R.on) { lookLerp(R.L0, R.L1, R.e); return; }   // (no rooms drawn with their neighbours: nowhere to lay it under them, the light eased only)
+  if (!riseRT) riseRT = frameRT.clone(); if (riseRT.width !== frameRT.width || riseRT.height !== frameRT.height) riseRT.setSize(frameRT.width, frameRT.height);
+  const was = R.vis.map(o => o.visible), gv = R.G.visible, bg = scene.background, mask = camera.layers.mask, cc = renderer.getClearColor(_vc).clone(), ca = renderer.getClearAlpha();
+  try { lookLerp(R.L0, R.L1, 0); R.vis.forEach(o => { o.visible = true; }); R.G.visible = true; scene.background = null; renderer.setRenderTarget(riseRT); renderer.setClearColor(FOG, 1); renderer.clear(); renderer.clippingPlanes = []; camera.layers.set(5); renderer.render(scene, camera); }
+  finally { camera.layers.mask = mask; R.vis.forEach((o, i) => { o.visible = was[i]; }); R.G.visible = gv; scene.background = bg; renderer.setClearColor(cc, ca); renderer.setRenderTarget(frameRT); lookLerp(R.L0, R.L1, R.e); }
+}
+function riseLay() {                                 // (viewScene's, over this room's sky and far backdrop, under the rooms: the one you left's, fading off)
+  if (!riseQ) { const m = new THREE.MeshBasicMaterial({ transparent: true, depthTest: false, depthWrite: false, toneMapped: false, fog: false }), q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), m), sc = new THREE.Scene(), cam = new THREE.OrthographicCamera(-1, 1, 1, -1, .1, 10); q.frustumCulled = false; cam.position.z = 1; sc.add(q); riseQ = { m, sc, cam }; }
+  if (riseQ.m.map !== riseRT.texture) { riseQ.m.map = riseRT.texture; riseQ.m.needsUpdate = true; } riseQ.m.opacity = 1 - riseX.e; const t = renderer.getRenderTarget(); renderer.setRenderTarget(null); renderer.setRenderTarget(t); renderer.render(riseQ.sc, riseQ.cam);   // (the frame's target bound again first: after a pass of the rooms the GPU is left on its resolved copy, and three thinks it's still on the frame (a scene with shadows sets it again; this one has none), so the quad went nowhere)
+}
 let panFade = 0;                                     // (the last of the pan: its final picture laid over the new screen alone, fading, so what only the other screen drew doesn't vanish at once)
 function panEnd(fade) {
   const P = pan; if (!P) return;
@@ -10609,14 +10640,18 @@ function upWant(s) {                               // the room above s, if one o
 const UP_SEE = 200;                                  // (this high, under the opening, the room above is put up: before the camera lifts to it)
 const UP_FIGHT = { x: 420, y: 200 };                 // (the way up shut only with one close by, at the height you jumped from: a fight. Was any awake within 900 px, the floor's far below a stack's top too, so back down in a room whose baddies were up again, the way up just stopped. The user, 2026-11-02 "after falling down, the ability to jump up again disappeared")
 function upSee(p) {                                  // up off a jump under an opening into the room above: it's there to see, and you're only in it once you come down onto something of it (its floor by the hole, a ledge); else back down into this one
-  const y0 = p.upY ?? p.y; p.upY = p.y; if (p.onGround) p.upFoot = p.y;
-  const R = holeAbove(p.x); if (!R || tutLock()) return;   // (the beach tutorial: not up out of a room with berries still in it)
+  const y0 = p.upY ?? p.y, x0 = p.upX ?? p.x; p.upY = p.y; p.upX = p.x; if (p.onGround) p.upFoot = p.y;
+  const R = holeAbove(p.x); if (!R) return;
+  { const L = upLandOf(R.to), g = upFloorY(L, p.x), cy = njCeil(p.x), hh = p.h || (p.rig && p.rig.heightPx) || 90; if (g !== null && cy !== null && upFloorY(L, x0) === null && p.y + ROW_H > g + 44 && p.y - hh < cy) { p.x = x0; p.vx = 0; } }   // (up in a hole in this room's roof, its sides walls: not off sideways into the floor of the room above. Woods C5 under B5, on the grid since 2026-11-08)
+  if (tutLock()) return;   // (the beach tutorial: not up out of a room with berries still in it)
   const ft = p.upFoot ?? p.y;                          // (where you jumped from)
   if (baddies.some(b => !b.dead && !b.gone && !b.sad && !b.flee && !b.sleep && !b.calm && Math.abs(b.x - p.x) < UP_FIGHT.x && Math.abs(b.y - ft) < UP_FIGHT.y) || (bossIn && enemy && !enemy.dead) || p.atkT >= 0 || p.combo || p.upHop || p.hangT > 0) return;   // (a fight on: the way up shut, as the others are, and no look up into it; nor mid-blow. The user, 2026-11-01: "I was fighting and jumped up ... it moved the camera elsewhere")
   if (STAGES[stage].upLift) { upShaft(p, R); return; }   // (a roof of its own under the room above: up its hole as up a shaft)
   if (!peek && !STAGES[stage].peekOff && p.y < UP_SEE && ((p.x > R.a - 120 && p.x < R.b + 120 && upReach(p, R)) || (world === 0 && upFloorY(upLandOf(R.to), p.x) !== null && upReach(p, { a: p.x, b: p.x })))) startPeek(R.to, true);   // (peekOff: no look up from there)   // (or up over its floor away from the hole, nothing overhead in the way: BB5's team launch, up off the span over BA5's land. Unseen till you came down on it, then there all at once, the user, 2026-11-05 "in BB5 I did the team high jump and it shot me up to BA5 which was cool but noticed the screens don't match")
   if (p.vy <= 0 || p.y > UP_SEE) return;
-  const sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H); if (sy === null) return;
+  let sy = upLandY(upLandOf(R.to), p.x, y0 + ROW_H, p.y + ROW_H);
+  if (sy === null) { const L = upLandOf(R.to), g = upFloorY(L, p.x); if (g !== null && upFloorY(L, x0) === null && p.y + ROW_H >= g && p.y + ROW_H <= g + 44) sy = g; }   // (out of its hole over the lip a little under the top of its floor: up onto it, not back down. C5's narrow hole into B5)
+  if (sy === null) return;
   p.y = sy - ROW_H - 1; goRoomRise(R.to);            // (landed up there: into it, onto what you came down on)
 }
 function upShaft(p, R) {                             // up through the hole in a room's own roof (upLift): nothing of the room above to see from here; once you're up in the hole, feet past the roof's underside, and going off to one side over its lip, you're in the room above, just over its floor by the hole (a fade, the camera where it was)
@@ -10759,12 +10794,12 @@ function viewScene(cells, fg, pre) {                 // (render) the rooms drawn
   scene.background = null; if (fg) camera.layers.set(1); else { renderer.setClearColor(FOG, 1); renderer.clear(); if (pre) renderer.render(pre, camera); }
   try {
     for (const c of cells) if (c.G) off(c.G); else for (const o of c.objs) if (!o.userData.nbFar) off(o);
-    renderer.clippingPlanes = []; renderer.render(scene, camera); scene.matrixWorldAutoUpdate = false;   // (every thing placed now: not again for each room's pass)
+    renderer.clippingPlanes = []; renderer.render(scene, camera); if (!fg && riseX && riseX.on) riseLay(); scene.matrixWorldAutoUpdate = false;   // (every thing placed now: not again for each room's pass)
     for (const o of scene.children) if (o.visible && !o.isLight) off(o);   // (drawn once: not again in a room's pass)
     _vf.setFromProjectionMatrix(_vm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
     for (const c of cells) {
       if (c.box && !_vf.intersectsBox(c.box)) continue;   // (out of sight)
-      const on = c.G ? [c.G] : c.objs.filter(o => was.get(o) === true);
+      const on = c.G ? [c.G] : c.objs.filter(o => was.get(o) === true && !o.userData.nbFar);   // (its far backdrop and sky drawn already, whole: not again over riseLay's)
       on.forEach(o => { o.visible = true; }); renderer.clippingPlanes = c.clip; renderer.render(scene, camera); on.forEach(o => { o.visible = false; });
     }
   } finally { scene.matrixWorldAutoUpdate = true; was.forEach((v, o) => { o.visible = v; }); renderer.clippingPlanes = []; if (fg) camera.layers.set(0); else renderer.setClearColor(cc, ca); scene.background = bg; }
@@ -11099,11 +11134,11 @@ function updateEJ(dt) {                              // the partner: at your sid
     if (p.onGround && s.y - p.y > 40 && (Math.abs(p.x - s.x) < 220 || Math.abs((s.upX ?? 1e9) - s.x) < 160) && ej.hopT <= 0 && !s.stayDown) { hopUp(s, s.upX ?? p.x); ej.hopT = .5; }   // up after you, onto its place by you (none there: it waits below, ledgeWait)
     else if (downAfter(s, p)) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (ej.hopT <= 0 && edgeLeap(s, p)) ej.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
-    else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
+    else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null && ((s.wantX ?? p.x) - s.x) * s.vx > 0 && Math.abs((s.wantX ?? p.x) - s.x) > 60) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it (only when its place is the far side: a step back to its place by B5's hole had it leap over and back again and again, 2026-11-08)
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s) && !tbAcross(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); ejPlace(p.x - p.face * 80, p.y, p.face); }   // left behind (or in the water): back at your side
   s.dropT = Math.max(0, (s.dropT || 0) - dt);
-  if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
+  hopCarry(s); if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); { const BK = bridgeKeep(s, dt); moveBody(s, dt, 14); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); } if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
 }
@@ -11847,7 +11882,7 @@ const CRAWL_V = 120, CRAWL_PH = TAU / 110;         // (crawlPh: a whole cycle of
 const crawlZone = p => { const L = (STAGES[stage] || {}).crawl; if (!L || !p || p.dead || p.climb || hideout || stronghold || arena) return null; return L.find(z => p.onGround && Math.abs(p.y - z.y) < 6 && p.x >= z.x0 && p.x <= z.x1 && crawlNear(p, z)) || null; };
 const CRAWL_OUT = 36;                                // (out the far end of a crawlway: up on your feet this far past its mouth, the zone's wall. The user, 2026-10-28: "the crawl should end a lot quicker once they get out on the other side")
 const crawlNear = (p, z) => { const out = z.wall === undefined ? -1 : (z.wall - p.x) * z.dir; return out <= CRAWL_OUT || (p.crawl ? p.vx * z.dir >= 0 : p.vx * z.dir > 20); };   // (out past that, in the room: down to crawl only heading in to the hole)
-const camUpOf = (s = stage) => (!hideout && !stronghold && !arena && (STAGES[s] || {}).camUp) || 0;   // (a room whose camera sits higher, room.camUp units: B4, so the cassette on its top ledge shows from the floor. The user, 2026-10-28: "I was in b4 and didn't see the casette at the top")   // (s: the room you're going into, while its arrival sets the camera: stage is still the one you left till enterStage. With the old one's, C2 → B2 came in a unit high and sank back: the user, 2026-11-03 "the camera jump to go up to b2 is also still tehre")
+const camUpOf = (s = stage) => (!hideout && !stronghold && !arena && ((STAGES[s] || {}).camUp || 0) * zoneK(s)) || 0;   // (a room whose camera sits higher, room.camUp units: B4, so the cassette on its top ledge shows from the floor. The user, 2026-10-28: "I was in b4 and didn't see the casette at the top")   // (s: the room you're going into, while its arrival sets the camera: stage is still the one you left till enterStage. With the old one's, C2 → B2 came in a unit high and sank back: the user, 2026-11-03 "the camera jump to go up to b2 is also still tehre")
 function standCam(x, P, s = stage) {                            // where the camera settles over you stood at x on P (a platform; null: the ground), as syncWorld has it (null: nothing under you there)
   const gy = groundAt(x); if (gy === null) return P ? Y(P.y) - 3.2 : null;
   const bu = P && P.kind === "bridge" ? Math.max(0, Y(P.y) - Y(gy) - 3.2) : 0, hiP = Math.max(bu, P && (STAGES[s] || {}).authored ? Math.max(0, Y(P.y) - Y(gy) - 5.5) : 0);
@@ -13884,9 +13919,10 @@ function ledgeWait(s) {                               // (following, every frame
   const x = s.downPlat ? null : upSpot(s, s.stayDown ? 12 : 0); s.upX = x;   // (its place up there: it goes under it, then up, partFollow; it stood back in the line below, too far off to come up)
   return (s.stayDown = x === null ? 1 : 0);   // (squeezed off it: down till you leave it; waiting: up only once there's room and a bit)
 }
+function hopCarry(s) { if (!s.hopV) return; if (s.onGround || s.hurtT > 0 || s.atkKind || s.climb || s.post || s.tcFly || s.bc) { s.hopV = 0; return; } s.vx = s.hopV; }   // (a buddy's hop up a step, or on over a gap, hopUp, hopTo: its way on kept all the way up. Off from the foot of a step, the step's face stopped it dead on the way up and it went straight up and down for good: woods C5's rock under the hole, 2026-11-08)
 function hopUp(s, tx) {                               // up after you, onto your ledge: a hop that comes down on its place there (it was aimed at you, and as long in the air as it took, so it came down a third past you)
   const p = player, hh = s.y - p.y + 50, T = Math.sqrt(2 * hh / GRAV) + Math.sqrt(100 / (GRAV * budFallOf(s)));   // (down at its own fall, 2026-11-06: a buddy's quicker)   // (up to 50 over it, down that 50 onto it)
-  s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = clamp((tx - s.x) / T, -520, 520); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.ledgeUpT = time; return s.vx;
+  s.vy = -Math.sqrt(2 * GRAV * hh); s.vx = s.hopV = clamp((tx - s.x) / T, -520, 520); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.ledgeUpT = time; return s.vx;
 }
 function ledgeSqueeze(s, k, sp) {                     // (following, on your ledge) no place for it up there at all: down off it to wait at its foot, not stood in the others at the end
   const p = player; if (!s.onGround || !s.plat || !p.onGround || p.plat !== s.plat || !lineSpots(sp).out.has(k) || landBelow(s.x, s.y + 4) === null) return false;
@@ -15185,7 +15221,7 @@ function landBelow(x, y) {                            // where one dropping at x
 function hopTo(s, tx, ty, vmax = 900) {               // a jump that comes down at (tx, ty): a hop up first, higher (for longer in the air) if it's far
   const G = GRAV, f = budFallOf(s), up = Math.max(70, s.y - ty + 70); let vy = -Math.sqrt(2 * G * up), t = budAirT(vy, ty - s.y, f);   // (down at its own fall: 2026-11-06)
   const tn = Math.abs(tx - s.x) / vmax; if (tn > t) { let lo = -1500, hi = vy; for (let i = 0; i < 24; i++) { const m = (lo + hi) / 2; if (budAirT(m, ty - s.y, f) > tn) hi = m; else lo = m; } vy = Math.max(-1500, lo); t = budAirT(vy, ty - s.y, f); }   // (far: up harder till it's that long in the air)
-  s.vy = vy; s.vx = clamp((tx - s.x) / Math.max(.2, t), -vmax, vmax); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.gapHop = true; SFX.jump();   // (gapHop: nothing but the jump till it's down, partHuman)
+  s.vy = vy; s.vx = s.hopV = clamp((tx - s.x) / Math.max(.2, t), -vmax, vmax); s.onGround = false; s.plat = null; s.sq = .2; s.sqv = 0; s.gapHop = true; SFX.jump();   // (gapHop: nothing but the jump till it's down, partHuman)
 }
 function pitKeep(s, P1, x0, y0) {                 // (updateAllyOne, after its move) off the end of a platform with nothing past it but the drop (walked off, or knocked off it by a baddy): back at that end, on it
   if (s.onGround || s.vy < 0 || s.gapHop || s.dropT > 0 || s.climb || s.climbW || s.tcFly || s.fleap || s.post || s.zipR || s.bc || s.pounce || s.dzap || s.exitOK) return;   // (on its way somewhere on purpose: a jump, a drop, a launch)
@@ -15196,7 +15232,7 @@ function pitKeep(s, P1, x0, y0) {                 // (updateAllyOne, after its m
 function edgeLeap(s, p) {                             // (updateAlly, updateEJ) true: it's jumped. You past the end of what it's on (a platform, a stretch of ground), and nothing past that end
   if (!p || !p.onGround) return false;                //   to come down on: a jump at the first place past it to land, your way (followSpan keeps it back from the end, so it never got to the gap)
   const d = Math.sign(p.x - s.x); if (!d || Math.abs(p.x - s.x) < 120 || p.y < s.y - 140) return false;
-  const sp = s.plat ? [s.plat.x, s.plat.x + s.plat.w] : supportSpan(s); if (!sp) return false;
+  const sp = s.plat ? stepRun(s.plat) : supportSpan(s); if (!sp) return false;   // (a vine of pieces: its far end, not the end of the piece it's on)
   const end = s.plat ? (d > 0 ? sp[1] : sp[0]) : (d > 0 ? sp[1] + 12 : sp[0] - 12);
   if ((p.x - end) * d < 40 || (end - s.x) * d > 130) return false;   // (you're not past its end; or it's not at it yet)
   if (landBelow(end + d * 26, s.y) !== null) return false;   // (something to come down on: the drop's fine)
@@ -15491,7 +15527,7 @@ function partJump(s, k, dx) {                       // you jumped: so does it, a
   if (!s.jAt || time < s.jAt) return; s.jAt = 0;
   if (Math.abs(dx) > 320 || !(s.onGround || (s.jDbl && s.airJ > 0)) || s.atkKind || s.block || s.stayDown) return;   // (stayDown: waiting below a full ledge)
   const h = s.jVy * s.jVy / (2 * GRAV * WEIGHT * feelMove().weight); s.vy = -Math.sqrt(2 * GRAV * h); if (!s.onGround) s.airJ = 0;
-  s.onGround = false; s.plat = null; s.sq = .25; s.sqv = 0; s.mirrorJ = true;
+  s.onGround = false; s.plat = null; s.sq = .25; s.sqv = 0; s.mirrorJ = true; s.hopV = 0;
 }
 function partPet(q, k, dt) {                        // a pet on your command: its pounces (true while it's busy and its following waits)
   const p = player; if (q.fleap) return fleapStep(null, q, dt); if (q.dzap) return dzapStep(q, dt);   // (its charge move going)
@@ -16992,8 +17028,9 @@ function updateAllyHere(dt) {                      // waiting: it turns to watch
 }
 const bridgeAt = (x, y) => PLATFORMS.find(q => q.kind === "bridge" && x >= q.x - 6 && x <= q.x + q.w + 6 && Math.abs(y - q.y) < 30) || null;   // (put by you by a bridge's planks: on them; you a few px under them, stepped off its end at the room's edge, put it under them and down through it went)
 const onHeroSpan = (x, y) => { const p = player, sp = p && p.onGround && !p.climb && Math.abs(y - p.y) < 2 ? supportSpan(p) : null; return sp ? clamp(x, sp[0] + 14, sp[1] - 14) : x; };   // (put by you: on what you're stood on, never off the end of the bridge beside it)
-function allyPlace(x, y, face, ally = allies[0]) { if (!ally) return; const s = ally.st; x = onHeroSpan(shoreX(x), y); if (STAGES[stage].swim) y = groundAt(x) ?? y; { const g = groundAt(clamp(x, 30, WORLD - 30)); if (g !== null && y > g) y = g; } const Bp = bridgeAt(clamp(x, 30, WORLD - 30), y); if (Bp) y = Bp.y; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: Bp, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player;   // (never under the floor: you coming up from below, still rising, 2026-11-02)
-  (ally.crew || []).forEach(m => Object.assign(m.st, { x: clamp(shoreX(x - face * m.off), 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 })); }
+function offPit(x) { const G = GAPS.find(([a, b]) => x > a - 26 && x < b + 26); if (!G || (STAGES[stage] && STAGES[stage].swim) || (player && bridgeAt(clamp(x, 30, WORLD - 30), player.y))) return x; const px = player ? player.x : x, side = px >= G[1] ? 1 : px <= G[0] ? -1 : (x - G[0] < G[1] - x ? -1 : 1); return side > 0 ? G[1] + 30 : G[0] - 30; }   // (put by a hole in the floor: on firm ground at its edge, your side of it. Up into woods B5 out of C5, 2026-11-08: they were put over its hole and fell back down it)
+function allyPlace(x, y, face, ally = allies[0]) { if (!ally) return; const s = ally.st; x = offPit(onHeroSpan(shoreX(x), y)); if (STAGES[stage].swim) y = groundAt(x) ?? y; { const g = groundAt(clamp(x, 30, WORLD - 30)); if (g !== null && y > g) y = g; } const Bp = bridgeAt(clamp(x, 30, WORLD - 30), y); if (Bp) y = Bp.y; Object.assign(s, { x: clamp(x, 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: Bp, atkT: -1, atkKind: null, wave: 0 }); ally.tgt = null; ally.at = allyRoomKey(); ally.pl = player;   // (never under the floor: you coming up from below, still rising, 2026-11-02)
+  (ally.crew || []).forEach(m => Object.assign(m.st, { x: clamp(offPit(shoreX(x - face * m.off)), 30, WORLD - 30), y, vx: 0, vy: 0, face, onGround: true, plat: null, atkT: -1, atkKind: null, wave: 0 })); }
 function updateAlly(dt) {                          // with you: just behind you (each a step further back), hopping up and down after you, and at any baddy (or the boss) that comes near
   if (teamFresh && mode === "play" && player && !transit && !hideout && !stronghold && !arena && !(intro && intro.lock)) { teamFresh = false; localPairArrive(); }   // (into a world: its two; back again, asked first)
   if (arriveNext && arriveNext.go && mode === "play" && player && !transit && !hideout && !stronghold && !arena && !cine) { const N = arriveNext; arriveNext = null;   // (the world's third: here, at a fight, if there's room)
@@ -17079,12 +17116,12 @@ function updateAllyOne(ally, k, dt) {              // (k: its place in the line 
     if (p.onGround && s.y - p.y > 40 && (Math.abs(p.x - s.x) < 220 || Math.abs((s.upX ?? 1e9) - s.x) < 160) && ally.hopT <= 0 && !s.stayDown) { hopUp(s, s.upX ?? p.x); ally.hopT = .5; }   // up after you, onto its place by you (none there: it waits below, ledgeWait)
     else if (downAfter(s, p)) { s.dropPlat = s.plat; s.dropT = .3; s.onGround = false; s.vy = 140; s.y += 2; }   // down after you
     else if (ally.hopT <= 0 && edgeLeap(s, p)) ally.hopT = .6;   // (off a platform's edge over a gap: a jump to you)
-    else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it
+    else if (!s.plat && Math.abs(s.vx) > 60 && groundAt(s.x + Math.sign(s.vx) * 40) === null && ((s.wantX ?? p.x) - s.x) * s.vx > 0 && Math.abs((s.wantX ?? p.x) - s.x) > 60) { s.vy = -940; s.vx = Math.sign(s.vx) * 460; s.onGround = false; SFX.jump(); }   // a gap ahead: over it (only when its place is the far side: a step back to its place by B5's hole had it leap over and back again and again, 2026-11-08)
   }
   if ((Math.abs(shoreX(p.x) - s.x) > 760 && !s.post && !s.lvlLock && !homeBlocked(s) && !tbAcross(s)) || (s.y > SINK + 20 && !wet)) { puffs(s.x, Math.min(s.y, WATER) - 30, 4, 24, 110); allyPlace(p.x - p.face * (80 + k * 75), p.y, p.face, ally); }   // left behind (or in the water): back at your side
   { const Z = !wet && crawlZone(s); if (Z) { s.crawl = Z; s.block = false; s.vx = clamp(s.vx, -CRAWL_V, CRAWL_V); s.crawlPh = (s.crawlPh || 0) + Math.abs(s.vx) * dt * CRAWL_PH; } else if (s.crawl) { s.crawl = null; s.sq = .14; s.sqv = 0; } }   // (through a low hole on hands and knees as you go, not walking upright through its roof: the user, 2026-11-05 "in berry forest the crawling animation ... looks very unnatural same for the buddies")
   s.dropT = Math.max(0, (s.dropT || 0) - dt); abStep(s, dt);   // (the blocker stepping in to take a shot, autoBlock)
-  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); const BK = bridgeKeep(s, dt); const PK = s.onGround ? s.plat : null, x0 = s.x, y0 = s.y; moveBody(s, dt, 14); if (!wet) pitKeep(s, PK, x0, y0); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
+  { const P0 = s.onGround && (s.atkKind || s.atkT >= 0) ? s.plat : null; hopCarry(s); if (!wet) partGrav(s, dt); else if (busy) s.vy *= Math.exp(-dt * 2.5); if (!wet) sepStep(s, dt); const BK = bridgeKeep(s, dt); const PK = s.onGround ? s.plat : null, x0 = s.x, y0 = s.y; moveBody(s, dt, 14); if (!wet) pitKeep(s, PK, x0, y0); if (P0 && !s.fleap && !s.dzap) s.x = clamp(s.x, P0.x + 8, P0.x + P0.w - 8); if (BK) s.x = clamp(s.x, BK.x + 8, BK.x + BK.w - 8); }   // (a string of its blows on the bridge (a platform): never carried off the end of it, as yours aren't)
   if (s.onGround) s.mirrorJ = false;
   if (s.landV > 300) { s.sq = -clamp(s.landV / 2600, .08, .3); s.sqv = 0; }
   ejLook(s, dt);
@@ -17401,8 +17438,13 @@ function syncFlairs() {                           // (real time: they play out d
   flairs = flairs.filter(f => { const u = (now - f.t0) / f.dur; if (u >= 1) { actors.remove(f.g); f.g.children.forEach(m => m.material.dispose()); return false; }
     const e = 1 - (1 - u) ** 3; f.g.scale.setScalar(f.s * (.35 + .75 * e)); f.g.children.forEach((m, i) => { m.material.opacity = 1 - u * u; if (i < 2) m.rotation.z += (i ? -1 : 1) * .02; }); return true; });
 }
+function stepRun(P) {                            // a platform, and those it runs on into end to end as steps (the woods' vines, a piece at a time, each a little up or down from the last): [from, to] the whole way
+  let a = P.x, b = P.x + P.w; if (!P.step) return [a, b];
+  for (let more = true; more;) { more = false; for (const q of PLATFORMS) if (q.step && Math.abs(q.y - P.y) < 60) { if (q.x < a && q.x + q.w >= a - 12 && q.x + q.w <= b) { a = q.x; more = true; } if (q.x + q.w > b && q.x <= b + 12 && q.x >= a) { b = q.x + q.w; more = true; } } }
+  return [a, b];
+}
 function supportSpan(p) {                        // the stretch of floor (or the platform) under you, edge to edge
-  if (p.plat) return [p.plat.x + 10, p.plat.x + p.plat.w - 10];
+  if (p.plat) { const R = stepRun(p.plat); return [R[0] + 10, R[1] - 10]; }   // (a vine of pieces: the whole of it, not the piece. Stood on a short one, the buddies had no place by you up there and hopped down off it to wait at its foot: over BA4's drop, the user, 2026-11-08 "in BA4 my buddies sometimes fall off from the vines and they shoulkdnt")
   if (groundAt(p.x) === null) return null;
   let a = p.x, b = p.x;
   while (a > -400 && groundAt(a - 10) !== null && Math.abs(groundAt(a - 10) - groundAt(a)) < 14) a -= 10;
@@ -22086,7 +22128,7 @@ const BEACH_STAGES = [   // the beach tutorial since 2026-11-03 (the user's draw
   { h: 0, foe: 0, cell: "B5", elev: ROW_H / ROW_RISE, tut: true, name: "THE CLIFF TOP", prev: 6, noRight: true, gaps: [[600, 3600]], below: 4, down: 4, downX: 600, downWall: -1, lockX: 585 },   // (the user, 2026-11-04: "another high platform on the left with a ladder you can go down on. you can go down the ladder or jump off to the right (one baddy up here first). this should look like we're going down some beach cliffs": the cliff top, the cove a row down; lockX: held back from its edge till the baddy's won back)
   { h: 0, foe: 0, cell: "C6", elev: 0, tut: true, name: "THE WATER TOWER", prev: 4, noRight: true, camUp: 1.4, gaps: [[2280, 3600]], dive: [2280, 2600], diveTo: 13, diveAfterTut: true, plats: [[1780, 170, 360, "tower"]], poles: [[1805, 170]], zip: { x: 1945, y: 40, to: 12, ex: 1280, ey: 300, base0: 170, base1: 470 }, wayTip: "↑ UP THE WATER TOWER, THEN JUMP UP ONTO THE ZIPLINE" },   // (the user, 2026-11-04: "4 baddies and then a high water tower looking structure you can use a ladder to climb up on. it will have a zip line that the team gets on and takes them to the next screen": out over the inlet at its end and into C7)   // (dive: the sea under the zipline, down into the deep, but only after the tutorial (in it, a fall in there is just a splash). The user, 2026-11-04: "add a connection to another level that we haven't had connected to it before", the deep picked off the map as the nearest. Cuss' Waves by C11 for a moment before that)
   { h: 0, foe: 0, cell: "C7", elev: 0, tut: true, name: "THE LANDING", prev: 11, next: 5, noLeft: true, gaps: [[-900, 190]] },   // ("c6 zip line ends in the middle of the screen on c7. there will be 3 baddies on the left of the zip line end and 3 to the right of it. it's an encouragement for players to split up but dont show any text for this")
-  { h: 0, foe: 0, cell: "C9", elev: 0, tut: true, name: "THE LOOKOUTS", prev: 5, next: 7, zoom: 2.3, camMid: [430, 1860, 1145], camUp: 6, plats: [[640, 40, 210, "lookout"], [1440, 40, 210, "lookout"]], poles: [[665, 40], [1465, 40]], towers: [{ plat: 0, btn: 820 }, { plat: 1, btn: 1620 }], set: [{ k: "gate", x: 2330, key: "w9:c9fence", look: "fence", h: 300, w: 150, tutOpen: true }], bigTrio: "mossback", authored: true },   // (the user, 2026-11-04: "more zoomed out than usual to fit these two towers. it will have two high lookout stations with little roofs and ladders that climb up them. baddies on the bottom. at the top of each one is a button ... when the player presses their button, the fence on the right side of the screen opens": both buttons held at once, twrTick. Out of a jump's reach, 430 up (a held jump and the double jump: Rose's 407); the camera out and up to have both in the picture)
+  { h: 0, foe: 0, cell: "C9", elev: 0, tut: true, name: "THE LOOKOUTS", prev: 5, next: 7, zoom: 2.3, zoomAt: [880, 1410, 320], camMid: [430, 1860, 1145], camUp: 6, plats: [[640, 40, 210, "lookout"], [1440, 40, 210, "lookout"]], poles: [[665, 40], [1465, 40]], towers: [{ plat: 0, btn: 820 }, { plat: 1, btn: 1620 }], set: [{ k: "gate", x: 2330, key: "w9:c9fence", look: "fence", h: 300, w: 150, tutOpen: true }], bigTrio: "mossback", authored: true },   // (the user, 2026-11-04: "more zoomed out than usual to fit these two towers. it will have two high lookout stations with little roofs and ladders that climb up them. baddies on the bottom. at the top of each one is a button ... when the player presses their button, the fence on the right side of the screen opens": both buttons held at once, twrTick. Out of a jump's reach, 430 up (a held jump and the double jump: Rose's 407); the camera out and up to have both in the picture)
   { h: 0, foe: 0, cell: "C-1", elev: 0, woods: true, woodsPath: true, name: "THE BACK WOODS", exitLeft: true, toWorld: 0, next: 15 },   // (the way back from the woods: off the left of their first room and in here on the left, the user 2026-11-04: "when they go back towards the beach area, they will be just two thick forest like screens with baddies, that start you on the left side of the screen")
   { h: 0, foe: 0, cell: "C0", elev: 0, woods: true, woodsPath: true, name: "THE THICKET", prev: 14, next: 0 },   // (and on: "then you end up appearing, on the third screen, on the beach area, on the left of the house". Built as the woods are: buildLevel)
 ];
@@ -29621,7 +29663,7 @@ function syncWorld(dt) {
     const CF = FEEL.camera, camOn = !FEEL.legacy && CF.enabled && !hideout && !(cine && cine.phase === "pan"), moving = Math.abs(player.vx) > 40;
     if (camOn) { camLook = lerp(camLook, moving ? Math.sign(player.vx) * CF.lookahead * 2 * halfW : 0, 1 - Math.exp(-dt * (moving ? 2.2 : CF.catchUp * .6))); }   // (COMBAT FEEL's CAMERA: ahead the way you're moving, back to you when you stop)
     let txc = X(player.x) + camLook + tbLean() + peekLean() + (camOn ? .8 * player.vx * S / Math.max(.5, CF.follow) : 0); /* (no framing a fight any more: the camera's on you alone, the user 2026-11-01: "the camera shouldn't follow enemies. right now i was not moving and an enemy bounced in an our of the screen and the camera jerked back and forth") */
-    const cm = camMid(), cmK = camMidK(); if (cmK > 0) txc = lerp(txc, X(roomOf().camMid[2]), cmK);   // (eased in and out over a few hundred px either side, not switched: 2026-11-04)   // (C9's: held still between its two lookouts so both are seen, the user 2026-11-04 "more zoomed out than usual to fit these two towers")
+    const cm = camMid(), cmK = camMidK() * zoneK(); if (cmK > 0) txc = lerp(txc, X(roomOf().camMid[2]), cmK);   // (eased in and out over a few hundred px either side, not switched: 2026-11-04)   // (C9's: held still between its two lookouts so both are seen, the user 2026-11-04 "more zoomed out than usual to fit these two towers")
     const tx = hideout ? X(hideout.cx) : cine && cine.phase === "pan" ? clamp(X(cine.x), halfW - 1, X(WORLD) - halfW + 1) : camOn ? clamp(txc, halfW - 1, X(WORLD) - halfW + 1) : clamp(cm ?? X(player.x) + player.face * 1.6 + tbLean() + peekLean(), halfW - 1, X(WORLD) - halfW + 1);   // (off: the game's own, 64 px ahead of the way you face)
     camSit = lerp(camSit, hideout && player.sit ? 1 : 0, 1 - Math.exp(-dt * .8));
     camX = lerp(camX, tx, 1 - Math.exp(-dt * (camOn ? (moving ? CF.follow : CF.catchUp) : 4.5)));
@@ -30062,7 +30104,7 @@ function render(dt) {
   const gbcCam = gradeMat.uniforms.gbc.value ? gbcSnap() : null;   // (in the beach house: the camera on the big pixels' grid, so the walls don't shimmer as it moves; put back after)
   renderer.setRenderTarget(frameRT);
   renderer.clear();
-  if (SHADE) { SHADE.pass(false); if (gradeMat.uniforms.gbc.value) SHADE.U.mkTexOn.value = 0; }   // (an applied look: the level's settings, then the characters'; in the beach house, no painted coat: its brush marks broke up into specks)
+  if (SHADE) { SHADE.pass(false); if (gradeMat.uniforms.gbc.value) SHADE.U.mkTexOn.value = 0; } if (riseX) risePre();   // (an applied look: the level's settings, then the characters'; in the beach house, no painted coat: its brush marks broke up into specks)
   if (pan) panScene(); else if (peek) panScene(peek); else if (level.subs) bigScene(); else if (nbOn() && !bepSel) viewScene(nbCells(), false); else renderer.render(scene, camera);   // (viewScene: the rooms over and under this one too, the world as one piece)
   actors.fog = actorFog();
   const hm = hatchHero();                            // (down a rope ladder through a floor: the hero drawn against the scenery, so the floor in front of the hatch hides what's gone down through it)
@@ -30301,7 +30343,7 @@ function frame(now) {                              // (the next frame is asked f
     keysPopCheck(dt);   // (the first time on a keyboard: the controls)
     if (story && mode === "play" && !paused && !window.__pause) { story.t += dt; if ((playSave += dt) > 30 && !transit && story.char) { playSave = 0; writeSave(); } }   // the save file's time played: real time, while a story run's going (not paused); saved every 30 s
     if (edOpen) return;                              // the editor draws its own stage
-    if (riseFade > 0) riseFadeTick(dt);              // (a room change without a pan: the one you left fading off, the game going on)
+    if (riseFade > 0) riseFadeTick(dt); if (riseX) riseTick(dt);   // (riseX: up into the room above, the two rooms' skies blended)   // (a room change without a pan: the one you left fading off, the game going on)
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
     else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || !!tutHold || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
