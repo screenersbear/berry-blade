@@ -124,10 +124,12 @@ class Tube {
       if (i) _n.addScaledVector(T[i], -_n.dot(T[i])).normalize();        // parallel transport: the tube never twists
       _b.crossVectors(T[i], _n);
       const i0 = Math.max(0, i - 1), i1 = Math.min(S - 1, i + 1), drds = (this.rad[i1] - this.rad[i0]) / ((this.len[i1] - this.len[i0]) || 1e-4);
+      let cx = P[i].x, cy = P[i].y, cz = P[i].z; const hx = this.helix;
+      if (hx) { const t = i / (S - 1), a = t * hx.turns * TAU + hx.ph, rr = hx.r * this.rad[i] * Math.min(1, t * 5); cx += (_n.x * Math.cos(a) + _b.x * Math.sin(a)) * rr; cy += (_n.y * Math.cos(a) + _b.y * Math.sin(a)) * rr; cz += (_n.z * Math.cos(a) + _b.z * Math.sin(a)) * rr; }   // (ringlets: the lock wound round its own line, from just under the root; Camila's curls, 2026-11-10)
       for (let j = 0; j <= R; j++) {
         const th = j / R * TAU, k = (i * (R + 1) + j) * 3;
         _q.copy(_n).multiplyScalar(Math.cos(th)).addScaledVector(_b, Math.sin(th) * this.flat);
-        pa[k] = P[i].x + _q.x * this.rad[i]; pa[k + 1] = P[i].y + _q.y * this.rad[i]; pa[k + 2] = P[i].z + _q.z * this.rad[i];
+        pa[k] = cx + _q.x * this.rad[i]; pa[k + 1] = cy + _q.y * this.rad[i]; pa[k + 2] = cz + _q.z * this.rad[i];
         _v.copy(_n).multiplyScalar(Math.cos(th) * this.flat).addScaledVector(_b, Math.sin(th)).addScaledVector(T[i], -drds).normalize();
         na[k] = _v.x; na[k + 1] = _v.y; na[k + 2] = _v.z;
       }
@@ -140,7 +142,8 @@ const rounded = (r, t, c0, c1) => t < c0 ? r * Math.sqrt(Math.max(0, 1 - (1 - t 
 
 // springy chain (tails, hair, scarves): follows a target shape in world space with lag and overshoot
 const DOWN = new THREE.Vector3(0, -1, 0), ZAX = new THREE.Vector3(0, 0, 1), XAX = new THREE.Vector3(1, 0, 0), _cq = new THREE.Quaternion();
-function simChain(st, tgt, dt, seg, k0, k1, damp) {
+const _ca = new THREE.Vector3(), _cb = new THREE.Vector3();
+function simChain(st, tgt, dt, seg, k0, k1, damp, maxA = 0) {
   if (!st.w || st.w.length !== tgt.length || st.w[0].distanceTo(tgt[0]) > 3) { st.w = tgt.map(v => v.clone()); st.v = tgt.map(() => new THREE.Vector3()); }
   st.w[0].copy(tgt[0]);
   if (dt > 0) for (let i = 1; i < tgt.length; i++) {
@@ -148,6 +151,8 @@ function simChain(st, tgt, dt, seg, k0, k1, damp) {
     v.addScaledVector(_v.subVectors(tgt[i], w).multiplyScalar(kk), dt).multiplyScalar(Math.exp(-dt * damp));
     w.addScaledVector(v, dt);
     _v.subVectors(w, st.w[i - 1]).setLength(seg); w.copy(st.w[i - 1]).add(_v);
+    if (maxA) { _ca.subVectors(tgt[i], tgt[i - 1]).normalize(); _cb.copy(_v).normalize(); const a = Math.acos(clamp(_cb.dot(_ca), -1, 1));   // (weight: never flung further than maxA off its rest, the swing's speed lost as it hits the limit)
+      if (a > maxA) { _cb.lerp(_ca, (a - maxA) / a).normalize(); w.copy(st.w[i - 1]).addScaledVector(_cb, seg); v.multiplyScalar(.4); } }
   }
   return st.w;
 }
@@ -169,7 +174,7 @@ function updateChains(r, p, dt) {
       tgt.push(tgt[i - 1].clone().addScaledVector(wd.normalize(), seg * sc));
     }
     if (!dt && p.restNow) st.w = null;               // (paused in the editor: the lock hangs at rest)
-    simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm * FEEL_KIT.chainStiff, (c.k1 || 60) / fm * FEEL_KIT.chainStiff, (c.damp || 8) * FEEL_KIT.chainDamp);
+    simChain(st, tgt, dt, seg * sc, (c.k0 || 220) / fm * FEEL_KIT.chainStiff, (c.k1 || 60) / fm * FEEL_KIT.chainStiff, (c.damp || 8) * FEEL_KIT.chainDamp, c.maxA || 0);
     st.w.forEach((w, i) => r.body.worldToLocal(c.tube.pts[i].copy(w)));
     const wa = c.wv ? c.wv() : 0;                   // wavy hair: each lock's points pushed side to side along it (none at the root)
     if (wa > 1e-4) for (let i = 1, n = c.tube.pts.length; i < n; i++) { const a = wa * Math.sin(i * 1.3 + (c.ph || 0)) * Math.min(1, i / (n - 1) * 3); c.tube.pts[i].z += a; c.tube.pts[i].x += a * .3; }
@@ -383,8 +388,8 @@ const PRESETS = [
   merge0(HUMAN_DEFAULT, { id: "camila", name: "CAMILA",   // (was Sofia; the user, 2026-10-20) from the approved mockup: Chase's outfit with his jumpsuit legs made a
     body: { build: "tall", head: .9 },                           //   slate dress (his red boot shafts from the knee), long wavy brown hair parted in the middle
     head: { width: 1, height: 1.16, jaw: .9, chinLen: .05 },     //   (the user's Gabby reference), June's face and eyes (brown), no mask, no tail; Chase's gauntlet
-    face: { style: "june", chin: .1, ears: 1.1, earY: -.11 },
-    hair: { mode: "sculpt", shell: .24, taper: -.25, fringe: "oval", fringeDrop: -.04, sides: 1.05, back: 1.15, curl: 0, curlFront: 0, style: "wavy", length: 1.45, flow: 1.2, thick: 1.7, wave: 1, tie: false,
+    face: { style: "june", chin: .1, ears: .7, earY: -.11 },   // (ears .7, was 1.1: under her side curls since 2026-11-10)
+    hair: { mode: "sculpt", shell: .24, taper: -.25, fringe: "oval", fringeDrop: -.04, sides: 1.05, back: 1.15, curl: .45, curlFront: 0, style: "wavy", length: 1.25, flow: 1.2, thick: 1.7, wave: 1, tie: false,   // (curl .45 and ringlets, length 1.25, was curl 0, 1.45: the user, 2026-11-10 "keep the shape and positioning of camila's hair but add some curly form to that shape", "let's make them a little shorter also they should cover her ears")
       tufts: [{ yaw: -30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: 30, pitch: 60, len: .07, width: .5, sharp: 1.2 }, { yaw: -95, pitch: 0, len: .1, width: .6, sharp: 1 },
         { yaw: 95, pitch: 0, len: .1, width: .6, sharp: 1 }, { yaw: 180, pitch: 5, len: .08, width: .8, sharp: 1 }] },
     colors: { skin: "#ebc3a6", hair: "#7a4a2a", eyes: "#70421f", lips: "#b8645a", lash: "#1b1b1b", brows: "#3a2416", ring: "#f4fbff" },   // (skin: Rose's and Camila's swapped, the user 2026-10-26: "can you swap the skin tones on rose and camila"; hers was #d59e72)
@@ -969,14 +974,16 @@ function hairChains(st) {                         // the flowing locks for each 
   if (st === "hightail") return [{ parent: "head", anchor: [-.26, .22, 0], dir: [-.7, -.55, 0], n: 7, seg: .1, w: [.13, .055], hang: .7, k0: 190, k1: 45, sway: .05, tie: true }];   // gathered high at the back, a short tail
   // (heavier since 2026-10-23, the user: "camila's hair is good that it has movement but it's too ragdoll like. can it have more weight and gravity and
   // bounce a little less?": each lock hangs further toward the ground, its tip less floppy, and it's damped near critically, so it settles, not bounces)
+  // (heavier again 2026-11-10, the user: "can there be a little more wiehgt to it so it's not jsut limp ragdoll?": stiffer springs, more damping, and maxA, each piece never swung
+  // more than ~40 degrees off the way it hangs, so a landing never flings the curls up over her head)
   if (st === "wavy") return [                       // long and wavy, parted in the middle (Camila, from the user's Gabby reference): the long style's locks,
-    ...[-.13, 0, .13].map((z, i) => ({ parent: "head", anchor: [-.22, 0, z], dir: [-.3, -1, z * 1.2], n: 9, seg: .1, w: [.11, .045], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: i * 1.9 })),   //   two more over each
-    ...[-1, 1].map((s, i) => ({ parent: "head", anchor: [.04, -.12, s * .29], dir: [.08, -1, s * .05], n: 4, seg: .08, w: [.06, .03], hang: .5, k0: 220, k1: 80, damp: 15, ph: (3 + i) * 1.9 })),                        //   shoulder and one more
+    ...[-.13, 0, .13].map((z, i) => ({ parent: "head", anchor: [-.22, 0, z], dir: [-.3, -1, z * 1.2], n: 9, seg: .1, w: [.11, .045], hang: .72, k0: 320, k1: 120, damp: 20, sway: .02, maxA: .7, ph: i * 1.9 })),   //   two more over each
+    ...[-1, 1].map((s, i) => ({ parent: "head", anchor: [.06, .04, s * .33], dir: [.06, -1, s * .1], n: 6, seg: .085, w: [.1, .055], hang: .6, k0: 320, k1: 130, damp: 20, maxA: .6, ph: (3 + i) * 1.9 })),   // (over her ears since 2026-11-10: "they should cover her ears")                        //   shoulder and one more
     ...[-1, 1].flatMap((s, j) => [                                                                                                                                                          //   each side at the back,
-      { parent: "head", anchor: [.011, -.131, s * .327], dir: [.12, -1, s * .12], n: 8, seg: .1, w: [.1, .05], hang: .68, k0: 200, k1: 62, damp: 15, sway: .02, ph: (5 + j * 3) * 1.9 },             //   and two short ones
-      { parent: "head", anchor: [-.089, -.091, s * .337], dir: [-.1, -1, s * .2], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: (6 + j * 3) * 1.9 },           //   sweeping off the
-      { parent: "head", anchor: [-.345, 0, s * .2], dir: [-.3, -1, s * .3], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 200, k1: 58, damp: 15, sway: .025, ph: (7 + j * 3) * 1.9 }]),               //   part (hair.wave
-    ...[-1, 1].map(s => ({ parent: "head", anchor: [.6, .78, s * .08], dir: [.4, -.3, s], curlX: s * .45, n: 5, seg: .075, w: [.09, .075], hang: .05, k0: 260, k1: 90, sway: .02, part: true }))];   //   ripples the rest)
+      { parent: "head", anchor: [.011, -.131, s * .327], dir: [.12, -1, s * .12], n: 8, seg: .1, w: [.1, .05], hang: .68, k0: 320, k1: 120, damp: 20, sway: .02, maxA: .7, ph: (5 + j * 3) * 1.9 },             //   and two short ones
+      { parent: "head", anchor: [-.089, -.091, s * .337], dir: [-.1, -1, s * .2], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 320, k1: 120, damp: 20, sway: .02, maxA: .7, ph: (6 + j * 3) * 1.9 },           //   sweeping off the
+      { parent: "head", anchor: [-.345, 0, s * .2], dir: [-.3, -1, s * .3], n: 9, seg: .1, w: [.11, .05], hang: .72, k0: 320, k1: 120, damp: 20, sway: .02, maxA: .7, ph: (7 + j * 3) * 1.9 }]),               //   part (hair.wave
+    ...[-1, 1].map(s => ({ parent: "head", anchor: [.6, .78, s * .08], dir: [.4, -.3, s], curlX: s * .45, n: 5, seg: .075, w: [.09, .075], hang: .05, k0: 380, k1: 170, damp: 22, maxA: .45, sway: .02, part: true }))];   //   ripples the rest)
   if (st === "pigtails") return [-1, 1].map(s => ({ parent: "head", anchor: [-.06, .1, s * .4], dir: [-.15, -.25, s * 1], n: 7, seg: .09, w: [.1, .045], hang: .5, k0: 190, k1: 45, sway: .04 }));
   return [];
 }
@@ -1856,16 +1863,18 @@ function buildHuman(R) {
   Object.assign(R, { kind: "human", root, yaw, spin, body, torso, arms, legs, hands, feet, head, chest, hips, ears, cap, spike, pads, headband, tail,
     mats, texs, mFace, faceO, faceB, mHair, chains, shadow, prop, D, sculpt, heightPx: D.px * S.body.scale, faceArt: art, eyes3d });
   const hk = D.head / 1.45;                                           // locks are sized for the chibi head
-  const anchorOf = a => {                                             // on sculpted hair, locks grow out of the hair surface
+  const anchorOf = (a, sink = 0) => {                                 // on sculpted hair, locks grow out of the hair surface (sink: that far into it)
     if (!sculpt) return sh(...a).toArray();
-    const d = new THREE.Vector3(...a).normalize(), rr = Math.max(field(d).r, 1) - .05;
+    const d = new THREE.Vector3(...a).normalize(), rr = Math.max(field(d).r, 1) - .05 - sink;
     return baseShape(d.multiplyScalar(.3 * rr), true).toArray();
   };
-  hairChains(S.hair.style).forEach(ch => {
-    const anchor = anchorOf(ch.anchor);
+  hairChains(S.hair.style).forEach((ch, ci) => {
+    const ring = S.hair.style === "wavy" && S.hair.curl > .01 && !ch.part;   // (curls: each long lock a ringlet, its root sunk into the hair, its tip rounded. The user, 2026-11-10: "add some curly form to that shape", "her curls seem detached from her actual head")
+    const anchor = anchorOf(ch.anchor, ring ? .14 : 0);
     chains.push({ ...ch, anchor, lm: ch.part ? () => R.spec.body.head * hk * 1.6 : () => R.spec.hair.length * R.spec.body.head * hk, fm: () => R.spec.hair.flow,   // locks grow with the head (a part's short sweeps don't grow with the length)
       wv: ch.part ? null : () => R.spec.hair.wave * R.spec.body.head * hk * .08,                                                                                // how far the waves push each lock side to side
-      tube: new Tube(body, ch.n, 18, 8, t => lerp(ch.w[0], ch.w[1], t) * R.spec.hair.thick * R.spec.body.head * hk, mHair) });
+      tube: new Tube(body, ch.n, ring ? 44 : 18, ring ? 10 : 8, ring ? t => rounded(lerp(ch.w[0], ch.w[1], t), t, 0, .12) * R.spec.hair.thick * R.spec.body.head * hk : t => lerp(ch.w[0], ch.w[1], t) * R.spec.hair.thick * R.spec.body.head * hk, mHair) });
+    if (ring) chains[chains.length - 1].tube.helix = { r: .3 + .2 * Math.min(1, S.hair.curl * 1.6), turns: ch.n > 6 ? 1.7 : 1.1, ph: ci * 2.1 };   // (wound loosely: any tighter for her thick locks and the tube folded through itself into flakes)
     if (ch.tie && S.hair.tie) {                                       // hair tie where the tail is gathered
       const tm = P(new THREE.TorusGeometry(.075, .028, 8, 20).rotateX(Math.PI / 2), M(c.tie)); tm.position.set(...anchor); pointAlong(tm, new THREE.Vector3(...ch.dir)); head.add(tm);
     }
@@ -2994,6 +3003,8 @@ Object.assign(STRIKES, {
     spB: [[0, -.15], [.45, -.05], [.9, -.2], [1.35, -.08], [1.8, -.22], [2.4, -.15]], wB: [[0, 0], [.6, .15], [1.2, -.1], [1.8, .12], [2.4, 0]] } },
   desk_rest: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .41], [1.5, .43], [3, .41]], headRot: [[0, .07], [1.5, .11], [3, .07]], headY: [[0, 0], [3, 0]],
     armF: [[0, .75], [3, .75]], elbF: [[0, .95], [3, .95]], spF: [[0, .38], [3, .38]], wF: [[0, -.13], [3, -.13]], armB: [[0, .75], [1.5, .77], [3, .75]], elbB: [[0, 1.1], [3, 1.1]], spB: [[0, .32], [3, .32]], wB: [[0, -.35], [3, -.35]] } },   // (both on the page, the pencil hand on its right, the user 2026-11-09 "make her right hand visible over the notebook")
+  desk_side: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .24], [1.5, .26], [3, .24]], headRot: [[0, .12], [1.5, .16], [3, .12]], headY: [[0, 0], [3, 0]],   // (sat up a little, her arms down at her sides, her hands by the seat under the desk, never over the sketchbook: it turns its pages by itself. The user, 2026-11-10: "keep the hands off of the page because flipping the page clips too much through the hands. so hands at the side and the page flips on its own. hands never move over the page")
+    armF: [[0, .06], [3, .06]], elbF: [[0, .3], [3, .3]], spF: [[0, .32], [3, .32]], wF: [[0, 0], [3, 0]], armB: [[0, .06], [1.5, .07], [3, .06]], elbB: [[0, .3], [3, .3]], spB: [[0, .3], [3, .3]], wB: [[0, 0], [3, 0]] } },
   desk_lap: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .14], [1.5, .17], [3, .14]], headRot: [[0, .1], [1.5, .14], [3, .1]], headY: [[0, 0], [3, 0]],   // (sat back, both hands in her lap under the desk: the camera in close on a page's drawings, her mittens out of them)
     armF: [[0, .1], [3, .1]], elbF: [[0, 1.2], [3, 1.2]], spF: [[0, .1], [3, .1]], armB: [[0, .1], [3, .1]], elbB: [[0, 1.2], [3, 1.2]], spB: [[0, .1], [3, .1]], wB: [[0, 0], [3, 0]] } },
   desk_flip: { dur: 3, pose: true, keys: { ...DESK_SIT, lean: [[0, .43], [3, .43]], headRot: [[0, .1], [3, .1]], headY: [[0, .05], [3, .05]],

@@ -726,7 +726,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261107"></script>
+<script src="charkit.js?v=20261110"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261109d"></script>
 <script src="score.js?v=20261104a"></script>
@@ -1302,6 +1302,7 @@ const gradeMat = new THREE.ShaderMaterial({
     uniform sampler2D bgDep; uniform float bgSoft, bgR, nite; uniform vec2 bgNF, bgZ;   // (the backgrounds' softness: the scene's depth, how soft, how far round; night's own colour)
     float bgFar(vec2 u) { float d = texture2D(bgDep, u).x; return smoothstep(bgZ.x, bgZ.y, bgNF.x * bgNF.y / (bgNF.y - d * (bgNF.y - bgNF.x))); }   // (0 in the play, up to 1 far behind it: the depth back to distance)
     float bgFarN(vec2 u) { vec2 o = tpx; return min(bgFar(u), min(min(bgFar(u + vec2(o.x, 0.0)), bgFar(u - vec2(o.x, 0.0))), min(bgFar(u + vec2(0.0, o.y)), bgFar(u - vec2(0.0, o.y))))); }   // (far only if its neighbours are too: a character's outline, and the pixel just past it, never softened. The user, 2026-11-10: "the game is still fuzzy on the characters and not just the background", "it was fine until I asked for background s to be blurred")
+    float bgMoat(vec2 u, float r) { float m = 1.0; for (int i = 0; i < 12; i++) { float a = float(i) * .5236; m = min(m, bgFar(u + vec2(cos(a), sin(a)) * tpx * r)); } return m; }   // (none within the blur's reach of a character either: the sea just past her outline took her colours, so her edge looked soft where it crossed it. The user, 2026-11-10: "the blur starteed towrads the top of her head in the first beach screen", "it's still blurry when you jump up")
     vec3 toSRGB(vec3 c) { return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - .055, step(.0031308, c)); }
     float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     float vnoise(vec2 p) { vec2 i = floor(p), u = fract(p); u = u * u * (3.0 - 2.0 * u); return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y); }
@@ -1310,7 +1311,7 @@ const gradeMat = new THREE.ShaderMaterial({
     float gbcMin(vec2 b) { vec2 s = tpx / (tpx.y * gbc), u = (b + .5) * s; vec3 w = vec3(.299, .587, .114); return min(min(dot(toSRGB(max(texture2D(tex, u - s * .25).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * .25).rgb, 0.0)), w)), min(dot(toSRGB(max(texture2D(tex, u + s * vec2(.25, -.25)).rgb, 0.0)), w), dot(toSRGB(max(texture2D(tex, u + s * vec2(-.25, .25)).rgb, 0.0)), w))); }   // its darkest look (an eye, smaller than one big pixel)
     void main() {
       vec4 f = texture2D(tex, vUv);
-      float kf = bgSoft > 0.0 && gbc <= 0.0 ? bgFarN(vUv) : 0.0; { float k = kf; if (k > .002) { vec2 o = tpx * bgR; vec3 s = f.rgb; float ws = 1.0; for (int i = 0; i < 6; i++) { float a = float(i) * 1.0472 + .52; vec2 u = vUv + vec2(cos(a), sin(a)) * o; float w = bgFar(u); s += texture2D(tex, u).rgb * w; ws += w; } f.rgb = mix(f.rgb, s / ws, k * bgSoft); } }   // THE BACKGROUNDS, a touch soft: what's far behind the play, a little blurred (each neighbour only if it's far too, so no one's outline smears into it). The user, 2026-11-09: "can we add just the slightest softenss to all backgrounds?"
+      float kf = bgSoft > 0.0 && gbc <= 0.0 ? bgFarN(vUv) : 0.0; if (kf > .002) kf = min(kf, bgMoat(vUv, max(bgR, softR * .6) + 1.5)); { float k = kf; if (k > .002) { vec2 o = tpx * bgR; vec3 s = f.rgb; float ws = 1.0; for (int i = 0; i < 6; i++) { float a = float(i) * 1.0472 + .52; vec2 u = vUv + vec2(cos(a), sin(a)) * o; float w = bgFar(u); s += texture2D(tex, u).rgb * w; ws += w; } f.rgb = mix(f.rgb, s / ws, k * bgSoft); } }   // THE BACKGROUNDS, a touch soft: what's far behind the play, a little blurred (each neighbour only if it's far too, so no one's outline smears into it). The user, 2026-11-09: "can we add just the slightest softenss to all backgrounds?"
       if (soft > 0.0 && kf > .002) { vec2 o = tpx * softR * .6; vec3 b = f.rgb; float wb = 1.0; for (int i = 0; i < 4; i++) { vec2 u = vUv + (i == 0 ? o : i == 1 ? -o : i == 2 ? vec2(o.x, -o.y) : vec2(-o.x, o.y)); float w = bgFar(u); b += texture2D(tex, u).rgb * w; wb += w; } f.rgb = mix(f.rgb, b / wb, .5 * soft * kf); }   // (kf: only what's far behind the play now, the play itself sharp again; no depth, none: the user, 2026-11-09 "even the player's plane is soft focused now") BIG SCREENS: the edges a little soft, as small as they look on a phone (its alpha kept sharp; each tap only if it's far too, 2026-11-10) (the user, 2026-11-09: "in small screens it looks great but in a bigger screen, it has a sort of regular 3d feel that takes away from the artifice of the clay")
       if (clayT > 0.0) { vec3 a = mat3(.59719, .07600, .02840, .35458, .90834, .13383, .04823, .01566, .83777) * (max(f.rgb, 0.0) * clayX); a = (a * (a + .0245786) - .000090537) / (a * (.983729 * a + .432951) + .238081);   // (CLAY LOOK: filmic, the mockup's ACES)
         f.rgb = mix(f.rgb, clamp(mat3(1.60475, -.10208, -.00327, -.53108, 1.10813, -.07276, -.07367, -.00605, 1.07602) * a, 0.0, 1.0), clayT); }
@@ -9230,19 +9231,12 @@ function towerStep(s, dt, ally) {                    // (updateAllyOne's, first:
   s.x = tx; s.vx = 0; s.pointKind = "press"; twrSt.who[W.i] = s;   // (W.ph "hold": its hand on it till the fence is open)
   return true;
 }
-function twrJoin(p) {                                // (the fence open: the buddy on the other lookout's button over beside you on yours, at once. The user, 2026-11-08: "when you press your button, your buddy who hit the other button should teleport to the tower you're on")
-  const P = p.plat; if (!p.press || !P) return;
-  twrSt.who.forEach((w, i) => { if (!w || w === "you" || i === p.press.i) return; const a = allies.find(A => A.st === w);
-    sparks(w.x, w.y - 60, 10); dust(w.x, w.y, 4, 0); const x = clamp(p.x - p.face * 70, P.x + 24, P.x + P.w - 24);
-    Object.assign(w, { x, y: P.y, vx: 0, vy: 0, onGround: true, plat: P, climb: null, twr: null, pointKind: null, face: p.face, wave: 1, sq: .25, sqv: 0 }); if (a) a.waveT = 1.2;
-    sparks(x, P.y - 60, 10); SFX.whoosh(); });
-}
 function twrTick(dt) {                                // (wavesFx's, every frame: the buttons down while held, and both down at once, the fence open)
   const q = twrOf(), p = player; if (!q || !p) { twrSt.s = -1; if (p && p.press) twrLet(p); return; }
   if (twrSt.s !== stage) { twrSt.s = stage; twrSt.who = q.towers.map(() => null); twrSt.openT = -1; if (p.press) twrLet(p); }
   twrSt.who = twrSt.who.map((w, i) => w === "you" ? (p.press && p.press.i === i ? w : null) : w && w.twr && w.twr.i === i && w.twr.ph === "hold" && allies.some(a => a.st === w) ? w : null);
   const B = (level && level.twr) || []; B.forEach((b, i) => { const on = !!twrSt.who[i] || itemGot(TWR_K.key); if (on !== b.on) { b.on = on; b.cap.position.y = b.y0 - (on ? .1 : 0); const M2 = twrTick.m || (twrTick.m = { on: toon("#5ccf5f"), off: toon("#e0402e") }); b.cap.material = on ? M2.on : M2.off; } });   // (its own two materials, swapped: tinting the one it had (the clay's, its red baked in) turned it a muddy brown here, and on the phone the sand green with it. The user, 2026-11-09: "on the beach, when we hit the switch the sand and parts of the level turned green all the way till the end. this happened on the phone")
-  if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; twrJoin(p); }
+  if (!itemGot(TWR_K.key) && twrSt.who.length && twrSt.who.every(w => w)) { markGot(TWR_K.key); if (story) writeSave(); SFX.confirm(); shake = Math.max(shake, 4); popText(p.x, p.y - 170, "THE FENCE IS OPEN!", 1600); twrSt.openT = 0; }   // (the buddy on the other button stays there and comes over on foot once it lets go: no more jump across to you. The user, 2026-11-10: "in c9 the buddy still teleports to me when I hit the switch")
   if (twrSt.openT >= 0 && (twrSt.openT += dt) > 1.4) { twrSt.openT = -1; allies.forEach(a => { const s = a.st; if (s.twr) { s.twr = null; s.pointKind = null; s.wave = 1; a.waveT = 1.2; } }); }   // (a beat on, the buddies let go and cheer)
   if (!btSeen("btn") && p.onGround && p.plat && q.towers.some((t, i) => Math.abs(p.plat.y - twrAt(q, i).y) < 4)) { btMark("btn"); tutPop(`PRESS ${tutTag("j")} AT THE BUTTON · HOLD ${tutTag("ch")} AND PRESS <span class="key">↑</span> TO SEND A BUDDY TO THE OTHER ONE`, 6); }   // (one press: your hand stays on it. It read "PRESS A OR X AT THE BUTTON TO HOLD IT DOWN": the user, 2026-11-08 "why do the instructions here say something about holding x or y?")   // (up on a lookout the first time: how)
 }
@@ -10243,7 +10237,7 @@ function showCard(id) {
 // the accessories page (the user, 2026-11-09: "when you find or buy an accessory (if buying, show it after you close the menu) show a full screen with no animation of camila's
 // drawing showing 3 accessories and a voice over explaining how to use them"): her page (story/desk/acc.jpg, pages.js "acc") on the whole screen, still, VO.acc read out over
 // it; once a story, the first one you get. Bought: once the stall's shut (update doesn't run while it's up). A press skips a line; after the last, a press closes it
-const ACC_PAGE = "story/desk/acc.jpg?v=20261109";
+const ACC_PAGE = "story/desk/acc.jpg?v=20261110";
 let accWant = 0;                                     // (when it's due: game time, once nothing else is up · 0: not)
 function accDue(d = .6) { if (!story || (story.vo || []).includes("acc") || accWant) return false; accWant = time + d; voLoad(); const im = new Image(); im.src = ACC_PAGE; return true; }
 function maybeAcc() {
@@ -10326,8 +10320,8 @@ const TALE = [                                       // (told by Camila, grown u
   { img: "story/k4.jpg?v=20261108", who: "camila", text: "And somehow, they convinced some of our own people to work for them, with promises upon promises of everything they've ever wanted." },   // (no "too": the user, 2026-10-23)
   { img: "story/k5.jpg?v=20261108", who: "camila", text: "But now, our lives are not our own. And we've been without peace for too long..." },
   { img: "story/k6.jpg?v=20261108", who: "camila", text: "The Berry Blade and the Berry Gauntlet were used by our people, years ago, to unify the different groups on the island." },
-  { img: "story/k7.jpg?v=20261108", who: "camila", text: "It's been a year now since the elders granted us these relics," },   // (the last two new, the user 2026-10-26: "its been a year now since the elders granted these relics to us, imploring us to quite literally beat some sense into the other berries and fight back against the greedy rulers...")
-  { img: "story/k8.jpg?v=20261108", who: "camila", text: "imploring us to quite literally beat some sense into the other berries, and fight back against the greedy rulers..." },
+  { img: "story/k7.jpg?v=20261110", who: "camila", text: "It's been a year now since the elders granted us these relics," },   // (the last two new, the user 2026-10-26: "its been a year now since the elders granted these relics to us, imploring us to quite literally beat some sense into the other berries and fight back against the greedy rulers...")
+  { img: "story/k8.jpg?v=20261110", who: "camila", text: "imploring us to quite literally beat some sense into the other berries, and fight back against the greedy rulers..." },
 ];
 const TALE_P1 = 5, TALE_VOL = .9;                   // (louder since 2026-10-23, the user: "the voice which was kind of low, and then loud background sounds": the sea and the bugs go quiet under it now)                   // (the first page's panels; then it turns over)
 let tale = null; const taleVo = { state: "idle", bufs: [] };
@@ -10414,7 +10408,7 @@ function voLoad() {                                  // the lines, decoded once
     const bytes = b64 => { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); return u.buffer; };
     Promise.all(Object.keys(A).flatMap(k => A[k].map((b, i) => c.decodeAudioData(bytes(b)).then(buf => { (voBank.bufs[k] = voBank.bufs[k] || [])[i] = buf; }).catch(() => { })))).then(() => { voBank.state = "ready"; }); };
   if (window.BERRY_VO) return go();
-  const el = document.createElement("script"); el.src = "story/vo.js?v=20261109b"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
+  const el = document.createElement("script"); el.src = "story/vo.js?v=20261110"; el.onload = go; el.onerror = () => { voBank.state = "failed"; }; document.head.appendChild(el);
 }
 // the voices (the user, 2026-10-24: "keep a log the player can access from the in-game or main menu of all voiceover from the heroines"): every line
 // Camila and Rose have said to you, in the order you heard them, each to hear again. Kept on this device
@@ -10431,7 +10425,7 @@ Object.assign(VO, { uprise: ["Every baddy we beat was a berry won back: caught i
 Object.assign(VLOG_TITLE, { uprise: "HOW THE UPRISING WORKS" });
 Object.assign(VO, { weap2: ["The Berry Blade and Gauntlet were not truly weapons, but living relics from so long ago.", "They captured the energy of the people, and were used to build and defend. Now, we used them to reclaim.", "But the weight of our people caused the weapons to grow, and we hoped to carry this responsibility well..."] });   // (the user's words, 2026-11-09: told at her desk the first time out of the Berry Woods, leaveTale)
 Object.assign(VLOG_TITLE, { weap2: "THE LIVING RELICS" });
-Object.assign(VO, { acc: ["Ooh, something to wear! Here are a few of my favorites.", "Pause the game and pick Accessories, then choose who to dress, Rose or me.", "Pick a spot, like our faces, hats or weapons, and change what goes there.", "They do not make us stronger. They just make us look good!"] });   // (the accessories page: showAccPage. ~/BerryBlade3DS-tools/vo1109b.sh)
+Object.assign(VO, { acc: ["Ooh, an accessory!", "Pause the game to customize our looks.", "They don't make us stronger, but they make us look cool!"] });   // (the accessories page: showAccPage. ~/BerryBlade3DS-tools/vo1110.sh; cut to these three, the user 2026-11-10: "just have the "ooh, an accessory!" and the pause the game to customize our looks and then cut out the rest. except for "they don't make us stronger, but they make us look cool!"")
 Object.assign(VLOG_TITLE, { acc: "HOW TO WEAR ACCESSORIES" });
 const TALE_STORIES = [{ id: "glosday", lines: [["pro2", 0]] }];   // (her stories, told in the spotlight after a world's CLEARED card, now and then: the user, 2026-11-08 "cut glos portion from intro. instead, that'll be one of the stories that camila tells at level complete screens after closing out. we'll have this happen randomly as well". Each told once, in the order they come up; more to come)
 // Her stories on the way out of a world, at her desk before La Guagua (the user, 2026-11-09: "we're going to have some randomized ones whenever you leave a world. it'll pop up before la guagua's cutscene. the very first
@@ -10455,7 +10449,7 @@ function storyAfter(then) {                          // (statsGo) one of her sto
 let spot = null, spotPv = null;   // (spot: her desk scene, up · spotPv: its renderer, its lights and her, kept for next time. Her knock-out stories (lose1, cheer, spotWant) taken out, the user 2026-11-09)
 function voLoud() { return !!((vo && vo.src) || (spot && spot.src)); }   // (the music down under her)
 // Camila at her desk, where the spotlight was (the user, 2026-11-08: "the conceit of the game is that this is a story camila is illustrating ... open to a shot of camila drawing at her desk in her house. the camera will be where we can see her face and her drawing but angled up and at a lower angle so we see her hands with a colored pencil moving but we dont see what she's drawing. the camera will swing around her and down to the paper and then there the story will appear in drawings"; the drawings IMG_1399 and IMG_1401)
-const DESK_PAGES = { woods1: "story/desk/woods1.jpg?v=20261108", woods2: "story/desk/woods2.jpg?v=20261108", uprise: "story/desk/uprise.jpg?v=20261108", glosday: "story/desk/glosday.jpg?v=20261108", relic1: "story/desk/relic1.jpg?v=20261109", relic2: "story/desk/relic2.jpg?v=20261109" };   // (her pages, colored pencil on the sketchbook's tan paper: drawn by .claude/berry-tools/sketch, each written out whole so the phone build finds it)
+const DESK_PAGES = { woods1: "story/desk/woods1.jpg?v=20261110", woods2: "story/desk/woods2.jpg?v=20261110", uprise: "story/desk/uprise.jpg?v=20261110", glosday: "story/desk/glosday.jpg?v=20261110", relic1: "story/desk/relic1.jpg?v=20261110", relic2: "story/desk/relic2.jpg?v=20261110" };   // (her pages, colored pencil on the sketchbook's tan paper: drawn by .claude/berry-tools/sketch, each written out whole so the phone build finds it)
 const DESK_BOOK = { desk: { pages: ["woods1", "woods2", "uprise"], lines: [["woods", 0, 0], ["woods", 1, 1], ["uprise", 0, 2, 1], ["uprise", 1, 2, 2], ["uprise", 2, 2, 3], ["uprise", 3, 2, 0]], k: 1, skip: 0 },   // (after the beach, deskIntro: the woods voice-over, then how the uprising works, its page's three drawings one at a time · lines: [VO key, line, its page, the drawing on it to look at, 0 the whole page])
   "story:glosday": { pages: ["glosday"], k: .85, skip: 2.6 }, weap2: { pages: ["relic1", "relic2"], lines: [["weap2", 0, 0, 1], ["weap2", 1, 0, 0], ["weap2", 2, 1, 0]], k: .85, skip: 2.6 } };   // (no lines: a page a line, the line's own · k: the camera's moves quicker · skip: in from round her side, not from in front)
 const DESK = { top: 1, nx: -.06, nz: .98, pw: .92, pd: .69, fov: 30, flip: 1.4, tA: 2.6, tB: 2.8, tC: 2.1 };   // (the desk's top, the sketchbook's middle and size, the lens, a page's turn, the three shots' lengths)
@@ -10549,7 +10543,7 @@ function spotOn(id, then, lines) {                   // her room on the black, h
   if (!list.length) return then();
   const book = DESK_BOOK[id] || DESK_BOOK["story:glosday"], ck = book.k || 1, pageOf = n => { const q = book.lines && book.lines[n]; if (q) return q[2]; const e = list[n]; return Math.min(Array.isArray(e) ? e[1] : e, book.pages.length - 1); };   // (the line's page: its own, or the one for that line)
   spot = { id, list, k: -1, wait: (DESK.tA + DESK.tB + DESK.tC - (book.skip || 0)) * ck + .2, hold: 3, src: null, t0: performance.now(), out: false, then,   // (her first line as the camera comes onto the page)
-    book, ck, ct: 0, page: pageOf(0), pageOf, focusOf: n => (book.lines && book.lines[n] && book.lines[n][3]) || 0, focus: 0, flip: null, pose: "desk_draw", cut: id === "desk", poseT0: 0, gest: null, gNext: 0, gLast: null, pencil: DESK_PENCILS[(story.pencil = ((story.pencil ?? -1) + 1) % DESK_PENCILS.length)] };   // (cut: the opening's, paused and skipped as a cutscene)
+    book, ck, ct: 0, page: pageOf(0), pageOf, focusOf: n => (book.lines && book.lines[n] && book.lines[n][3]) || 0, focus: 0, flip: null, pose: "desk_side", cut: id === "desk", poseT0: 0, gest: null, gNext: 0, gLast: null, pencil: DESK_PENCILS[(story.pencil = ((story.pencil ?? -1) + 1) % DESK_PENCILS.length)] };   // (cut: the opening's, paused and skipped as a cutscene)
   story.vo = [...new Set([...(story.vo || []), id])]; writeSave(); voLoad(); book.pages.forEach(deskTex);
   $("spot").classList.remove("lit", "off"); $("spot").classList.add("show");
   try { spotDraw(0); } catch (e) { console.warn("spot", e); }
@@ -10565,7 +10559,7 @@ function spotDraw(dt) {                              // her room through the men
     const pen = deskPencil(); let grip = null; if (r.hands && r.hands[1]) { r.hands[1].add(pen); grip = deskGrip(r.hands[1], pen); } const st = makeState(0, r); st.onGround = true; E = V.E = { r, st, spec: src.spec, fresh: true, t: 0, pen, grip }; }
   if (S) deskPencilSet(E.pen, S.pencil);
   const W = gearState().wear.camila || {}; if (E.r.__gearKey !== JSON.stringify(W)) { dressGear(E.r, W); E.fresh = true; }
-  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = E.r.prop && E.r.prop.rings ? E.r.prop.rings.length : 3; st.noGlow = true; st.palm = 1; st.palmBack = true; st.tcPose = S ? S.pose : "desk_draw"; st.tcT0 = S ? S.poseT0 : 0; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false; deskFlat(E.r); if (E.grip) E.grip.userData.hide.forEach(m => { m.visible = false; });   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip), her pencil hand's little moves (desk_face, desk_point, desk_out, each from its start: tcT0) · hp: every gauntlet ring in its colour, as at full health (the user, 2026-11-09 "have her gauntlet show all the colors like when she's at full health"), noGlow: still no glow over the page · palm: the gauntlet open, flat on the page)
+  const T0 = KIT.time; for (let i = 0, n = E.fresh ? 60 : 1, h = E.fresh ? 1 / 60 : clamp(dt || 1 / 60, 1 / 240, .05); i < n; i++) { const st = E.st; st.yaw = -Math.PI / 2; st.face = 1; st.sit = true; st.hp = E.r.prop && E.r.prop.rings ? E.r.prop.rings.length : 3; st.noGlow = true; st.palm = 1; st.palmBack = true; st.tcPose = S ? S.pose : "desk_side"; st.tcT0 = S ? S.poseT0 : 0; KIT.time = E.t += h; KIT.updatePose(st, h); E.r.sync(st, E.r, h); } KIT.time = T0; E.fresh = false; deskFlat(E.r); if (E.grip) E.grip.userData.hide.forEach(m => { m.visible = false; });   // (her own clock: the game's stands still under the black · sat, facing the desk, the pencil going (desk_draw), still (desk_rest), a page over (desk_flip), her pencil hand's little moves (desk_face, desk_point, desk_out, each from its start: tcT0) · hp: every gauntlet ring in its colour, as at full health (the user, 2026-11-09 "have her gauntlet show all the colors like when she's at full health"), noGlow: still no glow over the page · palm: the gauntlet open, flat on the page)
   const R = V.room; if (S) { deskSet(R.page.material, deskTex(S.book.pages[S.page])); const F = S.flip; R.sheetF.visible = R.sheetB.visible = !!F; if (F) { deskSet(R.sheetF.material, deskTex(S.book.pages[F.from])); deskSheet(R, clamp(F.t / DESK.flip, 0, 1)); } }
   const w = box.clientWidth, h = box.clientHeight, pr = Math.min(1.5, window.devicePixelRatio || 1, 2200 / Math.max(1, w)); if (w && h && (V.w !== w || V.h !== h || V.pr !== pr)) { V.w = w; V.h = h; V.pr = pr; V.R2.setPixelRatio(pr); V.R2.setSize(w, h, false); V.cam.aspect = w / h; V.cam.updateProjectionMatrix(); }
   deskCam(S, V, dt); const fU = V.clay && SHADE && SHADE.U, f0 = fU ? [fU.mkClayF.value, fU.mkClayPF.value] : null; if (fU) { fU.mkClayF.value *= 2.4; fU.mkClayPF.value *= 2.4; fU.mkXtraI.value = 1; }   // (in clay: her room's smears and prints finer, it's small and seen close; her lamp's light and the moon's through the window on it too (the user, 2026-11-09: "can we have a window in front and to the left of camila when she's on her room so there can be more dynamic light there?"))
@@ -10573,18 +10567,14 @@ function spotDraw(dt) {                              // her room through the men
 }
 function spotTick(dt) {                              // (every frame while she's up) the camera, her pencil, her lines one after another as the voice-overs go, a page over for each new drawing
   const S = spot; if (!S) return; S.ct += dt; const arrive = (DESK.tA + DESK.tB + DESK.tC - (S.book.skip || 0)) * S.ck;
-  const rest = S.focus ? "desk_lap" : "desk_rest";   // (her hands on the page now, the pencil in the right, the gauntlet flat, the user 2026-11-09; in her lap while the camera's in close on one drawing, out of it)
-  if (S.pose === "desk_draw" && S.ct > arrive - .7 * S.ck) S.pose = rest; if (S.pose === "desk_rest" || S.pose === "desk_lap") S.pose = rest;   // (the pencil still as the camera comes down onto the page)
-  const F = S.flip; if (F) { F.t += dt; if (F.t > DESK.flip * .55) S.pose = rest; if (F.t >= DESK.flip) S.flip = null; }
-  const G = S.gest; if (G && S.ct >= G.end) { S.gest = null; S.pose = rest; S.gNext = S.ct + rand(3.5, 6.5); }   // (one of her pencil hand's little moves done: back on the page a while)
-  else if (!G && !F && !S.out && !S.focus && S.pose === rest && S.ct > arrive + 1 && spotPv && spotPv.E) {   // (the camera on the page: now and then her hand off it a moment, up to her face, over the drawing, out past its side, the user 2026-11-09)
-    if (!S.gNext) S.gNext = S.ct + rand(1.5, 3); else if (S.ct >= S.gNext) { const k = ["desk_face", "desk_point", "desk_out"].filter(q => q !== S.gLast)[Math.floor(Math.random() * 2)]; S.gest = { k, end: S.ct + KIT.STRIKES[k].dur }; S.gLast = k; S.pose = k; S.poseT0 = spotPv.E.t; } }
+  S.pose = "desk_side";   // (her hands down at her sides under the desk, close-ups too, never over the page: no drawing, no turning it by hand, none of the little hand moves. The user, 2026-11-10: "hands at the side and the page flips on its own. hands never move over the page")
+  const F = S.flip; if (F) { F.t += dt; if (F.t >= DESK.flip) S.flip = null; }   // (the page turning itself)
   try { spotDraw(dt); } catch (e) { }
   if (S.out || S.flip) return;
   if (S.k < 0 && voBank.state === "loading" && (S.hold -= dt) > 0) return;   // (a moment for her voice to come in)
   if ((S.wait -= dt) > 0) return;
   const k = S.k + 1; if (k >= S.list.length) return spotOut();
-  const pg = S.pageOf(k); if (pg !== S.page) { if (S.gest) return; S.flip = { t: 0, from: S.page }; S.page = pg; S.focus = 0; S.pose = "desk_flip"; SFX.page(); S.wait = .3; return; }   // (a new drawing: she turns the page first, then says it)
+  const pg = S.pageOf(k); if (pg !== S.page) { if (S.gest) return; S.flip = { t: 0, from: S.page }; S.page = pg; S.focus = 0; SFX.page(); S.wait = .3; return; }   // (a new drawing: she turns the page first, then says it)
   S.k = k; S.focus = S.focusOf(k); const e = S.list[k], [vk, i] = Array.isArray(e) ? e : [S.id, e], line = VO[vk][i], cap = $("voCap"); cap.style.bottom = ""; capWho(cap, "camila", line); cap.classList.add("show", "spot"); vlogMark(vk + ":" + i);   // (a story's line: another voice-over's, [its key, the line])
   const b = (voBank.bufs[vk] || [])[i];
   if (b && live() && sfxOn) { const src = ac.createBufferSource(), g = ac.createGain(); src.buffer = b; g.gain.value = VO_VOL; src.connect(g); g.connect(ac.destination); src.start(ac.currentTime);
@@ -11734,7 +11724,7 @@ function enterStage(ns, back) {                      // into the room: its baddi
   const done = fillRoom(), iso = !!STAGES[stage].quick; if (!iso) maybeSkirmish(done);   // the berry baddies first; on a boss stage the boss drops in once they're popped   // (iso: QUICK PLAY, nothing else in it)
   if (bossIn) { showFoe(foe); enemy.dir = player.x < enemy.x ? -1 : 1; enemy.y = -60; enemy.vy = 200; enemy.onGround = false; }
   const fresh = !done && !roomsSeen.has(stage); roomsSeen.add(stage);
-  if (fresh) { player.hp = maxHp(); player.safeT = 1; partnerList().forEach(P => { P.q.php = PARTNER_HP; }); } updateHearts(false);
+  player.hp = maxHp(); if (fresh) player.safeT = 1; partnerList().forEach(P => { P.q.php = PARTNER_HP; }); updateHearts(false);   // (full health in every room, been in it or not: the user, 2026-11-10 "always replenish health when going to a new screen")
   if (!iso) { wildRoom(fresh, back); allyWander(); allyRoom(); meetRoom(); }   // (a wild cat: resting here, or still running on ahead of you)                               // (this world's berry buddies, if one's in here; they wander now and then; the one found in a fight)
   setFoeHud();
   $("banner").classList.remove("show");             // (no banner naming the room: the user, 2026-10-20)
@@ -12782,7 +12772,7 @@ function zipPan(ns) {                                // on down the line into th
   });
 }
 // LEDGES: jump at one, near enough, and she catches its edge and pulls herself up onto it (the user, 2026-11-09: "add a ledge grabbing animation where if the player jumps towards a ledge and is close enough to it, the character will catch it and pull herself up onto the level. make sure they do not awkwardly snap from big gaps between them and a ledge before or behind them")
-const LEDGE = { reach: 22, back: 24, lo: .05, sag: .8, hi: 1.2, top: 1.35, hang: .2, pull: .32, low: .2, over: .16 };   // (more forgiving since 2026-11-09, was reach 12, back 9, hi 1.1, top 1.2: the user, "the grabbing ledges should be more forgiving. I was jumping right up to a platform and it would not grab on") (reach / back: how far she's carried to it, forward or back, px; lo..top: how far under its top her feet are, in her heights (past hi she reaches up a few px, no more; caught higher than sag, under lo she steps straight up, between she sinks into the hang at her arms' length); the hang, the pull up, a quick step up for a low one, and over onto it, s)
+const LEDGE = { reach: 14, back: 10, lo: .78, sag: .8, hi: 1.2, top: 1.3, hang: .2, pull: .32, low: .2, over: .16 };   // (only where her hands are at its edge since 2026-11-10, was reach 22, back 24, lo .05, top 1.35: higher than that she just lands on it or drops past, no step up. The user: "sometimes it happens when their hands are not touching the platform", "only have them grab when their hands are in a place to grab a ledge but if you're over it, it doesn't need a step-up animation")   // (more forgiving since 2026-11-09, was reach 12, back 9, hi 1.1, top 1.2: the user, "the grabbing ledges should be more forgiving. I was jumping right up to a platform and it would not grab on") (reach / back: how far she's carried to it, forward or back, px; lo..top: how far under its top her feet are, in her heights (past hi she reaches up a few px, no more; caught higher than sag, under lo she steps straight up, between she sinks into the hang at her arms' length); the hang, the pull up, a quick step up for a low one, and over onto it, s)
 function ledgeFind(p, dir) {                       // the ledge ahead of her, in reach: its edge, its top, and the platform if it is one (never one behind her)
   const H = p.rig.heightPx || 92, hx = 13, inY = ly => { const d = p.y - ly; return d >= H * LEDGE.lo && d <= H * LEDGE.top; };
   const room = (ex, ly) => !CEILS.some(([c0, c1, cy]) => ex + dir * 20 > c0 && ex + dir * 20 < c1 && cy < ly && cy > ly - H);   // (room to stand up there)
@@ -15367,7 +15357,7 @@ function handChest(r, i) {                           // (one hand of a rig's, in
   return { c, top };
 }
 function healHold(r, s) {                            // the basket sat on his left hand, wherever it is, so it's never through it (the user, 2026-11-03: "make stilt hold the basket without his hands clipping to it"; 2026-11-05, "for stilt, let's make him hold his basket with his left hand"); blocking, held out before him by it, its floor to them: his shield
-  const g = r.__pile, H = r.hands; if (g && r.__basketAt) { g.rotation.z = 0; g.position.set(...r.__basketAt); return; }   // (one whose hands don't show, Flora: where it's held, __basketAt)
+  const g = r.__pile, H = r.hands; if (g && r.__basketAt) { g.rotation.z = 0; g.position.set(...(s && s.sit && s.chair ? LAP_BASKET : r.__basketAt)); return; }   // (sat in a chair: on her lap, 2026-11-10)   // (one whose hands don't show, Flora: where it's held, __basketAt)
   if (!g || !H || H.length < 2 || !r.chest) return; const { c } = handChest(r, 0);
   g.rotation.z = 0; g.position.set(c.x, c.y - .3, c.z);   // (carried by its handle, the hand at the top of it, blocking or not: his shield's in his right, shieldHold; it sat up on his palms when he held it in both)
 }
@@ -17347,6 +17337,7 @@ function meetStay() {                               // a new stay in this world:
 }
 function meetHide() { const M = meet; if (!M || !M.r) return; const joined = M.phase === "done"; if (!joined) { M.r.root.visible = M.r.shadow.visible = false; (M.crew || []).forEach(m => { m.r.root.visible = m.r.shadow.visible = false; }); }
   if (M.b) { M.b.duel = null; M.b = null; } M.st = null; }
+const LAP_BASKET = [.3, -.42, .06];   // (on the healer's lap, sat in B4's chair: in her chest's space)
 function meetRoom() {                               // into a room: the meeting, if one's in this one (and the dice say so this time)
   const M0 = meet;
   if (M0 && (M0.phase === "duel" || M0.phase === "help" || M0.phase === "cheer")) { meetHide(); M0.phase = "wait"; M0.seen = true; }   // (you left them to it: there again when you're back)
@@ -17382,7 +17373,8 @@ function meetStep(M, dt) {
   if (!M || !M.st || mode !== "play" || !player || transit) return; const s = M.st, p = player, b = M.b; M.t += dt;
   if (M.phase === "sit") {                           // (sat waiting: it watches you come; up, as you reach it)
     s.sit = 1; s.sitGround = !M.chair; s.vx = 0; s.face = Math.sign(p.x - s.x) || s.face; if (M.chair) { s.chair = true; s.seatLift = seatLift(M.r); s.z = -1.1; }   // (B4's white chair: sat up in it, back off the way you walk, 2026-11-04)
-    if (Math.abs(p.x - s.x) < 170 && Math.abs(p.y - s.y) < 140 && !p.dead) { s.sit = 0; s.sitGround = false; if (M.chair) { s.chair = false; s.seatLift = 0; s.z = 0; } M.phase = "cheer"; M.t = 0; s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1;
+    if (M.kind === "ally" && M.A.heal && M.r.__basketAt) { healPile(M.r, []); if (M.r.__pile) M.r.__pile.position.set(...LAP_BASKET); }   // (the healer's basket on her lap while she sits there: the user, 2026-11-10 "when flora is sitting in b4, he should have the basket on his lap")
+    if (Math.abs(p.x - s.x) < 170 && Math.abs(p.y - s.y) < 140 && !p.dead) { s.sit = 0; s.sitGround = false; if (M.chair) { s.chair = false; s.seatLift = 0; s.z = 0; } M.phase = "cheer"; M.t = 0; s.vy = -560; s.onGround = false; s.plat = null; s.wave = 1; if (M.r.__basketAt) healPile(M.r, null);   // (up: her basket's back in her hands once she's with you, healerTick)
       if (M.kind === "ally") { buddyLast[M.A.id] = -9; SFX.buddy(M.A.id, "hi", .9); } else petCall(M.sp, 1.3); } }
   else if (M.phase === "duel" || M.phase === "help") {
     if (!b || b.dead || b.gone) { M.phase = "cheer"; M.t = 0; s.atkKind = null; s.atkT = -1; if (b) b.duel = null; s.face = Math.sign(p.x - s.x) || s.face;   // (the berry beaten: a cheer)
@@ -22843,14 +22835,32 @@ function buildBeach(k = 0, seed = k) {
     const mBl = toon("#c9965e"), mBlD = toon("#9c6b42"), mCl = toon("#8a8279"), cuts = new Set([-900, WORLD + 900]), GP = ST.tbridge ? ST.gaps || [] : GAPS;   // (GP: B7's gap even once it's bridged)
     PROFILE.forEach(q => cuts.add(q[0])); GP.forEach(([a, b]) => { cuts.add(a); cuts.add(b); });
     const xs = [...cuts].filter(x => x >= -900 && x <= WORLD + 900).sort((a, b) => a - b);
+    const smRuns = [];                               // (a stretch with a slope in it and no sheer steps, up on the bluff: its sand and the rock under it each ONE piece, the slope's corners rounded, so no seam where the hill meets the flat, top or foot. The user, 2026-11-10: "in b3, hide the seams at the bottom and the top of the hill/ramp")
+    if (hi || ST.cliff) { let r = null; const shut = () => { if (r && r.slope && r.even) smRuns.push(r); r = null; };
+      for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2; if (b <= a) continue;
+        if (GP.some(([g0, g1]) => m > g0 && m < g1)) { shut(); continue; }
+        const ga = Y(groundAt(a + .01) ?? GROUND), gb = Y(groundAt(b - .01) ?? GROUND);
+        if (!r) r = { a, b, slope: false, even: true, pts: [[X(a), ga]] }; else { if (Math.abs(r.pts[r.pts.length - 1][1] - ga) > .05) r.even = false; r.b = b; }
+        if (Math.abs(ga - gb) > .05) r.slope = true; r.pts.push([X(b), gb]); }
+      shut(); }
+    const inSm = m => smRuns.some(q => m > q.a && m < q.b);
+    smRuns.forEach(q => { const P0 = q.pts.filter((p, k) => !k || Math.abs(p[0] - q.pts[k - 1][0]) > 1e-4), T = [P0[0]];   // (the corners rounded: a curve from a little before each to a little after)
+      for (let k = 1; k + 1 < P0.length; k++) { const [x0, y0] = P0[k - 1], [x1, y1] = P0[k], [x2, y2] = P0[k + 1], s0 = (y1 - y0) / (x1 - x0), s1 = (y2 - y1) / (x2 - x1);
+        if (Math.abs(s0 - s1) < .01) { T.push(P0[k]); continue; } const R = Math.min(1.6, (x1 - x0) * .45, (x2 - x1) * .45);
+        for (let j = 0; j <= 16; j++) { const u = j / 16, ax = x1 - R, ay = y1 - s0 * R, bx = x1 + R, by = y1 + s1 * R; T.push([(1 - u) ** 2 * ax + 2 * u * (1 - u) * x1 + u * u * bx, (1 - u) ** 2 * ay + 2 * u * (1 - u) * y1 + u * u * by]); } }
+      T.push(P0[P0.length - 1]); const bot = hi ? lowY - 6 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
+      const strip = (dn, base) => new THREE.Shape([...T.map(([x, y]) => new THREE.Vector2(x, y - dn)), ...(base === undefined ? T.slice().reverse().map(([x, y]) => new THREE.Vector2(x, y - dn - .5)) : [new THREE.Vector2(T[T.length - 1][0], base), new THREE.Vector2(T[0][0], base)])]);
+      const sd = mk(new THREE.ExtrudeGeometry(strip(0), { depth: d + .06, bevelEnabled: false }), null, { mat: mSand, ol: 0 }); sd.position.z = zc - (d + .06) / 2; scene.add(sd);   // its sand, one piece
+      const rk = mk(new THREE.ExtrudeGeometry(strip(.45, bot), { depth: d, bevelEnabled: false }), null, { mat: mBl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); });   // the rock under it, one piece
     for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2, w = (b - a) * S, cx = X(m); if (w <= 0) continue;
       if (GP.some(([g0, g1]) => m > g0 && m < g1)) { if (hi) scene.add(at(mk(new THREE.BoxGeometry(w, 6, 14), null, { mat: mSand, ol: 0 }), cx, lowY - 3, -2)); continue; }   // (open: the beach a row down)
       const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? lowY - 6 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
       const ga = Y(groundAt(a + .01) ?? GROUND), gb = Y(groundAt(b - .01) ?? GROUND);
+      if (Math.abs(ga - gb) > .05 && inSm(m)) continue;   // (built whole above)
       if (Math.abs(ga - gb) > .05) { const slS = new THREE.Shape([new THREE.Vector2(X(a), ga - .5), new THREE.Vector2(X(b), gb - .5), new THREE.Vector2(X(b), gb), new THREE.Vector2(X(a), ga)]), sl = mk(new THREE.ExtrudeGeometry(slS, { depth: d + .06, bevelEnabled: false }), null, { mat: mSand, ol: 0 }); sl.position.z = zc - (d + .06) / 2; scene.add(sl);   // a slope (B3's dune up to B4's high ground, 2026-11-04): its sand along it, the rock under it cut to the line   // (d + .06: its face a hair in front of the flat sand's and the rock's, where they overlap at its foot. In the one plane they fought for it, the bottom of B3's hill flickering: the user, 2026-11-05)   // (its sand a wedge, top end to end on the flat sand either side and its ends straight up, not a tilted slab: its square-cut ends left a crack where B3's hill meets the top. The user, 2026-11-08: "there's a seam atop b3 where the hill connects with the top level and it's cracked. it should be seamless")
         const sh = new THREE.Shape([new THREE.Vector2(X(a), bot), new THREE.Vector2(X(b), bot), new THREE.Vector2(X(b), gb - .45), new THREE.Vector2(X(a), ga - .45)]), rk = mk(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), null, { mat: hi || ST.cliff ? mBl : mCl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); continue; }
-      scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
-      if (hi || raised) { scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi && !ST.cliff ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it (ST.cliff: B5's bluff on down into the cove, C5's, 2026-11-04)
+      if (!inSm(m)) scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
+      if (hi || raised) { if (!inSm(m)) scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi && !ST.cliff ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it (ST.cliff: B5's bluff on down into the cove, C5's, 2026-11-04)
         for (let k = 1; k <= 3; k++) { const y = top - .5 - k * (top - .5 - bot) / 4; scene.add(at(mk(new THREE.BoxGeometry(w, .14, .06), null, { mat: mBlD, ol: 0 }), cx, y, zc + d / 2 + .03)); }   // (its layers)
         const n = Math.max(2, Math.round((top - bot) / 2.2));   // boulders along a face that's open to the side
         [[a, -1], [b, 1]].forEach(([ex, sd]) => { if (ex <= -900 || ex >= WORLD + 900) return; const open = GP.some(([g0, g1]) => ex + sd * 5 > g0 && ex + sd * 5 < g1) || (groundAt(ex + sd * 10) ?? 1e9) > groundAt(m) + 60; if (!open) return;
