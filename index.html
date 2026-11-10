@@ -30733,18 +30733,21 @@ function fpsNote(now, lg, dr) {                      // a tick done: its logic a
 }
 
 const STEP = 1 / 120;
-// if the frame rate drags (slower GPU, huge window), render at a lower resolution automatically
-let qT = 0, qN = 0, qSum = 0;
+// if the frame rate drags (slower GPU, huge window), render at a lower resolution automatically, and back up once it's smooth again
+const Q_MIN = 1.5, Q_FPS = [40, 36, 0];   // (phone build: only under ~40 fps, never below 1.5x, and always some edge smoothing)              // (the lowest resolution it goes to; how slow before a step down: a step of the resolution, the lighter smoothing, none)
+const Q_LAD = (() => { const m = Math.min(Q_MIN, pixelRatio), L = []; for (let r = pixelRatio; r > m + .001; r -= .25) L.push([r, 4, Q_FPS[0]]); L.push([m, 4, Q_FPS[1]], [m, 2, Q_FPS[2]], [m, 0, 0]); return L; })();   // (each step down: a quarter less resolution, to the lowest; then lighter edge smoothing; then none. Its third: the fps under which it steps down from there)
+let qT = 0, qLast = 0, qSlow = 0, qFast = 0, qLv = 0; const qIv = [], qFail = [];
+function qSet(lv) { const [r, n] = Q_LAD[lv]; qLv = lv; if (r !== pixelRatio) { pixelRatio = r; renderer.setPixelRatio(r); renderer.setSize(innerWidth, innerHeight); sizeRT(); } if (n !== frameRT.samples) { frameRT.samples = n; frameRT.dispose(); } }
 function adaptQuality(dt) {
-  if (document.hidden) return;
-  qT += dt; qN++; qSum += dt;
-  if (qT < 1.5) return;
-  const avg = qSum / qN; qT = qN = qSum = 0;
-  if (avg > 1 / 40 && pixelRatio > 1.5) {   // (phone build: only under ~40 fps, and never below 1.5x)                     // under ~54 fps: a lower resolution first
-    pixelRatio = Math.max(1.5, pixelRatio - .25);
-    renderer.setPixelRatio(pixelRatio); renderer.setSize(innerWidth, innerHeight); sizeRT();
-  } else if (avg > 1 / 36 && frameRT.samples > 2) { frameRT.samples = 2; frameRT.dispose(); }   // still slow: lighter edge smoothing
-  else if (false && frameRT.samples > 0) { frameRT.samples = 0; frameRT.dispose(); }      // and slower still: none
+  const now = performance.now(), iv = now - qLast; qLast = now;
+  if (document.hidden) { qT = 0; qIv.length = 0; qSlow = qFast = 0; return; }
+  if (iv > 0 && iv < 1000) qIv.push(iv);
+  if ((qT += dt) < 1.5) return;
+  qT = 0; if (qIv.length < 30) { qIv.length = 0; return; }
+  qIv.sort((a, b) => a - b); const med = qIv[qIv.length >> 1]; let sum = 0, n = 0; for (const v of qIv) if (v < med * 2.5) { sum += v; n++; } qIv.length = 0;   // (the stalls left out: a room being built, a shader made the first time, are the loading's, not the pace. Counted, they took the game to its lowest resolution in its first seconds, every time, and kept it there: the user, 2026-11-10, "now it's blurry all over again")
+  const avg = sum / n;
+  if (Q_LAD[qLv][2] && avg > 1000 / Q_LAD[qLv][2]) { qFast = 0; if (++qSlow >= 2 && qLv < Q_LAD.length - 1) { qSlow = 0; qFail[qLv] = (qFail[qLv] || 0) + 1; qSet(qLv + 1); } }   // slower than its step allows (54 fps; 50 for the lighter smoothing), 3 seconds: a step down
+  else { qSlow = 0; if (qLv > 0 && avg < 1000 / 58 && (qFail[qLv - 1] || 0) < 2 && ++qFast >= 10) { qFast = 0; qSet(qLv - 1); } }   // smooth for 15 seconds: a step back up (not to one that's been too slow twice)
 }
 let fadeT = 0; const fadeEl = document.getElementById("fade");
 // ─────────────────────────── Crux's play box ───────────────────────────
@@ -30913,7 +30916,7 @@ function pboxFit() {                                  // the front built for thi
   const top = Math.min(H / 2, Math.ceil(t / d) + 1), bot = Math.min(H / 2, Math.ceil((ah - b) / d) + 1), side = Math.min(W / 2, Math.ceil(sd / d) + 1), mid = Math.max(0, H - top - bot);
   [[0, 0, W, top], [0, H - bot, W, bot], [0, top, side, mid], [W - side, top, side, mid]].forEach(([l, t, w, h], i) => { const c = PBOX.el.children[i]; c.width = Math.max(1, Math.round(w * d)); c.height = Math.max(1, Math.round(h * d));
     c.style.cssText = `position:absolute;left:${l}px;top:${t}px;width:${w}px;height:${h}px`; c.getContext("2d").drawImage(art, Math.round(l * d), Math.round(t * d), c.width, c.height, 0, 0, c.width, c.height); });
-  qT = qN = qSum = 0;   // (the build's one slow frame isn't the game running slow: the quality check starts its count again)
+  qT = 0; qIv.length = 0; qSlow = 0;   // (the build's one slow frame isn't the game running slow: the quality check starts its count again)
 }
 function pboxTick() {                                 // up only while you play in Crux's city (not on the title, a ride, the prologue or the mockup stages); built again once the screen's settled at a new size
   const on = world === 7 && mode === "play" && !titleUp && !rideS && !pro && !shadeUp && !castUp, W = innerWidth, H = innerHeight;
