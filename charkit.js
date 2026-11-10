@@ -1253,8 +1253,10 @@ const slab = (shape, depth, bevel) => { const g = new THREE.ExtrudeGeometry(shap
 const glowCol = (c, k = .35) => { const g = new THREE.Color(); try { g.set(/^#[0-9a-f]{6}$/i.test(c) ? c : "#ffffff"); } catch { } return g.lerp(new THREE.Color("#ffffff"), k); };
 function halo(geo, col, a) {                    // additive glow shell (not a toon material, so hit flashes leave it alone)
   const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }));
-  m.userData.a = a; m.renderOrder = 3; m.visible = false; return m;
+  m.userData.a = a; m.userData.halo = true; m.renderOrder = 3; m.visible = false; return m;   // (halo: the clay look puts it away; it took the sword's first for the blade and drew it solid over her life, 2026-11-09)
 }
+const rtri = (h, d, r) => { const P = [[-h, 0], [h, 0], [0, -d]], t = new THREE.Shape(), u = (p, q, k) => { const dx = q[0] - p[0], dy = q[1] - p[1], l = Math.hypot(dx, dy); return [p[0] + dx / l * k, p[1] + dy / l * k]; };   // a tooth's triangle with its corners rounded off, a bit of clay
+  P.forEach((p, i) => { const a = u(p, P[(i + 2) % 3], r), b = u(p, P[(i + 1) % 3], r); if (i) t.lineTo(a[0], a[1]); else t.moveTo(a[0], a[1]); t.quadraticCurveTo(p[0], p[1], b[0], b[1]); }); t.closePath(); return t; };
 // berry gears (the user, 2026-10-28: "each gear gives half an extra life, so two make a whole life ... one gear will divide the 3 pieces in the sword into 4, and the top
 // one will be split in half, one side with life and the other just white. when you get the second gear, the white side at the top of the sword will become the life color
 // too ... the 3rd gear will then divide the middle life bar in half. the fourth will divide the last one in half ... for camila, she'll have her rings divided, in half"):
@@ -1285,8 +1287,8 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   const notches = [Q.c1, Q.c2, Q.c3].map((col, i) => {
     // (bigger since 2026-10-23, with a dark rim round each: "Make the teeth on rose's sword bigger and more noticeable")
     const x = (.34 + i * .25) * LK, tri = (h, d) => { const t = new THREE.Shape(); t.moveTo(-h, 0); t.lineTo(h, 0); t.lineTo(0, -d); t.closePath(); return t; };
-    const g = group(inner, x, -W / 2 + .012, 0); g.add(P(slab(tri(.072, .13), .04, .006), M(col)));        // (its pivot on the blade's edge: it grows out of it)
-    g.add(at(P(slab(tri(.088, .158), .03, .004), M("#2f3b43")), 0, .006, 0));                                 // the rim
+    const g = group(inner, x, -W / 2 + .012, 0); g.add(P(slab(rtri(.062, .118, .024), .036, .012), M(col)));        // (its pivot on the blade's edge: it grows out of it) (a soft rounded piece of clay since 2026-11-09, was a sharp tri(.072, .13) .04 thick: the user, "make the teeth on her sword at all levels also look made of clay. they look like the old model")
+    g.add(at(P(slab(rtri(.08, .146, .028), .022, .01), M(tint(col, .55, .55, .6))), 0, .006, 0));                                 // the rim (its own colour darker, pressed on behind: the slate outline was the old model's)
     [-1, 1].forEach(z => g.add(at(P(new THREE.SphereGeometry(.02, 10, 8), M("#ffffff")), 0, -.05, z * .028)));
     g.scale.setScalar(0); g.visible = false; return g;
   });
@@ -1297,7 +1299,7 @@ function buildSword(parent, M, P, Q) {          // hand frame: origin at the wri
   // middle's and the hilt's, only out once the three are; one gear: half out (sync, TOOTH_HALF), two: all the way, its white studs showing
   const teethX = [.715, .465].map(u => {
     const k = .72, tri = (h, d) => { const t = new THREE.Shape(); t.moveTo(-h, 0); t.lineTo(h, 0); t.lineTo(0, -d); t.closePath(); return t; };
-    const g = group(inner, u * LK, -W / 2 + .012, 0); g.add(P(slab(tri(.072 * k, .13 * k), .04, .006), M(GEAR_PINK))); g.add(at(P(slab(tri(.088 * k, .158 * k), .03, .004), M("#2f3b43")), 0, .006, 0));
+    const g = group(inner, u * LK, -W / 2 + .012, 0); g.add(P(slab(rtri(.062 * k, .118 * k, .02), .036, .011), M(GEAR_PINK))); g.add(at(P(slab(rtri(.08 * k, .146 * k, .024), .022, .009), M(tint(GEAR_PINK, .55, .55, .6))), 0, .006, 0));   // (clay too, 2026-11-09)
     const stud = group(g); [-1, 1].forEach(z => stud.add(at(P(new THREE.SphereGeometry(.016, 10, 8), M("#ffffff")), 0, -.04, z * .026)));
     g.scale.setScalar(0); g.visible = false; return { g, stud };
   });
