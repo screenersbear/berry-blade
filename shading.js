@@ -209,5 +209,5 @@ vec3 mkClayBend(vec3 sp, vec3 sn, vec2 dH, float fd) { vec3 sx = dFdx(sp), sy = 
   function useShipped() { try { localStorage.removeItem(KEY); return true; } catch (e) { return false; } }   // (this browser's choice let go of: the game's shipped look, or none)
   const exportJSON = (name, cfg) => JSON.stringify({ berryShading: 1, name, cfg }, null, 2);
   function importJSON(text) { const j = JSON.parse(text); const cfg = j && (j.cfg || (j.character && j.environment ? j : null)); if (!cfg) throw new Error("not a Berry Blade shading file"); return { name: j.name || "imported", cfg: normalize(cfg) }; }
-  return { KEY, SHIPPED, useShipped, DEF, PRESETS, PRESET_UI, clone, newUnifs, patchShader, setChar, setEnv, hullMat, setHull, normalize, active, apply, useOwn, exportJSON, importJSON, setClay, CLAY };
+  return { KEY, SHIPPED, useShipped, DEF, PRESETS, PRESET_UI, clone, newUnifs, patchShader, setChar, setEnv, hullMat, setHull, normalize, active, apply, useOwn, exportJSON, importJSON, setClay, CLAY, CLAY_VS: { head: VERT, body: VERT_CLAY } };   // (CLAY_VS: the clay's lumps for another vertex shader, the game's depth for its background softness: 2026-11-10)
 })();

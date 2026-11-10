@@ -1474,6 +1474,7 @@ function clayDepth(cam) {   // (the clay set into a shadow or crease pass: two r
 }
 function clayPost() { clayPk = 0; if (clayFogC) { FOG.copy(_cfog[0]); scene.fog.color.copy(_cfog[1]); clayFogC = false; } if (SHADE) { SHADE.U.mkShOn.value = 0; SHADE.U.mkAoOn.value = 0; SHADE.U.mkAoE.value = 0; SHADE.U.mkShPk.value = 0; } clayOff.forEach(o => { o.visible = true; }); clayOff.length = 0; claySwap.forEach(([o, m]) => { o.material = m; }); claySwap.length = 0; }   // (after the frame: other drawings (portraits, the cast) without them)
 let bgRT = null; const _bgHid = [];
+const bgDM = (() => { const B = window.BerryShading; if (!SHADE || !B || !B.CLAY_VS) return clayDM; const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, colorWrite: false }); m.onBeforeCompile = sh => { for (const k of ["mkClay", "mkClayF", "mkClayD", "mkTexObj"]) sh.uniforms[k] = SHADE.U[k]; sh.vertexShader = B.CLAY_VS.head + sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>" + B.CLAY_VS.body); }; m.customProgramCacheKey = () => "bgDM"; return m; })();   // (the depth with the clay's lumps, as the picture has them: without, an outline missed the depth by a few pixels and up against the sky those got softened. The user, 2026-11-10: "if you jump up, it appears towards the higher parts of a screen over the player")
 const BG_SOFT = 1, BG_Z = [6, 26];                   // the backgrounds' softness: how much (0: sharp), and from how far behind the play it starts to how far it's full
 function bgWalk(o) {                                 // (the solid parts only, for the depth: glows, sparks, cards and see-through bits put away for it)
   if (!o.visible) return; const m = o.material;
@@ -1486,8 +1487,8 @@ function bgSoftPre(skip) {                           // THE BACKGROUNDS' SOFTNES
   const aw = Math.max(1, frameRT.width), ah = Math.max(1, frameRT.height); if (bgRT.width !== aw || bgRT.height !== ah) bgRT.setSize(aw, ah);
   camera.updateMatrixWorld(); camera.getWorldDirection(_cv); const t = _cv.z < -.05 ? -camera.position.z / _cv.z : 17.5;   // (how far off the play is)
   const pr = renderer.getRenderTarget(), cp = renderer.clippingPlanes, sb = scene.background, sf = scene.fog, cm = camera.layers.mask;
-  try { bgWalk(scene); bgWalk(actors); scene.overrideMaterial = actors.overrideMaterial = clayDM; scene.background = null; scene.fog = null; renderer.clippingPlanes = [];
-    renderer.setRenderTarget(bgRT); renderer.clear(true, true, false); renderer.render(actors, camera); camera.layers.enable(1); clayDepth(camera);   // (layer 1: the foreground)
+  try { bgWalk(scene); bgWalk(actors); scene.overrideMaterial = actors.overrideMaterial = bgDM; scene.background = null; scene.fog = null; renderer.clippingPlanes = [];
+    renderer.setRenderTarget(bgRT); renderer.clear(true, true, false); if (SHADE) SHADE.pass(true); renderer.render(actors, camera); if (SHADE) SHADE.pass(false); camera.layers.enable(1); clayDepth(camera);   // (each with its own lumps: the characters' on them, the scenery's in the world; the frame sets its passes again after)   // (layer 1: the foreground)
   } catch (e) { return; }
   finally { camera.layers.mask = cm; scene.overrideMaterial = actors.overrideMaterial = null; scene.background = sb; scene.fog = sf; renderer.clippingPlanes = cp; renderer.setRenderTarget(pr); _bgHid.forEach(o => { o.visible = true; }); _bgHid.length = 0; }
   U.bgDep.value = bgRT.depthTexture; U.bgNF.value.set(camera.near, camera.far); U.bgZ.value.set(t + BG_Z[0], t + BG_Z[1]); U.bgR.value = 1.5 * frameRT.height / 720; U.bgSoft.value = BG_SOFT;   // (1.5 pixels at 720 rows, as much again on any screen: the same slight softness on a phone)
