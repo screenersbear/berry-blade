@@ -734,6 +734,7 @@
 <script src="beps.js?v=20261016b"></script>
 <script src="roots.js?v=20261102e"></script>
 <script src="clayroom.js?v=20261109l"></script>
+<script src="level-edits.js?v=0"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -974,6 +975,7 @@ const OUTLINES = false;   // soft, outline-free look
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
 let WORLD = 2560; const CELL_W = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);   // (WORLD: the room you're in, px across; a screen's is CELL_W, the big room's two of them: bigPlatforms)
+let lvEd = null, lookBase = null;   // (lvEd: the LEVEL EDITOR's stage, while its page has the game, see the bottom of this script; lookBase: the room's hour's light before its own edits)
 const PLATFORMS = [];                    // the current clearing's platforms (filled in by setScreen)
 // one clearing per opponent, walked through left to right; the light runs from midday to night
 const SCREENS = [
@@ -1056,6 +1058,7 @@ function clockEnter(s) {                             // into a room: the day mov
   const k = world + ":" + s; if (k === clockPrev) { clockPrev = clockCur; clockCur = k; } else { clockPrev = clockCur; clockCur = k; dayClock++; }
   const pos = dayPos(), was = { h: dayHeld, dawn: dawnNow };
   { const H = hourAt(world, pos); dayHeld = H.h; dawnNow = H.dawn; }
+  if (LV_EDIT) { dayHeld = lvEd && lvEd.hour != null ? lvEd.hour : 0; dawnNow = false; was.h = dayHeld; was.dawn = false; }   // (the level editor: the hour it's showing, MIDDAY till another's picked)
   hourTurn = was.h !== dayHeld || was.dawn !== dawnNow ? s : -1; hourWas = was;   // (the hour turned as you came into this room: see setScreen's hold, sleepersFor)
   if (!roomHour.has(s)) roomHour.set(s, dayHeld);
 }
@@ -3840,6 +3843,7 @@ function nightSkyTex() {                             // the same banded sky, but
 let look = SCREENS[0], world = 0;                    // world: 0 the berry woods, 1 crashing waves
 function setLook(k) {                                // light the clearing for its hour
   look = dawnNow && mode === "play" && k === dayHeld ? dawnLook(world) : SCREENS[k];   // (dawn: the blue hour's room, in dawn's light)
+  lookBase = look; { const ed = (STAGES[level.s] || {}).lookEd; if (ed && level.w === world) look = Object.assign({}, look, ed); }   // (the level editor's BACKGROUND: this room's own haze, light and colour, whatever the hour)
   FOG.set(look.bg); scene.fog.color.copy(FOG); scene.fog.near = look.fog[0]; scene.fog.far = look.fog[1];
   sun.color.set(look.sun[0]); sun.intensity = look.sun[1]; sun2.color.set(look.sun2[0]); sun2.intensity = look.sun2[1];
   hemi.color.set(look.hemi[0]); hemi.groundColor.set(look.hemi[1]); hemi.intensity = look.hemi[2];
@@ -17447,7 +17451,7 @@ let arrive = [], arriveNext = null;   // (arriveNext: the world's third, met in 
 // players if they want the local buddies to join them (this would be the two buddies that usually join when you play that area)"). The first time in, they're there as ever
 let budAskUp = false; const freeDuo = [];   // (budAskUp: the question's up, play held · freeDuo: free play's worlds whose two have met you, story.duo a story's)
 function localPairArrive() {
-  if (!player || world === 9 || !WORLDS[world]) return; const met = story ? (story.duo = story.duo || []) : freeDuo, first = !met.includes(world), meet = () => { if (first) { met.push(world); if (story) writeSave(); } };
+  if (!player || world === 9 || !WORLDS[world] || LV_EDIT) return; const met = story ? (story.duo = story.duo || []) : freeDuo, first = !met.includes(world), meet = () => { if (first) { met.push(world); if (story) writeSave(); } };   // (LV_EDIT: the level editor's test play, just you in the room, nothing asked)
   const { A, A2 } = worldPair(world), L = [A, A2].filter(a => a && !allyWith(a)); if (!L.length) return meet();   // (both with you already: nothing to ask)
   const out = localsOut(L.length); if (first && !out.length) { meet(); return worldTeamJoin(); }   // (the first time in, with room for them: there in the room ahead, as ever)
   if (menuUp || rideS || paused) { teamFresh = true; return; }   // (a menu or the bus up: asked once it's gone)
@@ -24807,6 +24811,29 @@ const WORLDS = [
 WORLDS[0].stages[1].bep = { trail: 780, zone: 250, left: 20, kind: "door" };       // where the beps live: the trail of sticks and pebbles, and the way in (back near the start: you follow them backwards)
 WAVE_STAGES[2].bep = { trail: 760, zone: 230, left: 20, kind: "cliff" };       // (on the coast too, back near the start)
 FACTORY_STAGES[3].bep = { trail: 760, zone: 230, left: 20, kind: "hatch" };    // (and in Volt Keep: a round hatch by the boilers, on screen 3)
+// ── THE LEVEL EDITOR'S EDITS (the user, 2026-11-13: "let's finally make the level editor"): the level edits file (level-edits.js, written by the
+// editor's helper on the Mac) has each room the user changed, by world and room number ("w:s", its cell kept to check it's still the same room),
+// with all of its editable parts as the user left them and its baddies exactly where they were put (never thinned or spread again)
+const LV_KEYS = ["plats", "ground", "gaps", "steps", "gifts", "items", "set", "theme", "lookEd", "dark"];   // (what an edit may change; the baddies apart)
+const LV_EDIT = new URLSearchParams(location.search).has("edit"), lvOrig = new Map();   // (LV_EDIT: the game as the editor's stage; lvOrig: each room before any edit, "w:s")
+const lvClone = v => v === undefined ? undefined : JSON.parse(JSON.stringify(v));
+function lvFields(w, s) {                            // a room's editable parts as they are now (one with no platforms of its own: its hour's)
+  const W = WORLDS[w], st = W.stages[s], o = {}; LV_KEYS.forEach(k => { o[k] = st[k] !== undefined ? lvClone(st[k]) : null; });   // (null: the room has none)
+  if (!o.plats) o.plats = lvClone((W.screens[st.h] || W.screens[0] || {})[st.boss ? "plats" : "plats2"] || []); return o;
+}
+function lvPut(w, s, d) {                            // an edit put in: each part it gives (null: none at all; left out: as it was), the baddies as placed
+  const W = WORLDS[w], st = W && W.stages[s]; if (!st) return false;
+  LV_KEYS.forEach(k => { if (!(k in d)) return; if (d[k] === null) delete st[k]; else st[k] = lvClone(d[k]); });
+  if (Array.isArray(d.roster)) { st.edRoster = lvClone(d.roster); if (W.rosterThin) W.rosterThin[s] = st.edRoster; if (world === w && STAGES[s] === st) BB_ROSTER[s] = st.edRoster; }
+  return true;
+}
+function levelEditsApply() {                         // every room in the file, over the room as made (one not found, or another cell now: left as it is)
+  const R = window.BERRY_LEVEL_EDITS && window.BERRY_LEVEL_EDITS.rooms; if (!R || typeof R !== "object") return;
+  for (const key in R) { const e = R[key] || {}, [w, s] = key.split(":").map(Number), st = WORLDS[w] && WORLDS[w].stages[s];
+    if (!st || (e.cell && st.cell !== e.cell)) { console.warn("level edits: room " + key + (e.cell ? " (" + e.cell + ")" : "") + " isn't there now, left out"); continue; }
+    try { if (LV_EDIT) lvOrig.set(key, lvFields(w, s)); lvPut(w, s, Object.assign({}, e.f || {}, { roster: e.roster })); }
+    catch (err) { console.warn("level edits: room " + key + " couldn't be put in", err); } }
+}
 growWorlds(); squeezeWorlds(); addArenas(); deepenWorlds();
 { const q = WORLDS[8].stages.find(s => s.cell === "B1");   // the lakebed's way out west, to the casino (the user, 2026-10-20: "the next connection to the left of the turtle world")
   if (q) { Object.assign(q, { exitLeft: true, toWorld: 11, boss: true, bossX: 760 }); delete q.noLeft; delete q.wallL; delete q.prev; } }
@@ -24816,6 +24843,7 @@ authorWaves();                                       // (Cuss' Waves too: the us
 authorCrux();                                        // (and Crux's city, from the street up to the rooftops: the user, 2026-10-26)
 placeDive();                                         // (the deep's hidden way in, in Cuss' sea caves)
 stitchEdges();                                       // (every stitched world's screens side by side: their floors meeting at one height)
+levelEditsApply();                                   // (the level editor's rooms last, over every room as it was made: the hand-made ones too)
 // ── each world's main boss at one way out, a crony of theirs at each of the others (the user, 2026-10-30: "we will have only one exit that has the main boss. in
 // cuss' cliffs it'; be in a8, and in berry forest it'll be in D8. The other exits should have a mini boss that is designed to look like a direct crony of the main
 // boss, kind of how losst is like glos ... designate one exit for the main boss for each of the other worlds. design 1 or 2 minibosses depending on how many exits the
@@ -24947,7 +24975,10 @@ queueMicrotask(() => BB_ROSTER.splice(0, BB_ROSTER.length, ...thinRoster(WORLDS[
 // each screen"). The ones on a ledge or out in the water stay where they were put; the ones on the ground are re-placed along the room
 // as evenly as the room allows (each spot as far as it can be from all the others, clear of the drops and back from either doorway),
 // still in their left-to-right order, and two heavy ones (big or giant) are never left side by side. The same every time
-function thinRoster(W) {
+function thinRoster(W) {                          // (the level editor's rooms: their baddies as the user put them, never spread out again)
+  if (!W.rosterThin) { thinRoster0(W); W.stages.forEach((q, k) => { if (q && q.edRoster) W.rosterThin[k] = q.edRoster; }); } return W.rosterThin;
+}
+function thinRoster0(W) {
   if (W.rosterThin) return W.rosterThin;
   const HEAVY = t => ({ B: 1, G: 1 })[(BB_TYPES[t] || {}).size] === 1;
   return (W.rosterThin = (W.roster || []).map((row, k) => {
@@ -30274,7 +30305,7 @@ function syncWorld(dt) {
       camera.position.set(cx + sx, gy + q.y + sy, CAM_Z * q.z); camera.lookAt(cx + sx * .6, gy + q.look + sy, 0); }
     if (arena) arenaCam(sx, sy);
   }
-  const dc = comicCam || proCam || window.__cam;   // the bep's comic panels (and a test hook): { x, y, z, tx, ty, tz }
+  const dc = comicCam || proCam || window.__cam || (lvEd && lvEd.frozen && lvEd.cam);   // the bep's comic panels (and a test hook, and the level editor's whole room): { x, y, z, tx, ty, tz }
   if (dc) { camera.position.set(dc.x, dc.y, dc.z); camera.lookAt(dc.tx, dc.ty, dc.tz); }
   else if (tutZoom && player) tutCam();   // (the beach tutorial's B6: slowly in close on you)
   if (cannonS) cannonCam();
@@ -30628,7 +30659,8 @@ function update(dt) {
   if (ejFight() && player.hitWall && (player.x < 60 || player.x > WORLD - 60) && (ej.bump -= dt) <= 0) { ej.bump = 1.6; popText(player.x, player.y - 140, "LOCKED!"); SFX.thud(); }   // (Evil June's shut the way out)
   else if (ej) ej.bump = Math.max(0, (ej.bump || 0) - dt);
   if (player.dead && !player.catsGone) { player.catsGone = true; catsOnKO(); }   // (knocked out: one you were chasing gets away; your own cat stays)
-  if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) if (story && !arena) koShow(); else showModal("KNOCKED OUT", ejFight() ? `${foe.name} wins this round, and he's gone. Reset to carry on.` : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
+  if (player.dead && (player.deadT += dt) > 1.6 && !modalOpen) if (LV_EDIT && lvEd && !lvEd.frozen) { if (!lvEd.retry) lvEd.retry = setTimeout(() => { lvEd.retry = 0; window.BerryLevelEdit.play(); }, 0); }   // (the level editor's test play: the room again)
+  else if (story && !arena) koShow(); else showModal("KNOCKED OUT", ejFight() ? `${foe.name} wins this round, and he's gone. Reset to carry on.` : `${bossIn ? foe.name + " wins" : "The berry baddies win"} this round. Reset to retry ${STAGES[stage].boss ? foe.name : "the patch"}.`, "ko");
   shake = Math.max(0, shake - dt * 40);
   camKickV += (-camKick * 160 - camKickV * 16) * dt; camKick += camKickV * dt;   // (the blow's knock to the camera, springing back)
 }
@@ -30930,7 +30962,7 @@ function frame(now) {                              // (the next frame is asked f
     if (riseFade > 0) riseFadeTick(dt); if (riseX) riseTick(dt);   // (riseX: up into the room above, the two rooms' skies blended)   // (a room change without a pan: the one you left fading off, the game going on)
     if (pan && !window.__pause) { panTick(dt); render(0); }   // (between stitched screens: everything waits while the camera goes across)
     else if (panFade > 0 && !window.__pause) { panFadeTick(dt); render(0); }   // (and while its last picture fades off the new one)
-    else if (window.__pause || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || !!tutHold || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
+    else if (window.__pause || (lvEd && lvEd.frozen) || paused || itemsUp || npcUp || teamAsk || budAskUp || menuUp === "bgears" || proFrozen() || !!tutHold || (!!rideS && !rideS.play && rideS.ph !== "lift")) { render(0); if (paused) wearBreathe(dt); }   // paused (or the test hook, or the items, or a talk): freeze the simulation
     else if (hitstop > 0) { hitstop -= dt; render(0); }
     else { const k = slowMo > 0 ? slowK : 1, ds = dt * k; slowMo = Math.max(0, slowMo - dt); feelTick(ds);   // (the last kill's slow motion, or COMBAT FEEL's finisher)
       const n = Math.max(1, Math.ceil(ds / STEP - 1e-6)), t0 = performance.now(); for (let i = 0; i < n; i++) update(ds / n); const t1 = performance.now(); render(ds);
@@ -31004,6 +31036,72 @@ window.__game = { scoreHour, PC_REC, goWorldNow, arrivalRoom, get patrol() { ret
   step(n) { for (let i = 0; i < n; i++) update(STEP); render(n * STEP); } };
 requestAnimationFrame(frame);
 if (new URLSearchParams(location.search).has("shading")) { const go = () => { if (warming || !window.ShadingMockup) return setTimeout(go, 250); titleUp = false; $("title").classList.add("hidden"); openShading(); }; setTimeout(go, 300); }   // (index.html?shading: straight into the SHADING MOCKUP)
+// ── THE LEVEL EDITOR'S STAGE (the user, 2026-11-13: "let's finally make the level editor"; first asked 2026-11-11: "a berry blade level editor that I can move
+// pieces around using the various assets that already exist for each level? allowing me to place enemies, and adjust the background as well?"). Only with ?edit:
+// its page (level-editor.html, run on the Mac by its helper) has the game in a frame and draws the handles over it. Here: a room as the game draws it, held
+// still, the camera square on all of it; each change the page sends, put in and the room built again at once; PLAY to try it, STOP back to the still room
+if (LV_EDIT) (() => {
+  const css = document.createElement("style"); css.textContent = "body.lvEdit > :not(.lvStage) { display: none !important; }"; document.head.append(css); renderer.domElement.classList.add("lvStage");   // (nothing over the room but the room: not even the map)
+  const vCam = new THREE.PerspectiveCamera(), v3 = new THREE.Vector3(), key = () => lvEd.w + ":" + lvEd.s;
+  function go() {                                    // the room built from its data, everyone put in their places, then held still
+    const E = lvEd; E.frozen = false; levelGo(E.w, "room", E.s, E.hero || "camila");
+    for (let i = 0; i < 24; i++) update(STEP);       // (a fifth of a second: everyone down on their feet)
+    E.frozen = true; document.body.classList.add("lvEdit"); view(); render(0);
+  }
+  function view(v) {                                 // the camera: square on the room, all of it in the picture (cx, cy: where it looks, px; zoom: nearer)
+    const E = lvEd; if (v) Object.assign(E.v, v); const V = E.v, C = renderer.domElement, asp = Math.max(.2, (C.clientWidth || innerWidth) / (C.clientHeight || innerHeight));
+    const cx = V.cx ?? WORLD / 2, cy = V.cy ?? GROUND - 190, t = Math.tan(camera.fov * Math.PI / 360), z = V.zoom || 1;
+    const d = Math.max((WORLD / 2 + 110) * S / (t * asp), 330 * S / t) / z; E.cam = { x: X(cx), y: Y(cy), z: d, tx: X(cx), ty: Y(cy), tz: 0 };
+    if (look && scene.fog) { const off = d - CAM_Z; scene.fog.near = look.fog[0] + off; scene.fog.far = look.fog[1] + off; }   // (the haze as far off the room as it is in play)
+    render(0); return { cx, cy, zoom: z };
+  }
+  function xform() {                                 // game px to the frame's own px: x * sx + ox, y * sy + oy (straight on, so it's that simple)
+    const E = lvEd, C = renderer.domElement, w = C.clientWidth, h = C.clientHeight, c = E.cam;
+    vCam.fov = camera.fov; vCam.aspect = w / h; vCam.near = camera.near; vCam.far = camera.far; vCam.updateProjectionMatrix();
+    vCam.position.set(c.x, c.y, c.z); vCam.lookAt(c.tx, c.ty, c.tz); vCam.updateMatrixWorld();
+    const p = (x, y) => { v3.set(X(x), Y(y), 0).project(vCam); return [(v3.x + 1) / 2 * w, (1 - v3.y) / 2 * h]; }, a = p(0, 0), b = p(1000, 1000);
+    return { sx: (b[0] - a[0]) / 1000, ox: a[0], sy: (b[1] - a[1]) / 1000, oy: a[1], w, h };
+  }
+  function snap(w, s) { return Object.assign(lvFields(w, s), { roster: lvClone(thinRoster(WORLDS[w])[s] || []) }); }
+  function origRoster(w, s) {                        // the room's baddies as the game would have spread them, from the room as it was made
+    const W = WORLDS[w], st = W.stages[s], O = lvOrig.get(w + ":" + s), now = lvFields(w, s), keep = W.rosterThin;
+    lvPut(w, s, O); W.rosterThin = null; try { thinRoster0(W); return lvClone(W.rosterThin[s] || []); }
+    finally { W.rosterThin = keep; lvPut(w, s, now); }
+  }
+  window.BerryLevelEdit = {
+    ready: false,
+    worlds() { return WORLDS.map((W, w) => ({ w, name: W.name, rooms: W.stages.map((q, s) => ({ s, cell: q.cell || "", name: q.name || "", gen: !!q.gen, boss: !!q.boss,
+      skip: !!(q.cut || q.arena || q.big || q.home || q.hut || q.hall), tut: !!q.tut, hub: q.hub !== undefined, rest: !!q.rest,
+      scripted: !!(q.tut || q.chair !== undefined || q.towers || q.bridge || q.zip || q.pads || q.fling || q.cannon || q.mine || q.climbUp || q.bwalk || q.ducks || q.gong || q.trio || q.secret || q.bep || q.crawl || q.rockfall) })) })); },   // (scripted: things in it tied to where its pieces are)
+    open(w, s) { lvEd = { w, s, frozen: false, v: {}, hero: lvEd && lvEd.hero, hour: lvEd && lvEd.hour }; if (!lvOrig.has(key())) lvOrig.set(key(), lvFields(w, s)); go(); return snap(w, s); },
+    room() { return snap(lvEd.w, lvEd.s); },
+    orig() { const O = lvOrig.get(key()); if (!O.roster) O.roster = origRoster(lvEd.w, lvEd.s); return lvClone(O); },
+    apply(d) { const t0 = performance.now(); lvPut(lvEd.w, lvEd.s, d); go(); return { ms: Math.round(performance.now() - t0) }; },
+    meta() {
+      const W = WORLDS[lvEd.w], st = W.stages[lvEd.s], kinds = new Set(), setK = new Map(), types = new Map();   // (setK: each scenery piece in the world, as one room has it)
+      W.stages.forEach(q => { (q.plats || []).forEach(p => { if (typeof p[3] === "string") kinds.add(p[3]); }); (q.set || []).forEach(p => { if (p && p.k && !setK.has(p.k)) setK.set(p.k, lvClone(p)); }); });
+      [W.roster || [], thinRoster(W)].forEach(R => R.forEach(row => (row || []).forEach(e => { if (!e || !BB_TYPES[e[0]]) return; if (!types.has(e[0])) types.set(e[0], new Set()); types.get(e[0]).add(e[1]); })));
+      return { WORLD, GROUND, ROW_H, world: W.name, cell: st.cell || "", name: st.name || "", hour: hour, hours: SCREENS.map((q, i) => q.name || "HOUR " + i),
+        kinds: [...kinds], setKinds: [...setK.keys()], setEx: Object.fromEntries(setK), themeSets: [...new Set(["conveyor", ...W.stages.map(q => q.theme && q.theme.set).filter(Boolean)])], cols: BB_COL, look: lvClone(lookBase || look), theme: !!st.theme || lvEd.w === 2,
+        types: [...types].map(([t, c]) => ({ t, size: BB_TYPES[t].size || "", swim: !!BB_TYPES[t].swim, cols: [...c] })), allTypes: Object.keys(BB_TYPES).filter(t => !BB_TYPES[t].boss) };
+    },
+    view, xform,
+    look(ed) { const st = WORLDS[lvEd.w].stages[lvEd.s]; if (ed && Object.keys(ed).length) st.lookEd = lvClone(ed); else delete st.lookEd; setLook(hour); view(); },   // (the room's own light: no rebuild)
+    dark(on) { const st = WORLDS[lvEd.w].stages[lvEd.s]; if (on) st.dark = true; else delete st.dark; setLook(hour); view(); },
+    hourSet(h) { lvEd.hour = h; go(); },
+    hero(id) { lvEd.hero = id; go(); },
+    play() { const E = lvEd; E.frozen = false; keysDone = true; document.body.classList.remove("lvEdit"); levelGo(E.w, "room", E.s, E.hero || "camila"); renderer.domElement.focus(); },
+    stop() { go(); },
+    reach(id) {                                      // how high a hero gets, px: a jump held to its top, then the double jump there (tried out, step by step, in C1's open start)
+      lvEd = { w: 0, s: 0, frozen: false, v: {}, hero: id }; levelGo(0, "room", 0, id); for (let i = 0; i < 40; i++) update(STEP);
+      for (const k in keys) keys[k] = false; const y0 = player.y; let top = y0, h1 = 0, n = 0; jumpBuf = .2; update(STEP); keys[JUMP_KEYS[0]] = true;
+      while (n++ < 900) { update(STEP); top = Math.min(top, player.y); if (player.onGround && n > 20) break; if (player.vy >= 0) { if (!h1) { h1 = y0 - top; jumpBuf = .2; } else break; } }
+      for (const k in keys) keys[k] = false; jumpBuf = 0; return h1 ? [Math.round(h1), Math.round(y0 - top)] : null;
+    },
+  };
+  const boot = () => { if (warming) return setTimeout(boot, 250); titleUp = false; $("title").classList.add("hidden"); document.body.classList.add("lvEdit"); window.BerryLevelEdit.ready = true; };
+  setTimeout(boot, 250);
+})();
 </script>
 </body>
 </html>
