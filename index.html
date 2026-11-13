@@ -1297,11 +1297,11 @@ function sizeRT() { const d = renderer.getPixelRatio(); frameRT.setSize(Math.flo
 sizeRT();
 const gradeScene = new THREE.Scene(), gradeCam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 const gradeMat = new THREE.ShaderMaterial({
-  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, soft: { value: 0 }, softR: { value: 1 }, tex: { value: frameRT.texture }, clayT: { value: 0 }, clayX: { value: 1.75 }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 }, bgDep: { value: null }, bgSoft: { value: 0 }, bgR: { value: 1 }, bgNF: { value: new THREE.Vector2(.1, 300) }, bgZ: { value: new THREE.Vector2(24, 44) }, nite: { value: 0 } },
+  uniforms: { tpx: { value: new THREE.Vector2(1, 1) }, pstep: { value: 1 }, gtime: { value: 0 }, paper: { value: 1 }, soft: { value: 0 }, softR: { value: 1 }, tex: { value: frameRT.texture }, clayT: { value: 0 }, clayX: { value: 1.75 }, tintC: { value: new THREE.Vector3(1, 1, 1) }, tintAmt: { value: 0 }, warm: { value: 1 }, ruin: { value: 0 }, gbc: { value: 0 }, bloom: { value: 0 }, dim: { value: 0 }, bgTex: { value: null }, bgOn: { value: 0 }, bgA: { value: 3.2 }, scr: { value: 1.78 }, bgOff: { value: 0 }, bgPer: { value: 1 }, bgDep: { value: null }, bgSoft: { value: 0 }, bgR: { value: 1 }, bgNF: { value: new THREE.Vector2(.1, 300) }, bgZ: { value: new THREE.Vector2(24, 44) }, nite: { value: 0 } },
   vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }",
   fragmentShader: `
     uniform float soft, softR;   // (BIG SCREENS: how far into the softening (0 on a phone), and the size of one phone-like pixel in frame pixels)
-    uniform sampler2D tex, bgTex; uniform float clayT, clayX; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc; varying vec2 vUv;
+    uniform sampler2D tex, bgTex; uniform float clayT, clayX; uniform vec2 tpx; uniform vec3 tintC; uniform float tintAmt, warm, bgOn, bgA, scr, bgOff, bgPer, ruin, bloom, dim, pstep, gtime, gbc, paper; varying vec2 vUv;
     uniform sampler2D bgDep; uniform float bgSoft, bgR, nite; uniform vec2 bgNF, bgZ;   // (the backgrounds' softness: the scene's depth, how soft, how far round; night's own colour)
     float bgFar(vec2 u) { float d = texture2D(bgDep, u).x; return smoothstep(bgZ.x, bgZ.y, bgNF.x * bgNF.y / (bgNF.y - d * (bgNF.y - bgNF.x))); }   // (0 in the play, up to 1 far behind it: the depth back to distance)
     float bgFarN(vec2 u) { vec2 o = tpx; return min(bgFar(u), min(min(bgFar(u + vec2(o.x, 0.0)), bgFar(u - vec2(o.x, 0.0))), min(bgFar(u + vec2(0.0, o.y)), bgFar(u - vec2(0.0, o.y))))); }   // (far only if its neighbours are too: a character's outline, and the pixel just past it, never softened. The user, 2026-11-10: "the game is still fuzzy on the characters and not just the background", "it was fine until I asked for background s to be blurred")
@@ -1339,7 +1339,7 @@ const gradeMat = new THREE.ShaderMaterial({
         c = clamp(max(mix(vec3(g0), c, 1.3), 0.0) * t / max(g0, .02), 0.0, 1.0); float cs = s0 ? .1 : .14; c = clamp(t + floor((c - dot(c, vec3(.299, .587, .114))) / cs + .5) * cs, 0.0, 1.0);   // (bolder, then flat: its shade exactly, its hue in coarse steps, a character's finer)
         if (s0 && m0 - gbcMin(gb) > .3) e = 1.0;   // (a character's small dark details kept: eyes, seams)
         if (e > .32) c = vec3(.06, .05, .1); }   // the black outline
-      if (gbc <= 0.0) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
+      if (gbc <= 0.0 && paper > 0.5) { vec2 px = gl_FragCoord.xy / pstep, sd = vec2(floor(gtime) * 17.0, floor(gtime) * 31.0);   // the PAPER, over the finished picture in screen pixels: a fine grain boiling, the paper's mottle
         float g = hash(floor(px) + sd) - .5, mot = vnoise(px / 90.0) * .6 + vnoise(px / 23.0) * .4 - .5;   // (FINE, the one the user kept, 2026-10-29: "the papter fine setting which is one i wan tto keep for all versions")
         c *= 1.0 + (g * .085 + mot * .06) * (1.0 - clayT); c = mix(c, c * vec3(1.0, .985, .955), .5);
         if (soft > 0.0) { float g2 = hash(floor(gl_FragCoord.xy / softR) + sd + 7.0) - .5; c += g2 * .07 * soft * clayT * max(c, vec3(.65)); } }   // (BIG SCREENS, CLAY LOOK: a fine grain back, its specks the size of a phone pixel: "maybe sort of grainy like before")   // (as strong in the dark as in the light: it went with the brightness, and at night it all but went. The user, 2026-11-09: "when it gets darker does the grainy feel/filter go away? it looked a little less stylized when nighttime hit")   // (CLAY LOOK: no grain or mottle, its warmth kept: the user, 2026-11-09, "I dont think it needs the grain though")
@@ -30730,7 +30730,7 @@ function render(dt) {
   if (gbcCam) { camera.position.copy(gbcCam); camera.updateMatrixWorld(); }
   clayPost();
   renderer.setRenderTarget(null);
-  { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.soft.value = THREE.MathUtils.smoothstep(Math.min(innerHeight, innerWidth / 1.6), 440, 760); U.softR.value = Math.max(1, frameRT.height / 720); }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
+  { const U = gradeMat.uniforms; U.tpx.value.set(1 / frameRT.width, 1 / frameRT.height); U.pstep.value = renderer.getPixelRatio(); U.gtime.value = performance.now() / 1000 * 12; U.paper.value = lvEd && lvEd.frozen ? 0 : 1; U.soft.value = THREE.MathUtils.smoothstep(Math.min(innerHeight, innerWidth / 1.6), 440, 760); U.softR.value = Math.max(1, frameRT.height / 720); }   // (the grain boils 12 times a second on the clock, paused or not: on the game's time it froze in the menus and slow moments and all but went)
   renderer.render(gradeScene, gradeCam); gradeMat.uniforms.bgSoft.value = 0;   // (the softness for this frame only: the other pictures through the colour pass have no depth of their own)
 }
 
@@ -30950,6 +30950,7 @@ function frame(now) {                              // (the next frame is asked f
   acc60 += Math.max(0, Math.min(.1, (now - last) / 1000)); last = now;   // (never backwards: a late frame's time stamp can be older than the last one's)
   const ticks = Math.min(3, Math.floor(acc60 * 60 + .25)); if (!ticks) return; acc60 = Math.max(-.01, acc60 - ticks / 60);   // (60 a second: a faster screen's in-between frames do nothing; a slow one's catch up)
   const dt = ticks / 60, fT0 = performance.now();   // (the game's time in whole 60ths)
+  if (lvEd && lvEd.frozen) { if (lvEd.tail > 0) { lvEd.tail--; render(0); } return; }   // (the level editor's still room: drawn again when it changes, then left be, not 60 times a second)
   try {
     if (fadeEl.classList.contains("on") && !(fadeHold && (menuUp === "mappath" || menuUp === "rideskip" || rideS || statsUp))) { if ((fadeT += dt) > 3) { fadeHold = false; fadeEl.classList.remove("on", "msg"); transit = false; fadeT = 0; console.warn("the fade was stuck: lifted it"); } } else fadeT = 0;
     adaptQuality(dt); pboxTick();   // (Crux's play box, up while you play in his city: 2026-11-07)
@@ -31053,7 +31054,7 @@ if (LV_EDIT) (() => {
     const cx = V.cx ?? WORLD / 2, cy = V.cy ?? GROUND - 190, t = Math.tan(camera.fov * Math.PI / 360), z = V.zoom || 1;
     const d = Math.max((WORLD / 2 + 110) * S / (t * asp), 330 * S / t) / z; E.cam = { x: X(cx), y: Y(cy), z: d, tx: X(cx), ty: Y(cy), tz: 0 };
     if (look && scene.fog) { const off = d - CAM_Z; scene.fog.near = look.fog[0] + off; scene.fog.far = look.fog[1] + off; }   // (the haze as far off the room as it is in play)
-    render(0); return { cx, cy, zoom: z };
+    render(0); E.tail = 10; return { cx, cy, zoom: z };   // (tail: a few more frames, for anything still settling in)
   }
   function xform() {                                 // game px to the frame's own px: x * sx + ox, y * sy + oy (straight on, so it's that simple)
     const E = lvEd, C = renderer.domElement, w = C.clientWidth, h = C.clientHeight, c = E.cam;
@@ -31086,6 +31087,13 @@ if (LV_EDIT) (() => {
         types: [...types].map(([t, c]) => ({ t, size: BB_TYPES[t].size || "", swim: !!BB_TYPES[t].swim, cols: [...c] })), allTypes: Object.keys(BB_TYPES).filter(t => !BB_TYPES[t].boss) };
     },
     view, xform,
+    boxes() {                                        // each baddy as drawn: its place in the room's list and the box round it, in the frame's px (to grab it by its body)
+      xform(); const C = renderer.domElement, w = C.clientWidth, h = C.clientHeight, bx = new THREE.Box3(), out = [];
+      baddies.forEach(b => { if (!b || !b.r || !b.r.root || typeof b.spot !== "string") return; bx.setFromObject(b.r.root); if (bx.isEmpty()) return; let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (let k = 0; k < 8; k++) { v3.set(k & 1 ? bx.max.x : bx.min.x, k & 2 ? bx.max.y : bx.min.y, k & 4 ? bx.max.z : bx.min.z).project(vCam); const sx = (v3.x + 1) / 2 * w, sy = (1 - v3.y) / 2 * h; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+        out.push({ i: +b.spot.split(":")[1], x0, y0, x1, y1 }); });
+      return out;
+    },
     look(ed) { const st = WORLDS[lvEd.w].stages[lvEd.s]; if (ed && Object.keys(ed).length) st.lookEd = lvClone(ed); else delete st.lookEd; setLook(hour); view(); },   // (the room's own light: no rebuild)
     dark(on) { const st = WORLDS[lvEd.w].stages[lvEd.s]; if (on) st.dark = true; else delete st.dark; setLook(hour); view(); },
     hourSet(h) { lvEd.hour = h; go(); },
