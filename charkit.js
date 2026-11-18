@@ -3399,7 +3399,9 @@ function updatePoseHuman(p, dt) {
   // run: alternating legs with the stride locked to distance travelled, arms pumping opposite
   const moving = p.onGround && sp > 20 && p.hurtT <= 0 && !p.skid && !p.brake && a < 0 && !p.crouch && !p.crawl && !p.upHop && !p.block && !m.float, L = Bd.legs * m.stride;
   const TH = D.th * Bd.legs, SH = D.sh * Bd.legs;
-  const stS = lerp(RUN_STANCE, WALK_STANCE, wk);
+  const gt = p.rig && p.rig.hm && p.rig.hm.gait;   // (a hero drawn as a model, on test with ?heromodel: its own tuning from index.html, HM_GAIT. Everyone else as before)
+  const stS = Math.min(.9, lerp(RUN_STANCE, WALK_STANCE, wk) + (gt ? gt.stance : 0));   // (gt.stance: each foot on the ground longer)
+  const gw = u => { if (!gt || u < stS) return u; const t = (u - stS) / (1 - stS); return stS + (1 - stS) * lerp(t, t * t * (3 - 2 * t), gt.ease); };   // (gt.ease: the foot eases off the ground and into the next step, quicker between)
   const pump = D.run && pumpRun, hk = m.heel ?? 1, leg = u => { const R = keyfC(u, RUN_KEYS), Wl = keyfC(u, WALK_KEYS), th0 = lerp(R[0], Wl[0], wk) * m.stride * (1 + .14 * sk), th = pump && th0 > 0 ? th0 * (1 + .12 * (1 - wk)) : th0, tk1 = lerp(R[1], Wl[1], wk) * (1 + .3 * sk), tk = tk1 > .5 ? .5 + (tk1 - .5) * hk : tk1;   // (sprinting: a longer stride with the hips kept high, the heel kicked up higher)   // (pumping: the knee drives a little higher)
     const pt0 = lerp(R[2], Wl[2], wk); return { th, pt: pt0 < 0 ? pt0 * hk : pt0, fx: Math.sin(th) * TH + Math.sin(th - tk) * SH, dy: Math.cos(th) * TH + Math.cos(th - tk) * SH }; };   // (hk, move.heel: under 1, a lower kick-back of the heel behind and less of a flip of the foot as it leaves the ground, the stance untouched. Rose's, the user, 2026-11-08: "rose's walking animnation looks a little stilted. and her foot flips back pretty long")
   const L0 = D.run ? leg(0) : null, LS = D.run ? leg(stS) : null;
@@ -3423,7 +3425,7 @@ function updatePoseHuman(p, dt) {
   };
   const sn = step(ph), sf = step(ph + Math.PI);
   if (D.run) {                                               // a real run: hip-driven legs that reach, drive the knee, push off and kick the heel up
-    const u = ph / TAU, uN = ((u % 1) + 1) % 1, uF = (uN + .5) % 1, N = leg(uN), F2 = leg(uF), stN = uN < stS, stF = uF < stS;
+    const u = ph / TAU, uN = ((u % 1) + 1) % 1, uF = (uN + .5) % 1, N = leg(gw(uN)), F2 = leg(gw(uF)), stN = uN < stS, stF = uF < stS;
     if (stN) N.fx = lerp(L0.fx, LS.fx, uN / stS);           // a planted foot goes back exactly as fast as the ground goes by
     if (stF) F2.fx = lerp(L0.fx, LS.fx, uF / stS);
     const hip = stN && stF ? Math.min(N.dy, F2.dy) : stN ? N.dy : stF ? F2.dy : Math.max(N.dy, F2.dy) + .05 * m.bounce * (1 + 1.6 * sk);   // (sprinting: longer in the air between steps, light on her feet)   // planted legs set the hip height (both down: the lower); airborne in between
