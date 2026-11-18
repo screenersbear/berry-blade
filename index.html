@@ -735,6 +735,7 @@
 <script src="roots.js?v=20261102e"></script>
 <script src="clayroom.js?v=20261109l"></script>
 <script src="level-edits.js?v=0"></script>
+<script src="models/models.js?v=20261118002412"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -970,8 +971,14 @@
 import * as THREE from "three";
 import { mergeVertices, mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 window.BERRY_BOOT = 1;                       // (three.js is here: the loading card's watchdog stands down)
 const OUTLINES = false;   // soft, outline-free look
+// ── characters made as 3D models: .glb files from Blender in models/, packed into models/models.js by .claude/berry-tools/make_models_js.py (the user, 2026-11-18: "I eventually want all the models to be this way")
+const MODELS = {};                                   // id: the model, read before the game starts. A character with one is built from it (modelRig), one without in code as before
+await Promise.race([Promise.all(Object.entries(window.BERRY_MODELS || {}).map(([id, b64]) => new Promise(ok => { const no = e => { console.warn("the model " + id + " did not read", e); ok(); };
+  try { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); new GLTFLoader().parse(u.buffer, "", g => { MODELS[id] = g.scene; ok(); }, no); } catch (e) { no(e); } }))),
+  new Promise(ok => setTimeout(ok, 8000))]);   // (8 s at most: then the game starts, and a model still reading is used from when it is done)
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
 let WORLD = 2560; const CELL_W = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);   // (WORLD: the room you're in, px across; a screen's is CELL_W, the big room's two of them: bigPlatforms)
@@ -1882,6 +1889,16 @@ function foeBase(pivot, shadowR) {
   return { root, yaw, bob, tilt, body, mats, M, P, shadow, legs: [], arms: [], chains: [], bobAmt: .08, stride: .3, swing: .2 };
 }
 function addChains(r, list) { list.forEach(c => r.chains.push({ ...c, tube: new Tube(r.body, c.n, c.S || 18, 8, c.prof, r.M(c.mat, { side: THREE.DoubleSide }), c.ol ?? .02, c.flat ?? 1) })); }
+function modelRig(id, pivot, shadowR, height, face = Math.PI / 2) {   // a character from its 3D model (MODELS[id]): its parts as made, each colour a toon one the character editor can change. Arm.L, Arm.R, Leg.L, Leg.R and Head swing from their own pivots, as the code-built ones do
+  const r = foeBase(pivot, shadowR), { M, body } = r, src = MODELS[id], m = src.clone(true), hold = group(body), mats = new Map(), bb = new THREE.Box3().setFromObject(src);
+  hold.rotation.y = face; hold.scale.setScalar(height / (bb.max.y - bb.min.y)); hold.add(m); m.position.y -= bb.min.y;   // (Blender faces them +z, the game +x; stood on the ground, as tall as asked)
+  m.traverse(o => { if (!o.isMesh) return; const k = o.material; if (!mats.has(k)) mats.set(k, M(k.color.clone(), { side: k.side, ...(k.map ? { map: k.map } : {}) })); o.material = mats.get(k); });   // (one material per colour in the model, so changing a part changes all of it)
+  r.root.updateMatrixWorld(true);
+  const joint = n => { const o = m.getObjectByName(n.replace(".", "")) || m.getObjectByName(n); if (!o) return null; const p = body.worldToLocal(o.getWorldPosition(new THREE.Vector3())), G = group(body, p.x, p.y, p.z); G.attach(o); return G; };   // (three drops the dot from a part name)
+  ["Arm.L", "Arm.R"].forEach(n => { const G = joint(n); if (G) r.arms.push(G); }); ["Leg.L", "Leg.R"].forEach(n => { const G = joint(n); if (G) r.legs.push(G); });   // (left, then right, as the code-built ones: the left on -z)
+  const H = joint("Head"); if (H) r.head = H;
+  return r;
+}
 
 function buildCrux() {                       // black coat giant: hypnotic spiral face, "C" shoulder rings, crescent belt
   const r = foeBase(2.3, 1.5), { M, P, body } = r;
@@ -23997,7 +24014,8 @@ const KP_ROSTER = [
 ];
 // ── King P himself (from the user's sheet): a great pineapple head, a black crown with a gold gem and a tuft of leaves, a red coat (a white
 // front, big gold buttons, gold bands at the cuffs, a dark epaulette), a green sash with his P medal, maroon fists, shorts and shoes
-function buildKingP() {
+function buildKingP() { return kpMoves(MODELS.kingp ? modelRig("kingp", 1.9, 1.25, 5.6) : buildKingPCode()); }   // King P from his 3D model (models/kingp.glb, made 2026-11-17), or built in code (below) if it did not read
+function buildKingPCode() {
   const r = foeBase(1.9, 1.25), { M, P, body } = r;
   const RD = M("#ff1a14"), MR = M("#6a0606"), BK = M("#151318"), WH = M("#ffffff"), YL = M("#ffd21f"), GN = M("#5ccf2a"), GND = M("#2f8a1a");
   [-1, 1].forEach(s => {
@@ -24043,6 +24061,9 @@ function buildKingP() {
   for (let i = 0; i < 6; i++) { const a = i / 6 * TAU + .26; head.add(at(P(new THREE.ConeGeometry(.08, .22, 4), BK, .01), Math.cos(a) * .38, 1.13, Math.sin(a) * .38)); }
   head.add(at(P(cyl(.12, .12, .05, 20).rotateZ(Math.PI / 2), YL, .015), .42, 1.0, 0)); head.add(at(P(cyl(.08, .08, .055, 16).rotateZ(Math.PI / 2), M("#ff8a1a"), 0), .43, 1.0, 0)); head.add(at(P(cyl(.045, .045, .06, 12).rotateZ(Math.PI / 2), M("#e3141b"), 0), .44, 1.0, 0));
   for (let k = 0; k < 5; k++) { const a = (k - 2) * .38; head.add(pointAlong(at(P(new THREE.ConeGeometry(.12, .7, 6).scale(1, 1, .4), k % 2 ? GND : GN, .015), 0, 1.4, (k - 2) * .08), new THREE.Vector3(0, 1, Math.sin(a) * 1.1))); }   // a tuft of tall leaves
+  return r;
+}
+function kpMoves(r) {                                 // how King P moves, whichever way he is built
   Object.assign(r, { bobAmt: .05, stride: .34, swing: .22, style: { hunch: .04, walkLean: .06, lift: .12, flare: .08, bounce: .03, beat: 4, arm: [80, .36] } });   // stately, but those fists come up
   r.animate = (e, r, m) => {
     const A = r.arms[1]; if (e.atk === "charge") A.rotation.z = -2.3; else if (e.atk === "act") A.rotation.z = 1.1;
@@ -24051,7 +24072,7 @@ function buildKingP() {
   return r;
 }
 let KP_FOES = null;
-const kpFoes = () => KP_FOES || (KP_FOES = [{ id: "kingp", name: "KING P", rig: buildKingP(), sync: syncFoe, hw: 48, h: 182, hp: 34, speed: 105, jumpy: .5, atk: "grenades", atk2: "grenades2", portraitY: .72 }]);
+const kpFoes = () => KP_FOES || (KP_FOES = [{ id: "kingp", name: "KING P", rig: buildKingP(), sync: syncFoe, hw: 48, h: 182, hp: 34, speed: 105, jumpy: .5, atk: "grenades", atk2: "grenades2", portraitY: MODELS.kingp ? .62 : .72 }]);   // (portraitY: the model has his face low on the pineapple)
 // the road up: shut till you've beaten the bosses of this many worlds (the user: "not easily accessible without having to do most of the maps")
 const kpNeed = () => WORLDS.map((W0, i) => i).filter(i => i !== 9 && i !== 12 && i !== 13 && WORLDS[i].stages.some(q => q.boss));   // (every other world's boss, at least once: not the beach's, not his own)
 const bossesBeaten = () => !story ? 99 : Math.max((story.beat || []).filter(w => kpNeed().includes(w)).length, story.beat0 || 0);   // (a save from before 2026-10-21: the worlds it had been on to, less one)
