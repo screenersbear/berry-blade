@@ -1908,9 +1908,10 @@ function modelRig(id, pivot, shadowR, height, face = Math.PI / 2) {   // a chara
 }
 // ── a hero from a Blender model with bones, on test (HERO_MODEL_ON: only with ?heromodel in the address)
 // Her own moves run as always on the code-built rig, which stays hidden; each frame the model's bones are turned to match its joints (shoulder, elbow, wrist, hip, knee, ankle) and its hips, chest, head, hands and feet
-const HERO_H = { camila: 2.4 };                      // (the code-built hero's height with her hair, in her guard, measured 2026-11-18: the model is scaled to it)
-const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
+const HERO_H = { camila: 2.72 };                     // (the code-built hero's height with her hair, standing straight, measured 2026-11-18 (HANDOFF-camila-fixes.md): the model is scaled to it. Was 2.4, her height crouched in her guard: the model came out too small)
+const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Z = new THREE.Vector3(0, 0, 1), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
 const hmBodyQ = (o, body) => { const q = new THREE.Quaternion(); for (let x = o; x && x !== body; x = x.parent) q.premultiply(x.quaternion); return q; };   // (a part's turn in the body's own space, from this frame's)
+const hmHands = r => r.hm ? [r.hm.B.handL, r.hm.B.handR] : r.hands;   // (the hands drawn: the model's wrists with ?heromodel, else her own; [0] her left, [1] her right, as r.hands. For what must touch them: the zip line's handle, fruit, a boost)
 const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
 function heroModelAttach(r, src, id) {               // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T
   const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map();
@@ -1954,11 +1955,13 @@ function hmLeg(r, W, i, sd, H, hipsQ) {              // the model's leg, on its 
   const ca = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1), Km = Hm.clone().addScaledVector(u, l1 * ca).addScaledVector(v, l1 * Math.sqrt(1 - ca * ca)), A2 = Hm.clone().addScaledVector(u, d);
   W.set(M.B["thigh" + sd], hmAim(Km.clone().sub(Hm)).multiply(M.rest.get(M.B["thigh" + sd]).q));   // (the model's legs hang straight down at rest)
   W.set(M.B["shin" + sd], hmAim(A2.clone().sub(Km)).multiply(M.rest.get(M.B["shin" + sd]).q));
-  W.set(M.B["foot" + sd], r.feet[i].quaternion.clone().multiply(M.rest.get(M.B["foot" + sd]).q));
+  const up = THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1), dA = up && Math.atan2(A2.y - Km.y, A2.x - Km.x) - Math.atan2(rA.y - rK.y, rA.x - rK.x);   // (a foot off the ground: turned on with the model's shin, so its ankle bends as hers does. Her back foot at rest is lifted behind her, the shin near level; the model's shin stood about 25 degrees steeper, so her foot's own turn pointed its toe far past an ankle's bend: "her right foot was bent back at idle", Starky, 2026-11-18)
+  W.set(M.B["foot" + sd], HM_Q.setFromAxisAngle(HM_Z, up * (Math.atan2(Math.sin(dA), Math.cos(dA)) || 0)).clone().multiply(r.feet[i].quaternion).multiply(M.rest.get(M.B["foot" + sd]).q));   // (planted, up 0: as hers, flat on the ground)
 }
 function heroModelSync(p, r) {                       // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
   const M = r.hm; if (!M) return; const B = M.B, W = new Map(), rq = n => M.rest.get(B[n]).q;
-  r.body.children.forEach(c => { if (c !== M.hold) c.visible = false; });
+  const G = r.giant, big = !!(G && G.on);           // (her grown arm: the code-built one, shown as the game shows it, the model's own arm on that side folded away)
+  r.body.children.forEach(c => { if (c !== M.hold && !(G && c === G.grp)) c.visible = false; });   // (the grown arm's group: left as her own code sets it, seen when it is out)
   const hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion;
   W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, hipsQ.clone().slerp(chestQ, .5).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
   const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, (P1.y - .05) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
@@ -1977,6 +1980,7 @@ function heroModelSync(p, r) {                       // each frame, after her ow
     const cu = M.curl[b.name]; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, open ? a0 : a1)));   // (the gauntlet's fingers and thumb: in a fist, or nearly straight for the open palm)
     out.set(b, parQ.clone().multiply(b.quaternion));
   });
+  ["L", "R"].forEach((sd, i) => B["upperarm" + sd].scale.setScalar(big && i === propI ? 1e-3 : 1));   // (folded to nothing at the shoulder while the grown arm is out on her gauntlet side)
   B.hips.position.copy(H).applyMatrix4(M.hipsInv);    // (its parent, the root bone, never moves)
 }
 
@@ -13297,7 +13301,7 @@ const BOOST = { set: .12, onto: .24, stand: .08, heave: .12, rec: .24, hop: .2, 
 let boostV = null;
 function boostHand(q, fc) {                           // where the foot goes: its cupped hands, between the two as its rig has them now (out in front and toward you, as it's turned: its depth too); no rig hands, by its height
   const r = q.rig, H = (r && r.heightPx) || 80;
-  if (r && r.hands && r.hands.length) { const v = boostV || (boostV = new THREE.Vector3()); let x = 0, y = 0, z = 0; for (const h of r.hands) { h.getWorldPosition(v); x += v.x; y += v.y; z += v.z; } const n = r.hands.length; return { x: x / n / S, y: GROUND - y / n / S - 4, z: z / n }; }
+  if (r && r.hands && r.hands.length) { const v = boostV || (boostV = new THREE.Vector3()); let x = 0, y = 0, z = 0; for (const h of hmHands(r)) { h.getWorldPosition(v); x += v.x; y += v.y; z += v.z; } const n = r.hands.length; return { x: x / n / S, y: GROUND - y / n / S - 4, z: z / n }; }
   return { x: q.x + fc * H * BOOST.hand[0], y: q.y - H * BOOST.hand[1], z: (q.z || 0) + .006 * H };
 }
 function bcLaunch(p, M) {                             // (the user, 2026-11-06: "have the characters do a crouching position with hands up front to simulate pushing up a character for a jump ... it's okay if this adds some delay")
@@ -26675,7 +26679,7 @@ function propTo(pr, P, d, n, so, rg = rig) {                   // (the sword out
   rg.hands.forEach(h => { h.visible = true; });
 }
 function zipHands() {                                // (render, after her rig's sync: on the zip line, how high her hands reach over her feet; her feet hung that far under the handle's bar, zipH)
-  const p = player; if (!p || !p.zip || !rig || !rig.hands) return; let top = -1e9; rig.root.updateMatrixWorld(true); rig.hands.forEach(h => { h.getWorldPosition(_cpV); top = Math.max(top, _cpV.y); });
+  const p = player; if (!p || !p.zip || !rig || !rig.hands) return; let top = -1e9; rig.root.updateMatrixWorld(true); hmHands(rig).forEach(h => { h.getWorldPosition(_cpV); top = Math.max(top, _cpV.y); });   // (the hands drawn: with ?heromodel the model's, not her hidden code ones)
   const reach = (top - Y(p.y)) / S; if (!(reach > 20 && reach < 400)) return; const h = reach + ZIP_BAR; rig.zipH = rig.zipH === undefined ? h : rig.zipH + (h - rig.zipH) * .25;
 }
 function chairProp() {                               // (render, after her rig's sync: sat in a rest stop's chair, her sword stood point down in the ground beside it, leant on it, the side away from the fire; both her hands her own. The user, 2026-11-05 "rose doesnt sit down on the rest chairs. make her put her sword next to it and actually sit")
@@ -26880,7 +26884,7 @@ function syncEat(p, dt) {
   if (u >= 1 || p.dead || p.atkT >= 0 || p.block || p.combo || p.climb || p.sunk || !r || !r.hands || !r.hands.length) { stopEat(p); return; }
   const pr = r.spec.outfit && r.spec.outfit.prop, armed = !!pr && pr.kind !== "none", far = armed && pr.side !== "near" && (pr.side === "left") === (p.face > 0);   // (is your weapon in the far hand?)
   p.eatFar = armed && !far; p.eatB = (1 - Math.cos(4 * Math.PI * Math.min(1, u * 1.08))) / 2;   // (two bites)
-  const near = p.face > 0 ? 1 : -1, s = p.eatFar ? -near : near, h = r.hands[s < 0 ? 0 : Math.min(1, r.hands.length - 1)];
+  const near = p.face > 0 ? 1 : -1, s = p.eatFar ? -near : near, h = hmHands(r)[s < 0 ? 0 : Math.min(1, r.hands.length - 1)];   // (hmHands: with ?heromodel, in the model's hand)
   r.root.updateMatrixWorld(true); h.getWorldPosition(_eatV);
   const m = p.eatM, k = u < .3 ? 1 : u < .78 ? .72 : .42; m.visible = u < .9; m.scale.setScalar(.5 * k); const hp = r.head ? r.head.getWorldPosition(_eatH) : null, b = p.eatB * .8;   // (in your hand; each bite, to your mouth: under the head's middle, out in front of it)
   m.position.set(_eatV.x, _eatV.y + .06, s === near ? _eatV.z + .14 : Math.max(_eatV.z, (hp ? hp.z : _eatV.z) + .14)); m.rotation.y = p.face > 0 ? .4 : -.4;
