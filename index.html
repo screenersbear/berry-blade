@@ -1911,6 +1911,7 @@ function modelRig(id, pivot, shadowR, height, face = Math.PI / 2) {   // a chara
 const HERO_H = { camila: 2.72 };                     // (the code-built hero's height with her hair, standing straight, measured 2026-11-18 (HANDOFF-camila-fixes.md): the model is scaled to it. Was 2.4, her height crouched in her guard: the model came out too small)
 const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Z = new THREE.Vector3(0, 0, 1), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
 const hmBodyQ = (o, body) => { const q = new THREE.Quaternion(); for (let x = o; x && x !== body; x = x.parent) q.premultiply(x.quaternion); return q; };   // (a part's turn in the body's own space, from this frame's)
+const HM_TOE = .6;                                   // (on the ground, the model's toe points down no more than this, radians: about 35 degrees, on the ball of the foot. Starky, 2026-11-18: her right foot "bent back at idle"; her own back foot at rest is held up behind her, toe straight down, which her round code boot hides)
 const hmHands = r => r.hm ? [r.hm.B.handL, r.hm.B.handR] : r.hands;   // (the hands drawn: the model's wrists with ?heromodel, else her own; [0] her left, [1] her right, as r.hands. For what must touch them: the zip line's handle, fruit, a boost)
 const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
 function heroModelAttach(r, src, id) {               // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T
@@ -1942,12 +1943,13 @@ function heroModelAttach(r, src, id) {               // the model on the rig: un
   r.hm.vis0 = new Map(r.body.children.map(c => [c, c.visible]));   // (the code-built body's parts as built: put back to see her as before)
   r.body.add(hold);
 }
-function hmLeg(r, W, i, sd, H, hipsQ) {              // the model's leg, on its own lengths, after hers: the ankle where hers is (in the model's proportions), the knee bent the way hers is
+function hmLeg(r, W, i, sd, H, hipsQ, gnd) {         // the model's leg, on its own lengths, after hers: the ankle where hers is (in the model's proportions), the knee bent the way hers is
   const M = r.hm, L = r.legs[i], rH = L.pts[1], rK = L.pts[2], rA = L.pts[3], f = M.f, l1 = M.l1, l2 = M.l2;
   const Hm = M.thighOff[i].clone().applyQuaternion(hipsQ).add(H);                       // (its hip joint, the hips as they are now)
   const F = r.feet[i], low = (C, q) => C.reduce((y, c) => Math.min(y, HM_V.copy(c).applyQuaternion(q).y), 1e9);   // (the lowest point of a box turned)
   F.updateMatrix(); const rb = M.rigSole[i].reduce((y, c) => Math.min(y, HM_V.copy(c).applyMatrix4(F.matrix).y), 1e9);   // (the bottom of her own boot, as it is now)
-  const At = rA.clone().sub(rH).multiplyScalar(f).add(Hm); At.y = rb - low(M.sole[i], F.quaternion);   // (its ankle: forward and back as hers, scaled to the shorter legs; up and down so its boot's bottom is where hers is: on the ground when hers is)
+  const c = gnd ? 1 - THREE.MathUtils.clamp((F.position.y - .3) / .25, 0, 1) : 0, qL = c ? new THREE.Quaternion().setFromEuler(new THREE.Euler(F.rotation.x, F.rotation.y, Math.max(F.rotation.z, -HM_TOE), F.rotation.order)) : null, qF = c ? F.quaternion.clone().slerp(qL, c) : F.quaternion;   // (c: on the ground, a foot low, her back foot at rest .25 up: its toe down no steeper than HM_TOE. Kicked up higher, running: turned with the shin, below)
+  const At = rA.clone().sub(rH).multiplyScalar(f).add(Hm); At.y = rb - low(M.sole[i], qF);   // (its ankle: forward and back as hers, scaled to the shorter legs; up and down so its boot's bottom is where hers is: on the ground when hers is)
   const reach = l1 + l2 - 1e-3, dy = At.y - Hm.y; let u = At.clone().sub(Hm);
   const hz = Math.hypot(u.x, u.z); if (u.length() > reach && Math.abs(dy) < reach && hz > 1e-4) { const want = Math.sqrt(reach * reach - dy * dy); u.x *= want / hz; u.z *= want / hz; }   // (too far for the shorter legs: a shorter step, the foot kept down)
   const d = THREE.MathUtils.clamp(u.length(), Math.abs(l1 - l2) + 1e-3, reach); u.normalize();
@@ -1955,8 +1957,8 @@ function hmLeg(r, W, i, sd, H, hipsQ) {              // the model's leg, on its 
   const ca = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1), Km = Hm.clone().addScaledVector(u, l1 * ca).addScaledVector(v, l1 * Math.sqrt(1 - ca * ca)), A2 = Hm.clone().addScaledVector(u, d);
   W.set(M.B["thigh" + sd], hmAim(Km.clone().sub(Hm)).multiply(M.rest.get(M.B["thigh" + sd]).q));   // (the model's legs hang straight down at rest)
   W.set(M.B["shin" + sd], hmAim(A2.clone().sub(Km)).multiply(M.rest.get(M.B["shin" + sd]).q));
-  const up = THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1), dA = up && Math.atan2(A2.y - Km.y, A2.x - Km.x) - Math.atan2(rA.y - rK.y, rA.x - rK.x);   // (a foot off the ground: turned on with the model's shin, so its ankle bends as hers does. Her back foot at rest is lifted behind her, the shin near level; the model's shin stood about 25 degrees steeper, so her foot's own turn pointed its toe far past an ankle's bend: "her right foot was bent back at idle", Starky, 2026-11-18)
-  W.set(M.B["foot" + sd], HM_Q.setFromAxisAngle(HM_Z, up * (Math.atan2(Math.sin(dA), Math.cos(dA)) || 0)).clone().multiply(r.feet[i].quaternion).multiply(M.rest.get(M.B["foot" + sd]).q));   // (planted, up 0: as hers, flat on the ground)
+  const up = THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1), dA = up && Math.atan2(A2.y - Km.y, A2.x - Km.x) - Math.atan2(rA.y - rK.y, rA.x - rK.x);   // (a foot lifted: turned on with the model's shin, so its ankle bends as hers does; the model's shin stands steeper than hers)
+  const qA = HM_Q.setFromAxisAngle(HM_Z, up * (Math.atan2(Math.sin(dA), Math.cos(dA)) || 0)).clone().multiply(F.quaternion); W.set(M.B["foot" + sd], (c ? qA.slerp(qL, c) : qA).multiply(M.rest.get(M.B["foot" + sd]).q));   // (low on the ground, c 1: qL)
 }
 function heroModelSync(p, r) {                       // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
   const M = r.hm; if (!M) return; const B = M.B, W = new Map(), rq = n => M.rest.get(B[n]).q;
@@ -1971,7 +1973,7 @@ function heroModelSync(p, r) {                       // each frame, after her ow
     W.set(B["upperarm" + sd], hmAim(E.clone().sub(S)).multiply(M.hang["upperarm" + sd]));
     W.set(B["forearm" + sd], hmAim(Wr.clone().sub(E)).multiply(M.hang["forearm" + sd]));
     W.set(B["hand" + sd], (pr && pr.fist && i === propI ? hmBodyQ(pr.fist, r.body) : r.hands[i].quaternion.clone()).multiply(HM_Q.setFromAxisAngle(HM_UP, M.tw[i])).multiply(M.hang["hand" + sd]));   // (the gauntlet hand: its fist's turn and bend. tw: her hands hang palm forward, the model's palm in)
-    hmLeg(r, W, i, sd, H, hipsQ);
+    hmLeg(r, W, i, sd, H, hipsQ, !!p.onGround);
   });
   const open = !!(pr && pr.open && (p.palm || 0) > .5), out = new Map();   // (her gauntlet fist: shut, but for the open palm)
   M.list.forEach(b => {                              // (parents first: each bone's own turn is its parent's undone, then the one wanted)
