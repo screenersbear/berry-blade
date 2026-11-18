@@ -735,7 +735,7 @@
 <script src="roots.js?v=20261102e"></script>
 <script src="clayroom.js?v=20261109l"></script>
 <script src="level-edits.js?v=0"></script>
-<script src="models/models.js?v=20261118002412"></script>
+<script src="models/models.js?v=20261118021608"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -975,10 +975,17 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 window.BERRY_BOOT = 1;                       // (three.js is here: the loading card's watchdog stands down)
 const OUTLINES = false;   // soft, outline-free look
 // ── characters made as 3D models: .glb files from Blender in models/, packed into models/models.js by .claude/berry-tools/make_models_js.py (the user, 2026-11-18: "I eventually want all the models to be this way")
-const MODELS = {};                                   // id: the model, read before the game starts. A character with one is built from it (modelRig), one without in code as before
-await Promise.race([Promise.all(Object.entries(window.BERRY_MODELS || {}).map(([id, b64]) => new Promise(ok => { const no = e => { console.warn("the model " + id + " did not read", e); ok(); };
-  try { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); new GLTFLoader().parse(u.buffer, "", g => { MODELS[id] = g.scene; ok(); }, no); } catch (e) { no(e); } }))),
+const readModels = (pack, into) => Promise.race([Promise.all(Object.entries(pack || {}).map(([id, b64]) => new Promise(ok => { const no = e => { console.warn("the model " + id + " did not read", e); ok(); };
+  try { const t = atob(b64), u = new Uint8Array(t.length); for (let i = 0; i < t.length; i++) u[i] = t.charCodeAt(i); new GLTFLoader().parse(u.buffer, "", g => { into[id] = g.scene; ok(); }, no); } catch (e) { no(e); } }))),
   new Promise(ok => setTimeout(ok, 8000))]);   // (8 s at most: then the game starts, and a model still reading is used from when it is done)
+const MODELS = {};                                   // id: the model, read before the game starts. A character with one is built from it (modelRig), one without in code as before
+await readModels(window.BERRY_MODELS, MODELS);
+// ── heroes made as models, on test (2026-11-18, the user's plan: Camila first, her starting size, standing, walking and her ground punches, on her own moves): only with ?heromodel
+// in the address, from models/test-models.js (models/test/*.glb, the same packer). Without it nothing changes. Not on the phone site. See heroModelAttach
+const HERO_MODEL_ON = /[?&]heromodel\b/.test(location.search), HERO_MODELS = {}; let heroClone = null;   // (heroClone: three's copier for a model with bones, read only for the test)
+if (HERO_MODEL_ON) try { heroClone = (await import("three/addons/utils/SkeletonUtils.js")).clone;
+  await new Promise(ok => { const sc = document.createElement("script"); sc.src = ["models", "test-models.js"].join("/") + "?v=" + Date.now(); sc.onload = sc.onerror = ok; document.head.appendChild(sc); });   // (its name in two pieces: the phone build copies every file named whole)
+  await readModels(window.BERRY_TEST_MODELS, HERO_MODELS); } catch (e) { console.warn("the hero model test did not start", e); }
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
 let WORLD = 2560; const CELL_W = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);   // (WORLD: the room you're in, px across; a screen's is CELL_W, the big room's two of them: bigPlatforms)
@@ -1898,6 +1905,79 @@ function modelRig(id, pivot, shadowR, height, face = Math.PI / 2) {   // a chara
   ["Arm.L", "Arm.R"].forEach(n => { const G = joint(n); if (G) r.arms.push(G); }); ["Leg.L", "Leg.R"].forEach(n => { const G = joint(n); if (G) r.legs.push(G); });   // (left, then right, as the code-built ones: the left on -z)
   const H = joint("Head"); if (H) r.head = H;
   return r;
+}
+// ── a hero from a Blender model with bones, on test (HERO_MODEL_ON: only with ?heromodel in the address)
+// Her own moves run as always on the code-built rig, which stays hidden; each frame the model's bones are turned to match its joints (shoulder, elbow, wrist, hip, knee, ankle) and its hips, chest, head, hands and feet
+const HERO_H = { camila: 2.4 };                      // (the code-built hero's height with her hair, in her guard, measured 2026-11-18: the model is scaled to it)
+const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
+const hmBodyQ = (o, body) => { const q = new THREE.Quaternion(); for (let x = o; x && x !== body; x = x.parent) q.premultiply(x.quaternion); return q; };   // (a part's turn in the body's own space, from this frame's)
+const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
+function heroModelAttach(r, src, id) {               // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T
+  const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map();
+  m.traverse(o => { if (o.isBone) B[o.name] = o; });
+  const need = ["hips", "spine", "chest", "head", ...["upperarm", "forearm", "hand", "thigh", "shin", "foot"].flatMap(n => [n + "L", n + "R"])].filter(n => !B[n]);
+  if (need.length) { console.warn("the model " + id + " has no bones " + need.join(", ") + ": built in code as before"); return; }   // (the bones it goes by, by name: hips > spine > chest > head, upperarm > forearm > hand, thigh > shin > foot, .L and .R)
+  m.traverse(o => { if (o.isBone) list.push(o); if (!o.isMesh) return; const c = o.material; if (!mats.has(c)) mats.set(c, toonT(c.color.clone(), { side: c.side })); o.material = mats.get(c); o.frustumCulled = false; });   // (one toon colour per colour in the model; list: parents before children)
+  const bb = new THREE.Box3(); src.updateMatrixWorld(true); src.traverse(o => { if (!o.isMesh) return; o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); });   // (its height as made, in the T: a skinned mesh's own box would follow bones not yet placed)
+  const k = (HERO_H[id] || 2.4) / (bb.max.y - bb.min.y);
+  hold.rotation.y = Math.PI / 2; hold.scale.setScalar(k); hold.add(m); hold.updateMatrixWorld(true);   // (Blender faces them +z, the game +x. Not on the body yet, so each matrixWorld is in the body's space)
+  const dec = o => { const p = new THREE.Vector3(), q = new THREE.Quaternion(); o.matrixWorld.decompose(p, q, new THREE.Vector3()); return { p, q, lq: o.quaternion.clone() }; };
+  list.forEach(b => rest.set(b, dec(b))); const top = list[0], topQ = dec(top.parent).q, P = n => rest.get(B[n]).p, hang = {};
+  ["L", "R"].forEach(sd => { const sw = new THREE.Quaternion().setFromUnitVectors(P("forearm" + sd).clone().sub(P("upperarm" + sd)).normalize(), HM_DOWN);   // (the arm swung down from the T, whole)
+    B["upperarm" + sd].traverse(o => { if (o.isBone) hang[o.name] = sw.clone().multiply(rest.get(o).q); }); });
+  const legR = (r.D.th + r.D.sh) * r.spec.body.legs + r.D.ankle;   // (her hip joint's height, standing)
+  r.hm = { hold, B, rest, list, hang, top, topQ, hipsInv: new THREE.Matrix4().copy(B.hips.parent.matrixWorld).invert(), f: P("thighL").y / legR, ankY: P("footL").y,
+    l1: P("thighL").distanceTo(P("shinL")), l2: P("shinL").distanceTo(P("footL")), thighOff: ["L", "R"].map(sd => P("thigh" + sd).clone().sub(P("hips"))) };
+  const curl = {}, mq = n => hold.quaternion.clone().invert().multiply(rest.get(B[n]).q), axis = (n, v) => v.clone().applyQuaternion(mq(n).invert());   // (curl: each finger bone's turns, about the model's own axes as Blender's fist does it, put in that bone's own frame)
+  const BK = new THREE.Vector3(0, 0, -1), D2R = Math.PI / 180;
+  [["fingers1L", [[BK, 12, 90]]], ["fingers2L", [[BK, 10, 95]]], ["thumb1L", [[BK, 7, 55], [HM_UP, 4, 35]]], ["thumb2L", [[HM_UP, 5, 45]]]].forEach(([n, T]) => { if (B[n]) curl[n] = T.map(([v, a0, a1]) => [axis(n, v), a0 * D2R, a1 * D2R]); });
+  r.hm.curl = curl; r.hm.tw = [-Math.PI / 2, Math.PI / 2];   // (her left hand, then her right: a quarter turn each, matched by eye to her own fist, 2026-11-18)
+  if (Array.isArray(r.mats)) mats.forEach(x => r.mats.push(x));   // (her flashes, when she is hit, on the model too)
+  const box8 = b => [0, 1, 2, 3, 4, 5, 6, 7].map(n => new THREE.Vector3(n & 1 ? b.max.x : b.min.x, n & 2 ? b.max.y : b.min.y, n & 4 ? b.max.z : b.min.z)), vp = new THREE.Vector3(), soles = [new THREE.Box3(), new THREE.Box3()];   // (soles: the box round each of the model's boots, from its ankle, at rest)
+  m.traverse(o => { if (!o.isSkinnedMesh) return; const g = o.geometry, Pa = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight, bs = o.skeleton.bones;
+    ["L", "R"].forEach((sd, i) => { const bi = bs.indexOf(B["foot" + sd]); if (bi >= 0) for (let v = 0; v < Pa.count; v++) for (let j = 0; j < 4; j++) if (SI.getComponent(v, j) === bi && SW.getComponent(v, j) > .5) soles[i].expandByPoint(vp.fromBufferAttribute(Pa, v).applyMatrix4(o.matrixWorld).sub(P("foot" + sd))); }); });
+  r.hm.sole = soles.map(b => b.isEmpty() ? [new THREE.Vector3(0, -r.hm.ankY, 0)] : box8(b));
+  r.hm.rigSole = r.feet.map(F => { const b = new THREE.Box3(), inv = new THREE.Matrix4(); F.updateMatrixWorld(true); inv.copy(F.matrixWorld).invert(); F.traverse(o => { if (o.isMesh) { o.geometry.computeBoundingBox(); b.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))); } }); return b.isEmpty() ? [new THREE.Vector3()] : box8(b); });   // (and round each of her own boots, in its own space)
+  r.hm.vis0 = new Map(r.body.children.map(c => [c, c.visible]));   // (the code-built body's parts as built: put back to see her as before)
+  r.body.add(hold);
+}
+function hmLeg(r, W, i, sd, H, hipsQ) {              // the model's leg, on its own lengths, after hers: the ankle where hers is (in the model's proportions), the knee bent the way hers is
+  const M = r.hm, L = r.legs[i], rH = L.pts[1], rK = L.pts[2], rA = L.pts[3], f = M.f, l1 = M.l1, l2 = M.l2;
+  const Hm = M.thighOff[i].clone().applyQuaternion(hipsQ).add(H);                       // (its hip joint, the hips as they are now)
+  const F = r.feet[i], low = (C, q) => C.reduce((y, c) => Math.min(y, HM_V.copy(c).applyQuaternion(q).y), 1e9);   // (the lowest point of a box turned)
+  F.updateMatrix(); const rb = M.rigSole[i].reduce((y, c) => Math.min(y, HM_V.copy(c).applyMatrix4(F.matrix).y), 1e9);   // (the bottom of her own boot, as it is now)
+  const At = rA.clone().sub(rH).multiplyScalar(f).add(Hm); At.y = rb - low(M.sole[i], F.quaternion);   // (its ankle: forward and back as hers, scaled to the shorter legs; up and down so its boot's bottom is where hers is: on the ground when hers is)
+  const reach = l1 + l2 - 1e-3, dy = At.y - Hm.y; let u = At.clone().sub(Hm);
+  const hz = Math.hypot(u.x, u.z); if (u.length() > reach && Math.abs(dy) < reach && hz > 1e-4) { const want = Math.sqrt(reach * reach - dy * dy); u.x *= want / hz; u.z *= want / hz; }   // (too far for the shorter legs: a shorter step, the foot kept down)
+  const d = THREE.MathUtils.clamp(u.length(), Math.abs(l1 - l2) + 1e-3, reach); u.normalize();
+  const rU = rA.clone().sub(rH).normalize(), v = rK.clone().sub(rH); v.addScaledVector(rU, -v.dot(rU)); v.addScaledVector(u, -v.dot(u)); if (v.lengthSq() < 1e-8) v.set(1, 0, 0); v.normalize();   // (v: which way her knee points)
+  const ca = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1), Km = Hm.clone().addScaledVector(u, l1 * ca).addScaledVector(v, l1 * Math.sqrt(1 - ca * ca)), A2 = Hm.clone().addScaledVector(u, d);
+  W.set(M.B["thigh" + sd], hmAim(Km.clone().sub(Hm)).multiply(M.rest.get(M.B["thigh" + sd]).q));   // (the model's legs hang straight down at rest)
+  W.set(M.B["shin" + sd], hmAim(A2.clone().sub(Km)).multiply(M.rest.get(M.B["shin" + sd]).q));
+  W.set(M.B["foot" + sd], r.feet[i].quaternion.clone().multiply(M.rest.get(M.B["foot" + sd]).q));
+}
+function heroModelSync(p, r) {                       // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
+  const M = r.hm; if (!M) return; const B = M.B, W = new Map(), rq = n => M.rest.get(B[n]).q;
+  r.body.children.forEach(c => { if (c !== M.hold) c.visible = false; });
+  const hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion;
+  W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, hipsQ.clone().slerp(chestQ, .5).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
+  const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, (P1.y - .05) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
+  const pr = r.prop, propI = r.spec.outfit.prop && r.spec.outfit.prop.side === "left" ? 0 : 1;
+  ["L", "R"].forEach((sd, i) => {
+    const t = r.arms[i], S = t.pts[1], E = t.pts[2], Wr = t.pts[3];
+    W.set(B["upperarm" + sd], hmAim(E.clone().sub(S)).multiply(M.hang["upperarm" + sd]));
+    W.set(B["forearm" + sd], hmAim(Wr.clone().sub(E)).multiply(M.hang["forearm" + sd]));
+    W.set(B["hand" + sd], (pr && pr.fist && i === propI ? hmBodyQ(pr.fist, r.body) : r.hands[i].quaternion.clone()).multiply(HM_Q.setFromAxisAngle(HM_UP, M.tw[i])).multiply(M.hang["hand" + sd]));   // (the gauntlet hand: its fist's turn and bend. tw: her hands hang palm forward, the model's palm in)
+    hmLeg(r, W, i, sd, H, hipsQ);
+  });
+  const open = !!(pr && pr.open && (p.palm || 0) > .5), out = new Map();   // (her gauntlet fist: shut, but for the open palm)
+  M.list.forEach(b => {                              // (parents first: each bone's own turn is its parent's undone, then the one wanted)
+    const R0 = M.rest.get(b), parQ = b === M.top ? M.topQ : out.get(b.parent); let q = W.get(b);
+    if (q) b.quaternion.copy(HM_Q.copy(parQ).invert().multiply(q)); else b.quaternion.copy(R0.lq);
+    const cu = M.curl[b.name]; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, open ? a0 : a1)));   // (the gauntlet's fingers and thumb: in a fist, or nearly straight for the open palm)
+    out.set(b, parQ.clone().multiply(b.quaternion));
+  });
+  B.hips.position.copy(H).applyMatrix4(M.hipsInv);    // (its parent, the root bone, never moves)
 }
 
 function buildCrux() {                       // black coat giant: hypnotic spiral face, "C" shoulder rings, crescent belt
@@ -7114,8 +7194,8 @@ function buildChar(spec) {
   const H = HEARTS[spec.id], pr = spec.outfit && spec.outfit.prop;   // (his gauntlet carries a ring per heart, whatever an edit saved)
   if (H && pr && pr.kind === "gauntlet" && pr.rings !== H) spec = { ...spec, outfit: { ...spec.outfit, prop: { ...pr, rings: H } } };
   const r = KIT.build(spec), body = r.sync;
-  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); };
-  shadeHulls(r.root); return r;
+  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); if (rr.hm) heroModelSync(p, rr); };
+  shadeHulls(r.root); if (HERO_MODELS[spec.id] && r.kind === "human") heroModelAttach(r, HERO_MODELS[spec.id], spec.id); return r;   // (the model after the hulls: theirs would not bend with it)
 }
 const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && sp.villain.on);
 const LOOK_KEY = "berry.looks.v1";                // which look each character wears (an alternate hair style, picked with ↑ ↓ on the select screen)
