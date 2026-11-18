@@ -735,7 +735,7 @@
 <script src="roots.js?v=20261102e"></script>
 <script src="clayroom.js?v=20261109l"></script>
 <script src="level-edits.js?v=0"></script>
-<script src="models/models.js?v=20261118161212"></script>
+<script src="models/models.js?v=20261118163342"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -1909,19 +1909,19 @@ function modelRig(id, pivot, shadowR, height, face = Math.PI / 2) {   // a chara
 // ── a hero from a Blender model with bones, on test (HERO_MODEL_ON: only with ?heromodel in the address)
 // Her own moves run as always on the code-built rig, which stays hidden; each frame the model's bones are turned to match its joints (shoulder, elbow, wrist, hip, knee, ankle) and its hips, chest, head, hands and feet
 const HERO_H = { camila: 2.72 };                     // (the code-built hero's height with her hair, standing straight, measured 2026-11-18 (HANDOFF-camila-fixes.md): the model is scaled to it. Was 2.4, her height crouched in her guard: the model came out too small)
-const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Z = new THREE.Vector3(0, 0, 1), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
+const HM_DOWN = new THREE.Vector3(0, -1, 0), HM_UP = new THREE.Vector3(0, 1, 0), HM_Z = new THREE.Vector3(0, 0, 1), HM_X = new THREE.Vector3(1, 0, 0), HM_Q = new THREE.Quaternion(), HM_V = new THREE.Vector3();
 const hmBodyQ = (o, body) => { const q = new THREE.Quaternion(); for (let x = o; x && x !== body; x = x.parent) q.premultiply(x.quaternion); return q; };   // (a part's turn in the body's own space, from this frame's)
 const HM_TOE = .6;                                   // (on the ground, the model's toe points down no more than this, radians: about 35 degrees, on the ball of the foot. Starky, 2026-11-18: her right foot "bent back at idle"; her own back foot at rest is held up behind her, toe straight down, which her round code boot hides)
 const hmHands = r => r.hm ? [r.hm.B.handL, r.hm.B.handR] : r.hands;   // (the hands drawn: the model's wrists with ?heromodel, else her own; [0] her left, [1] her right, as r.hands. For what must touch them: the zip line's handle, fruit, a boost)
 const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
-function heroModelAttach(r, src, id) {               // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T
+function heroModelAttach(r, src, id, k0) {           // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T (k0: its scale, given: her grown arm's models, as her own)
   const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map();
   m.traverse(o => { if (o.isBone) B[o.name] = o; });
   const need = ["hips", "spine", "chest", "head", ...["upperarm", "forearm", "hand", "thigh", "shin", "foot"].flatMap(n => [n + "L", n + "R"])].filter(n => !B[n]);
   if (need.length) { console.warn("the model " + id + " has no bones " + need.join(", ") + ": built in code as before"); return; }   // (the bones it goes by, by name: hips > spine > chest > head, upperarm > forearm > hand, thigh > shin > foot, .L and .R)
   m.traverse(o => { if (o.isBone) list.push(o); if (!o.isMesh) return; const c = o.material; if (!mats.has(c)) mats.set(c, toonT(c.color.clone(), { side: c.side })); o.material = mats.get(c); o.frustumCulled = false; });   // (one toon colour per colour in the model; list: parents before children)
   const bb = new THREE.Box3(); src.updateMatrixWorld(true); src.traverse(o => { if (!o.isMesh) return; o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); });   // (its height as made, in the T: a skinned mesh's own box would follow bones not yet placed)
-  const k = (HERO_H[id] || 2.4) / (bb.max.y - bb.min.y);
+  const k = k0 || (HERO_H[id] || 2.4) / (bb.max.y - bb.min.y);
   hold.rotation.y = Math.PI / 2; hold.scale.setScalar(k); hold.add(m); hold.updateMatrixWorld(true);   // (Blender faces them +z, the game +x. Not on the body yet, so each matrixWorld is in the body's space)
   const dec = o => { const p = new THREE.Vector3(), q = new THREE.Quaternion(); o.matrixWorld.decompose(p, q, new THREE.Vector3()); return { p, q, lq: o.quaternion.clone() }; };
   list.forEach(b => rest.set(b, dec(b))); const top = list[0], topQ = dec(top.parent).q, P = n => rest.get(B[n]).p, hang = {};
@@ -2021,31 +2021,86 @@ function hmSpring(M, r, dt) {                         // (each frame, after her 
   });
 }
 function heroModelSync(p, r, dt = 0) {               // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
+  if (r.hmSet) { const N = r.hmSet[hmLevel(p, r)]; if (N !== r.hm) hmSwap(r, N); }   // (her grown arm's size: its model in place of the last)
   const M = r.hm; if (!M) return; const B = M.B, W = new Map(), rq = n => M.rest.get(B[n]).q;
-  const G = r.giant, big = !!(G && G.on);           // (her grown arm: the code-built one, shown as the game shows it, the model's own arm on that side folded away)
-  r.body.children.forEach(c => { if (c !== M.hold && !(G && c === G.grp)) c.visible = false; });   // (the grown arm's group: left as her own code sets it, seen when it is out)
-  const hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion;
-  W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, hipsQ.clone().slerp(chestQ, .5).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
+  const G = r.giant, big = !!(G && G.on), gq = big && M.gi && G.hmQ;   // (her grown arm: the code-built one, shown as the game shows it, the model's own arm on that side folded away. gq: a big-arm model's own, its bones to the points hmGiantShape gave it)
+  r.body.children.forEach(c => { if (c !== M.hold && !(G && c === G.grp && !gq)) c.visible = false; });   // (the grown arm's group: left as her own code sets it, seen when it is out)
+  let hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion, spQ = null;
+  if (gq && HM_GIANT.lean) { const a = (G.idleW ?? 0) * HM_GIANT.lean[M.lv - 1] * ((r.spec.outfit.prop || {}).side === "left" ? -1 : 1), R = new THREE.Quaternion().setFromAxisAngle(HM_X, a);   // part C, change 3: her shoulders pulled further over toward the heavy arm, standing (the game's own roll, charkit GIANT_CLUB, is in chestQ already: this is on top), the spine half of it
+    chestQ = R.clone().multiply(chestQ); headQ = R.clone().multiply(headQ); spQ = R.slerp(HM_Q.identity(), .5); }
+  W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, (spQ ? spQ.clone().multiply(hipsQ.clone().slerp(r.chest.quaternion, .5)) : hipsQ.clone().slerp(chestQ, .5)).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
   const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, hmBob(M, P1.y - .05, p, dt) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
   const pr = r.prop, propI = r.spec.outfit.prop && r.spec.outfit.prop.side === "left" ? 0 : 1;
   ["L", "R"].forEach((sd, i) => {
     const t = r.arms[i], S = t.pts[1], E = t.pts[2], Wr = t.pts[3];
+    if (gq && i === propI) { W.set(B["upperarm" + sd], G.hmQ[0]); W.set(B["forearm" + sd], G.hmQ[1]); W.set(B["hand" + sd], G.hmQ[2]); } else {   // (the grown arm, as hmGiantShape turned it)
     W.set(B["upperarm" + sd], hmAim(E.clone().sub(S)).multiply(M.hang["upperarm" + sd]));
     W.set(B["forearm" + sd], hmAim(Wr.clone().sub(E)).multiply(M.hang["forearm" + sd]));
-    W.set(B["hand" + sd], (pr && pr.fist && i === propI ? hmBodyQ(pr.fist, r.body) : r.hands[i].quaternion.clone()).multiply(HM_Q.setFromAxisAngle(HM_UP, M.tw[i])).multiply(M.hang["hand" + sd]));   // (the gauntlet hand: its fist's turn and bend. tw: her hands hang palm forward, the model's palm in)
+    W.set(B["hand" + sd], (pr && pr.fist && i === propI ? hmBodyQ(pr.fist, r.body) : r.hands[i].quaternion.clone()).multiply(HM_Q.setFromAxisAngle(HM_UP, M.tw[i])).multiply(M.hang["hand" + sd])); }   // (the gauntlet hand: its fist's turn and bend. tw: her hands hang palm forward, the model's palm in)
     hmLeg(r, W, i, sd, H, hipsQ, !!p.onGround);
   });
   const open = !!(pr && pr.open && (p.palm || 0) > .5), out = new Map();   // (her gauntlet fist: shut, but for the open palm)
   M.list.forEach(b => {                              // (parents first: each bone's own turn is its parent's undone, then the one wanted)
     const R0 = M.rest.get(b), parQ = b === M.top ? M.topQ : out.get(b.parent); let q = W.get(b);
     if (q) b.quaternion.copy(HM_Q.copy(parQ).invert().multiply(q)); else b.quaternion.copy(R0.lq);
-    const cu = M.curl[b.name]; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, open ? a0 : a1)));   // (both hands' fingers and thumbs: in a fist, or nearly straight for the open palm)
+    const cu = M.curl[b.name], cc = gq && b.name.endsWith(propI ? "R" : "L") ? G.hmC : open ? 0 : 1; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, a0 + (a1 - a0) * cc)));   // (cc: the grown hand's, from open to a fist, hmGiantShape)   // (both hands' fingers and thumbs: in a fist, or nearly straight for the open palm)
     out.set(b, parQ.clone().multiply(b.quaternion));
   });
-  ["L", "R"].forEach((sd, i) => B["upperarm" + sd].scale.setScalar(big && i === propI ? 1e-3 : 1));   // (folded to nothing at the shoulder while the grown arm is out on her gauntlet side)
+  ["L", "R"].forEach((sd, i) => B["upperarm" + sd].scale.setScalar(big && !gq && i === propI ? 1e-3 : 1)); if (M.gi) B["hand" + (propI ? "R" : "L")].scale.setScalar(gq ? G.hmHs : 1);   // (the big hand as big as the size between models: the burst's swell and settle)   // (folded to nothing at the shoulder while the grown arm is out on her gauntlet side)
   B.hips.position.copy(H).applyMatrix4(M.hipsInv);    // (its parent, the root bone, never moves)
   hmSpring(M, r, dt);
+  if (gq) { const U = B["upperarm" + (propI ? "R" : "L")]; U.updateWorldMatrix(true, false); G.hmOff = r.body.worldToLocal(U.getWorldPosition(G.hmOff || new THREE.Vector3())).sub(G.hmS); }   // (where its shoulder is, off charkit's: next frame's arm from there)
 }
+
+// ── her grown arm from the modelling chat's models (camila-size2/3/4: the same girl, her left arm the big one, with an elbow and a big fist), on test with ?heromodel
+// The game grows the arm smoothly; the models are three sizes. Each is loaded whole, hidden but the one for her size now (hmLevel: the nearest), so the change comes
+// at the burst as she grows, hidden in its flash; between, the big hand is scaled as the game's would be (its swell past the size and back). Her own grown arm
+// (charkit giantArm) still runs: its points are set to the model's arm (hmGiantShape), so her other hand's hold, the team riding it and the camera go by what you see
+const HM_GIANT = { on: !/[?&]nobigarm(&|$)/.test(location.search), lean: [.05, .09, .14], up: [80, 14], roll: -Math.PI / 2, curl: .35, run: 1, hang: [["arm", .06], ["elb", .2], ["sp", .14], ["rl", 0]] };   // (on: off with ?nobigarm, the game's own arm as before. lean: her shoulders tipped further over to it standing, sizes 2 to 4, radians (part C change 3; null: as the game has it). Standing with it, from the modelling chat's shot.py "drag", Starky 2026-11-18: the upper arm down from the T (80 degrees) and a little back (14), the forearm rolled palm side up, bent forward at the elbow till the fist rests on the ground on its back, the fingers curled in a little. run: how much of that a run gives up for the game's own drag, the arm trailed along behind her; hang: her other arm then, hanging at her side)
+const hmLevel = (p, r) => HM_GIANT.on && r.giant && r.giant.on ? Math.round(clamp(KIT.giantOf(p), 0, 3)) : 0;   // (0: her own arm, the gauntlet; 1 to 3 the models for sizes 2 to 4)
+function heroModelSizes(r, id) {                     // (her grown arm's models, if there are all three: each on her body as she is, hidden till its size)
+  const M0 = r.hm, set = [M0];
+  for (let z = 2; z <= 4; z++) { const src = HERO_MODELS[id + "size" + z]; if (!src) return; heroModelAttach(r, src, id, M0.hold.scale.x); const M = r.hm; r.hm = M0; if (M === M0) return;
+    M.vis0 = M0.vis0; M.hold.visible = false; M.lv = z - 1; hmGiantSetup(M); if (!M.gi) return; set.push(M); }
+  r.hmSet = set;
+}
+function hmGiantSetup(M) {                           // (a big-arm model: its arm's lengths, its fist's ball, its standing pose; all in her body's space)
+  const B = M.B, rq = n => M.rest.get(B[n]).q, P = n => M.rest.get(B[n]).p, k = M.hold.scale.x, Hq = M.hold.quaternion, D2R = Math.PI / 180, V3 = (x, y, z) => new THREE.Vector3(x, y, z).applyQuaternion(Hq);
+  const ball = M.hold.getObjectByName("colhandL"); if (!ball || !B.forearmL || !B.handL || !B.upperarmL) return;
+  const Ru = new THREE.Quaternion().setFromAxisAngle(V3(1, 0, 0), HM_GIANT.up[1] * D2R).multiply(new THREE.Quaternion().setFromAxisAngle(V3(0, 0, -1), HM_GIANT.up[0] * D2R));   // (Blender's turns, about its y then its x: in the glTF its y is -z)
+  const fa = Ru.clone().multiply(rq("forearmL")), Rr = new THREE.Quaternion().setFromAxisAngle(HM_UP.clone().applyQuaternion(fa), HM_GIANT.roll);
+  M.gi = { l1: P("forearmL").distanceTo(P("upperarmL")), l2: P("handL").distanceTo(P("forearmL")), bc: ball.position.clone().multiplyScalar(k), br: ball.scale.x * k,   // (bc, br: the fist's ball on the hand, in her body's units)
+    up: Ru.clone().multiply(rq("upperarmL")), fo: Rr.clone().multiply(fa), hd: Rr.clone().multiply(Ru).multiply(rq("handL")), bx: V3(1, 0, 0),   // (up, fo, hd: standing, before the elbow's bend, about bx)
+    relI: rq("handL").clone().invert().multiply(rq("forearmL")), pl: new THREE.Vector3(0, -1, 0).applyQuaternion(rq("handL").clone().invert()) };   // (relI: the forearm from the hand as made; pl: the palm's way in the hand's own space, down in the T)
+}
+function hmSwap(r, N) {                               // (another size's model in place of the last, her hair as it was on it)
+  const O = r.hm; O.hold.visible = false; N.hold.visible = true; r.hm = N;
+  if (O.spring && N.spring) O.spring.chains.forEach((c, j) => { const d = N.spring.chains[j]; if (d && c.P) { d.P = c.P.map(v => v.clone()); d.V = c.V.map(v => v.clone()); d.Mp = c.Mp.clone(); } });
+}
+const hmFrameQ = (a1, b1, a2, b2) => { const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), f = (a, b, m) => { const x = a.clone().normalize(), y = b.clone().addScaledVector(x, -b.dot(x)).normalize(); m.makeBasis(x, y, x.clone().cross(y)); };   // (the turn taking a1 to a2 and, round it, b1 as near as can be to b2)
+  f(a1, b1, m1); f(a2, b2, m2); return new THREE.Quaternion().setFromRotationMatrix(m2.multiply(m1.transpose())); };
+function hmGiantShape(p, r, G, A, s, S, wI, fy, plant) {   // (charkit's giantArm, each frame it's out, last: the model's arm worked out, and the code arm's points put on it)
+  const M = r.hmSet && r.hmSet[hmLevel(p, r)], g = M && M.gi; G.hmQ = null; if (!g) return;
+  const hs = G.c.hand / KIT.GIANT_ARM[M.lv].hand, l1 = g.l1, l2 = g.l2, Y1 = HM_UP, Sm = (G.hmS = (G.hmS || new THREE.Vector3()).copy(S)).clone(); if (G.hmOff) Sm.add(G.hmOff);   // (hs: the hand's size against its model's; Sm: the model's shoulder)
+  const ik = (T, pole) => { const d = T.clone().sub(Sm), L = Math.min(d.length(), (l1 + l2) * .999), n = d.normalize(), c = clamp((l1 * l1 + L * L - l2 * l2) / (2 * l1 * Math.max(L, 1e-4)), -1, 1);   // (its two lengths to T, the elbow out toward pole)
+    const q = pole.clone().sub(Sm); q.addScaledVector(n, -q.dot(n)); if (q.lengthSq() < 1e-6) q.set(-1, 0, 0).addScaledVector(n, n.x); q.normalize();
+    const E = Sm.clone().addScaledVector(n, l1 * c).addScaledVector(q, l1 * Math.sqrt(1 - c * c)); return [E, Sm.clone().addScaledVector(n, L)]; };
+  const ballLo = (W, qh) => g.bc.clone().multiplyScalar(hs).applyQuaternion(qh).add(W).y - g.br * hs;   // (the fist's bottom)
+  const hq = G.hand.g.quaternion, Qh = hmFrameQ(Y1, g.pl, new THREE.Vector3(0, -1, 0).applyQuaternion(hq), new THREE.Vector3(1, 0, 0).applyQuaternion(hq));   // moving, as the game's arm: the hand turned as its hand is (its fingers down its -y, the palm its +x)
+  const [Ef, Wf] = ik(A[6], A[3]), Qf0 = Qh.clone().multiply(g.relI), Qf = new THREE.Quaternion().setFromUnitVectors(Y1.clone().applyQuaternion(Qf0), Wf.clone().sub(Ef).normalize()).multiply(Qf0);   // (the wrist where its wrist is, the elbow its way; the forearm rolled with the hand)
+  G.hmRun = lerp(G.hmRun || 0, p.onGround === false ? 0 : clamp(Math.abs(p.vx || 0) / 300, 0, 1), .12); const Qu = hmAim(Ef.clone().sub(Sm)).multiply(M.hang.upperarmL), w = plant || p.zip || p.climb || p.crawl ? 0 : wI * (1 - HM_GIANT.run * G.hmRun);   // (running: as the game drags it, trailed behind her. On a zip line, a ladder or crawling: at once its hand where hers is)
+  if (w > .001) { const up = g.up, fo = g.fo, hd = g.hd, Ed = Sm.clone().addScaledVector(Y1.clone().applyQuaternion(up), l1), R = new THREE.Quaternion();   // standing: the drag pose, bent at the elbow till the fist is on the ground
+    const at = b => { R.setFromAxisAngle(g.bx, -b); return ballLo(Ed.clone().addScaledVector(Y1.clone().applyQuaternion(fo).applyQuaternion(R), l2), R.clone().multiply(hd)) - fy; };
+    let lo = 0, hi = 1.75; if (at(0) >= 0) hi = 0; else if (at(hi) < 0) lo = hi; else for (let i = 0; i < 14; i++) { const m = (lo + hi) / 2; if (at(m) < 0) lo = m; else hi = m; }
+    R.setFromAxisAngle(g.bx, -hi); Qu.slerp(up, w); Qf.slerp(R.clone().multiply(fo), w); Qh.slerp(R.multiply(hd), w); if (w > .5 && p.out) { const o = p.out, K = -s === (p.face > 0 ? 1 : -1) ? "F" : "B"; p.gripFree = true; HM_GIANT.hang.forEach(([n, v]) => { o[n + K] = v; }); } }   // (her other hand off it, hanging at her side as in the modelling chat's pictures (shot.py's drag): held, it gripped her upper arm across her chest. K: that arm's keys, F when it's the near one)
+  let E = Sm.clone().addScaledVector(Y1.clone().applyQuaternion(Qu), l1), W = E.clone().addScaledVector(Y1.clone().applyQuaternion(Qf), l2);
+  const dd = fy + .004 - ballLo(W, Qh); if (dd > 0 && !plant) { const u0 = E.clone().sub(Sm).normalize(), v0 = W.clone().sub(E).normalize(); [E, W] = ik(W.clone().setY(W.y + dd), E);   // (anything of the fist in the ground: up out of it)
+    Qu.premultiply(new THREE.Quaternion().setFromUnitVectors(u0, E.clone().sub(Sm).normalize())); Qf.premultiply(new THREE.Quaternion().setFromUnitVectors(v0, W.clone().sub(E).normalize())); }
+  const u = E.clone().sub(Sm).normalize(), v = W.clone().sub(E);   // the code arm's points on it: the game's hold, the team's ride and the camera go by them
+  A[0].copy(Sm).addScaledVector(u, -.06); for (let i = 1; i <= 3; i++) A[i].copy(Sm).addScaledVector(E.clone().sub(Sm), i / 3); for (let i = 4; i <= 6; i++) A[i].copy(E).addScaledVector(v, (i - 3) / 3);
+  G.hand.g.position.copy(W); G.hmQ = [Qu, Qf, Qh]; G.hmC = lerp(G.fist || 0, HM_GIANT.curl, w); G.hmHs = hs;
+}
+if (HERO_MODEL_ON) KIT.giantShape = hmGiantShape;
 
 function buildCrux() {                       // black coat giant: hypnotic spiral face, "C" shoulder rings, crescent belt
   const r = foeBase(2.3, 1.5), { M, P, body } = r;
@@ -7262,7 +7317,7 @@ function buildChar(spec) {
   if (H && pr && pr.kind === "gauntlet" && pr.rings !== H) spec = { ...spec, outfit: { ...spec.outfit, prop: { ...pr, rings: H } } };
   const r = KIT.build(spec), body = r.sync;
   r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); if (rr.hm) heroModelSync(p, rr, dt); };
-  shadeHulls(r.root); if (HERO_MODELS[spec.id] && r.kind === "human") heroModelAttach(r, HERO_MODELS[spec.id], spec.id); return r;   // (the model after the hulls: theirs would not bend with it)
+  shadeHulls(r.root); if (HERO_MODELS[spec.id] && r.kind === "human") { heroModelAttach(r, HERO_MODELS[spec.id], spec.id); if (r.hm) heroModelSizes(r, spec.id); } return r;   // (the model after the hulls: theirs would not bend with it)
 }
 const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && sp.villain.on);
 const LOOK_KEY = "berry.looks.v1";                // which look each character wears (an alternate hair style, picked with ↑ ↓ on the select screen)

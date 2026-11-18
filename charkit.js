@@ -1541,6 +1541,7 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
   H.g.updateMatrix(); let lo = 1e9; const fc = G.fist;
   for (const [x, y, z] of [[.06, -.19, .1], [.06, -.19, -.1], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), .08], [lerp(.03, .09, fc), lerp(-.36, -.22, fc), -.08], [-.06, -.12, 0]]) lo = Math.min(lo, _gv.set(x, y, z).applyMatrix4(H.g.matrix).y);
   if (!plant && lo < fyK + .004) { const d = Math.min(.25, fyK + .004 - lo); A[6].y += d; A[5].y += d * .6; place(); }   // (anything of it still in the ground: up out of it)
+  if (api.giantShape) api.giantShape(p, r, G, A, s, S, wI, fyK, plant);   // (a test's own arm in place of this one, its points set to it: the game's ?heromodel, its grown arm from Blender models. Unset, nothing changes)
   G.tube.update(FWD); giantRings(G, pr);
   const ug = clamp((G.uB ?? .5) + .035, .2, .8);     // (where her other hand holds it: the gauntlet's base, just under its rim)
   G.tube.curve.getPoint(ug, _gv); G.tube.curve.getTangent(ug, _gu); _gx.set(.3, 1, -s * .4); _gw.copy(_gx).addScaledVector(_gu, -_gu.dot(_gx)).normalize();
