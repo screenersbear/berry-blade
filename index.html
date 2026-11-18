@@ -735,7 +735,7 @@
 <script src="roots.js?v=20261102e"></script>
 <script src="clayroom.js?v=20261109l"></script>
 <script src="level-edits.js?v=0"></script>
-<script src="models/models.js?v=20261118021608"></script>
+<script src="models/models.js?v=20261118125757"></script>
 <script src="story.js?v=20261018a"></script>
 <script src="shore.js?v=20261015a" defer></script>
 <script src="ambience.js?v=20261018a" defer></script>
@@ -1932,7 +1932,7 @@ function heroModelAttach(r, src, id) {               // the model on the rig: un
     l1: P("thighL").distanceTo(P("shinL")), l2: P("shinL").distanceTo(P("footL")), thighOff: ["L", "R"].map(sd => P("thigh" + sd).clone().sub(P("hips"))) };
   const curl = {}, mq = n => hold.quaternion.clone().invert().multiply(rest.get(B[n]).q), axis = (n, v) => v.clone().applyQuaternion(mq(n).invert());   // (curl: each finger bone's turns, about the model's own axes as Blender's fist does it, put in that bone's own frame)
   const BK = new THREE.Vector3(0, 0, -1), D2R = Math.PI / 180;
-  [["fingers1L", [[BK, 12, 90]]], ["fingers2L", [[BK, 10, 95]]], ["thumb1L", [[BK, 7, 55], [HM_UP, 4, 35]]], ["thumb2L", [[HM_UP, 5, 45]]]].forEach(([n, T]) => { if (B[n]) curl[n] = T.map(([v, a0, a1]) => [axis(n, v), a0 * D2R, a1 * D2R]); });
+  [["fingers1", [[BK, 12, 90]]], ["fingers2", [[BK, 10, 95]]], ["thumb1", [[BK, 7, 55], [HM_UP, 4, 35]]], ["thumb2", [[HM_UP, 5, 45]]]].forEach(([n, T]) => ["L", "R"].forEach(sd => { const b = n + sd; if (B[b]) curl[b] = T.map(([v, a0, a1]) => [axis(b, sd === "L" ? v : v.clone().negate()), a0 * D2R, a1 * D2R]); }));   // (both hands: her right one, with fingers since 2026-11-18, the same turns mirrored, as the model's own fist does it. It shuts and opens with the gauntlet)
   r.hm.curl = curl; r.hm.tw = [-Math.PI / 2, Math.PI / 2];   // (her left hand, then her right: a quarter turn each, matched by eye to her own fist, 2026-11-18)
   if (Array.isArray(r.mats)) mats.forEach(x => r.mats.push(x));   // (her flashes, when she is hit, on the model too)
   const box8 = b => [0, 1, 2, 3, 4, 5, 6, 7].map(n => new THREE.Vector3(n & 1 ? b.max.x : b.min.x, n & 2 ? b.max.y : b.min.y, n & 4 ? b.max.z : b.min.z)), vp = new THREE.Vector3(), soles = [new THREE.Box3(), new THREE.Box3()];   // (soles: the box round each of the model's boots, from its ankle, at rest)
@@ -1960,13 +1960,19 @@ function hmLeg(r, W, i, sd, H, hipsQ, gnd) {         // the model's leg, on its 
   const up = THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1), dA = up && Math.atan2(A2.y - Km.y, A2.x - Km.x) - Math.atan2(rA.y - rK.y, rA.x - rK.x);   // (a foot lifted: turned on with the model's shin, so its ankle bends as hers does; the model's shin stands steeper than hers)
   const qA = HM_Q.setFromAxisAngle(HM_Z, up * (Math.atan2(Math.sin(dA), Math.cos(dA)) || 0)).clone().multiply(F.quaternion); W.set(M.B["foot" + sd], (c ? qA.slerp(qL, c) : qA).multiply(M.rest.get(M.B["foot" + sd]).q));   // (low on the ground, c 1: qL)
 }
-function heroModelSync(p, r) {                       // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
+const HM_BOB = { keep: .4, rise: .5, blend: .12 };  // (part C, first change, 2026-11-18: her hips' bounce on the ground. keep: how much of each rise over the step's low is kept; rise, blend: seconds. Starky: her moves "skippy", wanted "fluid and weighty". Running her hips rose and fell .31 a stride, standing .09)
+function hmBob(M, y, p, dt) {                        // (her hips' height for the model: the low of each step kept, the rise over it cut to HM_BOB.keep, so lower and steadier; in the air as hers. Never higher than hers, so her legs always reach her feet)
+  if (M.fl === undefined) { M.fl = y; M.bk = 1; }
+  if (dt > 0) { M.fl = Math.min(y, M.fl + (y - M.fl) * (1 - Math.exp(-dt / HM_BOB.rise))); M.bk += ((p.onGround ? HM_BOB.keep : 1) - M.bk) * (1 - Math.exp(-dt / HM_BOB.blend)); }   // (fl: the low, down at once, up slowly; bk eased, so a jump or a landing doesn't pop)
+  return M.fl + (y - M.fl) * M.bk;
+}
+function heroModelSync(p, r, dt = 0) {               // each frame, after her own sync: the code-built body hidden, the model's bones turned to it
   const M = r.hm; if (!M) return; const B = M.B, W = new Map(), rq = n => M.rest.get(B[n]).q;
   const G = r.giant, big = !!(G && G.on);           // (her grown arm: the code-built one, shown as the game shows it, the model's own arm on that side folded away)
   r.body.children.forEach(c => { if (c !== M.hold && !(G && c === G.grp)) c.visible = false; });   // (the grown arm's group: left as her own code sets it, seen when it is out)
   const hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion;
   W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, hipsQ.clone().slerp(chestQ, .5).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
-  const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, (P1.y - .05) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
+  const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, hmBob(M, P1.y - .05, p, dt) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
   const pr = r.prop, propI = r.spec.outfit.prop && r.spec.outfit.prop.side === "left" ? 0 : 1;
   ["L", "R"].forEach((sd, i) => {
     const t = r.arms[i], S = t.pts[1], E = t.pts[2], Wr = t.pts[3];
@@ -1979,7 +1985,7 @@ function heroModelSync(p, r) {                       // each frame, after her ow
   M.list.forEach(b => {                              // (parents first: each bone's own turn is its parent's undone, then the one wanted)
     const R0 = M.rest.get(b), parQ = b === M.top ? M.topQ : out.get(b.parent); let q = W.get(b);
     if (q) b.quaternion.copy(HM_Q.copy(parQ).invert().multiply(q)); else b.quaternion.copy(R0.lq);
-    const cu = M.curl[b.name]; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, open ? a0 : a1)));   // (the gauntlet's fingers and thumb: in a fist, or nearly straight for the open palm)
+    const cu = M.curl[b.name]; if (cu) cu.forEach(([ax, a0, a1]) => b.quaternion.multiply(HM_Q.setFromAxisAngle(ax, open ? a0 : a1)));   // (both hands' fingers and thumbs: in a fist, or nearly straight for the open palm)
     out.set(b, parQ.clone().multiply(b.quaternion));
   });
   ["L", "R"].forEach((sd, i) => B["upperarm" + sd].scale.setScalar(big && i === propI ? 1e-3 : 1));   // (folded to nothing at the shoulder while the grown arm is out on her gauntlet side)
@@ -7200,7 +7206,7 @@ function buildChar(spec) {
   const H = HEARTS[spec.id], pr = spec.outfit && spec.outfit.prop;   // (his gauntlet carries a ring per heart, whatever an edit saved)
   if (H && pr && pr.kind === "gauntlet" && pr.rings !== H) spec = { ...spec, outfit: { ...spec.outfit, prop: { ...pr, rings: H } } };
   const r = KIT.build(spec), body = r.sync;
-  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); if (rr.hm) heroModelSync(p, rr); };
+  r.sync = (p, rr, dt) => { body(p, rr, dt); finishSync(p, rr); gearSync(rr, dt, p); if (rr.hm) heroModelSync(p, rr, dt); };
   shadeHulls(r.root); if (HERO_MODELS[spec.id] && r.kind === "human") heroModelAttach(r, HERO_MODELS[spec.id], spec.id); return r;   // (the model after the hulls: theirs would not bend with it)
 }
 const isPet = sp => !!(sp.pet && sp.pet.on), isVillain = sp => !!(sp.villain && sp.villain.on);
