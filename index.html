@@ -2026,7 +2026,7 @@ function heroModelSync(p, r, dt = 0) {               // each frame, after her ow
   const G = r.giant, big = !!(G && G.on), gq = big && M.gi && G.hmQ;   // (her grown arm: the code-built one, shown as the game shows it, the model's own arm on that side folded away. gq: a big-arm model's own, its bones to the points hmGiantShape gave it)
   r.body.children.forEach(c => { if (c !== M.hold && !(G && c === G.grp && !gq)) c.visible = false; });   // (the grown arm's group: left as her own code sets it, seen when it is out)
   let hipsQ = r.hips.quaternion, chestQ = r.chest.quaternion, headQ = r.head.quaternion, spQ = null;
-  if (gq && HM_GIANT.lean) { const a = (G.idleW ?? 0) * HM_GIANT.lean[M.lv - 1] * ((r.spec.outfit.prop || {}).side === "left" ? -1 : 1), R = new THREE.Quaternion().setFromAxisAngle(HM_X, a);   // part C, change 3: her shoulders pulled further over toward the heavy arm, standing (the game's own roll, charkit GIANT_CLUB, is in chestQ already: this is on top), the spine half of it
+  if (gq && HM_GIANT.lean) { const a = (G.leanW ?? G.idleW ?? 0) * HM_GIANT.lean[M.lv - 1] * ((r.spec.outfit.prop || {}).side === "left" ? -1 : 1), R = new THREE.Quaternion().setFromAxisAngle(HM_X, a);   // part C, change 3: her shoulders pulled further over toward the heavy arm, standing (the game's own roll, charkit GIANT_CLUB, is in chestQ already: this is on top), the spine half of it
     chestQ = R.clone().multiply(chestQ); headQ = R.clone().multiply(headQ); spQ = R.slerp(HM_Q.identity(), .5); }
   W.set(B.hips, hipsQ.clone().multiply(rq("hips"))); W.set(B.spine, (spQ ? spQ.clone().multiply(hipsQ.clone().slerp(r.chest.quaternion, .5)) : hipsQ.clone().slerp(chestQ, .5)).multiply(rq("spine"))); W.set(B.chest, chestQ.clone().multiply(rq("chest"))); W.set(B.head, headQ.clone().multiply(rq("head")));
   const P1 = r.hips.position, H = new THREE.Vector3(P1.x * M.f, hmBob(M, P1.y - .05, p, dt) * M.f, P1.z);   // (her hips: hers, in the model's proportions)
@@ -2056,7 +2056,7 @@ function heroModelSync(p, r, dt = 0) {               // each frame, after her ow
 // The game grows the arm smoothly; the models are three sizes. Each is loaded whole, hidden but the one for her size now (hmLevel: the nearest), so the change comes
 // at the burst as she grows, hidden in its flash; between, the big hand is scaled as the game's would be (its swell past the size and back). Her own grown arm
 // (charkit giantArm) still runs: its points are set to the model's arm (hmGiantShape), so her other hand's hold, the team riding it and the camera go by what you see
-const HM_GIANT = { on: !/[?&]nobigarm(&|$)/.test(location.search), lean: [.05, .09, .14], up: [80, 14], roll: -Math.PI / 2, curl: .35, run: 1, hang: [["arm", .06], ["elb", .2], ["sp", .14], ["rl", 0]] };   // (on: off with ?nobigarm, the game's own arm as before. lean: her shoulders tipped further over to it standing, sizes 2 to 4, radians (part C change 3; null: as the game has it). Standing with it, from the modelling chat's shot.py "drag", Starky 2026-11-18: the upper arm down from the T (80 degrees) and a little back (14), the forearm rolled palm side up, bent forward at the elbow till the fist rests on the ground on its back, the fingers curled in a little. run: how much of that a run gives up for the game's own drag, the arm trailed along behind her; hang: her other arm then, hanging at her side)
+const HM_GIANT = { on: !/[?&]nobigarm(&|$)/.test(location.search), lean: [.05, .09, .14], ease: 40, up: [80, 14], roll: -Math.PI / 6, curl: .35, run: 1, hang: [["arm", .06], ["elb", .2], ["sp", .14], ["rl", 0]] };   // (on: off with ?nobigarm, the game's own arm as before. lean: her shoulders tipped further over to it standing, sizes 2 to 4, radians (part C change 3; null: as the game has it). Standing with it, from the modelling chat's shot.py "drag", Starky 2026-11-18: the upper arm down from the T (80 degrees) and a little back (14), the forearm rolled palm side up (a third of the way since 2026-11-20, Starky: the thumb looked on the wrong side: rolled all the way, a left hand's thumb points out to her left, which is behind her when she faces left; now it is in front and showing either way), bent forward at the elbow till the fist rests on the ground on its back, the fingers curled in a little. run: how much of that a run gives up for the game's own drag, the arm trailed along behind her; hang: her other arm then, hanging at her side)
 const hmLevel = (p, r) => HM_GIANT.on && r.giant && r.giant.on ? Math.round(clamp(KIT.giantOf(p), 0, 3)) : 0;   // (0: her own arm, the gauntlet; 1 to 3 the models for sizes 2 to 4)
 function heroModelSizes(r, id) {                     // (her grown arm's models, if there are all three: each on her body as she is, hidden till its size)
   const M0 = r.hm, set = [M0];
@@ -2101,6 +2101,14 @@ function hmGiantShape(p, r, G, A, s, S, wI, fy, plant) {   // (charkit's giantAr
   G.hand.g.position.copy(W); G.hmQ = [Qu, Qf, Qh]; G.hmC = lerp(G.fist || 0, HM_GIANT.curl, w); G.hmHs = hs;
 }
 if (HERO_MODEL_ON) KIT.giantShape = hmGiantShape;
+function hmLeanEase(p, G, dt) {                      // part C change 3, the lean eased in and out (Starky, 2026-11-20: "jittery and sticks in places": the rest weight it went by ramps in a straight line, the same step every frame, and stops dead): two critically damped springs in a row after where the rest is headed, by the clock, so it starts gently and settles gently. The game's roll and the model's own extra lean both go by it (G.leanW)
+  const to = G.restK ?? G.idleW ?? 0;
+  if (p.restNow || G.leanW === undefined) { G.leanA = G.leanW = to; G.leanAV = G.leanV = 0; return to; }   // (paused in the editor: as posed)
+  const w = HM_GIANT.ease, h = Math.min(dt || 0, .1), e = Math.exp(-w * h), sp = (x, v, at) => { const d = x - at, t = (v + w * d) * h; return [at + (d + t) * e, (v - w * t) * e]; };   // (each spring's exact step: steady at any frame rate. ease 40: about as quick as the old ramp, half way in .08 s, nine tenths in .15 s, settled by .22 s)
+  [G.leanA, G.leanAV] = sp(G.leanA ?? G.leanW, G.leanAV || 0, to); [G.leanW, G.leanV] = sp(G.leanW, G.leanV || 0, G.leanA);
+  return G.leanW = clamp(G.leanW, 0, 1);
+}
+if (HERO_MODEL_ON) KIT.leanEase = hmLeanEase;
 
 function buildCrux() {                       // black coat giant: hypnotic spiral face, "C" shoulder rings, crescent belt
   const r = foeBase(2.3, 1.5), { M, P, body } = r;
