@@ -650,7 +650,7 @@ window.BerryScore = (() => {
     p.cancelScheduledValues(t); p.setValueAtTime(from, t);
     for (let i = 1; i <= 12; i++) { const x = i / 12, k = to > from ? Math.sin(x * Math.PI / 2) : 1 - Math.cos(x * Math.PI / 2); p.linearRampToValueAtTime(from + (to - from) * k, t + x * dur); }
   }
-  let curVol = -1, ac0 = null, master = null, playing = false, timer = 0, stopAt = 0, want = 0, song = 0, wantBpm = SONGS[0].bpm, players = [];
+  let curVol = -1, ac0 = null, master = null, duckG = null, playing = false, timer = 0, stopAt = 0, want = 0, song = 0, wantBpm = SONGS[0].bpm, players = [];
   let xfNext = 0, xfUntil = 0;                       // (one quicker crossfade: out of a hub or a hideout, the room's own song back sooner. The user, 2026-10-25)
   function tick() {
     if (!playing) return;
@@ -672,7 +672,7 @@ window.BerryScore = (() => {
   return {
     start(ac, vol) {
       if (ac0 && ac0 !== ac) { clearInterval(timer); players.forEach(p => { try { p.g.disconnect(); } catch (e) { } }); players = []; playing = false; stopAt = 0; ac0 = null; curVol = -1; }   // (a new audio context: the game made one anew after a phone cut the last one off. Start again on it)
-      if (!ac0) { ac0 = ac; master = ac.createGain(); master.gain.value = 0; master.connect(ac.destination); }
+      if (!ac0) { ac0 = ac; master = ac.createGain(); master.gain.value = 0; duckG = ac.createGain(); master.connect(duckG); duckG.connect(ac.destination); }   // (duckG: the game's dip under a heavy blow, duck(); at 1 otherwise)
       if (SONGS[song].STYLES[want].orig) decodeClip(ac, SONGS[song]);
       if (stopAt || !playing || Math.abs(vol - curVol) > 1e-4) fadeParam(master.gain, master.gain.value, vol * LEVEL, ac.currentTime, XF);   // fades in under the outgoing recording (equal-power, as it goes); or to a new level (the story's voice over it)
       curVol = vol;
@@ -687,6 +687,7 @@ window.BerryScore = (() => {
       g.connect(master); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(1, t0 + .05);
       players.push({ k: want, song, loop: SG.LOOP, bpm: wantBpm, band, g, fellBack, slot: 0, tNext: t0, end: 0, gloom });
     },
+    duck(k, T) { if (!duckG || !ac0) return; const t = ac0.currentTime; duckG.gain.cancelScheduledValues(t); duckG.gain.setValueAtTime(Math.max(.05, k), t); duckG.gain.setTargetAtTime(1, t + T, .04); },   // (the game's WEIGHT, 2026-11-21: the music dipped by k for T seconds under a heavy blow)
     stop(fade = .12) { if (!ac0 || !playing || stopAt) return; const now = ac0.currentTime;   // (a fade of a second or more: equal-power, under the incoming recording)
       if (fade >= 1) fadeParam(master.gain, master.gain.value, 0, now, fade); else master.gain.setTargetAtTime(0, now, fade / 3); stopAt = now + fade + .05; },
     setSong(i) { song = Math.max(0, Math.min(SONGS.length - 1, i | 0)); },   // 0: the woods (original) · 1: the waves (original) · 2: Volt Keep (original) · 3: Loof's sky (original) · 4: Sirocco's dunes (original) · 5: Evil June's (original) · 6: Kesh's garden (original) · 7: Vinella's candy works (original) · 8: Crux's city (original)

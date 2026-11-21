@@ -13,7 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
-const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1 };
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1, w8: null };   // (w8: the game's WEIGHT, FEEL.body: { id: strength } of who has it, else null)
 const DBG_RIG = { noSquash: false, noStretch: false };   // (tests: squash and stretch off, limb stretch / leg over-reach off; 2026-10-31's limb distortion hunt)   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -3435,9 +3435,11 @@ function updatePoseHuman(p, dt) {
     const ca = Math.cos(TAU * (u - .04)), fwF = Math.max(0, -ca), fwB = Math.max(0, ca);   // pumping, after the user's run sheet (refs/run_reference.png): leaning well into it, head out front, the
     const rF = pump ? .02 - .95 * (1 + .25 * sk) * m.swing * ca : -1.42 + flut, rB = pump ? .02 + .95 * (1 + .25 * sk) * m.swing * ca : -1.42 - flut;   // front fist driving forward at chest height, the back elbow driving up behind, a beat behind
     const eF = pump ? 1.32 + .14 * fwF - .06 * fwB : .3, eB = pump ? 1.32 + .14 * fwB - .06 * fwF : .3;   // the legs; the elbow closed coming forward, a little more open behind; the forward arm a touch across
+    const w8 = !pump && FEEL_KIT.w8 ? FEEL_KIT.w8[p.rig.id] || 0 : 0;   // (the game's WEIGHT, GAME-FEEL-BRIEF.md 2026-11-21: the arms swing against the legs, the sword arm trailing lower and straighter, in place of both trailing straight back)
+    const rFx = w8 ? lerp(rF, (pf ? -.1 : -.5) - (pf ? .95 : .5) * ca, w8) : rF, rBx = w8 ? lerp(rB, (pf ? -.5 : -.1) + (pf ? .5 : .95) * ca, w8) : rB, eFx = w8 ? lerp(eF, pf ? 1.25 : .55, w8) : eF, eBx = w8 ? lerp(eB, pf ? .55 : 1.25, w8) : eB;
     if (pump && g > 0) { o.spF = lerp(o.spF || 0, -.14 * fwF + .05 * fwB, g * (1 - wk)); o.spB = lerp(o.spB || 0, -.14 * fwB + .05 * fwF, g * (1 - wk)); }
-    o.armF = lerp(o.armF, lerp(rF, .08 - awF * cw, wk), g); o.elbF = lerp(o.elbF, lerp(eF, .3 + .25 * Math.max(0, -cw), wk), g);
-    o.armB = lerp(o.armB, lerp(rB, .04 + awB * cw, wk), g); o.elbB = lerp(o.elbB, lerp(eB, .3 + .25 * Math.max(0, cw), wk), g);
+    o.armF = lerp(o.armF, lerp(rFx, .08 - awF * cw, wk), g); o.elbF = lerp(o.elbF, lerp(eFx, .3 + .25 * Math.max(0, -cw), wk), g);
+    o.armB = lerp(o.armB, lerp(rBx, .04 + awB * cw, wk), g); o.elbB = lerp(o.elbB, lerp(eBx, .3 + .25 * Math.max(0, cw), wk), g);
     sn[0] = N.fx * dir / ds; sn[1] = Math.max(0, hip - N.dy) / ds; sn[2] = N.pt;
     sf[0] = F2.fx * dir / ds; sf[1] = Math.max(0, hip - F2.dy) / ds; sf[2] = F2.pt;
   }
@@ -3475,6 +3477,9 @@ function updatePoseHuman(p, dt) {
     if (PK && PK.keys.blade) { const sw = leadFar(p); o.wrist = keyvS(PK.keys.blade, api.time % PK.dur) - (sw ? o.armB + o.elbB : o.armF + o.elbF); }   // (pointing: the blade's own angle)
     else if (bl !== undefined && p.hurtT <= 0 && (p.onGround || BB !== undefined) && !(BB === undefined && giantOf(p) > .005)) { const sw = leadFar(p); o.wrist = lerp(o.wrist, bl - (sw ? o.armB + o.elbB : o.armF + o.elbF), BB !== undefined ? 1 : 1 - g * (1 - wk)); }   // (walking, the blade's carried at its ready angle)
   }
+  { const w8 = FEEL_KIT.w8 && FEEL_KIT.w8[p.rig.id], sw = leadFar(p), arm = sw ? o.armB + o.elbB : o.armF + o.elbF, abs = arm + (o.wrist || 0);   // (WEIGHT: the blade lags the hand, out of a strike, its angle eased after the arm's)
+    if (w8 && a < 0 && p.hurtT <= 0 && p.rig.prop && p.rig.prop.kind === "sword") { const want = lerp(abs, -.45 + .45 * (arm - .05), g * w8);   // (running: the blade trailing down and back, swinging a little with the arm. 0 down, 1.57 out ahead)
+      p.w8bl = p.w8bl == null ? want : p.w8bl + (want - p.w8bl) * (1 - Math.exp(-dt / .07)); o.wrist = p.w8bl - arm; } else p.w8bl = abs; }
   if (SK && p.cup > 0) cupArms(p, o, Math.min(1, p.cup), Math.min(1, p.cup2 || 0));   // (kicking with an armful, the healer's basket: the arms stay round it and the legs do the work, 2026-11-03)
   // starting to run: a gather before the first stride (the user, 2026-10-22: "bring their torso up and forward and almost step up before
   // crouching down into the full run, almost like winding it up"): up onto the toes leaning in, arms drawn back, then down into the run
