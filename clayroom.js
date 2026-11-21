@@ -255,7 +255,7 @@ window.BerryClayRoom = (function () {
   const protoM = (...a) => proto(...a), stampM = (...a) => stamp(...a);   // (dress's own proto and stamp: the plant kit's plants, when it has them)
   function proto(T, o, key, fn) { key += "@" + (o.lod ?? 1); let p = PROTO.get(key); if (!p) { const K = Kit(T, o); fn(K); p = []; gather(T, K.W).forEach((list, k) => p.push({ k, geo: list.length === 1 ? list[0] : o.mergeGeometries(list, false) })); PROTO.set(key, p); } return p; }
   function stamp(B, parts, m4, col, nc) { parts.forEach(({ k, geo }) => add(B, (col || k.slice(0, 7)) + (nc ? "n" : k.slice(7)), geo.clone().applyMatrix4(m4))); }   // (nc: casts no clay shadow)
-  // ── the ground kit's pieces (models/levels/ground-kit, 2026-11-20, only with ?heromodel): [{ col, geo }] each (the game's kitParts), into the bins as the clay's own are.
+  // ── the ground kit's pieces (models/levels/ground-kit, 2026-11-20; ?nokits: none): [{ col, geo }] each (the game's kitParts), into the bins as the clay's own are.
   // m4 places it (a mirror's faces turned back out); op.bend(x): the floor's top there, its y following it (sheared); op.lift: [from y, by]: its own y above that stretched; op.nc: no clay shadow
   function kitLay(T, B, parts, m4, op = {}) {
     const det = m4.determinant(), nm = new T.Matrix3().getNormalMatrix(m4), v = new T.Vector3(), w = new T.Vector3(), [y0, sy] = op.lift || [1e9, 1];
@@ -266,7 +266,7 @@ window.BerryClayRoom = (function () {
         w.normalize(); p.setXYZ(i, v.x, v.y, v.z); n.setXYZ(i, w.x, w.y, w.z); }
       if (det < 0) { const ix = g.index.array; for (let j = 0; j < ix.length; j += 3) { const t = ix[j + 1]; ix[j + 1] = ix[j + 2]; ix[j + 2] = t; } }
       add(B, c + (op.nc ? "n" : "c"), g); }); }
-  // the Beach's bluff from the kit (buildBeach says where, only with ?heromodel): a face toward you in rows of rock layers from under its sand down to its foot, each
+  // the Beach's bluff from the kit (buildBeach says where): a face toward you in rows of rock layers from under its sand down to its foot, each
   // row its own height, the pieces staggered, a little in and out; a cliff's side the same, turned along it, boulders at its foot (where a ladder or an item stands at
   // it, its layers kept off the path and the boulders behind it). faces: [{ a, b, top0, top(x), bot, z, grey }]; sides: [{ x, sd, top, foot, z0, z1, clear }]
   function kitBeach(T, o, faces, sides) {
@@ -327,7 +327,7 @@ window.BerryClayRoom = (function () {
   const SKY = ["#74c0e4", "#7cc2e0", "#86c4dc", "#e3b27f", "#ee946e", "#6d7ec2", "#2b3e72"];
   function dress(T, o) {
     const WX = o.W, sd = o.seed | 0, top = o.top, R = (i, j) => hsh(sd, i, j, 77), M = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), v = new T.Vector3(), sc = new T.Vector3();
-    // the plant kit (?heromodel, with the ground kit): the woods' fill made of its plants, where the clay's own stood; kept aside (FILL), laid once the room's counted, as many as its budget holds (kitFill)
+    // the plant kit (with the ground kit): the woods' fill made of its plants, where the clay's own stood; kept aside (FILL), laid once the room's counted, as many as its budget holds (kitFill)
     const PK = o.kit && o.plants ? o.plants : null, FILL = [], KC = new T.Matrix4();
     const KMAP = { bush: [k => "bushBig", 1, .85], sbush: [k => "bushSmall", 1, 1.8], bamboo: [k => "bamboo", 0, 1], ftrunk: [(k, f) => f ? "trunkFar" : "trunk", 0, [1.8, 2.5, 1.8]], palm: [k => ["palmC", "palmA", "palmB"][k % 3], 0, .95],
       tfern: [k => "treeFern", 0, k => (3.4 + k * .9) / 3.9], fern: [k => "fern", 2, 1], wleaf: [k => "bigLeaf", 2, .85], flower: [k => "flower", 2, 1], clover: [k => "clover", 2, 1], tree: [k => "roundTree", 0, 1],
@@ -370,7 +370,7 @@ window.BerryClayRoom = (function () {
         const x = (k + .15 + Hw(k, salt + 7) * .7) * 3.6 - WXo; if (x < a + .4 || x > b - .4) continue; const v = m3(k);
         stamp(near, rootP(v), at(x, topAt(x) + .05, zf + .1, 0, 0, (Hw(k, salt + 8) - .5) * .4, (far ? 1.3 : .75) + Hw(k, salt + 9) * .5), v === 2 ? P.rootD : null, nc); }
     }
-    // the ground kit (models/levels/ground-kit, the level modelling chat's, 2026-11-20; o.kit, only with ?heromodel): its pieces laid on the room's own line, the computer's
+    // the ground kit (models/levels/ground-kit, the level modelling chat's, 2026-11-20; o.kit): its pieces laid on the room's own line, the computer's
     // or the phone's (kitParts: the same size and place, fewer triangles). Its tiles on the world's 10-unit grid, so rooms side by side lay the same tile at a place
     const KK = o.kit, kitPut = (parts, x, y, z, sx = 1, op) => kitLay(T, near, parts, new T.Matrix4().makeScale(sx, 1, 1).setPosition(x, y, z), op);   // (sx: stretched along x; less than 0, mirrored)
     const kitRun = (a, b, fn) => { const xs = [a]; for (let gx = Math.ceil((a + WXo + 5) / 10) * 10; gx < b + WXo - 5; gx += 10) xs.push(gx - WXo); xs.push(b);   // (a..b in tiles on the grid, the two ends' a little stretched or squeezed to fit)
@@ -478,7 +478,7 @@ window.BerryClayRoom = (function () {
     if (o.trees) { const tx = 8 + R(1, 30) * (WX - 16), y = solidAt(tx); if (y !== null) stamp(near, proto(T, o, "tree" + (sd % 2), Q => Q.tree(0, 0, 0, sd % 2 ? 6 : 5.4, 1, 31 + (sd % 2) * 6, !(sd % 2))), at(tx, y, -2.3, 0, 0, 0, 1)); }
     }
     // the platforms: a mushroom shelf on a trunk, a great leaf on its stalk, a log; the rest floating slabs of grass on an earth block
-    const KP = o.kits, BK = window.BerryLevelKit, kitPlat = (p, gy) => { if (!KP || !BK) return false; const L = [];   // (the platform kit, only with ?heromodel: the leaf, the log, the jut, the slabs; the fungus shelves as they were)
+    const KP = o.kits, BK = window.BerryLevelKit, kitPlat = (p, gy) => { if (!KP || !BK) return false; const L = [];   // (the platform kit: the leaf, the log, the jut, the slabs; the fungus shelves as they were)
       if (p.kind === "shroom") { if (!KP.shroom) return false; BK.shroom(T, KP, L, p.xa, p.xb, p.top, gy); } else if (p.kind === "log") { if (!KP.log) return false; BK.log(T, KP, L, p.xa, p.xb, p.top); }
       else if (p.kind === "jut") { if (!KP.jut) return false; BK.jut(T, KP, L, p.xa, p.xb, p.top, (p.xa + p.xb) / 2 < WX / 2); } else if (/^fungus/.test(p.kind) || !KP.slab) return false; else BK.slab(T, KP, L, p.xa, p.xb, p.top);
       L.forEach(it => kitLay(T, near, it.parts, it.m4, it.op || {})); return true; };

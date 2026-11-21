@@ -1,4 +1,4 @@
-// LEVEL KITS (only with ?heromodel, 2026-11-20): the level modelling chat's pieces (models/levels/: platforms, ladders and the rope bridge, plants, big trees;
+// LEVEL KITS (2026-11-20; the default since Starky's yes, ?nokits for the old look): the level modelling chat's pieces (models/levels/: platforms, ladders and the rope bridge, plants, big trees;
 // models/levels/HANDOFF-level-kits.md) laid where the game's own pieces stand. A part is [{ col, geo, mat }] (index.html kitParts: the phone's lighter shape on the phone).
 // A layout is a list of { parts, m4, op } (op as clayroom.js kitLay), made into a vertex-coloured mesh or two, marked done so the clay pass leaves it be.
 window.BerryLevelKit = (function () {
