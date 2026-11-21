@@ -1610,10 +1610,10 @@ const FEEL_DEFAULT = {
   movement: { enabled: true, weight: 1, fall: 1.8, jumpCut: 2.1, coyoteFrames: 6, groundAccel: .72, groundStop: 1, airControl: 1, airStrikeGrav: 1, whiffOn: true, whiffGrav: 1, hang: .3,
     upRiseFull: true, upRiseHeight: 1, upCoil: true, upCoilFrames: 3, landRecovery: 5, camDip: 6, camDipTime: .15, accLean: 6 },   // (the user, 2026-10-31: fall 1.8 (was 1.4), a 5-frame recovery after a fall higher than a full jump, a 6 px dip back over .15 s, a 6-degree lean at its peak)
   // WEIGHT (GAME-FEEL-BRIEF.md, 2026-11-21, Starky: "the weight and jankiness of the animations is holding it back", "the sound effects dont feel crunchy enough"):
-  // off here and under BEFORE, on in the WEIGHT preset. Rose only for now (BODY_WHO); the night's choices are in GAME-FEEL-NIGHT-NOTES.md
-  body: { enabled: false, intensity: 1, lag: 1, lean: 1, runLean: 14, squash: 1, dent: 1, bob: .55, steps: 1 },   // the weight layer on her body (hmWeight): springs, lean, squash, the bob kept, footsteps
-  strike: { enabled: false, intensity: 1, timing: true, step: 1, push: 1, smear: 1, react: 1 },   // her three-hit string: slow in, fast through, slow out; the step in, the push back, the blade's smear; the baddy taking it
-  crunch: { enabled: false, intensity: 1, crack: 1, thump: 1, grit: 1, whoosh: 1, dipDb: 3 }        // a landed blow's sound in three layers (crunchHit), the swing's whoosh as the wind-up ends, the music's dip
+  // on by default since Starky's yes on 2026-11-21 ("Yes, make it default"); off under BEFORE and NO WEIGHT (the default as it was on 11-20). Rose only for now (BODY_WHO); the choices are in GAME-FEEL-NIGHT-NOTES.md
+  body: { enabled: true, intensity: 1, lag: 1, lean: 1, runLean: 14, squash: 1, dent: 1, bob: .55, steps: 1 },   // the weight layer on her body (hmWeight): springs, lean, squash, the bob kept, footsteps
+  strike: { enabled: true, intensity: 1, timing: true, step: 1, push: 1, smear: 1, react: 1 },   // her three-hit string: slow in, fast through, slow out; the step in, the push back, the blade's smear; the baddy taking it
+  crunch: { enabled: true, intensity: 1, crack: 1, thump: 1, grit: 1, whoosh: 1, dipDb: 3 }        // a landed blow's sound in three layers (crunchHit), the swing's whoosh as the wind-up ends, the music's dip
 };
 const W8_STR = { orig: null, warped: null, on: null };   // (WEIGHT's string: Rose's three ground strikes as they are, and retimed; built after their own patches, w8Build)
 function w8Strikes() {                               // (her strikes swapped for their WEIGHT timing, or back, as FEEL.strike says)
@@ -1646,13 +1646,14 @@ const FEEL_PRESETS = {
   odin: c => { Object.assign(c.secondaryMotion, { intensity: 1.6, stiffness: .14, damping: .6 }); Object.assign(c.weaponTrail, { intensity: 1.5, length: 1.4, fadeTime: .17 });
     c.screenShake.intensity = .8; c.hitstop.intensity = 1.15; c.anticipation.intensity = 1.35; c.idleLife.intensity = 1.3; c.squashStretch.intensity = 1.2; },
   extreme: c => { c.masterIntensity = 2; },
-  weight: c => { c.body.enabled = c.strike.enabled = c.crunch.enabled = true; },   // (DEFAULT and the weight layer, the string's timing and the crunch: GAME-FEEL-BRIEF.md, 2026-11-21)
+  noweight: c => { c.body.enabled = c.strike.enabled = c.crunch.enabled = false; },   // (the default as it was on 11-20: no weight layer, the string's old timing, the old hit sound. WEIGHT is DEFAULT since 11-21)
   before: c => { c.legacy = true; }
 };
 const feelClone = o => JSON.parse(JSON.stringify(o));
 function feelMerge(into, from) { for (const k in into) { if (!(k in from)) continue; const a = into[k], b = from[k]; if (a && typeof a === "object") { if (b && typeof b === "object") feelMerge(a, b); } else if (typeof b === typeof a) into[k] = b; } return into; }
 function feelPreset(name) { const c = feelClone(FEEL_DEFAULT); (FEEL_PRESETS[name] || FEEL_PRESETS.default)(c); c.preset = name; return c; }
-let FEEL = (() => { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "null"); if (s && s.cur) return feelMerge(feelClone(FEEL_DEFAULT), s.cur); } catch (e) { } return feelClone(FEEL_DEFAULT); })();
+function feelW8On(s) { [s.cur, s.mine].forEach(o => { if (!o) return; ["body", "strike", "crunch"].forEach(g => { if (o[g]) o[g].enabled = true; }); if (o.preset === "weight") o.preset = "default"; }); s.w8 = 1; try { localStorage.setItem(FEEL_KEY, JSON.stringify(s)); } catch (e) { } }   // (WEIGHT made the default, 2026-11-21: settings a browser saved before then get it turned on, once; the rest of their tuning kept)
+let FEEL = (() => { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "null"); if (s && !s.w8) feelW8On(s); if (s && s.cur) return feelMerge(feelClone(FEEL_DEFAULT), s.cur); } catch (e) { } return feelClone(FEEL_DEFAULT); })();
 function feelSave(asDefault) { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "{}") || {}; s.cur = FEEL; if (asDefault) s.mine = feelClone(FEEL); localStorage.setItem(FEEL_KEY, JSON.stringify(s)); } catch (e) { } }
 function feelMine() { try { const s = JSON.parse(localStorage.getItem(FEEL_KEY) || "{}"); if (s && s.mine) return feelMerge(feelClone(FEEL_DEFAULT), s.mine); } catch (e) { } return null; }
 function feelSet(c) { FEEL = c; feelApply(); feelSave(false); }
@@ -1749,7 +1750,7 @@ const FEEL_UI = [
   ["strike", "WEIGHT: STRING (ROSE)", [["timing", "slow in, fast through, slow out"], ["step", "step into the swing x", 0, 2.5, .05], ["push", "pushed back by a hit x", 0, 3, .05], ["smear", "blade smear", 0, 2, .05], ["react", "the baddy taking it", 0, 2, .05]]],
   ["crunch", "WEIGHT: CRUNCH (HIT SOUND)", [["crack", "crack (the recording)", 0, 2, .05], ["thump", "thump (low drop)", 0, 2, .05], ["grit", "grit (noise)", 0, 2, .05], ["whoosh", "whoosh as the wind-up ends", 0, 2, .05], ["dipDb", "music dip on heavy hits, dB", 0, 9, .5]]]
 ];
-const FEEL_PRESET_UI = [["before", "BEFORE (10-30)"], ["off", "OFF"], ["subtle", "SUBTLE"], ["default", "DEFAULT"], ["weight", "WEIGHT (11-21)"], ["odin", "ODIN SPHERE"], ["extreme", "EXTREME"]];
+const FEEL_PRESET_UI = [["before", "BEFORE (10-30)"], ["off", "OFF"], ["subtle", "SUBTLE"], ["default", "DEFAULT"], ["noweight", "NO WEIGHT (11-20)"], ["odin", "ODIN SPHERE"], ["extreme", "EXTREME"]];
 let feelEl = null, feelSaveT = 0;
 function feelChanged(custom) { if (custom && FEEL.preset !== "custom") FEEL.preset = "custom"; feelApply(); clearTimeout(feelSaveT); feelSaveT = setTimeout(() => feelSave(false), 250); feelPanelState(); }
 function feelPanelBuild() {
