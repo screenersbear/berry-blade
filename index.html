@@ -733,7 +733,8 @@
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="roots.js?v=20261102e"></script>
-<script src="clayroom.js?v=20261120q"></script>
+<script src="clayroom.js?v=20261120s"></script>
+<script src="levelkit.js?v=20261120b"></script>
 <script src="level-edits.js?v=0"></script>
 <script src="models/models.js?v=20261120215806"></script>
 <script src="models/heroes.js?v=20261120215807"></script>
@@ -986,7 +987,7 @@ const MODELS = {}, HERO_MODELS = {};                // id: the model, read befor
 // ── the levels' ground kit (the level modelling chat's, approved 2026-11-20: models/levels/ground-kit, packed into models/levels.js): Berry Woods' and the Beach's ground laid
 // from it, on test, only with ?heromodel (Starky, 2026-11-20: "add them behind ?heromodel"); its script added and read only then. See kitParts, clayroom.js dress (o.kit), buildBeach
 const LEVEL_KIT_ON = /[?&]heromodel\b/.test(location.search), LEVEL_MODELS = {};
-if (LEVEL_KIT_ON && !window.BERRY_LEVEL_MODELS) await new Promise(ok => { const t = document.createElement("script"); t.src = "models/levels.js?v=20261120222212"; t.onload = t.onerror = () => ok(); document.head.appendChild(t); });
+if (LEVEL_KIT_ON) await Promise.all(["models/levels.js?v=20261120230604", "models/levels-platform.js?v=20261120230604", "models/levels-ladder.js?v=20261120230604", "models/levels-plant.js?v=20261120230604", "models/levels-tree.js?v=20261120230604"].map(src => new Promise(ok => { const t = document.createElement("script"); t.src = src; t.onload = t.onerror = () => ok(); document.head.appendChild(t); })));   // (the level kits: the ground, then the platforms, ladders and bridge, plants, big trees (models/levels/HANDOFF-level-kits.md), each its own file)
 await Promise.all([readModels(window.BERRY_MODELS, MODELS), readModels(window.BERRY_HERO_MODELS, HERO_MODELS), LEVEL_KIT_ON && readModels(window.BERRY_LEVEL_MODELS, LEVEL_MODELS)]);
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
@@ -2871,7 +2872,7 @@ function frondGeo(len, w, { rise = .3, fall = .9, segs = 10, saw = .45, fold = .
 }
 function tropPalm(par, M, x, y, z, rng, { h = 9, lean = 0, royal = false, ol = 0, coco = false } = {}) {   // (coco: a coconut palm on the beach)   // a sierra palm (a ringed grey trunk bending a little, fronds arching, orange fruit stalks under the crown) or a royal palm (tall, smooth, pale, swelling in the middle, a green crownshaft)
   const R = (a, b) => a + rng() * (b - a), g = group(par, x, y, z); let top;
-  if (clayWorld && CLAY_WORLDS.has(world) && window.BerryClayRoom && BerryClayRoom.palm) { g.add(BerryClayRoom.palm(THREE, { toon, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1 }, { h, lean, royal, coco, seed: Math.floor(rng() * 1e6) })); return g; }   // (in clay: a clay palm, its fronds rounded and arching)
+  if (clayWorld && CLAY_WORLDS.has(world) && window.BerryClayRoom && BerryClayRoom.palm) { const sd = Math.floor(rng() * 1e6); g.add((world === 9 && !royal && kitPalm(h, lean, coco, sd)) || BerryClayRoom.palm(THREE, { toon, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1 }, { h, lean, royal, coco, seed: sd })); return g; }   // (in clay: a clay palm, its fronds rounded and arching)
   if (royal) {
     g.add(mk(new THREE.LatheGeometry([[.4, -.5], [.38, h * .12], [.47, h * .45], [.36, h * .82], [.3, h]].map(([r, v]) => new THREE.Vector2(r, v)), 8), null, { mat: M.royal, ol }));
     g.add(at(mk(new THREE.CylinderGeometry(.27, .31, h * .15, 8), null, { mat: M.crown, ol }), 0, h * 1.075, 0)); top = new THREE.Vector3(0, h * 1.15, 0);
@@ -4544,6 +4545,7 @@ function buildLadders() {                          // wooden ladders up the clif
   const mW = toon("#8a5a34"), mR = toon("#6b4126"), z = -.4;
   return LADDERS.map(L => {
     const g = group(scene), x = X(L.x), y0 = Y(L.bot) - .05, y1 = Y(L.rope === "up" ? Math.min(L.top, -60) : L.top) + .45, h = y1 - y0; if (L.rock || (L.camila && (STAGES[level.s] || {}).authored)) return g;   // (a rope ladder up into the room above: on up past the screen's top, as you go on climbing it; it stopped short in view, the user 2026-10-25 "the ladder in b3 ends even though you can keep climbing up")   // (Camila's rock: no ladder on it; in the hand-made forest, her pattern on the rock's the sign. It had slipped into the comment: the user, 2026-10-27 "in c3 there shouldnt be a ladder, only the rock wall for camila to climb")
+    const KL = (world === 0 || world === 9) && levelKits(); if (KL && KL.ladder && window.BerryLevelKit) { g.add(BerryLevelKit.group(THREE, kitO(), BerryLevelKit.ladder(THREE, KL, [], x, y0, y1 - .45, z, !!L.rope), "clayKitLadder")); g.userData.clayDone = true; return g; }   // (the ladder kit, ?heromodel: foot, sections, the top hooked over)
     [-1, 1].forEach(sx => { g.add(at(mk(new THREE.BoxGeometry(.1, h, .1), null, { mat: mW }), x + sx * .3, y0 + h / 2, z));
       g.add(at(mk(new THREE.BoxGeometry(.1, .1, .5), null, { mat: mW }), x + sx * .3, y1 - .05, z - .2)); });   // the hooks over the lip
     for (let y = y0 + .32; y < y1 - .2; y += .36) g.add(at(mk(new THREE.BoxGeometry(.62, .07, .08), null, { mat: mR }), x, y, z));
@@ -5441,6 +5443,8 @@ function buildSet(s) {
       for (let i = 0; i < 9; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.05, .45 + (i % 3) * .15, .05), mC); c.position.set(x0 - .36, gy + .7 + (i % 3) * 1.3, zf - .6 - (i % 4) * 1.05); c.rotation.x = i % 2 ? .5 : -.4; rk.add(c); }   // (its cracks)
       hole.add(at(new THREE.Mesh(new THREE.CircleGeometry(1, 14, 0, Math.PI).scale(2.3, 2.3, 1).rotateY(-Math.PI / 2), mH), x0 - .02, gy, zf - 2.3));   // (broken: a dark hole in its side)
       for (let i = 0; i < 5; i++) { const m = mk(new THREE.DodecahedronGeometry(.22 + (i % 3) * .08, 0), null, { mat: i % 2 ? mR2 : mR, ol: .02 }); at(m, x0 - .5 - (i % 3) * .35, gy + .12, zf - .5 - i * .8); m.rotation.set(i, i * 2, 0); hole.add(m); }   // (and what's left of it at its foot)
+      const KCk = world === 9 && levelKits() && levelKits().crack; if (KCk && window.BerryLevelKit) [rk, hole].forEach((G2, i) => { G2.children.slice().forEach(c => { G2.remove(c); if (c.geometry) c.geometry.dispose(); });   // (the cracked rock kit, ?heromodel: whole, then broken, on the wall's side)
+        G2.add(BerryLevelKit.group(THREE, kitO(), [{ parts: i ? KCk.broken : KCk.whole, m4: BerryLevelKit.at(THREE, x0 - .1, gy, zf - 2.3, { ry: -Math.PI / 2 }) }], "clayKitCrack")); });
       roomCrack = { s, w: world, rk, hole, x: P.x, key: P.key, cart: P.cart, hp: itemGot(P.key) ? 0 : 3, wob: 0, out: false }; rk.visible = roomCrack.hp > 0; hole.visible = !rk.visible; continue; }
     if (P.k === "gate") {                           // a way on, shut (room.shutR) till its key's got (gateTick): a portcullis (bars), a door (BD4's), a panel in the wall (BD5's hidden one), a rock rising from the floor (lift: C11's)
       const look = P.look || "bars", x = X(P.x), gy = Y(groundAt(P.x - 40) ?? GROUND), H = (P.h ?? 300) * S, W = (P.w ?? 120) * S, open = itemGot(P.key) ? 1 : 0;   // (farOpen: the beach's C9 fence, shut till its buttons are pressed, after the tutorial too (it was open once that was behind you, 2026-11-04). The user, 2026-11-09: "the fence that you're supposed to unlock already looks open before you even hit the buttons")
@@ -5451,7 +5455,9 @@ function buildSet(s) {
         [.2, .75].forEach(u => leaf.add(at(mk(new THREE.BoxGeometry(W, .2, .14), null, { mat: wd2, ol: .02 }), W / 2, H * u, .1)));
         { const br = mk(new THREE.BoxGeometry(Math.hypot(W, H * .55), .16, .12), null, { mat: wd2, ol: .02 }); br.rotation.z = Math.atan2(H * .55, W); at(br, W / 2, H * .475, .12); leaf.add(br); }
         for (let fx = P.x + (P.w ?? 120) / 2 + 40; fx < WORLD + 300; fx += 46) { const ph = H * R(.92, 1.04); g.add(at(mk(new THREE.BoxGeometry(.3, ph, .14), null, { mat: rng() < .5 ? wd : wd2, ol: .02 }), X(fx), gy + ph / 2, -.2)); }   // (and on to the room's end)
-        [.2, .75].forEach(u => g.add(at(mk(new THREE.BoxGeometry(X(WORLD + 300) - x - W / 2, .2, .12), null, { mat: wd2, ol: .02 }), (x + W / 2 + X(WORLD + 300)) / 2, gy + H * u, -.08))); }
+        [.2, .75].forEach(u => g.add(at(mk(new THREE.BoxGeometry(X(WORLD + 300) - x - W / 2, .2, .12), null, { mat: wd2, ol: .02 }), (x + W / 2 + X(WORLD + 300)) / 2, gy + H * u, -.08)));
+        const KG = world === 9 && levelKits() && levelKits().gate; if (KG && window.BerryLevelKit) { leaf.children.slice().forEach(c => { leaf.remove(c); if (c.geometry) c.geometry.dispose(); });   // (the gate kit, ?heromodel: on its hinge, stretched to the way through)
+          leaf.add(BerryLevelKit.group(THREE, kitO(), [{ parts: KG.gate, m4: BerryLevelKit.at(THREE, 0, 0, 0, { sx: W / 3.75, sy: H / 7.5 }) }], "clayKitGate")); } }
       else if (look === "lift") { leaf.position.set(x, gy, -.1); leaf.add(at(mk(jag(new THREE.BoxGeometry(W, H, 1.6, 3, 3, 2), rng, .18), null, { mat: lf, ol: .03 }), 0, -H / 2, 0)); leaf.add(at(mk(new THREE.BoxGeometry(W + .1, .2, 1.7), null, { mat: toon("#8d8478"), ol: .02 }), 0, -.1, 0)); }
       else { leaf.position.set(x, gy, 0);
         [-1, 1].forEach(sd => g.add(at(mk(new THREE.BoxGeometry(.4, H + .5, .7), null, { mat: fr, ol: .03 }), x + sd * (W / 2 + .2), gy + H / 2 + .25, 0)));
@@ -5697,6 +5703,7 @@ function buildSet(s) {
     if (P.fg) { mergeLocal(g); g.traverse(o => o.layers.set(1)); }
     if (P.fg && P.k === "giant") { g.traverse(o => { if (o.isMesh) o.material = o.material.clone(); }); fgSee.push({ g, x: X(P.x), r: 2.7, z: P.z ?? 4.4 }); }   // (its own materials: it fades, fgSeeThru)
   }
+  if (world === 0 && levelKits()) [...objs, ...fg].forEach(g => kitSwap(g.userData.setP, g, s));   // (the level kits, ?heromodel: the set pieces they have, in their place)
   return { objs, fg, fgSee };
 }
 // the forest's rooms as the user drew them (columns 1-6, rows A-D, 2026-10-24; columns 7-8 the next day: the whole world now). Each authored room's own ground,
@@ -6178,6 +6185,7 @@ function screenBuild(s, h, tierNow, frNow) {          // one screen's level: its
   if (STAGES[s].clayRoom) clayRoomSet();
   if (level.clayConv) clayWorldConvert(s);
   if (level.clayWorld && !level.clayConv) { const off = level.objs.filter(o => o.userData && (o.userData.setK === "woodsFar" || o.userData.setK === "earthBack" || (o.userData.setP && clayEnd(o.userData.setP)))); if (off.length) { disposeLevel({ objs: off }); level.objs = level.objs.filter(o => !off.includes(o)); } clayLevel(s); }   // (the woods small in the distance: the clay hills there instead; the rest of the room's own pieces made clay)
+  if (level.kitFill) kitFillIn();   // (the plant kit's fill, ?heromodel: last, in what the room's budget has left)
 }
 // ONE BIG ROOM (a test: the user, 2026-11-01: "can we test having screens that load several screens at once? so like in berry woods where there are those i believe
 // 4 screens that connect the big trees and have the bridge at the top? is it possible ot make it one continuous map without screens and the player can move freely
@@ -7847,18 +7855,70 @@ function claySkyTex(h) { const k = clamp(h | 0, 0, 6); if (claySkyC[k]) return c
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (claySkyC[k] = t); }
 // the ground kit's pieces (LEVEL_MODELS, only with ?heromodel): each one's shape in its clays, [{ col, geo }], the phone's (<name>_phone) with the lighter clay (CLAY_LITE): the same size and place
 const KIT_PARTS = {};
-function kitParts(id) { if (id in KIT_PARTS) return KIT_PARTS[id]; const sc = LEVEL_MODELS[id]; let node = null, out = null;
+let KIT_FILE = null;   // (a part's name → the kit file holding it: the kits after the ground hold several parts a file)
+const kitFileOf = id => { if (!KIT_FILE) { KIT_FILE = {}; Object.values(LEVEL_MODELS).forEach(sc => sc && sc.traverse(m => { if (m.name && !(m.name in KIT_FILE)) KIT_FILE[m.name] = sc; })); } return KIT_FILE[id] || null; };
+function kitParts(id) { if (id in KIT_PARTS) return KIT_PARTS[id]; const sc = LEVEL_MODELS[id] || kitFileOf(id); let node = null, out = null;
   if (sc) { const want = CLAY_LITE ? id + "_phone" : id; sc.traverse(m => { if (m.name === want) node = m; }); if (!node) sc.traverse(m => { if (!node && m.name === id) node = m; }); }
   if (node) { out = []; sc.updateMatrixWorld(true); node.traverse(m => { if (!m.isMesh || !m.geometry || !m.geometry.attributes.normal) return; const G = m.geometry, n = G.attributes.position.count, P3 = new Float32Array(n * 3), N3 = new Float32Array(n * 3), v = new THREE.Vector3();
     const nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld); for (let i = 0; i < n; i++) { v.fromBufferAttribute(G.attributes.position, i).applyMatrix4(m.matrixWorld); P3.set([v.x, v.y, v.z], i * 3); v.fromBufferAttribute(G.attributes.normal, i).applyMatrix3(nm).normalize(); N3.set([v.x, v.y, v.z], i * 3); }
     const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(P3, 3)); g.setAttribute("normal", new THREE.BufferAttribute(N3, 3)); g.setIndex(new THREE.BufferAttribute(G.index ? Uint32Array.from(G.index.array) : Uint32Array.from({ length: n }, (_, i) => i), 1));
-    out.push({ col: "#" + m.material.color.getHexString(), geo: g }); }); if (!out.length) out = null; }
+    out.push({ col: "#" + m.material.color.getHexString(), geo: g, mat: m.material.name }); }); if (!out.length) out = null; }   // (mat: its clay's name, to recolour by)
   return (KIT_PARTS[id] = out); }
 let LEVEL_KIT = undefined;
 const levelKit = () => { if (!LEVEL_KIT_ON) return null; if (LEVEL_KIT !== undefined) return LEVEL_KIT;
   const K = { tile: ["floor-tile-a", "floor-tile-b", "floor-tile-c"].map(kitParts), pit: kitParts("pit-edge"), bank: kitParts("back-bank"), ravine: kitParts("ravine-wall"), over: kitParts("land-overhead"),
     end: kitParts("end-wall"), door: kitParts("end-wall-door"), hole: kitParts("crawl-hole"), cliff: [kitParts("cliff-layer-a"), kitParts("cliff-layer-b")], boulder: ["boulder-a", "boulder-b", "boulder-c"].map(kitParts) };
   return (LEVEL_KIT = Object.values(K).flat().every(Boolean) ? K : null); };   // (null: a piece didn't read, so the ground stays as it was)
+// the level kits after the ground (models/levels/HANDOFF-level-kits.md, only with ?heromodel): each kind's pieces, or null where one didn't read (that kind as it was)
+let LEVEL_KITS = undefined;
+const kitOf = ids => { const o = {}; for (const k in ids) { o[k] = kitParts(ids[k]); if (!o[k]) return null; } return o; };
+const levelKits = () => { if (!LEVEL_KIT_ON) return null; if (LEVEL_KITS !== undefined) return LEVEL_KITS;
+  return (LEVEL_KITS = { slab: kitOf({ l: "slab-end-l", m: "slab-mid", r: "slab-end-r", a: "slab-chunk-a", b: "slab-chunk-b", c: "slab-chunk-c" }), shroom: kitOf({ leaf: "shroom-leaf", stalk: "shroom-stalk", ha: "shroom-half-a", hb: "shroom-half-b" }),
+    jut: kitOf({ m: "jut-mid", e: "jut-end" }), log: kitOf({ l: "log-end-l", m: "log-mid", r: "log-end-r", br: "log-branch" }), ladder: kitOf({ foot: "ladder-foot", section: "ladder-section", top: "ladder-top", rope: "rope-ladder-section" }),
+    bridge: kitOf({ l: "bridge-post-l", seg: "bridge-segment", r: "bridge-post-r" }), stand: kitOf({ bay: "stand-bay" }), giant: kitOf({ roots: "giant-roots", trunk: "giant-trunk", top: "giant-top", shelf: "giant-shelf" }),
+    ceiba: kitOf({ foot: "ceiba-foot", trunk: "ceiba-trunk", crown: "ceiba-crown" }), leaner: kitOf({ foot: "leaner-foot", section: "leaner-section", top: "leaner-top", peek: "leaner-peek" }),
+    tall: kitOf({ trunk: "tall-trunk", crown: "tall-crown" }), willow: kitOf({ tree: "willow", shade: "willow-shade" }), maga: kitOf({ tree: "maga" }),
+    rock: kitOf({ l: "rock-end-l", m: "rock-mid", r: "rock-end-r", leg: "rock-leg" }), wood: kitOf({ l: "plank-end-l", m: "plank-mid", r: "plank-end-r", post: "post", stout: "post-stout", beam: "beam", brace: "brace", rail: "rail" }),
+    boat: kitOf({ boat: "boat" }), shelf: kitOf({ root: "shelf-root", m: "shelf-mid", e: "shelf-end" }), tower: kitOf({ deck: "tower-deck", tank: "tower-tank", roof: "tower-roof", brace: "tower-brace", leg: "tower-leg" }),
+    lookout: kitOf({ deck: "lookout-deck", roof: "lookout-roof", leg: "lookout-leg" }), crack: kitOf({ whole: "crack-whole", broken: "crack-broken" }), gate: kitOf({ gate: "gate" }), zip: kitOf({ post: "zip-post" }),
+    boulder: (b => b.every(Boolean) ? b : null)(["boulder-a", "boulder-b", "boulder-c"].map(kitParts)),
+    plants: (ids => { const o = {}; let any = false; for (const k in ids) { o[k] = kitParts(ids[k]); any = any || !!o[k]; } return any ? o : null; })({ fern: "fern", bushBig: "bush-big", bushSmall: "bush-small", flower: "flower", clover: "clover", bigLeaf: "big-leaf",
+      pebble: "pebble", hangingRoot: "hanging-root", curtain: "curtain-strand", canopyBlob: "canopy-blob", lily: "lily-pad", reed: "reed", malanga: "malanga", heliconia: "heliconia", plantain: "plantain", bromeliad: "bromeliad", treeFern: "tree-fern",
+      yagrumo: "yagrumo", trunk: "trunk-pale", trunkFar: "trunk-pale-far", bamboo: "bamboo", flamboyan: "flamboyan", roundTree: "round-tree", palmA: "palm-a", palmB: "palm-b", palmC: "palm-c", palmFlat: "palm-flat",
+      cocoA: "palm-a-coconuts", cocoB: "palm-b-coconuts", cocoC: "palm-c-coconuts", cocoFlat: "palm-flat-coconuts", seaGrape: "sea-grape", shell: "shell", starfish: "starfish", tuft: "grass-tuft" }) }); };   // (plants: each on its own, a missing one as the clay's)
+const KIT_BUDGET = () => CLAY_LITE ? 150000 : 600000;   // (a room's triangles: the level sheets' budget)
+function kitTris(objs) { let n = 0; const seen = new Set(); objs.forEach(o => o && o.traverse(m => { if (!m.isMesh || !m.geometry || seen.has(m)) return; seen.add(m); let v = m.visible, q = m.parent; while (v && q) { v = q.visible; q = q.parent; } if (!v) return;
+  const g = m.geometry; n += (g.index ? g.index.count : g.attributes.position.count) / 3 * (m.isInstancedMesh ? m.count : 1); })); return n; }
+function kitFillIn() {                               // the plant kit's fill (?heromodel): once the rest of the room's made, as many of its plants as the room's budget still holds
+  const F = level.kitFill; level.kitFill = null; if (!F) return; const used = kitTris(level.objs), cap = Math.max(0, KIT_BUDGET() - used - 1500), g = F.build(cap);
+  scene.add(g); level.objs.push(g); level.kitFillInfo = { used, cap, laid: g.userData.tris, cut: g.userData.cut, of: g.userData.of }; }
+const kitO = () => ({ toon, mergeGeometries, layer: CLAY_CAST });
+function kitInst(parts, geo, mat, n) {               // many of one small thing: the plant kit's (its clay colours in its vertices, the clay's one material), or the game's own shape where it has none
+  if (!parts || !window.BerryLevelKit) return new THREE.InstancedMesh(geo(), mat, n);
+  const m = BerryLevelKit.group(THREE, kitO(), [{ parts, m4: BerryLevelKit.at(THREE, 0, 0, 0), op: { nc: true } }], "k").children[0], I = new THREE.InstancedMesh(m.geometry, m.material, n);
+  I.name = "clayKit-few"; I.userData.clayDone = I.userData.keepMat = true; return I; }
+const KIT_PALM = new Map();
+function kitPalm(h, lean, coco, sd) {                // a Beach palm from the plant kit (?heromodel): palm b where it leans hard, a or c where it barely does, turned to lean the clay one's way; made once a kind, then copies
+  const P = levelKits() && levelKits().plants, BK = window.BerryLevelKit, v = Math.abs(lean) > .15 ? "B" : sd % 2 ? "A" : "C"; if (!P || !BK || !P["palm" + v]) return null;
+  const key = v + (coco && P["coco" + v] ? "c" : "") + (CLAY_LITE ? "l" : ""); let t = KIT_PALM.get(key);
+  if (!t) { const L = [{ parts: P["palm" + v], m4: BK.at(THREE, 0, 0, 0) }]; if (key.includes("c")) L.push({ parts: P["coco" + v], m4: BK.at(THREE, 0, 0, 0) });
+    t = BK.group(THREE, kitO(), L, "clayKit-palm"); t.traverse(m => { m.userData.keepGeo = m.userData.keepMat = true; }); t.userData.ht = BK.ext(P["palm" + v]).max.y; KIT_PALM.set(key, t); }
+  const g = t.clone(), sy = (h + .6) / t.userData.ht, sx = Math.sqrt(sy), dir = v === "C" ? -1 : 1; g.scale.set(lean * dir < 0 ? -sx : sx, sy, sx); g.rotation.y = ((sd >> 3) % 7 - 3) * .05; return g; }
+function kitSwap(P, g, s) {                          // a woods set piece the kits have: its own pieces put away (built first, so the room's rng goes on as it was), the kit's in their place
+  const K = levelKits(), BK = window.BerryLevelKit; if (!K || !BK || !P || g.userData.clayDone) return; const L = [], x = X(P.x ?? 0), gx = Y(groundAt(P.x ?? 0) ?? GROUND);
+  if (P.k === "giant" && K.giant) BK.giant(THREE, K, L, P, x, gx, P.z ?? 4.4);
+  else if (P.k === "ceiba" && K.ceiba) BK.ceiba(THREE, K, L, P, x, Y(P.base ?? GROUND), P.z ?? -3, Y(GROUND));
+  else if (P.k === "leaner" && K.leaner) { if (!BK.leaner(THREE, K, L, P, x, Y(GROUND), P.z ?? -3.4)) return; }
+  else if (P.k === "tall" && K.tall) BK.tall(THREE, K, L, P, x, Y(GROUND), P.z ?? -3.2, Y(P.top ?? GROUND));
+  else if (P.k === "willow" && K.willow) BK.willow(THREE, K, L, P, x, gx, P.z ?? -2.6);
+  else if (P.k === "maga" && K.maga) BK.maga(THREE, K, L, P, x, gx, P.z ?? -6.4);
+  else if (P.k === "stand" && K.stand) { const q = PLATFORMS.find(p => p.kind === "bridge" && Math.abs(p.x - P.x) < 4) || { x: P.x, w: 600, y: GROUND - 200 }; BK.stand(THREE, K, L, X(q.x) + .35, X(q.x + q.w) - .35, Y(q.y), Y(GROUND)); }
+  else if (P.k === "shelves" && K.giant) climbLedges(STAGES[s].climbUp).forEach(q => BK.shelf(THREE, K, L, X(q.x + q.w / 2), Y(q.y), q.w * S));
+  else if (P.k === "bridge" && K.bridge) PLATFORMS.filter(q => q.kind === "bridge").forEach(q => BK.bridge(THREE, K, L, X(q.x <= 10 ? -420 : q.x), X(q.x + q.w >= WORLD - 10 ? WORLD + 420 : q.x + q.w), Y(q.y), q.x > 10, q.x + q.w < WORLD - 10));
+  else return;
+  g.children.slice().forEach(c => { g.remove(c); c.traverse(m => { if (m.geometry) m.geometry.dispose(); }); });
+  const k = BK.group(THREE, kitO(), L, "clayKit-" + P.k); g.add(k); g.userData.clayDone = true;
+  if (P.fg) k.traverse(m => { m.layers.set(1); if (m.isMesh) m.material = m.material.clone(); }); }   // (in front: drawn with the foreground, its own material to fade with)
 const clayEnd = P => P.k === "earth" && (!P.door && !P.hole || !!levelKit());   // (a plain earth wall at the woods' end: in clay; one with a way through it as it was, but with the ground kit, which has those too)
 function clayWorldDress(s) {                         // (screenBuild: the woods' own pieces put away, the clay set from the room's own layout in their place; the sky the game's, flat)
   if (!window.BerryClayRoom) return; const t0 = performance.now(), st = STAGES[s], hr = clamp(level.h ?? 0, 0, 6);
@@ -7866,13 +7926,13 @@ function clayWorldDress(s) {                         // (screenBuild: the woods'
   const sky = new THREE.Mesh(new THREE.PlaneGeometry(250, 125), new THREE.MeshBasicMaterial({ map: claySkyTex(hr), fog: false })); sky.position.set(X(WORLD) / 2, 30, -80); scene.add(sky);
   level.sky = sky; level.skyFor = claySkyTex; level.objs.push(sky);
   const el = st.elev ?? 1, dr = st.drop || 0, bgY = (el >= 2 ? -14 : (1 - el) * ROW_RISE * S) - dr * S, FB = STITCH.has(world) ? -(SEAM_T - 6 + dr) * S : -12;
-  const [near, far] = BerryClayRoom.dress(THREE, { toon, mergeVertices, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1, wx: (() => { const m = String(st.cell || "").match(/(-?\d+)$/); return m ? +m[1] * X(WORLD) : 0; })(),   // (wx: where the room lies in the world, its column: rooms side by side meet in one piece)
+  const [near, far, fill] = BerryClayRoom.dress(THREE, { toon, mergeVertices, mergeGeometries, layer: CLAY_CAST, lod: CLAY_LITE ? CLAYL.lod : 1, wx: (() => { const m = String(st.cell || "").match(/(-?\d+)$/); return m ? +m[1] * X(WORLD) : 0; })(),   // (wx: where the room lies in the world, its column: rooms side by side meet in one piece)
     W: X(WORLD), seed: s, bgY, FB, fy: -dr * S, tops: !!(st.bgRow && st.drop && st.open && (st.gaps || []).length), row: String(st.cell || st.bgRow || "")[0],   // (tops: up in the trees over the drop, BB2, as farForest has it)
     top: x => { const g = groundAt(clamp(x / S, 0, WORLD)); return g == null ? null : Y(g); }, gaps: GAPS.map(([a, b]) => [X(a), X(b)]), steps: stepXs().map(X),
     plats: PLATFORMS.filter(p => !(p.kind === "bridge" || p.kind === "camTop" || p.kind === "hole" || p.crumble !== undefined || BG_KINDS.has(p.kind))).map(p => ({ xa: X(p.x), xb: X(p.x + p.w), top: Y(p.y), kind: p.kind })),
-    ceils: CEILS.filter(c => !c[3]).map(([a, b, y]) => ({ xa: X(a), xb: X(b), y: Y(y) })), ends: (st.set || []).filter(clayEnd).map(P => ({ side: P.side, door: !!P.door, hole: P.hole ? { y: Y(P.hole.y), top: Y(P.hole.y - P.hole.h) } : null })), kit: levelKit(),
+    ceils: CEILS.filter(c => !c[3]).map(([a, b, y]) => ({ xa: X(a), xb: X(b), y: Y(y) })), ends: (st.set || []).filter(clayEnd).map(P => ({ side: P.side, door: !!P.door, hole: P.hole ? { y: Y(P.hole.y), top: Y(P.hole.y - P.hole.h) } : null })), kit: levelKit(), kits: levelKits(), plants: levelKits() && levelKits().plants,
     trees: !(st.set || []).some(P => ["ceiba", "giant", "leaner", "bgTree", "willow", "treetops"].includes(P.k)) });
-  scene.add(near, far); level.objs.push(near, far); level.clayWorld = true; level.clayMs = performance.now() - t0;
+  scene.add(near, far); level.objs.push(near, far); level.kitFill = fill || null; level.clayWorld = true; level.clayMs = performance.now() - t0;
 }
 // the room's own pieces (its set pieces, Glos's roots, the climbs, the ladders, the hole's ceiling) made clay where they stand, once all are built (clayroom.js
 // clayify: divided, rounded, pressed lumpy, their colours and pictures baked into their vertices). What never moves is merged into a draw or two; what the game
@@ -12132,8 +12192,10 @@ function clearGifts() { gifts.forEach(q => actors.remove(q.g)); gifts = []; clea
 // stalk) or "ledge" (a slab of the tan earth jutting out of the back wall). Broken: gone till you come back to the world (crumbleGone, newStay)
 let crumbles = [];
 function crumbleRig(p, look) {
-  const g = group(actors), w = p.w * S;
-  if (look === "leaf") { const lf = toon("#3f8a3c"), vn = toon("#8cc46a"), st = toon("#6e9e48"), sc = (w + 1.7) / 2.1, nx = -.55 * sc, x0 = (-w / 2 - nx) / sc, x1 = (w / 2 - nx) / sc;
+  const g = group(actors), w = p.w * S, KC = world === 0 && levelKits(), BKc = window.BerryLevelKit, KS = BKc && KC && look !== "leaf" ? KC.slab : null;   // (KS: the slab kit's chunks, ?heromodel)
+  if (look === "leaf" && KC && KC.shroom && BKc) { const sx = (w + .6) / 5.8, sz = Math.min(1.25, Math.max(.8, sx)), lf = BKc.at(THREE, -.4 * sx, 0, 0, { sx, sz });   // (the leaf kit, ?heromodel: its two broken halves together, its stalk)
+    g.add(BKc.group(THREE, kitO(), [{ parts: KC.shroom.ha, m4: lf }, { parts: KC.shroom.hb, m4: lf }, { parts: KC.shroom.stalk, m4: BKc.at(THREE, -.13, -.05, -.1, { sx: Math.min(1, sx), sy: 7 / 3.74 }) }], "clayKitLeaf")); }
+  else if (look === "leaf") { const lf = toon("#3f8a3c"), vn = toon("#8cc46a"), st = toon("#6e9e48"), sc = (w + 1.7) / 2.1, nx = -.55 * sc, x0 = (-w / 2 - nx) / sc, x1 = (w / 2 - nx) / sc;
     const lg = new THREE.ExtrudeGeometry(heartShape(), { depth: .16, bevelEnabled: false, curveSegments: 2 }).rotateX(Math.PI / 2), P = lg.attributes.position;
     for (let i = 0; i < P.count; i++) { const lx = P.getX(i), o = lx > x1 ? lx - x1 : lx < x0 ? x0 - lx : 0; P.setY(i, P.getY(i) - o * o * 4 - o * .5); }   // (flat where you stand, its tip and lobes drooping: the forest's own leaf)
     lg.computeVertexNormals(); const L = mk(lg, null, { mat: lf, ol: .04 }); L.scale.set(sc, 1, Math.min(sc, 1.6)); at(L, nx, 0, 0); g.add(L);
@@ -12144,18 +12206,23 @@ function crumbleRig(p, look) {
     // as it opens, so the split shows whichever way you see it (crumbleSag)
     const U = [0, .2, .5, .8, 1], segs = [];
     for (let k = 0; k < 4; k++) { const x0 = -w / 2 + U[k] * w, x1 = -w / 2 + U[k + 1] * w, sg = group(g, (x0 + x1) / 2, 0, 0); segs.push({ g: sg, u0: U[k], u1: U[k + 1], len: x1 - x0 });
+      if (KS) { const it = [], a = x0 - (x0 + x1) / 2, b = x1 - (x0 + x1) / 2; let u0 = a, u1 = b;   // (the slab kit, ?heromodel: its end at each end, its chunks along each piece)
+        if (k === 0) { it.push({ parts: KS.l, m4: BKc.at(THREE, a + .6, 0, 0) }); u0 = a + .6; } if (k === 3) { it.push({ parts: KS.r, m4: BKc.at(THREE, b - .6, 0, 0) }); u1 = b - .6; }
+        const n = Math.max(1, Math.round((u1 - u0) / .96)), cw = (u1 - u0) / n, sx = cw / .96;
+        for (let i = 0; i < n; i++) { const j = (k + i) % 3; it.push({ parts: [KS.a, KS.b, KS.c][j], m4: BKc.at(THREE, u0 + (i + .5) * cw + [1, 0, -1][j] * sx, 0, 0, { sx }) }); }
+        sg.add(BKc.group(THREE, kitO(), it, "clayKitChunk")); continue; }
       sg.add(at(mk(new THREE.BoxGeometry(x1 - x0, .42, 3.4), null, { mat: rk, ol: .04 }), 0, -.21, -1.5)); }
     const segAt = x => segs.find(q => x <= -w / 2 + q.u1 * w + 1e-6) || segs[3], put = (m, x, y, z) => { const q = segAt(x); at(m, x - q.g.position.x, y, z); q.g.add(m); };
-    for (let i = 0; i < 9; i++) put(mk(new THREE.DodecahedronGeometry(.2 + (i % 3) * .07, 0), null, { mat: i % 2 ? rk2 : rk, ol: .03 }), -w / 2 + .2 + i * (w - .4) / 8, -.32, .16 + (i % 2) * .08);   // (its rough front edge)
-    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.03, .3, .03), cr); c.rotation.z = (i % 2 ? .4 : -.3); put(c, -w / 2 + .4 + i * (w - .8) / 3, -.2, .2); }   // (cracks: it won't hold long)
+    if (!KS) for (let i = 0; i < 9; i++) put(mk(new THREE.DodecahedronGeometry(.2 + (i % 3) * .07, 0), null, { mat: i % 2 ? rk2 : rk, ol: .03 }), -w / 2 + .2 + i * (w - .4) / 8, -.32, .16 + (i % 2) * .08);   // (its rough front edge)
+    if (!KS) for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.BoxGeometry(.03, .3, .03), cr); c.rotation.z = (i % 2 ? .4 : -.3); put(c, -w / 2 + .4 + i * (w - .8) / 3, -.2, .2); }   // (cracks: it won't hold long)
     const dk = new THREE.MeshBasicMaterial({ color: "#2a1c0e" });   // (the dark inside each crack: in the gap as the pieces sag apart)
-    g.userData.seams = [.5, .2, .8].map(u => { const m = new THREE.Mesh(new THREE.BoxGeometry(.1, .4, 3.3), dk); m.position.set(-w / 2 + u * w, -.22, -1.5); m.visible = false; g.add(m); return m; });
+    g.userData.seams = [.5, .2, .8].map(u => { const m = new THREE.Mesh(new THREE.BoxGeometry(.1, KS ? 1.2 : .4, KS ? 2.4 : 3.3), dk); m.position.set(-w / 2 + u * w, KS ? -.6 : -.22, KS ? -.03 : -1.5); m.visible = false; g.add(m); return m; });
     g.userData.segs = segs; }
   // the three cracks it gives way in (the user, 2026-10-28: "can they crack in 3 parts, where like there's one noticevable crack and a pause, a second, and a third
   // and it breaks?"): the middle first, then a side, then the other; each a dark jagged split across the top from the front to the back, hidden till its turn
   // (crumbleCrack; a ledge's pieces sag apart at it too, crumbleSag)
   const leaf = look === "leaf", mC = new THREE.MeshBasicMaterial({ color: leaf ? "#24401a" : "#3a2814", polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), rng = rngF(p.crumble * 7 + 3);
-  g.userData.cracks = [.5, .2, .8].map(u => { const cg = new THREE.Group(), x0 = -w / 2 + u * w, z0 = leaf ? .55 : .26, z1 = leaf ? -.85 : -2.6, n = 6; let px = x0, pz = z0;
+  g.userData.cracks = [.5, .2, .8].map(u => { const cg = new THREE.Group(), x0 = -w / 2 + u * w, z0 = leaf ? .55 : KS ? 1.1 : .26, z1 = leaf ? -.85 : KS ? -1.2 : -2.6, n = 6; let px = x0, pz = z0;
     for (let i = 1; i <= n; i++) { const z = z0 + (z1 - z0) * i / n, x = x0 + (rng() - .5) * .3, dx = x - px, dz = z - pz, L = Math.hypot(dx, dz), m = new THREE.Mesh(new THREE.BoxGeometry(.075, .012, L + .03), mC);
       m.position.set((px + x) / 2, .012, (pz + z) / 2); m.rotation.y = Math.atan2(dx, dz); cg.add(m); if (i === 2 || i === 4) { const b = new THREE.Mesh(new THREE.BoxGeometry(.045, .012, .32), mC); b.position.set(x + (i === 2 ? .1 : -.1), .012, z - .1); b.rotation.y = i === 2 ? .9 : -.9; cg.add(b); } px = x; pz = z; }   // (across the top, a branch or two off it)
     cg.visible = false; g.add(cg); return cg; });
@@ -23252,22 +23319,26 @@ function buildBeach(k = 0, seed = k) {
   // coconut palms all along the back of the beach, leaning out to sea; sea grape and rocks under them; rocks at the water's edge
   const knock = [], inGap = x => !hi && (ST.gaps || []).some(([a, b]) => x > X(a) - 1.2 && x < X(b) + 1.2);   // (inGap: over the sea through a gap in the sand, row C's (C6, C7, C10 since 2026-11-04): nothing grows there)
   const nbS = ST.tut ? nbOf(seed) : null, capY = nbS && nbS.up >= 0 ? NB_TOP() - .35 : 1e9, _pb = new THREE.Box3();   // (a room with one over it: its palms kept under the seam, or the cut took their crowns; one up on the bluff with the beach drawn under it: none of its own down there, or their tops alone showed over the seam. The user, 2026-11-09: "there's a tree top without a body and a tree without its leaves in here")
+  const KPL = levelKits() && window.BerryLevelKit ? levelKits().plants : null, KPI = [], kTuft = (x, z, k) => { if (KPL && KPL.tuft) KPI.push({ parts: KPL.tuft, m4: BerryLevelKit.at(THREE, x, gAt(x) - .02, z, { s: k, ry: x * 5.1 }) }); };   // (the plant kit's, ?heromodel: sea grape, bushes and grass tufts laid in one, after; tufts drawn from where they stand, not the rng)
   const palmCap = (g, base) => { if (capY > 1e8) return; g.updateMatrixWorld(true); _pb.setFromObject(g); if (_pb.max.y > capY) g.scale.multiplyScalar(Math.max(.45, (capY - base) / (_pb.max.y - base))); };
   for (const sl of W.scatter(Math.round(15 * WS), 6, 6, 3201)) inSlot(sl, x => { if (x < lo + 2) return; const z = -R(3.2, 8.5); if ((ST.home && x < 13 && z > -7) || inGap(x)) return;
     const g = tropPalm(scene, M, x, gAt(x), z, rng, { h: R(6.5, 11), lean: R(-.3, .3), coco: true }); g.rotation.x = -R(.04, .18);
-    if (hi && nbS && nbS.dn >= 0 && gAt(x) <= lowY + .01) { scene.remove(g); return; } palmCap(g, gAt(x)); });   // (made and taken away again: its rolls all taken, so the rest of the room comes out as it did)
+    if (hi && nbS && nbS.dn >= 0 && gAt(x) <= lowY + .01) { scene.remove(g); return; } palmCap(g, gAt(x)); if (KPL && g.children[0] && g.children[0].name === "clayKit-palm") { kTuft(x - .7, z + .5, 1.3); kTuft(x + .6, z + .2, 1); } });   // (made and taken away again: its rolls all taken, so the rest of the room comes out as it did)
   if (ST.home) [[960, -2.4, 1], [1290, -2.9, 1], [1450, -2.3, 1], [1620, -2.8, 1], [1800, -2.4, 1], [1990, -2.7, 1], [2190, -2.4, 1]].forEach(([px, z, d], i) => {   // the seven that come down in the opening (each knocked over to the right, away from whoever hits it)
     const g = tropPalm(scene, M, X(px), gAt(X(px)), z, rng, { h: 8.4 + (i % 3) * .7, lean: d * .12, coco: true });
     g.traverse(o => { if (o.isMesh) keep.add(o); }); knock.push({ g, x: px, z, dir: d, t: -1 }); if (!beachOpening) g.rotation.z = -d * 1.48; });   // (dir: the way the crown falls)
   else if (!ST.cove) for (let i = 0; i < 2; i++) { const x = R(8, WX - 8), d = rng() < .5 ? 1 : -1; if (inGap(x)) continue; const g = tropPalm(scene, M, x, gAt(x), -R(2.6, 4.5), rng, { h: R(7, 9), coco: true }); g.rotation.z = d * 1.48; }   // knocked flat on their way through
   for (const sl of W.scatter(Math.round(26 * WS), 8, 8, 3202)) inSlot(sl, x => { if (x < lo) return; const z = -R(2.4, 8.6), r = R(.5, 1.2); if ((ST.home && x < 12 && z > -7) || inGap(x)) return;
-    scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[((sl.j % 3) + 3) % 3], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); });
+    const j = ((sl.j % 3) + 3) % 3, kp = KPL && (j === 1 ? KPL.bushBig || KPL.seaGrape : KPL.seaGrape || KPL.bushBig);
+    if (kp) { KPI.push({ parts: kp, m4: BerryLevelKit.at(THREE, x, gAt(x) - .05, z, { s: r * (kp === KPL.bushBig ? .9 : 1), ry: (x * 7.3) % 6.28 }) }); kTuft(x + r * 1.5, z + .4, 1.2); return; }   // (the kit's: as wide as the clay lump it stands for)
+    scene.add(at(mk(new THREE.IcosahedronGeometry(r, 0).scale(1.4, .75, 1), null, { mat: bush[j], ol: z > -6 ? .04 : 0 }), x, gAt(x) + r * .4, z)); });
+  if (KPI.length) scene.add(BerryLevelKit.group(THREE, kitO(), KPI, "clayKit-beachPlants"));
   for (const sl of W.scatter(Math.round(18 * WS), 8, 8, 3203)) inSlot(sl, x => { const r = R(.4, 1.1), z = rng() < .6 ? -R(9.5, 13) + (zb + 9) : -R(2.5, 8); if (z > zb && (x < lo || inGap(x))) return;
     scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1.3, .8, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .03 }), x, z < zb ? sb + (z - zb) * drop / run + r * .3 - .2 : gAt(x) + r * .3, z)); });
-  { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sh = new THREE.InstancedMesh(new THREE.ConeGeometry(.09, .14, 6).rotateX(Math.PI / 2), toon("#ffe0d2"), Math.round(90 * WS));   // shells
+  { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), sh = kitInst(KPL && KPL.shell, () => new THREE.ConeGeometry(.09, .14, 6).rotateX(Math.PI / 2), toon("#ffe0d2"), Math.round(90 * WS));   // shells
     for (let i = 0; i < sh.count; i++) { const x = R(lo, WX + 8); e.set(R(-.4, .4), R(0, TAU), 0); q.setFromEuler(e); const k = inGap(x) ? 0 : 1; m4.compose(new THREE.Vector3(x, gAt(x) + .04, R(-8.5, 4.5)), q, new THREE.Vector3(k, k, k)); sh.setMatrixAt(i, m4); } scene.add(sh);
     const st = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * TAU, r = i % 2 ? .07 : .2; (i ? st.lineTo : st.moveTo).call(st, Math.cos(a) * r, Math.sin(a) * r); }
-    const sf = new THREE.InstancedMesh(new THREE.ShapeGeometry(st).rotateX(-Math.PI / 2), toon("#ff7a4a"), Math.round(12 * WS));   // starfish
+    const sf = kitInst(KPL && KPL.starfish, () => new THREE.ShapeGeometry(st).rotateX(-Math.PI / 2), toon("#ff7a4a"), Math.round(12 * WS));   // starfish
     for (let i = 0; i < sf.count; i++) { const x = R(lo, WX + 8); q.setFromEuler(e.set(0, R(0, TAU), 0)); const k = inGap(x) ? 0 : 1; m4.compose(new THREE.Vector3(x, gAt(x) + .03, R(-8, 4)), q, new THREE.Vector3(k, k, k)); sf.setMatrixAt(i, m4); } scene.add(sf); }
   // the kids' house (the first room): a little wooden house up on posts, turquoise with a red tin roof, a porch, a hammock between two palms,
   // a table with a bowl of mangoes, and the log they sit on
@@ -23301,7 +23372,10 @@ function buildBeach(k = 0, seed = k) {
     if (ST.edge) { const gr = mk(new THREE.BoxGeometry(WX * .5 + 30, .06, 14), null, { mat: toon("#6c9c44"), ol: 0 }); at(gr, WX * .78 + 15, .03, -2); scene.add(gr); }   // the grass begins
     tropMogote(scene, M, WX + 18, -2, -46, rng, 9, 18); tropMogote(scene, M, WX + 2, -2, -58, rng, 7, 14); }
   // platforms
+  const KBP = levelKits() && window.BerryLevelKit;   // (the platform kit, ?heromodel: the Beach's platforms from it; the rng drawn as their own would, so the rest of the beach stays where it was)
   for (const p of PLATFORMS) { const cx = X(p.x + p.w / 2), top = Y(p.y), w = p.w * S, gy = gAt(cx);
+    if (KBP) { const L = BerryLevelKit.beachPlat(THREE, levelKits(), [], { kind: p.kind, xa: X(p.x), xb: X(p.x + p.w), top }, gAt);
+      if (L) { scene.add(BerryLevelKit.group(THREE, kitO(), L, "clayKit-" + p.kind)); for (let k = 0; k < (p.kind === "drift" ? 1 : p.kind === "shelf" ? 25 : 0); k++) rng(); continue; } }
     if (p.kind === "rock") {                          // a rock arch: a slab of rock on legs at either end, front and back (open underneath, like the woods' slabs)
       scene.add(at(mk(new THREE.DodecahedronGeometry(1, 0).scale(w * .52, .5, 1.25), null, { mat: mRock, ol: .05 }), cx, top - .42, 0));
       scene.add(at(mk(new THREE.BoxGeometry(w - .1, .22, 2.4), null, { mat: mRockL, ol: .05 }), cx, top - .11, 0));
