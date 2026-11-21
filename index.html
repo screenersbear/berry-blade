@@ -1915,11 +1915,11 @@ const HM_TOE = .6;                                   // (on the ground, the mode
 const hmHands = r => r.hm ? [r.hm.B.handL, r.hm.B.handR] : r.hands;   // (the hands drawn: the model's wrists with ?heromodel, else her own; [0] her left, [1] her right, as r.hands. For what must touch them: the zip line's handle, fruit, a boost)
 const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
 function heroModelAttach(r, src, id, k0) {           // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T (k0: its scale, given: her grown arm's models, as her own)
-  const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map();
+  const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map(), part = {};
   m.traverse(o => { if (o.isBone) B[o.name] = o; });
   const need = ["hips", "spine", "chest", "head", ...["upperarm", "forearm", "hand", "thigh", "shin", "foot"].flatMap(n => [n + "L", n + "R"])].filter(n => !B[n]);
   if (need.length) { console.warn("the model " + id + " has no bones " + need.join(", ") + ": built in code as before"); return; }   // (the bones it goes by, by name: hips > spine > chest > head, upperarm > forearm > hand, thigh > shin > foot, .L and .R)
-  m.traverse(o => { if (o.isBone) list.push(o); if (!o.isMesh) return; const c = o.material; if (!mats.has(c)) mats.set(c, toonT(c.color.clone(), { side: c.side })); o.material = mats.get(c); o.frustumCulled = false; });   // (one toon colour per colour in the model; list: parents before children)
+  m.traverse(o => { if (o.isBone) list.push(o); if (!o.isMesh) return; const c = o.material; if (!mats.has(c)) mats.set(c, toonT(c.color.clone(), { side: c.side })); o.material = mats.get(c); o.frustumCulled = false; (part[c.name] || (part[c.name] = { mat: o.material, meshes: [] })).meshes.push(o); });   // (one toon colour per colour in the model; list: parents before children)
   const bb = new THREE.Box3(); src.updateMatrixWorld(true); src.traverse(o => { if (!o.isMesh) return; o.geometry.computeBoundingBox(); bb.union(o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld)); });   // (its height as made, in the T: a skinned mesh's own box would follow bones not yet placed)
   const k = k0 || (HERO_H[id] || 2.4) / (bb.max.y - bb.min.y);
   hold.rotation.y = Math.PI / 2; hold.scale.setScalar(k); hold.add(m); hold.updateMatrixWorld(true);   // (Blender faces them +z, the game +x. Not on the body yet, so each matrixWorld is in the body's space)
@@ -1934,6 +1934,7 @@ function heroModelAttach(r, src, id, k0) {           // the model on the rig: un
   const BK = new THREE.Vector3(0, 0, -1), D2R = Math.PI / 180;
   [["fingers1", [[BK, 12, 90]]], ["fingers2", [[BK, 10, 95]]], ["thumb1", [[BK, 7, 55], [HM_UP, 4, 35]]], ["thumb2", [[HM_UP, 5, 45]]]].forEach(([n, T]) => ["L", "R"].forEach(sd => { const b = n + sd; if (B[b]) curl[b] = T.map(([v, a0, a1]) => [axis(b, sd === "L" ? v : v.clone().negate()), a0 * D2R, a1 * D2R]); }));   // (both hands: her right one, with fingers since 2026-11-18, the same turns mirrored, as the model's own fist does it. It shuts and opens with the gauntlet)
   r.hm.spring = hmSpringSetup(r.hm, hold);   // (spring hair: only a model with collider balls)
+  r.hm.part = part;                                   // (its parts by the model's material names, each its toon colour and meshes: the rings, gold and orb her life goes on, hmLife)
   r.hm.curl = curl; r.hm.tw = [-Math.PI / 2, 0];   // (her left hand, then her right, matched by eye to her own fists, 2026-11-18. The right one, no turn: the back of that hand to the player, as Starky asked the same day, not its curled fingers)
   if (Array.isArray(r.mats)) mats.forEach(x => r.mats.push(x));   // (her flashes, when she is hit, on the model too)
   const box8 = b => [0, 1, 2, 3, 4, 5, 6, 7].map(n => new THREE.Vector3(n & 1 ? b.max.x : b.min.x, n & 2 ? b.max.y : b.min.y, n & 4 ? b.max.z : b.min.z)), vp = new THREE.Vector3(), soles = [new THREE.Box3(), new THREE.Box3()];   // (soles: the box round each of the model's boots, from its ankle, at rest)
@@ -2049,6 +2050,7 @@ function heroModelSync(p, r, dt = 0) {               // each frame, after her ow
   ["L", "R"].forEach((sd, i) => B["upperarm" + sd].scale.setScalar(big && !gq && i === propI ? 1e-3 : 1)); if (M.gi) B["hand" + (propI ? "R" : "L")].scale.setScalar(gq ? G.hmHs : 1);   // (the big hand as big as the size between models: the burst's swell and settle)   // (folded to nothing at the shoulder while the grown arm is out on her gauntlet side)
   B.hips.position.copy(H).applyMatrix4(M.hipsInv);    // (its parent, the root bone, never moves)
   hmSpring(M, r, dt);
+  hmLife(p, r, dt);
   if (gq) { const U = B["upperarm" + (propI ? "R" : "L")]; U.updateWorldMatrix(true, false); G.hmOff = r.body.worldToLocal(U.getWorldPosition(G.hmOff || new THREE.Vector3())).sub(G.hmS); }   // (where its shoulder is, off charkit's: next frame's arm from there)
 }
 
@@ -2109,6 +2111,43 @@ function hmLeanEase(p, G, dt) {                      // part C change 3, the lea
   return G.leanW = clamp(G.leanW, 0, 1);
 }
 KIT.leanEase = hmLeanEase;                           // (the game's own Camila too since Starky's yes, 2026-11-20: her shoulders' lean toward the big arm eases in and out; before, only with ?heromodel)
+const HM_LIFE = { spikes: /[?&]spikes(&|$)/.test(location.search), ring: [["ringp", -1], ["ringg", 0], ["ringr", 1], ["ringb", 2]], A: [0, 1.05, -1.05, 2.1, -2.1], white: new THREE.Color("#ffffff"), m4: new THREE.Matrix4() };   // her life on the model's gauntlet, as on her own (Starky's yes to the plan, 2026-11-20). ring: the model's four rings by name and the heart each is, from the usual three's first (-1: the extra one above them, purple). A: the spikes round the orb, the game's. spikes: ?heromodel&spikes shows them for a look, by the sword's rule (her three all out, p.wTeeth, and a pink one per two of her POWER berry gears): the game's gauntlet has none since 2026-11-02
+function hmLife(p, r, dt) {                            // each frame, after her own sync: the model's rings, glow and spikes, from the code gauntlet's own
+  const M = r.hm, pr = r.prop; if (!M || !M.part || !pr || pr.kind !== "gauntlet" || !pr.rings) return;
+  if (r.hmGlowPr !== pr) { r.hmGlowPr = pr; (r.hmSet || [M]).forEach(S => ["gold", "orb"].forEach(n => { const m = S.part[n] && S.part[n].mat; if (m && !pr.glowMats.includes(m)) pr.glowMats.push(m); })); }   // (full health: every size's gold and orb glow with the gauntlet's, the game's own glow)
+  const rows = pr.life || pr.rings.map(() => ({ split: false })), R = []; let k = 0;
+  rows.forEach(w => { const n = w.split ? 2 : 1; R.push(pr.rings.slice(k, k + n)); k += n; });   // (each heart's ring on her gauntlet: one, or a berry gear's split ring, its two halves)
+  HM_LIFE.ring.forEach(([n, j]) => { const P = M.part[n]; if (!P) return; const H = R[(pr.ringX || 0) + j], on = !!(H && H.length);
+    P.meshes.forEach(o => { o.visible = on; }); if (!on) return;   // (fewer hearts than the model has rings: that one hidden)
+    const lit = H.filter(m => m.userData.on).length, col = H[0].userData.col0 || "#ffffff", key = lit + "/" + H.length + col;
+    if (P.key !== key) { P.key = key; P.mat.color.set(col).lerp(HM_LIFE.white, 1 - lit / H.length); }   // (lost: gone white, as hers go. Half a split one lost: half way to white, till the model has its rings split in two)
+    const e = Math.max(...H.map(m => m.material.emissive.r)); P.mat.userData.glowE = [e, e, e]; P.mat.emissive.setRGB(e, e, e);   // (the shine running ring to ring every 2.8 s, the same)
+  });
+  if (pr.glow) { const hold = M.hold, inv = HM_LIFE.m4;   // (the glow's soft halo round her cuff and fist: copies of the game's own, where her own gauntlet has them, lit and faded by the game)
+    if (M.haloPr !== pr) { (M.halo || []).forEach(h => hold.remove(h)); M.haloPr = pr; M.halo = pr.glow.map(m => { const h = m.clone(); h.matrixAutoUpdate = false; h.visible = false; hold.add(h); return h; }); }
+    hold.updateWorldMatrix(true, false); inv.copy(hold.matrixWorld).invert();
+    pr.glow.forEach((m, i) => { const h = M.halo[i]; let o = m, vis = m.visible; while (vis && o.parent && o.parent !== r.body) { o = o.parent; vis = o.parent !== r.body ? o.visible : o === pr.group ? !(r.giant && r.giant.on) : M.vis0.get(o) ?? true; }   // (seen only where hers would be: not with her grown arm out, when the game hides her gauntlet. Its own flag is the test's hiding by now)
+      h.visible = vis; if (vis) { m.updateWorldMatrix(true, false); h.matrix.multiplyMatrices(inv, m.matrixWorld); h.matrixWorldNeedsUpdate = true; } }); }
+  if (M.spkPr !== pr) { (M.spk || []).forEach(S => { if (S.h.parent) S.h.parent.remove(S.h); }); M.spkPr = pr; M.spk = hmSpikes(M, r, pr); }
+  if (HM_LIFE.spikes) { const n = p.wTeeth ?? (p.power || 0), pg = p.powG || 0, h = Math.min(dt || 0, .1), T = r.hmSpS || (r.hmSpS = HM_LIFE.A.map(() => ({ x: 0, v: 0 })));   // (shown for a look: as the sword's teeth go, each popping out as they do)
+    T.forEach((s, i) => { const want = i < 3 ? (i < n ? 1 : 0) : pg > (i - 3) * 2 ? (pg >= (i - 3) * 2 + 2 ? 1 : .55) : 0;
+      for (let q = 0, m = Math.ceil(h * 120); q < m; q++) { s.v += (260 * (want - s.x) - 14 * s.v) * h / m; s.x += s.v * h / m; } if (s.x < 0) { s.x = 0; s.v = 0; } }); }
+  M.spk.forEach((S, i) => { const x = HM_LIFE.spikes ? r.hmSpS[i].x : S.src.scale.x; S.h.scale.setScalar(S.k * x); S.h.visible = x > .01; });   // (else as the game's own are: none on the gauntlet)
+}
+function hmSpikes(M, r, pr) {                          // (the gauntlet's spikes on a model's hand: copies of the game's own, in their ring round the model's own orb)
+  const sd = r.spec.outfit.prop && r.spec.outfit.prop.side === "left" ? "L" : "R", bone = M.B["hand" + sd], O = M.part.orb, src = [...(pr.teeth || []), ...(pr.teethX || []).map(X => X.g)];
+  if (!bone || !O || !src.length) return [];
+  const V = THREE.Vector3, inHand = parts => { const out = []; parts.forEach(o => { const sk = o.skeleton, bi = sk ? sk.bones.indexOf(bone) : -1; if (bi < 0) return; const g = o.geometry, Pa = g.attributes.position, SI = g.attributes.skinIndex, SW = g.attributes.skinWeight, inv = sk.boneInverses[bi];
+    for (let v = 0; v < Pa.count; v++) { let w = 0; for (let q = 0; q < 4; q++) if (SI.getComponent(v, q) === bi) w += SW.getComponent(v, q); if (w > .5) out.push(new V().fromBufferAttribute(Pa, v).applyMatrix4(o.bindMatrix).applyMatrix4(inv)); } }); return out; };   // (its points on that hand, in the hand bone's own space)
+  const orb = inHand(O.meshes), fist = inHand(M.part.glove ? M.part.glove.meshes : []); if (!orb.length || !fist.length) return [];
+  const mid = a => a.reduce((t, v) => t.add(v), new V()).multiplyScalar(1 / a.length), C = mid(orb), nrm = C.clone().sub(mid(fist)).normalize();   // (the orb's middle, and out of the back of the hand: from the fist's middle through it)
+  const f = new V(0, 1, 0).addScaledVector(nrm, -nrm.y).normalize(), sv = nrm.clone().cross(f), th = M.B["thumb1" + sd]; if (th && th.position.dot(sv) < 0) sv.negate();   // (f: on toward the fingers, as the bone runs; sv: across it, to the thumb's side, where the game's second spike goes)
+  let rad = 0, dep = 0; orb.forEach(v => { const d = v.clone().sub(C), a = d.dot(nrm); dep = Math.max(dep, Math.abs(a)); rad = Math.max(rad, d.addScaledVector(nrm, -a).length()); });
+  const k = rad / .056, base = C.clone().addScaledVector(nrm, -dep * .024 / .036);   // (sized by the orb: the game's fist has an orb .056 across and .036 deep, its spikes' feet .064 out from its middle and .024 below it)
+  return src.map((sp, i) => { const a = HM_LIFE.A[i], out = f.clone().multiplyScalar(Math.cos(a)).addScaledVector(sv, Math.sin(a)), h = new THREE.Group(), aim = sp.children[0].clone();
+    aim.quaternion.identity(); h.add(aim); h.position.copy(base).addScaledVector(out, .064 * k); h.quaternion.setFromUnitVectors(HM_UP, nrm.clone().addScaledVector(out, .5).normalize()); h.visible = false; bone.add(h);   // (out of the back of the hand, leaning out from the orb, as hers)
+    return { h, k, src: sp }; });
+}
 
 function buildCrux() {                       // black coat giant: hypnotic spiral face, "C" shoulder rings, crescent belt
   const r = foeBase(2.3, 1.5), { M, P, body } = r;
