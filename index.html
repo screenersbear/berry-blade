@@ -733,7 +733,7 @@
 <script src="dawn.js?v=20261016a"></script>
 <script src="beps.js?v=20261016b"></script>
 <script src="roots.js?v=20261102e"></script>
-<script src="clayroom.js?v=20261109l"></script>
+<script src="clayroom.js?v=20261120q"></script>
 <script src="level-edits.js?v=0"></script>
 <script src="models/models.js?v=20261120215806"></script>
 <script src="models/heroes.js?v=20261120215807"></script>
@@ -983,7 +983,11 @@ const readModels = (pack, into) => Promise.race([Promise.all(Object.entries(pack
 const MODELS = {}, HERO_MODELS = {};                // id: the model, read before the game starts. A character with one is built from it (modelRig), one without in code as before
 // ── the heroes made as models with bones (Rose and Camila, from the modelling chat, 2026-11-18 to 11-20): models/heroes.js (models/heroes/*.glb, the same packer), read with the rest.
 // The game plays as them everywhere since Starky's ask, 2026-11-20 ("by default, everywhere: no ?heromodel switch"): their moves still run on the code-built rig, hidden, the model turned to it. See heroModelAttach
-await Promise.all([readModels(window.BERRY_MODELS, MODELS), readModels(window.BERRY_HERO_MODELS, HERO_MODELS)]);
+// ── the levels' ground kit (the level modelling chat's, approved 2026-11-20: models/levels/ground-kit, packed into models/levels.js): Berry Woods' and the Beach's ground laid
+// from it, on test, only with ?heromodel (Starky, 2026-11-20: "add them behind ?heromodel"); its script added and read only then. See kitParts, clayroom.js dress (o.kit), buildBeach
+const LEVEL_KIT_ON = /[?&]heromodel\b/.test(location.search), LEVEL_MODELS = {};
+if (LEVEL_KIT_ON && !window.BERRY_LEVEL_MODELS) await new Promise(ok => { const t = document.createElement("script"); t.src = "models/levels.js?v=20261120222212"; t.onload = t.onerror = () => ok(); document.head.appendChild(t); });
+await Promise.all([readModels(window.BERRY_MODELS, MODELS), readModels(window.BERRY_HERO_MODELS, HERO_MODELS), LEVEL_KIT_ON && readModels(window.BERRY_LEVEL_MODELS, LEVEL_MODELS)]);
 
 // ───────────────────────────── world (gameplay runs in 2D "px" space) ─────────────────────────────
 let WORLD = 2560; const CELL_W = 2560, GROUND = 470, TAU = Math.PI * 2, GRAV = 2200, WEIGHT = 1.12, JUMPK = Math.sqrt(WEIGHT);   // (WORLD: the room you're in, px across; a screen's is CELL_W, the big room's two of them: bigPlatforms)
@@ -7841,7 +7845,21 @@ const claySkyC = [];
 function claySkyTex(h) { const k = clamp(h | 0, 0, 6); if (claySkyC[k]) return claySkyC[k];   // (an hour's sky: one flat clay colour)
   const c = document.createElement("canvas"); c.width = c.height = 4; const g = c.getContext("2d"); g.fillStyle = BerryClayRoom.SKY[k]; g.fillRect(0, 0, 4, 4);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return (claySkyC[k] = t); }
-const clayEnd = P => P.k === "earth" && !P.door && !P.hole;   // (a plain earth wall at the woods' end: in clay; one with a way through it as it was)
+// the ground kit's pieces (LEVEL_MODELS, only with ?heromodel): each one's shape in its clays, [{ col, geo }], the phone's (<name>_phone) with the lighter clay (CLAY_LITE): the same size and place
+const KIT_PARTS = {};
+function kitParts(id) { if (id in KIT_PARTS) return KIT_PARTS[id]; const sc = LEVEL_MODELS[id]; let node = null, out = null;
+  if (sc) { const want = CLAY_LITE ? id + "_phone" : id; sc.traverse(m => { if (m.name === want) node = m; }); if (!node) sc.traverse(m => { if (!node && m.name === id) node = m; }); }
+  if (node) { out = []; sc.updateMatrixWorld(true); node.traverse(m => { if (!m.isMesh || !m.geometry || !m.geometry.attributes.normal) return; const G = m.geometry, n = G.attributes.position.count, P3 = new Float32Array(n * 3), N3 = new Float32Array(n * 3), v = new THREE.Vector3();
+    const nm = new THREE.Matrix3().getNormalMatrix(m.matrixWorld); for (let i = 0; i < n; i++) { v.fromBufferAttribute(G.attributes.position, i).applyMatrix4(m.matrixWorld); P3.set([v.x, v.y, v.z], i * 3); v.fromBufferAttribute(G.attributes.normal, i).applyMatrix3(nm).normalize(); N3.set([v.x, v.y, v.z], i * 3); }
+    const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.BufferAttribute(P3, 3)); g.setAttribute("normal", new THREE.BufferAttribute(N3, 3)); g.setIndex(new THREE.BufferAttribute(G.index ? Uint32Array.from(G.index.array) : Uint32Array.from({ length: n }, (_, i) => i), 1));
+    out.push({ col: "#" + m.material.color.getHexString(), geo: g }); }); if (!out.length) out = null; }
+  return (KIT_PARTS[id] = out); }
+let LEVEL_KIT = undefined;
+const levelKit = () => { if (!LEVEL_KIT_ON) return null; if (LEVEL_KIT !== undefined) return LEVEL_KIT;
+  const K = { tile: ["floor-tile-a", "floor-tile-b", "floor-tile-c"].map(kitParts), pit: kitParts("pit-edge"), bank: kitParts("back-bank"), ravine: kitParts("ravine-wall"), over: kitParts("land-overhead"),
+    end: kitParts("end-wall"), door: kitParts("end-wall-door"), hole: kitParts("crawl-hole"), cliff: [kitParts("cliff-layer-a"), kitParts("cliff-layer-b")], boulder: ["boulder-a", "boulder-b", "boulder-c"].map(kitParts) };
+  return (LEVEL_KIT = Object.values(K).flat().every(Boolean) ? K : null); };   // (null: a piece didn't read, so the ground stays as it was)
+const clayEnd = P => P.k === "earth" && (!P.door && !P.hole || !!levelKit());   // (a plain earth wall at the woods' end: in clay; one with a way through it as it was, but with the ground kit, which has those too)
 function clayWorldDress(s) {                         // (screenBuild: the woods' own pieces put away, the clay set from the room's own layout in their place; the sky the game's, flat)
   if (!window.BerryClayRoom) return; const t0 = performance.now(), st = STAGES[s], hr = clamp(level.h ?? 0, 0, 6);
   disposeLevel({ objs: level.objs.filter(o => o !== level.motes) }); level.objs = level.motes ? [level.motes] : []; if (level.motes) level.motes.visible = false; level.shafts = [];
@@ -7852,7 +7870,7 @@ function clayWorldDress(s) {                         // (screenBuild: the woods'
     W: X(WORLD), seed: s, bgY, FB, fy: -dr * S, tops: !!(st.bgRow && st.drop && st.open && (st.gaps || []).length), row: String(st.cell || st.bgRow || "")[0],   // (tops: up in the trees over the drop, BB2, as farForest has it)
     top: x => { const g = groundAt(clamp(x / S, 0, WORLD)); return g == null ? null : Y(g); }, gaps: GAPS.map(([a, b]) => [X(a), X(b)]), steps: stepXs().map(X),
     plats: PLATFORMS.filter(p => !(p.kind === "bridge" || p.kind === "camTop" || p.kind === "hole" || p.crumble !== undefined || BG_KINDS.has(p.kind))).map(p => ({ xa: X(p.x), xb: X(p.x + p.w), top: Y(p.y), kind: p.kind })),
-    ceils: CEILS.filter(c => !c[3]).map(([a, b, y]) => ({ xa: X(a), xb: X(b), y: Y(y) })), ends: (st.set || []).filter(clayEnd).map(P => ({ side: P.side })),
+    ceils: CEILS.filter(c => !c[3]).map(([a, b, y]) => ({ xa: X(a), xb: X(b), y: Y(y) })), ends: (st.set || []).filter(clayEnd).map(P => ({ side: P.side, door: !!P.door, hole: P.hole ? { y: Y(P.hole.y), top: Y(P.hole.y - P.hole.h) } : null })), kit: levelKit(),
     trees: !(st.set || []).some(P => ["ceiba", "giant", "leaner", "bgTree", "willow", "treetops"].includes(P.k)) });
   scene.add(near, far); level.objs.push(near, far); level.clayWorld = true; level.clayMs = performance.now() - t0;
 }
@@ -23186,6 +23204,7 @@ function buildBeach(k = 0, seed = k) {
     const w = mk(new THREE.BoxGeometry(L, 6, 14), null, { mat: mWet, ol: 0 }); w.rotation.z = a; at(w, (xs + xe) / 2 + 3 * Math.sin(a), bed / 2 - 3 * Math.cos(a), -2); scene.add(w); }
   else if (ST.tut) {                                 // the tutorial's: the ground as it is, a piece at a time (its gaps open, C2's bluff, the bluff under every room up on it)
     const mBl = toon("#c9965e"), mBlD = toon("#9c6b42"), mCl = toon("#8a8279"), cuts = new Set([-900, WORLD + 900]), GP = ST.tbridge ? ST.gaps || [] : GAPS;   // (GP: B7's gap even once it's bridged)
+    const KB = levelKit(), KF = [], KS = [], lerpPts = (P, x) => { if (x <= P[0][0]) return P[0][1]; for (let k = 1; k < P.length; k++) if (x <= P[k][0]) { const [x0, y0] = P[k - 1], [x1, y1] = P[k]; return x1 - x0 < 1e-6 ? y1 : y0 + (y1 - y0) * (x - x0) / (x1 - x0); } return P[P.length - 1][1]; };   // (KB: the ground kit, only with ?heromodel: the bluff's faces (KF) and its cliffs' sides (KS) dressed from it, once all are laid out)
     PROFILE.forEach(q => cuts.add(q[0])); GP.forEach(([a, b]) => { cuts.add(a); cuts.add(b); });
     const xs = [...cuts].filter(x => x >= -900 && x <= WORLD + 900).sort((a, b) => a - b);
     const smRuns = [];                               // (a stretch with a slope in it and no sheer steps, up on the bluff: its sand and the rock under it each ONE piece, the slope's corners rounded, so no seam where the hill meets the flat, top or foot. The user, 2026-11-10: "in b3, hide the seams at the bottom and the top of the hill/ramp")
@@ -23204,22 +23223,26 @@ function buildBeach(k = 0, seed = k) {
       T.push(P0[P0.length - 1]); const bot = hi ? lowY - 6 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
       const strip = (dn, base) => new THREE.Shape([...T.map(([x, y]) => new THREE.Vector2(x, y - dn)), ...(base === undefined ? T.slice().reverse().map(([x, y]) => new THREE.Vector2(x, y - dn - .5)) : [new THREE.Vector2(T[T.length - 1][0], base), new THREE.Vector2(T[0][0], base)])]);
       const sd = mk(new THREE.ExtrudeGeometry(strip(0), { depth: d + .06, bevelEnabled: false }), null, { mat: mSand, ol: 0 }); sd.position.z = zc - (d + .06) / 2; scene.add(sd);   // its sand, one piece
-      const rk = mk(new THREE.ExtrudeGeometry(strip(.45, bot), { depth: d, bevelEnabled: false }), null, { mat: mBl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); });   // the rock under it, one piece
+      const rk = mk(new THREE.ExtrudeGeometry(strip(.45, bot), { depth: d, bevelEnabled: false }), null, { mat: mBl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); if (KB) KF.push({ a: T[0][0], b: T[T.length - 1][0], top0: Math.max(...T.map(p => p[1])) - .5, top: x => lerpPts(T, x) - .5, bot: hi ? Math.max(bot, lowY - 1.5) : bot, z: zc + d / 2 }); });   // the rock under it, one piece
     for (let i = 0; i + 1 < xs.length; i++) { const a = xs[i], b = xs[i + 1], m = (a + b) / 2, w = (b - a) * S, cx = X(m); if (w <= 0) continue;
       if (GP.some(([g0, g1]) => m > g0 && m < g1)) { if (hi) scene.add(at(mk(new THREE.BoxGeometry(w, 6, 14), null, { mat: mSand, ol: 0 }), cx, lowY - 3, -2)); continue; }   // (open: the beach a row down)
       const top = Y(groundAt(m) ?? GROUND), raised = top > 1.5, bot = hi ? lowY - 6 : -6, d = hi ? 5 - zb : 14, zc = hi ? (5 + zb) / 2 : -2;
       const ga = Y(groundAt(a + .01) ?? GROUND), gb = Y(groundAt(b - .01) ?? GROUND);
       if (Math.abs(ga - gb) > .05 && inSm(m)) continue;   // (built whole above)
       if (Math.abs(ga - gb) > .05) { const slS = new THREE.Shape([new THREE.Vector2(X(a), ga - .5), new THREE.Vector2(X(b), gb - .5), new THREE.Vector2(X(b), gb), new THREE.Vector2(X(a), ga)]), sl = mk(new THREE.ExtrudeGeometry(slS, { depth: d + .06, bevelEnabled: false }), null, { mat: mSand, ol: 0 }); sl.position.z = zc - (d + .06) / 2; scene.add(sl);   // a slope (B3's dune up to B4's high ground, 2026-11-04): its sand along it, the rock under it cut to the line   // (d + .06: its face a hair in front of the flat sand's and the rock's, where they overlap at its foot. In the one plane they fought for it, the bottom of B3's hill flickering: the user, 2026-11-05)   // (its sand a wedge, top end to end on the flat sand either side and its ends straight up, not a tilted slab: its square-cut ends left a crack where B3's hill meets the top. The user, 2026-11-08: "there's a seam atop b3 where the hill connects with the top level and it's cracked. it should be seamless")
-        const sh = new THREE.Shape([new THREE.Vector2(X(a), bot), new THREE.Vector2(X(b), bot), new THREE.Vector2(X(b), gb - .45), new THREE.Vector2(X(a), ga - .45)]), rk = mk(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), null, { mat: hi || ST.cliff ? mBl : mCl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); continue; }
+        const sh = new THREE.Shape([new THREE.Vector2(X(a), bot), new THREE.Vector2(X(b), bot), new THREE.Vector2(X(b), gb - .45), new THREE.Vector2(X(a), ga - .45)]), rk = mk(new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }), null, { mat: hi || ST.cliff ? mBl : mCl, ol: .04 }); rk.position.z = zc - d / 2; scene.add(rk); if (KB && (hi || ST.cliff)) KF.push({ a: X(a), b: X(b), top0: Math.max(ga, gb) - .5, top: x => ga + (gb - ga) * (x - X(a)) / (X(b) - X(a)) - .5, bot: hi ? Math.max(bot, lowY - 1.5) : bot, z: zc + d / 2 }); continue; }
       if (!inSm(m)) scene.add(at(mk(new THREE.BoxGeometry(w, .5, d), null, { mat: mSand, ol: 0 }), cx, top - .25, zc));   // its sand
       if (hi || raised) { if (!inSm(m)) scene.add(at(mk(new THREE.BoxGeometry(w, top - .5 - bot, d), null, { mat: raised && !hi && !ST.cliff ? mCl : mBl, ol: .04 }), cx, (top - .5 + bot) / 2, zc));   // the rock under it (ST.cliff: B5's bluff on down into the cove, C5's, 2026-11-04)
-        for (let k = 1; k <= 3; k++) { const y = top - .5 - k * (top - .5 - bot) / 4; scene.add(at(mk(new THREE.BoxGeometry(w, .14, .06), null, { mat: mBlD, ol: 0 }), cx, y, zc + d / 2 + .03)); }   // (its layers)
+        if (KB) { if (!inSm(m)) KF.push({ a: X(a), b: X(b), top0: top - .5, top: () => top - .5, bot: hi ? Math.max(bot, lowY - 1.5) : bot, z: zc + d / 2, grey: raised && !hi && !ST.cliff }); }   // (the kit's layers on it instead, below)
+        else for (let k = 1; k <= 3; k++) { const y = top - .5 - k * (top - .5 - bot) / 4; scene.add(at(mk(new THREE.BoxGeometry(w, .14, .06), null, { mat: mBlD, ol: 0 }), cx, y, zc + d / 2 + .03)); }   // (its layers)
         const n = Math.max(2, Math.round((top - bot) / 2.2));   // boulders along a face that's open to the side
         [[a, -1], [b, 1]].forEach(([ex, sd]) => { if (ex <= -900 || ex >= WORLD + 900) return; const open = GP.some(([g0, g1]) => ex + sd * 5 > g0 && ex + sd * 5 < g1) || (groundAt(ex + sd * 10) ?? 1e9) > groundAt(m) + 60; if (!open) return;
           const clear = LADDERS.some(L => Math.abs(L.x - ex) < 80) || (ST.items || []).some(it => Math.abs(it[1] - ex) < 100);   // (a ladder or an item at its foot: the boulders kept back behind it, 2026-11-04)
-          for (let k = 0; k < n; k++) { const r = R(.6, 1.2); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, 1.2, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .04 }), X(ex) + sd * R(-.2, .3), bot + (k + .5) * (top - bot) / n, R(zb + 1, clear ? -1.8 : 4))); } }); }
+          if (KB) { KS.push({ x: X(ex), sd, top: top - .5, foot: GP.some(([g0, g1]) => ex + sd * 5 > g0 && ex + sd * 5 < g1) ? (hi ? lowY : bot) : Y(groundAt(ex + sd * 10) ?? GROUND), z0: zc - d / 2, z1: zc + d / 2, clear });   // (the kit's layers along it, boulders at its foot)
+            for (let k = 0; k < n * 4; k++) rng(); }   // (the same draws as the old boulders took, so all else on the beach stays where it was)
+          else for (let k = 0; k < n; k++) { const r = R(.6, 1.2); scene.add(at(mk(new THREE.DodecahedronGeometry(r, 0).scale(1, 1.2, 1), null, { mat: rng() < .5 ? mRock : mRockL, ol: .04 }), X(ex) + sd * R(-.2, .3), bot + (k + .5) * (top - bot) / n, R(zb + 1, clear ? -1.8 : 4))); } }); }
       else scene.add(at(mk(new THREE.BoxGeometry(w, 5.5, 14), null, { mat: mSand, ol: 0 }), cx, -3.25, -2)); }
+    if (KB && (KF.length || KS.length)) scene.add(BerryClayRoom.kitBeach(THREE, { toon, mergeGeometries, layer: CLAY_CAST, kit: KB }, KF, KS));   // (the bluff from the ground kit: one piece, already clay)
   }
   else scene.add(at(mk(new THREE.BoxGeometry(WX + 70, 6, 14), null, { mat: mSand, ol: 0 }), WX / 2, -3, -2));
   const drop = sb - seaY + .35, run = 7, slope = new THREE.Mesh(new THREE.PlaneGeometry(WX + 70, Math.hypot(drop, run)).rotateX(-Math.PI / 2).rotateX(-Math.atan2(drop, run)), mWet);

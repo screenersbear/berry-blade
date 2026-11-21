@@ -254,6 +254,36 @@ window.BerryClayRoom = (function () {
   const PROTO = new Map();
   function proto(T, o, key, fn) { key += "@" + (o.lod ?? 1); let p = PROTO.get(key); if (!p) { const K = Kit(T, o); fn(K); p = []; gather(T, K.W).forEach((list, k) => p.push({ k, geo: list.length === 1 ? list[0] : o.mergeGeometries(list, false) })); PROTO.set(key, p); } return p; }
   function stamp(B, parts, m4, col, nc) { parts.forEach(({ k, geo }) => add(B, (col || k.slice(0, 7)) + (nc ? "n" : k.slice(7)), geo.clone().applyMatrix4(m4))); }   // (nc: casts no clay shadow)
+  // ── the ground kit's pieces (models/levels/ground-kit, 2026-11-20, only with ?heromodel): [{ col, geo }] each (the game's kitParts), into the bins as the clay's own are.
+  // m4 places it (a mirror's faces turned back out); op.bend(x): the floor's top there, its y following it (sheared); op.lift: [from y, by]: its own y above that stretched; op.nc: no clay shadow
+  function kitLay(T, B, parts, m4, op = {}) {
+    const det = m4.determinant(), nm = new T.Matrix3().getNormalMatrix(m4), v = new T.Vector3(), w = new T.Vector3(), [y0, sy] = op.lift || [1e9, 1];
+    parts.forEach(({ col, geo }) => { const g = geo.clone(), p = g.attributes.position, n = g.attributes.normal;
+      for (let i = 0; i < p.count; i++) { let py = p.getY(i), ny = n.getY(i); if (py > y0) { py = y0 + (py - y0) * sy; ny /= sy; }
+        v.set(p.getX(i), py, p.getZ(i)).applyMatrix4(m4); w.set(n.getX(i), ny, n.getZ(i)).applyMatrix3(nm);
+        if (op.bend) { const k = (op.bend(v.x + .1) - op.bend(v.x - .1)) / .2; v.y += op.bend(v.x); w.x -= k * w.y; }
+        w.normalize(); p.setXYZ(i, v.x, v.y, v.z); n.setXYZ(i, w.x, w.y, w.z); }
+      if (det < 0) { const ix = g.index.array; for (let j = 0; j < ix.length; j += 3) { const t = ix[j + 1]; ix[j + 1] = ix[j + 2]; ix[j + 2] = t; } }
+      add(B, col + (op.nc ? "n" : "c"), g); }); }
+  // the Beach's bluff from the kit (buildBeach says where, only with ?heromodel): a face toward you in rows of rock layers from under its sand down to its foot, each
+  // row its own height, the pieces staggered, a little in and out; a cliff's side the same, turned along it, boulders at its foot (where a ladder or an item stands at
+  // it, its layers kept off the path and the boulders behind it). faces: [{ a, b, top0, top(x), bot, z, grey }]; sides: [{ x, sd, top, foot, z0, z1, clear }]
+  function kitBeach(T, o, faces, sides) {
+    const B = new Map(), K = o.kit, M = new T.Matrix4(), q = new T.Quaternion(), e = new T.Euler(), v = new T.Vector3(), s = new T.Vector3(), H = (i, j, k) => hsh(i, j, k, 93), LEN = [6.15, 4.1], HT = [1.1, .92];
+    const put = (parts, x, y, z, ry, sx, sy, sz, nc) => kitLay(T, B, parts, M.compose(v.set(x, y, z), q.setFromEuler(e.set(0, ry, 0)), s.set(sx, sy, sz)), { nc });
+    const rows = (y1, y0, salt, fn, all) => { for (let y = y1, r = 0; y > y0 + .25; r++) { const k = (r + salt) & 1, sy = .8 + H(salt, r, 1) * .5; y -= HT[k] * sy; if (all || r < 1 || H(salt, r, 6) > .14) fn(y, sy, r, k, (H(salt, r, 5) - .5) * .5); y += HT[k] * sy * .1; } };   // (a row now and then left out: the rock behind shows, a band pressed in; each row in or out as one, strata. all: none left out, the rock behind not the bluff's)
+    const along = (u0, u1, fi, r, k0, fn) => { for (let u = u0, j = 0; u < u1 - .3; j++) { const k = j ? (H(fi, r, j + 3) < .6 ? 0 : 1) : k0, L = Math.min(u1 - u, LEN[k] * (1.1 + H(fi, r, j + 40) * .5) * (j ? 1 : .3 + H(fi, r, 2) * .7)); fn(u + L / 2, L, k, j); u += L > 1.2 ? L - .55 : L; } };   // (long, overlapping: a layer, not loaves in a row)
+    const Y1 = Math.max(...faces.map(f => f.top0), ...sides.map(c => c.top));   // (every face's rows from one height: the strata run on from one stretch of ground to the next, round a cliff's corner too)
+    faces.forEach((f, fi) => rows(Y1, f.bot, 0, (y, sy, r, k0, dz) => along(f.a, f.b, fi, r, k0, function lay(cx, L, k, j, d = 0) {   // (one that won't fit under the sand, a slope's: in halves, then quarters, the layers stepping up under it)
+      if (y + HT[k] * sy < Math.min(f.top(cx - L / 2), f.top(cx + L / 2)) + .02) put(K.cliff[k], cx, y, f.z - .52 + dz + (H(fi, r, j + 80) - .5) * .14, 0, L / LEN[k], sy, .9 + H(fi, r, j + 81) * .2, true);
+      else if (d < 2 && L > 1.4) { lay(cx - L / 4, L / 2 + .2, k, j * 3 + 101, d + 1); lay(cx + L / 4, L / 2 + .2, k, j * 3 + 102, d + 1); } }), f.grey));
+    sides.forEach((c, ci) => { const fi = 500 + ci * 7;
+      rows(Y1, c.foot, 0, (y, sy, r, k0, dz) => y + HT[k0] * sy > c.top + .02 ? 0 : along(c.z0, c.z1, fi, r, k0, (cz, L, k, j) => { if (c.clear && cz - L / 2 < 1.6 && cz + L / 2 > -1.6) return;
+        put(K.cliff[k], c.x - c.sd * (.52 - dz + (H(fi, r, j + 80) - .5) * .14), y, cz, c.sd * Math.PI / 2, L / LEN[k], sy, .9 + H(fi, r, j + 81) * .2, true); }));
+      for (let k = 0, n = 3 + Math.floor(H(ci, 9, 1) * 3); k < n; k++) { const back = c.clear || H(ci, k, 10) < .6, z = back ? c.z0 + 1 + H(ci, k, 11) * (-1.5 - c.z0 - 1) : 1.6 + H(ci, k, 11) * 2.4, sc = .8 + H(ci, k, 13) * .5;
+        put(K.boulder[Math.min(2, Math.floor(H(ci, k, 12) * 3))], c.x + c.sd * (.2 + H(ci, k, 14) * .9), c.foot - .05, z, H(ci, k, 15) * 6.28, sc, sc, sc, false); } });
+    return meshes(T, o, B, "clayKitBluff");
+  }
 
   // ── the CLAY TEST ROOM: the mockup's picture round cx, x0..x1 its reach
   function build(T, o) {
@@ -327,16 +357,34 @@ window.BerryClayRoom = (function () {
         const x = (k + .15 + Hw(k, salt + 7) * .7) * 3.6 - WXo; if (x < a + .4 || x > b - .4) continue; const v = m3(k);
         stamp(near, rootP(v), at(x, topAt(x) + .05, zf + .1, 0, 0, (Hw(k, salt + 8) - .5) * .4, (far ? 1.3 : .75) + Hw(k, salt + 9) * .5), v === 2 ? P.rootD : null, nc); }
     }
+    // the ground kit (models/levels/ground-kit, the level modelling chat's, 2026-11-20; o.kit, only with ?heromodel): its pieces laid on the room's own line, the computer's
+    // or the phone's (kitParts: the same size and place, fewer triangles). Its tiles on the world's 10-unit grid, so rooms side by side lay the same tile at a place
+    const KK = o.kit, kitPut = (parts, x, y, z, sx = 1, op) => kitLay(T, near, parts, new T.Matrix4().makeScale(sx, 1, 1).setPosition(x, y, z), op);   // (sx: stretched along x; less than 0, mirrored)
+    const kitRun = (a, b, fn) => { const xs = [a]; for (let gx = Math.ceil((a + WXo + 5) / 10) * 10; gx < b + WXo - 5; gx += 10) xs.push(gx - WXo); xs.push(b);   // (a..b in tiles on the grid, the two ends' a little stretched or squeezed to fit)
+      for (let i = 0; i + 1 < xs.length; i++) if (xs[i + 1] - xs[i] > .05) fn((xs[i] + xs[i + 1]) / 2, (xs[i + 1] - xs[i]) / 10, Math.floor(((xs[i] + xs[i + 1]) / 2 + WXo) / 10)); };
+    const stepHi = c => (top(c - .12) ?? -1e9) > (top(c + .12) ?? -1e9), edgeAt = (x, right) => { if (o.gaps.some(([g0, g1]) => Math.abs((right ? g0 : g1) - x) < .05)) return true;   // (a run's end at a pit, or the top of a sheer step)
+      const c = o.steps.find(c => Math.abs(c - x) < .05); return c !== undefined && (right ? stepHi(c) : !stepHi(c)); };
     // the ends of the woods: walls of earth, banded all the way up (their faces toward you and into the room; tall: no clay shadow from them, or it'd lie over the whole room)
-    (o.ends || []).forEach((e, i) => { const ex = e.side < 0 ? 0 : WX, a = e.side < 0 ? ex - 9 : ex, b = e.side < 0 ? ex : ex + 9, bands = [];
+    if (KK) (o.ends || []).forEach((e, i) => { const sd = e.side < 0 ? 1 : -1, ex = e.side < 0 ? 0 : WX, a = e.side < 0 ? ex - 9 : ex, b = e.side < 0 ? ex : ex + 9;   // (the kit's: made for a room's left end, mirrored for its right; a door's or a crawlway's own)
+      kitPut(e.door ? KK.door : KK.end, ex, 0, 0, sd, { nc: true }); if (e.hole) kitPut(KK.hole, ex + sd * .12, e.hole.y, 0, sd, { nc: true, lift: [0, Math.max(.3, (e.hole.top - e.hole.y) / 1.36)] });
+      soil(a, b, () => -2.05, o.FB, 3.4, 1.2, 700 + i * 13, { nc: true, deep: 0, roots: false }); });   // (under it, the old one's earth on down)
+    else (o.ends || []).forEach((e, i) => { const ex = e.side < 0 ? 0 : WX, a = e.side < 0 ? ex - 9 : ex, b = e.side < 0 ? ex : ex + 9, bands = [];
       for (let y = 2.4, k = 0; y < 24 - o.FB; y += 2.6 + Hw(i, k, 710) * 1.4, k++) bands.push([y, .38 + Hw(i, k, 711) * .2, [P.soilL, P.soilD, P.soilT][k % 3], true]);
       soil(a, b, () => 24, o.FB, 3.4, 1.2, 700 + i * 13, { nc: true, up: true, deep: 24 - o.FB, roots: false, bands });
       const G = new T.Group(); G.position.x = ex; G.rotation.y = e.side < 0 ? Math.PI / 2 : -Math.PI / 2; K.W.add(G);
       K.soilFace(e.side < 0 ? -2.4 : -11.4, e.side < 0 ? 11.4 : 2.4, () => 24, o.FB, 0, 1.2, 720 + i, false, G, false, bands); });
     // the floor: grass over the woods' earth, down to the floor's underside
-    runs.forEach(([a, b]) => { K.grassSlab(a, b, 0, -3.2, 2.7, .6, 3, false, x => topIn(x, a, b)); soil(a, b, x => topIn(x, a, b) - .3, o.FB, 2.45, 5.6, 100); });
+    const kL = KK && (o.ends || []).some(e => e.side < 0) ? -1 : -1e9, kR = KK && (o.ends || []).some(e => e.side > 0) ? WX + 1 : 1e9, inK = ([a, b]) => [Math.max(a, kL), Math.min(b, kR)];   // (with the kit: no floor or bank inside an end wall, out of sight)
+    if (KK) runs.forEach(([a0, b0]) => { const [a, b] = inK([a0, b0]); if (b - a < .3) return; const bend = x => topIn(x, a, b), pl = a > xL + .01 && a > kL + .01 && edgeAt(a, false), pr = b < xR - .01 && b < kR - .01 && edgeAt(b, true), a1 = pl ? a + .5 : a, b1 = pr ? b - .5 : b;   // (the kit's tiles, their top on the floor's line; a pit edge where it ends at a hole or above a step)
+      kitRun(a1, b1, (cx, sx, k) => kitPut(KK.tile[Math.min(2, Math.floor(Hw(k, 801) * 3))], cx, 0, 0, sx, { bend })); if (pl) kitPut(KK.pit, a1, 0, 0, -1, { bend }); if (pr) kitPut(KK.pit, b1, 0, 0, 1, { bend });
+      soil(a, b, x => topIn(x, a, b) - 2.05, o.FB, 2.45, 5.6, 100, { roots: false, deep: (o.lod ?? 1) < 1 ? 0 : 4 }); });   // (on the phone no pebbles in it: the sheet's)   // (under the tile, its earth only 2.2 deep: the woods' own on down to the floor's underside)
+    else runs.forEach(([a, b]) => { K.grassSlab(a, b, 0, -3.2, 2.7, .6, 3, false, x => topIn(x, a, b)); soil(a, b, x => topIn(x, a, b) - .3, o.FB, 2.45, 5.6, 100); });
     // the land overhead: earth up from its underside, a dirt lip dripping under it, roots hanging (no clay shadow from it: up out of sight, it'd darken the woods' back for nothing you can see)
-    o.ceils.forEach((c, i) => { if (c.xb - c.xa < .5) return; K.grassSlab(c.xa, c.xb, c.y + .45, -3.2, 2.7, .55, 50, false, null, P.dirt).userData.cast = false;
+    if (KK) o.ceils.forEach((c, i) => { if (c.xb - c.xa < .5) return; const cl = c.xa > xL - 2, cr = c.xb < xR + 2, a = cl ? c.xa + .5 : c.xa, b = cr ? c.xb - .5 : c.xb;   // (the kit's, its underside at the ceiling's; an end in sight closed with the old one's earth)
+      kitRun(a, b, (cx, sx) => kitPut(KK.over, cx, c.y, 0, sx, { nc: true }));
+      [[cl, c.xa, a + .1], [cr, b - .1, c.xb]].forEach(([on, u, w]) => { if (!on || w - u < .1) return; K.grassSlab(u, w, c.y + .45, -3.2, 2.7, .55, 50, false, null, P.dirt).userData.cast = false;
+        soil(u, w, () => c.y + 7.5, c.y + .2, 2.45, 5.6, 300, { nc: true, up: true, deep: 0, roots: false, bands: [[.95, .45, P.soilD, true], [2.1, .4, P.soilL, true]] }); }); });
+    else o.ceils.forEach((c, i) => { if (c.xb - c.xa < .5) return; K.grassSlab(c.xa, c.xb, c.y + .45, -3.2, 2.7, .55, 50, false, null, P.dirt).userData.cast = false;
       soil(c.xa, c.xb, () => c.y + 7.5, c.y + .2, 2.45, 5.6, 300, { nc: true, up: true, deep: 2.6, roots: false, bands: [[.95, .45, P.soilD, true], [2.1, .4, P.soilL, true]] });
       for (let k = Math.floor((c.xa + WXo) / 2.4), k1 = Math.ceil((c.xb + WXo) / 2.4); k <= k1; k++) { if (Hw(k, 340) < .4) continue; const x = (k + .1 + Hw(k, 341) * .8) * 2.4 - WXo; if (x < c.xa + .4 || x > c.xb - .4) continue; const v = m3(k);
         stamp(near, rootP(v), at(x, c.y + .12, -2.4 + Hw(k, 342) * 4.6, 0, Hw(k, 343) * 6, (Hw(k, 344) - .5) * .3, .45 + Hw(k, 345) * .4), v === 2 ? P.rootD : null, true); } });
@@ -346,9 +394,11 @@ window.BerryClayRoom = (function () {
     const bigBush = (x, y, z, i, s, far = false) => { const k = i % 4; stamp(near, proto(T, far ? oF : o, "bush" + k, Q => Q.bush(0, 0, 0, 1, BCOLS[k], BBER[k], 21 + k * 6)), at(x, y, z, 0, (Hw(i, 9) - .5) * .5, 0, s)); };
     const bambooAt = (x, y, z, i, far = true) => { const k = i % 3, w = .95 + Hw(i, 16) * .15; stamp(near, proto(T, far ? oF : o, "bamboo" + k, Q => Q.bamboo(0, 0, 0, 16, .42, 41 + k * 3, 0)), at(x, y, z, 0, Hw(i, 14) * 6, (Hw(i, 15) - .5) * .07, w, 1, w)); };
     const up = o.row === "A" ? .05 : .55, bank = o.tops ? [] : runs.map(([a, b], i) => [i ? a : xL - 14, i < runs.length - 1 ? b : xR + 14]);   // (o.tops: up in the trees over the drop, BB2: no bank of land behind the path)
-    bank.forEach(([a, b], i) => { const [ra, rb] = runs[i]; K.grassSlab(a, b, 0, -9.5, -3.25, .5, 9, true, x => topIn(x, ra, rb) + up); });
+    if (KK) bank.forEach(([a0, b0], i) => { const [a, b] = inK([a0, b0]); if (b - a < .3) return; const [ra, rb] = runs[i], bend = x => topIn(x, ra, rb) + up - .3, cl = i > 0 && a > kL + .01, cr = i < bank.length - 1 && b < kR - .01, a1 = cl ? a + .5 : a, b1 = cr ? b - .5 : b;   // (the kit's bank: its back as high as the old one's; an end at a pit or a step closed with the old one's)
+      kitRun(a1, b1, (cx, sx) => kitPut(KK.bank, cx, 0, 0, sx, { bend })); if (cl) K.grassSlab(a, a1 + .1, 0, -9.5, -3.25, .5, 9, true, x => bend(x) + .3); if (cr) K.grassSlab(b1 - .1, b, 0, -9.5, -3.25, .5, 9, true, x => bend(x) + .3); });
+    else bank.forEach(([a, b], i) => { const [ra, rb] = runs[i]; K.grassSlab(a, b, 0, -9.5, -3.25, .5, 9, true, x => topIn(x, ra, rb) + up); });
     const bankAt = x => { for (let i = 0; i < bank.length; i++) if (x >= bank[i][0] && x <= bank[i][1]) return topIn(x, runs[i][0], runs[i][1]) + up; return null; };
-    along(xL - 6, xR + 6, o.row === "A" ? 11 : 6.2, 2.6, 5, (x, i) => { const y = bankAt(x); if (y !== null) bigBush(x, y - .05, -4.3 - Hw(i, 6) * .3, i, (o.row === "A" ? .8 : 1.05) + Hw(i, 7) * .3); });
+    if (!KK) along(xL - 6, xR + 6, o.row === "A" ? 11 : 6.2, 2.6, 5, (x, i) => { const y = bankAt(x); if (y !== null) bigBush(x, y - .05, -4.3 - Hw(i, 6) * .3, i, (o.row === "A" ? .8 : 1.05) + Hw(i, 7) * .3); });
     // the forest behind (the user, 2026-11-09: "it was trees and space in the background ... what can we do so it's not so much earth that it doesn't look like a
     // forest?"): tall pale trunks standing just behind the path, more up on the woods' floor further back, hazier, then the far woods in pressed layers; in the
     // ravine (rows C, D) its wall of earth stays, hung with big leaves and vines, ferns along its foot and its top, the stones in it few
@@ -369,19 +419,22 @@ window.BerryClayRoom = (function () {
       if (Hw(i, 624) < .72) trunkAt(x, y - .35, z, .5 + Hw(i, 623) * .28, i, BARK[i % 4]); else stamp(near, palmP(m3(i), false), at(x, y - .2, z, 0, Hw(i, 625) * 6.28, 0, 1.05)); });
     if (o.bgY > 1) { const bt = o.bgY, lip = Math.min(bt - .5, 1.5), zS = -16.5, slopeY = z => { const t = Math.max(0, Math.min(1, (-9.55 - z) / (-9.55 - zS))); return lip + (bt - lip) * t * t * (3 - 2 * t); };
       // (the ravine: a low lip of earth behind the path, hung with leaves; from it a green bank rising back to the woods' floor, ferns, bushes and trees all up it)
-      soil(xL - 26, xR + 26, () => lip, -1, -9.6, 3, 500, { far: true, deep: 2, sparse: true, roots: false, bands: [[.9, .4, P.soilL]] });
+      if (!KK) { soil(xL - 26, xR + 26, () => lip, -1, -9.6, 3, 500, { far: true, deep: 2, sparse: true, roots: false, bands: [[.9, .4, P.soilL]] });
       K.grassSlab(xL - 26, xR + 26, lip, -10.6, -9.5, .4, 18, true);
-      K.slope(xL - 26, xR + 26, -10.5, zS, lip - .05, bt, 17, "#49aa45"); K.grassSlab(xL - 26, xR + 26, bt, -32, zS + .2, .5, 19, true);
+      K.slope(xL - 26, xR + 26, -10.5, zS, lip - .05, bt, 17, "#49aa45"); }
+      else { const L0 = 1.7; kitRun(xL - 26, xR + 26, (cx, sx) => kitPut(KK.ravine, cx, 0, 0, sx, { lift: [L0, Math.max(.05, (bt - L0) / (7.5 - L0))] })); }   // (the kit's wall: its lip as made, its bank up to the woods' floor here)
+      K.grassSlab(xL - 26, xR + 26, bt, -32, zS + .2, .5, 19, true);
+      if (!KK) {   // (with the ground kit: its wall and bank bare, for the plants' kit: big leaves, ferns, bushes, trees)
       along(xL - 22, xR + 22, 1.5, 1.4, 600, (x, i) => { if (Hw(i, 601) < .35) return; stamp(near, leafP(i % 3), at(x, lip - .35 - Hw(i, 602) * (lip + .3) * .7, -9.42, -.3, 0, Math.PI + (Hw(i, 605) - .5) * 1.7, .9 + Hw(i, 606) * .8), null, true); });
       along(xL - 18, xR + 18, 2.4, 2.2, 609, (x, i) => stamp(near, fernP(i & 1), at(x, lip - .05, -10.1, 0, (Hw(i, 610) - .5) * .6, 0, 1.1 + Hw(i, 611) * .5), null, true));
       along(xL - 20, xR + 20, 1.6, 1.6, 612, (x, i) => { const z = -11 - Hw(i, 613) * 5; stamp(near, fernP(i & 1), at(x, slopeY(z) - .1, z, 0, (Hw(i, 614) - .5) * .8, 0, 1.2 + Hw(i, 615) * .7), null, true); });
       along(xL - 16, xR + 16, 4.2, 3.4, 31, (x, i) => { const z = -11.2 - Hw(i, 32) * 4.5; bigBush(x, slopeY(z) - .1, z, i + 40, .9 + Hw(i, 33) * .35, true); });
       along(xL - 16, xR + 16, 3.6, 3.2, 630, (x, i) => { const z = -11.6 - Hw(i, 631) * 4.4; treeAt(x, slopeY(z), z, i, 1); });
       along(xL - 24, xR + 24, 3.2, 2.8, 650, (x, i) => trunkAt(x, bt - .15, -18 - Hw(i, 651) * 4, .36 + Hw(i, 652) * .16, i + 1, BARKF, true));
-      frontTrunks(-7.7, 1.1);
+      frontTrunks(-7.7, 1.1); }
     } else if (o.row === "A" || o.tops) {   // (up in the treetops: palm crowns and tree ferns standing up out of the canopy below, behind the path)
       const ty = o.tops ? o.fy ?? 0 : 0;   // (BB2's: its treetops lower, the floor BD under the rest)
-      along(xL - 12, xR + 12, 5.5, 4, 670, (x, i) => { const z = -6.5 - Hw(i, 671) * 6, h = Hw(i, 672); if (h < .5) stamp(near, palmP(m3(i), true), at(x, ty - 7.5 + Hw(i, 673) * 2.5, z, 0, Hw(i, 674) * 6.28, 0, 1.1), null, true); else if (h < .8) stamp(near, tfernP(m3(i)), at(x, ty - 3.4 + Hw(i, 675) * 1.6, z, 0, Hw(i, 676) * 6.28, 0, 1.15), null, true); });
+      if (!KK) along(xL - 12, xR + 12, 5.5, 4, 670, (x, i) => { const z = -6.5 - Hw(i, 671) * 6, h = Hw(i, 672); if (h < .5) stamp(near, palmP(m3(i), true), at(x, ty - 7.5 + Hw(i, 673) * 2.5, z, 0, Hw(i, 674) * 6.28, 0, 1.1), null, true); else if (h < .8) stamp(near, tfernP(m3(i)), at(x, ty - 3.4 + Hw(i, 675) * 1.6, z, 0, Hw(i, 676) * 6.28, 0, 1.15), null, true); });
       if (o.tops) { const PAL = [["#2c9c3f", "#34ad46"], ["#3f9f3a", "#57b347"], ["#27894a", "#33a05a"], ["#4a9b36", "#6cb84a"], ["#23803a", "#2e9444"]];   // (the treetops under the branches: whole trees, each its own height, size, shape and green, gaps between them down into the haze; nothing to land on, you fall through. Packed crown on crown all at one height they looked like a floor: the user, 2026-11-09 "the tree canopies should be spread out though and more variety. now it looks like a lump you could theoretically walk on". First, The user, 2026-11-09: "the bottom of BB2 should look more like tree tops and tree and green in the background, but youy just cant land on it.. and again, the background behind where they player is standing on the tree branches should not look like regular land. it should look like you're high up among the trees and can fall through other trees")
         const streeP = k => proto(T, oF, "stree" + k, Q => Q.tree(0, 0, 0, 13, 1, 250 + k * 7, false, PAL[k])), pick = (i, j) => Math.min(4, Math.floor(Hw(i, j) * 5));
         K.cutout(K.blobLine(xL - 60, xR + 60, ty - 44, ty - 1.2, Math.round((xR - xL + 120) * .1), 41), .5, "#a7cfae", -46);   // (far below and off: the forest's roof in the haze)
@@ -390,17 +443,19 @@ window.BerryClayRoom = (function () {
           const s = .85 + Hw(i, 681 + r) * .6, sx = s * (.8 + Hw(i, 686 + r) * .45), sy = s * (.85 + Hw(i, 687 + r) * .35), topY = ty - .7 - Hw(i, 682 + r) * 4.2;
           stamp(near, streeP(pick(i, 688 + r)), at(x, topY - 16.25 * sy, z - Hw(i, 683 + r) * 1.4, 0, Hw(i, 684 + r) * 6.28, 0, sx, sy, sx), null, z < -1); }));   // (their trunks on down out of sight)
         const btreeP = k => proto(T, oF, "btree" + k, Q => Q.tree(0, 0, 0, [7.5, 9, 10.5, 8.2, 9.8][k], 1, 240 + k * 7, false, PAL[k]));   // (big trees standing up out of them behind the path, their crowns about you: in among the trees, green round you)
-        along(xL - 14, xR + 14, 6, 4, 690, (x, i) => { if (Hw(i, 691) < .12) return; const s = 1.1 + Hw(i, 695) * .3, w = s * (.85 + Hw(i, 697) * .3); stamp(near, btreeP(pick(i, 696)), at(x, ty - 5 - Hw(i, 692) * 1.5, -9.5 - Hw(i, 693) * 11, 0, Hw(i, 694) * 6.28, 0, w, s, w), null, true); }); }
+        if (!KK) along(xL - 14, xR + 14, 6, 4, 690, (x, i) => { if (Hw(i, 691) < .12) return; const s = 1.1 + Hw(i, 695) * .3, w = s * (.85 + Hw(i, 697) * .3); stamp(near, btreeP(pick(i, 696)), at(x, ty - 5 - Hw(i, 692) * 1.5, -9.5 - Hw(i, 693) * 11, 0, Hw(i, 694) * 6.28, 0, w, s, w), null, true); }); }
     } else { const fy = o.bgY + .3;   // (row B: the woods' floor runs on back behind the bank, trees all over it)
       K.grassSlab(xL - 26, xR + 26, fy, -30, -9.4, .5, 23, true);
+      if (!KK) {   // (with the ground kit: the woods' floor back there bare, for the plants' kit and the big trees)
       along(xL - 8, xR + 8, 7, 4, 11, (x, i) => { const y = bankAt(x); if (Hw(i, 12) > .6) bambooAt(x, (y ?? o.bgY + .55) - 2.5, -7 - Hw(i, 13) * 1.2, i); });
       along(xL - 16, xR + 16, 4.2, 3.4, 630, (x, i) => treeAt(x, fy, -11.8 - Hw(i, 631) * 2.6, i, 2));
       along(xL - 24, xR + 24, 3.4, 3, 650, (x, i) => trunkAt(x, fy - .15, -18 - Hw(i, 651) * 3.5, .36 + Hw(i, 652) * .16, i + 1, BARKF, true));
       along(xL - 14, xR + 14, 6, 3, 660, (x, i) => stamp(near, fernP(i & 1), at(x, fy - .05, -10.2 - Hw(i, 661) * 1.5, 0, (Hw(i, 662) - .5) * .6, 0, 1.3 + Hw(i, 663) * .5), null, true));
-      frontTrunks(-7.3, 1.3);
+      frontTrunks(-7.3, 1.3); }
     }
     // on the floor: flowers along its lip, small bushes behind the path, flowers lying in the grass, a clover or a flower pressed on the earth, a tree
     const flowerP = k => proto(T, o, "flower" + k, Q => Q.flower(0, 0, 0, 1, ["#e2262a", "#ff7bb0", "#ffd23a", "#ffffff"][k]));
+    if (!KK) {   // (with the ground kit: none of these yet, the plants' kit comes later and goes here)
     along(xL + 1, xR, 2.9, 1.4, 20, (x, i) => { const y = solidAt(x); if (y !== null) stamp(near, flowerP(i % 4 === 3 ? 1 : 0), at(x, y + (Hw(i, 21) - .3) * .1 - .05, 2.62, -.2, 0, i, .9 + (i % 3) * .15)); });
     along(xL + 4, xR - 2, 8, 4, 22, (x, i) => { const y = solidAt(x); if (y === null) return; const k = i % 2;
       stamp(near, proto(T, o, "sbush" + k, Q => Q.bush(0, 0, 0, 1, ["#4fc24a", P.leafD], [P.berryR, P.berryB][k], 70 + k)), at(x, y, -2.1 - Hw(i, 23) * .5, 0, 0, 0, .55)); });
@@ -408,6 +463,7 @@ window.BerryClayRoom = (function () {
     if (o.FB < -1.2) along(xL + 3, xR, 5, 3, 27, (x, i) => { const y = solidAt(x); if (y === null || y - o.FB < 1.6) return;
       const yy = y - .9 - Hw(i, 28) * Math.min(2.5, y - o.FB - 1.4); if (i % 2) stamp(near, flowerP(0), at(x, yy, 2.62, 0, 0, i * .7, 1.05)); else stamp(near, proto(T, o, "clover", Q => Q.clover(0, 0, 0, 1)), at(x, yy, 2.66, 0, 0, i * .5, 1.15)); });
     if (o.trees) { const tx = 8 + R(1, 30) * (WX - 16), y = solidAt(tx); if (y !== null) stamp(near, proto(T, o, "tree" + (sd % 2), Q => Q.tree(0, 0, 0, sd % 2 ? 6 : 5.4, 1, 31 + (sd % 2) * 6, !(sd % 2))), at(tx, y, -2.3, 0, 0, 0, 1)); }
+    }
     // the platforms: a mushroom shelf on a trunk, a great leaf on its stalk, a log; the rest floating slabs of grass on an earth block
     o.plats.forEach((p, i) => { const w = p.xb - p.xa, cx = (p.xa + p.xb) / 2, gy = solidAt(cx);
       if (p.kind === "fungus" || p.kind === "fungus2") {
@@ -644,5 +700,5 @@ window.BerryClayRoom = (function () {
     const g = new T.Group(); vcOf(T, o, proto(T, o, key, Q => Q.palm2(h, ln, !!p.royal, !!p.coco, 200 + ((p.seed ?? 0) % 3) * 7))).forEach(({ cast, geo }) => {
       const m = new T.Mesh(geo, matVs(o.toon, 2)); m.userData.keepMat = m.userData.keepGeo = m.userData.clayDone = true; if (cast) m.layers.enable(o.layer ?? 7); g.add(m); });
     return g; }
-  return { build, dress, SKY, clayify, budget, clouds, palm };
+  return { build, dress, SKY, clayify, budget, clouds, palm, kitBeach };
 })();
