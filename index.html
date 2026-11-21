@@ -7966,11 +7966,23 @@ function clayLevel(s) {
   const t0 = performance.now(), ox = clayOx(s), fg = new Set(level.fg || []), win = [0, X(WORLD)], skipG = g => !g || g === level.sky || g === level.motes || /^clay/.test(g.name || "") || (g.userData && g.userData.clayDone);
   const eOf = BerryClayRoom.budget ? BerryClayRoom.budget(THREE, level.objs.filter(g => !skipG(g)), CLAY_TRIS * (CLAY_LITE ? CLAYL.lod : 1), win) : null;
   const cast = typeof STAGES[s].home === "string" || STAGES[s].hut ? (m, cen, size, thick) => cen.z > -11 && size > .8 && size < 8 && thick > .3 : undefined;   // (indoors: the furniture casts, not the walls, floor and roof: from the sun they'd lay dark smears over the floor)   // (the room's clay about CLAY_TRIS triangles, shared out by size and nearness)
+  const redo = CLAY_LITE && world === 0 && levelKits() ? new Map() : null;   // (the phone's Berry Woods with the kits: each merged group's pieces as they were, to make again coarser if the room comes out over its 150k)
   for (const g of level.objs) { if (skipG(g)) continue;
     const k = g.userData && g.userData.setK;
-    try { if (fg.has(g)) clayConvert(g, { ox, own: true, eOf, win, cast }); else { const merge = (world === 0 ? !!k && !CLAY_LIVE.has(k) : CLAY_STILL.has(k)) || g.name === "glosRoots"; clayConvert(g, { ox, eOf, win, cast, merge, each: !merge }); } } catch (e) { console.warn("clay: " + (k || g.name || "?") + ": " + e.message); } }
+    try { if (fg.has(g)) clayConvert(g, { ox, own: true, eOf, win, cast }); else { const merge = (world === 0 ? !!k && !CLAY_LIVE.has(k) : CLAY_STILL.has(k)) || g.name === "glosRoots", o = { ox, eOf, win, cast, merge, each: !merge };
+      if (redo && merge) { const orig = []; g.traverse(m => orig.push(m)); redo.set(g, { bak: g.clone(), orig, o }); } clayConvert(g, o); } } catch (e) { console.warn("clay: " + (k || g.name || "?") + ": " + e.message); } }
+  if (redo && redo.size) clayTrim(redo);
   level.clayConvMs = performance.now() - t0;
 }
+function clayTrim(redo) {                           // the phone's Berry Woods with the kits, over its 150k once in clay (B4, B5, B6 since 2026-11-21): its biggest merged groups made clay again, coarser, just enough to fit; the computer's as it was
+  const cap = KIT_BUDGET() - 2500; let over = kitTris(level.objs) - cap; level.clayTrim = null; if (over <= 0) return; const info = level.clayTrim = { over: Math.round(over), redo: [] };
+  for (const [g, t0] of [...redo.keys()].map(g => [g, kitTris([g])]).sort((a, b) => b[1] - a[1])) { if (over <= 0 || t0 < 4000) break;
+    const R = redo.get(g), want = Math.max(t0 * .4, t0 - over); let t = t0, k = 1;
+    for (let n = 0; n < 3 && t > want; n++) { k *= Math.sqrt(t / want) * 1.02; const b = R.bak.clone(), eOf = new Map(); let i = 0;
+      b.traverse(m => { const e = R.o.eOf && R.o.eOf.get(R.orig[i++]); if (m.isMesh) eOf.set(m, (e || 0) * k); });
+      [...g.children].forEach(c => { g.remove(c); if (c.isMesh && c.userData.clayDone && !c.userData.keepGeo && c.geometry) c.geometry.dispose(); }); [...b.children].forEach(c => g.add(c));
+      try { clayConvert(g, Object.assign({}, R.o, { eOf, edge: .32 * k })); } catch (e) { console.warn("clay trim: " + e.message); } t = kitTris([g]); }
+    over -= t0 - t; info.redo.push([g.userData.setK || g.name || "?", Math.round(t0), Math.round(t), +k.toFixed(2)]); } }
 function clayRide(R) {                               // La Guagua's road in clay (CLAY TEST WORLD's whole game: the prologue's drive, the rides between its worlds): its pieces made clay where they are (they go by and wrap round: nothing merged), its sea the clay one, the bus too; whoever's on it as they are
   if (!clayWorld || !R || !R.G) return; const t0 = performance.now();
   const chars = new Set([...roster.map(q => q.root), R.driver && R.driver.r && R.driver.r.root, ...(R.kids || []).map(k => k.r && k.r.root)].filter(Boolean)), skip = m => { for (let q = m; q; q = q.parent) if (chars.has(q)) return true; return false; };
