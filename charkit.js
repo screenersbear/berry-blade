@@ -13,7 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
-const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1, w8: null, drag: 0 };   // (drag: the game's ROAM, 2026-11-21: a grown weapon's weight brought down onto the ground as she runs, 0 off)   // (w8: the game's WEIGHT, FEEL.body: { id: strength } of who has it, else null)
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1, w8: null, drag: 0, trail: 1 };   // (drag: the game's ROAM, 2026-11-21: a grown weapon's weight brought down onto the ground as she runs, 0 off)   // (w8: the game's WEIGHT, FEEL.body: { id: strength } of who has it, else null)
 const DBG_RIG = { noSquash: false, noStretch: false };   // (tests: squash and stretch off, limb stretch / leg over-reach off; 2026-10-31's limb distortion hunt)   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -271,7 +271,7 @@ const HUMAN_DEFAULT = {
     beanie: { on: false, col: "#0d2550", band: "#e8245a" },                          // a knit cap pulled down over the hair, with a band round the rim
     prop: { kind: "none", side: "right", main: "#fff77e", fill: "#f32782", orb: "#d20001", trim: "#f8219b", c1: "#fe0000", c2: "#3eff00", c3: "#0d97f9", c4: "#c03cff", rings: 3, size: 1 },
   },
-  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, heel: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
+  move: { set: "brawler", tackle: "shoulder", run: "auto", stride: 1, swing: 1, lean: 0, bounce: 1, reach: 1, speed: 1, jump: 1, heel: 1, tuck: 1, landDip: 1, float: false, stance: {}, gstance: {}, guard: {}, rise: {}, top: {}, fall: {}, hurt: {}, anims: {}, rests: {}, clear: {}, hits: {} },
   pet: { on: false, with: "" },                  // a companion (not playable) that follows the characters listed in "with" (ids, comma separated)
   villain: { on: false },                        // a boss: in the editor with everyone else, but never on the select screen
 };
@@ -473,7 +473,7 @@ const RANGE = {
   "hair.bangLen": [0, 1.6], "hair.cover": [.4, .85], "hair.width": [.8, 1.5], "hair.height": [.8, 1.5], "hair.depth": [.8, 1.5],
   "hair.tilt": [0, 1], "hair.length": [.4, 2], "hair.flow": [.4, 2.5], "hair.thick": [.5, 1.8], "hair.spike": [0, 2],
   "move.stride": [.6, 1.6], "move.swing": [0, 2], "move.lean": [-.3, .6], "move.bounce": [0, 2.5], "move.reach": [.5, 1.8],
-  "move.speed": [.6, 1.5], "move.jump": [.7, 1.4],
+  "move.speed": [.6, 1.5], "move.jump": [.7, 1.4], "move.tuck": [.3, 1.2], "move.landDip": [0, 1.2],
   "outfit.boot.r": [.07, .14], "outfit.boot.len": [.12, .3], "outfit.boot.wide": [.9, 1.5],
   "outfit.collar.top": [.06, .3], "outfit.collar.bottom": [.06, .3], "outfit.collar.h": [.04, .3], "outfit.collar.y": [-.15, .35], "outfit.collar.open": [0, 3],
   "outfit.neck.h": [.05, .3], "outfit.neck.r": [.05, .2], "outfit.boot.shaftH": [.1, .7], "outfit.boot.shaftR": [.06, .22], "outfit.prop.size": [.6, 1.6], "outfit.prop.rings": [3, 4],
@@ -1582,6 +1582,21 @@ function swordLowPt(pr, out) { pr.group.updateMatrix(); pr.inner.updateMatrix();
 function swordLow(pr) { pr.group.updateMatrix(); pr.inner.updateMatrix(); _gM.multiplyMatrices(pr.group.matrix, pr.inner.matrix); let lo = 1e9; for (const [x, y] of SWORD_LOW) lo = Math.min(lo, _gv.set(x, y, 0).applyMatrix4(_gM).y); return lo; }
 const SWORD_LEAN = .35, SWORD_LEAN_DN = .3;          // (grown Rose's blade leant out off her: 20 degrees, more pointing down past her legs in the air, giantSword)
 const _sl0 = new THREE.Vector3(), _sl1 = new THREE.Vector3();
+// on the move with it grown, the blade trails behind her, its point down to the ground behind (the user, 2026-11-21: "for rose, her sword should drag behind her not in front"):
+// swung round behind her along her own side (never through her or over her head), its notched edge kept down; a swing takes it back at once
+const TRAIL = { v: 25, air: .55, out: .3, in: 7 / 60, off: 15 / 60 };   // (moving faster than v px/s · its angle below level in the air · out from her side, behind · how fast it goes back, how fast it comes off for a swing)
+const _trQ = new THREE.Quaternion(), _trQ2 = new THREE.Quaternion(), _trQ3 = new THREE.Quaternion(), _trY = new THREE.Vector3(0, 1, 0), _trZ = new THREE.Vector3(0, 0, 1), _trX = new THREE.Vector3();
+function swordTrail(p, pr, g, fy, s) {
+  const atk = p.atkT >= 0, on = Math.abs(p.vx || 0) > TRAIL.v && !atk && !(p.leanK > .001) && !(p.hurtT > 0) && !p.climb && !p.restNow;
+  const tr = p.trK = approach(p.trK || 0, on ? (FEEL_KIT.drag || 0) * (FEEL_KIT.trail ?? 1) * sstep(1, 2, g) : 0, atk ? TRAIL.off : TRAIL.in); if (tr <= .001) return;
+  pr.group.updateMatrix(); pr.inner.updateMatrix(); _gM.multiplyMatrices(pr.group.matrix, pr.inner.matrix);
+  const h = _gu.set(0, 0, 0).applyMatrix4(_gM), L = _gv.set(1.24, 0, 0).applyMatrix4(_gM).distanceTo(h), qg = pr.group.quaternion, e = sstep(0, 1, tr);
+  const qc = _trQ.copy(qg).multiply(pr.inner.quaternion), x = _trX.set(1, 0, 0).applyQuaternion(qc);   // (where her pose has it now, in her body's space: +x ahead of her, s*z out at her side)
+  const thT = p.onGround !== false ? Math.asin(clamp((h.y - fy) / Math.max(L, .01), .05, .95)) + .04 : TRAIL.air;   // (on the ground: down just to it from her hand)
+  const a = lerp(Math.atan2(s * x.z, x.x), Math.PI - TRAIL.out, e), th = lerp(Math.asin(clamp(-x.y, -1, 1)), thT, e);   // (turned round her side, from ahead to behind; and down)
+  const qt = _trQ2.setFromAxisAngle(_trY, -s * a).multiply(_trQ3.setFromAxisAngle(_trZ, -th));   // (its flat upright, the notched edge, -y, down)
+  qc.slerp(qt, sstep(0, .35, e)); pr.inner.quaternion.copy(_gq.copy(qg).invert()).multiply(qc);
+}
 function giantSword(p, r, pr, s) {                   // the blade grown from the hilt (her hand stays on the grip), turned up off the ground where it would go into it: it drags; out from her legs
   const g = giantOf(p); if (g <= .005) { if (pr.inner.scale.x !== 1) pr.inner.scale.set(1, 1, 1); pr.inner.rotation.y = 0; return; }
   const c = giantAt(GIANT_SWORD, g), fy = giantFloor(p, r) + .015; pr.inner.scale.set(c.L, c.W, c.T);
@@ -1593,6 +1608,7 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
     if (A < T && R > 1e-4) { const k = Math.acos(clamp(T / R, -1, 1)), y1 = k - dl, y2 = -k - dl, wrap = v => v - TAU * Math.round(v / TAU); const a1 = wrap(y1), a2 = wrap(y2); pr.inner.rotation.y = Math.abs(a1) < Math.abs(a2) ? a1 : a2; }
     else pr.inner.rotation.y = 0;
   }
+  swordTrail(p, pr, g, fy, s);                       // (ROAM: on the move, the blade trailed behind her, not carried out in front)
   for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo >= fy) break;
     pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
@@ -3332,7 +3348,7 @@ function momentumPose(p, o, dt, legs, cat) {           // (laid over the pose, a
   if (p.mLandT != null) { const t = p.mLandT += dt;
     if (t > LAND.T || !p.onGround) p.mLandT = null;
     else { const u = t < LAND.dn ? Math.sin(t / LAND.dn * Math.PI / 2) : 1 - sstep(LAND.dn, LAND.T * .78, t), tall = t > LAND.T * .6 ? Math.sin((t - LAND.T * .6) / (LAND.T * .4) * Math.PI) * .12 : 0;
-      const k = p.mLandK * (1 - .65 * (p.gaitAmt || 0)) * (u - tall);   // (running on: only a dip in the stride)
+      const k = p.mLandK * (1 - .65 * (p.gaitAmt || 0)) * (u - tall) * (p.rig.spec.move.landDip ?? 1);   // (landDip: a character's own, how deep into the knees; Rose's shallower, 2026-11-21)   // (running on: only a dip in the stride)
       if (cat) { o.bodyY -= .24 * k; o.arch += .2 * k; o.lean += .12 * k; o.tailBase += .3 * k; o.armF += .25 * k; o.elbF += .3 * k; }
       else { o.bodyY -= .2 * k; o.lean += .26 * k; o.arch += .08 * k; o.headRot -= .05 * k; o.fNx += .12 * k * legs; o.fFx -= .1 * k * legs; o.armF += .35 * k; o.armB += .3 * k; o.elbF += .35 * k; o.elbB += .3 * k; } } }
 }                                   // the run's gather: how long (about two drawn frames, then into the stride)
@@ -3373,6 +3389,7 @@ function updatePoseHuman(p, dt) {
     else if (p.vy < 160) Object.assign(T, { lean: .12, armF: 1.3, elbF: .9, armB: .9, elbB: .9, fNx: .2, fNy: .3, fFx: -.2, fFy: .32, fP: -.55, fNz: .07, fFz: .05 }), layPose(T, m.top, p);   // the top: both knees up, tucked, still a stride apart (lower: the lead knee was up past her hips, 2026-11-08)
     else Object.assign(T, { lean: .08, armF: 1.5, elbF: .3, armB: 1.2, elbB: .3, fNx: lerp(.22, .2, fk) + sway - drift, fNy: lerp(.22, .16, fk), fFx: lerp(-.3, -.36, fk) - sway - drift, fFy: lerp(.3, .34, fk), fP: lerp(-.5, -.55, fk), fNz: .09, fFz: .07 }), layPose(T, m.fall, p);   // dropping: both knees bent, the front one up, the back foot tucked up behind, swaying (they're turned to us, so heights read, front and back don't: hung straight down they looked stood in mid-air)
     airSplay(p, T, ST);                              // (the stance's spread, if it's wider: the user, 2026-10-26)
+    if (m.tuck != null && m.tuck !== 1) { T.fNy *= m.tuck; T.fFy *= m.tuck; }   // (a character's own: how far the feet come up under her in the air. Rose's less: the user, 2026-11-21 "her legs get real bent when she jumps")
   } else if (p.brake) Object.assign(T, brakePose(p, t));
   else if (p.skid) Object.assign(T, { lean: -.28, armF: 1.4, elbF: .4, armB: 1.0, elbB: .5, fNx: -.18, fFx: -.32 });
   else if (sp > 30 && m.float) Object.assign(T, { lean: .3, bodyY: 0, armF: -.3, elbF: .55, armB: -.55, elbB: .5, fNx: -.42, fNy: .3, fFx: -.6, fFy: .2, fP: .9, headRot: -.1 });   // gliding: leaning in, feet trailing behind
@@ -3498,7 +3515,7 @@ function updatePoseHuman(p, dt) {
   momentum(p, dt, sp); if (a < 0 && p.hurtT <= 0 && !p.block && !p.crouch && !m.float) momentumPose(p, o, dt, Bd.legs, false);
   tackleOver(p, o, false);
   if (p.tkDig > 0 && a < 0 && g > 0) { const k = p.tkDig * g, D = poseKeys(p, tkKind(p, "tkdig"), p.tkCharge ? p.tkCharge.t : 9) || TKDIG_H; for (const key of ["lean", "arch", "headRot", "armF", "elbF", "armB", "elbB", "spF", "spB"]) if (key in D) o[key] = lerp(o[key], D[key], k); o.bodyY -= .16 * k; }   // charging the tackle on the move: a crouched creep, the set held
-  if (p.onGround && p.sq < 0 && a < 0 && !m.float) { o.bodyY += p.sq * .3; o.lean -= p.sq * .15; }   // landing: the knees take the weight
+  if (p.onGround && p.sq < 0 && a < 0 && !m.float) { const ld = m.landDip ?? 1; o.bodyY += p.sq * .3 * ld; o.lean -= p.sq * .15 * ld; }   // landing: the knees take the weight (landDip: a character's own, how deep; Rose's shallower, 2026-11-21)
   if (p.rig.prop && p.rig.prop.kind === "sword") {          // a spiked sword: in a swing, the blade turns over so its spikes (the notched edge) lead the cut, into the enemy
     let want = 0;                                           // (2026-10-23: the spikes moved to the notched edge, which leads a down or over cut as it is: it turns over for the up cuts now)
     if (SK && SK.keys && SK.hits && SK.hits[0]) { const KK = keysOf(p, SK), h = SK.hits[0]; if (KK.blade && kv(p, KK, "blade", h.t1) - kv(p, KK, "blade", h.t0) > .3) want = Math.PI; }   // swinging down / over: the other edge leads, so turn it over
