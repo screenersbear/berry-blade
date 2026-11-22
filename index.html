@@ -726,7 +726,7 @@
     #fade .lockup.big .blk { font-size: 34px; } #fade .lockup.big .bar { font-size: 10px; }
   }
 </style>
-<script src="charkit.js?v=20261121zd"></script>
+<script src="charkit.js?v=20261122a"></script>
 <script src="characters.js?v=20261014t"></script>
 <script src="shading.js?v=20261109d"></script>
 <script src="score.js?v=20261121w"></script>
@@ -1954,6 +1954,26 @@ const hmBodyQ = (o, body) => { const q = new THREE.Quaternion(); for (let x = o;
 const HM_TOE = .6;                                   // (on the ground, the model's toe points down no more than this, radians: about 35 degrees, on the ball of the foot. Starky, 2026-11-18: her right foot "bent back at idle"; her own back foot at rest is held up behind her, toe straight down, which her round code boot hides)
 const hmHands = r => r.hm ? [r.hm.B.handL, r.hm.B.handR] : r.hands;   // (the hands drawn: the model's wrists for a hero made as a model, else her own; [0] her left, [1] her right, as r.hands. For what must touch them: the zip line's handle, fruit, a boost)
 const hmAim = dir => new THREE.Quaternion().setFromUnitVectors(HM_DOWN, dir.clone().normalize());   // (the turn from hanging straight down to along dir)
+const HM_HG = { x: new THREE.Vector3(), y: new THREE.Vector3(), z: new THREE.Vector3(), m: new THREE.Matrix4() };
+const HM_HINGE = { on: !/[?&]nohinge(&|$)/.test(location.search) };   // (?heromodel&nohinge: the knees and elbows as before 2026-11-22, each bone aimed on its own, to compare)
+const HM_STRAIGHT = 4 * Math.PI / 180;            // (a knee or an elbow stays bent at least this much, the right way)
+function hmHinge(t, s, f, k) {                       // a knee or an elbow as a hinge (GAME-FEEL-REFERENCES.md rule 4, 2026-11-22): t, s the upper and lower bone's ways (unit); the upper one's front (+x hanging down) faces away from the lower bone for a knee (k -1, the kneecap) or toward it for an elbow (k 1, its inside), and f is that way when it's nearly straight. The turns from hanging straight down: the upper bone's, then the lower's about the same bend axis, so the lower never twists against the upper, bends off to the side or flips. (hmAim's shortest turn for each bone on its own did all three: Starky, "her legs get real bent")
+  const G = HM_HG, y = G.y.copy(t).negate(), x = G.x.copy(s).addScaledVector(t, -s.dot(t)), b = THREE.MathUtils.smoothstep(x.length(), .06, .2), fp = f.clone().addScaledVector(t, -f.dot(t));   // (x: the lower bone's way across the upper; b: how bent)
+  if (x.lengthSq() < 1e-12 || fp.lengthSq() < 1e-12) { if (fp.lengthSq() >= 1e-12) x.copy(fp); } else { x.normalize().multiplyScalar(k); fp.normalize(); x.applyAxisAngle(t, (1 - b) * Math.atan2(x.clone().cross(fp).dot(t), x.dot(fp))); }   // (between the two by the angle round the bone, so it never passes through nothing)
+  x.addScaledVector(t, -x.dot(t));
+  if (x.lengthSq() < 1e-8) x.set(Math.abs(t.x) < .9 ? 1 : 0, 0, Math.abs(t.x) < .9 ? 0 : 1).addScaledVector(t, -(Math.abs(t.x) < .9 ? t.x : t.z)); x.normalize(); HM_HG.f = x.clone();
+  const z = G.z.crossVectors(x, y), qu = new THREE.Quaternion().setFromRotationMatrix(G.m.makeBasis(x, y, z));
+  if (Math.atan2(k * s.dot(x), s.dot(t)) < HM_STRAIGHT) s = t.clone().multiplyScalar(Math.cos(HM_STRAIGHT)).addScaledVector(x, k * Math.sin(HM_STRAIGHT));   // (never quite straight, never past it: rule 4's limit)
+  const y2 = G.y.copy(s).negate(), z2 = z.addScaledVector(s, -z.dot(s)); if (z2.lengthSq() < 1e-8) z2.crossVectors(x, y2); z2.normalize();
+  return [qu, new THREE.Quaternion().setFromRotationMatrix(G.m.makeBasis(G.x.crossVectors(y2, z2), y2, z2))];
+}
+const HM_FOLD = 150 * Math.PI / 180;                // (a knee or an elbow folds no further than this, 2026-11-22: Rose's double jump folded her knee flat, 177 degrees, the shin through the thigh)
+function hmArmQ(M, i, S, E, Wr) {                     // the model's arm on the code arm's points as a hinge (rule 4): the inside of her elbow toward the way it bends; nearly straight, the way it faced last
+  const t = E.clone().sub(S).normalize(), s = Wr.clone().sub(E).normalize(), F = M.elbF || (M.elbF = []), cf = Math.cos(HM_FOLD);
+  if (s.dot(t) < cf) { const x = s.clone().addScaledVector(t, -s.dot(t)); if (x.lengthSq() > 1e-8) s.copy(t).multiplyScalar(cf).addScaledVector(x.normalize(), Math.sin(HM_FOLD)); }   // (folded past HM_FOLD: held there)
+  const f = F[i] ? F[i].clone().addScaledVector(t, -F[i].dot(t)).normalize() : new THREE.Vector3(1, 0, 0).applyQuaternion(hmAim(t));
+  const q = hmHinge(t, s, f, 1); F[i] = HM_HG.f.clone(); return q;
+}
 function heroModelAttach(r, src, id, k0) {           // the model on the rig: under its body, turned to face +x, as tall as she is, its rest pose noted (in the body's space) and its arms let down from the T (k0: its scale, given: her grown arm's models, as her own)
   const hold = new THREE.Group(), m = heroClone(src), B = {}, mats = new Map(), list = [], rest = new Map(), part = {};
   m.traverse(o => { if (o.isBone) B[o.name] = o; });
@@ -1985,6 +2005,14 @@ function heroModelAttach(r, src, id, k0) {           // the model on the rig: un
   r.hm.vis0 = new Map(r.body.children.map(c => [c, c.visible]));   // (the code-built body's parts as built: put back to see her as before)
   r.body.add(hold);
 }
+const HM_HIP = { up: 145 * Math.PI / 180, back: -70 * Math.PI / 180, hx: new THREE.Vector3(), hy: new THREE.Vector3(), hz: new THREE.Vector3(), t: new THREE.Vector3(), a: new THREE.Vector3() };   // (2026-11-22, the limb test: off the ground a thigh swings forward from straight down no further than up, and back no further than back, against her hips. The model's legs are shorter but its feet go as high as hers, so in the double jump's tuck Rose's far thigh went up behind her back and the near one up past her chin)
+function hmHip(hipsQ, Hm, Km, A2, v, lift) {          // a thigh past the hip's reach: the whole leg turned back into it about the hip, her foot let go of (rule 5)
+  if (lift <= 0) return; const H = HM_HIP, hx = H.hx.set(1, 0, 0).applyQuaternion(hipsQ), hy = H.hy.set(0, 1, 0).applyQuaternion(hipsQ), hz = H.hz.set(0, 0, 1).applyQuaternion(hipsQ), t = H.t.copy(Km).sub(Hm);
+  const fl = Math.atan2(t.dot(hx), -t.dot(hy)); if (fl <= H.up && fl >= H.back) return;
+  const dF = H.up - (fl < 0 ? fl + 2 * Math.PI : fl), dB = H.back - (fl > 0 ? fl - 2 * Math.PI : fl), fwd = H.a.copy(A2).sub(Hm).dot(hx) >= 0;   // (dF: turned forward-side in, dB: back-side in)
+  let d = fwd ? dF : dB; if (Math.abs(d) > Math.PI * .55) d = fwd ? dB : dF; d *= lift;   // (in on the side her foot is, in front or behind, unless that's the long way round)
+  Km.sub(Hm).applyAxisAngle(hz, d).add(Hm); A2.sub(Hm).applyAxisAngle(hz, d).add(Hm); v.applyAxisAngle(hz, d);
+}
 function hmLeg(r, W, i, sd, H, hipsQ, gnd) {         // the model's leg, on its own lengths, after hers: the ankle where hers is (in the model's proportions), the knee bent the way hers is
   const M = r.hm, L = r.legs[i], rH = L.pts[1], rK = L.pts[2], rA = L.pts[3], f = M.f, l1 = M.l1, l2 = M.l2;
   const Hm = M.thighOff[i].clone().applyQuaternion(hipsQ).add(H);                       // (its hip joint, the hips as they are now)
@@ -1994,11 +2022,15 @@ function hmLeg(r, W, i, sd, H, hipsQ, gnd) {         // the model's leg, on its 
   const At = rA.clone().sub(rH).multiplyScalar(f).add(Hm); At.y = rb - low(M.sole[i], qF);   // (its ankle: forward and back as hers, scaled to the shorter legs; up and down so its boot's bottom is where hers is: on the ground when hers is)
   const reach = l1 + l2 - 1e-3, dy = At.y - Hm.y; let u = At.clone().sub(Hm);
   const hz = Math.hypot(u.x, u.z); if (u.length() > reach && Math.abs(dy) < reach && hz > 1e-4) { const want = Math.sqrt(reach * reach - dy * dy); u.x *= want / hz; u.z *= want / hz; }   // (too far for the shorter legs: a shorter step, the foot kept down)
-  const d = THREE.MathUtils.clamp(u.length(), Math.abs(l1 - l2) + 1e-3, reach); u.normalize();
-  const rU = rA.clone().sub(rH).normalize(), v = rK.clone().sub(rH); v.addScaledVector(rU, -v.dot(rU)); v.addScaledVector(u, -v.dot(u)); if (v.lengthSq() < 1e-8) v.set(1, 0, 0); v.normalize();   // (v: which way her knee points)
+  const d = THREE.MathUtils.clamp(u.length(), !HM_HINGE.on ? Math.abs(l1 - l2) + 1e-3 : M.dFold || (M.dFold = Math.sqrt(l1 * l1 + l2 * l2 - 2 * l1 * l2 * Math.cos(Math.PI - HM_FOLD))), reach); u.normalize();   // (no closer than the knee folds: its foot left short of hers, rule 5)
+  const rU = rA.clone().sub(rH).normalize(), v = rK.clone().sub(rH); v.addScaledVector(rU, -v.dot(rU)); v.addScaledVector(u, -v.dot(u)); const vk = v.length() / Math.max(rK.distanceTo(rH), 1e-6);   // (v: which way her knee points)
+  const hf = HM_V.set(1, 0, 0).applyQuaternion(hipsQ); if (HM_HINGE.on) { const hy = HM_HIP.hy.set(0, 1, 0).applyQuaternion(hipsQ), ph = Math.atan2(u.dot(hf), -u.dot(hy)); hf.multiplyScalar(Math.cos(ph)).addScaledVector(hy, Math.sin(ph)); }   // (her hips' front lifted with the leg, 2026-11-22: a straight leg out in front, sliding, had its kneecap turned off to the side; now it's up)
+  hf.addScaledVector(u, -hf.dot(u)); if (!HM_HINGE.on) { if (v.lengthSq() < 1e-8) v.set(1, 0, 0); v.normalize(); } else { if (v.lengthSq() < 1e-8) v.copy(hf); v.normalize().lerp(hf.normalize(), 1 - THREE.MathUtils.smoothstep(vk, .03, .15)).normalize(); }   // (nearly straight her knee's way is unsure: then the way her hips face)
   const ca = THREE.MathUtils.clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1), Km = Hm.clone().addScaledVector(u, l1 * ca).addScaledVector(v, l1 * Math.sqrt(1 - ca * ca)), A2 = Hm.clone().addScaledVector(u, d);
-  W.set(M.B["thigh" + sd], hmAim(Km.clone().sub(Hm)).multiply(M.rest.get(M.B["thigh" + sd]).q));   // (the model's legs hang straight down at rest)
-  W.set(M.B["shin" + sd], hmAim(A2.clone().sub(Km)).multiply(M.rest.get(M.B["shin" + sd]).q));
+  if (HM_HINGE.on) hmHip(hipsQ, Hm, Km, A2, v, THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1));   // (off the ground, the thigh kept in the hip's reach: rule 4)
+  const tT = Km.clone().sub(Hm).normalize(), fK = v.clone().addScaledVector(tT, -v.dot(tT)).normalize(), [qT, qS] = HM_HINGE.on ? hmHinge(tT, A2.clone().sub(Km).normalize(), fK, -1) : [hmAim(tT), hmAim(A2.clone().sub(Km))];   // (the knee a hinge, its kneecap out the way it bends)
+  W.set(M.B["thigh" + sd], qT.multiply(M.rest.get(M.B["thigh" + sd]).q));   // (the model's legs hang straight down at rest)
+  W.set(M.B["shin" + sd], qS.multiply(M.rest.get(M.B["shin" + sd]).q));
   const up = THREE.MathUtils.clamp((F.position.y - .02) / .1, 0, 1), dA = up && Math.atan2(A2.y - Km.y, A2.x - Km.x) - Math.atan2(rA.y - rK.y, rA.x - rK.x);   // (a foot lifted: turned on with the model's shin, so its ankle bends as hers does; the model's shin stands steeper than hers)
   const qA = HM_Q.setFromAxisAngle(HM_Z, up * (Math.atan2(Math.sin(dA), Math.cos(dA)) || 0)).clone().multiply(F.quaternion); W.set(M.B["foot" + sd], (c ? qA.slerp(qL, c) : qA).multiply(M.rest.get(M.B["foot" + sd]).q));   // (low on the ground, c 1: qL)
 }
@@ -2174,8 +2206,9 @@ function heroModelSync(p, r, dt = 0) {               // each frame, after her ow
   ["L", "R"].forEach((sd, i) => {
     const t = r.arms[i], S = t.pts[1], E = t.pts[2], Wr = t.pts[3];
     if (gq && i === propI) { W.set(B["upperarm" + sd], G.hmQ[0]); W.set(B["forearm" + sd], G.hmQ[1]); W.set(B["hand" + sd], G.hmQ[2]); } else {   // (the grown arm, as hmGiantShape turned it)
-    W.set(B["upperarm" + sd], hmAim(E.clone().sub(S)).multiply(M.hang["upperarm" + sd]));
-    W.set(B["forearm" + sd], hmAim(Wr.clone().sub(E)).multiply(M.hang["forearm" + sd]));
+    const [qU, qF] = HM_HINGE.on ? hmArmQ(M, i, S, E, Wr) : [hmAim(E.clone().sub(S)), hmAim(Wr.clone().sub(E))];          // (the elbow a hinge: rule 4)
+    W.set(B["upperarm" + sd], qU.multiply(M.hang["upperarm" + sd]));
+    W.set(B["forearm" + sd], qF.multiply(M.hang["forearm" + sd]));
     W.set(B["hand" + sd], (M.sw && pr && pr.kind === "sword" && pr.inner && i === propI ? hmBodyQ(pr.inner, r.body).multiply(M.sw.HQ).multiply(M.hang["hand" + sd].clone().invert()).multiply(HM_Q.setFromAxisAngle(HM_UP, -M.tw[i])) : pr && pr.fist && i === propI ? hmBodyQ(pr.fist, r.body) : r.hands[i].quaternion.clone()).multiply(HM_Q.setFromAxisAngle(HM_UP, M.tw[i])).multiply(M.hang["hand" + sd])); }   // (the gauntlet hand: its fist's turn and bend. tw: her hands hang palm forward, the model's palm in)
     hmLeg(r, W, i, sd, H, hipsQ, !!p.onGround);
   });
@@ -2224,6 +2257,16 @@ function hmSwap(r, N) {                               // (another size's model i
 }
 const hmFrameQ = (a1, b1, a2, b2) => { const m1 = new THREE.Matrix4(), m2 = new THREE.Matrix4(), f = (a, b, m) => { const x = a.clone().normalize(), y = b.clone().addScaledVector(x, -b.dot(x)).normalize(); m.makeBasis(x, y, x.clone().cross(y)); };   // (the turn taking a1 to a2 and, round it, b1 as near as can be to b2)
   f(a1, b1, m1); f(a2, b2, m2); return new THREE.Quaternion().setFromRotationMatrix(m2.multiply(m1.transpose())); };
+const HM_ROLL = 35 * Math.PI / 180;                 // (the grown arm's forearm still rolled toward its fist's turn, up to this past the elbow's hinge: its thumb where Starky had it, 2026-11-20; the rest of the turn is the wrist's)
+function hmGiantHinge(M, Sm, Qu, Qf, l1, l2) {        // the grown arm's elbow a hinge too (rule 4, 2026-11-22): the elbow where it was, the forearm's way kept (folded no further than HM_FOLD), rolled toward the fist's turn up to HM_ROLL. Was each bone aimed on its own, the forearm rolled with the fist: the elbow wrung round, bent off to the side, folded flat
+  const hU = M.hang.upperarmL, hF = M.hang.forearmL, t = HM_UP.clone().applyQuaternion(Qu), s = HM_UP.clone().applyQuaternion(Qf), cf = Math.cos(HM_FOLD);
+  if (s.dot(t) < cf) { const x = s.clone().addScaledVector(t, -s.dot(t)); if (x.lengthSq() > 1e-8) s.copy(t).multiplyScalar(cf).addScaledVector(x.normalize(), Math.sin(HM_FOLD)); }
+  const f = new THREE.Vector3(1, 0, 0).applyQuaternion(Qf.clone().multiply(hF.clone().invert()));   // (nearly straight: turned with the fist, so the turn is the shoulder's, not the wrist's)
+  const [qU, qF] = hmHinge(t, s, f, 1), s2 = HM_DOWN.clone().applyQuaternion(qF);
+  const zc = HM_Z.clone().applyQuaternion(qF), zd = HM_Z.clone().applyQuaternion(Qf.clone().multiply(hF.clone().invert())); zc.addScaledVector(s2, -zc.dot(s2)).normalize(); zd.addScaledVector(s2, -zd.dot(s2)).normalize();   // (zc: the forearm on the hinge; zd: as the fist turned it)
+  qF.premultiply(new THREE.Quaternion().setFromAxisAngle(s2, THREE.MathUtils.clamp(Math.atan2(zc.clone().cross(zd).dot(s2), zc.dot(zd)), -HM_ROLL, HM_ROLL)));
+  const E = Sm.clone().addScaledVector(t, l1); return [qU.multiply(hU), qF.multiply(hF), E, E.clone().addScaledVector(s2, l2)];
+}
 function hmGiantShape(p, r, G, A, s, S, wI, fy, plant) {   // (charkit's giantArm, each frame it's out, last: the model's arm worked out, and the code arm's points put on it)
   const M = r.hmSet && r.hmSet[hmLevel(p, r)], g = M && M.gi; G.hmQ = null; if (!g) return;
   const hs = G.c.hand / KIT.GIANT_ARM[M.lv].hand, l1 = g.l1, l2 = g.l2, Y1 = HM_UP, Sm = (G.hmS = (G.hmS || new THREE.Vector3()).copy(S)).clone(); if (G.hmOff) Sm.add(G.hmOff);   // (hs: the hand's size against its model's; Sm: the model's shoulder)
@@ -2241,6 +2284,7 @@ function hmGiantShape(p, r, G, A, s, S, wI, fy, plant) {   // (charkit's giantAr
   let E = Sm.clone().addScaledVector(Y1.clone().applyQuaternion(Qu), l1), W = E.clone().addScaledVector(Y1.clone().applyQuaternion(Qf), l2);
   const dd = fy + .004 - ballLo(W, Qh); if (dd > 0 && !plant) { const u0 = E.clone().sub(Sm).normalize(), v0 = W.clone().sub(E).normalize(); [E, W] = ik(W.clone().setY(W.y + dd), E);   // (anything of the fist in the ground: up out of it)
     Qu.premultiply(new THREE.Quaternion().setFromUnitVectors(u0, E.clone().sub(Sm).normalize())); Qf.premultiply(new THREE.Quaternion().setFromUnitVectors(v0, W.clone().sub(E).normalize())); }
+  if (HM_HINGE.on) { const h = hmGiantHinge(M, Sm, Qu, Qf, l1, l2); Qu.copy(h[0]); Qf.copy(h[1]); E = h[2]; W = h[3]; }   // (its elbow a hinge: rule 4)
   const u = E.clone().sub(Sm).normalize(), v = W.clone().sub(E);   // the code arm's points on it: the game's hold, the team's ride and the camera go by them
   A[0].copy(Sm).addScaledVector(u, -.06); for (let i = 1; i <= 3; i++) A[i].copy(Sm).addScaledVector(E.clone().sub(Sm), i / 3); for (let i = 4; i <= 6; i++) A[i].copy(E).addScaledVector(v, (i - 3) / 3);
   G.hand.g.position.copy(W); G.hmQ = [Qu, Qf, Qh]; G.hmC = lerp(G.fist || 0, HM_GIANT.curl, w); G.hmHs = hs;

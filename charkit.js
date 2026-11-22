@@ -2579,7 +2579,7 @@ const GW = {                                         // the blade's (blade: its 
   leap: (S, z) => ({ dur: .95 * S, chain: .9 * S, step: 260, hop: -760, dive: [.4 * S, 1000], diveStill: true, sq: .12, sfx: "slash", sfx2: [.5 * S, "slam"], quake: [.5 * S, z + 1],
     hits: [GH(.4, .54, "cleave", S, { y0: 230, y1: -40 }), GH(.5, .64, "launch", S, { reach: 210 + 30 * z, back: 120 + 30 * z, y0: 40, y1: -20, wide: true })],
     keys: KZ([0, .14, .34, .46, .62, .95], { armF: [.4, 2.9, 3.1, .6, .5, .5], elbF: [.3, .4, .3, .1, .1, .3], blade: [2.6, 2.95, 3.1, -.6, -.8, -1.2], grip: [0, 1, 1, 1, 1, .4], lean: [.2, -.2, -.28, .7, .6, .3], arch: [0, -.25, -.3, .2, .15, 0],
-      bodyY: [-.1, 0, 0, -.4, -.42, -.12], fNy: [0, .3, .28, 0, 0, 0], fFy: [0, .25, .22, 0, 0, 0] }, S) }),
+      bodyY: [-.1, 0, 0, -.4, -.42, -.12], fNy: [0, .3, .28, 0, 0, 0], fFy: [0, .25, .22, 0, 0, 0], fNx: [.32, .3, .3, .5, .52, .38], fFx: [-.36, -.3, -.3, -.52, -.56, -.42] }, S) }),   // (fNx, fFx: landing in a wide stance like the drag's slam, 2026-11-22: her feet close in under that forward lean put her front thigh up past her chest, the limb test)
 };
 const GIANT_S = [1, 1, 1.25, 1.55];                  // the moves' time scale by size: heavier, slower
 // (the user, 2026-11-02: "some attacks look like you're not attacking but it's actually loading a long animation"): GIANT_S slowed the whole move, its wind-up too, so the
