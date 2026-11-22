@@ -13,7 +13,7 @@
 "use strict";
 function StarkyCharKit(THREE, opt = {}) {
 const api = { time: 0, version: 1 };
-const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1, w8: null };   // (w8: the game's WEIGHT, FEEL.body: { id: strength } of who has it, else null)
+const FEEL_KIT = { antic: 1, chainStiff: 1, chainDamp: 1, idle: 1, accLean: 1, w8: null, drag: 0 };   // (drag: the game's ROAM, 2026-11-21: a grown weapon's weight brought down onto the ground as she runs, 0 off)   // (w8: the game's WEIGHT, FEEL.body: { id: strength } of who has it, else null)
 const DBG_RIG = { noSquash: false, noStretch: false };   // (tests: squash and stretch off, limb stretch / leg over-reach off; 2026-10-31's limb distortion hunt)   // (the game's COMBAT FEEL settings, set from index.html's feelApply: wind-ups pulled back, the springy chains' stiffness and damping, the idle's breathing. 1, 1, 1, 1: as they were)
 const TAU = Math.PI * 2;
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
@@ -1414,7 +1414,7 @@ const GIANT_CLUB = [{ back: 0, out: .12, lift: .12, bow: 0, roll: 0 }, { back: .
 const GIANT_SWORD = [{ L: 1, W: 1, T: 1 }, { L: 1.4, W: 1.6, T: 1.25 }, { L: 1.85, W: 2.3, T: 1.55 }, { L: 2.35, W: 3.1, T: 1.9 }];   // the blade (x its own): the biggest is the 10-31 mockup's slab
 const giantAt = (tab, g) => { const i = Math.min(Math.floor(clamp(g, 0, 3)), 2), u = g - i, A = tab[i], B = tab[i + 1], o = {}; for (const k in A) o[k] = A[k] + (B[k] - A[k]) * u; return o; };   // (past the top: on along the last step, for the burst's overshoot)
 const giantOf = p => clamp(p.wsizeV ?? 0, 0, 3.5);
-api.giantOf = giantOf; api.GIANT_ARM = GIANT_ARM; api.GIANT_SWORD = GIANT_SWORD; api.giantFloor = (p, r) => giantFloor(p, r);
+api.giantOf = giantOf; api.swordLowPt = swordLowPt; api.GIANT_ARM = GIANT_ARM; api.GIANT_SWORD = GIANT_SWORD; api.giantFloor = (p, r) => giantFloor(p, r);
 const GIANT_WRIST = .9, GIANT_RING_T = .27, GIANT_BASE = .17, GIANT_UPPER = .45;   // down the arm (0 the shoulder, 1 the wrist): where the rings start up from; a ring's thickness (x the arm's girth); the base above them (world units)
 function giantArmTex(Q, skin, uB = .5, uR = .62) {   // its colours down its length: her skin to the gauntlet's top (uB), its rim, the base gold with its trim, the rings' gold under them (uR on), red at the wrist
   const [c] = cv2(64, 512), t = canvasTex(c); t.wrapS = THREE.RepeatWrapping; giantArmPaint(t, Q, skin, uB, uR); return t;
@@ -1506,7 +1506,8 @@ function giantArm(p, r, s, S0, E, W, D) {            // the arm grown out of the
   const fyK = p.onGround === false ? Math.min(fy, fyA) : fy;   // (what it's kept up out of: the ground, but in a flip, upside down, the ground's "above" her in her body's terms and it dragged the arm toward it, "stretches to the ground when you jump": then her own floor)
   if (wI > .001) { const C = giantAt(GIANT_CLUB, g), run = clamp(Math.abs(p.vx || 0) / 300, 0, 1), tt = api.time;   // at rest: leant on the ground beside her (running, dragged further back)
     const nearS = s === (p.face > 0 ? 1 : -1); G.fw = p.restNow ? (nearS ? -1 : .75) : approach(G.fw ?? (nearS ? -1 : .75), run > .3 ? -1 : nearS ? -1 : .75, 4 / 60);   // (on the side facing you: behind her; on the far side: out in front of her, where you can see it past her)
-    _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fyA + C.lift - .03 * run, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
+    const dd = G.dd = approach(G.dd || 0, p.onGround !== false && run > .35 && !p.restNow ? (FEEL_KIT.drag || 0) * sstep(2, 3.2, g) : 0, 4 / 60);   // (ROAM: running with it grown big, the fist down on the ground, its knuckles dragged along)
+    _gw.set(S.x + C.back * G.fw - .32 * run + .03 * Math.sin(tt * 1.6), fyA + C.lift * (1 - dd) - .03 * run - .25 * dd, S.z + s * (C.out + .02 * Math.sin(tt * 1.1)));
     if (p.sit && p.chair) _gw.set(S.x + .1, fyA + C.lift, S.z + s * (C.out + .18));   // (sat in a chair: hanging straight down off its side, outside its arm, the hand on the ground by it: the user, 2026-11-05: "when camila sits down to rest on the chair, have her properly sit. her big arm should go off the side but the other shouldbe at an arm rest")
     { const L0 = (_gu.length() + _gv.length()) * 1.02; _gx.subVectors(_gw, S); if (_gx.length() > L0) _gw.copy(S).addScaledVector(_gx.normalize(), L0); }   // (no further than the arm's own length: the ground far below, up in a jump, never stretches it down to it)
     for (let i = 0; i <= 6; i++) { const t = i / 6, bw = Math.sin(Math.PI * t); _gx.lerpVectors(S, _gw, t); _gx.x -= C.bow * bw * .5; _gx.y -= .04 * bw; _gx.z += s * C.bow * bw; if (i === 0) _gx.addScaledVector(_gu, -.06 / Math.max(.01, _gu.length()));
@@ -1577,6 +1578,7 @@ function giantRoll(r, ang) {                         // her upper body tipped ov
 }
 function giantOff(r) { const G = r.giant; if (!G || !G.on) return; G.on = false; G.grp.visible = false; r.arms.forEach(t => { t.mesh.visible = true; }); if (r.prop) r.prop.group.visible = true; }
 const SWORD_LOW = [[1.24, .085], [1.24, -.085], [.7, .085], [.7, -.085], [.3, .085], [.3, -.085]];
+function swordLowPt(pr, out) { pr.group.updateMatrix(); pr.inner.updateMatrix(); _gM.multiplyMatrices(pr.group.matrix, pr.inner.matrix); let lo = 1e9; for (const [x, y] of SWORD_LOW) { _gv.set(x, y, 0).applyMatrix4(_gM); if (_gv.y < lo) { lo = _gv.y; out.copy(_gv); } } return out; }   // (the game's: where it's lowest, the point that drags along the ground, in her body's space. ROAM, 2026-11-21)
 function swordLow(pr) { pr.group.updateMatrix(); pr.inner.updateMatrix(); _gM.multiplyMatrices(pr.group.matrix, pr.inner.matrix); let lo = 1e9; for (const [x, y] of SWORD_LOW) lo = Math.min(lo, _gv.set(x, y, 0).applyMatrix4(_gM).y); return lo; }
 const SWORD_LEAN = .35, SWORD_LEAN_DN = .3;          // (grown Rose's blade leant out off her: 20 degrees, more pointing down past her legs in the air, giantSword)
 const _sl0 = new THREE.Vector3(), _sl1 = new THREE.Vector3();
@@ -1594,9 +1596,10 @@ function giantSword(p, r, pr, s) {                   // the blade grown from the
   for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo >= fy) break;
     pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
     pr.inner.rotation.z += clamp((fy - lo) / d, -1, 1); }
-  if (p.leanK > .001) { const z0 = pr.inner.rotation.z; for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo <= fy + .01) break;   // (Rose leaning on it, swordLean: down onto the ground too, its point planted, not hung off it)
+  const dd = p.ddK = approach(p.ddK || 0, p.onGround !== false && Math.abs(p.vx || 0) > 90 && !(p.atkT >= 0) && !(p.leanK > .001) ? (FEEL_KIT.drag || 0) * sstep(1.6, 2.6, g) : 0, 5 / 60), pk = Math.max(p.leanK || 0, dd);   // (ROAM: running with it grown, its point brought down to drag along the ground, as the lean plants it)
+  if (pk > .001) { const z0 = pr.inner.rotation.z; for (let it = 0; it < 4; it++) { const lo = swordLow(pr); if (lo <= fy + .01) break;   // (Rose leaning on it, swordLean: down onto the ground too, its point planted, not hung off it)
     pr.inner.rotation.z += .05; const d = (swordLow(pr) - lo) / .05; pr.inner.rotation.z -= .05; if (Math.abs(d) < .02) break;
-    pr.inner.rotation.z += clamp((fy - lo) / d, -.5, .5); } pr.inner.rotation.z = z0 + clamp(pr.inner.rotation.z - z0, -.8, .8) * sstep(0, 1, p.leanK); }
+    pr.inner.rotation.z += clamp((fy - lo) / d, -.5, .5); } pr.inner.rotation.z = z0 + clamp(pr.inner.rotation.z - z0, -.8, .8) * sstep(0, 1, pk); }
   pr.group.position.z += s * .045 * Math.min(g, 3);
 }
 // its weight dragging her back as she runs, Camila's arm and Rose's blade alike (the user, 2026-11-01: "camila leans back when running, like the weight of the arm is pulling her back (which I love)
